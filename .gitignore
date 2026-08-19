@@ -1,0 +1,13 @@
+# select to ignore
+
+# root folder not needed in path
+# /index.file
+# /folder/file.extension
+
+# To select all files
+# *.extension
+# folder/another_folder/*
+
+/logs
+*env
+*txt
