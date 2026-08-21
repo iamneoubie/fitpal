@@ -1,0 +1,465 @@
+/**
+ * FitPal Header Styles
+ * 
+ * This file contains styles specific to the header component.
+ * It builds on the global CSS variables defined in global.css.
+ */
+
+/* ============================================
+   Header Container
+   ============================================ */
+
+.header {
+    background-color: var(--white);
+    border-bottom: 1px solid var(--gray-200);
+    position: sticky;
+    top: 0;
+    z-index: var(--z-sticky);
+    box-shadow: var(--shadow-sm);
+}
+
+.header-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 var(--spacing-4);
+    height: 70px;
+}
+
+/* ============================================
+   Logo
+   ============================================ */
+
+.header-logo {
+    flex-shrink: 0;
+}
+
+.logo-link {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    text-decoration: none;
+}
+
+.logo-image {
+    height: 40px;
+    width: auto;
+}
+
+.logo-text {
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.5px;
+}
+
+.logo-text span {
+    color: var(--primary);
+}
+
+/* ============================================
+   Navigation
+   ============================================ */
+
+.header-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-4);
+}
+
+.nav-list {
+    display: flex;
+    align-items: center;
+    list-style: none;
+    gap: var(--spacing-2);
+    margin: 0;
+    padding: 0;
+}
+
+.nav-item {
+    position: relative;
+}
+
+.nav-link {
+    display: block;
+    padding: var(--spacing-2) var(--spacing-3);
+    color: var(--gray-600);
+    font-weight: 500;
+    font-size: var(--font-size-sm);
+    border-radius: var(--radius-base);
+    transition: all var(--transition-fast);
+}
+
+.nav-link:hover {
+    color: var(--primary);
+    background-color: var(--gray-50);
+}
+
+.nav-link.active {
+    color: var(--primary);
+    background-color: rgba(89, 193, 74, 0.1);
+}
+
+.nav-link.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 20px;
+    height: 3px;
+    background-color: var(--primary);
+    border-radius: var(--radius-full);
+}
+
+/* ============================================
+   Navigation Actions (Login/Logout)
+   ============================================ */
+
+.nav-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+}
+
+.auth-links {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+}
+
+.user-profile {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+}
+
+.user-name {
+    font-weight: 500;
+    font-size: var(--font-size-sm);
+    color: var(--gray-700);
+}
+
+.btn-login {
+    color: var(--primary);
+    font-weight: 500;
+    padding: var(--spacing-1) var(--spacing-3);
+    border-radius: var(--radius-base);
+    transition: all var(--transition-fast);
+}
+
+.btn-login:hover {
+    background-color: rgba(89, 193, 74, 0.1);
+    color: var(--primary-dark);
+}
+
+.btn-register {
+    background-color: var(--primary);
+    color: var(--white);
+    padding: var(--spacing-1) var(--spacing-4);
+    border-radius: var(--radius-full);
+    font-weight: 500;
+    font-size: var(--font-size-sm);
+    transition: all var(--transition-fast);
+}
+
+.btn-register:hover {
+    background-color: var(--primary-dark);
+    color: var(--white);
+}
+
+.btn-logout {
+    background-color: transparent;
+    color: var(--gray-500);
+    font-weight: 500;
+    font-size: var(--font-size-sm);
+    padding: var(--spacing-1) var(--spacing-3);
+    border-radius: var(--radius-base);
+    transition: all var(--transition-fast);
+}
+
+.btn-logout:hover {
+    color: var(--danger);
+    background-color: rgba(220, 53, 69, 0.05);
+}
+
+/* ============================================
+   Login Dropdown
+   ============================================ */
+
+.auth-dropdown {
+    position: relative;
+}
+
+.dropdown-toggle {
+    padding: var(--spacing-1) var(--spacing-3);
+    color: var(--primary);
+    font-weight: 500;
+    border-radius: var(--radius-base);
+    transition: all var(--transition-fast);
+}
+
+.dropdown-toggle:hover {
+    background-color: rgba(89, 193, 74, 0.1);
+}
+
+.dropdown-toggle::after {
+    content: '';
+    display: inline-block;
+    margin-left: var(--spacing-1);
+    border: 4px solid transparent;
+    border-top-color: currentColor;
+    vertical-align: middle;
+}
+
+.dropdown-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + var(--spacing-1));
+    right: 0;
+    min-width: 180px;
+    background: var(--white);
+    border-radius: var(--radius-base);
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--gray-200);
+    padding: var(--spacing-2) 0;
+    z-index: var(--z-dropdown);
+    list-style: none;
+    margin: 0;
+}
+
+.dropdown-menu.active {
+    display: block;
+    animation: dropdownFadeIn 0.2s ease;
+}
+
+@keyframes dropdownFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.dropdown-menu li {
+    margin: 0;
+}
+
+.dropdown-menu a {
+    display: block;
+    padding: var(--spacing-2) var(--spacing-4);
+    color: var(--gray-700);
+    font-size: var(--font-size-sm);
+    transition: all var(--transition-fast);
+}
+
+.dropdown-menu a:hover {
+    background-color: var(--gray-50);
+    color: var(--primary);
+}
+
+/* ============================================
+   Mobile Menu Toggle
+   ============================================ */
+
+.menu-toggle {
+    display: none;
+    flex-direction: column;
+    gap: 5px;
+    padding: var(--spacing-2);
+    border-radius: var(--radius-base);
+    transition: all var(--transition-fast);
+}
+
+.menu-toggle:hover {
+    background-color: var(--gray-50);
+}
+
+.menu-icon {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 24px;
+}
+
+.menu-icon .bar {
+    display: block;
+    height: 2px;
+    width: 100%;
+    background-color: var(--text);
+    border-radius: var(--radius-full);
+    transition: all var(--transition-fast);
+    transform-origin: center;
+}
+
+.menu-toggle.active .bar:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+}
+
+.menu-toggle.active .bar:nth-child(2) {
+    opacity: 0;
+    transform: scaleX(0);
+}
+
+.menu-toggle.active .bar:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+}
+
+/* ============================================
+   Mobile Navigation
+   ============================================ */
+
+.mobile-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(5, 10, 4, 0.5);
+    z-index: var(--z-modal-backdrop);
+}
+
+.mobile-overlay.active {
+    display: block;
+}
+
+.mobile-nav {
+    display: none;
+    position: fixed;
+    top: 0;
+    right: -320px;
+    width: 300px;
+    max-width: 80%;
+    height: 100%;
+    background-color: var(--white);
+    box-shadow: var(--shadow-xl);
+    z-index: var(--z-modal);
+    padding: var(--spacing-6);
+    transition: right var(--transition-slow);
+    overflow-y: auto;
+}
+
+.mobile-nav.open {
+    right: 0;
+    display: block;
+}
+
+.mobile-nav-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-1);
+}
+
+.mobile-nav-item {
+    margin: 0;
+}
+
+.mobile-nav-link {
+    display: block;
+    padding: var(--spacing-3) var(--spacing-4);
+    color: var(--gray-700);
+    font-weight: 500;
+    font-size: var(--font-size-base);
+    border-radius: var(--radius-base);
+    transition: all var(--transition-fast);
+}
+
+.mobile-nav-link:hover {
+    background-color: var(--gray-50);
+    color: var(--primary);
+}
+
+.mobile-nav-link.active {
+    color: var(--primary);
+    background-color: rgba(89, 193, 74, 0.1);
+}
+
+.mobile-nav-divider {
+    height: 1px;
+    background-color: var(--gray-200);
+    margin: var(--spacing-2) 0;
+}
+
+.mobile-login {
+    color: var(--primary);
+}
+
+.mobile-logout {
+    color: var(--danger);
+}
+
+.mobile-register {
+    background-color: var(--primary);
+    color: var(--white);
+    text-align: center;
+    border-radius: var(--radius-full);
+    margin-top: var(--spacing-2);
+}
+
+.mobile-register:hover {
+    background-color: var(--primary-dark);
+    color: var(--white);
+}
+
+/* ============================================
+   Main Content Wrapper
+   ============================================ */
+
+.main-content {
+    flex: 1;
+    padding: var(--spacing-6) 0;
+    min-height: calc(100vh - 70px);
+}
+
+/* ============================================
+   Responsive Styles
+   ============================================ */
+
+/* Tablet and smaller */
+@media (max-width: 992px) {
+    .header-nav {
+        display: none;
+    }
+    
+    .menu-toggle {
+        display: flex;
+    }
+    
+    .mobile-overlay.active {
+        display: block;
+    }
+    
+    .mobile-nav.open {
+        display: block;
+    }
+}
+
+/* Small screens */
+@media (max-width: 576px) {
+    .header-container {
+        padding: 0 var(--spacing-3);
+        height: 60px;
+    }
+    
+    .logo-text {
+        font-size: var(--font-size-lg);
+    }
+    
+    .logo-image {
+        height: 32px;
+    }
+    
+    .mobile-nav {
+        width: 280px;
+        padding: var(--spacing-4);
+    }
+}
