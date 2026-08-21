@@ -1,0 +1,177 @@
+/**
+ * FitPal Footer Styles
+ * 
+ * This file contains styles for the footer component.
+ */
+
+/* ============================================
+   FOOTER - Make sure it sticks to bottom
+   ============================================ */
+
+.footer {
+    background-color: var(--text);
+    color: rgba(255, 255, 255, 0.8);
+    padding: var(--spacing-8) 0 0 0;
+    border-top: 3px solid var(--primary);
+    margin-top: auto;
+    width: 100%;
+    flex-shrink: 0;
+}
+
+.footer-upper {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 var(--spacing-4);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--spacing-4);
+    padding-bottom: var(--spacing-6);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.footer-brand {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-2);
+}
+
+.footer-logo {
+    text-decoration: none;
+}
+
+.footer-logo-text {
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    color: var(--white);
+    letter-spacing: -0.5px;
+}
+
+.footer-logo-text span {
+    color: var(--secondary);
+}
+
+.footer-description {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: var(--font-size-sm);
+    margin: 0;
+    max-width: 300px;
+}
+
+.footer-social {
+    display: flex;
+    gap: var(--spacing-2);
+}
+
+.footer-social a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-full);
+    background-color: rgba(255, 255, 255, 0.08);
+    transition: all var(--transition-fast);
+}
+
+.footer-social a:hover {
+    background-color: var(--primary);
+    transform: translateY(-2px);
+}
+
+.footer-social img {
+    width: 18px;
+    height: 18px;
+    filter: brightness(0) saturate(100%) invert(100%);
+}
+
+.footer-lower {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: var(--spacing-4);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--spacing-4);
+}
+
+.footer-links {
+    display: flex;
+    gap: var(--spacing-4);
+}
+
+.footer-links a {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: var(--font-size-sm);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+
+.footer-links a:hover {
+    color: var(--secondary);
+}
+
+.footer-copyright {
+    color: rgba(255, 255, 255, 0.3);
+    font-size: var(--font-size-sm);
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 768px) {
+    .footer-upper {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .footer-description {
+        max-width: 100%;
+    }
+
+    .footer-lower {
+        flex-direction: column;
+        text-align: center;
+        gap: var(--spacing-2);
+    }
+
+    .footer-links {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 576px) {
+    .footer {
+        padding: var(--spacing-6) 0 0 0;
+    }
+
+    .footer-logo-text {
+        font-size: var(--font-size-lg);
+    }
+
+    .footer-social a {
+        width: 36px;
+        height: 36px;
+    }
+
+    .footer-social img {
+        width: 16px;
+        height: 16px;
+    }
+
+    .footer-links {
+        gap: var(--spacing-3);
+    }
+
+    .footer-links a {
+        font-size: var(--font-size-xs);
+    }
+
+    .footer-copyright {
+        font-size: var(--font-size-xs);
+    }
+}

@@ -13,77 +13,22 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-/**
- * Get the correct base path for assets based on the current file location
- * 
- * This function calculates how many levels up we need to go to reach the 
- * project root, then appends 'shared/' to point to the shared directory.
- * 
- * @return string The base path for shared assets (e.g., '../../shared/')
- */
-function getAssetBasePath() {
-    // Get the current script's directory path relative to the document root
+// ===== PATH DETECTION =====
+// Detect the base path for assets based on current file location
+function getHeaderAssetBase() {
     $scriptPath = $_SERVER['SCRIPT_NAME'];
-    
-    // Remove the filename to get the directory path
     $dirPath = dirname($scriptPath);
-    
-    // Count how many segments are in the path (excluding empty segments)
     $segments = array_filter(explode('/', $dirPath));
     $depth = count($segments);
     
-    // If we're at the root level (depth 0), use './shared/'
     if ($depth <= 0) {
         return './shared/';
     }
     
-    // For each directory level, we need to go up one level
-    // Example: /fitpal/customer/pages/ -> depth = 3
-    // We need: ../../../shared/
-    $basePath = str_repeat('../', $depth) . 'shared/';
-    
-    return $basePath;
+    return str_repeat('../', $depth) . 'shared/';
 }
 
-/**
- * Alternative: Get base path using the current file's directory
- * This is more reliable when files are included from different locations
- */
-function getAssetBasePathFromFile() {
-    // Get the absolute path of the current file
-    $currentFile = $_SERVER['SCRIPT_FILENAME'];
-    
-    // Get the directory of the current file
-    $currentDir = dirname($currentFile);
-    
-    // Find the project root (where 'shared' directory exists)
-    $projectRoot = $currentDir;
-    $found = false;
-    
-    // Try up to 10 levels up to find the 'shared' directory
-    for ($i = 0; $i < 10; $i++) {
-        if (is_dir($projectRoot . '/shared')) {
-            $found = true;
-            break;
-        }
-        $projectRoot = dirname($projectRoot);
-    }
-    
-    if ($found) {
-        // Calculate relative path from current file to shared directory
-        $relativePath = str_replace($_SERVER['DOCUMENT_ROOT'], '', $projectRoot . '/shared/');
-        return $relativePath;
-    }
-    
-    // Fallback: use the depth-based calculation
-    return getAssetBasePath();
-}
-
-// Use the more reliable method
-$assetBase = getAssetBasePathFromFile();
-
-// For debugging - uncomment to see the calculated path
-// error_log("Asset base path: " . $assetBase);
+$assetBase = getHeaderAssetBase();
 
 // Get current page for active link highlighting
 $currentPage = basename($_SERVER['PHP_SELF']);
@@ -105,9 +50,6 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['user_role'])) {
     $userRole = $_SESSION['user_role'];
     $userName = $_SESSION['user_name'] ?? '';
 }
-
-// Get the project root URL for absolute paths
-$projectRoot = '/fitpal/';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -126,7 +68,7 @@ $projectRoot = '/fitpal/';
     <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/global.css">
     <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/header.css">
 
-    <!-- Google Fonts (Optional) -->
+    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -159,10 +101,8 @@ $projectRoot = '/fitpal/';
 
             <!-- Navigation Section -->
             <nav class="header-nav" id="mainNav" role="navigation" aria-label="Main navigation">
-                <!-- Primary Navigation Links -->
                 <ul class="nav-list">
                     <?php if ($isLoggedIn): ?>
-                    <!-- Logged In User Navigation -->
                     <li class="nav-item">
                         <a href="<?php echo $assetBase; ?>../<?php echo $userRole; ?>/pages/dashboard.php"
                             class="nav-link <?php echo ($currentPage === 'dashboard.php') ? 'active' : ''; ?>">
@@ -182,7 +122,6 @@ $projectRoot = '/fitpal/';
                         </a>
                     </li>
                     <?php else: ?>
-                    <!-- Public Navigation Links -->
                     <li class="nav-item">
                         <a href="<?php echo $assetBase; ?>../index.php"
                             class="nav-link <?php echo ($currentPage === 'index.php' || $currentPage === '') ? 'active' : ''; ?>">
@@ -190,13 +129,13 @@ $projectRoot = '/fitpal/';
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="<?php echo $assetBase; ?>../shared/pages/about.php"
+                        <a href="<?php echo $assetBase; ?>pages/about.php"
                             class="nav-link <?php echo ($currentPage === 'about.php') ? 'active' : ''; ?>">
                             About
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="<?php echo $assetBase; ?>../shared/pages/contact.php"
+                        <a href="<?php echo $assetBase; ?>pages/contact.php"
                             class="nav-link <?php echo ($currentPage === 'contact.php') ? 'active' : ''; ?>">
                             Contact
                         </a>
@@ -204,10 +143,8 @@ $projectRoot = '/fitpal/';
                     <?php endif; ?>
                 </ul>
 
-                <!-- Authentication / User Actions -->
                 <div class="nav-actions">
                     <?php if ($isLoggedIn): ?>
-                    <!-- Logged In User -->
                     <div class="user-profile">
                         <span class="user-name"><?php echo htmlspecialchars($userName); ?></span>
                         <a href="<?php echo $assetBase; ?>../shared/backend/scripts/logout.php" class="btn btn-logout"
@@ -216,7 +153,6 @@ $projectRoot = '/fitpal/';
                         </a>
                     </div>
                     <?php else: ?>
-                    <!-- Guest User - Login Links -->
                     <div class="auth-links">
                         <div class="auth-dropdown">
                             <button class="btn btn-login dropdown-toggle" id="loginDropdown" aria-expanded="false"
@@ -243,11 +179,10 @@ $projectRoot = '/fitpal/';
     <!-- Mobile Navigation Overlay -->
     <div class="mobile-overlay" id="mobileOverlay"></div>
 
-    <!-- Mobile Navigation Menu (hidden by default, shown on mobile) -->
+    <!-- Mobile Navigation Menu -->
     <nav class="mobile-nav" id="mobileNav" role="navigation" aria-label="Mobile navigation">
         <ul class="mobile-nav-list">
             <?php if ($isLoggedIn): ?>
-            <!-- Logged In User Mobile Navigation -->
             <li class="mobile-nav-item">
                 <a href="<?php echo $assetBase; ?>../<?php echo $userRole; ?>/pages/dashboard.php"
                     class="mobile-nav-link <?php echo ($currentPage === 'dashboard.php') ? 'active' : ''; ?>">
@@ -273,7 +208,6 @@ $projectRoot = '/fitpal/';
                 </a>
             </li>
             <?php else: ?>
-            <!-- Guest Mobile Navigation -->
             <li class="mobile-nav-item">
                 <a href="<?php echo $assetBase; ?>../index.php"
                     class="mobile-nav-link <?php echo ($currentPage === 'index.php' || $currentPage === '') ? 'active' : ''; ?>">
@@ -281,13 +215,13 @@ $projectRoot = '/fitpal/';
                 </a>
             </li>
             <li class="mobile-nav-item">
-                <a href="<?php echo $assetBase; ?>../shared/pages/about.php"
+                <a href="<?php echo $assetBase; ?>pages/about.php"
                     class="mobile-nav-link <?php echo ($currentPage === 'about.php') ? 'active' : ''; ?>">
                     About
                 </a>
             </li>
             <li class="mobile-nav-item">
-                <a href="<?php echo $assetBase; ?>../shared/pages/contact.php"
+                <a href="<?php echo $assetBase; ?>pages/contact.php"
                     class="mobile-nav-link <?php echo ($currentPage === 'contact.php') ? 'active' : ''; ?>">
                     Contact
                 </a>
@@ -324,5 +258,4 @@ $projectRoot = '/fitpal/';
         </ul>
     </nav>
 
-    <!-- Main content wrapper starts here -->
     <main class="main-content" role="main">
