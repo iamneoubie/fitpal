@@ -2,10 +2,12 @@
  * FitPal Footer Styles
  * 
  * This file contains styles for the footer component.
+ * Uses global CSS variables from global.css.
+ * Footer sticks to bottom of page.
  */
 
 /* ============================================
-   FOOTER - Make sure it sticks to bottom
+   FOOTER - STICKS TO BOTTOM
    ============================================ */
 
 .footer {
@@ -57,7 +59,12 @@
     font-size: var(--font-size-sm);
     margin: 0;
     max-width: 300px;
+    line-height: 1.6;
 }
+
+/* ============================================
+   SOCIAL LINKS
+   ============================================ */
 
 .footer-social {
     display: flex;
@@ -85,6 +92,10 @@
     height: 18px;
     filter: brightness(0) saturate(100%) invert(100%);
 }
+
+/* ============================================
+   FOOTER LOWER
+   ============================================ */
 
 .footer-lower {
     max-width: 1200px;
@@ -119,23 +130,29 @@
 }
 
 /* ============================================
-   RESPONSIVE
+   RESPONSIVE FOOTER
    ============================================ */
 
 @media (max-width: 768px) {
     .footer-upper {
         flex-direction: column;
         text-align: center;
+        gap: var(--spacing-6);
+    }
+
+    .footer-brand {
+        align-items: center;
     }
 
     .footer-description {
         max-width: 100%;
+        text-align: center;
     }
 
     .footer-lower {
         flex-direction: column;
         text-align: center;
-        gap: var(--spacing-2);
+        gap: var(--spacing-3);
     }
 
     .footer-links {

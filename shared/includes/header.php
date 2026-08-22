@@ -6,7 +6,12 @@
  * It includes the HTML head, navigation bar, and shared CSS/JS links.
  * 
  * Usage: require_once __DIR__ . '/shared/includes/header.php';
+ * 
+ * @package FitPal
+ * @version 1.0
  */
+
+declare(strict_types=1);
 
 // Start session if not already started
 if (session_status() === PHP_SESSION_NONE) {
@@ -14,8 +19,12 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 // ===== PATH DETECTION =====
-// Detect the base path for assets based on current file location
-function getHeaderAssetBase() {
+/**
+ * Get the base path for assets based on current file location
+ * 
+ * @return string The asset base path
+ */
+function getHeaderAssetBase(): string {
     $scriptPath = $_SERVER['SCRIPT_NAME'];
     $dirPath = dirname($scriptPath);
     $segments = array_filter(explode('/', $dirPath));
@@ -34,21 +43,22 @@ $assetBase = getHeaderAssetBase();
 $currentPage = basename($_SERVER['PHP_SELF']);
 $currentDir = basename(dirname($_SERVER['PHP_SELF']));
 
-// Determine which role is currently active (if any)
-$activeRole = '';
-if (in_array($currentDir, ['customer', 'restaurant', 'rider', 'admin'])) {
-    $activeRole = $currentDir;
-}
+// Check if we're on the landing page (root index.php)
+$isLandingPage = ($currentPage === 'index.php' && $currentDir === 'fitpal');
 
-// Check if user is logged in for any role
-$isLoggedIn = false;
-$userRole = null;
-$userName = '';
+// Determine page-specific CSS to load in head
+$pageCssMap = [
+    'index.php' => 'landing.css',
+    'about.php' => 'about.css',
+    'contact.php' => 'contact.css',
+    'privacy_policy.php' => 'privacy_policy.css',
+    'terms_conditions.php' => 'terms_conditions.css'
+];
 
-if (isset($_SESSION['user_id']) && isset($_SESSION['user_role'])) {
-    $isLoggedIn = true;
-    $userRole = $_SESSION['user_role'];
-    $userName = $_SESSION['user_name'] ?? '';
+$pageCssFile = $pageCssMap[$currentPage] ?? '';
+$pageCssPath = '';
+if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFile)) {
+    $pageCssPath = $assetBase . 'assets/css/' . $pageCssFile;
 }
 ?>
 <!DOCTYPE html>
@@ -64,18 +74,19 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['user_role'])) {
     <link rel="icon" type="image/x-icon" href="<?php echo $assetBase; ?>assets/images/brand/favicon.ico">
     <link rel="shortcut icon" href="<?php echo $assetBase; ?>assets/images/brand/favicon.ico">
 
-    <!-- Global CSS -->
+    <!-- ============================================
+         CSS - Load in HEAD for proper rendering
+         ============================================ -->
+    <!-- Global CSS (variables, utilities, base styles) -->
     <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/global.css">
+
+    <!-- Header CSS -->
     <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/header.css">
 
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
-    <!-- Shared JavaScript -->
-    <script src="<?php echo $assetBase; ?>assets/ui/js/utils.js" defer></script>
-    <script src="<?php echo $assetBase; ?>assets/ui/js/header.js" defer></script>
+    <!-- Page-Specific CSS (loaded in head for no FOUC) -->
+    <?php if (!empty($pageCssPath)): ?>
+    <link rel="stylesheet" href="<?php echo $pageCssPath; ?>">
+    <?php endif; ?>
 </head>
 
 <body>
@@ -91,7 +102,8 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['user_role'])) {
             </div>
 
             <!-- Mobile Menu Toggle -->
-            <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation menu" aria-expanded="false">
+            <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation menu" aria-expanded="false"
+                type="button">
                 <span class="menu-icon">
                     <span class="bar"></span>
                     <span class="bar"></span>
@@ -102,29 +114,9 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['user_role'])) {
             <!-- Navigation Section -->
             <nav class="header-nav" id="mainNav" role="navigation" aria-label="Main navigation">
                 <ul class="nav-list">
-                    <?php if ($isLoggedIn): ?>
-                    <li class="nav-item">
-                        <a href="<?php echo $assetBase; ?>../<?php echo $userRole; ?>/pages/dashboard.php"
-                            class="nav-link <?php echo ($currentPage === 'dashboard.php') ? 'active' : ''; ?>">
-                            Dashboard
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="<?php echo $assetBase; ?>../<?php echo $userRole; ?>/pages/orders.php"
-                            class="nav-link <?php echo ($currentPage === 'orders.php') ? 'active' : ''; ?>">
-                            Orders
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="<?php echo $assetBase; ?>../<?php echo $userRole; ?>/pages/profile.php"
-                            class="nav-link <?php echo ($currentPage === 'profile.php') ? 'active' : ''; ?>">
-                            Profile
-                        </a>
-                    </li>
-                    <?php else: ?>
                     <li class="nav-item">
                         <a href="<?php echo $assetBase; ?>../index.php"
-                            class="nav-link <?php echo ($currentPage === 'index.php' || $currentPage === '') ? 'active' : ''; ?>">
+                            class="nav-link <?php echo ($isLandingPage || $currentPage === '') ? 'active' : ''; ?>">
                             Home
                         </a>
                     </li>
@@ -140,37 +132,38 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['user_role'])) {
                             Contact
                         </a>
                     </li>
-                    <?php endif; ?>
                 </ul>
 
                 <div class="nav-actions">
-                    <?php if ($isLoggedIn): ?>
-                    <div class="user-profile">
-                        <span class="user-name"><?php echo htmlspecialchars($userName); ?></span>
-                        <a href="<?php echo $assetBase; ?>../shared/backend/scripts/logout.php" class="btn btn-logout"
-                            onclick="return confirm('Are you sure you want to logout?');">
-                            Logout
-                        </a>
+                    <!-- Login Dropdown -->
+                    <div class="auth-dropdown">
+                        <button class="btn btn-login dropdown-toggle" id="loginDropdown" aria-expanded="false"
+                            aria-haspopup="true" type="button">
+                            Login ▾
+                        </button>
+                        <ul class="dropdown-menu" id="dropdownMenu" role="menu">
+                            <li role="none">
+                                <a href="<?php echo $assetBase; ?>../customer/pages/login.php" role="menuitem">
+                                    Customer
+                                </a>
+                            </li>
+                            <li role="none">
+                                <a href="<?php echo $assetBase; ?>../restaurant/pages/login.php" role="menuitem">
+                                    Restaurant
+                                </a>
+                            </li>
+                            <li role="none">
+                                <a href="<?php echo $assetBase; ?>../rider/pages/login.php" role="menuitem">
+                                    Rider
+                                </a>
+                            </li>
+                            <li role="none">
+                                <a href="<?php echo $assetBase; ?>../admin/pages/login.php" role="menuitem">
+                                    Admin
+                                </a>
+                            </li>
+                        </ul>
                     </div>
-                    <?php else: ?>
-                    <div class="auth-links">
-                        <div class="auth-dropdown">
-                            <button class="btn btn-login dropdown-toggle" id="loginDropdown" aria-expanded="false"
-                                aria-haspopup="true">
-                                Login
-                            </button>
-                            <ul class="dropdown-menu" aria-labelledby="loginDropdown">
-                                <li><a href="<?php echo $assetBase; ?>../customer/pages/login.php">Customer</a></li>
-                                <li><a href="<?php echo $assetBase; ?>../restaurant/pages/login.php">Restaurant</a></li>
-                                <li><a href="<?php echo $assetBase; ?>../rider/pages/login.php">Rider</a></li>
-                                <li><a href="<?php echo $assetBase; ?>../admin/pages/login.php">Admin</a></li>
-                            </ul>
-                        </div>
-                        <a href="<?php echo $assetBase; ?>../customer/pages/register.php" class="btn btn-register">
-                            Register
-                        </a>
-                    </div>
-                    <?php endif; ?>
                 </div>
             </nav>
         </div>
@@ -182,35 +175,9 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['user_role'])) {
     <!-- Mobile Navigation Menu -->
     <nav class="mobile-nav" id="mobileNav" role="navigation" aria-label="Mobile navigation">
         <ul class="mobile-nav-list">
-            <?php if ($isLoggedIn): ?>
-            <li class="mobile-nav-item">
-                <a href="<?php echo $assetBase; ?>../<?php echo $userRole; ?>/pages/dashboard.php"
-                    class="mobile-nav-link <?php echo ($currentPage === 'dashboard.php') ? 'active' : ''; ?>">
-                    Dashboard
-                </a>
-            </li>
-            <li class="mobile-nav-item">
-                <a href="<?php echo $assetBase; ?>../<?php echo $userRole; ?>/pages/orders.php"
-                    class="mobile-nav-link <?php echo ($currentPage === 'orders.php') ? 'active' : ''; ?>">
-                    Orders
-                </a>
-            </li>
-            <li class="mobile-nav-item">
-                <a href="<?php echo $assetBase; ?>../<?php echo $userRole; ?>/pages/profile.php"
-                    class="mobile-nav-link <?php echo ($currentPage === 'profile.php') ? 'active' : ''; ?>">
-                    Profile
-                </a>
-            </li>
-            <li class="mobile-nav-item">
-                <a href="<?php echo $assetBase; ?>../shared/backend/scripts/logout.php"
-                    class="mobile-nav-link mobile-logout">
-                    Logout
-                </a>
-            </li>
-            <?php else: ?>
             <li class="mobile-nav-item">
                 <a href="<?php echo $assetBase; ?>../index.php"
-                    class="mobile-nav-link <?php echo ($currentPage === 'index.php' || $currentPage === '') ? 'active' : ''; ?>">
+                    class="mobile-nav-link <?php echo ($isLandingPage || $currentPage === '') ? 'active' : ''; ?>">
                     Home
                 </a>
             </li>
@@ -247,15 +214,12 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['user_role'])) {
                     Admin Login
                 </a>
             </li>
-            <li class="mobile-nav-divider"></li>
-            <li class="mobile-nav-item">
-                <a href="<?php echo $assetBase; ?>../customer/pages/register.php"
-                    class="mobile-nav-link mobile-register">
-                    Register
-                </a>
-            </li>
-            <?php endif; ?>
         </ul>
     </nav>
 
     <main class="main-content" role="main">
+
+        <!-- ============================================
+         JavaScript - Load at end of body with defer
+         ============================================ -->
+        <script src="<?php echo $assetBase; ?>assets/ui/js/header.js" defer></script>

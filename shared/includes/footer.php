@@ -5,10 +5,20 @@
  * This is the global footer component used across all roles and the public landing page.
  * 
  * Usage: require_once __DIR__ . '/shared/includes/footer.php';
+ * 
+ * @package FitPal
+ * @version 1.0
  */
 
+declare(strict_types=1);
+
 // ===== PATH DETECTION =====
-function getFooterAssetBase() {
+/**
+ * Get the base path for assets based on current file location
+ * 
+ * @return string The asset base path
+ */
+function getFooterAssetBase(): string {
     $scriptPath = $_SERVER['SCRIPT_NAME'];
     $dirPath = dirname($scriptPath);
     $segments = array_filter(explode('/', $dirPath));
@@ -22,10 +32,6 @@ function getFooterAssetBase() {
 }
 
 $assetBase = getFooterAssetBase();
-
-$current_page = basename($_SERVER['PHP_SELF']);
-$is_root = ($current_page == 'index.php');
-$pathPrefix = $is_root ? '' : '../';
 ?>
 </main> <!-- Close main-content from header.php -->
 
@@ -56,8 +62,8 @@ $pathPrefix = $is_root ? '' : '../';
     </div>
     <div class="footer-lower">
         <div class="footer-links">
-            <a href="<?php echo $assetBase; ?>pages/privacy-policy.php">Privacy Policy</a>
-            <a href="<?php echo $assetBase; ?>pages/terms-conditions.php">Terms & Conditions</a>
+            <a href="<?php echo $assetBase; ?>pages/privacy_policy.php">Privacy Policy</a>
+            <a href="<?php echo $assetBase; ?>pages/terms_conditions.php">Terms & Conditions</a>
             <a href="<?php echo $assetBase; ?>pages/contact.php">Contact</a>
         </div>
         <div class="footer-copyright">
@@ -65,6 +71,9 @@ $pathPrefix = $is_root ? '' : '../';
         </div>
     </div>
 </footer>
+
+<!-- Footer CSS -->
+<link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/footer.css">
 
 </body>
 

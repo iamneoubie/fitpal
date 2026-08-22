@@ -1,56 +1,46 @@
 /**
  * FitPal Landing Page Styles
  * 
- * This file contains styles specific to the public landing page.
- * It builds on the global CSS variables and provides a modern,
- * engaging design for the homepage.
+ * ONLY styles specific to the landing page.
+ * All base styles come from global.css.
+ * 
+ * This file OVERRIDES or EXTENDS global.css styles.
  */
 
 /* ============================================
-   HERO SECTION
+   CONTENT WRAPPER - Full width
    ============================================ */
 
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+}
+
+/* ============================================
+   LANDING PAGE SPECIFIC STYLES
+   ============================================ */
+
+/* Hero section - specific to landing page */
 .hero-section {
-    padding: var(--spacing-12) 0;
+    padding: var(--spacing-8) var(--spacing-4);
     background: linear-gradient(135deg, var(--background) 0%, var(--gray-50) 100%);
     position: relative;
     overflow: hidden;
-}
-
-.hero-section::before {
-    content: '';
-    position: absolute;
-    top: -50%;
-    right: -20%;
-    width: 600px;
-    height: 600px;
-    background: radial-gradient(circle, rgba(89, 193, 74, 0.08) 0%, transparent 70%);
-    border-radius: 50%;
-    pointer-events: none;
-}
-
-.hero-section::after {
-    content: '';
-    position: absolute;
-    bottom: -30%;
-    left: -10%;
-    width: 400px;
-    height: 400px;
-    background: radial-gradient(circle, rgba(89, 193, 74, 0.05) 0%, transparent 70%);
-    border-radius: 50%;
-    pointer-events: none;
+    width: 100%;
 }
 
 .hero-container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 0 var(--spacing-4);
+    padding: 0;
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: var(--spacing-8);
     align-items: center;
-    position: relative;
-    z-index: 1;
 }
 
 .hero-content {
@@ -89,10 +79,7 @@
     line-height: 1.2;
     color: var(--text);
 }
-
-.hero-title span {
-    color: var(--primary);
-}
+.hero-title span { color: var(--primary); }
 
 .hero-description {
     font-size: var(--font-size-lg);
@@ -106,11 +93,6 @@
     flex-wrap: wrap;
     gap: var(--spacing-3);
     margin-top: var(--spacing-2);
-}
-
-.hero-actions .btn-lg {
-    padding: var(--spacing-3) var(--spacing-6);
-    font-size: var(--font-size-base);
 }
 
 .hero-stats {
@@ -132,12 +114,10 @@
     font-weight: 700;
     color: var(--text);
 }
-
 .hero-stat-label {
     font-size: var(--font-size-sm);
     color: var(--gray-500);
 }
-
 .hero-stat-divider {
     width: 1px;
     height: 40px;
@@ -149,7 +129,6 @@
     justify-content: center;
     align-items: center;
 }
-
 .hero-illustration {
     max-width: 100%;
     height: auto;
@@ -161,18 +140,16 @@
     50% { transform: translateY(-20px); }
 }
 
-/* ============================================
-   FEATURES SECTION
-   ============================================ */
-
+/* Features section - landing page specific */
 .features-section {
-    padding: var(--spacing-16) 0;
+    padding: var(--spacing-12) var(--spacing-4);
     background-color: var(--white);
+    width: 100%;
 }
 
 .section-header {
     text-align: center;
-    margin-bottom: var(--spacing-10);
+    margin-bottom: var(--spacing-8);
 }
 
 .section-title {
@@ -181,10 +158,7 @@
     color: var(--text);
     margin-bottom: var(--spacing-2);
 }
-
-.section-title span {
-    color: var(--primary);
-}
+.section-title span { color: var(--primary); }
 
 .section-subtitle {
     font-size: var(--font-size-lg);
@@ -195,6 +169,8 @@
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: var(--spacing-6);
+    max-width: 1200px;
+    margin: 0 auto;
 }
 
 .feature-card {
@@ -205,7 +181,6 @@
     border: 1px solid var(--gray-200);
     transition: all var(--transition-base);
 }
-
 .feature-card:hover {
     box-shadow: var(--shadow-md);
     transform: translateY(-4px);
@@ -223,17 +198,13 @@
     justify-content: center;
     transition: all var(--transition-base);
 }
-
-.feature-card:hover .feature-icon {
-    background-color: var(--primary);
-}
+.feature-card:hover .feature-icon { background-color: var(--primary); }
 
 .feature-icon img {
     width: 32px;
     height: 32px;
     transition: filter var(--transition-base);
 }
-
 .feature-card:hover .feature-icon img {
     filter: brightness(0) saturate(100%) invert(100%);
 }
@@ -244,7 +215,6 @@
     margin-bottom: var(--spacing-2);
     color: var(--text);
 }
-
 .feature-description {
     color: var(--gray-500);
     line-height: 1.6;
@@ -252,36 +222,22 @@
     margin-bottom: 0;
 }
 
-/* ============================================
-   HOW IT WORKS SECTION
-   ============================================ */
-
+/* How it works section */
 .how-it-works-section {
-    padding: var(--spacing-16) 0;
+    padding: var(--spacing-12) var(--spacing-4);
     background-color: var(--gray-50);
+    width: 100%;
 }
 
 .steps-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: var(--spacing-6);
+    max-width: 1200px;
+    margin: 0 auto;
 }
 
-.step-card {
-    text-align: center;
-    position: relative;
-}
-
-.step-card:not(:last-child)::after {
-    content: '';
-    position: absolute;
-    top: 40px;
-    right: -20px;
-    width: 40px;
-    height: 2px;
-    background-color: var(--gray-300);
-    z-index: 1;
-}
+.step-card { text-align: center; position: relative; }
 
 .step-number {
     width: 48px;
@@ -310,16 +266,11 @@
     justify-content: center;
     transition: all var(--transition-base);
 }
-
 .step-card:hover .step-icon {
     background-color: rgba(89, 193, 74, 0.15);
     transform: scale(1.05);
 }
-
-.step-icon img {
-    width: 32px;
-    height: 32px;
-}
+.step-icon img { width: 32px; height: 32px; }
 
 .step-title {
     font-size: var(--font-size-lg);
@@ -327,7 +278,6 @@
     margin-bottom: var(--spacing-2);
     color: var(--text);
 }
-
 .step-description {
     color: var(--gray-500);
     font-size: var(--font-size-sm);
@@ -335,20 +285,19 @@
     margin-bottom: 0;
 }
 
-/* ============================================
-   RESTAURANTS SECTION
-   ============================================ */
-
+/* Restaurants section */
 .restaurants-section {
-    padding: var(--spacing-16) 0;
+    padding: var(--spacing-12) var(--spacing-4);
     background-color: var(--white);
+    width: 100%;
 }
 
 .restaurants-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: var(--spacing-6);
-    margin-bottom: var(--spacing-8);
+    max-width: 1200px;
+    margin: 0 auto var(--spacing-8);
 }
 
 .restaurant-card {
@@ -357,8 +306,10 @@
     overflow: hidden;
     border: 1px solid var(--gray-200);
     transition: all var(--transition-base);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
 }
-
 .restaurant-card:hover {
     box-shadow: var(--shadow-md);
     transform: translateY(-4px);
@@ -369,21 +320,21 @@
     height: 180px;
     overflow: hidden;
     background-color: var(--gray-100);
+    flex-shrink: 0;
 }
-
 .restaurant-image img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     transition: transform var(--transition-base);
 }
-
-.restaurant-card:hover .restaurant-image img {
-    transform: scale(1.05);
-}
+.restaurant-card:hover .restaurant-image img { transform: scale(1.05); }
 
 .restaurant-info {
     padding: var(--spacing-4);
+    display: flex;
+    flex-direction: column;
+    flex: 1;
 }
 
 .restaurant-header {
@@ -406,6 +357,8 @@
     background-color: var(--gray-100);
     padding: var(--spacing-1) var(--spacing-2);
     border-radius: var(--radius-full);
+    flex-shrink: 0;
+    margin-left: var(--spacing-2);
 }
 
 .restaurant-rating {
@@ -415,29 +368,16 @@
     margin-bottom: var(--spacing-2);
 }
 
-.rating-stars {
-    display: flex;
-    gap: 2px;
-}
-
-.star {
-    font-size: 14px;
-}
-
-.star.filled {
-    color: #f5a623;
-}
-
-.star.empty {
-    color: var(--gray-300);
-}
+.rating-stars { display: flex; gap: 2px; }
+.star { font-size: 14px; }
+.star.filled { color: #f5a623; }
+.star.empty { color: var(--gray-300); }
 
 .rating-value {
     font-weight: 600;
     color: var(--text);
     font-size: var(--font-size-sm);
 }
-
 .rating-reviews {
     color: var(--gray-400);
     font-size: var(--font-size-xs);
@@ -448,6 +388,7 @@
     flex-wrap: wrap;
     gap: var(--spacing-1);
     margin-bottom: var(--spacing-3);
+    min-height: 28px;
 }
 
 .restaurant-tag {
@@ -458,112 +399,24 @@
     border-radius: var(--radius-full);
     font-weight: 500;
 }
-
-.restaurant-card .btn {
-    width: 100%;
-}
+.restaurant-card .btn { margin-top: auto; width: 100%; }
 
 .restaurants-action {
     text-align: center;
+    max-width: 1200px;
+    margin: 0 auto;
 }
 
-/* ============================================
-   TESTIMONIALS SECTION
-   ============================================ */
-
-.testimonials-section {
-    padding: var(--spacing-16) 0;
-    background-color: var(--gray-50);
-}
-
-.testimonials-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: var(--spacing-6);
-}
-
-.testimonial-card {
-    background: var(--white);
-    border-radius: var(--radius-lg);
-    padding: var(--spacing-6);
-    border: 1px solid var(--gray-200);
-    transition: all var(--transition-base);
-}
-
-.testimonial-card:hover {
-    box-shadow: var(--shadow-md);
-    transform: translateY(-2px);
-}
-
-.testimonial-quote {
-    position: relative;
-    margin-bottom: var(--spacing-4);
-}
-
-.quote-icon {
-    font-size: 48px;
-    color: var(--primary);
-    opacity: 0.2;
-    line-height: 1;
-    display: block;
-    margin-bottom: -20px;
-}
-
-.testimonial-text {
-    color: var(--gray-600);
-    font-style: italic;
-    line-height: 1.7;
-    font-size: var(--font-size-sm);
-    margin: 0;
-}
-
-.testimonial-author {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-3);
-    padding-top: var(--spacing-3);
-    border-top: 1px solid var(--gray-100);
-}
-
-.testimonial-avatar {
-    width: 48px;
-    height: 48px;
-    border-radius: var(--radius-full);
-    object-fit: cover;
-    background-color: var(--gray-100);
-}
-
-.testimonial-info {
-    display: flex;
-    flex-direction: column;
-}
-
-.testimonial-name {
-    font-weight: 600;
-    color: var(--text);
-    font-size: var(--font-size-sm);
-}
-
-.testimonial-role {
-    font-size: var(--font-size-xs);
-    color: var(--gray-400);
-}
-
-/* ============================================
-   CTA SECTION
-   ============================================ */
-
+/* CTA section */
 .cta-section {
-    padding: var(--spacing-16) 0;
+    padding: var(--spacing-12) var(--spacing-4);
     background: linear-gradient(135deg, var(--primary), var(--primary-dark));
     color: var(--white);
     text-align: center;
+    width: 100%;
 }
 
-.cta-content {
-    max-width: 600px;
-    margin: 0 auto;
-}
+.cta-content { max-width: 600px; margin: 0 auto; }
 
 .cta-title {
     font-size: var(--font-size-3xl);
@@ -571,7 +424,6 @@
     color: var(--white);
     margin-bottom: var(--spacing-3);
 }
-
 .cta-description {
     font-size: var(--font-size-lg);
     color: rgba(255, 255, 255, 0.9);
@@ -583,238 +435,61 @@
     color: var(--primary);
     border-color: var(--white);
 }
-
 .cta-section .btn-primary:hover {
     background-color: var(--gray-50);
     border-color: var(--gray-50);
 }
-
 .cta-section .btn-outline {
     background-color: transparent;
     color: var(--white);
     border-color: rgba(255, 255, 255, 0.3);
 }
-
 .cta-section .btn-outline:hover {
     background-color: rgba(255, 255, 255, 0.1);
     border-color: var(--white);
 }
 
 /* ============================================
-   RESPONSIVE DESIGN
+   RESPONSIVE - LANDING PAGE OVERRIDES
    ============================================ */
 
-/* Tablets and smaller */
 @media (max-width: 992px) {
     .hero-container {
         grid-template-columns: 1fr;
         text-align: center;
     }
-
-    .hero-content {
-        align-items: center;
-    }
-
-    .hero-badge {
-        align-self: center;
-    }
-
-    .hero-description {
-        max-width: 100%;
-    }
-
-    .hero-actions {
-        justify-content: center;
-    }
-
-    .hero-stats {
-        justify-content: center;
-    }
-
-    .hero-image {
-        order: -1;
-    }
-
-    .hero-illustration {
-        max-width: 60%;
-    }
-
-    .features-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-    .steps-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-    .step-card:not(:last-child)::after {
-        display: none;
-    }
-
-    .restaurants-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-    .testimonials-grid {
-        grid-template-columns: 1fr 1fr;
-    }
+    .hero-content { align-items: center; }
+    .hero-badge { align-self: center; }
+    .hero-description { max-width: 100%; }
+    .hero-actions { justify-content: center; }
+    .hero-stats { justify-content: center; }
+    .hero-image { order: -1; }
+    .hero-illustration { max-width: 60%; }
+    .features-grid { grid-template-columns: repeat(2, 1fr); }
+    .steps-grid { grid-template-columns: repeat(2, 1fr); }
+    .restaurants-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* Mobile devices */
 @media (max-width: 768px) {
-    .hero-section {
-        padding: var(--spacing-8) 0;
+    .hero-section { padding: var(--spacing-6) var(--spacing-3); }
+    .hero-title { font-size: var(--font-size-3xl); }
+    .hero-description { font-size: var(--font-size-base); }
+    .hero-stats { flex-direction: column; gap: var(--spacing-3); }
+    .hero-stat-divider { display: none; }
+    .hero-illustration { max-width: 80%; }
+    .section-title { font-size: var(--font-size-2xl); }
+    .features-section, .how-it-works-section, .restaurants-section, .cta-section {
+        padding: var(--spacing-8) var(--spacing-3);
     }
-
-    .hero-title {
-        font-size: var(--font-size-3xl);
-    }
-
-    .hero-description {
-        font-size: var(--font-size-base);
-    }
-
-    .hero-stats {
-        flex-direction: column;
-        gap: var(--spacing-3);
-    }
-
-    .hero-stat-divider {
-        display: none;
-    }
-
-    .hero-illustration {
-        max-width: 80%;
-    }
-
-    .section-title {
-        font-size: var(--font-size-2xl);
-    }
-
-    .features-grid {
-        grid-template-columns: 1fr;
-        gap: var(--spacing-4);
-    }
-
-    .steps-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .restaurants-grid {
-        grid-template-columns: 1fr;
-        gap: var(--spacing-4);
-    }
-
-    .testimonials-grid {
-        grid-template-columns: 1fr;
-        gap: var(--spacing-4);
-    }
-
-    .cta-title {
-        font-size: var(--font-size-2xl);
-    }
-
-    .cta-description {
-        font-size: var(--font-size-base);
-    }
-
-    .cta-section .btn {
-        width: 100%;
-        margin: var(--spacing-2) 0;
-    }
-
-    .hero-actions .btn-lg {
-        width: 100%;
-        justify-content: center;
-    }
+    .features-grid { grid-template-columns: 1fr; gap: var(--spacing-4); }
+    .steps-grid { grid-template-columns: 1fr; }
+    .restaurants-grid { grid-template-columns: 1fr; gap: var(--spacing-4); }
+    .cta-title { font-size: var(--font-size-2xl); }
+    .cta-description { font-size: var(--font-size-base); }
 }
 
-/* Small mobile devices */
 @media (max-width: 576px) {
-    .hero-section {
-        padding: var(--spacing-6) 0;
-    }
-
-    .hero-title {
-        font-size: var(--font-size-2xl);
-    }
-
-    .hero-illustration {
-        max-width: 100%;
-    }
-
-    .hero-stats {
-        flex-direction: column;
-        gap: var(--spacing-3);
-        padding-top: var(--spacing-3);
-    }
-
-    .hero-stat-number {
-        font-size: var(--font-size-xl);
-    }
-
-    .feature-card {
-        padding: var(--spacing-4);
-    }
-
-    .restaurant-card .restaurant-image {
-        height: 140px;
-    }
-
-    .testimonial-card {
-        padding: var(--spacing-4);
-    }
+    .hero-title { font-size: var(--font-size-2xl); }
+    .hero-illustration { max-width: 100%; }
+    .restaurant-card .restaurant-image { height: 140px; }
 }
-
-/* ============================================
-   ANIMATIONS
-   ============================================ */
-
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(30px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.hero-content,
-.hero-image,
-.feature-card,
-.step-card,
-.restaurant-card,
-.testimonial-card {
-    animation: fadeInUp 0.6s ease forwards;
-}
-
-.hero-content {
-    animation-delay: 0.1s;
-}
-
-.hero-image {
-    animation-delay: 0.2s;
-}
-
-.feature-card:nth-child(1) { animation-delay: 0.1s; }
-.feature-card:nth-child(2) { animation-delay: 0.2s; }
-.feature-card:nth-child(3) { animation-delay: 0.3s; }
-.feature-card:nth-child(4) { animation-delay: 0.4s; }
-.feature-card:nth-child(5) { animation-delay: 0.5s; }
-.feature-card:nth-child(6) { animation-delay: 0.6s; }
-
-.step-card:nth-child(1) { animation-delay: 0.1s; }
-.step-card:nth-child(2) { animation-delay: 0.2s; }
-.step-card:nth-child(3) { animation-delay: 0.3s; }
-.step-card:nth-child(4) { animation-delay: 0.4s; }
-
-.restaurant-card:nth-child(1) { animation-delay: 0.1s; }
-.restaurant-card:nth-child(2) { animation-delay: 0.2s; }
-.restaurant-card:nth-child(3) { animation-delay: 0.3s; }
-.restaurant-card:nth-child(4) { animation-delay: 0.4s; }
-
-.testimonial-card:nth-child(1) { animation-delay: 0.1s; }
-.testimonial-card:nth-child(2) { animation-delay: 0.2s; }
-.testimonial-card:nth-child(3) { animation-delay: 0.3s; }
