@@ -1,0 +1,473 @@
+/**
+ * FitPal Customer Login Page Styles
+ * Mobile-First Design with Large Touch Targets
+ * Based on crooks-cart-collectives sign-in.css
+ */
+
+/* ============================================
+   CONTENT WRAPPER
+   ============================================ */
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+}
+
+.login-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 16px;
+    background: linear-gradient(135deg, #f9faf9 0%, #ffffff 100%);
+    flex: 1;
+    min-height: calc(100vh - 70px);
+}
+
+/* ============================================
+   LOGIN CONTAINER - Mobile First
+   ============================================ */
+
+.login-container {
+    max-width: 440px;
+    width: 100%;
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 32px 24px;
+    box-shadow: 0 8px 30px rgba(5, 10, 4, 0.12);
+    border: 1px solid #e2e6e2;
+    margin: 16px 0;
+}
+
+/* ============================================
+   LOGIN HEADER
+   ============================================ */
+
+.login-header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.login-title {
+    margin: 0 0 6px 0;
+    color: #050a04;
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.login-title span {
+    color: #59c14a;
+}
+
+.login-subtitle {
+    color: #788278;
+    font-size: 16px;
+    margin: 0;
+}
+
+/* ============================================
+   LOGIN FORM
+   ============================================ */
+
+.login-form .form-group {
+    margin-bottom: 20px;
+}
+
+.login-form .form-label {
+    display: block;
+    font-weight: 600;
+    color: #384238;
+    margin-bottom: 6px;
+    font-size: 15px;
+}
+
+.login-form .form-control {
+    width: 100%;
+    padding: 14px 16px;
+    border: 2px solid #c8cec8;
+    border-radius: 10px;
+    font-size: 16px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    background-color: #ffffff;
+    height: 54px;
+    box-sizing: border-box;
+    color: #050a04;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.login-form .form-control:focus {
+    outline: none;
+    border-color: #59c14a;
+    box-shadow: 0 0 0 4px rgba(89, 193, 74, 0.15);
+}
+
+.login-form .form-control.error {
+    border-color: #dc3545;
+}
+
+.login-form .form-control.error:focus {
+    box-shadow: 0 0 0 4px rgba(220, 53, 69, 0.15);
+}
+
+.login-form .form-control::placeholder {
+    color: #a0a8a0;
+    font-size: 15px;
+}
+
+.login-form .form-error {
+    color: #dc3545;
+    font-size: 14px;
+    margin-top: 6px;
+    display: none;
+    font-weight: 500;
+}
+
+/* ============================================
+   PASSWORD TOGGLE
+   ============================================ */
+
+.password-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.password-wrapper .form-control {
+    padding-right: 56px;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+    border-radius: 8px;
+}
+
+.password-toggle:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.password-toggle img {
+    width: 24px;
+    height: 24px;
+}
+
+/* ============================================
+   ALERT MESSAGES
+   ============================================ */
+
+.alert {
+    padding: 14px 16px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    border: 2px solid transparent;
+    font-size: 15px;
+    line-height: 1.6;
+}
+
+.alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+.alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+
+/* ============================================
+   LOGIN BUTTON - Large Touch Target
+   ============================================ */
+
+.login-form .btn {
+    margin-top: 4px;
+    padding: 16px 20px;
+    font-size: 17px;
+    font-weight: 700;
+    height: 56px;
+    width: 100%;
+    border-radius: 10px;
+    letter-spacing: 0.3px;
+}
+
+.login-form .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* ============================================
+   LOGIN FOOTER
+   ============================================ */
+
+.login-footer {
+    margin-top: 24px;
+    text-align: center;
+}
+
+.login-footer-text {
+    font-size: 15px;
+    color: #788278;
+    margin: 10px 0 0 0;
+    line-height: 1.6;
+}
+
+.login-footer-text a {
+    color: #59c14a;
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.2s;
+    padding: 4px 0;
+}
+
+.login-footer-text a:hover {
+    color: #3d8a32;
+    text-decoration: underline;
+}
+
+.login-footer-text .forgot-link {
+    color: #788278;
+}
+
+.login-footer-text .forgot-link:hover {
+    color: #59c14a;
+}
+
+/* ============================================
+   NOTIFIER MODAL - Mobile First
+   ============================================ */
+
+.notifier {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+    padding: 20px;
+}
+
+.notifier.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.notifier-content {
+    background: #ffffff;
+    padding: 40px 32px 32px;
+    border-radius: 16px;
+    max-width: 400px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+    animation: modalFadeIn 0.3s ease;
+}
+
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.notifier-icon {
+    margin: 0 auto 20px;
+    width: 72px;
+    height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(89, 193, 74, 0.1);
+    border-radius: 50%;
+}
+
+.notifier-icon img {
+    width: 36px;
+    height: 36px;
+}
+
+.notifier-content p {
+    font-size: 17px;
+    color: #050a04;
+    margin: 0 0 28px 0;
+    line-height: 1.6;
+    font-weight: 500;
+}
+
+.notifier-content .btn {
+    min-width: 120px;
+    padding: 14px 32px;
+    font-size: 16px;
+    font-weight: 600;
+    border-radius: 10px;
+    height: 50px;
+}
+
+/* ============================================
+   RESPONSIVE - MOBILE FIRST
+   ============================================ */
+
+/* Small phones */
+@media (max-width: 374px) {
+    .login-container {
+        padding: 24px 16px;
+        border-radius: 12px;
+    }
+
+    .login-title {
+        font-size: 24px;
+    }
+
+    .login-subtitle {
+        font-size: 14px;
+    }
+
+    .login-form .form-control {
+        height: 48px;
+        padding: 12px 14px;
+        font-size: 15px;
+    }
+
+    .login-form .btn {
+        height: 48px;
+        font-size: 15px;
+        padding: 12px 16px;
+    }
+
+    .password-toggle img {
+        width: 20px;
+        height: 20px;
+    }
+
+    .password-wrapper .form-control {
+        padding-right: 48px;
+    }
+
+    .notifier-content {
+        padding: 32px 20px 24px;
+    }
+
+    .notifier-content p {
+        font-size: 15px;
+    }
+
+    .notifier-icon {
+        width: 60px;
+        height: 60px;
+    }
+
+    .notifier-icon img {
+        width: 30px;
+        height: 30px;
+    }
+
+    .notifier-content .btn {
+        height: 44px;
+        font-size: 14px;
+        padding: 10px 24px;
+    }
+}
+
+/* Medium phones */
+@media (min-width: 375px) and (max-width: 424px) {
+    .login-container {
+        padding: 28px 20px;
+    }
+
+    .login-title {
+        font-size: 26px;
+    }
+}
+
+/* Large phones */
+@media (min-width: 425px) and (max-width: 767px) {
+    .login-container {
+        padding: 32px 24px;
+    }
+}
+
+/* Tablets */
+@media (min-width: 768px) and (max-width: 1023px) {
+    .login-container {
+        padding: 40px 36px;
+    }
+
+    .login-title {
+        font-size: 32px;
+    }
+
+    .login-form .form-control {
+        height: 52px;
+        font-size: 16px;
+    }
+
+    .login-form .btn {
+        height: 52px;
+        font-size: 16px;
+    }
+}
+
+/* Desktops */
+@media (min-width: 1024px) {
+    .login-container {
+        padding: 48px 40px;
+    }
+
+    .login-title {
+        font-size: 34px;
+    }
+
+    .login-form .form-control {
+        height: 52px;
+        font-size: 16px;
+    }
+
+    .login-form .btn {
+        height: 52px;
+        font-size: 16px;
+    }
+}
+
+/* ============================================
+   UTILITY - Screen Reader Only
+   ============================================ */
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
