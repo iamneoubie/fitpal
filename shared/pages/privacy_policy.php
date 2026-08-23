@@ -12,12 +12,10 @@
 
 declare(strict_types=1);
 
-// Start session if not already started
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+// Session is now handled by header.php
+// No need to start session here
 
-// Include shared header
+// Include shared header (handles session)
 require_once __DIR__ . '/../includes/header.php';
 
 /**
@@ -154,7 +152,6 @@ $policySections = [
     PRIVACY POLICY PAGE CSS
     ============================================ -->
 <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/privacy_policy.css">
-<link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/footer.css">
 
 <!-- ============================================
     PRIVACY POLICY CONTENT

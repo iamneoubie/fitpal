@@ -12,12 +12,10 @@
 
 declare(strict_types=1);
 
-// Start session if not already started
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+// Session is now handled by header.php
+// No need to start session here
 
-// Include shared header
+// Include shared header (handles session)
 require_once __DIR__ . '/../includes/header.php';
 
 /**
@@ -38,53 +36,9 @@ function getAboutAssetBase(): string {
     return str_repeat('../', $depth) . 'shared/';
 }
 
-/**
- * Get the shared asset base path
- * 
- * @return string The shared asset base path
- */
-function getSharedAssetBase(): string {
-    $scriptPath = $_SERVER['SCRIPT_NAME'];
-    $dirPath = dirname($scriptPath);
-    $segments = array_filter(explode('/', $dirPath));
-    $depth = count($segments);
-    
-    if ($depth <= 0) {
-        return './shared/';
-    }
-    
-    return str_repeat('../', $depth) . 'shared/';
-}
-
 $assetBase = getAboutAssetBase();
-$sharedAssetBase = getSharedAssetBase();
 
-// Team members data
-$teamMembers = [
-    [
-        'name' => 'Lance N. Madelar',
-        'role' => 'Lead Developer',
-        'bio' => 'Project leader responsible for system architecture, database design, and core functionality implementation.',
-        'image' => $sharedAssetBase . 'assets/images/teams/lance-madelar.jpg',
-        'email' => 'lance.madelar@fitpal.com'
-    ],
-    [
-        'name' => 'Maria Santos',
-        'role' => 'UI/UX Designer',
-        'bio' => 'Designs the user interface and user experience for all FitPal platforms.',
-        'image' => $sharedAssetBase . 'assets/images/teams/maria-santos.jpg',
-        'email' => 'maria.santos@fitpal.com'
-    ],
-    [
-        'name' => 'John Dela Cruz',
-        'role' => 'Backend Developer',
-        'bio' => 'Builds and maintains the server-side logic and database optimization.',
-        'image' => $sharedAssetBase . 'assets/images/teams/john-dela-cruz.jpg',
-        'email' => 'john.delacruz@fitpal.com'
-    ]
-];
-
-// Mission points
+// ===== FIXED: Define mission points =====
 $missionPoints = [
     'Transparent nutritional information for every meal',
     'Dietary filtering by vegan, keto, gluten-free, and more',
@@ -92,6 +46,31 @@ $missionPoints = [
     'Special instructions communicated directly to the kitchen',
     'Real-time order tracking from preparation to delivery',
     'Nutrition analytics to understand your eating habits'
+];
+
+// Team members data
+$teamMembers = [
+    [
+        'name' => 'Lance N. Madelar',
+        'role' => 'Lead Developer',
+        'bio' => 'Project leader responsible for system architecture, database design, and core functionality implementation.',
+        'image' => $assetBase . 'assets/images/teams/lance-madelar.jpg',
+        'email' => 'lance.madelar@fitpal.com'
+    ],
+    [
+        'name' => 'Maria Santos',
+        'role' => 'UI/UX Designer',
+        'bio' => 'Designs the user interface and user experience for all FitPal platforms.',
+        'image' => $assetBase . 'assets/images/teams/maria-santos.jpg',
+        'email' => 'maria.santos@fitpal.com'
+    ],
+    [
+        'name' => 'John Dela Cruz',
+        'role' => 'Backend Developer',
+        'bio' => 'Builds and maintains the server-side logic and database optimization.',
+        'image' => $assetBase . 'assets/images/teams/john-dela-cruz.jpg',
+        'email' => 'john.delacruz@fitpal.com'
+    ]
 ];
 ?>
 <!-- ============================================
@@ -135,9 +114,8 @@ $missionPoints = [
                     </p>
                 </div>
                 <div class="mission-image">
-                    <img src="<?php echo $sharedAssetBase; ?>assets/images/about-mission.svg"
-                        alt="Our mission illustration"
-                        onerror="this.onerror=null; this.src='<?php echo $sharedAssetBase; ?>assets/images/placeholder.svg';">
+                    <img src="<?php echo $assetBase; ?>assets/images/about-mission.svg" alt="Our mission illustration"
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/placeholder.svg';">
                 </div>
             </div>
         </div>
@@ -154,7 +132,8 @@ $missionPoints = [
                 <?php foreach ($missionPoints as $point): ?>
                 <div class="offer-card">
                     <div class="offer-icon">
-                        <img src="<?php echo $sharedAssetBase; ?>assets/images/icons/check.svg" alt="Checkmark">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/check.svg" alt="Checkmark"
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg';">
                     </div>
                     <p class="heading-6"><?php echo htmlspecialchars($point, ENT_QUOTES, 'UTF-8'); ?></p>
                 </div>
@@ -176,7 +155,7 @@ $missionPoints = [
                     <div class="team-image">
                         <img src="<?php echo htmlspecialchars($member['image'], ENT_QUOTES, 'UTF-8'); ?>"
                             alt="<?php echo htmlspecialchars($member['name'], ENT_QUOTES, 'UTF-8'); ?>"
-                            onerror="this.onerror=null; this.src='<?php echo $sharedAssetBase; ?>assets/images/teams/default-avatar.jpg';">
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/teams/default-avatar.jpg';">
                     </div>
                     <div class="team-info">
                         <p class="heading-5"><?php echo htmlspecialchars($member['name'], ENT_QUOTES, 'UTF-8'); ?></p>

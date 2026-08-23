@@ -12,12 +12,10 @@
 
 declare(strict_types=1);
 
-// Start session if not already started
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+// Session is now handled by header.php
+// No need to start session here
 
-// Include shared header
+// Include shared header (handles session)
 require_once __DIR__ . '/shared/includes/header.php';
 
 /**
@@ -40,16 +38,7 @@ function getLandingAssetBase(): string {
 
 $assetBase = getLandingAssetBase();
 
-// Check if user is logged in for any role
-$isLoggedIn = false;
-$userRole = null;
-$userName = '';
-
-if (isset($_SESSION['user_id']) && isset($_SESSION['user_role'])) {
-    $isLoggedIn = true;
-    $userRole = $_SESSION['user_role'];
-    $userName = $_SESSION['user_name'] ?? '';
-}
+// $isLoggedIn, $userRole, $userName are now available from header.php
 
 // Featured restaurants (placeholder data)
 $featuredRestaurants = [
@@ -145,7 +134,7 @@ $featuredRestaurants = [
             <div class="hero-image">
                 <img src="<?php echo $assetBase; ?>assets/images/hero-image.svg"
                     alt="Healthy food ordering illustration" class="hero-illustration"
-                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/placeholder.svg';">
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/placeholder.svg'">
             </div>
         </div>
     </section>
@@ -162,7 +151,7 @@ $featuredRestaurants = [
                     <div class="feature-icon">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/nutrition.svg"
                             alt="Nutritional information"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg';">
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
                     </div>
                     <p class="feature-title">Nutritional Information</p>
                     <p class="feature-description">
@@ -172,7 +161,7 @@ $featuredRestaurants = [
                 <div class="feature-card">
                     <div class="feature-icon">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/dietary.svg" alt="Dietary filters"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg';">
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
                     </div>
                     <p class="feature-title">Dietary Filters</p>
                     <p class="feature-description">
@@ -182,7 +171,7 @@ $featuredRestaurants = [
                 <div class="feature-card">
                     <div class="feature-icon">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/allergy.svg" alt="Allergy management"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg';">
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
                     </div>
                     <p class="feature-title">Allergy Management</p>
                     <p class="feature-description">
@@ -193,7 +182,7 @@ $featuredRestaurants = [
                     <div class="feature-icon">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/instructions.svg"
                             alt="Special instructions"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg';">
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
                     </div>
                     <p class="feature-title">Special Instructions</p>
                     <p class="feature-description">
@@ -203,7 +192,7 @@ $featuredRestaurants = [
                 <div class="feature-card">
                     <div class="feature-icon">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/tracking.svg" alt="Order tracking"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg';">
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
                     </div>
                     <p class="feature-title">Order Tracking</p>
                     <p class="feature-description">
@@ -213,7 +202,7 @@ $featuredRestaurants = [
                 <div class="feature-card">
                     <div class="feature-icon">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/analytics.svg" alt="Nutrition analytics"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg';">
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
                     </div>
                     <p class="feature-title">Nutrition Analytics</p>
                     <p class="feature-description">
@@ -236,7 +225,7 @@ $featuredRestaurants = [
                     <div class="step-number">1</div>
                     <div class="step-icon">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/register.svg" alt="Create account"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg';">
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
                     </div>
                     <p class="step-title">Create Account</p>
                     <p class="step-description">
@@ -247,7 +236,7 @@ $featuredRestaurants = [
                     <div class="step-number">2</div>
                     <div class="step-icon">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/browse.svg" alt="Browse menus"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg';">
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
                     </div>
                     <p class="step-title">Browse Menus</p>
                     <p class="step-description">
@@ -258,7 +247,7 @@ $featuredRestaurants = [
                     <div class="step-number">3</div>
                     <div class="step-icon">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt="Place order"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg';">
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
                     </div>
                     <p class="step-title">Place Order</p>
                     <p class="step-description">
@@ -269,7 +258,7 @@ $featuredRestaurants = [
                     <div class="step-number">4</div>
                     <div class="step-icon">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/delivery.svg" alt="Track delivery"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg';">
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
                     </div>
                     <p class="step-title">Track Order</p>
                     <p class="step-description">
@@ -293,7 +282,7 @@ $featuredRestaurants = [
                     <div class="restaurant-image">
                         <img src="<?php echo htmlspecialchars($restaurant['image'], ENT_QUOTES, 'UTF-8'); ?>"
                             alt="<?php echo htmlspecialchars($restaurant['name'], ENT_QUOTES, 'UTF-8'); ?>"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/restaurants/placeholder.jpg';">
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/restaurants/placeholder.jpg'">
                     </div>
                     <div class="restaurant-info">
                         <div class="restaurant-header">

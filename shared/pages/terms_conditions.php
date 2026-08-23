@@ -12,12 +12,10 @@
 
 declare(strict_types=1);
 
-// Start session if not already started
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+// Session is now handled by header.php
+// No need to start session here
 
-// Include shared header
+// Include shared header (handles session)
 require_once __DIR__ . '/../includes/header.php';
 
 /**
@@ -151,7 +149,6 @@ $termsSections = [
     TERMS & CONDITIONS PAGE CSS
     ============================================ -->
 <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/terms_conditions.css">
-<link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/footer.css">
 
 <!-- ============================================
     TERMS & CONDITIONS CONTENT

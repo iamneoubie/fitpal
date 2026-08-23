@@ -12,12 +12,10 @@
 
 declare(strict_types=1);
 
-// Start session if not already started
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+// Session is now handled by header.php
+// No need to start session here
 
-// Include shared header
+// Include shared header (handles session)
 require_once __DIR__ . '/../includes/header.php';
 
 /**
@@ -39,6 +37,12 @@ function getContactAssetBase(): string {
 }
 
 $assetBase = getContactAssetBase();
+
+// ===== FIXED: Generate CSRF token =====
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+$csrfToken = $_SESSION['csrf_token'];
 
 // Contact information
 $contactInfo = [
@@ -78,50 +82,61 @@ $subject = '';
 $message = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
-    $fullName = trim($_POST['full_name'] ?? '');
-    $email = trim($_POST['email'] ?? '');
-    $subject = trim($_POST['subject'] ?? '');
-    $message = trim($_POST['message'] ?? '');
-    
-    if (empty($fullName)) {
-        $formErrors['full_name'] = 'Full name is required.';
-    } elseif (strlen($fullName) < 2) {
-        $formErrors['full_name'] = 'Full name must be at least 2 characters.';
-    }
-    
-    if (empty($email)) {
-        $formErrors['email'] = 'Email address is required.';
-    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $formErrors['email'] = 'Please enter a valid email address.';
-    }
-    
-    if (empty($subject)) {
-        $formErrors['subject'] = 'Subject is required.';
-    } elseif (strlen($subject) < 3) {
-        $formErrors['subject'] = 'Subject must be at least 3 characters.';
-    }
-    
-    if (empty($message)) {
-        $formErrors['message'] = 'Message is required.';
-    } elseif (strlen($message) < 10) {
-        $formErrors['message'] = 'Message must be at least 10 characters.';
-    }
-    
-    if (empty($formErrors)) {
-        error_log("Contact form submission from: {$fullName} ({$email}) - Subject: {$subject}");
-        $formSuccess = true;
-        $formSubmitted = true;
-        $fullName = '';
-        $email = '';
-        $subject = '';
-        $message = '';
+    // ===== FIXED: CSRF validation =====
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $csrfToken) {
+        $formErrors['general'] = 'Security validation failed. Please try again.';
     } else {
-        $formSubmitted = true;
+        $fullName = trim($_POST['full_name'] ?? '');
+        $email = trim($_POST['email'] ?? '');
+        $subject = trim($_POST['subject'] ?? '');
+        $message = trim($_POST['message'] ?? '');
+        
+        if (empty($fullName)) {
+            $formErrors['full_name'] = 'Full name is required.';
+        } elseif (strlen($fullName) < 2) {
+            $formErrors['full_name'] = 'Full name must be at least 2 characters.';
+        }
+        
+        if (empty($email)) {
+            $formErrors['email'] = 'Email address is required.';
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $formErrors['email'] = 'Please enter a valid email address.';
+        }
+        
+        if (empty($subject)) {
+            $formErrors['subject'] = 'Subject is required.';
+        } elseif (strlen($subject) < 3) {
+            $formErrors['subject'] = 'Subject must be at least 3 characters.';
+        }
+        
+        if (empty($message)) {
+            $formErrors['message'] = 'Message is required.';
+        } elseif (strlen($message) < 10) {
+            $formErrors['message'] = 'Message must be at least 10 characters.';
+        }
+        
+        if (empty($formErrors)) {
+            // ===== FIXED: Log the submission (no actual email sending in demo) =====
+            error_log("Contact form submission from: {$fullName} ({$email}) - Subject: {$subject}");
+            
+            // Store in database if needed (optional)
+            // In a real app, you would send an email here
+            
+            $formSuccess = true;
+            $formSubmitted = true;
+            $fullName = '';
+            $email = '';
+            $subject = '';
+            $message = '';
+            
+            // ===== FIXED: Regenerate CSRF token after successful submission =====
+            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+            $csrfToken = $_SESSION['csrf_token'];
+        } else {
+            $formSubmitted = true;
+        }
     }
 }
-
-// Get page-specific CSS
-$pageCss = $assetBase . 'assets/css/contact.css';
 ?>
 <!-- ============================================
     CONTENT WRAPPER
@@ -150,14 +165,16 @@ $pageCss = $assetBase . 'assets/css/contact.css';
             <div class="contact-info-grid">
                 <div class="contact-info-card">
                     <div class="contact-info-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/location.svg" alt="Location">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/location.svg" alt="Location"
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg';">
                     </div>
                     <p class="heading-6">Our Address</p>
                     <p><?php echo htmlspecialchars($contactInfo['address'], ENT_QUOTES, 'UTF-8'); ?></p>
                 </div>
                 <div class="contact-info-card">
                     <div class="contact-info-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/phone.svg" alt="Phone">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/phone.svg" alt="Phone"
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg';">
                     </div>
                     <p class="heading-6">Phone Number</p>
                     <p>
@@ -168,7 +185,8 @@ $pageCss = $assetBase . 'assets/css/contact.css';
                 </div>
                 <div class="contact-info-card">
                     <div class="contact-info-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/email.svg" alt="Email">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/email.svg" alt="Email"
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg';">
                     </div>
                     <p class="heading-6">Email Address</p>
                     <p>
@@ -179,7 +197,8 @@ $pageCss = $assetBase . 'assets/css/contact.css';
                 </div>
                 <div class="contact-info-card">
                     <div class="contact-info-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/clock.svg" alt="Hours">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/clock.svg" alt="Hours"
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg';">
                     </div>
                     <p class="heading-6">Business Hours</p>
                     <p><?php echo htmlspecialchars($contactInfo['hours'], ENT_QUOTES, 'UTF-8'); ?></p>
@@ -218,6 +237,9 @@ $pageCss = $assetBase . 'assets/css/contact.css';
                     <form method="POST"
                         action="<?php echo htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8'); ?>"
                         class="contact-form" id="contactForm" novalidate>
+                        <!-- ===== FIXED: CSRF token field ===== -->
+                        <input type="hidden" name="csrf_token"
+                            value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                         <input type="hidden" name="submit_contact" value="1">
 
                         <div class="form-row">

@@ -13,10 +13,23 @@
 
 declare(strict_types=1);
 
-// Start session if not already started
+// ===== SESSION MANAGEMENT =====
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+
+// Regenerate session ID periodically for security
+if (!isset($_SESSION['created'])) {
+    $_SESSION['created'] = time();
+} elseif (time() - $_SESSION['created'] > 1800) {
+    session_regenerate_id(true);
+    $_SESSION['created'] = time();
+}
+
+// ===== DATABASE CONNECTION =====
+// Include centralized database connection
+// This will show error page if database is not available
+require_once __DIR__ . '/../backend/database/database_connect.php';
 
 // ===== PATH DETECTION =====
 /**
@@ -46,7 +59,10 @@ $currentDir = basename(dirname($_SERVER['PHP_SELF']));
 // Check if we're on the landing page (root index.php)
 $isLandingPage = ($currentPage === 'index.php' && $currentDir === 'fitpal');
 
-// Determine page-specific CSS to load in head
+// ============================================
+// PAGE-SPECIFIC CSS PRELOADING - FIXED
+// Prevents FOUC and page transition flicker
+// ============================================
 $pageCssMap = [
     'index.php' => 'landing.css',
     'about.php' => 'about.css',
@@ -59,6 +75,17 @@ $pageCssFile = $pageCssMap[$currentPage] ?? '';
 $pageCssPath = '';
 if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFile)) {
     $pageCssPath = $assetBase . 'assets/css/' . $pageCssFile;
+}
+
+// Check if user is logged in (for any role)
+$isLoggedIn = false;
+$userRole = null;
+$userName = '';
+
+if (isset($_SESSION['user_id']) && isset($_SESSION['user_role'])) {
+    $isLoggedIn = true;
+    $userRole = $_SESSION['user_role'];
+    $userName = $_SESSION['user_name'] ?? '';
 }
 ?>
 <!DOCTYPE html>
@@ -96,7 +123,8 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
             <div class="header-logo">
                 <a href="<?php echo $assetBase; ?>../index.php" class="logo-link" aria-label="FitPal Home">
                     <img src="<?php echo $assetBase; ?>assets/images/brand/logo.svg" alt="FitPal Logo"
-                        class="logo-image">
+                        class="logo-image"
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/brand/logo-placeholder.svg'">
                     <span class="logo-text">Fit<span>Pal</span></span>
                 </a>
             </div>
@@ -135,11 +163,23 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
                 </ul>
 
                 <div class="nav-actions">
+                    <?php if ($isLoggedIn): ?>
+                    <!-- Logged in: Show user info and logout -->
+                    <span class="user-greeting">Hello,
+                        <?php echo htmlspecialchars($userName, ENT_QUOTES, 'UTF-8'); ?></span>
+                    <a href="<?php echo $assetBase; ?>../<?php echo $userRole; ?>/pages/dashboard.php"
+                        class="btn btn-primary btn-sm">
+                        Dashboard
+                    </a>
+                    <a href="<?php echo $assetBase; ?>../shared/scripts/logout.php" class="btn btn-outline btn-sm">
+                        Logout
+                    </a>
+                    <?php else: ?>
                     <!-- Login Dropdown -->
                     <div class="auth-dropdown">
                         <button class="btn btn-login dropdown-toggle" id="loginDropdown" aria-expanded="false"
                             aria-haspopup="true" type="button">
-                            Login ▾
+                            Login
                         </button>
                         <ul class="dropdown-menu" id="dropdownMenu" role="menu">
                             <li role="none">
@@ -164,6 +204,7 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
                             </li>
                         </ul>
                     </div>
+                    <?php endif; ?>
                 </div>
             </nav>
         </div>
@@ -194,6 +235,24 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
                 </a>
             </li>
             <li class="mobile-nav-divider"></li>
+
+            <?php if ($isLoggedIn): ?>
+            <li class="mobile-nav-item">
+                <span class="mobile-nav-greeting">Hello,
+                    <?php echo htmlspecialchars($userName, ENT_QUOTES, 'UTF-8'); ?></span>
+            </li>
+            <li class="mobile-nav-item">
+                <a href="<?php echo $assetBase; ?>../<?php echo $userRole; ?>/pages/dashboard.php"
+                    class="mobile-nav-link mobile-dashboard">
+                    Dashboard
+                </a>
+            </li>
+            <li class="mobile-nav-item">
+                <a href="<?php echo $assetBase; ?>../shared/scripts/logout.php" class="mobile-nav-link mobile-logout">
+                    Logout
+                </a>
+            </li>
+            <?php else: ?>
             <li class="mobile-nav-item">
                 <a href="<?php echo $assetBase; ?>../customer/pages/login.php" class="mobile-nav-link mobile-login">
                     Customer Login
@@ -214,6 +273,7 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
                     Admin Login
                 </a>
             </li>
+            <?php endif; ?>
         </ul>
     </nav>
 
