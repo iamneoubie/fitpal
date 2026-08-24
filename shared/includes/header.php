@@ -1,14 +1,14 @@
 <?php
 /**
  * FitPal Shared Header
- * 
+ *
  * This is the global header component used across all roles and the public landing page.
  * It includes the HTML head, navigation bar, and shared CSS/JS links.
- * 
+ *
  * Usage: require_once __DIR__ . '/shared/includes/header.php';
- * 
+ *
  * @package FitPal
- * @version 1.0
+ * @version 1.1
  */
 
 declare(strict_types=1);
@@ -34,7 +34,7 @@ require_once __DIR__ . '/../backend/database/database_connect.php';
 // ===== PATH DETECTION =====
 /**
  * Get the base path for assets based on current file location
- * 
+ *
  * @return string The asset base path
  */
 function getHeaderAssetBase(): string {
@@ -42,11 +42,11 @@ function getHeaderAssetBase(): string {
     $dirPath = dirname($scriptPath);
     $segments = array_filter(explode('/', $dirPath));
     $depth = count($segments);
-    
+
     if ($depth <= 0) {
         return './shared/';
     }
-    
+
     return str_repeat('../', $depth) . 'shared/';
 }
 
@@ -60,7 +60,7 @@ $currentDir = basename(dirname($_SERVER['PHP_SELF']));
 $isLandingPage = ($currentPage === 'index.php' && $currentDir === 'fitpal');
 
 // ============================================
-// PAGE-SPECIFIC CSS PRELOADING - FIXED
+// PAGE-SPECIFIC CSS PRELOADING
 // Prevents FOUC and page transition flicker
 // ============================================
 $pageCssMap = [
@@ -87,6 +87,11 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['user_role'])) {
     $userRole = $_SESSION['user_role'];
     $userName = $_SESSION['user_name'] ?? '';
 }
+
+// ===== FIXED: brand assets use the actual files that exist in
+// shared/assets/images/brand/ (Logo.ico, Logo.png) =====
+$brandLogoIco = $assetBase . 'assets/images/brand/Logo.ico';
+$brandLogoPng = $assetBase . 'assets/images/brand/Logo.png';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -98,8 +103,8 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['user_role'])) {
     <title>FitPal - Healthy Food Delivery</title>
 
     <!-- Favicon -->
-    <link rel="icon" type="image/x-icon" href="<?php echo $assetBase; ?>assets/images/brand/favicon.ico">
-    <link rel="shortcut icon" href="<?php echo $assetBase; ?>assets/images/brand/favicon.ico">
+    <link rel="icon" type="image/x-icon" href="<?php echo $brandLogoIco; ?>">
+    <link rel="shortcut icon" href="<?php echo $brandLogoIco; ?>">
 
     <!-- ============================================
          CSS - Load in HEAD for proper rendering
@@ -122,9 +127,8 @@ if (isset($_SESSION['user_id']) && isset($_SESSION['user_role'])) {
             <!-- Logo Section -->
             <div class="header-logo">
                 <a href="<?php echo $assetBase; ?>../index.php" class="logo-link" aria-label="FitPal Home">
-                    <img src="<?php echo $assetBase; ?>assets/images/brand/logo.svg" alt="FitPal Logo"
-                        class="logo-image"
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/brand/logo-placeholder.svg'">
+                    <img src="<?php echo $brandLogoPng; ?>" alt="FitPal Logo" class="logo-image"
+                        onerror="this.onerror=null; this.src='<?php echo $brandLogoPng; ?>'">
                     <span class="logo-text">Fit<span>Pal</span></span>
                 </a>
             </div>

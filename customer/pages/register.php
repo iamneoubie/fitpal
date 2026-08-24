@@ -1,11 +1,12 @@
 <?php
 /**
  * FitPal Customer Registration Page
- * 
- * Multi-step registration with dietary preferences, allergies, and fitness goals
- * 
+ *
+ * Multi-step registration with dietary preferences, allergies, and fitness goals.
+ * Requires agreement to Terms & Conditions / Privacy Policy before account creation.
+ *
  * @package FitPal
- * @version 1.0
+ * @version 1.1
  */
 
 declare(strict_types=1);
@@ -57,9 +58,7 @@ $allergyOptions = [
 $fitnessGoals = [
     'weight_loss' => 'Weight Loss',
     'muscle_gain' => 'Muscle Gain',
-    'maintenance' => 'Maintenance / General Health',
-    'athletic_performance' => 'Athletic Performance',
-    'none' => 'No Specific Goal'
+    'maintenance' => 'Maintenance / General Health'
 ];
 ?>
 <div class="content register-page">
@@ -198,8 +197,8 @@ $fitnessGoals = [
                         <div class="password-wrapper">
                             <input type="password" id="password" name="password" class="form-control"
                                 placeholder="Create a password" required autocomplete="new-password"
-                                pattern="[A-Za-z0-9]{6,20}"
-                                title="Password must be 6-20 characters and contain only letters and numbers">
+                                pattern="^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,16}$"
+                                title="Password must be 8-16 characters with at least one uppercase letter, one lowercase letter, and one number">
                             <button type="button" class="password-toggle" id="togglePassword" tabindex="-1"
                                 aria-label="Toggle password visibility">
                                 <img src="<?php echo $assetBase; ?>assets/images/icons/password-hide.svg"
@@ -207,7 +206,8 @@ $fitnessGoals = [
                             </button>
                         </div>
                         <div class="form-error" id="passwordError"></div>
-                        <div class="form-hint">Password must be 6-20 characters (letters and numbers only)</div>
+                        <div class="form-hint">Password must be 8-16 characters with at least one uppercase letter, one
+                            lowercase letter, and one number</div>
                     </div>
 
                     <div class="form-group">
@@ -227,7 +227,7 @@ $fitnessGoals = [
                 </div>
 
                 <div class="step-actions">
-                    <button type="button" class="btn btn-primary btn-next" data-next="2">Next Step →</button>
+                    <button type="button" class="btn btn-primary btn-next" data-next="2">Next Step &rarr;</button>
                 </div>
             </div>
 
@@ -253,10 +253,10 @@ $fitnessGoals = [
                 </div>
 
                 <div class="step-actions">
-                    <button type="button" class="btn btn-secondary btn-prev" data-prev="1">← Back</button>
+                    <button type="button" class="btn btn-secondary btn-prev" data-prev="1">&larr; Back</button>
                     <button type="button" class="btn btn-skip" id="skipDiet">Skip Step</button>
                     <button type="button" class="btn btn-primary btn-next" data-next="3" id="dietNext" disabled>Next
-                        Step →</button>
+                        Step &rarr;</button>
                 </div>
             </div>
 
@@ -283,10 +283,10 @@ $fitnessGoals = [
                 </div>
 
                 <div class="step-actions">
-                    <button type="button" class="btn btn-secondary btn-prev" data-prev="2">← Back</button>
+                    <button type="button" class="btn btn-secondary btn-prev" data-prev="2">&larr; Back</button>
                     <button type="button" class="btn btn-skip" id="skipAllergies">Skip Step</button>
                     <button type="button" class="btn btn-primary btn-next" data-next="4" id="allergyNext" disabled>Next
-                        Step →</button>
+                        Step &rarr;</button>
                 </div>
             </div>
 
@@ -327,8 +327,29 @@ $fitnessGoals = [
                     <div class="form-error" id="fitnessGoalError"></div>
                 </div>
 
+                <!-- ============================================
+                     TERMS & CONDITIONS / PRIVACY POLICY CHECKBOX
+                     FIXED: Properly styled with custom checkbox
+                     matching crooks-cart-collectives sign-up.php
+                     ============================================ -->
+                <div class="form-group terms-group" id="termsGroup">
+                    <div class="checkbox-wrapper">
+                        <input type="checkbox" id="terms" name="terms" required>
+                        <span class="custom-checkbox"></span>
+                        <label for="terms" class="terms-label">
+                            I agree to the
+                            <a href="<?php echo $assetBase; ?>pages/terms_conditions.php" target="_blank"
+                                rel="noopener noreferrer">Terms and Conditions</a>
+                            and
+                            <a href="<?php echo $assetBase; ?>pages/privacy_policy.php" target="_blank"
+                                rel="noopener noreferrer">Privacy Policy</a>.
+                        </label>
+                    </div>
+                    <div class="form-error" id="termsError"></div>
+                </div>
+
                 <div class="step-actions">
-                    <button type="button" class="btn btn-secondary btn-prev" data-prev="3">← Back</button>
+                    <button type="button" class="btn btn-secondary btn-prev" data-prev="3">&larr; Back</button>
                     <button type="submit" class="btn btn-primary" id="registerBtn">Create Account</button>
                 </div>
             </div>

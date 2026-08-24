@@ -1,218 +1,235 @@
 /**
  * FitPal Customer Login JavaScript
  * 
- * Handles form validation, password toggle, and AJAX submission
- * Uses the same pattern as crooks-cart-collectives sign-in.js
+ * Handles login form validation and submission with modal feedback.
  * 
  * @package FitPal
  * @version 1.0
  */
 
-document.addEventListener('DOMContentLoaded', function() {
+(function() {
     'use strict';
 
-    // ===== DOM ELEMENTS =====
-    const form = document.getElementById('loginForm');
-    const modal = document.getElementById('notifierModal');
-    const modalMessage = document.getElementById('notifierMessage');
-    const modalClose = document.getElementById('notifierCloseBtn');
-    
-    const identifierInput = document.getElementById('identifier');
-    const passwordInput = document.getElementById('password');
-    const identifierError = document.getElementById('identifierError');
-    const passwordError = document.getElementById('passwordError');
-    const loginError = document.getElementById('loginError');
-    
-    const togglePassword = document.getElementById('togglePassword');
-    const passwordIcon = document.getElementById('passwordIcon');
+    document.addEventListener('DOMContentLoaded', function() {
+        
+        // ============================================
+        // DOM ELEMENTS
+        // ============================================
+        const form = document.getElementById('loginForm');
+        const loginBtn = document.getElementById('loginBtn');
+        const identifier = document.getElementById('identifier');
+        const password = document.getElementById('password');
+        const identifierError = document.getElementById('identifierError');
+        const passwordError = document.getElementById('passwordError');
+        const loginError = document.getElementById('loginError');
+        const errorMessage = document.getElementById('errorMessage');
+        const notifierModal = document.getElementById('notifierModal');
+        const notifierMessage = document.getElementById('notifierMessage');
+        const notifierCloseBtn = document.getElementById('notifierCloseBtn');
 
-    // ===== STATE =====
-    let isModalOpen = false;
-    let isSubmitting = false;
+        // Password toggle
+        const togglePassword = document.getElementById('togglePassword');
+        const passwordIcon = document.getElementById('passwordIcon');
 
-    // ===== PASSWORD TOGGLE =====
-    if (togglePassword && passwordInput && passwordIcon) {
-        togglePassword.addEventListener('click', function(e) {
-            e.preventDefault();
-            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-            passwordInput.setAttribute('type', type);
-            
-            if (type === 'text') {
-                passwordIcon.src = '../../shared/assets/images/icons/password-unhide.svg';
-                passwordIcon.alt = 'Show password';
+        // State
+        let isSubmitting = false;
+        let isModalOpen = false;
+
+        // ============================================
+        // PASSWORD TOGGLE
+        // ============================================
+        if (togglePassword && password && passwordIcon) {
+            togglePassword.addEventListener('click', function() {
+                const type = password.getAttribute('type') === 'password' ? 'text' : 'password';
+                password.setAttribute('type', type);
+                
+                if (type === 'text') {
+                    passwordIcon.src = '../../shared/assets/images/icons/password-unhide.svg';
+                    passwordIcon.alt = 'Show password';
+                } else {
+                    passwordIcon.src = '../../shared/assets/images/icons/password-hide.svg';
+                    passwordIcon.alt = 'Hide password';
+                }
+            });
+        }
+
+        // ============================================
+        // NOTIFIER FUNCTIONS
+        // ============================================
+        function showNotifier(message) {
+            if (isModalOpen) return;
+            notifierMessage.textContent = message;
+            notifierModal.classList.remove('hidden');
+            isModalOpen = true;
+        }
+
+        function closeNotifier() {
+            notifierModal.classList.add('hidden');
+            isModalOpen = false;
+        }
+
+        if (notifierCloseBtn) {
+            notifierCloseBtn.addEventListener('click', closeNotifier);
+        }
+
+        notifierModal.addEventListener('click', function(e) {
+            if (e.target === notifierModal) closeNotifier();
+        });
+
+        // ============================================
+        // ERROR HANDLING
+        // ============================================
+        function showFieldError(field, errorElement, message) {
+            if (field) field.classList.add('error');
+            if (errorElement) {
+                errorElement.textContent = message;
+                errorElement.style.display = 'block';
+            }
+        }
+
+        function clearFieldError(field, errorElement) {
+            if (field) field.classList.remove('error');
+            if (errorElement) {
+                errorElement.textContent = '';
+                errorElement.style.display = 'none';
+            }
+        }
+
+        function clearAllErrors() {
+            document.querySelectorAll('.form-control.error').forEach(el => el.classList.remove('error'));
+            document.querySelectorAll('.form-error').forEach(el => {
+                el.textContent = '';
+                el.style.display = 'none';
+            });
+            if (loginError) {
+                loginError.style.display = 'none';
+            }
+        }
+
+        // ============================================
+        // VALIDATION
+        // ============================================
+        function validateForm() {
+            let isValid = true;
+            clearAllErrors();
+
+            if (!identifier.value.trim()) {
+                showFieldError(identifier, identifierError, 'Email or username is required');
+                isValid = false;
+            }
+
+            if (!password.value) {
+                showFieldError(password, passwordError, 'Password is required');
+                isValid = false;
+            }
+
+            return isValid;
+        }
+
+        // ============================================
+        // REAL-TIME VALIDATION
+        // ============================================
+        identifier.addEventListener('blur', function() {
+            if (!this.value.trim()) {
+                showFieldError(this, identifierError, 'Email or username is required');
             } else {
-                passwordIcon.src = '../../shared/assets/images/icons/password-hide.svg';
-                passwordIcon.alt = 'Hide password';
+                clearFieldError(this, identifierError);
             }
         });
-    }
+        identifier.addEventListener('input', function() {
+            clearFieldError(this, identifierError);
+        });
 
-    // ===== NOTIFIER FUNCTIONS =====
-    function showNotifier(message) {
-        if (isModalOpen) return;
-        modalMessage.textContent = message;
-        modal.classList.remove('hidden');
-        isModalOpen = true;
-    }
+        password.addEventListener('blur', function() {
+            if (!this.value) {
+                showFieldError(this, passwordError, 'Password is required');
+            } else {
+                clearFieldError(this, passwordError);
+            }
+        });
+        password.addEventListener('input', function() {
+            clearFieldError(this, passwordError);
+        });
 
-    function closeNotifier() {
-        modal.classList.add('hidden');
-        isModalOpen = false;
-    }
+        // ============================================
+        // FORM SUBMISSION
+        // ============================================
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
 
-    function clearErrors() {
-        identifierError.textContent = '';
-        passwordError.textContent = '';
-        identifierError.style.display = 'none';
-        passwordError.style.display = 'none';
-        identifierInput.classList.remove('error');
-        passwordInput.classList.remove('error');
-        if (loginError) {
-            loginError.style.display = 'none';
-        }
-    }
+            if (isSubmitting) return;
 
-    function showFieldError(field, message) {
-        let errorElement, inputElement;
-        
-        if (field === 'identifier') {
-            errorElement = identifierError;
-            inputElement = identifierInput;
-        } else if (field === 'password') {
-            errorElement = passwordError;
-            inputElement = passwordInput;
-        } else {
-            return;
-        }
-        
-        errorElement.textContent = message;
-        errorElement.style.display = 'block';
-        inputElement.classList.add('error');
-    }
-
-    // ===== MODAL EVENT LISTENERS =====
-    if (modalClose) {
-        modalClose.addEventListener('click', closeNotifier);
-    }
-    
-    modal.addEventListener('click', function(e) {
-        if (e.target === modal) closeNotifier();
-    });
-
-    // ===== BLUR VALIDATION =====
-    identifierInput.addEventListener('blur', function() {
-        if (!this.value.trim()) {
-            showFieldError('identifier', 'Email or username is required');
-        } else {
-            identifierError.textContent = '';
-            identifierError.style.display = 'none';
-            identifierInput.classList.remove('error');
-        }
-    });
-
-    passwordInput.addEventListener('blur', function() {
-        if (!this.value) {
-            showFieldError('password', 'Password is required');
-        } else {
-            passwordError.textContent = '';
-            passwordError.style.display = 'none';
-            passwordInput.classList.remove('error');
-        }
-    });
-
-    // ===== FORM SUBMISSION =====
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-
-        if (isSubmitting) return;
-
-        clearErrors();
-
-        // ===== CLIENT-SIDE VALIDATION =====
-        let isValid = true;
-        
-        if (!identifierInput.value.trim()) {
-            showFieldError('identifier', 'Email or username is required');
-            isValid = false;
-        }
-
-        if (!passwordInput.value) {
-            showFieldError('password', 'Password is required');
-            isValid = false;
-        }
-
-        if (!isValid) {
-            showNotifier('Please fix the errors above');
-            return;
-        }
-
-        // ===== SUBMIT =====
-        isSubmitting = true;
-        const submitBtn = form.querySelector('#loginBtn');
-        const originalText = submitBtn.textContent;
-        submitBtn.textContent = 'Signing In...';
-        submitBtn.disabled = true;
-
-        // Get form data
-        const formData = new FormData(form);
-
-        // Add redirect from URL if present
-        const urlParams = new URLSearchParams(window.location.search);
-        const redirectParam = urlParams.get('redirect');
-        if (redirectParam) {
-            formData.append('redirect', redirectParam);
-        }
-
-        // Submit via AJAX (same pattern as crooks-cart-collectives)
-        fetch(form.action, {
-            method: 'POST',
-            body: formData,
-            credentials: 'same-origin'
-        })
-        .then(function(response) {
-            // If the server redirects, we need to handle it
-            // Since PHP redirects, we check if the response is a redirect
-            if (response.redirected) {
-                // Server sent a redirect - follow it
-                window.location.href = response.url;
+            if (!validateForm()) {
+                showNotifier('Please fix the errors above');
                 return;
             }
-            
-            // If not redirected, try to parse as JSON
-            return response.text();
-        })
-        .then(function(data) {
-            // If we got here and data is a string, try to parse it
-            if (typeof data === 'string' && data.length > 0) {
-                try {
-                    const result = JSON.parse(data);
-                    if (result.status === 'success') {
-                        showNotifier('Login successful! Redirecting...');
-                        setTimeout(function() {
-                            window.location.href = result.redirect || '../pages/dashboard.php';
-                        }, 1500);
-                    } else {
-                        showNotifier(result.message || 'Login failed. Please try again.');
-                    }
-                } catch (e) {
-                    // Not JSON - check if there's an error message in the session
-                    showNotifier('Please check your credentials and try again.');
-                }
-            }
-        })
-        .catch(function(error) {
-            console.error('Login error:', error);
-            showNotifier('Network error. Please check your connection and try again.');
-        })
-        .finally(function() {
-            isSubmitting = false;
-            submitBtn.textContent = originalText;
-            submitBtn.disabled = false;
-        });
-    });
 
-    // ===== FOCUS ON IDENTIFIER =====
-    setTimeout(function() {
-        identifierInput.focus();
-    }, 100);
-});
+            // Show loading state
+            isSubmitting = true;
+            const originalText = loginBtn.textContent;
+            loginBtn.textContent = 'Signing In...';
+            loginBtn.disabled = true;
+
+            const formData = new FormData(form);
+
+            fetch('../backend/handlers/login_handler.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(text => {
+                // If response is HTML, it's a redirect (success)
+                if (text.includes('<!DOCTYPE html>') || text.includes('<html')) {
+                    // Success - page will redirect
+                    showNotifier('Login successful! Redirecting...');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    // Try to parse as JSON
+                    try {
+                        const data = JSON.parse(text);
+                        if (data.status === 'success') {
+                            showNotifier('Login successful! Redirecting...');
+                            setTimeout(() => {
+                                window.location.href = data.redirect || 'dashboard.php';
+                            }, 1000);
+                        } else {
+                            showNotifier(data.message || 'Login failed. Please try again.');
+                        }
+                    } catch (e) {
+                        // Not JSON - might be a redirect
+                        showNotifier('Login successful! Redirecting...');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Login error:', error);
+                showNotifier('Network error. Please check your connection and try again.');
+            })
+            .finally(() => {
+                isSubmitting = false;
+                loginBtn.textContent = originalText;
+                loginBtn.disabled = false;
+            });
+        });
+
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+        // Show any existing error from PHP
+        if (loginError && loginError.style.display !== 'none') {
+            // Error is already displayed
+        }
+
+        // Focus on identifier field
+        setTimeout(function() {
+            if (identifier) identifier.focus();
+        }, 100);
+
+        console.log('Customer login initialized successfully');
+    });
+})();
