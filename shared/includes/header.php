@@ -29,7 +29,7 @@ if (!isset($_SESSION['created'])) {
 // ===== DATABASE CONNECTION =====
 // Include centralized database connection
 // This will show error page if database is not available
-require_once __DIR__ . '/../backend/database/database_connect.php';
+require_once __DIR__ . '/../backend/database/database-connect.php';
 
 // ===== PATH DETECTION =====
 /**
@@ -187,22 +187,22 @@ $brandLogoPng = $assetBase . 'assets/images/brand/Logo.png';
                         </button>
                         <ul class="dropdown-menu" id="dropdownMenu" role="menu">
                             <li role="none">
-                                <a href="<?php echo $assetBase; ?>../customer/pages/login.php" role="menuitem">
+                                <a href="<?php echo $assetBase; ?>../customer/pages/sign-in.php" role="menuitem">
                                     Customer
                                 </a>
                             </li>
                             <li role="none">
-                                <a href="<?php echo $assetBase; ?>../restaurant/pages/login.php" role="menuitem">
+                                <a href="<?php echo $assetBase; ?>../restaurant/pages/.php" role="menuitem">
                                     Restaurant
                                 </a>
                             </li>
                             <li role="none">
-                                <a href="<?php echo $assetBase; ?>../rider/pages/login.php" role="menuitem">
+                                <a href="<?php echo $assetBase; ?>../rider/pages/.php" role="menuitem">
                                     Rider
                                 </a>
                             </li>
                             <li role="none">
-                                <a href="<?php echo $assetBase; ?>../admin/pages/login.php" role="menuitem">
+                                <a href="<?php echo $assetBase; ?>../admin/pages/.php" role="menuitem">
                                     Admin
                                 </a>
                             </li>
@@ -258,22 +258,22 @@ $brandLogoPng = $assetBase . 'assets/images/brand/Logo.png';
             </li>
             <?php else: ?>
             <li class="mobile-nav-item">
-                <a href="<?php echo $assetBase; ?>../customer/pages/login.php" class="mobile-nav-link mobile-login">
+                <a href="<?php echo $assetBase; ?>../customer/pages/.php" class="mobile-nav-link mobile-login">
                     Customer Login
                 </a>
             </li>
             <li class="mobile-nav-item">
-                <a href="<?php echo $assetBase; ?>../restaurant/pages/login.php" class="mobile-nav-link mobile-login">
+                <a href="<?php echo $assetBase; ?>../restaurant/pages/.php" class="mobile-nav-link mobile-login">
                     Restaurant Login
                 </a>
             </li>
             <li class="mobile-nav-item">
-                <a href="<?php echo $assetBase; ?>../rider/pages/login.php" class="mobile-nav-link mobile-login">
+                <a href="<?php echo $assetBase; ?>../rider/pages/.php" class="mobile-nav-link mobile-login">
                     Rider Login
                 </a>
             </li>
             <li class="mobile-nav-item">
-                <a href="<?php echo $assetBase; ?>../admin/pages/login.php" class="mobile-nav-link mobile-login">
+                <a href="<?php echo $assetBase; ?>../admin/pages/.php" class="mobile-nav-link mobile-login">
                     Admin Login
                 </a>
             </li>

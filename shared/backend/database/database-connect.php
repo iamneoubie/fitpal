@@ -73,71 +73,66 @@ try {
         $connection_options
     );
 } catch (PDOException $exception) {
-    // Log the error for debugging
     error_log('Database Connection Error: ' . $exception->getMessage());
 
-    // Build a user-friendly error message
-    $error_message = 'Unable to connect to the database. Please try again later.';
+    $error_message = "We're having trouble connecting right now. Please try again in a moment.";
     $detailed_error = $exception->getMessage();
 
-    // Show detailed error in development environment
     if (getenv('APP_ENV') === 'development') {
         $error_message = 'Database Connection Failed: ' . $detailed_error;
     }
 
-    // Set status code
     http_response_code(500);
 
-    // ===== FIXED: Define asset base path (for CSS) =====
     $scriptPath = $_SERVER['SCRIPT_NAME'];
     $dirPath = dirname($scriptPath);
     $segments = array_filter(explode('/', $dirPath));
     $depth = count($segments);
     $assetBase = $depth <= 0 ? './shared/' : str_repeat('../', $depth) . 'shared/';
-
-    // ===== STANDALONE ERROR PAGE =====
     ?>
-<link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/global.css">
-<link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/database_connect.css">
+<!DOCTYPE html>
+<html lang="en">
 
-<div class="error-page">
-    <div class="error-card">
-        <div class="error-status">500</div>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FitPal - Service Unavailable</title>
+    <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/global.css">
+    <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/database_connect.css">
+</head>
 
-        <div class="error-content">
-            <div class="error-icon">
-                <div class="db-stack">
-                    <span></span>
-                    <span></span>
-                    <span></span>
+<body>
+    <div class="error-page">
+        <div class="error-card">
+            <div class="error-status">500</div>
+            <div class="error-content">
+                <div class="error-icon">
+                    <div class="db-stack"><span></span><span></span><span></span></div>
                 </div>
-            </div>
-
-            <div class="error-text">
-                <p class="error-title">Database <span>Connection Lost</span></p>
-                <p class="error-message"><?php echo htmlspecialchars($error_message, ENT_QUOTES, 'UTF-8'); ?></p>
-            </div>
-
-            <?php if (getenv('APP_ENV') === 'development'): ?>
-            <div class="error-debug">
-                <p class="debug-label">Error Details</p>
-                <code><?php echo htmlspecialchars($detailed_error, ENT_QUOTES, 'UTF-8'); ?></code>
-            </div>
-            <?php endif; ?>
-
-            <div class="error-action">
-                <a href="javascript:location.reload()" class="btn-retry">
-                    <span class="retry-icon">&#8635;</span> Retry Connection
-                </a>
-            </div>
-
-            <div class="error-help">
-                <p>Check that MySQL is running and database
-                    <code><?php echo htmlspecialchars($database_name, ENT_QUOTES, 'UTF-8'); ?></code> exists.</p>
+                <div class="error-text">
+                    <p class="error-title">We're <span>Having Trouble</span></p>
+                    <p class="error-message"><?php echo htmlspecialchars($error_message, ENT_QUOTES, 'UTF-8'); ?></p>
+                </div>
+                <?php if (getenv('APP_ENV') === 'development'): ?>
+                <div class="error-debug">
+                    <p class="debug-label">Error Details</p>
+                    <code><?php echo htmlspecialchars($detailed_error, ENT_QUOTES, 'UTF-8'); ?></code>
+                </div>
+                <?php endif; ?>
+                <div class="error-action">
+                    <a href="javascript:location.reload()" class="btn-retry">
+                        <span class="retry-icon">&#8635;</span> Retry
+                    </a>
+                </div>
+                <div class="error-help">
+                    <p>If this keeps happening, please try again shortly.</p>
+                </div>
             </div>
         </div>
     </div>
-</div>
+</body>
+
+</html>
 <?php
     exit;
 }

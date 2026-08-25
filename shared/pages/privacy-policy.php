@@ -151,7 +151,7 @@ $policySections = [
 <!-- ============================================
     PRIVACY POLICY PAGE CSS
     ============================================ -->
-<link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/privacy_policy.css">
+<link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/privacy-policy.css">
 
 <!-- ============================================
     PRIVACY POLICY CONTENT

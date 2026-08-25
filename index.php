@@ -106,7 +106,7 @@ $featuredRestaurants = [
                         Go to Dashboard
                     </a>
                     <?php else: ?>
-                    <a href="<?php echo $assetBase; ?>../customer/pages/register.php" class="btn btn-primary btn-lg">
+                    <a href="<?php echo $assetBase; ?>../customer/pages/sign-up.php" class="btn btn-primary btn-lg">
                         Get Started
                     </a>
                     <a href="<?php echo $assetBase; ?>pages/about.php" class="btn btn-outline btn-lg">
@@ -341,7 +341,7 @@ $featuredRestaurants = [
                     Go to Dashboard
                 </a>
                 <?php else: ?>
-                <a href="<?php echo $assetBase; ?>../customer/pages/register.php" class="btn btn-primary btn-lg">
+                <a href="<?php echo $assetBase; ?>../customer/pages/.php" class="btn btn-primary btn-lg">
                     Get Started
                 </a>
                 <a href="<?php echo $assetBase; ?>../customer/pages/login.php" class="btn btn-outline btn-lg">

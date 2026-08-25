@@ -148,7 +148,7 @@ $termsSections = [
 <!-- ============================================
     TERMS & CONDITIONS PAGE CSS
     ============================================ -->
-<link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/terms_conditions.css">
+<link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/terms-conditions.css">
 
 <!-- ============================================
     TERMS & CONDITIONS CONTENT
@@ -205,30 +205,6 @@ $termsSections = [
             </div>
         </div>
     </section>
-
-    <!-- Agreement Section -->
-    <section class="terms-agreement" aria-labelledby="agreement-title">
-        <div class="container">
-            <p class="sr-only" id="agreement-title">Agreement Confirmation</p>
-            <div class="terms-agreement-box">
-                <p class="terms-agreement-text">
-                    By using FitPal, you acknowledge that this is a <strong>DEMONSTRATION PROJECT</strong> only.
-                    You agree NOT to use real personal information, real passwords, or attempt real financial
-                    transactions. The developers are NOT responsible for any real money transfers made through
-                    this simulation platform.
-                </p>
-                <div class="terms-agreement-actions">
-                    <a href="<?php echo $assetBase; ?>../customer/pages/register.php" class="btn btn-primary">
-                        Create Test Account
-                    </a>
-                    <a href="<?php echo $assetBase; ?>../index.php" class="btn btn-outline">
-                        Return to Home
-                    </a>
-                </div>
-            </div>
-        </div>
-    </section>
-
 </div>
 
 <?php

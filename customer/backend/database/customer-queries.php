@@ -1,26 +1,26 @@
 <?php
 /**
  * FitPal Customer Database Queries
- * 
+ *
  * Customer-specific database operations.
- * All queries use prepared statements for security.
- * 
+ * All queries use prepared statements.
+ *
  * @package FitPal
- * @version 1.0
+ * @version 1.1
  */
 
 declare(strict_types=1);
 
 /**
- * Find a customer by email or username
- * 
- * @param PDO $connection Database connection
- * @param string $identifier Email or username
- * @return array|false Customer data or false if not found
+ * Find a customer by email or username.
+ *
+ * @param PDO    $connection  Shared database connection
+ * @param string $identifier  Email address or username
+ * @return array|false        Customer row or false if not found
  */
 function findCustomerByIdentifier(PDO $connection, string $identifier): array|false {
     $stmt = $connection->prepare(
-        "SELECT 
+        "SELECT
             customer_id,
             first_name,
             middle_name,
@@ -33,7 +33,7 @@ function findCustomerByIdentifier(PDO $connection, string $identifier): array|fa
             gender,
             is_active,
             date_created
-        FROM customer 
+        FROM customer
         WHERE email = :identifier OR username = :identifier
         LIMIT 1"
     );
@@ -42,15 +42,15 @@ function findCustomerByIdentifier(PDO $connection, string $identifier): array|fa
 }
 
 /**
- * Get customer profile data
- * 
- * @param PDO $connection Database connection
- * @param int $customerId Customer ID
- * @return array|false Customer profile data or false if not found
+ * Get full customer profile including financial account balance.
+ *
+ * @param PDO $connection  Shared database connection
+ * @param int $customerId  Customer primary key
+ * @return array|false     Profile row or false if not found
  */
 function getCustomerProfile(PDO $connection, int $customerId): array|false {
     $stmt = $connection->prepare(
-        "SELECT 
+        "SELECT
             c.customer_id,
             c.first_name,
             c.middle_name,
@@ -81,31 +81,11 @@ function getCustomerProfile(PDO $connection, int $customerId): array|false {
 }
 
 /**
- * Update last login timestamp
- * 
- * @param PDO $connection Database connection
- * @param int $customerId Customer ID
- * @return bool True on success
- */
-function updateCustomerLastLogin(PDO $connection, int $customerId): bool {
-    $stmt = $connection->prepare(
-        "UPDATE administrator_profile 
-         SET last_login = CURRENT_TIMESTAMP 
-         WHERE administrator_id = (
-             SELECT administrator_id FROM administrator WHERE email = (
-                 SELECT email FROM customer WHERE customer_id = :customer_id
-             )
-         )"
-    );
-    return $stmt->execute([':customer_id' => $customerId]);
-}
-
-/**
- * Check if customer account is active
- * 
- * @param PDO $connection Database connection
- * @param int $customerId Customer ID
- * @return bool True if active
+ * Check whether a customer account is active.
+ *
+ * @param PDO $connection  Shared database connection
+ * @param int $customerId  Customer primary key
+ * @return bool            True if the account is active
  */
 function isCustomerActive(PDO $connection, int $customerId): bool {
     $stmt = $connection->prepare(
@@ -113,5 +93,5 @@ function isCustomerActive(PDO $connection, int $customerId): bool {
     );
     $stmt->execute([':customer_id' => $customerId]);
     $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    return $result ? (bool)$result['is_active'] : false;
+    return $result ? (bool) $result['is_active'] : false;
 }

@@ -1,14 +1,13 @@
 /**
  * FitPal Customer Registration Page Styles
+ * 
  * Multi-step registration with card-based selection
  * Mobile-First Design
- *
- * FIXED: added Terms & Conditions / Privacy Policy checkbox styles
- * (previously missing) at the bottom of this file.
+ * Follows FitPal's .content > .container pattern
  */
 
 /* ============================================
-   CONTENT WRAPPER
+   CONTENT WRAPPER - Standard FitPal pattern
    ============================================ */
 
 .content {
@@ -20,28 +19,39 @@
     min-height: calc(100vh - 70px);
 }
 
+.content .container {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 20px 16px;
+    width: 100%;
+}
+
+/* ============================================
+   REGISTER PAGE - Full page background
+   ============================================ */
+
 .register-page {
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 20px 16px;
-    background: linear-gradient(135deg, #f9faf9 0%, #ffffff 100%);
+    background: linear-gradient(135deg, var(--gray-50) 0%, var(--white) 100%);
     flex: 1;
     min-height: calc(100vh - 70px);
 }
 
 /* ============================================
-   REGISTER CONTAINER - Mobile First
+   REGISTER CARD
    ============================================ */
 
-.register-container {
+.register-card {
     max-width: 700px;
     width: 100%;
-    background: #ffffff;
-    border-radius: 16px;
+    background: var(--white);
+    border-radius: var(--radius-xl);
     padding: 32px 24px;
-    box-shadow: 0 8px 30px rgba(5, 10, 4, 0.12);
-    border: 1px solid #e2e6e2;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--gray-200);
     margin: 16px 0;
 }
 
@@ -66,54 +76,58 @@
     position: relative;
 }
 
-.step-number {
+.progress-step .step-number {
     width: 36px;
     height: 36px;
-    border-radius: 50%;
-    background: #e2e6e2;
-    color: #788278;
+    border-radius: var(--radius-full);
+    background: var(--gray-200);
+    color: var(--gray-500);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: 700;
-    font-size: 14px;
-    transition: all 0.3s ease;
+    font-weight: var(--font-weight-bold);
+    font-size: var(--font-size-sm);
+    transition: all var(--transition-base);
 }
 
 .progress-step.active .step-number {
-    background: #59c14a;
-    color: #ffffff;
+    background: var(--primary);
+    color: var(--white);
     box-shadow: 0 0 0 4px rgba(89, 193, 74, 0.2);
 }
 
 .progress-step.completed .step-number {
-    background: #59c14a;
-    color: #ffffff;
+    background: var(--primary);
+    color: var(--white);
 }
 
-.step-label {
-    font-size: 11px;
-    color: #a0a8a0;
+.progress-step .step-label {
+    font-size: var(--font-size-xs);
+    color: var(--gray-400);
     text-align: center;
-    font-weight: 500;
-    transition: color 0.3s ease;
+    font-weight: var(--font-weight-medium);
+    transition: color var(--transition-base);
 }
 
 .progress-step.active .step-label {
-    color: #59c14a;
+    color: var(--primary);
 }
 
 .progress-step.completed .step-label {
-    color: #59c14a;
+    color: var(--primary);
 }
 
 .progress-line {
     flex: 1;
     height: 2px;
-    background: #e2e6e2;
+    background: var(--gray-200);
     margin: 0 4px;
     position: relative;
     top: -12px;
+}
+
+.progress-line.completed {
+    background: var(--primary);
 }
 
 /* ============================================
@@ -125,21 +139,18 @@
     margin-bottom: 28px;
 }
 
-.register-title {
+.register-header .heading-2 {
     margin: 0 0 4px 0;
-    color: #050a04;
-    font-size: 28px;
-    font-weight: 700;
-    line-height: 1.2;
+    color: var(--text);
 }
 
-.register-title span {
-    color: #59c14a;
+.register-header .heading-2 span {
+    color: var(--primary);
 }
 
-.register-subtitle {
-    color: #788278;
-    font-size: 15px;
+.register-header .text-muted {
+    color: var(--gray-500);
+    font-size: var(--font-size-base);
     margin: 0;
 }
 
@@ -164,13 +175,13 @@
 
 .step-description {
     margin-bottom: 20px;
-    color: #505a50;
-    font-size: 15px;
+    color: var(--gray-600);
+    font-size: var(--font-size-sm);
     line-height: 1.6;
     padding: 12px 16px;
-    background: #f9faf9;
-    border-radius: 8px;
-    border-left: 3px solid #59c14a;
+    background: var(--gray-50);
+    border-radius: var(--radius-base);
+    border-left: 3px solid var(--primary);
 }
 
 .step-description p {
@@ -194,35 +205,35 @@
 
 .register-form .form-label {
     display: block;
-    font-weight: 600;
-    color: #384238;
+    font-weight: var(--font-weight-semibold);
+    color: var(--gray-700);
     margin-bottom: 4px;
-    font-size: 14px;
+    font-size: var(--font-size-sm);
 }
 
 .register-form .form-control {
     width: 100%;
     padding: 12px 16px;
-    border: 2px solid #c8cec8;
-    border-radius: 10px;
-    font-size: 15px;
-    transition: border-color 0.2s, box-shadow 0.2s;
-    background-color: #ffffff;
+    border: 2px solid var(--gray-300);
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-base);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    background-color: var(--white);
     height: 48px;
     box-sizing: border-box;
-    color: #050a04;
+    color: var(--text);
     -webkit-appearance: none;
     appearance: none;
 }
 
 .register-form .form-control:focus {
     outline: none;
-    border-color: #59c14a;
+    border-color: var(--primary);
     box-shadow: 0 0 0 4px rgba(89, 193, 74, 0.15);
 }
 
 .register-form .form-control.error {
-    border-color: #dc3545;
+    border-color: var(--danger);
 }
 
 .register-form .form-control.error:focus {
@@ -230,8 +241,8 @@
 }
 
 .register-form .form-control::placeholder {
-    color: #a0a8a0;
-    font-size: 14px;
+    color: var(--gray-400);
+    font-size: var(--font-size-sm);
 }
 
 .register-form .form-control[type="number"] {
@@ -245,25 +256,25 @@
 }
 
 .register-form .form-error {
-    color: #dc3545;
-    font-size: 13px;
+    color: var(--danger);
+    font-size: var(--font-size-sm);
     margin-top: 4px;
     display: none;
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
 }
 
 .register-form .form-hint {
-    color: #788278;
-    font-size: 12px;
+    color: var(--gray-500);
+    font-size: var(--font-size-xs);
     margin-top: 4px;
 }
 
 .text-danger {
-    color: #dc3545;
+    color: var(--danger);
 }
 
 .text-muted {
-    color: #788278;
+    color: var(--gray-500);
 }
 
 /* ============================================
@@ -292,8 +303,8 @@
     align-items: center;
     justify-content: center;
     opacity: 0.5;
-    transition: opacity 0.2s;
-    border-radius: 6px;
+    transition: opacity var(--transition-fast);
+    border-radius: var(--radius-sm);
 }
 
 .password-toggle:hover {
@@ -318,21 +329,21 @@
 }
 
 .option-card {
-    background: #ffffff;
-    border: 2px solid #e2e6e2;
-    border-radius: 10px;
+    background: var(--white);
+    border: 2px solid var(--gray-200);
+    border-radius: var(--radius-base);
     padding: 12px 14px;
-    transition: all 0.2s ease;
+    transition: all var(--transition-fast);
     cursor: pointer;
 }
 
 .option-card:hover {
-    border-color: #96de8c;
-    background: #f9faf9;
+    border-color: var(--secondary);
+    background: var(--gray-50);
 }
 
 .option-card.selected {
-    border-color: #59c14a;
+    border-color: var(--primary);
     background: rgba(89, 193, 74, 0.05);
     box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.1);
 }
@@ -346,7 +357,7 @@
 .option-check input[type="checkbox"] {
     width: 18px;
     height: 18px;
-    accent-color: #59c14a;
+    accent-color: var(--primary);
     cursor: pointer;
     flex-shrink: 0;
 }
@@ -358,9 +369,9 @@
 }
 
 .option-label {
-    font-size: 14px;
-    color: #384238;
-    font-weight: 500;
+    font-size: var(--font-size-sm);
+    color: var(--gray-700);
+    font-weight: var(--font-weight-medium);
 }
 
 /* ============================================
@@ -376,52 +387,23 @@
 
 .step-actions .btn {
     padding: 12px 24px;
-    font-size: 15px;
-    font-weight: 600;
-    border-radius: 10px;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    border-radius: var(--radius-base);
     min-width: 120px;
     flex: 1;
 }
 
-.btn-primary {
-    background: #59c14a;
-    color: #ffffff;
-    border: none;
-    transition: all 0.2s ease;
-}
-
-.btn-primary:hover:not(:disabled) {
-    background: #3d8a32;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(89, 193, 74, 0.3);
-}
-
-.btn-primary:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.btn-secondary {
-    background: #e2e6e2;
-    color: #384238;
-    border: none;
-    transition: all 0.2s ease;
-}
-
-.btn-secondary:hover {
-    background: #c8cec8;
-}
-
 .btn-skip {
     background: transparent;
-    color: #788278;
-    border: 2px solid #e2e6e2;
-    transition: all 0.2s ease;
+    color: var(--gray-500);
+    border: 2px solid var(--gray-200);
+    transition: all var(--transition-fast);
 }
 
 .btn-skip:hover {
-    border-color: #a0a8a0;
-    color: #384238;
+    border-color: var(--gray-400);
+    color: var(--gray-700);
 }
 
 /* ============================================
@@ -430,10 +412,10 @@
 
 .alert {
     padding: 12px 16px;
-    border-radius: 10px;
+    border-radius: var(--radius-base);
     margin-bottom: 20px;
     border: 2px solid transparent;
-    font-size: 14px;
+    font-size: var(--font-size-sm);
     line-height: 1.6;
 }
 
@@ -450,6 +432,107 @@
 }
 
 /* ============================================
+   TERMS & CONDITIONS CHECKBOX
+   ============================================ */
+
+.terms-group {
+    margin: 20px 0;
+    padding: 14px 16px;
+    background: rgba(89, 193, 74, 0.05);
+    border-radius: var(--radius-base);
+    border: 1px solid rgba(5, 10, 4, 0.05);
+}
+
+.terms-group.error {
+    background: rgba(220, 53, 69, 0.06);
+    border-color: var(--danger);
+}
+
+.terms-group.error .terms-label {
+    color: var(--danger);
+}
+
+.terms-group.error .custom-checkbox {
+    border-color: var(--danger);
+}
+
+.checkbox-wrapper {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    position: relative;
+}
+
+.checkbox-wrapper input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+    z-index: 2;
+    margin: 0;
+    top: 0;
+    left: 0;
+}
+
+.checkbox-wrapper .custom-checkbox {
+    display: inline-block;
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--gray-300);
+    border-radius: var(--radius-sm);
+    background: var(--white);
+    position: relative;
+    flex-shrink: 0;
+    cursor: pointer;
+    margin-top: 1px;
+    transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.checkbox-wrapper input[type="checkbox"]:checked + .custom-checkbox {
+    background: var(--primary);
+    border-color: var(--primary);
+}
+
+.checkbox-wrapper input[type="checkbox"]:checked + .custom-checkbox::after {
+    content: '\2714';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -55%);
+    color: var(--white);
+    font-size: 13px;
+    font-weight: var(--font-weight-bold);
+    line-height: 1;
+}
+
+.checkbox-wrapper input[type="checkbox"]:focus-visible + .custom-checkbox {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.terms-label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--gray-700);
+    line-height: 1.5;
+    cursor: pointer;
+    flex: 1;
+}
+
+.terms-label a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: var(--font-weight-bold);
+    transition: color var(--transition-fast);
+}
+
+.terms-label a:hover {
+    color: var(--primary-dark);
+    text-decoration: underline;
+}
+
+/* ============================================
    REGISTER FOOTER
    ============================================ */
 
@@ -457,25 +540,25 @@
     margin-top: 24px;
     text-align: center;
     padding-top: 20px;
-    border-top: 1px solid #e2e6e2;
+    border-top: 1px solid var(--gray-200);
 }
 
-.register-footer-text {
-    font-size: 15px;
-    color: #788278;
+.register-footer .text-muted {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
     margin: 0;
     line-height: 1.6;
 }
 
-.register-footer-text a {
-    color: #59c14a;
+.register-footer .text-muted a {
+    color: var(--primary);
     text-decoration: none;
-    font-weight: 600;
-    transition: color 0.2s;
+    font-weight: var(--font-weight-semibold);
+    transition: color var(--transition-fast);
 }
 
-.register-footer-text a:hover {
-    color: #3d8a32;
+.register-footer .text-muted a:hover {
+    color: var(--primary-dark);
     text-decoration: underline;
 }
 
@@ -489,13 +572,13 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(5, 10, 4, 0.5);
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 9999;
+    z-index: var(--z-modal-backdrop);
     transition: opacity 0.3s ease, visibility 0.3s ease;
     padding: 20px;
 }
@@ -507,13 +590,13 @@
 }
 
 .notifier-content {
-    background: #ffffff;
+    background: var(--white);
     padding: 40px 32px 32px;
-    border-radius: 16px;
+    border-radius: var(--radius-xl);
     max-width: 400px;
     width: 100%;
     text-align: center;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+    box-shadow: var(--shadow-xl);
     animation: modalFadeIn 0.3s ease;
 }
 
@@ -536,7 +619,7 @@
     align-items: center;
     justify-content: center;
     background: rgba(89, 193, 74, 0.1);
-    border-radius: 50%;
+    border-radius: var(--radius-full);
 }
 
 .notifier-icon img {
@@ -544,20 +627,23 @@
     height: 36px;
 }
 
+.notifier-content .heading-5 {
+    margin: 0 0 8px 0;
+}
+
 .notifier-content p {
-    font-size: 17px;
-    color: #050a04;
+    font-size: var(--font-size-base);
+    color: var(--gray-600);
     margin: 0 0 28px 0;
     line-height: 1.6;
-    font-weight: 500;
 }
 
 .notifier-content .btn {
     min-width: 120px;
     padding: 14px 32px;
-    font-size: 16px;
-    font-weight: 600;
-    border-radius: 10px;
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    border-radius: var(--radius-base);
     height: 50px;
 }
 
@@ -565,14 +651,9 @@
    RESPONSIVE
    ============================================ */
 
-/* Tablets and below */
 @media (max-width: 768px) {
-    .register-container {
+    .register-card {
         padding: 24px 16px;
-    }
-
-    .register-title {
-        font-size: 24px;
     }
 
     .register-form .form-row {
@@ -601,14 +682,14 @@
         gap: 4px;
     }
 
-    .step-number {
+    .progress-step .step-number {
         width: 30px;
         height: 30px;
-        font-size: 12px;
+        font-size: var(--font-size-xs);
     }
 
-    .step-label {
-        font-size: 10px;
+    .progress-step .step-label {
+        font-size: 9px;
     }
 
     .progress-line {
@@ -616,33 +697,28 @@
     }
 }
 
-/* Small phones */
 @media (max-width: 480px) {
     .register-page {
         padding: 12px 10px;
     }
 
-    .register-container {
+    .register-card {
         padding: 20px 14px;
-        border-radius: 12px;
+        border-radius: var(--radius-lg);
     }
 
-    .register-title {
-        font-size: 22px;
-    }
-
-    .register-subtitle {
-        font-size: 14px;
+    .register-header .heading-2 {
+        font-size: var(--font-size-2xl);
     }
 
     .register-form .form-control {
         height: 44px;
-        font-size: 14px;
+        font-size: var(--font-size-sm);
         padding: 10px 14px;
     }
 
     .register-form .form-label {
-        font-size: 13px;
+        font-size: var(--font-size-xs);
     }
 
     .options-grid {
@@ -655,7 +731,7 @@
     }
 
     .option-label {
-        font-size: 13px;
+        font-size: var(--font-size-xs);
     }
 
     .option-check input[type="checkbox"] {
@@ -663,26 +739,12 @@
         height: 16px;
     }
 
-    .step-number {
-        width: 26px;
-        height: 26px;
-        font-size: 11px;
-    }
-
-    .step-label {
-        font-size: 9px;
-    }
-
-    .progress-line {
-        top: -8px;
-    }
-
     .notifier-content {
         padding: 32px 20px 24px;
     }
 
     .notifier-content p {
-        font-size: 15px;
+        font-size: var(--font-size-sm);
     }
 
     .notifier-icon {
@@ -697,19 +759,18 @@
 
     .notifier-content .btn {
         height: 44px;
-        font-size: 14px;
+        font-size: var(--font-size-sm);
         padding: 10px 24px;
     }
 }
 
-/* Very small phones */
 @media (max-width: 375px) {
-    .register-container {
+    .register-card {
         padding: 16px 12px;
     }
 
-    .register-title {
-        font-size: 20px;
+    .register-header .heading-2 {
+        font-size: var(--font-size-xl);
     }
 
     .options-grid {
@@ -722,7 +783,7 @@
     }
 
     .option-label {
-        font-size: 12px;
+        font-size: var(--font-size-xs);
     }
 }
 
@@ -740,118 +801,4 @@
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
     border: 0;
-}
-
-/* ============================================
-   TERMS & CONDITIONS / PRIVACY POLICY CHECKBOX
-   FIXED: was missing from register.php - added to match
-   crooks-cart-collectives sign-up checkbox pattern,
-   restyled to FitPal's green palette.
-   ============================================ */
-
-.terms-group {
-    margin: 20px 0;
-    padding: 14px 16px;
-    background: rgba(89, 193, 74, 0.05);
-    border-radius: 10px;
-    border: 1px solid rgba(5, 10, 4, 0.05);
-}
-
-.checkbox-wrapper {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    position: relative;
-}
-
-.checkbox-wrapper input[type="checkbox"] {
-    position: absolute;
-    opacity: 0;
-    width: 22px;
-    height: 22px;
-    cursor: pointer;
-    z-index: 2;
-    margin: 0;
-    top: 0;
-    left: 0;
-}
-
-.checkbox-wrapper .custom-checkbox {
-    display: inline-block;
-    width: 22px;
-    height: 22px;
-    border: 2px solid #c8cec8;
-    border-radius: 5px;
-    background: #ffffff;
-    position: relative;
-    flex-shrink: 0;
-    cursor: pointer;
-    margin-top: 1px;
-    transition: border-color 0.2s ease, background-color 0.2s ease;
-}
-
-.checkbox-wrapper input[type="checkbox"]:checked + .custom-checkbox {
-    background: #59c14a;
-    border-color: #59c14a;
-}
-
-.checkbox-wrapper input[type="checkbox"]:checked + .custom-checkbox::after {
-    content: '\2714';
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -55%);
-    color: #ffffff;
-    font-size: 13px;
-    font-weight: bold;
-    line-height: 1;
-}
-
-.checkbox-wrapper input[type="checkbox"]:focus-visible + .custom-checkbox {
-    outline: 2px solid #59c14a;
-    outline-offset: 2px;
-}
-
-.terms-label {
-    font-size: 14px;
-    font-weight: 500;
-    color: #384238;
-    line-height: 1.5;
-    cursor: pointer;
-    flex: 1;
-}
-
-.terms-label a {
-    color: #59c14a;
-    text-decoration: none;
-    font-weight: 700;
-    transition: color 0.2s ease;
-}
-
-.terms-label a:hover {
-    color: #3d8a32;
-    text-decoration: underline;
-}
-
-.terms-group.error {
-    background: rgba(220, 53, 69, 0.06);
-    border-color: #dc3545;
-}
-
-.terms-group.error .terms-label {
-    color: #dc3545;
-}
-
-.terms-group.error .custom-checkbox {
-    border-color: #dc3545;
-}
-
-@media (max-width: 480px) {
-    .terms-group {
-        padding: 12px;
-    }
-
-    .terms-label {
-        font-size: 13px;
-    }
 }

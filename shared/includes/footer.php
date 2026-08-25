@@ -62,8 +62,8 @@ $assetBase = getFooterAssetBase();
     </div>
     <div class="footer-lower">
         <div class="footer-links">
-            <a href="<?php echo $assetBase; ?>pages/privacy_policy.php">Privacy Policy</a>
-            <a href="<?php echo $assetBase; ?>pages/terms_conditions.php">Terms & Conditions</a>
+            <a href="<?php echo $assetBase; ?>pages/privacy-policy.php">Privacy Policy</a>
+            <a href="<?php echo $assetBase; ?>pages/terms-conditions.php">Terms & Conditions</a>
             <a href="<?php echo $assetBase; ?>pages/contact.php">Contact</a>
         </div>
         <div class="footer-copyright">
