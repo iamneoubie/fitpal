@@ -5,7 +5,7 @@
  * Customer dashboard showing order summary, profile info, and quick actions.
  *
  * @package FitPal
- * @version 1.1
+ * @version 1.2
  */
 
 declare(strict_types=1);
@@ -142,15 +142,32 @@ function formatOrderDate(string $date): string {
     return $timestamp !== false ? date('M d, Y g:i A', $timestamp) : $date;
 }
 
-// Count dietary preferences
+// Count dietary preferences (excluding 'none')
 $dietCount = 0;
 if (!empty($profileData['dietary_preferences'])) {
-    $diets     = explode(',', $profileData['dietary_preferences']);
-    $dietCount = count(array_filter($diets, fn($d) => trim($d) !== ''));
+    $diets = explode(',', $profileData['dietary_preferences']);
+    $dietCount = count(array_filter($diets, function($d) {
+        $trimmed = trim($d);
+        return $trimmed !== '' && $trimmed !== 'none';
+    }));
+}
+
+// Count allergies (excluding 'none')
+$allergyCount = 0;
+if (!empty($profileData['allergies'])) {
+    $allergies = explode(',', $profileData['allergies']);
+    $allergyCount = count(array_filter($allergies, function($a) {
+        $trimmed = trim($a);
+        return $trimmed !== '' && $trimmed !== 'none';
+    }));
 }
 
 $balanceFloat = (float)($profileData['balance'] ?? 0);
 ?>
+<!-- ============================================
+    DASHBOARD CSS
+    ============================================ -->
+<link rel="stylesheet" href="../assets/css/dashboard.css">
 
 <div class="content dashboard-page">
     <div class="container">
@@ -168,10 +185,11 @@ $balanceFloat = (float)($profileData['balance'] ?? 0);
 
         <!-- Stats Cards -->
         <div class="stats-grid">
+            <!-- Orders Stat -->
             <div class="stat-card">
                 <div class="stat-icon stat-icon-orders">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt="Orders"
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/cart-shopping.svg" alt="Orders"
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/package.svg'">
                 </div>
                 <div class="stat-info">
                     <p class="stat-number"><?php echo number_format($orderCount); ?></p>
@@ -179,10 +197,11 @@ $balanceFloat = (float)($profileData['balance'] ?? 0);
                 </div>
             </div>
 
+            <!-- Wallet Balance Stat -->
             <div class="stat-card">
                 <div class="stat-icon stat-icon-balance">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/wallet.svg" alt="Wallet"
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/cart-shopping.svg" alt="Wallet"
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/profile.svg'">
                 </div>
                 <div class="stat-info">
                     <p class="stat-number"><?php echo formatCurrency($balanceFloat); ?></p>
@@ -190,10 +209,11 @@ $balanceFloat = (float)($profileData['balance'] ?? 0);
                 </div>
             </div>
 
+            <!-- Fitness Goal Stat -->
             <div class="stat-card">
-                <div class="stat-icon stat-icon-profile">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/profile.svg" alt="Profile"
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
+                <div class="stat-icon stat-icon-fitness">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/target-fill.svg" alt="Fitness Goal"
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/star-empty.svg'">
                 </div>
                 <div class="stat-info">
                     <p class="stat-number"><?php
@@ -209,10 +229,11 @@ $balanceFloat = (float)($profileData['balance'] ?? 0);
                 </div>
             </div>
 
+            <!-- Dietary Preferences Stat -->
             <div class="stat-card">
                 <div class="stat-icon stat-icon-diet">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/dietary.svg" alt="Dietary"
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/list-view.svg" alt="Dietary Preferences"
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/list-settings-fill.svg'">
                 </div>
                 <div class="stat-info">
                     <p class="stat-number"><?php echo $dietCount; ?></p>
@@ -236,8 +257,8 @@ $balanceFloat = (float)($profileData['balance'] ?? 0);
                 <?php if (empty($recentOrders)): ?>
                 <div class="empty-state">
                     <div class="empty-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt="No orders"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/cart-shopping.svg" alt="No orders"
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/package.svg'">
                     </div>
                     <p class="empty-title">No Orders Yet</p>
                     <p class="empty-description">Start ordering healthy meals from your favorite restaurants.</p>
@@ -280,40 +301,42 @@ $balanceFloat = (float)($profileData['balance'] ?? 0);
             <!-- Quick Actions & Profile -->
             <div class="dashboard-sidebar">
 
+                <!-- Quick Actions -->
                 <div class="dashboard-card quick-actions">
                     <p class="heading-5">Quick Actions</p>
                     <div class="actions-grid">
                         <a href="menu.php" class="action-item">
                             <div class="action-icon">
-                                <img src="<?php echo $assetBase; ?>assets/images/icons/menu.svg" alt="Menu"
-                                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
+                                <img src="<?php echo $assetBase; ?>assets/images/icons/cart-shopping.svg" alt="Browse Menu"
+                                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/package.svg'">
                             </div>
                             <span>Browse Menu</span>
                         </a>
                         <a href="orders.php" class="action-item">
                             <div class="action-icon">
-                                <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt="Orders"
-                                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
+                                <img src="<?php echo $assetBase; ?>assets/images/icons/cart-shopping.svg" alt="My Orders"
+                                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/package.svg'">
                             </div>
                             <span>My Orders</span>
                         </a>
                         <a href="profile.php" class="action-item">
                             <div class="action-icon">
-                                <img src="<?php echo $assetBase; ?>assets/images/icons/profile.svg" alt="Profile"
-                                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
+                                <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="Profile"
+                                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/profile.svg'">
                             </div>
                             <span>Profile</span>
                         </a>
                         <a href="wallet.php" class="action-item">
                             <div class="action-icon">
-                                <img src="<?php echo $assetBase; ?>assets/images/icons/wallet.svg" alt="Wallet"
-                                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
+                                <img src="<?php echo $assetBase; ?>assets/images/icons/cart-shopping.svg" alt="Wallet"
+                                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/profile.svg'">
                             </div>
                             <span>Wallet</span>
                         </a>
                     </div>
                 </div>
 
+                <!-- Profile Summary -->
                 <div class="dashboard-card profile-summary">
                     <p class="heading-5">Profile Summary</p>
                     <div class="profile-info">
@@ -339,12 +362,13 @@ $balanceFloat = (float)($profileData['balance'] ?? 0);
                             </span>
                         </div>
 
-                        <?php if (!empty($profileData['dietary_preferences'])): ?>
+                        <?php if ($dietCount > 0): ?>
                         <div class="profile-row">
                             <span class="profile-label">Dietary</span>
                             <span class="profile-value profile-tags">
                                 <?php
-                                foreach (explode(',', $profileData['dietary_preferences']) as $diet) {
+                                $dietParts = explode(',', $profileData['dietary_preferences']);
+                                foreach ($dietParts as $diet) {
                                     $diet = trim($diet);
                                     if ($diet !== '' && $diet !== 'none') {
                                         echo '<span class="tag">'
@@ -357,12 +381,13 @@ $balanceFloat = (float)($profileData['balance'] ?? 0);
                         </div>
                         <?php endif; ?>
 
-                        <?php if (!empty($profileData['allergies']) && $profileData['allergies'] !== 'none'): ?>
+                        <?php if ($allergyCount > 0): ?>
                         <div class="profile-row">
                             <span class="profile-label">Allergies</span>
                             <span class="profile-value profile-tags">
                                 <?php
-                                foreach (explode(',', $profileData['allergies']) as $allergy) {
+                                $allergyParts = explode(',', $profileData['allergies']);
+                                foreach ($allergyParts as $allergy) {
                                     $allergy = trim($allergy);
                                     if ($allergy !== '' && $allergy !== 'none') {
                                         echo '<span class="tag tag-danger">'
@@ -370,6 +395,23 @@ $balanceFloat = (float)($profileData['balance'] ?? 0);
                                             . '</span>';
                                     }
                                 }
+                                ?>
+                            </span>
+                        </div>
+                        <?php endif; ?>
+
+                        <?php if (!empty($profileData['fitness_goal']) && $profileData['fitness_goal'] !== ''): ?>
+                        <div class="profile-row">
+                            <span class="profile-label">Fitness Goal</span>
+                            <span class="profile-value">
+                                <?php
+                                $goal = $profileData['fitness_goal'];
+                                echo htmlspecialchars(match ($goal) {
+                                    'weight_loss' => 'Weight Loss',
+                                    'muscle_gain' => 'Muscle Gain',
+                                    'maintenance' => 'Maintenance',
+                                    default       => ucwords(str_replace('_', ' ', $goal)),
+                                }, ENT_QUOTES, 'UTF-8');
                                 ?>
                             </span>
                         </div>

@@ -259,22 +259,22 @@ $brandLogoPng = $assetBase . 'assets/images/brand/Logo.png';
             <?php else: ?>
             <li class="mobile-nav-item">
                 <a href="<?php echo $assetBase; ?>../customer/pages/.php" class="mobile-nav-link mobile-login">
-                    Customer Login
+                    Customer
                 </a>
             </li>
             <li class="mobile-nav-item">
                 <a href="<?php echo $assetBase; ?>../restaurant/pages/.php" class="mobile-nav-link mobile-login">
-                    Restaurant Login
+                    Restaurant
                 </a>
             </li>
             <li class="mobile-nav-item">
                 <a href="<?php echo $assetBase; ?>../rider/pages/.php" class="mobile-nav-link mobile-login">
-                    Rider Login
+                    Rider
                 </a>
             </li>
             <li class="mobile-nav-item">
                 <a href="<?php echo $assetBase; ?>../admin/pages/.php" class="mobile-nav-link mobile-login">
-                    Admin Login
+                    Admin
                 </a>
             </li>
             <?php endif; ?>

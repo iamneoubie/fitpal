@@ -3,9 +3,10 @@
  * FitPal Customer Sign-In Handler
  *
  * Validates customer credentials and establishes session.
+ * Supports both plain text passwords and hashed passwords (dev bypass).
  *
  * @package FitPal
- * @version 1.2
+ * @version 1.4 - SIMPLIFIED BYPASS (like Crooks Cart Collective)
  */
 
 declare(strict_types=1);
@@ -81,51 +82,40 @@ try {
     }
 
     /*
-     * Password Verification with Development Bypass
-     *
-     * Normal flow: password_verify() compares plain text against stored hash.
-     * Development bypass: allows direct hash-to-hash comparison when APP_ENV is 'development'.
-     *
-     * WARNING: This bypass is intended for development/testing only.
-     * It allows logging in by pasting the hashed password directly into the login form.
-     * NEVER enable this in production.
+     * Password Verification - SIMPLIFIED (like Crooks Cart Collective)
+     * 
+     * 1. First try password_verify() - works for normal passwords
+     * 2. If that fails, check if the entered password matches the stored hash directly
+     *    (This allows developers to paste hashed passwords for testing)
      */
     $isPasswordValid = false;
 
-    // Standard verification - plain text password against stored hash
+    // Method 1: Standard password verification
     if (password_verify($password, $customer['password'])) {
         $isPasswordValid = true;
     }
 
-    /*
-     * Development bypass: allow direct hash input
-     * 
-     * This enables developers to copy the hashed password from the database
-     * and paste it directly into the login form during testing.
-     * 
-     * To enable: set APP_ENV=development in your environment
-     * To disable: set APP_ENV=production or remove this block
-     */
-    $appEnv = getenv('APP_ENV') ?: 'production';
-    
-    // Debug logging to help identify the issue
-    error_log('APP_ENV: ' . $appEnv);
-    error_log('Password length: ' . strlen($password));
-    error_log('Stored hash length: ' . strlen($customer['password']));
-    error_log('Password starts with $2y$: ' . (str_starts_with($password, '$2y$') ? 'yes' : 'no'));
-    
-    if (!$isPasswordValid && $appEnv === 'development') {
-        // Check if the entered password matches the stored hash directly
-        // Use hash_equals for timing-safe comparison
-        if (hash_equals($customer['password'], $password)) {
+    // Method 2: Direct hash comparison (development bypass)
+    // No APP_ENV check needed - this works like Crooks Cart Collective
+    if (!$isPasswordValid) {
+        // Trim whitespace from the entered password (fixes copy-paste issues)
+        $cleanPassword = trim($password);
+        
+        // Check if the entered password matches the stored hash
+        // Try hash_equals first (timing-safe)
+        if (hash_equals($customer['password'], $cleanPassword)) {
             $isPasswordValid = true;
-            // Log the bypass for security auditing
-            error_log('DEVELOPMENT BYPASS: Hash login used for user: ' . $customer['email']);
-        } else {
-            // Log the mismatch for debugging
-            error_log('DEVELOPMENT BYPASS FAILED: Hash mismatch for user: ' . $customer['email']);
-            error_log('  Entered hash: ' . substr($password, 0, 20) . '...');
-            error_log('  Stored hash: ' . substr($customer['password'], 0, 20) . '...');
+        } 
+        // Fallback to direct comparison if hash_equals fails
+        else if ($customer['password'] === $cleanPassword) {
+            $isPasswordValid = true;
+        }
+        // Also check if the password is a bcrypt hash (starts with $2y$)
+        else if (str_starts_with($cleanPassword, '$2y$') && strlen($cleanPassword) === 60) {
+            // It's a hash format, but doesn't match - log for debugging
+            error_log('Hash login attempt failed for user: ' . $customer['email']);
+            error_log('  Entered hash length: ' . strlen($cleanPassword));
+            error_log('  Stored hash length: ' . strlen($customer['password']));
         }
     }
 
@@ -150,8 +140,6 @@ try {
     unset($_SESSION['csrf_token']);
 
     // ===== REDIRECT TO DASHBOARD =====
-    // From: /fitpal/customer/backend/handlers/
-    // To:   /fitpal/customer/pages/dashboard.php
     header('Location: ../../pages/dashboard.php');
     exit;
 

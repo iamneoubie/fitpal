@@ -47,16 +47,16 @@ $assetBase = getFooterAssetBase();
         </div>
         <div class="footer-social">
             <a href="https://www.facebook.com/" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
-                <img src="<?php echo $assetBase; ?>assets/images/icons/facebook.svg" alt="Facebook">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/facebook-mono.svg" alt="Facebook">
             </a>
             <a href="https://www.instagram.com/" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
-                <img src="<?php echo $assetBase; ?>assets/images/icons/instagram.svg" alt="Instagram">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/instagram-mono.svg" alt="Instagram">
             </a>
-            <a href="https://twitter.com/" target="_blank" rel="noopener noreferrer" aria-label="Twitter">
-                <img src="<?php echo $assetBase; ?>assets/images/icons/twitter.svg" alt="Twitter">
+            <a href="https://github.com/" target="_blank" rel="noopener noreferrer" aria-label="GitHub">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/github-mono.svg" alt="GitHub">
             </a>
             <a href="https://youtube.com/" target="_blank" rel="noopener noreferrer" aria-label="YouTube">
-                <img src="<?php echo $assetBase; ?>assets/images/icons/youtube.svg" alt="YouTube">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/youtube-mono.svg" alt="YouTube">
             </a>
         </div>
     </div>

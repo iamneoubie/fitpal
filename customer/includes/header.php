@@ -179,7 +179,7 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
                 </ul>
 
                 <div class="nav-actions">
-                    <a href="sign-in.php" class="btn btn-primary btn-sm">Sign In</a>
+                    <a href="sign-in.php" class="btn btn-primary btn-sm">Login</a>
                 </div>
                 <?php endif; ?>
             </nav>
@@ -237,7 +237,7 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
             </li>
             <li class="mobile-nav-divider"></li>
             <li class="mobile-nav-item">
-                <a href="sign-in.php" class="mobile-nav-link mobile-login">Sign In</a>
+                <a href="sign-in.php" class="mobile-nav-link mobile-login">Login</a>
             </li>
             <?php endif; ?>
         </ul>

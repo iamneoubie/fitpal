@@ -76,7 +76,6 @@ $featuredRestaurants = [
     ]
 ];
 ?>
-
 <!-- ============================================
     LANDING PAGE CONTENT
     ============================================ -->
@@ -87,10 +86,6 @@ $featuredRestaurants = [
     <section class="hero-section" aria-labelledby="hero-title">
         <div class="hero-container">
             <div class="hero-content">
-                <div class="hero-badge">
-                    <span class="hero-badge-icon">&#9679;</span>
-                    Dietary Meal Ordering
-                </div>
                 <p class="hero-title" id="hero-title">
                     Find Meals That Fit<br>
                     <span>Your Diet</span>
@@ -149,7 +144,7 @@ $featuredRestaurants = [
             <div class="features-grid">
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/nutrition.svg"
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/chart-line-up.svg"
                             alt="Nutritional information"
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
                     </div>
@@ -160,7 +155,7 @@ $featuredRestaurants = [
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/dietary.svg" alt="Dietary filters"
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/verified-empty.svg" alt="Dietary filters"
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
                     </div>
                     <p class="feature-title">Dietary Filters</p>
@@ -170,7 +165,7 @@ $featuredRestaurants = [
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/allergy.svg" alt="Allergy management"
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/star-empty.svg" alt="Allergy management"
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
                     </div>
                     <p class="feature-title">Allergy Management</p>
@@ -180,7 +175,7 @@ $featuredRestaurants = [
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/instructions.svg"
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/edit.svg"
                             alt="Special instructions"
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
                     </div>
@@ -191,7 +186,7 @@ $featuredRestaurants = [
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/tracking.svg" alt="Order tracking"
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/time-update.svg" alt="Order tracking"
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
                     </div>
                     <p class="feature-title">Order Tracking</p>
@@ -201,7 +196,7 @@ $featuredRestaurants = [
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/analytics.svg" alt="Nutrition analytics"
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/chart-line-up.svg" alt="Nutrition analytics"
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
                     </div>
                     <p class="feature-title">Nutrition Analytics</p>
@@ -224,7 +219,7 @@ $featuredRestaurants = [
                 <div class="step-card">
                     <div class="step-number">1</div>
                     <div class="step-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/register.svg" alt="Create account"
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="Create account"
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
                     </div>
                     <p class="step-title">Create Account</p>
@@ -235,7 +230,7 @@ $featuredRestaurants = [
                 <div class="step-card">
                     <div class="step-number">2</div>
                     <div class="step-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/browse.svg" alt="Browse menus"
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt="Browse menus"
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
                     </div>
                     <p class="step-title">Browse Menus</p>
@@ -246,7 +241,7 @@ $featuredRestaurants = [
                 <div class="step-card">
                     <div class="step-number">3</div>
                     <div class="step-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt="Place order"
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/cart-shopping.svg" alt="Place order"
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
                     </div>
                     <p class="step-title">Place Order</p>
@@ -257,7 +252,7 @@ $featuredRestaurants = [
                 <div class="step-card">
                     <div class="step-number">4</div>
                     <div class="step-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/delivery.svg" alt="Track delivery"
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/package.svg" alt="Track delivery"
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
                     </div>
                     <p class="step-title">Track Order</p>
@@ -341,10 +336,10 @@ $featuredRestaurants = [
                     Go to Dashboard
                 </a>
                 <?php else: ?>
-                <a href="<?php echo $assetBase; ?>../customer/pages/.php" class="btn btn-primary btn-lg">
+                <a href="<?php echo $assetBase; ?>../customer/pages/sign-up.php" class="btn btn-primary btn-lg">
                     Get Started
                 </a>
-                <a href="<?php echo $assetBase; ?>../customer/pages/login.php" class="btn btn-outline btn-lg">
+                <a href="<?php echo $assetBase; ?>../customer/pages/sign-in.php" class="btn btn-outline btn-lg">
                     Sign In
                 </a>
                 <?php endif; ?>

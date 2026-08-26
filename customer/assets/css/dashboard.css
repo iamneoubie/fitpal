@@ -193,6 +193,10 @@
     margin: 0;
 }
 
+.heading-5 {
+    margin-bottom: 1rem;
+}
+
 .dashboard-card .card-header .btn {
     flex-shrink: 0;
 }
@@ -390,7 +394,6 @@
     background: var(--white);
     border-color: var(--primary);
     box-shadow: var(--shadow-sm);
-    transform: translateY(-2px);
 }
 
 .action-icon {

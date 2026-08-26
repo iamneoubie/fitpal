@@ -4,18 +4,12 @@
  * 
  * This is the public contact page that provides contact information and a form.
  * 
- * Usage: Direct access via web browser
- * 
  * @package FitPal
- * @version 1.0
+ * @version 1.2
  */
 
 declare(strict_types=1);
 
-// Session is now handled by header.php
-// No need to start session here
-
-// Include shared header (handles session)
 require_once __DIR__ . '/../includes/header.php';
 
 /**
@@ -38,7 +32,7 @@ function getContactAssetBase(): string {
 
 $assetBase = getContactAssetBase();
 
-// ===== FIXED: Generate CSRF token =====
+// Generate CSRF token
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
@@ -82,7 +76,6 @@ $subject = '';
 $message = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
-    // ===== FIXED: CSRF validation =====
     if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $csrfToken) {
         $formErrors['general'] = 'Security validation failed. Please try again.';
     } else {
@@ -116,11 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
         }
         
         if (empty($formErrors)) {
-            // ===== FIXED: Log the submission (no actual email sending in demo) =====
             error_log("Contact form submission from: {$fullName} ({$email}) - Subject: {$subject}");
-            
-            // Store in database if needed (optional)
-            // In a real app, you would send an email here
             
             $formSuccess = true;
             $formSubmitted = true;
@@ -129,7 +118,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
             $subject = '';
             $message = '';
             
-            // ===== FIXED: Regenerate CSRF token after successful submission =====
             $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
             $csrfToken = $_SESSION['csrf_token'];
         } else {
@@ -138,10 +126,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
     }
 }
 ?>
-<!-- ============================================
-    CONTENT WRAPPER
-    ============================================ -->
-
 <div class="content">
 
     <!-- Hero Section -->
@@ -165,16 +149,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
             <div class="contact-info-grid">
                 <div class="contact-info-card">
                     <div class="contact-info-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/location.svg" alt="Location"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg';">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="Location"
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/building.svg'">
                     </div>
                     <p class="heading-6">Our Address</p>
                     <p><?php echo htmlspecialchars($contactInfo['address'], ENT_QUOTES, 'UTF-8'); ?></p>
                 </div>
                 <div class="contact-info-card">
                     <div class="contact-info-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/phone.svg" alt="Phone"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg';">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/phone-fill.svg" alt="Phone"
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/contact-us-empty.svg'">
                     </div>
                     <p class="heading-6">Phone Number</p>
                     <p>
@@ -185,8 +169,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
                 </div>
                 <div class="contact-info-card">
                     <div class="contact-info-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/email.svg" alt="Email"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg';">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/mail.svg" alt="Email"
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/contact-us-fill.svg'">
                     </div>
                     <p class="heading-6">Email Address</p>
                     <p>
@@ -197,8 +181,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
                 </div>
                 <div class="contact-info-card">
                     <div class="contact-info-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/clock.svg" alt="Hours"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg';">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/time-update.svg" alt="Hours"
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/update.svg'">
                     </div>
                     <p class="heading-6">Business Hours</p>
                     <p><?php echo htmlspecialchars($contactInfo['hours'], ENT_QUOTES, 'UTF-8'); ?></p>
@@ -237,7 +221,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
                     <form method="POST"
                         action="<?php echo htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8'); ?>"
                         class="contact-form" id="contactForm" novalidate>
-                        <!-- ===== FIXED: CSRF token field ===== -->
                         <input type="hidden" name="csrf_token"
                             value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                         <input type="hidden" name="submit_contact" value="1">
@@ -319,15 +302,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
             <div class="faq-grid">
                 <?php foreach ($faqItems as $index => $faq): ?>
                 <div class="faq-item">
-                    <div class="faq-question" id="faq-question-<?php echo $index; ?>">
-                        <p class="heading-6"><?php echo htmlspecialchars($faq['question'], ENT_QUOTES, 'UTF-8'); ?></p>
-                        <button class="faq-toggle" aria-expanded="false"
-                            aria-controls="faq-answer-<?php echo $index; ?>" type="button">
-                            <span class="faq-toggle-icon"></span>
-                            <span class="sr-only">Toggle answer</span>
-                        </button>
-                    </div>
-                    <div class="faq-answer" id="faq-answer-<?php echo $index; ?>" role="region">
+                    <button class="faq-question-btn" type="button" aria-expanded="false">
+                        <span class="faq-question-text"><?php echo htmlspecialchars($faq['question'], ENT_QUOTES, 'UTF-8'); ?></span>
+                        <span class="faq-toggle-icon" aria-hidden="true">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                        </span>
+                    </button>
+                    <div class="faq-answer">
                         <p><?php echo htmlspecialchars($faq['answer'], ENT_QUOTES, 'UTF-8'); ?></p>
                     </div>
                 </div>
@@ -343,10 +327,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
                 <p class="heading-2" id="cta-title">Want to join as a restaurant?</p>
                 <p class="contact-cta-description">Register your restaurant and showcase your healthy menu options.</p>
                 <div class="contact-cta-actions">
-                    <a href="<?php echo $assetBase; ?>../restaurant/pages/register.php" class="btn btn-primary btn-lg">
+                    <a href="<?php echo $assetBase; ?>../restaurant/pages/sign-up.php" class="btn btn-primary btn-lg">
                         Register Restaurant
                     </a>
-                    <a href="<?php echo $assetBase; ?>../customer/pages/login.php" class="btn btn-outline btn-lg">
+                    <a href="<?php echo $assetBase; ?>../customer/pages/sign-in.php" class="btn btn-outline btn-lg">
                         Sign In
                     </a>
                 </div>
@@ -355,6 +339,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
     </section>
 
 </div>
+
+<script src="<?php echo $assetBase; ?>assets/ui/js/contact.js" defer></script>
 
 <?php
 // Include shared footer

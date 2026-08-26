@@ -119,7 +119,7 @@ unset($_SESSION['registration_error']);
                     <div class="form-row">
                         <div class="form-group">
                             <label for="first_name" class="form-label">
-                                First Name <span class="text-danger">*</span>
+                                First Name <span class="text-danger"></span>
                             </label>
                             <input type="text" id="first_name" name="first_name" class="form-control"
                                 placeholder="Enter your first name" required autocomplete="given-name">
@@ -136,7 +136,7 @@ unset($_SESSION['registration_error']);
 
                         <div class="form-group">
                             <label for="last_name" class="form-label">
-                                Last Name <span class="text-danger">*</span>
+                                Last Name <span class="text-danger"></span>
                             </label>
                             <input type="text" id="last_name" name="last_name" class="form-control"
                                 placeholder="Enter your last name" required autocomplete="family-name">
@@ -147,7 +147,7 @@ unset($_SESSION['registration_error']);
                     <div class="form-row">
                         <div class="form-group">
                             <label for="birthdate" class="form-label">
-                                Birthdate <span class="text-danger">*</span>
+                                Birthdate <span class="text-danger"></span>
                             </label>
                             <input type="date" id="birthdate" name="birthdate" class="form-control" required
                                 max="<?php echo date('Y-m-d', strtotime('-13 years')); ?>"
@@ -158,7 +158,7 @@ unset($_SESSION['registration_error']);
 
                         <div class="form-group">
                             <label for="gender" class="form-label">
-                                Gender <span class="text-danger">*</span>
+                                Gender <span class="text-danger"></span>
                             </label>
                             <select id="gender" name="gender" class="form-control" required>
                                 <option value="">Select your gender</option>
@@ -173,7 +173,7 @@ unset($_SESSION['registration_error']);
                     <div class="form-row">
                         <div class="form-group">
                             <label for="email" class="form-label">
-                                Email Address <span class="text-danger">*</span>
+                                Email Address <span class="text-danger"></span>
                             </label>
                             <input type="email" id="email" name="email" class="form-control"
                                 placeholder="Enter your email address" required autocomplete="email">
@@ -182,7 +182,7 @@ unset($_SESSION['registration_error']);
 
                         <div class="form-group">
                             <label for="contact_number" class="form-label">
-                                Contact Number <span class="text-danger">*</span>
+                                Contact Number <span class="text-danger"></span>
                             </label>
                             <input type="tel" id="contact_number" name="contact_number" class="form-control"
                                 placeholder="09XX XXX XXXX" required autocomplete="tel">
@@ -193,7 +193,7 @@ unset($_SESSION['registration_error']);
                     <div class="form-row">
                         <div class="form-group">
                             <label for="username" class="form-label">
-                                Username <span class="text-danger">*</span>
+                                Username <span class="text-danger"></span>
                             </label>
                             <input type="text" id="username" name="username" class="form-control"
                                 placeholder="Choose a username" required autocomplete="username">
@@ -204,7 +204,7 @@ unset($_SESSION['registration_error']);
                     <div class="form-row">
                         <div class="form-group">
                             <label for="password" class="form-label">
-                                Password <span class="text-danger">*</span>
+                                Password <span class="text-danger"></span>
                             </label>
                             <div class="password-wrapper">
                                 <input type="password" id="password" name="password" class="form-control"
@@ -221,7 +221,7 @@ unset($_SESSION['registration_error']);
 
                         <div class="form-group">
                             <label for="confirm_password" class="form-label">
-                                Confirm Password <span class="text-danger">*</span>
+                                Confirm Password <span class="text-danger"></span>
                             </label>
                             <div class="password-wrapper">
                                 <input type="password" id="confirm_password" name="confirm_password"
