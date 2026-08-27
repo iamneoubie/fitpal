@@ -6,7 +6,7 @@
  * Responds with JSON for fetch()-based submission from sign-up.js.
  *
  * @package FitPal
- * @version 1.5
+ * @version 1.6
  */
 
 declare(strict_types=1);
@@ -93,16 +93,10 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     respondError('Please enter a valid email address.', 'email');
 }
 
-// ===== CONTACT NUMBER (Philippine mobile) =====
+// ===== CONTACT NUMBER (Philippine mobile - exactly 11 digits, starts with 09) =====
 $cleanedContact = preg_replace('/\s+/', '', $contactNumber);
-if (!preg_match('/^\d{10,11}$/', $cleanedContact)) {
-    respondError('Please enter a valid Philippine mobile number (10-11 digits).', 'contact_number');
-}
-if (!(
-    (strlen($cleanedContact) === 11 && str_starts_with($cleanedContact, '09')) ||
-    (strlen($cleanedContact) === 10 && str_starts_with($cleanedContact, '9'))
-)) {
-    respondError('Please enter a valid Philippine mobile number (e.g. 09123456789).', 'contact_number');
+if (!preg_match('/^09\d{9}$/', $cleanedContact)) {
+    respondError('Please enter a valid Philippine mobile number (11 digits, starting with 09).', 'contact_number');
 }
 
 // ===== USERNAME =====
@@ -248,14 +242,10 @@ try {
     $_SESSION = [];
     $_SESSION['registration_success'] = 'Account created successfully! Please sign in.';
 
-    // FIXED: Redirect path for client-side JavaScript
-    // Since sign-up.js runs this redirect via window.location.href,
-    // the path must be relative to the current page (customer/pages/sign-up.php).
-    // Both sign-up.php and sign-in.php are in the same directory.
     echo json_encode([
         'status'   => 'success',
         'message'  => 'Account created successfully! Please sign in.',
-        'redirect' => 'sign-in.php',  // FIXED: was '../../pages/sign-in.php'
+        'redirect' => 'sign-in.php',
     ]);
     exit;
 

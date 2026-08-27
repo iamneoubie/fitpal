@@ -5,7 +5,7 @@
  * Multi-step registration with dietary preferences, allergies, and fitness goals.
  *
  * @package FitPal
- * @version 1.3
+ * @version 1.5
  */
 
 declare(strict_types=1);
@@ -38,7 +38,6 @@ $dietaryOptions = [
     'dairy_free'    => 'Dairy Free',
     'pescatarian'   => 'Pescatarian',
     'mediterranean' => 'Mediterranean',
-    'none'          => 'No Preference',
 ];
 
 $allergyOptions = [
@@ -51,7 +50,6 @@ $allergyOptions = [
     'fish'      => 'Fish',
     'peanuts'   => 'Peanuts',
     'sesame'    => 'Sesame',
-    'none'      => 'No Allergies',
 ];
 
 $fitnessGoals = [
@@ -187,6 +185,7 @@ unset($_SESSION['registration_error']);
                             <input type="tel" id="contact_number" name="contact_number" class="form-control"
                                 placeholder="09XX XXX XXXX" required autocomplete="tel">
                             <div class="form-error" id="contactError"></div>
+                            <div class="form-hint">11 digits, starting with 09 (e.g., 09123456789)</div>
                         </div>
                     </div>
 
@@ -267,12 +266,12 @@ unset($_SESSION['registration_error']);
                     </div>
 
                     <div class="step-actions">
-                        <button type="button" class="btn btn-secondary btn-prev" data-prev="1">
+                        <button type="button" class="btn btn-outline btn-prev" data-prev="1">
                             &larr; Back
                         </button>
-                        <button type="button" class="btn btn-skip" id="skipDiet">Skip Step</button>
-                        <button type="button" class="btn btn-primary btn-next" data-next="3"
-                            id="dietNext" disabled>Next Step &rarr;</button>
+                        <button type="button" class="btn btn-primary btn-step-action" id="dietAction">
+                            Skip Step
+                        </button>
                     </div>
                 </div>
 
@@ -299,12 +298,12 @@ unset($_SESSION['registration_error']);
                     </div>
 
                     <div class="step-actions">
-                        <button type="button" class="btn btn-secondary btn-prev" data-prev="2">
+                        <button type="button" class="btn btn-outline btn-prev" data-prev="2">
                             &larr; Back
                         </button>
-                        <button type="button" class="btn btn-skip" id="skipAllergies">Skip Step</button>
-                        <button type="button" class="btn btn-primary btn-next" data-next="4"
-                            id="allergyNext" disabled>Next Step &rarr;</button>
+                        <button type="button" class="btn btn-primary btn-step-action" id="allergyAction">
+                            Skip Step
+                        </button>
                     </div>
                 </div>
 
@@ -363,7 +362,7 @@ unset($_SESSION['registration_error']);
                     </div>
 
                     <div class="step-actions">
-                        <button type="button" class="btn btn-secondary btn-prev" data-prev="3">
+                        <button type="button" class="btn btn-outline btn-prev" data-prev="3">
                             &larr; Back
                         </button>
                         <button type="submit" class="btn btn-primary" id="registerBtn">

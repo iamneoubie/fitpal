@@ -4,6 +4,9 @@
  * Multi-step registration with card-based selection
  * Mobile-First Design
  * Follows FitPal's .content > .container pattern
+ * 
+ * @package FitPal
+ * @version 1.7
  */
 
 /* ============================================
@@ -245,10 +248,6 @@
     font-size: var(--font-size-sm);
 }
 
-.register-form .form-control[type="number"] {
-    -moz-appearance: textfield;
-}
-
 .register-form .form-control[type="number"]::-webkit-outer-spin-button,
 .register-form .form-control[type="number"]::-webkit-inner-spin-button {
     -webkit-appearance: none;
@@ -323,18 +322,22 @@
 
 .options-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: 10px;
     margin-bottom: 20px;
+    grid-auto-rows: 1fr;
 }
 
 .option-card {
     background: var(--white);
     border: 2px solid var(--gray-200);
     border-radius: var(--radius-base);
-    padding: 12px 14px;
+    padding: 10px 12px;
     transition: all var(--transition-fast);
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    min-height: 48px;
 }
 
 .option-card:hover {
@@ -351,12 +354,14 @@
 .option-check {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
 }
 
 .option-check input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
+    width: 17px;
+    height: 17px;
     accent-color: var(--primary);
     cursor: pointer;
     flex-shrink: 0;
@@ -366,16 +371,27 @@
     cursor: pointer;
     flex: 1;
     margin: 0;
+    min-width: 0;
+    display: block;
 }
 
 .option-label {
     font-size: var(--font-size-sm);
     color: var(--gray-700);
     font-weight: var(--font-weight-medium);
+    display: block;
+    line-height: 1.2;
+    /* Prevent awkward breaking */
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    /* Allow hyphenation as last resort */
+    hyphens: auto;
+    /* Prevent text from overflowing */
+    max-width: 100%;
 }
 
 /* ============================================
-   STEP ACTIONS
+   STEP ACTIONS - 2 BUTTON LAYOUT
    ============================================ */
 
 .step-actions {
@@ -394,16 +410,54 @@
     flex: 1;
 }
 
-.btn-skip {
-    background: transparent;
-    color: var(--gray-500);
-    border: 2px solid var(--gray-200);
-    transition: all var(--transition-fast);
+/* BACK BUTTON - Black outline, black text, black background on hover */
+.step-actions .btn-outline.btn-prev {
+    background-color: var(--black);
+    color: var(--white);
+    border-color: var(--black);
 }
 
-.btn-skip:hover {
-    border-color: var(--gray-400);
-    color: var(--gray-700);
+.step-actions .btn-outline.btn-prev:hover,
+.step-actions .btn-outline.btn-prev:focus {
+    background-color: var(--black);
+    color: var(--white);
+    border-color: var(--black);
+    opacity: 0.85;
+}
+
+/* STEP ACTION BUTTON (Dynamic - Skip/Next) - Vibrant primary color */
+.step-actions .btn-primary.btn-step-action {
+    background-color: var(--primary);
+    color: var(--white);
+    border-color: var(--primary);
+}
+
+.step-actions .btn-primary.btn-step-action:hover,
+.step-actions .btn-primary.btn-step-action:focus {
+    background-color: var(--primary-dark);
+    border-color: var(--primary-dark);
+    color: var(--white);
+}
+
+.step-actions .btn-primary.btn-step-action:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* CREATE ACCOUNT BUTTON - Same vibrant primary color */
+.step-actions .btn-primary#registerBtn {
+    background-color: var(--primary);
+    color: var(--white);
+    border-color: var(--primary);
+}
+
+.step-actions .btn-primary#registerBtn:hover,
+.step-actions .btn-primary#registerBtn:focus {
+    background-color: var(--primary-dark);
+    border-color: var(--primary-dark);
+    color: var(--white);
 }
 
 /* ============================================
@@ -648,9 +702,10 @@
 }
 
 /* ============================================
-   RESPONSIVE
+   RESPONSIVE - Mobile First Adjustments
    ============================================ */
 
+/* Tablets and small laptops */
 @media (max-width: 768px) {
     .register-card {
         padding: 24px 16px;
@@ -666,7 +721,26 @@
     }
 
     .options-grid {
-        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 8px;
+    }
+
+    .option-card {
+        padding: 8px 10px;
+        min-height: 44px;
+    }
+
+    .option-check {
+        gap: 6px;
+    }
+
+    .option-check input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+    }
+
+    .option-label {
+        font-size: 13px;
     }
 
     .step-actions {
@@ -675,6 +749,7 @@
 
     .step-actions .btn {
         min-width: 100%;
+        width: 100%;
     }
 
     .register-progress {
@@ -697,13 +772,46 @@
     }
 }
 
+/* Mobile phones - where "Mediterranean" breaks */
+@media (max-width: 690px) {
+    .options-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+
+    .option-card {
+        padding: 8px 8px;
+        min-height: 40px;
+        border-radius: var(--radius-sm);
+    }
+
+    .option-check {
+        gap: 5px;
+    }
+
+    .option-check input[type="checkbox"] {
+        width: 15px;
+        height: 15px;
+    }
+
+    .option-label {
+        font-size: 12px;
+        line-height: 1.1;
+        /* Force single line or proper break */
+        word-break: break-word;
+        overflow-wrap: break-word;
+        hyphens: auto;
+    }
+}
+
+/* Small mobile phones */
 @media (max-width: 480px) {
     .register-page {
-        padding: 12px 10px;
+        padding: 10px 8px;
     }
 
     .register-card {
-        padding: 20px 14px;
+        padding: 16px 10px;
         border-radius: var(--radius-lg);
     }
 
@@ -711,10 +819,14 @@
         font-size: var(--font-size-2xl);
     }
 
-    .register-form .form-control {
-        height: 44px;
+    .register-header .text-muted {
         font-size: var(--font-size-sm);
-        padding: 10px 14px;
+    }
+
+    .register-form .form-control {
+        height: 40px;
+        font-size: var(--font-size-sm);
+        padding: 8px 10px;
     }
 
     .register-form .form-label {
@@ -722,25 +834,45 @@
     }
 
     .options-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 8px;
+        grid-template-columns: 1fr 1fr;
+        gap: 5px;
     }
 
     .option-card {
-        padding: 10px 12px;
+        padding: 6px 6px;
+        min-height: 36px;
+        border-radius: var(--radius-sm);
+        border-width: 1.5px;
     }
 
-    .option-label {
-        font-size: var(--font-size-xs);
+    .option-check {
+        gap: 4px;
     }
 
     .option-check input[type="checkbox"] {
-        width: 16px;
-        height: 16px;
+        width: 14px;
+        height: 14px;
+    }
+
+    .option-label {
+        font-size: 10px;
+        line-height: 1.1;
+        word-break: break-word;
+        overflow-wrap: break-word;
+        hyphens: auto;
+    }
+
+    .step-description {
+        font-size: var(--font-size-xs);
+        padding: 8px 10px;
+    }
+
+    .step-description p {
+        font-size: var(--font-size-xs);
     }
 
     .notifier-content {
-        padding: 32px 20px 24px;
+        padding: 24px 16px 20px;
     }
 
     .notifier-content p {
@@ -748,25 +880,50 @@
     }
 
     .notifier-icon {
-        width: 60px;
-        height: 60px;
+        width: 52px;
+        height: 52px;
     }
 
     .notifier-icon img {
-        width: 30px;
-        height: 30px;
+        width: 26px;
+        height: 26px;
     }
 
     .notifier-content .btn {
-        height: 44px;
+        height: 40px;
         font-size: var(--font-size-sm);
-        padding: 10px 24px;
+        padding: 8px 16px;
+    }
+
+    .step-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+        margin-top: 16px;
+    }
+
+    .step-actions .btn {
+        width: 100%;
+        min-width: unset;
+        padding: 8px 12px;
+        font-size: var(--font-size-sm);
+        min-height: 38px;
+    }
+
+    .register-footer {
+        margin-top: 16px;
+        padding-top: 14px;
+    }
+
+    .register-footer .text-muted {
+        font-size: var(--font-size-xs);
     }
 }
 
+/* Very small phones */
 @media (max-width: 375px) {
     .register-card {
-        padding: 16px 12px;
+        padding: 12px 6px;
     }
 
     .register-header .heading-2 {
@@ -775,15 +932,64 @@
 
     .options-grid {
         grid-template-columns: 1fr 1fr;
-        gap: 6px;
+        gap: 4px;
     }
 
     .option-card {
-        padding: 8px 10px;
+        padding: 4px 4px;
+        min-height: 30px;
+        border-width: 1.5px;
+    }
+
+    .option-check {
+        gap: 3px;
+    }
+
+    .option-check input[type="checkbox"] {
+        width: 12px;
+        height: 12px;
     }
 
     .option-label {
+        font-size: 9px;
+        line-height: 1;
+        word-break: break-word;
+        overflow-wrap: break-word;
+        hyphens: auto;
+    }
+
+    .step-actions .btn {
+        padding: 6px 8px;
+        font-size: 10px;
+        min-height: 32px;
+    }
+
+    .register-form .form-control {
+        height: 34px;
         font-size: var(--font-size-xs);
+        padding: 4px 8px;
+    }
+
+    .register-form .form-label {
+        font-size: 9px;
+    }
+
+    .register-form .form-error {
+        font-size: 9px;
+    }
+
+    .register-form .form-hint {
+        font-size: 8px;
+    }
+
+    .register-progress .step-label {
+        font-size: 7px;
+    }
+
+    .progress-step .step-number {
+        width: 24px;
+        height: 24px;
+        font-size: 9px;
     }
 }
 

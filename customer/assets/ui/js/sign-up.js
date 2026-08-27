@@ -9,7 +9,7 @@
  * shared/ from customer/pages/ = ../../shared/
  *
  * @package FitPal
- * @version 1.4
+ * @version 1.8
  */
 
 (function () {
@@ -31,8 +31,8 @@
 
         const nextButtons  = document.querySelectorAll('.btn-next');
         const prevButtons  = document.querySelectorAll('.btn-prev');
-        const skipDiet     = document.getElementById('skipDiet');
-        const skipAllergies = document.getElementById('skipAllergies');
+        const dietAction   = document.getElementById('dietAction');
+        const allergyAction = document.getElementById('allergyAction');
 
         const firstName       = document.getElementById('first_name');
         const middleName      = document.getElementById('middle_name');
@@ -74,26 +74,17 @@
 
         /**
          * Validate a Philippine mobile number.
-         * Accepts 09XXXXXXXXX (11 digits) or 9XXXXXXXXX (10 digits).
+         * Exactly 11 digits, starting with 09.
          *
          * @param {string} number
          * @returns {{ valid: boolean, message: string }}
          */
         function isValidPhilippineMobile(number) {
             const cleaned = number.replace(/\s/g, '');
-            if (!/^\d{10,11}$/.test(cleaned)) {
-                return { valid: false, message: 'Phone number must be 10-11 digits.' };
+            if (!/^09\d{9}$/.test(cleaned)) {
+                return { valid: false, message: 'Enter a valid Philippine mobile number (11 digits, starting with 09).' };
             }
-            if (cleaned.length === 11 && cleaned.startsWith('09')) {
-                return { valid: true, message: '' };
-            }
-            if (cleaned.length === 10 && cleaned.startsWith('9')) {
-                return { valid: true, message: '' };
-            }
-            return {
-                valid: false,
-                message: 'Enter a valid Philippine mobile number (e.g. 09123456789).',
-            };
+            return { valid: true, message: '' };
         }
 
         /**
@@ -120,11 +111,90 @@
         // INPUT FILTERS
         // ============================================
 
-        function filterNameInput(input) {
+        /**
+         * Auto-capitalize the first letter of a name field.
+         * Also filters out invalid characters.
+         *
+         * @param {HTMLElement} input - The input element
+         */
+        function setupNameInput(input) {
             if (!input) return;
+
+            // Filter invalid characters on input
             input.addEventListener('input', function () {
-                this.value = this.value.replace(/[^A-Za-z\s\-']/g, '');
+                // Store cursor position
+                const start = this.selectionStart;
+                const end = this.selectionEnd;
+
+                // Filter out invalid characters
+                const filtered = this.value.replace(/[^A-Za-z\s\-']/g, '');
+                
+                // Auto-capitalize: capitalize first letter of each word
+                const capitalized = filtered.replace(/\b\w/g, function (char) {
+                    return char.toUpperCase();
+                });
+
+                // Only update if value changed
+                if (this.value !== capitalized) {
+                    this.value = capitalized;
+                    
+                    // Restore cursor position
+                    const newStart = Math.min(start, this.value.length);
+                    this.setSelectionRange(newStart, newStart);
+                }
+
                 clearFieldError(this, document.getElementById(this.id + 'Error'));
+            });
+
+            // Also handle blur to ensure proper capitalization
+            input.addEventListener('blur', function () {
+                if (this.value.length > 0) {
+                    const capitalized = this.value.replace(/\b\w/g, function (char) {
+                        return char.toUpperCase();
+                    });
+                    if (this.value !== capitalized) {
+                        this.value = capitalized;
+                    }
+                }
+            });
+        }
+
+        /**
+         * Auto-lowercase the email field.
+         *
+         * @param {HTMLElement} input - The input element
+         */
+        function setupEmailInput(input) {
+            if (!input) return;
+
+            input.addEventListener('input', function () {
+                // Store cursor position
+                const start = this.selectionStart;
+                const end = this.selectionEnd;
+
+                // Convert to lowercase
+                const lowercased = this.value.toLowerCase();
+
+                // Only update if value changed
+                if (this.value !== lowercased) {
+                    this.value = lowercased;
+                    
+                    // Restore cursor position
+                    const newStart = Math.min(start, this.value.length);
+                    this.setSelectionRange(newStart, newStart);
+                }
+
+                clearFieldError(this, emailError);
+            });
+
+            // Also handle blur to ensure lowercase
+            input.addEventListener('blur', function () {
+                if (this.value.length > 0) {
+                    const lowercased = this.value.toLowerCase();
+                    if (this.value !== lowercased) {
+                        this.value = lowercased;
+                    }
+                }
             });
         }
 
@@ -151,9 +221,14 @@
             });
         }
 
-        filterNameInput(firstName);
-        filterNameInput(middleName);
-        filterNameInput(lastName);
+        // Apply name auto-capitalization and filtering
+        setupNameInput(firstName);
+        setupNameInput(middleName);
+        setupNameInput(lastName);
+
+        // Apply email auto-lowercase
+        setupEmailInput(email);
+
         filterDigitsOnly(contactNumber);
         filterAlphanumUnderscore(username);
         filterAlphanumOnly(password);
@@ -190,7 +265,7 @@
             hideError();
 
             const firstInput = document.querySelector('#step' + step + ' input, #step' + step + ' select');
-            if (firstInput) setTimeout(() => firstInput.focus(), 100);
+            if (firstInput) setTimeout(function () { firstInput.focus(); }, 100);
 
             const progressbar = document.querySelector('.register-progress');
             if (progressbar) progressbar.setAttribute('aria-valuenow', step);
@@ -413,51 +488,55 @@
         setupOptionCards('allergyOptions');
 
         // ============================================
-        // DIETARY - enable Next when at least one checked
+        // DIETARY - Dynamic button for Step 2
         // ============================================
         const dietCheckboxes = document.querySelectorAll('#dietaryOptions input[type="checkbox"]');
-        const dietNext       = document.getElementById('dietNext');
 
-        if (dietCheckboxes.length && dietNext) {
-            function updateDietNext() {
-                dietNext.disabled = !Array.from(dietCheckboxes).some(cb => cb.checked);
+        if (dietCheckboxes.length && dietAction) {
+            function updateDietAction() {
+                const hasSelection = Array.from(dietCheckboxes).some(function (cb) { return cb.checked; });
+                dietAction.textContent = hasSelection ? 'Next Step \u2192' : 'Skip Step';
+                dietAction.disabled = false;
             }
-            dietCheckboxes.forEach(cb => cb.addEventListener('change', updateDietNext));
 
-            if (skipDiet) {
-                skipDiet.addEventListener('click', function () {
-                    dietCheckboxes.forEach(function (cb) {
-                        cb.checked = false;
-                        cb.closest('.option-card')?.classList.remove('selected');
-                    });
-                    dietNext.disabled = false;
-                    goToStep(3);
-                });
-            }
+            dietCheckboxes.forEach(function (cb) {
+                cb.addEventListener('change', updateDietAction);
+            });
+
+            dietAction.addEventListener('click', function () {
+                // If no selection, we're skipping
+                // If selection exists, we're proceeding to next step
+                goToStep(3);
+            });
+
+            // Initialize button state
+            updateDietAction();
         }
 
         // ============================================
-        // ALLERGIES - enable Next when at least one checked
+        // ALLERGIES - Dynamic button for Step 3
         // ============================================
         const allergyCheckboxes = document.querySelectorAll('#allergyOptions input[type="checkbox"]');
-        const allergyNext       = document.getElementById('allergyNext');
 
-        if (allergyCheckboxes.length && allergyNext) {
-            function updateAllergyNext() {
-                allergyNext.disabled = !Array.from(allergyCheckboxes).some(cb => cb.checked);
+        if (allergyCheckboxes.length && allergyAction) {
+            function updateAllergyAction() {
+                const hasSelection = Array.from(allergyCheckboxes).some(function (cb) { return cb.checked; });
+                allergyAction.textContent = hasSelection ? 'Next Step \u2192' : 'Skip Step';
+                allergyAction.disabled = false;
             }
-            allergyCheckboxes.forEach(cb => cb.addEventListener('change', updateAllergyNext));
 
-            if (skipAllergies) {
-                skipAllergies.addEventListener('click', function () {
-                    allergyCheckboxes.forEach(function (cb) {
-                        cb.checked = false;
-                        cb.closest('.option-card')?.classList.remove('selected');
-                    });
-                    allergyNext.disabled = false;
-                    goToStep(4);
-                });
-            }
+            allergyCheckboxes.forEach(function (cb) {
+                cb.addEventListener('change', updateAllergyAction);
+            });
+
+            allergyAction.addEventListener('click', function () {
+                // If no selection, we're skipping
+                // If selection exists, we're proceeding to next step
+                goToStep(4);
+            });
+
+            // Initialize button state
+            updateAllergyAction();
         }
 
         // ============================================
@@ -465,17 +544,8 @@
         // ============================================
         nextButtons.forEach(function (btn) {
             btn.addEventListener('click', function () {
-                const nextStep = parseInt(this.getAttribute('data-next'), 10);
+                var nextStep = parseInt(this.getAttribute('data-next'), 10);
                 if (isNaN(nextStep) || nextStep > totalSteps) return;
-
-                if (currentStep === 2) {
-                    const checked = Array.from(dietCheckboxes).some(cb => cb.checked);
-                    if (!checked) { showError('Please select at least one dietary preference, or click "Skip Step".'); return; }
-                }
-                if (currentStep === 3) {
-                    const checked = Array.from(allergyCheckboxes).some(cb => cb.checked);
-                    if (!checked) { showError('Please select at least one allergy, or click "Skip Step".'); return; }
-                }
 
                 goToStep(nextStep);
             });
@@ -483,7 +553,7 @@
 
         prevButtons.forEach(function (btn) {
             btn.addEventListener('click', function () {
-                const prevStep = parseInt(this.getAttribute('data-prev'), 10);
+                var prevStep = parseInt(this.getAttribute('data-prev'), 10);
                 if (!isNaN(prevStep) && prevStep >= 1) goToStep(prevStep);
             });
         });
@@ -493,9 +563,9 @@
         // ============================================
         if (password) {
             password.addEventListener('input', function () {
-                const val = this.value;
+                var val = this.value;
                 if (val.length === 0) { clearFieldError(this, passwordError); return; }
-                const check = isValidPassword(val);
+                var check = isValidPassword(val);
                 check.valid ? clearFieldError(this, passwordError) : showFieldError(this, passwordError, check.message);
 
                 if (confirmPassword && confirmPassword.value) {
@@ -508,7 +578,7 @@
 
         if (confirmPassword) {
             confirmPassword.addEventListener('input', function () {
-                const val = this.value;
+                var val = this.value;
                 if (!val) { clearFieldError(this, confirmError); return; }
                 val === (password ? password.value : '')
                     ? clearFieldError(this, confirmError)
@@ -522,8 +592,8 @@
         [firstName, lastName].forEach(function (field) {
             if (!field) return;
             field.addEventListener('blur', function () {
-                const val     = this.value.trim();
-                const errorEl = document.getElementById(this.id + 'Error');
+                var val     = this.value.trim();
+                var errorEl = document.getElementById(this.id + 'Error');
                 if (!val) return;
                 if (val.length < 2) {
                     showFieldError(this, errorEl, 'Must be at least 2 characters.');
@@ -537,16 +607,17 @@
 
         if (contactNumber) {
             contactNumber.addEventListener('blur', function () {
-                const val = this.value.trim();
+                var val = this.value.trim();
                 if (!val) return;
-                const ph = isValidPhilippineMobile(val);
+                var ph = isValidPhilippineMobile(val);
                 ph.valid ? clearFieldError(this, contactError) : showFieldError(this, contactError, ph.message);
             });
         }
 
         if (email) {
+            // Email validation on blur
             email.addEventListener('blur', function () {
-                const val = this.value.trim();
+                var val = this.value.trim();
                 if (!val) return;
                 /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)
                     ? clearFieldError(this, emailError)
@@ -556,7 +627,7 @@
 
         if (username) {
             username.addEventListener('blur', function () {
-                const val = this.value.trim();
+                var val = this.value.trim();
                 if (!val) return;
                 if (val.length < 3) {
                     showFieldError(this, usernameError, 'Username must be at least 3 characters.');
@@ -574,7 +645,8 @@
             termsCheckbox.addEventListener('change', function () {
                 if (this.checked) {
                     clearFieldError(null, termsError);
-                    document.getElementById('termsGroup')?.classList.remove('error');
+                    var tg = document.getElementById('termsGroup');
+                    if (tg) tg.classList.remove('error');
                 }
             });
         }
@@ -587,47 +659,85 @@
                 e.preventDefault();
                 if (isSubmitting) return;
 
+                // If not on step 4, move to next step instead of submitting
+                if (currentStep < 4) {
+                    // For step 1, validate before moving
+                    if (currentStep === 1 && !validateStep(1)) {
+                        goToStep(1);
+                        return;
+                    }
+                    // For steps 2 and 3, just move forward (validation is handled by the dynamic button)
+                    // but we need to ensure at least one option is selected if the button says "Next Step"
+                    if (currentStep === 2) {
+                        var checkedDiet = Array.from(dietCheckboxes).some(function (cb) { return cb.checked; });
+                        if (!checkedDiet && dietAction.textContent.includes('Next')) {
+                            // This shouldn't happen since the button text changes based on selection
+                            showError('Please select at least one dietary preference, or click "Skip Step".');
+                            return;
+                        }
+                        goToStep(3);
+                        return;
+                    }
+                    if (currentStep === 3) {
+                        var checkedAllergy = Array.from(allergyCheckboxes).some(function (cb) { return cb.checked; });
+                        if (!checkedAllergy && allergyAction.textContent.includes('Next')) {
+                            showError('Please select at least one allergy, or click "Skip Step".');
+                            return;
+                        }
+                        goToStep(4);
+                        return;
+                    }
+                    // For any other step, just move forward
+                    goToStep(currentStep + 1);
+                    return;
+                }
+
+                // --- Step 4 submission logic ---
                 if (!validateStep(1)) { goToStep(1); return; }
                 if (!validateStep4()) { goToStep(4); return; }
 
                 isSubmitting = true;
-                const submitBtn = document.getElementById('registerBtn');
+                var submitBtn = document.getElementById('registerBtn');
                 if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Creating Account...'; }
 
-                fetch(form.action, { method: 'POST', body: new FormData(form) })
-                    .then(res => res.json())
-                    .then(function (data) {
-                        if (data.status === 'success') {
-                            showNotification('Account Created', data.message || 'Account created successfully!', function () {
-                                window.location.href = data.redirect || 'sign-in.php';
-                            });
-                        } else {
-                            isSubmitting = false;
-                            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Create Account'; }
-                            if (data.field === 'terms') {
-                                if (termsError) { termsError.textContent = data.message; termsError.style.display = 'block'; }
-                                document.getElementById('termsGroup')?.classList.add('error');
-                                goToStep(4);
-                            } else {
-                                showError(data.message || 'An error occurred. Please try again.');
-                            }
-                        }
-                    })
-                    .catch(function () {
+                fetch(form.action, {
+                    method: 'POST',
+                    body: new FormData(form)
+                })
+                .then(function (res) { return res.json(); })
+                .then(function (data) {
+                    if (data.status === 'success') {
+                        showNotification('Account Created', data.message || 'Account created successfully!', function () {
+                            window.location.href = data.redirect || 'sign-in.php';
+                        });
+                    } else {
                         isSubmitting = false;
                         if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Create Account'; }
-                        showError('An unexpected error occurred. Please try again.');
-                    });
+                        if (data.field === 'terms') {
+                            if (termsError) { termsError.textContent = data.message; termsError.style.display = 'block'; }
+                            var tg2 = document.getElementById('termsGroup');
+                            if (tg2) tg2.classList.add('error');
+                            goToStep(4);
+                        } else {
+                            showError(data.message || 'An error occurred. Please try again.');
+                        }
+                    }
+                })
+                .catch(function () {
+                    isSubmitting = false;
+                    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Create Account'; }
+                    showError('An unexpected error occurred. Please try again.');
+                });
             });
         }
 
         // ============================================
         // NOTIFICATION MODAL
         // ============================================
-        const notifierModal   = document.getElementById('notifierModal');
-        const notifierTitle   = document.getElementById('notifierTitle');
-        const notifierMessage = document.getElementById('notifierMessage');
-        const notifierCloseBtn = document.getElementById('notifierCloseBtn');
+        var notifierModal   = document.getElementById('notifierModal');
+        var notifierTitle   = document.getElementById('notifierTitle');
+        var notifierMessage = document.getElementById('notifierMessage');
+        var notifierCloseBtn = document.getElementById('notifierCloseBtn');
 
         function showNotification(title, message, callback) {
             if (notifierTitle)   notifierTitle.textContent   = title || 'Success!';
@@ -639,7 +749,7 @@
         function closeNotification() {
             if (notifierModal) notifierModal.classList.add('hidden');
             if (notifierCloseBtn && typeof notifierCloseBtn._callback === 'function') {
-                const cb = notifierCloseBtn._callback;
+                var cb = notifierCloseBtn._callback;
                 notifierCloseBtn._callback = null;
                 cb();
             }

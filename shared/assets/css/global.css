@@ -16,6 +16,8 @@
  * --primary: #59c14a
  * --secondary: #96de8c
  * --accent: #6cd85c
+ * --black: #000000
+ * --white: #ffffff
  * 
  * Font Stack: System fonts only - no external loading
  */
@@ -42,6 +44,8 @@
     
     /* Neutral Colors */
     --white: #ffffff;
+    --black: #000000;
+    --gray: #718096;
     --gray-50: #f9faf9;
     --gray-100: #f0f2f0;
     --gray-200: #e2e6e2;
@@ -272,6 +276,7 @@ textarea {
 .text-success { color: var(--success); }
 .text-warning { color: var(--warning); }
 .text-info { color: var(--info); }
+.text-black { color: var(--black); }
 
 
 /* ============================================
@@ -283,6 +288,7 @@ textarea {
 .bg-accent { background-color: var(--accent); }
 .bg-white { background-color: var(--white); }
 .bg-dark { background-color: var(--text); }
+.bg-black { background-color: var(--black); }
 .bg-gray-50 { background-color: var(--gray-50); }
 .bg-gray-100 { background-color: var(--gray-100); }
 .bg-gray-200 { background-color: var(--gray-200); }
@@ -479,6 +485,7 @@ textarea {
 .border { border: 1px solid var(--gray-200); }
 .border-2 { border: 2px solid var(--gray-200); }
 .border-primary { border-color: var(--primary); }
+.border-black { border-color: var(--black); }
 .border-gray { border-color: var(--gray-200); }
 .border-transparent { border-color: transparent; }
 .border-none { border: none; }
@@ -569,7 +576,7 @@ textarea {
     text-align: center;
     text-decoration: none;
     transition: all var(--transition-fast);
-    border: 1px solid transparent;
+    border: 2px solid transparent;
     cursor: pointer;
     white-space: nowrap;
 }
@@ -589,7 +596,8 @@ textarea {
     color: var(--white);
     border-color: var(--primary);
 }
-.btn-primary:hover {
+.btn-primary:hover,
+.btn-primary:focus {
     background-color: var(--primary-dark);
     border-color: var(--primary-dark);
     color: var(--white);
@@ -600,19 +608,22 @@ textarea {
     color: var(--text);
     border-color: var(--secondary);
 }
-.btn-secondary:hover {
+.btn-secondary:hover,
+.btn-secondary:focus {
     background-color: var(--secondary-dark);
     border-color: var(--secondary-dark);
 }
 
 .btn-outline {
     background-color: transparent;
-    color: var(--primary);
-    border-color: var(--primary);
+    color: var(--black);
+    border-color: var(--black);
 }
-.btn-outline:hover {
-    background-color: var(--primary);
+.btn-outline:hover,
+.btn-outline:focus {
+    background-color: var(--black);
     color: var(--white);
+    border-color: var(--black);
 }
 
 .btn-danger {
@@ -620,7 +631,8 @@ textarea {
     color: var(--white);
     border-color: var(--danger);
 }
-.btn-danger:hover {
+.btn-danger:hover,
+.btn-danger:focus {
     background-color: #bd2130;
     border-color: #bd2130;
 }
