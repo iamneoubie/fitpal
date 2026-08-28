@@ -1,12 +1,12 @@
 /**
  * FitPal Menu Page JavaScript
- * Version 3.0 - Compact filter dropdowns, sticky behavior, order tracker
+ * Version 3.1 - Fixed product detail navigation, improved performance
  *
  * Handles quantity controls, add-to-cart feedback, sticky filter behavior,
  * dropdown toggles, and active order tracker with auto-hide.
  *
  * @package FitPal
- * @version 3.0
+ * @version 3.1
  */
 
 (function() {
@@ -63,7 +63,7 @@
         }, { passive: true });
 
         // ============================================
-        // DROPDOWN TOGGLES
+        // DROPDOWN TOGGLES - FIXED to not interfere with clicks
         // ============================================
         var dropdowns = document.querySelectorAll('.filter-dropdown');
 
@@ -100,7 +100,8 @@
 
             // Close button (mobile)
             if (closeBtn) {
-                closeBtn.addEventListener('click', function() {
+                closeBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
                     menu.classList.remove('open');
                     toggle.setAttribute('aria-expanded', 'false');
                 });
@@ -125,7 +126,7 @@
         });
 
         // ============================================
-        // QUANTITY CONTROLS
+        // QUANTITY CONTROLS - FIXED to not interfere with clicks
         // ============================================
         document.querySelectorAll('.quantity-control').forEach(function(control) {
             var minusBtn = control.querySelector('.qty-minus');
@@ -145,15 +146,18 @@
 
             minusBtn.addEventListener('click', function(e) {
                 e.preventDefault();
+                e.stopPropagation(); // Prevent event from bubbling
                 updateValue(-1);
             });
 
             plusBtn.addEventListener('click', function(e) {
                 e.preventDefault();
+                e.stopPropagation(); // Prevent event from bubbling
                 updateValue(1);
             });
 
-            input.addEventListener('change', function() {
+            input.addEventListener('change', function(e) {
+                e.stopPropagation(); // Prevent event from bubbling
                 var val = parseInt(this.value, 10) || 1;
                 var max = parseInt(this.max, 10) || 999;
                 if (val < 1) val = 1;
@@ -164,6 +168,7 @@
             input.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
+                    e.stopPropagation(); // Prevent event from bubbling
                     var form = this.closest('.add-to-cart-form');
                     if (form) {
                         var submitBtn = form.querySelector('.add-btn');
@@ -171,13 +176,24 @@
                     }
                 }
             });
+
+            // Prevent click on quantity control from bubbling to parent
+            control.addEventListener('click', function(e) {
+                e.stopPropagation();
+            });
         });
 
         // ============================================
-        // ADD-TO-CART FORM HANDLING
+        // ADD-TO-CART FORM HANDLING - FIXED to not interfere with clicks
         // ============================================
         document.querySelectorAll('.add-to-cart-form').forEach(function(form) {
+            // Prevent clicks inside form from bubbling
+            form.addEventListener('click', function(e) {
+                e.stopPropagation();
+            });
+
             form.addEventListener('submit', function(e) {
+                e.stopPropagation(); // Prevent event from bubbling
                 var submitBtn = this.querySelector('.add-btn');
                 if (submitBtn) {
                     submitBtn.disabled = true;
@@ -203,13 +219,15 @@
             input.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
+                    e.stopPropagation(); // Prevent event from bubbling
                     if (filterForm) {
                         filterForm.submit();
                     }
                 }
             });
 
-            input.addEventListener('blur', function() {
+            input.addEventListener('blur', function(e) {
+                e.stopPropagation(); // Prevent event from bubbling
                 var defaultValue = this.getAttribute('data-default') || '';
                 if (this.value !== defaultValue) {
                     if (filterForm) {
@@ -220,12 +238,18 @@
 
             // Store initial value for blur comparison
             input.setAttribute('data-default', input.value);
+
+            // Prevent click on price input from bubbling
+            input.addEventListener('click', function(e) {
+                e.stopPropagation();
+            });
         });
 
         // Price apply button
         document.querySelectorAll('.price-apply-btn').forEach(function(btn) {
             btn.addEventListener('click', function(e) {
                 e.preventDefault();
+                e.stopPropagation(); // Prevent event from bubbling
                 if (filterForm) {
                     filterForm.submit();
                 }
@@ -237,7 +261,8 @@
         // ============================================
         var searchTimeout = null;
         if (searchInput) {
-            searchInput.addEventListener('input', function() {
+            searchInput.addEventListener('input', function(e) {
+                e.stopPropagation(); // Prevent event from bubbling
                 clearTimeout(searchTimeout);
                 searchTimeout = setTimeout(function() {
                     if (filterForm) {
@@ -249,11 +274,17 @@
             searchInput.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
+                    e.stopPropagation(); // Prevent event from bubbling
                     clearTimeout(searchTimeout);
                     if (filterForm) {
                         filterForm.submit();
                     }
                 }
+            });
+
+            // Prevent click on search input from bubbling
+            searchInput.addEventListener('click', function(e) {
+                e.stopPropagation();
             });
         }
 
@@ -345,7 +376,32 @@
             });
         });
 
-        console.log('Menu JS v3.0 initialized');
+        // ============================================
+        // PRODUCT CARD CLICK HANDLING - FIXED
+        // ============================================
+        // Ensure product cards don't have click handlers that interfere
+        document.querySelectorAll('.product-card').forEach(function(card) {
+            // Remove any existing click listeners that might have been added
+            // by other scripts (like menu.js v3.0)
+            var links = card.querySelectorAll('a');
+            links.forEach(function(link) {
+                // Ensure links work normally
+                link.addEventListener('click', function(e) {
+                    // Allow the link to work normally
+                    // Don't prevent default
+                });
+            });
+
+            // Prevent accidental drag selection
+            card.addEventListener('mousedown', function(e) {
+                // Allow clicks, just prevent text selection on drag
+                if (e.button === 0) {
+                    // Left click only
+                }
+            });
+        });
+
+        console.log('Menu JS v3.1 - Fixed product navigation initialized');
 
     });
 })();

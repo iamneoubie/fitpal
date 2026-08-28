@@ -1,0 +1,720 @@
+/**
+ * FitPal Product Detail Page Styles
+ * Version 2.1 - Updated back button styling to match sign-up page
+ * 
+ * @package FitPal
+ * @version 2.1
+ */
+
+/* ============================================
+   BASE - Mobile First
+   ============================================ */
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-height: calc(100vh - 70px);
+    background: var(--gray-50);
+}
+
+.product-detail-page {
+    padding: 16px 0 100px 0;
+    background: var(--gray-50);
+}
+
+.product-detail-page .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 12px;
+    width: 100%;
+}
+
+/* ============================================
+   ALERTS
+   ============================================ */
+
+.alert {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: var(--radius-base);
+    margin-bottom: 16px;
+    font-size: var(--font-size-sm);
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.alert-success {
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+}
+
+.alert-danger {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fca5a5;
+}
+
+.alert-icon {
+    flex-shrink: 0;
+}
+
+/* ============================================
+   BACK BUTTON - UPDATED TO MATCH SIGN-UP
+   ============================================ */
+
+.back-nav {
+    margin-bottom: 16px;
+}
+
+.back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #ffffff;
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    padding: 10px 18px;
+    border-radius: var(--radius-base);
+    transition: all var(--transition-fast);
+    background: #1a1a1a;
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.back-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.back-btn svg {
+    width: 20px;
+    height: 20px;
+    stroke: #ffffff;
+}
+
+/* ============================================
+   PRODUCT CARD
+   ============================================ */
+
+.product-detail-card {
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--gray-100);
+}
+
+/* ============================================
+   PRODUCT IMAGE
+   ============================================ */
+
+.product-image-wrapper {
+    position: relative;
+    background: var(--gray-100);
+    padding: 0;
+}
+
+.product-image-container {
+    position: relative;
+    width: 100%;
+    padding-bottom: 100%;
+    background: var(--gray-100);
+    overflow: hidden;
+}
+
+.product-image {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.product-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    padding: 6px 14px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(4px);
+}
+
+.out-of-stock-badge {
+    color: #991b1b;
+    background: rgba(254, 226, 226, 0.95);
+}
+
+.low-stock-badge {
+    color: #92400e;
+    background: rgba(254, 243, 199, 0.95);
+}
+
+/* ============================================
+   PRODUCT INFO
+   ============================================ */
+
+.product-info-section {
+    padding: 20px 16px;
+}
+
+.product-header {
+    margin-bottom: 16px;
+}
+
+.product-title {
+    font-size: var(--font-size-2xl);
+    font-weight: 700;
+    color: var(--text);
+    margin: 0 0 6px 0;
+    line-height: 1.2;
+}
+
+.product-restaurant {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    flex-wrap: wrap;
+}
+
+.product-restaurant a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.product-restaurant .separator {
+    color: var(--gray-300);
+}
+
+/* ============================================
+   PRICE
+   ============================================ */
+
+.product-price-section {
+    margin-bottom: 20px;
+    padding: 12px 16px;
+    background: var(--gray-50);
+    border-radius: var(--radius-base);
+    border: 1px solid var(--gray-100);
+}
+
+.product-price-large {
+    font-size: var(--font-size-3xl);
+    font-weight: 700;
+    color: var(--text);
+}
+
+/* ============================================
+   SECTION LABELS
+   ============================================ */
+
+.section-label {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--gray-700);
+    margin: 0 0 8px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ============================================
+   DESCRIPTION
+   ============================================ */
+
+.product-description {
+    margin-bottom: 20px;
+}
+
+.product-description p {
+    margin: 0;
+    color: var(--gray-600);
+    line-height: 1.7;
+    font-size: var(--font-size-base);
+}
+
+/* ============================================
+   NUTRITION
+   ============================================ */
+
+.product-nutrition {
+    margin-bottom: 20px;
+}
+
+.nutrition-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    background: var(--gray-50);
+    border-radius: var(--radius-base);
+    padding: 12px;
+    border: 1px solid var(--gray-100);
+}
+
+.nutrition-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 6px 4px;
+}
+
+.nutrition-value {
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--text);
+}
+
+.nutrition-label {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-top: 2px;
+}
+
+/* ============================================
+   TAGS
+   ============================================ */
+
+.product-tags,
+.product-allergens {
+    margin-bottom: 16px;
+}
+
+.tags-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+}
+
+.dietary-tag {
+    color: #1d4ed8;
+    background: #dbeafe;
+}
+
+.allergen-tag {
+    color: #dc2626;
+    background: #fee2e2;
+}
+
+.no-allergens {
+    color: var(--gray-500);
+    background: var(--gray-100);
+}
+
+/* ============================================
+   ADD TO CART - Fixed Bottom
+   ============================================ */
+
+.add-to-cart-section {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--white);
+    padding: 12px 16px;
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
+    border-top: 1px solid var(--gray-200);
+    z-index: 100;
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(100%);
+    }
+    to {
+        transform: translateY(0);
+    }
+}
+
+.add-to-cart-form {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+}
+
+.quantity-control {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius-base);
+    overflow: hidden;
+    flex-shrink: 0;
+    background: var(--white);
+}
+
+.qty-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: none;
+    background: var(--gray-50);
+    cursor: pointer;
+    transition: background var(--transition-fast);
+    color: var(--text);
+    padding: 0;
+}
+
+.qty-btn:active {
+    background: var(--gray-300);
+}
+
+.qty-btn svg {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2;
+}
+
+.qty-input {
+    width: 48px;
+    height: 44px;
+    border: none;
+    background: var(--white);
+    text-align: center;
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    padding: 0 4px;
+    -moz-appearance: textfield;
+}
+
+.qty-input::-webkit-inner-spin-button,
+.qty-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.qty-input:focus {
+    outline: none;
+}
+
+.add-to-cart-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 16px;
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    border-radius: var(--radius-base);
+    border: none;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    min-height: 44px;
+}
+
+.add-to-cart-btn svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+.btn-primary {
+    background: var(--primary);
+    color: white;
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+.btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-disabled {
+    background: var(--gray-100);
+    color: var(--gray-400);
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* ============================================
+   RELATED PRODUCTS
+   ============================================ */
+
+.related-products {
+    margin-top: 24px;
+    padding-bottom: 20px;
+}
+
+.related-title {
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    color: var(--text);
+    margin: 0 0 16px 0;
+}
+
+.related-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.related-card {
+    display: flex;
+    flex-direction: column;
+    background: var(--white);
+    border-radius: var(--radius-base);
+    overflow: hidden;
+    border: 1px solid var(--gray-100);
+    text-decoration: none;
+    transition: all var(--transition-base);
+}
+
+.related-card:active {
+    transform: scale(0.98);
+}
+
+.related-image {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    background: var(--gray-100);
+}
+
+.related-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.related-info {
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.related-name {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.3;
+}
+
+.related-price {
+    margin: 0;
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: var(--text);
+}
+
+.related-calories {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+}
+
+/* ============================================
+   TABLET BREAKPOINT
+   ============================================ */
+
+@media (min-width: 768px) {
+    .product-detail-page {
+        padding: 24px 0 100px 0;
+    }
+
+    .product-detail-page .container {
+        padding: 0 24px;
+    }
+
+    .product-info-section {
+        padding: 24px;
+    }
+
+    .product-title {
+        font-size: var(--font-size-3xl);
+    }
+
+    .product-price-large {
+        font-size: var(--font-size-4xl);
+    }
+
+    .nutrition-grid {
+        grid-template-columns: repeat(4, 1fr);
+        padding: 16px;
+        gap: 12px;
+    }
+
+    .nutrition-value {
+        font-size: var(--font-size-xl);
+    }
+
+    .related-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+    }
+
+    .add-to-cart-section {
+        padding: 16px 24px;
+    }
+
+    .quantity-control {
+        flex-shrink: 0;
+    }
+
+    .add-to-cart-btn {
+        padding: 14px 24px;
+        min-height: 48px;
+    }
+    
+    .back-btn {
+        padding: 12px 20px;
+        font-size: var(--font-size-base);
+    }
+}
+
+/* ============================================
+   DESKTOP BREAKPOINT
+   ============================================ */
+
+@media (min-width: 1024px) {
+    .product-detail-page {
+        padding: 32px 0 100px 0;
+    }
+
+    .product-detail-page .container {
+        padding: 0 32px;
+        max-width: 1200px;
+    }
+
+    .product-detail-card {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0;
+        border-radius: var(--radius-lg);
+    }
+
+    .product-image-wrapper {
+        border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+        min-height: 500px;
+    }
+
+    .product-image-container {
+        padding-bottom: 0;
+        height: 100%;
+        min-height: 500px;
+    }
+
+    .product-image {
+        position: relative;
+        height: 100%;
+    }
+
+    .product-info-section {
+        padding: 32px;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+    }
+
+    .product-info-section > *:not(.add-to-cart-section) {
+        margin-bottom: 20px;
+    }
+
+    .product-info-section > *:last-child {
+        margin-bottom: 0;
+    }
+
+    .add-to-cart-section {
+        position: static;
+        margin-top: auto;
+        padding: 0;
+        box-shadow: none;
+        border-top: 1px solid var(--gray-200);
+        padding-top: 20px;
+    }
+
+    .add-to-cart-form {
+        gap: 16px;
+    }
+
+    .related-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 20px;
+    }
+
+    .related-image img {
+        transition: transform var(--transition-base);
+    }
+}
+
+/* ============================================
+   LARGE DESKTOP
+   ============================================ */
+
+@media (min-width: 1400px) {
+    .product-detail-page .container {
+        padding: 0 40px;
+    }
+
+    .product-info-section {
+        padding: 40px;
+    }
+
+    .related-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 24px;
+    }
+}
+
+/* ============================================
+   UTILITY - Hide scrollbar on number inputs
+   ============================================ */
+
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type=number] {
+    -moz-appearance: textfield;
+}

@@ -5,7 +5,7 @@
  * Displays restaurants and their menu items with dietary filtering and pagination.
  *
  * @package FitPal
- * @version 3.0
+ * @version 4.3 - Improved empty state with search term display
  */
 
 declare(strict_types=1);
@@ -20,6 +20,11 @@ require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../backend/database/product-queries.php';
 require_once __DIR__ . '/../backend/database/order-queries.php';
 
+// ============================================
+// CONFIGURATION - Products per page
+// ============================================
+$perPage = 10; // Change this value to show more or fewer products per page
+
 // Get filters from GET
 $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
@@ -27,13 +32,12 @@ $selectedTags = isset($_GET['tags']) && is_array($_GET['tags']) ? array_filter($
 $restaurantId = isset($_GET['restaurant_id']) ? max(0, (int)$_GET['restaurant_id']) : 0;
 $minPrice = isset($_GET['min_price']) && $_GET['min_price'] !== '' ? max(0, (float)$_GET['min_price']) : 0.0;
 $maxPrice = isset($_GET['max_price']) && $_GET['max_price'] !== '' ? max(0, (float)$_GET['max_price']) : 0.0;
-$perPage = 10;
 
-// Fetch menu data
+// Fetch menu data with pagination
 $menuData = getMenuDataPaginated($database_connection, $page, $perPage, $selectedTags, $search, $restaurantId, $minPrice, $maxPrice);
-$restaurants = $menuData['restaurants'];
-$totalProducts = $menuData['totalProducts'];
-$totalPages = $menuData['totalPages'];
+$restaurants = $menuData['restaurants'] ?? [];
+$totalProducts = $menuData['totalProducts'] ?? 0;
+$totalPages = $menuData['totalPages'] ?? 1;
 
 // Get all dietary tags for filter checkboxes
 $allDietaryTags = getDistinctDietaryTags($database_connection);
@@ -104,6 +108,10 @@ function buildQueryString(array $params = []): string {
     if (isset($_GET['max_price']) && !isset($params['max_price'])) {
         $params['max_price'] = $_GET['max_price'];
     }
+    // Preserve per_page in pagination links if it was set in the URL
+    if (isset($_GET['per_page']) && !isset($params['per_page'])) {
+        $params['per_page'] = $_GET['per_page'];
+    }
     foreach ($params as $key => $val) {
         if (is_array($val)) {
             foreach ($val as $v) {
@@ -115,16 +123,40 @@ function buildQueryString(array $params = []): string {
     }
     return $base ? '?' . implode('&', $base) : '';
 }
+
+/**
+ * Truncate text to a specified length with ellipsis.
+ *
+ * @param string $text The text to truncate
+ * @param int $length Maximum length
+ * @return string Truncated text
+ */
+function truncateText(string $text, int $length = 60): string {
+    if (strlen($text) <= $length) {
+        return $text;
+    }
+    return substr($text, 0, $length) . '...';
+}
+
+/**
+ * Check if any filters are applied
+ *
+ * @return bool
+ */
+function hasActiveFilters(): bool {
+    return !empty($_GET['search']) || 
+           !empty($_GET['tags']) || 
+           (isset($_GET['restaurant_id']) && (int)$_GET['restaurant_id'] > 0) ||
+           (isset($_GET['min_price']) && (float)$_GET['min_price'] > 0) ||
+           (isset($_GET['max_price']) && (float)$_GET['max_price'] > 0);
+}
 ?>
 <link rel="stylesheet" href="../assets/css/menu.css">
+<link rel="stylesheet" href="../assets/css/menu-filter.css">
+<link rel="stylesheet" href="../assets/css/menu-product.css">
 
 <div class="content menu-page<?php echo $activeOrder ? ' has-order-tracker' : ''; ?>">
     <div class="container">
-
-        <!-- <div class="menu-header">
-            <p class="heading-2">Explore <span>Menu</span></p>
-            <p class="text-muted">Find meals that match your dietary needs</p>
-        </div> -->
 
         <!-- Flash Messages -->
         <?php if (isset($_SESSION['cart_success'])): ?>
@@ -265,14 +297,7 @@ function buildQueryString(array $params = []): string {
                             <button type="submit" class="btn btn-primary btn-sm price-apply-btn">Apply</button>
                         </div>
 
-                        <!-- Clear Filters -->
-                        <?php if (!empty($search) || !empty($selectedTags) || $restaurantId > 0 || $minPrice > 0 || $maxPrice > 0): ?>
-                        <a href="<?php echo htmlspecialchars(buildQueryString(['page'=>1, 'search'=>'', 'tags'=>[], 'restaurant_id'=>0, 'min_price'=>'', 'max_price'=>'']), ENT_QUOTES, 'UTF-8'); ?>"
-                            class="btn btn-outline btn-sm clear-btn">
-                            <img src="<?php echo $assetBase; ?>assets/images/icons/reset.svg" alt="Clear filters"
-                                class="btn-icon">
-                        </a>
-                        <?php endif; ?>
+
                     </div>
                 </div>
 
@@ -281,11 +306,14 @@ function buildQueryString(array $params = []): string {
         </div>
         <!-- /Sticky Filter Bar -->
 
-        <!-- Results Info -->
+        <!-- Results Info with Per Page Display -->
         <?php if (!empty($restaurants)): ?>
         <div class="results-info">
             <span class="text-muted">Showing <?php echo count($restaurants); ?> restaurants •
                 <?php echo $totalProducts; ?> products</span>
+            <span class="text-muted" style="margin-left: 12px; font-size: 13px; color: var(--gray-400);">
+                (<?php echo $perPage; ?> per page)
+            </span>
         </div>
         <?php endif; ?>
 
@@ -294,10 +322,30 @@ function buildQueryString(array $params = []): string {
             <?php if (empty($restaurants)): ?>
             <div class="empty-state">
                 <div class="empty-icon">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt="No results">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt="No results">
                 </div>
                 <p class="heading-4">No products found</p>
-                <p class="text-muted">Try adjusting your filters or search terms.</p>
+                <p class="text-muted">
+                    <?php if (!empty($search)): ?>
+                    No products match "<strong><?php echo htmlspecialchars($search, ENT_QUOTES, 'UTF-8'); ?></strong>"
+                    <?php elseif (!empty($selectedTags)): ?>
+                    No products match your dietary preferences
+                    <?php elseif ($restaurantId > 0): ?>
+                    No products available for this restaurant
+                    <?php else: ?>
+                    Try adjusting your filters or search terms.
+                    <?php endif; ?>
+                </p>
+                <?php if (hasActiveFilters()): ?>
+                <a href="menu.php" class="btn btn-outline btn-sm" style="margin-top: 12px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                    Clear Filters
+                </a>
+                <?php endif; ?>
             </div>
             <?php else: ?>
             <?php foreach ($restaurants as $restaurant): ?>
@@ -310,31 +358,42 @@ function buildQueryString(array $params = []): string {
                     <p class="heading-5"><?php echo htmlspecialchars($branch['name'], ENT_QUOTES, 'UTF-8'); ?></p>
                     <div class="product-grid">
                         <?php foreach ($branch['products'] as $product): ?>
+                        <!-- PRODUCT CARD - FIXED REDIRECT -->
                         <div class="product-card" data-product-id="<?php echo $product['id']; ?>"
                             data-dietary="<?php echo htmlspecialchars(implode(',', $product['dietary_tags']), ENT_QUOTES, 'UTF-8'); ?>"
                             data-allergens="<?php echo htmlspecialchars(implode(',', $product['allergens']), ENT_QUOTES, 'UTF-8'); ?>"
                             data-product-name="<?php echo htmlspecialchars(strtolower($product['name']), ENT_QUOTES, 'UTF-8'); ?>"
                             data-restaurant-name="<?php echo htmlspecialchars(strtolower($restaurant['name']), ENT_QUOTES, 'UTF-8'); ?>">
 
-                            <!-- Product Image -->
-                            <div class="product-image">
-                                <?php if (!empty($product['image'])): ?>
-                                <img src="<?php echo htmlspecialchars($product['image'], ENT_QUOTES, 'UTF-8'); ?>"
-                                    alt="<?php echo htmlspecialchars($product['name'], ENT_QUOTES, 'UTF-8'); ?>"
-                                    loading="lazy"
-                                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/restaurant.svg'">
-                                <?php else: ?>
-                                <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg"
-                                    alt="Restaurant icon" loading="lazy">
-                                <?php endif; ?>
-                            </div>
+                            <!-- ============ FIXED: PRODUCT IMAGE WITH DIRECT LINK ============ -->
+                            <a href="product-detail.php?id=<?php echo (int)$product['id']; ?>"
+                                class="product-image-link" onclick="event.stopPropagation();">
+                                <div class="product-image">
+                                    <?php if (!empty($product['image'])): ?>
+                                    <img src="<?php echo htmlspecialchars($product['image'], ENT_QUOTES, 'UTF-8'); ?>"
+                                        alt="<?php echo htmlspecialchars($product['name'], ENT_QUOTES, 'UTF-8'); ?>"
+                                        loading="lazy"
+                                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/restaurant.svg'">
+                                    <?php else: ?>
+                                    <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg"
+                                        alt="Restaurant icon" loading="lazy">
+                                    <?php endif; ?>
+                                </div>
+                            </a>
 
                             <div class="product-info">
-                                <p class="heading-6">
-                                    <?php echo htmlspecialchars($product['name'], ENT_QUOTES, 'UTF-8'); ?></p>
+                                <!-- ============ FIXED: PRODUCT NAME WITH DIRECT LINK ============ -->
+                                <a href="product-detail.php?id=<?php echo (int)$product['id']; ?>"
+                                    class="product-name-link" onclick="event.stopPropagation();">
+                                    <p class="heading-6">
+                                        <?php echo htmlspecialchars($product['name'], ENT_QUOTES, 'UTF-8'); ?>
+                                    </p>
+                                </a>
+
                                 <?php if (!empty($product['description'])): ?>
                                 <p class="product-description">
-                                    <?php echo htmlspecialchars($product['description'], ENT_QUOTES, 'UTF-8'); ?></p>
+                                    <?php echo htmlspecialchars(truncateText($product['description'], 70), ENT_QUOTES, 'UTF-8'); ?>
+                                </p>
                                 <?php endif; ?>
 
                                 <div class="product-meta">
@@ -343,49 +402,69 @@ function buildQueryString(array $params = []): string {
                                     <?php if ($product['calories']): ?>
                                     <span class="product-calories"><?php echo (int)$product['calories']; ?> kcal</span>
                                     <?php endif; ?>
-                                    <span
-                                        class="product-stock <?php echo $product['stock'] > 0 ? 'in-stock' : 'out-of-stock'; ?>">
-                                        <?php echo $product['stock'] > 0 ? 'In stock' : 'Out of stock'; ?>
-                                    </span>
                                 </div>
 
+                                <!-- Dietary Tags with Label -->
                                 <?php if (!empty($product['dietary_tags'])): ?>
-                                <div class="product-tags">
-                                    <?php foreach ($product['dietary_tags'] as $tag): ?>
-                                    <span
-                                        class="tag dietary-tag"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $tag)), ENT_QUOTES, 'UTF-8'); ?></span>
-                                    <?php endforeach; ?>
+                                <div class="product-tags-section">
+                                    <span class="tags-label">Dietary Tags:</span>
+                                    <div class="product-tags">
+                                        <?php 
+                                        // Show max 5 tags
+                                        $displayTags = array_slice($product['dietary_tags'], 0, 5);
+                                        foreach ($displayTags as $tag): ?>
+                                        <span
+                                            class="tag dietary-tag"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $tag)), ENT_QUOTES, 'UTF-8'); ?></span>
+                                        <?php endforeach; ?>
+                                        <?php if (count($product['dietary_tags']) > 5): ?>
+                                        <span class="tag tag-more">+<?php echo count($product['dietary_tags']) - 5; ?>
+                                            more</span>
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
                                 <?php endif; ?>
 
-                                <?php if (!empty($product['allergens'])): ?>
-                                <div class="product-allergens">
+                                <!-- Allergens with Label -->
+                                <div class="product-allergens-section">
                                     <span class="allergen-label">Allergens:</span>
-                                    <?php foreach ($product['allergens'] as $allergen): ?>
-                                    <span
-                                        class="tag allergen-tag"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $allergen)), ENT_QUOTES, 'UTF-8'); ?></span>
-                                    <?php endforeach; ?>
+                                    <div class="product-allergens-tags">
+                                        <?php if (!empty($product['allergens'])): 
+                                        // Show max 5 allergens
+                                        $displayAllergens = array_slice($product['allergens'], 0, 5);
+                                        foreach ($displayAllergens as $allergen): ?>
+                                        <span
+                                            class="tag allergen-tag"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $allergen)), ENT_QUOTES, 'UTF-8'); ?></span>
+                                        <?php endforeach; ?>
+                                        <?php if (count($product['allergens']) > 5): ?>
+                                        <span class="tag tag-more">+<?php echo count($product['allergens']) - 5; ?>
+                                            more</span>
+                                        <?php endif; ?>
+                                        <?php else: ?>
+                                        <span class="tag-none">None</span>
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
-                                <?php endif; ?>
                             </div>
 
                             <div class="product-actions">
                                 <?php if ($isLoggedIn && $product['stock'] > 0): ?>
                                 <form method="POST" action="../backend/handlers/add-to-cart-handler.php"
-                                    class="add-to-cart-form">
+                                    class="add-to-cart-form" style="width: 100%;">
                                     <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
                                     <input type="hidden" name="product_id" value="<?php echo $product['id']; ?>">
                                     <input type="hidden" name="redirect"
                                         value="<?php echo htmlspecialchars(buildQueryString(['page' => $page]), ENT_QUOTES, 'UTF-8'); ?>">
-                                    <div class="quantity-control">
-                                        <button type="button" class="qty-btn qty-minus"
-                                            aria-label="Decrease quantity">-</button>
-                                        <input type="number" name="quantity" value="1" min="1"
-                                            max="<?php echo $product['stock']; ?>" class="qty-input">
-                                        <button type="button" class="qty-btn qty-plus"
-                                            aria-label="Increase quantity">+</button>
+                                    <div class="action-row">
+                                        <div class="quantity-control">
+                                            <button type="button" class="qty-btn qty-minus"
+                                                aria-label="Decrease quantity">-</button>
+                                            <input type="number" name="quantity" value="1" min="1"
+                                                max="<?php echo $product['stock']; ?>" class="qty-input">
+                                            <button type="button" class="qty-btn qty-plus"
+                                                aria-label="Increase quantity">+</button>
+                                        </div>
+                                        <button type="submit" class="btn btn-primary btn-sm add-btn">Add</button>
                                     </div>
-                                    <button type="submit" class="btn btn-primary btn-sm add-btn">Add</button>
                                 </form>
                                 <?php elseif (!$isLoggedIn): ?>
                                 <a href="sign-in.php" class="btn btn-outline btn-sm">Login to Order</a>
