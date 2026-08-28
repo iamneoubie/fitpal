@@ -3,10 +3,10 @@
  * FitPal Add to Cart Handler
  *
  * Processes adding a product to the customer's cart.
- * Uses a transaction for atomicity (ACID).
+ * Thin coordinator - validation only, database work delegated to cart-queries.php.
  *
  * @package FitPal
- * @version 1.0
+ * @version 2.0
  */
 
 declare(strict_types=1);
@@ -15,7 +15,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Redirect if not logged in
+// Authentication check
 if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     $_SESSION['cart_error'] = 'Please sign in to add items to your cart.';
     header('Location: ../../pages/sign-in.php');
@@ -23,71 +23,55 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
 }
 
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
+require_once __DIR__ . '/../database/cart-queries.php';
 
-// ===== CSRF =====
+// CSRF validation
 if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== ($_SESSION['csrf_token'] ?? '')) {
     $_SESSION['cart_error'] = 'Security validation failed. Please try again.';
     header('Location: ../../pages/menu.php');
     exit;
 }
 
-// ===== Input =====
+// Input validation
 $productId = isset($_POST['product_id']) ? (int)$_POST['product_id'] : 0;
 $quantity = isset($_POST['quantity']) ? (int)$_POST['quantity'] : 1;
 $customerId = (int)$_SESSION['customer_id'];
 
-if ($productId <= 0 || $quantity < 1) {
-    $_SESSION['cart_error'] = 'Invalid product or quantity.';
+if ($productId <= 0) {
+    $_SESSION['cart_error'] = 'Invalid product selected.';
     header('Location: ../../pages/menu.php');
     exit;
 }
 
+if ($quantity < 1) {
+    $_SESSION['cart_error'] = 'Quantity must be at least 1.';
+    header('Location: ../../pages/menu.php');
+    exit;
+}
+
+// Process add to cart (ACID compliant with row locking)
 try {
-    // Start transaction
-    $database_connection->beginTransaction();
+    $success = addToCart($database_connection, $customerId, $productId, $quantity);
 
-    // 1. Check product exists, is active, and has sufficient stock
-    $stmt = $database_connection->prepare(
-        "SELECT stock, is_active FROM product WHERE product_id = :id FOR UPDATE"
-    );
-    $stmt->execute([':id' => $productId]);
-    $product = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    if (!$product || !$product['is_active']) {
-        throw new Exception('Product not available.');
-    }
-    if ($product['stock'] < $quantity) {
-        throw new Exception('Not enough stock available.');
+    if ($success) {
+        $_SESSION['cart_success'] = 'Item added to cart successfully.';
+    } else {
+        $_SESSION['cart_error'] = 'Could not add item to cart.';
     }
 
-    // 2. Insert or update cart
-    // Use ON DUPLICATE KEY UPDATE to atomically adjust quantity
-    $stmt = $database_connection->prepare(
-        "INSERT INTO cart (customer_id, product_id, quantity, price)
-         VALUES (:customer_id, :product_id, :quantity, (SELECT price FROM product WHERE product_id = :product_id2))
-         ON DUPLICATE KEY UPDATE quantity = quantity + :quantity_add"
-    );
-    $stmt->execute([
-        ':customer_id' => $customerId,
-        ':product_id' => $productId,
-        ':quantity' => $quantity,
-        ':product_id2' => $productId,
-        ':quantity_add' => $quantity
-    ]);
-
-    // Commit
-    $database_connection->commit();
-
-    $_SESSION['cart_success'] = 'Item added to cart successfully!';
     header('Location: ../../pages/menu.php');
     exit;
 
-} catch (Exception $e) {
-    if ($database_connection->inTransaction()) {
-        $database_connection->rollBack();
-    }
-    error_log('Add to cart error: ' . $e->getMessage());
-    $_SESSION['cart_error'] = $e->getMessage() ?: 'Could not add item to cart. Please try again.';
+} catch (RuntimeException $e) {
+    // Business logic errors (insufficient stock, product unavailable)
+    $_SESSION['cart_error'] = $e->getMessage();
+    header('Location: ../../pages/menu.php');
+    exit;
+
+} catch (PDOException $e) {
+    // Database errors
+    error_log('Add to cart database error: ' . $e->getMessage());
+    $_SESSION['cart_error'] = 'A system error occurred. Please try again.';
     header('Location: ../../pages/menu.php');
     exit;
 }
