@@ -1,195 +1,146 @@
 /**
- * FitPal Header JavaScript
- * Handles mobile menu toggle and login dropdown
+ * FitPal Header – Direct class toggling, no input locks
+ * All animations via CSS; minimal JS overhead.
  */
-
 (function() {
     'use strict';
 
-    // Wait for DOM to be ready
-    document.addEventListener('DOMContentLoaded', function() {
-        
-        // ============================================
-        // MOBILE MENU TOGGLE
-        // ============================================
-        const menuToggle = document.getElementById('menuToggle');
-        const mobileNav = document.getElementById('mobileNav');
-        const mobileOverlay = document.getElementById('mobileOverlay');
-        
-        if (menuToggle && mobileNav) {
-            // Toggle menu
-            menuToggle.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                const isOpen = mobileNav.classList.contains('open');
-                
-                if (isOpen) {
-                    // Close menu
-                    mobileNav.classList.remove('open');
-                    menuToggle.classList.remove('active');
-                    menuToggle.setAttribute('aria-expanded', 'false');
-                    if (mobileOverlay) {
-                        mobileOverlay.classList.remove('active');
-                    }
-                    document.body.classList.remove('menu-open');
-                } else {
-                    // Open menu
-                    mobileNav.classList.add('open');
-                    menuToggle.classList.add('active');
-                    menuToggle.setAttribute('aria-expanded', 'true');
-                    if (mobileOverlay) {
-                        mobileOverlay.classList.add('active');
-                    }
-                    document.body.classList.add('menu-open');
-                }
+    const menuToggle = document.getElementById('menuToggle');
+    const mobileNav = document.getElementById('mobileNav');
+    const mobileOverlay = document.getElementById('mobileOverlay');
+    const loginBtn = document.getElementById('loginDropdown');
+    const dropdownMenu = document.getElementById('dropdownMenu');
+    const header = document.querySelector('.header');
+
+    let isMenuOpen = false;
+    let isDropdownOpen = false;
+
+    // ─── Menu Toggle ───
+    function toggleMenu(e) {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        isMenuOpen = !isMenuOpen;
+
+        // Toggle classes directly on elements
+        mobileNav.classList.toggle('open', isMenuOpen);
+        menuToggle.classList.toggle('active', isMenuOpen);
+        menuToggle.setAttribute('aria-expanded', String(isMenuOpen));
+        if (mobileOverlay) {
+            mobileOverlay.classList.toggle('active', isMenuOpen);
+        }
+        // Optional body class if you want to lock scroll – but we avoid it for performance
+        // document.body.classList.toggle('menu-open', isMenuOpen);
+    }
+
+    // ─── Dropdown Toggle ───
+    function toggleDropdown(e) {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        isDropdownOpen = !isDropdownOpen;
+        dropdownMenu.classList.toggle('active', isDropdownOpen);
+        loginBtn.setAttribute('aria-expanded', String(isDropdownOpen));
+    }
+
+    // ─── Close dropdown on outside click ───
+    function handleOutsideClick(e) {
+        if (isDropdownOpen &&
+            !loginBtn.contains(e.target) &&
+            !dropdownMenu.contains(e.target)) {
+            isDropdownOpen = false;
+            dropdownMenu.classList.remove('active');
+            loginBtn.setAttribute('aria-expanded', 'false');
+        }
+    }
+
+    // ─── Sticky header (rAF-throttled) ───
+    function handleScroll() {
+        header.classList.toggle('header-scrolled', window.pageYOffset > 10);
+    }
+
+    // ─── Initialise ───
+
+    if (menuToggle && mobileNav) {
+        menuToggle.addEventListener('click', toggleMenu);
+
+        if (mobileOverlay) {
+            mobileOverlay.addEventListener('click', () => {
+                if (isMenuOpen) toggleMenu();
             });
-            
-            // Close on overlay click
-            if (mobileOverlay) {
-                mobileOverlay.addEventListener('click', function() {
-                    mobileNav.classList.remove('open');
-                    menuToggle.classList.remove('active');
-                    menuToggle.setAttribute('aria-expanded', 'false');
-                    mobileOverlay.classList.remove('active');
-                    document.body.classList.remove('menu-open');
-                });
+        }
+
+        // Close menu on link click inside nav
+        mobileNav.addEventListener('click', (e) => {
+            if (e.target.closest('a') && isMenuOpen) {
+                toggleMenu();
             }
-            
-            // Close on escape key
-            document.addEventListener('keydown', function(e) {
-                if (e.key === 'Escape' && mobileNav.classList.contains('open')) {
-                    mobileNav.classList.remove('open');
-                    menuToggle.classList.remove('active');
-                    menuToggle.setAttribute('aria-expanded', 'false');
-                    if (mobileOverlay) {
-                        mobileOverlay.classList.remove('active');
-                    }
-                    document.body.classList.remove('menu-open');
-                    menuToggle.focus();
+        });
+
+        // Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && isMenuOpen) {
+                toggleMenu();
+                menuToggle.focus();
+            }
+        });
+
+        // Close on resize to desktop (debounced)
+        let resizeTimer;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(() => {
+                if (window.innerWidth > 992 && isMenuOpen) {
+                    toggleMenu();
                 }
-            });
-            
-            // Close on window resize (desktop)
-            window.addEventListener('resize', function() {
-                if (window.innerWidth > 992 && mobileNav.classList.contains('open')) {
-                    mobileNav.classList.remove('open');
-                    menuToggle.classList.remove('active');
-                    menuToggle.setAttribute('aria-expanded', 'false');
-                    if (mobileOverlay) {
-                        mobileOverlay.classList.remove('active');
-                    }
-                    document.body.classList.remove('menu-open');
-                }
-            });
-            
-            // Close mobile menu when a link is clicked
-            mobileNav.querySelectorAll('a').forEach(function(link) {
-                link.addEventListener('click', function() {
-                    setTimeout(function() {
-                        mobileNav.classList.remove('open');
-                        menuToggle.classList.remove('active');
-                        menuToggle.setAttribute('aria-expanded', 'false');
-                        if (mobileOverlay) {
-                            mobileOverlay.classList.remove('active');
-                        }
-                        document.body.classList.remove('menu-open');
-                    }, 300);
+            }, 100);
+        });
+    }
+
+    if (loginBtn && dropdownMenu) {
+        loginBtn.addEventListener('click', toggleDropdown);
+        document.addEventListener('click', handleOutsideClick);
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && isDropdownOpen) {
+                isDropdownOpen = false;
+                dropdownMenu.classList.remove('active');
+                loginBtn.setAttribute('aria-expanded', 'false');
+                loginBtn.focus();
+            }
+        });
+    }
+
+    // Sticky header
+    if (header) {
+        let ticking = false;
+        window.addEventListener('scroll', () => {
+            if (!ticking) {
+                requestAnimationFrame(() => {
+                    handleScroll();
+                    ticking = false;
                 });
-            });
-        }
-        
-        // ============================================
-        // LOGIN DROPDOWN - SIMPLE & RELIABLE
-        // ============================================
-        const loginBtn = document.getElementById('loginDropdown');
-        const dropdownMenu = document.getElementById('dropdownMenu');
-        
-        if (loginBtn && dropdownMenu) {
-            // Toggle dropdown on button click
-            loginBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                const isOpen = dropdownMenu.classList.contains('active');
-                
-                if (isOpen) {
-                    dropdownMenu.classList.remove('active');
-                    loginBtn.setAttribute('aria-expanded', 'false');
-                } else {
-                    dropdownMenu.classList.add('active');
-                    loginBtn.setAttribute('aria-expanded', 'true');
-                }
-            });
-            
-            // Close dropdown when clicking outside
-            document.addEventListener('click', function(e) {
-                if (!loginBtn.contains(e.target) && !dropdownMenu.contains(e.target)) {
-                    dropdownMenu.classList.remove('active');
-                    loginBtn.setAttribute('aria-expanded', 'false');
-                }
-            });
-            
-            // Close dropdown on escape key
-            document.addEventListener('keydown', function(e) {
-                if (e.key === 'Escape' && dropdownMenu.classList.contains('active')) {
-                    dropdownMenu.classList.remove('active');
-                    loginBtn.setAttribute('aria-expanded', 'false');
-                    loginBtn.focus();
-                }
-            });
-            
-            // Close dropdown when a link is clicked
-            dropdownMenu.querySelectorAll('a').forEach(function(link) {
-                link.addEventListener('click', function() {
-                    setTimeout(function() {
-                        dropdownMenu.classList.remove('active');
-                        loginBtn.setAttribute('aria-expanded', 'false');
-                    }, 150);
-                });
-            });
-        }
-        
-        // ============================================
-        // STICKY HEADER
-        // ============================================
-        const header = document.querySelector('.header');
-        if (header) {
-            let lastScroll = 0;
-            
-            window.addEventListener('scroll', function() {
-                const currentScroll = window.pageYOffset || document.documentElement.scrollTop;
-                
-                if (currentScroll > 10) {
-                    header.classList.add('header-scrolled');
-                } else {
-                    header.classList.remove('header-scrolled');
-                }
-                
-                lastScroll = currentScroll;
-            }, { passive: true });
-        }
-        
-        // ============================================
-        // ACTIVE LINK HIGHLIGHTING
-        // ============================================
-        const currentPath = window.location.pathname;
-        const currentPage = currentPath.split('/').pop() || 'index.php';
-        
-        document.querySelectorAll('.nav-link, .mobile-nav-link').forEach(function(link) {
+                ticking = true;
+            }
+        }, { passive: true });
+    }
+
+    // Active link highlight
+    (function highlightActive() {
+        const currentPage = window.location.pathname.split('/').pop() || 'index.php';
+        document.querySelectorAll('.nav-link, .mobile-nav-link').forEach((link) => {
             const href = link.getAttribute('href');
             if (!href) return;
-            
             const hrefFile = href.split('/').pop() || '';
-            
-            // Check if this link matches current page
-            if (hrefFile === currentPage || 
+            if (hrefFile === currentPage ||
                 (currentPage === 'index.php' && hrefFile === '') ||
                 (currentPage === '' && hrefFile === 'index.php')) {
                 link.classList.add('active');
             }
         });
-        
-        console.log('Header initialized successfully');
-    });
+    })();
+
+    console.log('Header initialized – direct toggling, no locks');
 })();

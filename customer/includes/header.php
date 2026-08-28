@@ -29,9 +29,6 @@ require_once __DIR__ . '/../backend/database/customer-connect.php';
 /**
  * Get the base path to shared/ from the currently executing page.
  *
- * A page at customer/pages/foo.php has SCRIPT_NAME depth 2
- * (customer, pages), so it needs ../../shared/ — no +1 adjustment.
- *
  * @return string Asset base path ending with 'shared/'
  */
 function getCustomerAssetBase(): string {
@@ -119,10 +116,13 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
                 </a>
             </div>
 
+            <!-- Mobile Toggle (shared pattern) -->
             <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation menu"
                 aria-expanded="false" type="button">
                 <span class="menu-icon">
-                    <span class="bar"></span><span class="bar"></span><span class="bar"></span>
+                    <span class="bar"></span>
+                    <span class="bar"></span>
+                    <span class="bar"></span>
                 </span>
             </button>
 
@@ -166,15 +166,15 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
                 <ul class="nav-list">
                     <li class="nav-item">
                         <a href="<?php echo $assetBase; ?>../index.php"
-                            class="nav-link">Home</a>
+                            class="nav-link <?php echo ($currentPage === 'index.php') ? 'active' : ''; ?>">Home</a>
                     </li>
                     <li class="nav-item">
                         <a href="<?php echo $assetBase; ?>pages/about.php"
-                            class="nav-link">About</a>
+                            class="nav-link <?php echo ($currentPage === 'about.php') ? 'active' : ''; ?>">About</a>
                     </li>
                     <li class="nav-item">
                         <a href="<?php echo $assetBase; ?>pages/contact.php"
-                            class="nav-link">Contact</a>
+                            class="nav-link <?php echo ($currentPage === 'contact.php') ? 'active' : ''; ?>">Contact</a>
                     </li>
                 </ul>
 
@@ -186,8 +186,10 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
         </div>
     </header>
 
+    <!-- Mobile Overlay (shared pattern) -->
     <div class="mobile-overlay" id="mobileOverlay"></div>
 
+    <!-- Mobile Navigation (shared pattern) -->
     <nav class="mobile-nav" id="mobileNav" role="navigation" aria-label="Mobile navigation">
         <ul class="mobile-nav-list">
 
@@ -245,4 +247,5 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
 
     <main class="main-content" role="main">
 
+    <!-- Load ONLY the customer header JS (not the shared one) -->
     <script src="../assets/ui/js/header.js" defer></script>

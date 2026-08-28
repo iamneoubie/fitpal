@@ -129,7 +129,7 @@ $featuredRestaurants = [
             <div class="hero-image">
                 <img src="<?php echo $assetBase; ?>assets/images/hero-image.svg"
                     alt="Healthy food ordering illustration" class="hero-illustration"
-                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/placeholder.svg'">
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/file-warning-fill.svg'">
             </div>
         </div>
     </section>
@@ -144,9 +144,9 @@ $featuredRestaurants = [
             <div class="features-grid">
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/chart-line-up.svg"
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/list-view.svg"
                             alt="Nutritional information"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
                     <p class="feature-title">Nutritional Information</p>
                     <p class="feature-description">
@@ -155,8 +155,8 @@ $featuredRestaurants = [
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/verified-empty.svg" alt="Dietary filters"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/equalizer-line.svg" alt="Dietary filters"
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
                     <p class="feature-title">Dietary Filters</p>
                     <p class="feature-description">
@@ -165,8 +165,8 @@ $featuredRestaurants = [
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/star-empty.svg" alt="Allergy management"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/list-settings-fill.svg" alt="Allergy management"
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
                     <p class="feature-title">Allergy Management</p>
                     <p class="feature-description">
@@ -175,9 +175,9 @@ $featuredRestaurants = [
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/edit.svg"
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg"
                             alt="Special instructions"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
                     <p class="feature-title">Special Instructions</p>
                     <p class="feature-description">
@@ -187,7 +187,7 @@ $featuredRestaurants = [
                 <div class="feature-card">
                     <div class="feature-icon">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/time-update.svg" alt="Order tracking"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
                     <p class="feature-title">Order Tracking</p>
                     <p class="feature-description">
@@ -197,7 +197,7 @@ $featuredRestaurants = [
                 <div class="feature-card">
                     <div class="feature-icon">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/chart-line-up.svg" alt="Nutrition analytics"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
                     <p class="feature-title">Nutrition Analytics</p>
                     <p class="feature-description">
@@ -220,7 +220,7 @@ $featuredRestaurants = [
                     <div class="step-number">1</div>
                     <div class="step-icon">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="Create account"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
                     <p class="step-title">Create Account</p>
                     <p class="step-description">
@@ -230,8 +230,8 @@ $featuredRestaurants = [
                 <div class="step-card">
                     <div class="step-number">2</div>
                     <div class="step-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt="Browse menus"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/menu-search-fill.svg" alt="Browse menus"
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
                     <p class="step-title">Browse Menus</p>
                     <p class="step-description">
@@ -241,8 +241,8 @@ $featuredRestaurants = [
                 <div class="step-card">
                     <div class="step-number">3</div>
                     <div class="step-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/cart-shopping.svg" alt="Place order"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="Place order"
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
                     <p class="step-title">Place Order</p>
                     <p class="step-description">
@@ -252,8 +252,8 @@ $featuredRestaurants = [
                 <div class="step-card">
                     <div class="step-number">4</div>
                     <div class="step-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/package.svg" alt="Track delivery"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/placeholder.svg'">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/pages-line.svg" alt="Track delivery"
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
                     <p class="step-title">Track Order</p>
                     <p class="step-description">

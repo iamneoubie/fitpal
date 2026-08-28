@@ -1,0 +1,571 @@
+/* ============================================
+   Menu Page Styles - Mobile First
+   ============================================ */
+
+.menu-page {
+    padding: 1rem 0 3rem;
+}
+
+.menu-header {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+
+.menu-header .heading-2 span {
+    color: var(--primary);
+}
+
+.menu-header .text-muted {
+    font-size: 0.9rem;
+}
+
+/* ============================================
+   Flash Messages
+   ============================================ */
+
+.alert {
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+.alert-success {
+    background: #c6f6d5;
+    color: #22543d;
+    border: 1px solid #9ae6b4;
+}
+
+.alert-danger {
+    background: #fed7d7;
+    color: #9b2c2c;
+    border: 1px solid #feb2b2;
+}
+
+/* ============================================
+   Filter Form - Search on top, Tags below
+   ============================================ */
+
+.filter-form {
+    background: var(--background);
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.filter-search-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.search-wrapper {
+    flex: 1;
+    min-width: 180px;
+}
+
+.search-wrapper .form-control {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    transition: border-color 0.2s;
+}
+
+.search-wrapper .form-control:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
+}
+
+.filter-tags-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+}
+
+.filter-label {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #4a5568;
+}
+
+.filter-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.filter-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    background: #f7fafc;
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    border: 1px solid #e2e8f0;
+    transition: all 0.15s;
+}
+
+.filter-check:hover {
+    background: #edf2f7;
+}
+
+.filter-check input[type="checkbox"] {
+    accent-color: var(--primary);
+    width: 13px;
+    height: 13px;
+    cursor: pointer;
+}
+
+.filter-check:has(input:checked) {
+    background: #c6f6d5;
+    border-color: var(--primary);
+}
+
+.btn-sm {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+    border-radius: 6px;
+}
+
+.btn-primary {
+    background: var(--primary);
+    color: white;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-primary:hover {
+    background: #4aad3c;
+}
+
+.btn-outline {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid #e2e8f0;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.btn-outline:hover {
+    background: #f7fafc;
+    border-color: #cbd5e0;
+}
+
+/* ============================================
+   Results Info
+   ============================================ */
+
+.results-info {
+    margin-bottom: 1rem;
+    font-size: 0.85rem;
+    color: #718096;
+}
+
+/* ============================================
+   Restaurant List - Mobile First 2-col grid
+   ============================================ */
+
+.restaurant-card {
+    margin-bottom: 2rem;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 1.5rem;
+}
+
+.restaurant-header {
+    margin-bottom: 0.75rem;
+}
+
+.restaurant-header .heading-4 {
+    font-size: 1.1rem;
+}
+
+.branch-section {
+    margin-bottom: 1rem;
+}
+
+.branch-section .heading-5 {
+    font-size: 0.95rem;
+    color: #4a5568;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+/* ============================================
+   Product Grid - 2 columns on mobile, expands on desktop
+   ============================================ */
+
+.product-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+    .product-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+}
+
+@media (min-width: 992px) {
+    .product-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.25rem;
+    }
+}
+
+@media (min-width: 1200px) {
+    .product-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1.5rem;
+    }
+}
+
+/* ============================================
+   Product Card - Compact Mobile Design
+   ============================================ */
+
+.product-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: box-shadow 0.2s;
+}
+
+.product-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.product-image {
+    width: 100%;
+    padding-top: 75%; /* 4:3 aspect ratio */
+    position: relative;
+    background: #f7fafc;
+    overflow: hidden;
+}
+
+.product-image img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.product-info {
+    padding: 0.6rem 0.6rem 0.4rem;
+    flex: 1;
+}
+
+.product-info .heading-6 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin: 0 0 0.2rem;
+    line-height: 1.2;
+}
+
+.product-description {
+    font-size: 0.75rem;
+    color: #4a5568;
+    margin: 0.15rem 0 0.3rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.3;
+}
+
+.product-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 0.6rem;
+    font-size: 0.75rem;
+    margin: 0.3rem 0;
+}
+
+.product-price {
+    font-weight: 700;
+    color: var(--primary);
+    font-size: 0.9rem;
+}
+
+.product-calories {
+    color: #718096;
+}
+
+.product-stock {
+    color: #718096;
+}
+
+.product-stock.in-stock {
+    color: #48bb78;
+}
+
+.product-stock.out-of-stock {
+    color: #fc8181;
+}
+
+.product-tags, .product-allergens {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem;
+    margin-top: 0.25rem;
+}
+
+.tag {
+    font-size: 0.6rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: 10px;
+    background: #edf2f7;
+    color: #2d3748;
+}
+
+.dietary-tag {
+    background: #c6f6d5;
+    color: #22543d;
+}
+
+.allergen-tag {
+    background: #fed7d7;
+    color: #9b2c2c;
+}
+
+.allergen-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: #718096;
+    margin-right: 0.1rem;
+}
+
+.product-actions {
+    padding: 0.4rem 0.6rem 0.6rem;
+    border-top: 1px solid #f0f4f8;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.add-to-cart-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
+}
+
+.quantity-control {
+    display: flex;
+    align-items: center;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.qty-btn {
+    background: #f7fafc;
+    border: none;
+    padding: 0 0.5rem;
+    font-size: 1rem;
+    cursor: pointer;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #4a5568;
+    transition: background 0.15s;
+    min-width: 28px;
+}
+
+.qty-btn:hover {
+    background: #edf2f7;
+}
+
+.qty-input {
+    width: 36px;
+    text-align: center;
+    border: none;
+    border-left: 1px solid #e2e8f0;
+    border-right: 1px solid #e2e8f0;
+    height: 28px;
+    font-size: 0.8rem;
+    padding: 0;
+    -moz-appearance: textfield;
+}
+
+.qty-input::-webkit-outer-spin-button,
+.qty-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.add-btn {
+    flex: 1;
+    min-width: 50px;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.8rem;
+}
+
+.btn-disabled {
+    background: #e2e8f0;
+    color: #a0aec0;
+    cursor: not-allowed;
+    pointer-events: none;
+    padding: 0.3rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    width: 100%;
+    text-align: center;
+}
+
+/* ============================================
+   Empty State
+   ============================================ */
+
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+}
+
+.empty-icon {
+    width: 60px;
+    height: 60px;
+    margin: 0 auto 1rem;
+    opacity: 0.5;
+}
+
+.empty-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* ============================================
+   Pagination
+   ============================================ */
+
+.pagination {
+    margin-top: 2rem;
+    display: flex;
+    justify-content: center;
+}
+
+.pagination-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.pagination-item {
+    display: inline-block;
+}
+
+.pagination-link {
+    display: block;
+    padding: 0.4rem 0.8rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    text-decoration: none;
+    color: var(--text);
+    font-size: 0.85rem;
+    transition: all 0.15s;
+    background: white;
+}
+
+.pagination-link:hover {
+    background: #f7fafc;
+    border-color: #cbd5e0;
+}
+
+.pagination-link.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+    cursor: default;
+}
+
+.pagination-ellipsis {
+    display: flex;
+    align-items: center;
+    padding: 0 0.3rem;
+    color: #a0aec0;
+}
+
+@media (max-width: 480px) {
+    .pagination-link {
+        padding: 0.3rem 0.6rem;
+        font-size: 0.75rem;
+    }
+}
+
+/* ============================================
+   Mobile Optimizations
+   ============================================ */
+
+@media (max-width: 480px) {
+    .filter-search-row .btn {
+        font-size: 0.75rem;
+        padding: 0.3rem 0.6rem;
+    }
+    
+    .filter-check {
+        font-size: 0.7rem;
+        padding: 0.15rem 0.4rem;
+    }
+    
+    .product-info .heading-6 {
+        font-size: 0.8rem;
+    }
+    
+    .product-price {
+        font-size: 0.8rem;
+    }
+    
+    .product-description {
+        font-size: 0.7rem;
+    }
+    
+    .product-meta {
+        font-size: 0.65rem;
+    }
+    
+    .qty-btn {
+        height: 24px;
+        min-width: 24px;
+        font-size: 0.85rem;
+    }
+    
+    .qty-input {
+        height: 24px;
+        width: 30px;
+        font-size: 0.7rem;
+    }
+    
+    .add-btn {
+        font-size: 0.7rem;
+        padding: 0.2rem 0.4rem;
+    }
+}
