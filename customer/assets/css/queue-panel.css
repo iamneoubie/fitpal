@@ -1,0 +1,772 @@
+/**
+ * FitPal Customer Queue Panel Styles
+ * 
+ * Clean, aligned queue panel with proper spacing and positioning.
+ * 
+ * @package FitPal
+ * @version 2.1
+ */
+
+/* ============================================
+   QUEUE PANEL - Bottom aligned with container
+   ============================================ */
+
+.queue-panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--white);
+    border-top: 2px solid var(--primary);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+    z-index: 200;
+    max-height: 75vh;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Closed state - only header visible */
+.queue-panel.closed {
+    transform: translateY(calc(100% - 56px));
+}
+
+/* Open state - full panel visible */
+.queue-panel.open {
+    transform: translateY(0);
+}
+
+/* ============================================
+   PANEL HEADER - Clean, minimal
+   ============================================ */
+
+.queue-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    background: var(--white);
+    border-bottom: 1px solid var(--gray-100);
+    flex-shrink: 0;
+    min-height: 56px;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+
+.queue-panel-header:hover {
+    background: var(--gray-50);
+}
+
+.queue-panel-title {
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.queue-item-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 24px;
+    padding: 0 8px;
+    border-radius: var(--radius-full);
+    background: var(--primary);
+    color: var(--white);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+}
+
+.queue-panel-summary {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+}
+
+.queue-item-count-label {
+    font-weight: 500;
+}
+
+.queue-panel-toggle {
+    background: none;
+    border: none;
+    padding: 4px 8px;
+    cursor: pointer;
+    color: var(--gray-400);
+    transition: transform 0.35s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.queue-panel.open .queue-panel-toggle {
+    transform: rotate(180deg);
+}
+
+.queue-panel-toggle:hover {
+    color: var(--gray-600);
+}
+
+/* ============================================
+   PANEL BODY - Scrollable content
+   ============================================ */
+
+.queue-panel-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--gray-50);
+}
+
+/* ============================================
+   QUEUE ITEMS CONTAINER
+   ============================================ */
+
+.queue-items-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 16px;
+    max-height: 45vh;
+    background: var(--gray-50);
+}
+
+.queue-items-container::-webkit-scrollbar {
+    width: 5px;
+}
+.queue-items-container::-webkit-scrollbar-track {
+    background: var(--gray-100);
+    border-radius: 3px;
+}
+.queue-items-container::-webkit-scrollbar-thumb {
+    background: var(--gray-300);
+    border-radius: 3px;
+}
+.queue-items-container::-webkit-scrollbar-thumb:hover {
+    background: var(--gray-400);
+}
+
+/* ============================================
+   QUEUE ITEM - Clean design
+   ============================================ */
+
+.queue-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 14px;
+    background: var(--white);
+    border-radius: var(--radius-base);
+    margin-bottom: 6px;
+    transition: all var(--transition-fast);
+    border: 1px solid transparent;
+    box-shadow: var(--shadow-sm);
+}
+
+.queue-item:hover {
+    border-color: var(--gray-200);
+    box-shadow: var(--shadow-md);
+}
+
+.queue-item-image {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    flex-shrink: 0;
+    background: var(--gray-100);
+    border: 1px solid var(--gray-200);
+}
+
+.queue-item-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.queue-item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.queue-item-name {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text);
+    margin: 0;
+    line-height: 1.3;
+}
+
+.queue-item-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    margin-top: 2px;
+}
+
+.queue-item-price {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.queue-item-restaurant {
+    color: var(--gray-400);
+}
+
+.queue-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.queue-item-qty {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: var(--white);
+}
+
+.queue-item-qty .qty-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: none;
+    background: var(--gray-50);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    transition: background var(--transition-fast);
+}
+
+.queue-item-qty .qty-btn:hover {
+    background: var(--gray-200);
+}
+.queue-item-qty .qty-btn:active {
+    background: var(--gray-300);
+}
+
+.queue-item-qty .qty-input {
+    width: 34px;
+    height: 30px;
+    border: none;
+    background: var(--white);
+    text-align: center;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    padding: 0 2px;
+    -moz-appearance: textfield;
+}
+
+.queue-item-qty .qty-input::-webkit-inner-spin-button,
+.queue-item-qty .qty-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.queue-item-qty .qty-input:focus {
+    outline: none;
+}
+
+.queue-item-remove {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: none;
+    background: transparent;
+    color: var(--gray-400);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+}
+
+.queue-item-remove:hover {
+    background: rgba(220, 53, 69, 0.1);
+    color: var(--danger);
+}
+
+.queue-item-total {
+    font-weight: 700;
+    font-size: var(--font-size-sm);
+    color: var(--text);
+    min-width: 60px;
+    text-align: right;
+}
+
+/* ============================================
+   EMPTY STATE
+   ============================================ */
+
+.queue-empty-state {
+    text-align: center;
+    padding: 40px 16px;
+    color: var(--gray-400);
+    background: var(--gray-50);
+}
+
+.queue-empty-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 12px;
+    opacity: 0.3;
+}
+
+.queue-empty-icon img {
+    width: 100%;
+    height: 100%;
+}
+
+.queue-empty-text {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+}
+
+/* ============================================
+   QUEUE FOOTER - Clean, aligned
+   ============================================ */
+
+.queue-footer {
+    padding: 12px 20px;
+    border-top: 1px solid var(--gray-200);
+    background: var(--white);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.queue-footer-total {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+
+.queue-footer-label {
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    font-weight: 500;
+}
+
+.queue-footer-grand-total {
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    color: var(--text);
+}
+
+.queue-footer-item-count {
+    font-size: var(--font-size-xs);
+    color: var(--gray-400);
+}
+
+.queue-footer-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+/* Cancel Order Button */
+.queue-btn-cancel {
+    padding: 8px 18px;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    border-radius: var(--radius-base);
+    border: 1px solid var(--gray-300);
+    background: transparent;
+    color: var(--gray-600);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.queue-btn-cancel:hover {
+    background: rgba(220, 53, 69, 0.08);
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
+.queue-btn-cancel:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Checkout Button */
+.queue-btn-checkout {
+    padding: 8px 22px;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    border-radius: var(--radius-base);
+    background: var(--primary);
+    color: var(--white);
+    border: none;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.queue-btn-checkout:hover {
+    background: var(--primary-dark);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.queue-btn-checkout:active {
+    transform: translateY(0);
+}
+
+.queue-btn-checkout:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* ============================================
+   MODAL - Remove Item Confirmation
+   ============================================ */
+
+.queue-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.queue-modal.active {
+    display: flex;
+}
+
+.queue-modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+
+.queue-modal-content {
+    position: relative;
+    background: var(--white);
+    border-radius: var(--radius-xl);
+    padding: 28px 32px;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: var(--shadow-xl);
+    animation: modalSlideIn 0.25s ease;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.queue-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.queue-modal-title {
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--text);
+}
+
+.queue-modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: var(--gray-400);
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+    transition: color var(--transition-fast);
+}
+
+.queue-modal-close:hover {
+    color: var(--text);
+}
+
+.queue-modal-body {
+    padding: 8px 0 16px;
+}
+
+.queue-modal-body p {
+    font-size: var(--font-size-base);
+    color: var(--gray-700);
+    margin: 0;
+    line-height: 1.6;
+}
+
+.queue-modal-body strong {
+    color: var(--text);
+}
+
+.queue-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 12px;
+    border-top: 1px solid var(--gray-200);
+}
+
+.queue-modal-btn-cancel {
+    padding: 8px 20px;
+    border-radius: var(--radius-base);
+    border: 1px solid var(--gray-300);
+    background: transparent;
+    color: var(--gray-600);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.queue-modal-btn-cancel:hover {
+    background: var(--gray-50);
+    border-color: var(--gray-400);
+}
+
+.queue-modal-btn-confirm {
+    padding: 8px 20px;
+    border-radius: var(--radius-base);
+    border: none;
+    background: var(--danger);
+    color: var(--white);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.queue-modal-btn-confirm:hover {
+    background: #bd2130;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 768px) {
+    .queue-panel {
+        max-height: 70vh;
+    }
+    
+    .queue-panel.closed {
+        transform: translateY(calc(100% - 50px));
+    }
+    
+    .queue-panel-header {
+        padding: 10px 14px;
+        min-height: 50px;
+    }
+    
+    .queue-panel-title {
+        font-size: var(--font-size-sm);
+    }
+    
+    .queue-panel-summary {
+        font-size: var(--font-size-xs);
+    }
+    
+    .queue-items-container {
+        padding: 6px 12px;
+        max-height: 40vh;
+    }
+    
+    .queue-item {
+        padding: 8px 10px;
+        gap: 10px;
+    }
+    
+    .queue-item-image {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .queue-item-name {
+        font-size: var(--font-size-xs);
+    }
+    
+    .queue-item-actions {
+        gap: 4px;
+    }
+    
+    .queue-item-qty .qty-btn {
+        width: 26px;
+        height: 26px;
+        font-size: 12px;
+    }
+    
+    .queue-item-qty .qty-input {
+        width: 28px;
+        height: 26px;
+        font-size: var(--font-size-xs);
+    }
+    
+    .queue-item-total {
+        font-size: var(--font-size-xs);
+        min-width: 44px;
+    }
+    
+    .queue-footer {
+        padding: 10px 14px;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+    
+    .queue-footer-total {
+        justify-content: space-between;
+        padding: 0 4px;
+    }
+    
+    .queue-footer-actions {
+        justify-content: stretch;
+        gap: 8px;
+    }
+    
+    .queue-btn-cancel,
+    .queue-btn-checkout {
+        flex: 1;
+        justify-content: center;
+        padding: 10px 12px;
+        font-size: var(--font-size-sm);
+    }
+    
+    .queue-modal-content {
+        padding: 20px 24px;
+        max-width: 340px;
+    }
+}
+
+@media (max-width: 480px) {
+    .queue-panel {
+        max-height: 80vh;
+    }
+    
+    .queue-panel.closed {
+        transform: translateY(calc(100% - 44px));
+    }
+    
+    .queue-panel-header {
+        padding: 8px 12px;
+        min-height: 44px;
+    }
+    
+    .queue-panel-title {
+        font-size: var(--font-size-sm);
+    }
+    
+    .queue-item-count {
+        font-size: 10px;
+        min-width: 20px;
+        height: 20px;
+        padding: 0 6px;
+    }
+    
+    .queue-items-container {
+        padding: 4px 8px;
+        max-height: 35vh;
+    }
+    
+    .queue-item {
+        padding: 6px 8px;
+        gap: 8px;
+    }
+    
+    .queue-item-image {
+        width: 32px;
+        height: 32px;
+    }
+    
+    .queue-item-name {
+        font-size: 11px;
+    }
+    
+    .queue-item-meta {
+        font-size: 10px;
+    }
+    
+    .queue-item-qty .qty-btn {
+        width: 22px;
+        height: 22px;
+        font-size: 11px;
+    }
+    
+    .queue-item-qty .qty-input {
+        width: 24px;
+        height: 22px;
+        font-size: 10px;
+    }
+    
+    .queue-item-remove {
+        width: 22px;
+        height: 22px;
+    }
+    
+    .queue-item-remove svg {
+        width: 12px;
+        height: 12px;
+    }
+    
+    .queue-item-total {
+        font-size: 10px;
+        min-width: 36px;
+    }
+    
+    .queue-footer {
+        padding: 8px 12px;
+    }
+    
+    .queue-footer-grand-total {
+        font-size: var(--font-size-lg);
+    }
+    
+    .queue-btn-cancel,a
+    .queue-btn-checkout {
+        padding: 8px 12px;
+        font-size: var(--font-size-xs);
+    }
+    
+    .queue-modal-content {
+        padding: 16px 18px;
+        max-width: 300px;
+    }
+    
+    .queue-modal-title {
+        font-size: var(--font-size-base);
+    }
+    
+    .queue-modal-body p {
+        font-size: var(--font-size-sm);
+    }
+}
