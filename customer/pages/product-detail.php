@@ -1,10 +1,10 @@
 <?php
 /**
  * FitPal Product Detail Page
- * Version 4.3 - Fixed price calculation and layout overflow
+ * Version 5.9 - Removed unit_price fallback; use only price_modifier
  *
  * @package FitPal
- * @version 4.3
+ * @version 5.9
  */
 declare(strict_types=1);
 
@@ -12,73 +12,67 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// ===== VALIDATE PRODUCT ID BEFORE ANY OUTPUT =====
+// ===== VALIDATE PRODUCT ID =====
 $productId = isset($_GET['id']) ? max(1, (int)$_GET['id']) : 0;
-
 if ($productId <= 0) {
     header('Location: menu.php');
     exit;
 }
 
-// ===== CHECK PRODUCT EXISTS BEFORE INCLUDING HEADER =====
+// ===== CHECK PRODUCT EXISTS =====
 require_once __DIR__ . '/../backend/database/customer-connect.php';
 
 try {
-    // First check if product exists with a simple query
     $checkStmt = $database_connection->prepare(
         "SELECT p.product_id, p.is_customizable 
          FROM product p
-         WHERE p.product_id = :product_id 
-         AND p.is_active = 1"
+         WHERE p.product_id = :product_id AND p.is_active = 1"
     );
     $checkStmt->execute([':product_id' => $productId]);
-    $productExists = $checkStmt->fetch(PDO::FETCH_ASSOC);
-
-    if (!$productExists) {
+    if (!$checkStmt->fetch()) {
         header('Location: menu.php');
         exit;
     }
 
-    // ===== FETCH FULL PRODUCT DATA - FIXED PRICE =====
-$stmt = $database_connection->prepare(
-    "SELECT 
-        p.product_id,
-        p.name AS product_name,
-        p.description,
-        p.price,
-        p.stock,
-        p.is_active,
-        p.restaurant_branch_id,
-        p.is_customizable,
-        p.customization_type,
-        COALESCE(NULLIF(p.base_price, 0), p.price, 0) AS base_price,
-        rb.branch_name,
-        rb.barangay,
-        rb.city,
-        rb.province,
-        r.business_name AS restaurant_name,
-        r.cuisine_type,
-        COALESCE(di.dietary_tags, '') AS dietary_tags,
-        COALESCE(di.allergens, '') AS allergens,
-        di.calories,
-        di.protein,
-        di.carbs,
-        di.fat,
-        COALESCE(di.images, '') AS product_image
-    FROM product p
-    JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
-    JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
-    LEFT JOIN dietary_information di ON p.dietary_information_id = di.dietary_information_id
-    WHERE p.product_id = :product_id
-    AND p.is_active = 1"
-);
-$stmt->execute([':product_id' => $productId]);
-$product = $stmt->fetch(PDO::FETCH_ASSOC);
+    // ===== FETCH FULL PRODUCT DATA =====
+    $stmt = $database_connection->prepare(
+        "SELECT 
+            p.product_id,
+            p.name AS product_name,
+            p.description,
+            p.price,
+            p.stock,
+            p.is_active,
+            p.restaurant_branch_id,
+            p.is_customizable,
+            p.customization_type,
+            COALESCE(NULLIF(p.base_price, 0), p.price, 0) AS base_price,
+            rb.branch_name,
+            rb.barangay,
+            rb.city,
+            rb.province,
+            r.business_name AS restaurant_name,
+            r.cuisine_type,
+            COALESCE(di.dietary_tags, '') AS dietary_tags,
+            COALESCE(di.allergens, '') AS allergens,
+            di.calories,
+            di.protein,
+            di.carbs,
+            di.fat,
+            COALESCE(di.images, '') AS product_image
+        FROM product p
+        JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
+        JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
+        LEFT JOIN dietary_information di ON p.dietary_information_id = di.dietary_information_id
+        WHERE p.product_id = :product_id AND p.is_active = 1"
+    );
+    $stmt->execute([':product_id' => $productId]);
+    $product = $stmt->fetch(PDO::FETCH_ASSOC);
 
-if (!$product) {
-    header('Location: menu.php');
-    exit;
-}
+    if (!$product) {
+        header('Location: menu.php');
+        exit;
+    }
 
     // ===== FETCH CUSTOMIZATION COMPONENTS =====
     $components = [];
@@ -106,8 +100,7 @@ if (!$product) {
                 i.is_active
             FROM product_composition pc
             JOIN ingredient i ON pc.ingredient_id = i.ingredient_id
-            WHERE pc.product_id = :product_id
-            AND i.is_active = 1
+            WHERE pc.product_id = :product_id AND i.is_active = 1
             ORDER BY pc.display_order ASC, i.name ASC"
         );
         $compStmt->execute([':product_id' => $productId]);
@@ -124,18 +117,19 @@ if (!$product) {
                     $isRequired = (bool)($row['is_required'] ?? false);
                     $groupedIngredients[$compId] = [
                         'id' => $compId,
-                        'type' => $maxQty <= 1 ? 'choice' : 'modifier',
+                        'type' => 'choice',
                         'is_required' => $isRequired,
                         'max_selections' => $maxQty,
                         'display_order' => (int)($row['display_order'] ?? 0),
+                        'is_unchangeable' => false,
+                        'is_modifier' => false,
+                        'is_multi_choice' => false,
                         'ingredients' => []
                     ];
                 }
 
+                // Use ONLY price_modifier from product_composition – no fallback to unit_price
                 $priceModifier = (float)($row['price_modifier'] ?? 0);
-                if ($priceModifier == 0) {
-                    $priceModifier = (float)($row['unit_price'] ?? 0);
-                }
 
                 $groupedIngredients[$compId]['ingredients'][] = [
                     'id' => (int)$row['ingredient_id'],
@@ -145,11 +139,140 @@ if (!$product) {
                     'is_active' => (bool)($row['is_active'] ?? true),
                     'max_quantity' => (int)($row['max_quantity'] ?? 1),
                     'default_quantity' => (int)($row['default_quantity'] ?? 0),
-                    'min_quantity' => (int)($row['min_quantity'] ?? 0)
+                    'min_quantity' => (int)($row['min_quantity'] ?? 0),
+                    'calories' => (int)($row['ingredient_calories'] ?? 0)
                 ];
             }
 
-            $components = array_values($groupedIngredients);
+            // ===== POST-PROCESS: GROUP BY DISPLAY_ORDER =====
+            $displayOrderGroups = [];
+            foreach ($groupedIngredients as $compId => $group) {
+                $order = $group['display_order'];
+                if (!isset($displayOrderGroups[$order])) {
+                    $displayOrderGroups[$order] = [];
+                }
+                $displayOrderGroups[$order][] = $compId;
+            }
+
+            $processedComponents = [];
+            foreach ($displayOrderGroups as $order => $compIds) {
+                // Check if this group has multiple ingredients (choice group)
+                $isChoiceGroup = count($compIds) > 1;
+
+                // Get all ingredients from all components in this group
+                $allIngredients = [];
+                $isRequired = false;
+                $maxSelections = 1;
+                $hasDefault = false;
+                $groupName = '';
+
+                foreach ($compIds as $cid) {
+                    $group = $groupedIngredients[$cid];
+                    if ($group['is_required']) {
+                        $isRequired = true;
+                    }
+                    if ($group['max_selections'] > $maxSelections) {
+                        $maxSelections = $group['max_selections'];
+                    }
+                    foreach ($group['ingredients'] as $ing) {
+                        $allIngredients[] = $ing;
+                        if ($ing['is_default']) {
+                            $hasDefault = true;
+                        }
+                    }
+                }
+
+                // Generate group label
+                if (!empty($allIngredients)) {
+                    $firstIng = $allIngredients[0];
+                    $groupName = ucwords(str_replace('_', ' ', $firstIng['name']));
+                    if ($isChoiceGroup) {
+                        $groupName .= ' Choice';
+                    }
+                }
+
+                if ($isChoiceGroup) {
+                    // CHOICE GROUP: Multiple options, pick one
+                    // Find the default option's price modifier to normalize all options
+                    $defaultPriceMod = 0;
+                    foreach ($allIngredients as $ing) {
+                        if ($ing['is_default']) {
+                            $defaultPriceMod = $ing['price_modifier'];
+                            break;
+                        }
+                    }
+
+                    // Adjust all ingredients relative to the default
+                    $adjustedIngredients = [];
+                    foreach ($allIngredients as $ing) {
+                        $adjustedIng = $ing;
+                        $adjustedIng['price_modifier'] = $ing['price_modifier'] - $defaultPriceMod;
+                        $adjustedIngredients[] = $adjustedIng;
+                    }
+
+                    $processedComponents[] = [
+                        'id' => implode('_', $compIds),
+                        'type' => 'choice',
+                        'is_required' => $isRequired,
+                        'max_selections' => 1,
+                        'display_order' => $order,
+                        'is_unchangeable' => false,
+                        'is_modifier' => false,
+                        'is_choice_group' => true,
+                        'has_default' => $hasDefault,
+                        'ingredients' => $adjustedIngredients,
+                        'label' => $groupName
+                    ];
+                } else {
+                    // SINGLE INGREDIENT: Check if it's an unchangeable base or a modifier
+                    $singleGroup = $groupedIngredients[$compIds[0]];
+                    $count = count($singleGroup['ingredients']);
+
+                    // Get the first ingredient (there should be only one)
+                    $ing = $singleGroup['ingredients'][0];
+                    $minQty = $ing['min_quantity'] ?? 0;
+                    $maxQtyPerItem = $singleGroup['max_selections'];
+                    $isReq = $singleGroup['is_required'];
+
+                    // Determine if unchangeable: single ingredient, required, min_quantity=1, max_quantity_per_item=1
+                    if ($count === 1 && $isReq && $maxQtyPerItem === 1 && $minQty === 1) {
+                        // Unchangeable base component (e.g., Seaweed)
+                        $ingCopy = $singleGroup['ingredients'];
+                        $ingCopy[0]['price_modifier'] = 0;
+
+                        $processedComponents[] = [
+                            'id' => $singleGroup['id'],
+                            'type' => 'choice',
+                            'is_required' => true,
+                            'max_selections' => 1,
+                            'display_order' => $order,
+                            'is_unchangeable' => true,
+                            'is_modifier' => false,
+                            'is_choice_group' => false,
+                            'has_default' => true,
+                            'ingredients' => $ingCopy,
+                            'label' => ucwords(str_replace('_', ' ', $ing['name']))
+                        ];
+                    } else {
+                        // Modifier (optional add-on or with adjustable quantity)
+                        $processedComponents[] = [
+                            'id' => $singleGroup['id'],
+                            'type' => 'modifier',
+                            'is_required' => $isReq,
+                            'max_selections' => $maxQtyPerItem,
+                            'display_order' => $order,
+                            'is_unchangeable' => false,
+                            'is_modifier' => true,
+                            'is_choice_group' => false,
+                            'has_default' => false,
+                            'ingredients' => $singleGroup['ingredients'],
+                            'label' => ucwords(str_replace('_', ' ', $ing['name']))
+                        ];
+                    }
+                }
+            }
+
+            $components = $processedComponents;
         }
     }
 
@@ -182,7 +305,7 @@ if (!$product) {
     exit;
 }
 
-// ===== NOW INCLUDE HEADER (safe - no more redirects) =====
+// ===== INCLUDE HEADER =====
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../backend/database/product-queries.php';
 require_once __DIR__ . '/../backend/database/order-queries.php';
@@ -194,32 +317,31 @@ if (empty($_SESSION['csrf_token'])) {
 }
 $csrfToken = $_SESSION['csrf_token'];
 
-// Parse dietary tags and allergens
 $dietaryTags = !empty($product['dietary_tags']) ? explode(',', $product['dietary_tags']) : [];
 $allergens = !empty($product['allergens']) ? explode(',', $product['allergens']) : [];
 
-// Format price
 $basePrice = (float)($product['base_price'] ?? $product['price'] ?? 0);
 $formattedPrice = '₱' . number_format($basePrice, 2);
+$baseCalories = (int)($product['calories'] ?? 0);
 
-// Check if product is in stock
 $inStock = (int)($product['stock'] ?? 0) > 0 && (int)($product['is_active'] ?? 0) === 1;
 
-// Product image
-$productImage = !empty($product['product_image']) 
+$productImage = !empty($product['product_image'])
     ? htmlspecialchars($product['product_image'], ENT_QUOTES, 'UTF-8')
     : $assetBase . 'assets/images/icons/restaurant.svg';
 ?>
 
 <link rel="stylesheet" href="../assets/css/product-detail.css">
 
-<div class="content product-detail-page" id="productDetailPage">
+<div class="content product-detail-page" id="productDetailPage" data-base-price="<?php echo $basePrice; ?>"
+    data-base-calories="<?php echo $baseCalories; ?>">
+
     <!-- ============================================
          STEP 1: MAIN VIEW
          ============================================ -->
     <div class="product-step product-step-main" id="stepMain">
         <div class="container">
-            <!-- Flash Messages -->
+
             <?php if (isset($_SESSION['cart_success'])): ?>
             <div class="alert alert-success" role="alert">
                 <svg class="alert-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -259,7 +381,6 @@ $productImage = !empty($product['product_image'])
 
             <!-- Product Detail Card -->
             <div class="product-detail-card">
-                <!-- Product Image -->
                 <div class="product-image-wrapper">
                     <div class="product-image-container">
                         <img src="<?php echo $productImage; ?>"
@@ -275,7 +396,6 @@ $productImage = !empty($product['product_image'])
                     </div>
                 </div>
 
-                <!-- Product Info -->
                 <div class="product-info-section">
                     <div class="product-header">
                         <h1 class="product-title">
@@ -295,7 +415,7 @@ $productImage = !empty($product['product_image'])
                         </div>
                     </div>
 
-                    <!-- Price -->
+                    <!-- Price & Calories -->
                     <div class="product-price-section">
                         <span class="product-price-large" id="productBasePrice"><?php echo $formattedPrice; ?></span>
                         <?php if ($hasCustomizations): ?>
@@ -330,7 +450,7 @@ $productImage = !empty($product['product_image'])
                     </div>
 
                     <!-- ============================================
-                         ACTION CONTROLS - FIXED
+                         ACTION CONTROLS
                          ============================================ -->
                     <div class="action-control" id="actionControl">
                         <?php if ($isLoggedIn && $inStock): ?>
@@ -338,10 +458,12 @@ $productImage = !empty($product['product_image'])
                             class="action-control-form" id="actionControlForm">
                             <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
                             <input type="hidden" name="product_id" value="<?php echo $productId; ?>">
-                            <input type="hidden" name="redirect" value="menu.php"> <!-- FIXED: Always go to menu.php -->
+                            <input type="hidden" name="redirect" value="menu.php">
                             <input type="hidden" name="customizations" id="customizationsData" value="">
                             <input type="hidden" name="total_price" id="totalPriceInput"
                                 value="<?php echo $basePrice; ?>">
+                            <input type="hidden" name="total_calories" id="totalCaloriesInput"
+                                value="<?php echo $baseCalories; ?>">
 
                             <!-- ROW A: Quantity + Total -->
                             <div class="action-row action-row-a">
@@ -367,9 +489,8 @@ $productImage = !empty($product['product_image'])
                                 <div class="action-col action-col-total">
                                     <div class="action-total">
                                         <span class="action-total-label">Total:</span>
-                                        <span class="action-total-price" id="mainTotalPrice">
-                                            ₱<?php echo number_format($basePrice, 2); ?>
-                                        </span>
+                                        <span class="action-total-price"
+                                            id="mainTotalPrice">₱<?php echo number_format($basePrice, 2); ?></span>
                                     </div>
                                 </div>
                             </div>
@@ -472,7 +593,7 @@ $productImage = !empty($product['product_image'])
     </div>
 
     <!-- ============================================
-         STEP 2: CUSTOMIZATION VIEW - FIXED
+         STEP 2: CUSTOMIZATION VIEW
          ============================================ -->
     <?php if ($hasCustomizations && $isLoggedIn && $inStock): ?>
     <div class="product-step product-step-customize" id="stepCustomize" style="display:none;">
@@ -507,89 +628,128 @@ $productImage = !empty($product['product_image'])
 
                 <div class="customization-options-container" id="customizationContainer">
                     <h3 class="section-label">Customize Your Order</h3>
-                    <?php foreach ($components as $index => $component): ?>
-                    <?php 
+                    <?php foreach ($components as $index => $component): 
                         $componentType = $component['type'] ?? 'choice';
                         $isRequired = $component['is_required'] ?? false;
                         $maxSelections = $component['max_selections'] ?? 1;
                         $ingredients = $component['ingredients'] ?? [];
-                        
-                        // Find default ingredient
-                        $defaultIngredient = null;
-                        foreach ($ingredients as $ing) {
-                            if ($ing['is_default'] ?? false) {
-                                $defaultIngredient = $ing;
-                                break;
-                            }
-                        }
-                        if (!$defaultIngredient && !empty($ingredients)) {
-                            $defaultIngredient = $ingredients[0];
-                        }
-                        
-                        // Generate a label for this component group
-                        $groupLabel = 'Option ' . ($index + 1);
-                        if (!empty($ingredients)) {
-                            $firstIng = $ingredients[0];
-                            $groupLabel = ucwords(str_replace('_', ' ', $firstIng['name']));
-                            if (count($ingredients) > 1) {
-                                $groupLabel .= ' Choice';
-                            }
-                        }
+                        $isUnchangeable = $component['is_unchangeable'] ?? false;
+                        $isModifier = $component['is_modifier'] ?? false;
+                        $isChoiceGroup = $component['is_choice_group'] ?? false;
+                        $hasDefault = $component['has_default'] ?? false;
+                        $groupLabel = $component['label'] ?? 'Option';
                     ?>
                     <div class="customization-group" data-component-id="<?php echo $index; ?>"
                         data-component-type="<?php echo $componentType; ?>"
                         data-required="<?php echo $isRequired ? 'true' : 'false'; ?>"
                         data-max="<?php echo $maxSelections; ?>">
+
                         <div class="customization-header">
                             <span class="customization-label">
                                 <?php echo htmlspecialchars($groupLabel, ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                            <span class="badge-wrapper">
+                                <?php if ($componentType === 'choice'): ?>
+                                <?php if ($isUnchangeable): ?>
+                                <span class="badge unchangeable-badge">Unchangeable</span>
+                                <?php elseif ($isChoiceGroup): ?>
                                 <?php if ($isRequired): ?>
-                                <span class="required-badge">Required</span>
+                                <span class="badge required-badge">Choose one</span>
                                 <?php else: ?>
-                                <span class="optional-badge">Optional</span>
+                                <span class="badge optional-badge">Optional – Pick one</span>
+                                <?php endif; ?>
+                                <?php elseif ($isRequired): ?>
+                                <span class="badge required-badge">Choose one</span>
+                                <?php else: ?>
+                                <span class="badge optional-badge">Optional – Pick one</span>
+                                <?php endif; ?>
+                                <?php elseif ($componentType === 'modifier'): ?>
+                                <?php if ($isRequired && $maxSelections > 0): ?>
+                                <span class="badge required-badge">Required</span>
+                                <?php else: ?>
+                                <span class="badge optional-badge">Add or remove</span>
+                                <?php endif; ?>
                                 <?php endif; ?>
                             </span>
-                            <?php if ($componentType === 'choice' && count($ingredients) > 1): ?>
-                            <span class="selection-hint">Select one</span>
-                            <?php elseif ($componentType === 'modifier'): ?>
-                            <span class="selection-hint">Add or remove</span>
-                            <?php endif; ?>
                         </div>
+
                         <div class="customization-options" data-component-id="<?php echo $index; ?>">
                             <?php if ($componentType === 'choice'): ?>
-                            <select class="customization-select" name="customization_<?php echo $index; ?>"
-                                data-component-id="<?php echo $index; ?>" <?php echo $isRequired ? 'required' : ''; ?>>
-                                <?php if (!$isRequired): ?>
-                                <option value="">None</option>
+                            <?php if ($isUnchangeable || (!$isChoiceGroup && count($ingredients) === 1)): ?>
+                            <?php $ing = $ingredients[0]; ?>
+                            <div class="static-ingredient">
+                                <span
+                                    class="static-name"><?php echo htmlspecialchars($ing['name'], ENT_QUOTES, 'UTF-8'); ?></span>
+                                <?php if (!$isUnchangeable): ?>
+                                <span class="static-price">
+                                    <?php if ($ing['price_modifier'] > 0): ?>
+                                    +₱<?php echo number_format($ing['price_modifier'], 2); ?>
+                                    <?php elseif ($ing['price_modifier'] < 0): ?>
+                                    -₱<?php echo number_format(abs($ing['price_modifier']), 2); ?>
+                                    <?php endif; ?>
+                                </span>
                                 <?php endif; ?>
-                                <?php foreach ($ingredients as $ing): ?>
-                                <?php 
-                                        $isDefault = $ing['is_default'] ?? false;
-                                        $priceMod = $ing['price_modifier'] ?? 0;
-                                        $label = $ing['name'];
-                                        if ($priceMod > 0) {
-                                            $label .= ' (+₱' . number_format($priceMod, 2) . ')';
-                                        } elseif ($priceMod < 0) {
-                                            $label .= ' (-₱' . number_format(abs($priceMod), 2) . ')';
-                                        }
-                                    ?>
-                                <option value="<?php echo $ing['id']; ?>" data-price-modifier="<?php echo $priceMod; ?>"
-                                    <?php echo $isDefault ? 'selected' : ''; ?>>
-                                    <?php echo htmlspecialchars($label, ENT_QUOTES, 'UTF-8'); ?>
-                                </option>
+                                <span class="static-calories"><?php echo $ing['calories']; ?> kcal</span>
+                                <input type="hidden" name="customization_<?php echo $index; ?>"
+                                    value="<?php echo $ing['id']; ?>"
+                                    data-price-modifier="<?php echo $isUnchangeable ? 0 : $ing['price_modifier']; ?>"
+                                    data-calories="<?php echo $ing['calories']; ?>">
+                            </div>
+                            <?php else: ?>
+                            <fieldset class="customization-radio-group">
+                                <legend class="sr-only">
+                                    <?php echo htmlspecialchars($groupLabel, ENT_QUOTES, 'UTF-8'); ?></legend>
+                                <?php if (!$isRequired): ?>
+                                <label class="radio-option">
+                                    <input type="radio" name="customization_<?php echo $index; ?>" value=""
+                                        data-price-modifier="0" data-calories="0"
+                                        <?php echo !$hasDefault ? 'checked' : ''; ?>>
+                                    <span class="option-name">None</span>
+                                    <span class="option-calories">0 kcal</span>
+                                </label>
+                                <?php endif; ?>
+                                <?php foreach ($ingredients as $ing): 
+                                            $isDefault = $ing['is_default'] ?? false;
+                                            $priceMod = $ing['price_modifier'] ?? 0;
+                                            $calories = $ing['calories'] ?? 0;
+                                            $label = $ing['name'];
+                                            if ($priceMod > 0) {
+                                                $label .= ' (+₱' . number_format($priceMod, 2) . ')';
+                                            } elseif ($priceMod < 0) {
+                                                $label .= ' (-₱' . number_format(abs($priceMod), 2) . ')';
+                                            }
+                                        ?>
+                                <label class="radio-option <?php echo $isDefault ? 'selected' : ''; ?>">
+                                    <input type="radio" name="customization_<?php echo $index; ?>"
+                                        value="<?php echo $ing['id']; ?>" data-price-modifier="<?php echo $priceMod; ?>"
+                                        data-calories="<?php echo $calories; ?>"
+                                        <?php echo $isDefault ? 'checked' : ''; ?>>
+                                    <span
+                                        class="option-name"><?php echo htmlspecialchars($label, ENT_QUOTES, 'UTF-8'); ?></span>
+                                    <?php if ($priceMod != 0): ?>
+                                    <span
+                                        class="option-price"><?php echo ($priceMod > 0 ? '+' : '') . '₱' . number_format(abs($priceMod), 2); ?></span>
+                                    <?php endif; ?>
+                                    <span class="option-calories"><?php echo $calories; ?> kcal</span>
+                                </label>
                                 <?php endforeach; ?>
-                            </select>
+                            </fieldset>
+                            <?php endif; ?>
                             <?php elseif ($componentType === 'modifier'): ?>
-                            <?php foreach ($ingredients as $ing): ?>
-                            <?php 
+                            <?php foreach ($ingredients as $ing): 
                                     $isDefault = $ing['is_default'] ?? false;
                                     $defaultQty = $ing['default_quantity'] ?? 0;
                                     $priceMod = $ing['price_modifier'] ?? 0;
-                                    $displayQty = $isDefault ? ($defaultQty > 0 ? $defaultQty : 1) : 0;
+                                    $calories = $ing['calories'] ?? 0;
+                                    $minQty = $ing['min_quantity'] ?? 0;
+                                    $maxQty = $ing['max_quantity'] ?? 1;
+                                    $displayQty = $isDefault ? ($defaultQty > 0 ? $defaultQty : $minQty) : $minQty;
+                                    $isRequired = ($minQty > 0);
                                 ?>
                             <div class="customization-option modifier-option <?php echo $displayQty > 0 ? 'selected' : ''; ?>"
                                 data-ingredient-id="<?php echo $ing['id']; ?>"
-                                data-price-modifier="<?php echo $priceMod; ?>">
+                                data-price-modifier="<?php echo $priceMod; ?>" data-calories="<?php echo $calories; ?>"
+                                data-min-qty="<?php echo $minQty; ?>" data-max-qty="<?php echo $maxQty; ?>">
                                 <div class="modifier-info">
                                     <span
                                         class="option-name"><?php echo htmlspecialchars($ing['name'], ENT_QUOTES, 'UTF-8'); ?></span>
@@ -598,22 +758,29 @@ $productImage = !empty($product['product_image'])
                                     <?php elseif ($priceMod < 0): ?>
                                     <span class="option-price">-₱<?php echo number_format(abs($priceMod), 2); ?></span>
                                     <?php endif; ?>
+                                    <span class="option-calories"><?php echo $calories; ?> kcal</span>
+                                    <?php if ($isRequired): ?>
+                                    <span class="required-badge-small">Required</span>
+                                    <?php endif; ?>
                                 </div>
                                 <div class="modifier-controls">
                                     <button type="button" class="modifier-btn modifier-minus"
                                         data-ingredient-id="<?php echo $ing['id']; ?>"
-                                        aria-label="Remove <?php echo htmlspecialchars($ing['name'], ENT_QUOTES, 'UTF-8'); ?>">
+                                        data-min-qty="<?php echo $minQty; ?>"
+                                        aria-label="Remove <?php echo htmlspecialchars($ing['name'], ENT_QUOTES, 'UTF-8'); ?>"
+                                        <?php echo $displayQty <= $minQty ? 'disabled' : ''; ?>>
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2">
                                             <line x1="5" y1="12" x2="19" y2="12" />
                                         </svg>
                                     </button>
-                                    <span class="modifier-quantity" data-ingredient-id="<?php echo $ing['id']; ?>">
-                                        <?php echo $displayQty; ?>
-                                    </span>
+                                    <span class="modifier-quantity"
+                                        data-ingredient-id="<?php echo $ing['id']; ?>"><?php echo $displayQty; ?></span>
                                     <button type="button" class="modifier-btn modifier-plus"
                                         data-ingredient-id="<?php echo $ing['id']; ?>"
-                                        aria-label="Add <?php echo htmlspecialchars($ing['name'], ENT_QUOTES, 'UTF-8'); ?>">
+                                        data-max-qty="<?php echo $maxQty; ?>"
+                                        aria-label="Add <?php echo htmlspecialchars($ing['name'], ENT_QUOTES, 'UTF-8'); ?>"
+                                        <?php echo $displayQty >= $maxQty ? 'disabled' : ''; ?>>
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2">
                                             <line x1="12" y1="5" x2="12" y2="19" />
@@ -623,17 +790,17 @@ $productImage = !empty($product['product_image'])
                                 </div>
                             </div>
                             <?php endforeach; ?>
-                            <?php else: ?>
-                            <?php foreach ($ingredients as $ing): ?>
-                            <?php 
+                            <?php else: // checkbox type ?>
+                            <?php foreach ($ingredients as $ing): 
                                     $isDefault = $ing['is_default'] ?? false;
                                     $priceMod = $ing['price_modifier'] ?? 0;
+                                    $calories = $ing['calories'] ?? 0;
                                 ?>
                             <label
                                 class="customization-option checkbox-option <?php echo $isDefault ? 'selected' : ''; ?>">
                                 <input type="checkbox" name="customization_<?php echo $index; ?>[]"
                                     value="<?php echo $ing['id']; ?>" data-price-modifier="<?php echo $priceMod; ?>"
-                                    <?php echo $isDefault ? 'checked' : ''; ?>>
+                                    data-calories="<?php echo $calories; ?>" <?php echo $isDefault ? 'checked' : ''; ?>>
                                 <span
                                     class="option-name"><?php echo htmlspecialchars($ing['name'], ENT_QUOTES, 'UTF-8'); ?></span>
                                 <?php if ($priceMod > 0): ?>
@@ -641,6 +808,7 @@ $productImage = !empty($product['product_image'])
                                 <?php elseif ($priceMod < 0): ?>
                                 <span class="option-price">-₱<?php echo number_format(abs($priceMod), 2); ?></span>
                                 <?php endif; ?>
+                                <span class="option-calories"><?php echo $calories; ?> kcal</span>
                             </label>
                             <?php endforeach; ?>
                             <?php endif; ?>
@@ -648,7 +816,7 @@ $productImage = !empty($product['product_image'])
                     </div>
                     <?php endforeach; ?>
 
-                    <!-- Special instructions -->
+                    <!-- Special Instructions -->
                     <div class="customization-notes-global">
                         <label for="globalNotes" class="customization-label">Special Instructions</label>
                         <textarea id="globalNotes" class="customization-textarea"
@@ -656,22 +824,22 @@ $productImage = !empty($product['product_image'])
                     </div>
                 </div>
 
-                <!-- Customization Action Controls - FIXED -->
+                <!-- Customization Action Controls - VERTICAL STACK -->
                 <div class="customization-actions">
                     <div class="customization-total">
-                        <span class="customization-total-label">Total:</span>
-                        <span class="customization-total-price" id="customizeTotalPrice">
-                            ₱<?php echo number_format($basePrice, 2); ?>
-                        </span>
+                        <div class="customization-total-item">
+                            <span class="customization-total-label">Total:</span>
+                            <span id="customizeTotalPrice">₱<?php echo number_format($basePrice, 2); ?></span>
+                        </div>
+                        <div class="customization-total-item">
+                            <span class="customization-total-label">Calories:</span>
+                            <span id="customizeTotalCalories"><?php echo $baseCalories; ?> kcal</span>
+                        </div>
                     </div>
                     <div class="customization-buttons">
                         <button type="button" class="btn btn-outline" id="cancelCustomizeBtn">Cancel</button>
                         <button type="button" class="btn btn-primary" id="applyCustomizeBtn">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path d="M20 6L9 17l-5-5" />
-                            </svg>
-                            <span>Apply &amp; Add to Order</span>
+                            <span>Apply and Add to Order</span>
                         </button>
                     </div>
                 </div>

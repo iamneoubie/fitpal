@@ -4,24 +4,17 @@
  * 
  * This is the public entry point for the FitPal platform.
  * 
- * Usage: Direct access via web browser
- * 
  * @package FitPal
- * @version 1.0
+ * @version 2.5 - Exact match to menu.php product cards
  */
 
 declare(strict_types=1);
 
 // Session is now handled by header.php
-// No need to start session here
-
-// Include shared header (handles session)
 require_once __DIR__ . '/shared/includes/header.php';
 
 /**
  * Get the base path for assets based on current file location
- * 
- * @return string The asset base path
  */
 function getLandingAssetBase(): string {
     $scriptPath = $_SERVER['SCRIPT_NAME'];
@@ -38,47 +31,94 @@ function getLandingAssetBase(): string {
 
 $assetBase = getLandingAssetBase();
 
-// $isLoggedIn, $userRole, $userName are now available from header.php
+// ============================================
+// DATABASE QUERY — Fetch random products (EXACT same as menu.php)
+// ============================================
 
-// Featured restaurants (placeholder data)
-$featuredRestaurants = [
-    [
-        'name' => 'Green Bowl Cafe',
-        'cuisine' => 'Vegan',
-        'rating' => 4.8,
-        'reviews' => 234,
-        'image' => $assetBase . 'assets/images/showcase/variety.png',
-        'tags' => ['Vegan', 'Gluten-Free', 'Organic']
-    ],
-    [
-        'name' => 'Keto Kitchen',
-        'cuisine' => 'Keto',
-        'rating' => 4.6,
-        'reviews' => 189,
-        'image' => $assetBase . 'assets/images/restaurants/keto-kitchen.jpg',
-        'tags' => ['Keto', 'High-Protein', 'Low-Carb']
-    ],
-    [
-        'name' => 'PureFit Meals',
-        'cuisine' => 'Healthy',
-        'rating' => 4.9,
-        'reviews' => 312,
-        'image' => $assetBase . 'assets/images/restaurants/purefit.jpg',
-        'tags' => ['High-Protein', 'Low-Calorie', 'Organic']
-    ],
-    [
-        'name' => 'Asian Fusion Fit',
-        'cuisine' => 'Asian',
-        'rating' => 4.5,
-        'reviews' => 156,
-        'image' => $assetBase . 'assets/images/restaurants/asian-fusion.jpg',
-        'tags' => ['Gluten-Free', 'Vegan Options', 'Low-Carb']
-    ]
-];
+require_once __DIR__ . '/shared/backend/database/database-connect.php';
+
+function getFeaturedProducts(PDO $db, int $limit = 8): array {
+    $stmt = $db->prepare(
+        "SELECT 
+            p.product_id as id,
+            p.name,
+            p.description,
+            p.price,
+            p.stock,
+            p.is_active,
+            p.restaurant_branch_id,
+            p.is_customizable,
+            p.customization_type,
+            p.base_price,
+            rb.branch_name,
+            rb.barangay,
+            rb.city,
+            rb.province,
+            r.restaurant_id,
+            r.business_name as restaurant_name,
+            r.cuisine_type,
+            COALESCE(di.dietary_tags, '') as dietary_tags,
+            COALESCE(di.allergens, '') as allergens,
+            di.calories,
+            di.protein,
+            di.carbs,
+            di.fat,
+            COALESCE(di.images, '') as product_image
+        FROM product p
+        JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
+        JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
+        LEFT JOIN dietary_information di ON p.dietary_information_id = di.dietary_information_id
+        WHERE p.is_active = 1 
+        AND rb.is_active = 1 
+        AND r.is_active = 1
+        ORDER BY RAND()
+        LIMIT :limit"
+    );
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+// ============================================
+// FETCH REAL DATA
+// ============================================
+
+$featuredProducts = [];
+
+try {
+    $featuredProducts = getFeaturedProducts($database_connection, 5);
+    error_log('Featured products found: ' . count($featuredProducts));
+} catch (PDOException $e) {
+    error_log('Landing page query error: ' . $e->getMessage());
+    $featuredProducts = [];
+}
+
+$hasProducts = !empty($featuredProducts);
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+function formatPrice($price): string {
+    return '₱' . number_format((float)$price, 2);
+}
+
+function truncateText(string $text, int $length = 70): string {
+    $text = trim($text);
+    if (strlen($text) <= $length) {
+        return $text;
+    }
+    return substr($text, 0, $length) . '...';
+}
+
+// ============================================
+// HEADER DATA (from shared/includes/header.php)
+// ============================================
 ?>
 <!-- ============================================
     LANDING PAGE CONTENT
     ============================================ -->
+<link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/landing.css">
 
 <div class="content">
 
@@ -111,17 +151,44 @@ $featuredRestaurants = [
                 </div>
                 <div class="hero-stats">
                     <div class="hero-stat">
-                        <span class="hero-stat-number">500+</span>
-                        <span class="hero-stat-label">Meals</span>
-                    </div>
-                    <div class="hero-stat-divider"></div>
-                    <div class="hero-stat">
-                        <span class="hero-stat-number">200+</span>
+                        <span class="hero-stat-number">
+                            <?php 
+                                try {
+                                    $countStmt = $database_connection->query("SELECT COUNT(*) FROM restaurant WHERE is_active = 1");
+                                    echo number_format((int)$countStmt->fetchColumn());
+                                } catch (PDOException $e) {
+                                    echo '0';
+                                }
+                            ?>
+                        </span>
                         <span class="hero-stat-label">Restaurants</span>
                     </div>
                     <div class="hero-stat-divider"></div>
                     <div class="hero-stat">
-                        <span class="hero-stat-number">10K+</span>
+                        <span class="hero-stat-number">
+                            <?php 
+                                try {
+                                    $countStmt = $database_connection->query("SELECT COUNT(*) FROM product WHERE is_active = 1");
+                                    echo number_format((int)$countStmt->fetchColumn());
+                                } catch (PDOException $e) {
+                                    echo '0';
+                                }
+                            ?>
+                        </span>
+                        <span class="hero-stat-label">Meals</span>
+                    </div>
+                    <div class="hero-stat-divider"></div>
+                    <div class="hero-stat">
+                        <span class="hero-stat-number">
+                            <?php 
+                                try {
+                                    $countStmt = $database_connection->query("SELECT COUNT(*) FROM customer WHERE is_active = 1");
+                                    echo number_format((int)$countStmt->fetchColumn());
+                                } catch (PDOException $e) {
+                                    echo '0';
+                                }
+                            ?>
+                        </span>
                         <span class="hero-stat-label">Active Users</span>
                     </div>
                 </div>
@@ -129,7 +196,7 @@ $featuredRestaurants = [
             <div class="hero-image">
                 <img src="<?php echo $assetBase; ?>assets/images/showcase/hero-image.png"
                     alt="Healthy food ordering illustration" class="hero-illustration"
-                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/file-warning-fill.svg'">
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
             </div>
         </div>
     </section>
@@ -267,65 +334,186 @@ $featuredRestaurants = [
         </div>
     </section>
 
-    <!-- Restaurants Section -->
-    <section class="restaurants-section" aria-labelledby="restaurants-title">
+    <!-- ============================================
+         FEATURED PRODUCTS SECTION — EXACT match to menu.php
+         ============================================ -->
+    <section class="featured-products-section" aria-labelledby="featured-products-title">
         <div class="container">
             <div class="section-header">
-                <p class="section-title" id="restaurants-title">Featured <span>Restaurants</span></p>
-                <p class="section-subtitle">Restaurants with nutritional information</p>
+                <p class="section-title" id="featured-products-title">Featured <span>Meals</span></p>
+                <p class="section-subtitle">
+                    <?php if ($hasProducts): ?>
+                    Discover popular meals from our restaurant partners
+                    <?php else: ?>
+                    Discover meals that match your dietary preferences
+                    <?php endif; ?>
+                </p>
             </div>
-            <div class="restaurants-grid">
-                <?php foreach ($featuredRestaurants as $restaurant): ?>
-                <div class="restaurant-card">
-                    <div class="restaurant-image">
-                        <img src="<?php echo htmlspecialchars($restaurant['image'], ENT_QUOTES, 'UTF-8'); ?>"
-                            alt="<?php echo htmlspecialchars($restaurant['name'], ENT_QUOTES, 'UTF-8'); ?>"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/restaurants/placeholder.jpg'">
-                    </div>
-                    <div class="restaurant-info">
-                        <div class="restaurant-header">
-                            <p class="restaurant-name">
-                                <?php echo htmlspecialchars($restaurant['name'], ENT_QUOTES, 'UTF-8'); ?></p>
-                            <span
-                                class="restaurant-cuisine"><?php echo htmlspecialchars($restaurant['cuisine'], ENT_QUOTES, 'UTF-8'); ?></span>
+
+            <?php if ($hasProducts): ?>
+            <div class="product-grid">
+                <?php foreach ($featuredProducts as $product): 
+                    // Cast all values to proper types
+                    $productId = (int)$product['id'];
+                    $productName = $product['name'] ?? 'Product';
+                    $productPrice = (float)($product['price'] ?? 0);
+                    $productStock = (int)($product['stock'] ?? 0);
+                    $productCalories = (int)($product['calories'] ?? 0);
+                    $restaurantName = $product['restaurant_name'] ?? '';
+                    $branchName = $product['branch_name'] ?? '';
+                    $productDescription = $product['description'] ?? '';
+                    
+                    $dietaryTags = !empty($product['dietary_tags']) 
+                        ? array_map('trim', explode(',', $product['dietary_tags'])) 
+                        : [];
+                    $allergens = !empty($product['allergens']) 
+                        ? array_map('trim', explode(',', $product['allergens'])) 
+                        : [];
+                    $productImage = !empty($product['product_image']) 
+                        ? htmlspecialchars($product['product_image'], ENT_QUOTES, 'UTF-8')
+                        : $assetBase . 'assets/images/icons/restaurant.svg';
+                ?>
+                <!-- PRODUCT CARD — EXACT match to menu.php -->
+                <div class="product-card" data-product-id="<?php echo $productId; ?>"
+                    data-product-name="<?php echo htmlspecialchars($productName, ENT_QUOTES, 'UTF-8'); ?>"
+                    data-product-price="<?php echo $productPrice; ?>" data-product-stock="<?php echo $productStock; ?>"
+                    data-product-image="<?php echo $productImage; ?>"
+                    data-restaurant-name="<?php echo htmlspecialchars($restaurantName, ENT_QUOTES, 'UTF-8'); ?>"
+                    data-branch-name="<?php echo htmlspecialchars($branchName, ENT_QUOTES, 'UTF-8'); ?>">
+
+                    <!-- Product Image -->
+                    <a href="<?php echo $assetBase; ?>../customer/pages/product-detail.php?id=<?php echo $productId; ?>"
+                        class="product-image-link" onclick="event.stopPropagation();">
+                        <div class="product-image">
+                            <img src="<?php echo $productImage; ?>"
+                                alt="<?php echo htmlspecialchars($productName, ENT_QUOTES, 'UTF-8'); ?>" loading="lazy"
+                                onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/restaurant.svg'">
                         </div>
-                        <div class="restaurant-rating">
-                            <span class="rating-stars">
+                    </a>
+
+                    <div class="product-info">
+                        <!-- Product Name -->
+                        <a href="<?php echo $assetBase; ?>../customer/pages/product-detail.php?id=<?php echo $productId; ?>"
+                            class="product-name-link" onclick="event.stopPropagation();">
+                            <p class="heading-6">
+                                <?php echo htmlspecialchars($productName, ENT_QUOTES, 'UTF-8'); ?>
+                            </p>
+                        </a>
+
+                        <!-- Restaurant Name -->
+                        <p class="product-restaurant-name">
+                            <?php echo htmlspecialchars($restaurantName, ENT_QUOTES, 'UTF-8'); ?>
+                        </p>
+
+                        <!-- Description -->
+                        <p class="product-description">
+                            <?php echo htmlspecialchars(truncateText($productDescription, 70), ENT_QUOTES, 'UTF-8'); ?>
+                        </p>
+
+                        <!-- Price + Calories -->
+                        <div class="product-meta">
+                            <span class="product-price"><?php echo formatPrice($productPrice); ?></span>
+                            <?php if ($productCalories > 0): ?>
+                            <span class="product-calories"><?php echo $productCalories; ?> kcal</span>
+                            <?php endif; ?>
+                        </div>
+
+                        <!-- Dietary Tags -->
+                        <?php if (!empty($dietaryTags)): ?>
+                        <div class="product-tags-section">
+                            <span class="tags-label">Dietary Tags:</span>
+                            <div class="product-tags">
                                 <?php 
-                                $fullStars = floor($restaurant['rating']);
-                                for ($i = 1; $i <= 5; $i++) {
-                                    if ($i <= $fullStars) {
-                                        echo '<span class="star filled">&#9733;</span>';
-                                    } else {
-                                        echo '<span class="star empty">&#9734;</span>';
-                                    }
-                                }
-                                ?>
-                            </span>
-                            <span class="rating-value"><?php echo number_format($restaurant['rating'], 1); ?></span>
-                            <span class="rating-reviews">(<?php echo number_format($restaurant['reviews']); ?>
-                                reviews)</span>
+                                $displayTags = array_slice($dietaryTags, 0, 5);
+                                foreach ($displayTags as $tag): ?>
+                                <span class="tag dietary-tag">
+                                    <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $tag)), ENT_QUOTES, 'UTF-8'); ?>
+                                </span>
+                                <?php endforeach; ?>
+                                <?php if (count($dietaryTags) > 5): ?>
+                                <span class="tag tag-more">+<?php echo count($dietaryTags) - 5; ?></span>
+                                <?php endif; ?>
+                            </div>
                         </div>
-                        <div class="restaurant-tags">
-                            <?php foreach ($restaurant['tags'] as $tag): ?>
-                            <span
-                                class="restaurant-tag"><?php echo htmlspecialchars($tag, ENT_QUOTES, 'UTF-8'); ?></span>
-                            <?php endforeach; ?>
+                        <?php endif; ?>
+
+                        <!-- Allergens -->
+                        <div class="product-allergens-section">
+                            <span class="allergen-label">Allergens:</span>
+                            <div class="product-allergens-tags">
+                                <?php if (!empty($allergens)): 
+                                $displayAllergens = array_slice($allergens, 0, 4);
+                                foreach ($displayAllergens as $allergen): ?>
+                                <span class="tag allergen-tag">
+                                    <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $allergen)), ENT_QUOTES, 'UTF-8'); ?>
+                                </span>
+                                <?php endforeach; ?>
+                                <?php if (count($allergens) > 4): ?>
+                                <span class="tag tag-more">+<?php echo count($allergens) - 4; ?></span>
+                                <?php endif; ?>
+                                <?php else: ?>
+                                <span class="tag-none">None</span>
+                                <?php endif; ?>
+                            </div>
                         </div>
-                        <a href="#" class="btn btn-primary btn-sm">View Menu</a>
+                    </div>
+
+                    <!-- Product Actions -->
+                    <div class="product-actions">
+                        <?php if ($isLoggedIn && $productStock > 0): ?>
+                        <form method="POST"
+                            action="<?php echo $assetBase; ?>../customer/backend/handlers/add-to-cart-handler.php"
+                            class="add-to-cart-form" style="width: 100%;">
+                            <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
+                            <input type="hidden" name="product_id" value="<?php echo $productId; ?>">
+                            <div class="action-row">
+                                <div class="quantity-control">
+                                    <button type="button" class="qty-btn qty-minus"
+                                        aria-label="Decrease quantity">−</button>
+                                    <input type="number" name="quantity" value="1" min="1"
+                                        max="<?php echo $productStock; ?>" class="qty-input">
+                                    <button type="button" class="qty-btn qty-plus"
+                                        aria-label="Increase quantity">+</button>
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-sm add-btn" aria-label="Add to order">
+                                    <img src="<?php echo $assetBase; ?>assets/images/icons/add-circle-empty.svg"
+                                        alt="Add to order" class="btn-icon" width="18" height="18">
+                                </button>
+                            </div>
+                        </form>
+                        <?php elseif (!$isLoggedIn): ?>
+                        <a href="<?php echo $assetBase; ?>../customer/pages/sign-in.php"
+                            class="btn btn-outline btn-sm">Login to Order</a>
+                        <?php else: ?>
+                        <span class="btn btn-sm btn-disabled">Out of Stock</span>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <?php endforeach; ?>
             </div>
-            <div class="restaurants-action">
+
+            <div class="featured-products-action">
                 <a href="<?php echo $assetBase; ?>../customer/pages/menu.php" class="btn btn-outline">
-                    View All Restaurants
+                    View All Meals
                 </a>
             </div>
+            <?php else: ?>
+            <div class="empty-state featured-empty">
+                <div class="empty-icon">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt="No products">
+                </div>
+                <p class="heading-4">No products available</p>
+                <p class="text-muted">Check back later for featured meals.</p>
+                <a href="<?php echo $assetBase; ?>../customer/pages/menu.php" class="btn btn-primary"
+                    style="margin-top: 16px;">
+                    Browse Menu
+                </a>
+            </div>
+            <?php endif; ?>
         </div>
     </section>
 
-    <!-- CTA Section -->
+    <!-- CTA Section — FIXED with better spacing -->
     <section class="cta-section" aria-labelledby="cta-title">
         <div class="container">
             <div class="cta-content">
@@ -333,19 +521,21 @@ $featuredRestaurants = [
                 <p class="cta-description">
                     Explore restaurants and filter by your dietary preferences.
                 </p>
-                <?php if ($isLoggedIn): ?>
-                <a href="<?php echo $assetBase; ?>../<?php echo $userRole; ?>/pages/dashboard.php"
-                    class="btn btn-primary btn-lg">
-                    Go to Dashboard
-                </a>
-                <?php else: ?>
-                <a href="<?php echo $assetBase; ?>../customer/pages/sign-up.php" class="btn btn-primary btn-lg">
-                    Get Started
-                </a>
-                <a href="<?php echo $assetBase; ?>../customer/pages/sign-in.php" class="btn btn-outline btn-lg">
-                    Sign In
-                </a>
-                <?php endif; ?>
+                <div class="cta-buttons">
+                    <?php if ($isLoggedIn): ?>
+                    <a href="<?php echo $assetBase; ?>../<?php echo $userRole; ?>/pages/dashboard.php"
+                        class="btn btn-primary btn-lg">
+                        Go to Dashboard
+                    </a>
+                    <?php else: ?>
+                    <a href="<?php echo $assetBase; ?>../customer/pages/sign-up.php" class="btn btn-primary btn-lg">
+                        Get Started
+                    </a>
+                    <a href="<?php echo $assetBase; ?>../customer/pages/sign-in.php" class="btn btn-outline btn-lg">
+                        Sign In
+                    </a>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
     </section>

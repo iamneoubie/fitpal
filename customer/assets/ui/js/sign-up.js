@@ -495,7 +495,7 @@
         if (dietCheckboxes.length && dietAction) {
             function updateDietAction() {
                 const hasSelection = Array.from(dietCheckboxes).some(function (cb) { return cb.checked; });
-                dietAction.textContent = hasSelection ? 'Next Step \u2192' : 'Skip Step';
+                dietAction.textContent = hasSelection ? 'Next Step' : 'Skip Step';
                 dietAction.disabled = false;
             }
 
@@ -521,7 +521,7 @@
         if (allergyCheckboxes.length && allergyAction) {
             function updateAllergyAction() {
                 const hasSelection = Array.from(allergyCheckboxes).some(function (cb) { return cb.checked; });
-                allergyAction.textContent = hasSelection ? 'Next Step \u2192' : 'Skip Step';
+                allergyAction.textContent = hasSelection ? 'Next Step' : 'Skip Step';
                 allergyAction.disabled = false;
             }
 

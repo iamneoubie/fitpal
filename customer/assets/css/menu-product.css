@@ -212,8 +212,9 @@
 
 /* Dietary tag color */
 .product-tags .tag.dietary-tag {
-    color: #1d4ed8;
-    background: #dbeafe;
+    color: var(--primary);
+    font-weight: 600;
+    background-color: rgba(89, 193, 74, 0.08);
 }
 
 /* ============================================

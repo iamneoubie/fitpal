@@ -1,11 +1,9 @@
 /**
  * FitPal Product Detail JavaScript
- * Version 4.4 - Fixed queue redirect to menu.php
- * 
- * Handles step navigation, ingredient customization, price calculation, and add-to-order.
- * 
+ * Version 5.4 - Required ingredients start at min_quantity
+ *
  * @package FitPal
- * @version 4.4
+ * @version 5.4
  */
 
 (function() {
@@ -25,26 +23,25 @@
         var addToCartBtn = document.getElementById('addToCartBtn');
         var quantityInput = document.getElementById('productQuantity');
         var mainTotalPrice = document.getElementById('mainTotalPrice');
+        var mainCaloriesTotal = document.getElementById('mainCaloriesTotal');
         var customizeTotalPrice = document.getElementById('customizeTotalPrice');
+        var customizeTotalCalories = document.getElementById('customizeTotalCalories');
         var basePriceDisplay = document.getElementById('productBasePrice');
         var customizationsData = document.getElementById('customizationsData');
         var totalPriceInput = document.getElementById('totalPriceInput');
+        var totalCaloriesInput = document.getElementById('totalCaloriesInput');
         var redirectInput = document.querySelector('input[name="redirect"]');
         var form = document.getElementById('actionControlForm');
+        var pageContainer = document.getElementById('productDetailPage');
 
         // ============================================
         // STATE
         // ============================================
-        var basePrice = 0;
+        var basePrice = parseFloat(pageContainer.dataset.basePrice) || 0;
+        var baseCalories = parseInt(pageContainer.dataset.baseCalories) || 0;
         var quantity = 1;
         var currentCustomizations = [];
-
-        // Get base price from the page
-        var priceText = basePriceDisplay ? basePriceDisplay.textContent.trim() : '';
-        var priceMatch = priceText.match(/[\d,.]+/);
-        if (priceMatch) {
-            basePrice = parseFloat(priceMatch[0].replace(/,/g, '')) || 0;
-        }
+        var isFirstLoad = true;
 
         // ============================================
         // STEP NAVIGATION
@@ -55,13 +52,17 @@
                 stepCustomize.style.display = 'block';
                 stepCustomize.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
-            updateCustomizeTotal();
+            if (isFirstLoad) {
+                resetToBase();
+                isFirstLoad = false;
+            }
+            updateCustomizeTotals();
         }
 
         function showMainStep() {
             if (stepCustomize) stepCustomize.style.display = 'none';
             if (stepMain) stepMain.style.display = 'block';
-            updateMainTotal();
+            updateMainTotals();
         }
 
         if (customizeBtn) {
@@ -81,7 +82,7 @@
         if (cancelCustomizeBtn) {
             cancelCustomizeBtn.addEventListener('click', function(e) {
                 e.preventDefault();
-                resetCustomizations();
+                resetToBase();
                 showMainStep();
             });
         }
@@ -101,8 +102,8 @@
                 if (newVal > max) newVal = max;
                 quantityInput.value = newVal;
                 quantity = newVal;
-                updateMainTotal();
-                updateCustomizeTotal();
+                updateMainTotals();
+                updateCustomizeTotals();
             }
 
             minusBtn.addEventListener('click', function(e) {
@@ -124,8 +125,8 @@
                 if (val > max) val = max;
                 this.value = val;
                 quantity = val;
-                updateMainTotal();
-                updateCustomizeTotal();
+                updateMainTotals();
+                updateCustomizeTotals();
             });
 
             quantityInput.addEventListener('keydown', function(e) {
@@ -137,153 +138,231 @@
         }
 
         // ============================================
-        // CHOICE (SELECT DROPDOWN) CUSTOMIZATION
+        // CUSTOMIZATION EVENT BINDING
         // ============================================
-        document.querySelectorAll('.customization-select').forEach(function(select) {
-            select.addEventListener('change', function() {
-                updateCustomizeTotal();
+
+        // ---- Radio Buttons ----
+        document.querySelectorAll('.customization-radio-group input[type="radio"]').forEach(function(radio) {
+            radio.addEventListener('change', function() {
+                var parentLabel = this.closest('.radio-option');
+                var siblings = parentLabel.parentElement.querySelectorAll('.radio-option');
+                siblings.forEach(function(sib) {
+                    sib.classList.remove('selected');
+                });
+                parentLabel.classList.add('selected');
+                updateCustomizeTotals();
             });
         });
 
-        // ============================================
-        // MODIFIER CUSTOMIZATION
-        // ============================================
+        // ---- Select Dropdowns (fallback if any) ----
+        document.querySelectorAll('.customization-select').forEach(function(select) {
+            select.addEventListener('change', function() {
+                updateCustomizeTotals();
+            });
+        });
+
+        // ---- Modifier ----
         document.querySelectorAll('.modifier-option').forEach(function(option) {
             var minusBtn = option.querySelector('.modifier-minus');
             var plusBtn = option.querySelector('.modifier-plus');
             var quantitySpan = option.querySelector('.modifier-quantity');
+            var minQty = parseInt(option.dataset.minQty, 10) || 0;
+            var maxQty = parseInt(option.dataset.maxQty, 10) || 10;
 
             if (minusBtn && plusBtn && quantitySpan) {
                 var currentModifierQty = parseInt(quantitySpan.textContent, 10) || 0;
 
                 function updateModifierQty(delta) {
                     var newQty = currentModifierQty + delta;
-                    if (newQty < 0) newQty = 0;
-                    if (newQty > 10) newQty = 10;
+                    if (newQty < minQty) newQty = minQty;
+                    if (newQty > maxQty) newQty = maxQty;
                     currentModifierQty = newQty;
                     quantitySpan.textContent = newQty;
                     option.classList.toggle('selected', newQty > 0);
-                    updateCustomizeTotal();
+                    
+                    minusBtn.disabled = (newQty <= minQty);
+                    plusBtn.disabled = (newQty >= maxQty);
+                    
+                    updateCustomizeTotals();
                 }
+
+                minusBtn.disabled = (currentModifierQty <= minQty);
+                plusBtn.disabled = (currentModifierQty >= maxQty);
 
                 minusBtn.addEventListener('click', function(e) {
                     e.preventDefault();
                     e.stopPropagation();
-                    updateModifierQty(-1);
+                    var currentQty = parseInt(quantitySpan.textContent, 10) || 0;
+                    if (currentQty > minQty) {
+                        updateModifierQty(-1);
+                    }
                 });
 
                 plusBtn.addEventListener('click', function(e) {
                     e.preventDefault();
                     e.stopPropagation();
-                    updateModifierQty(1);
+                    var currentQty = parseInt(quantitySpan.textContent, 10) || 0;
+                    if (currentQty < maxQty) {
+                        updateModifierQty(1);
+                    }
                 });
             }
         });
 
-        // ============================================
-        // CHECKBOX CUSTOMIZATION
-        // ============================================
+        // ---- Checkbox ----
         document.querySelectorAll('.checkbox-option input[type="checkbox"]').forEach(function(checkbox) {
             checkbox.addEventListener('change', function() {
                 var parent = this.closest('.customization-option');
                 parent.classList.toggle('selected', this.checked);
-                updateCustomizeTotal();
+                updateCustomizeTotals();
             });
         });
 
         // ============================================
-        // PRICE CALCULATION
+        // RESET FUNCTIONS
         // ============================================
-        function calculateTotalPrice() {
-            var total = basePrice;
 
-            // Check if we're in the customization view
-            var isCustomizeVisible = stepCustomize && stepCustomize.style.display !== 'none';
-            
-            // Only apply customizations if the user is actively customizing
-            if (isCustomizeVisible) {
-                // 1. Select dropdown selections
-                document.querySelectorAll('.customization-select').forEach(function(select) {
-                    var selectedOption = select.options[select.selectedIndex];
-                    if (selectedOption && selectedOption.value && selectedOption.value !== '') {
-                        var modifier = parseFloat(selectedOption.dataset.priceModifier) || 0;
-                        total += modifier;
-                    }
-                });
-
-                // 2. Modifier quantities
-                document.querySelectorAll('.modifier-option').forEach(function(option) {
-                    var qtySpan = option.querySelector('.modifier-quantity');
-                    if (qtySpan) {
-                        var qty = parseInt(qtySpan.textContent, 10) || 0;
-                        if (qty > 0) {
-                            var priceModifier = parseFloat(option.dataset.priceModifier) || 0;
-                            total += priceModifier * qty;
-                        }
-                    }
-                });
-
-                // 3. Checkbox selections
-                document.querySelectorAll('.checkbox-option input[type="checkbox"]:checked').forEach(function(checkbox) {
-                    var modifier = parseFloat(checkbox.dataset.priceModifier) || 0;
-                    total += modifier;
-                });
-            }
-
-            return total;
-        }
-
-        function updateMainTotal() {
-            var total = calculateTotalPrice();
-            var qty = parseInt(quantityInput ? quantityInput.value : 1, 10) || 1;
-            var finalTotal = total * qty;
-
-            if (mainTotalPrice) {
-                mainTotalPrice.textContent = '₱' + finalTotal.toFixed(2);
-            }
-        }
-
-        function updateCustomizeTotal() {
-            var total = calculateTotalPrice();
-            var qty = parseInt(quantityInput ? quantityInput.value : 1, 10) || 1;
-            var finalTotal = total * qty;
-
-            if (customizeTotalPrice) {
-                customizeTotalPrice.textContent = '₱' + finalTotal.toFixed(2);
-            }
-
-            if (totalPriceInput) {
-                totalPriceInput.value = finalTotal.toFixed(2);
-            }
-        }
-
-        // ============================================
-        // RESET CUSTOMIZATIONS
-        // ============================================
-        function resetCustomizations() {
-            document.querySelectorAll('.customization-select').forEach(function(select) {
-                var defaultOption = select.querySelector('option[selected]');
-                if (defaultOption) {
-                    select.value = defaultOption.value;
-                } else if (select.options.length > 0) {
-                    select.selectedIndex = 0;
-                }
-            });
-
+        // Reset to base: required ingredients at min_quantity, optional at 0
+        function resetToBase() {
+            // Modifiers - respect min_quantity
             document.querySelectorAll('.modifier-option').forEach(function(option) {
                 var qtySpan = option.querySelector('.modifier-quantity');
+                var minusBtn = option.querySelector('.modifier-minus');
+                var plusBtn = option.querySelector('.modifier-plus');
+                var minQty = parseInt(option.dataset.minQty, 10) || 0;
+                var maxQty = parseInt(option.dataset.maxQty, 10) || 10;
+                
                 if (qtySpan) {
-                    qtySpan.textContent = '0';
-                    option.classList.remove('selected');
+                    // REQUIRED: Set to min_quantity (1 for required, 0 for optional)
+                    var defaultQty = minQty;
+                    qtySpan.textContent = defaultQty;
+                    option.classList.toggle('selected', defaultQty > 0);
+                    
+                    if (minusBtn) minusBtn.disabled = (defaultQty <= minQty);
+                    if (plusBtn) plusBtn.disabled = (defaultQty >= maxQty);
                 }
             });
 
+            // Radio groups - select default option
+            document.querySelectorAll('.customization-radio-group').forEach(function(group) {
+                var defaultRadio = group.querySelector('input[type="radio"][checked]');
+                if (defaultRadio) {
+                    defaultRadio.checked = true;
+                    var parentLabel = defaultRadio.closest('.radio-option');
+                    var siblings = group.querySelectorAll('.radio-option');
+                    siblings.forEach(function(sib) { sib.classList.remove('selected'); });
+                    parentLabel.classList.add('selected');
+                } else {
+                    var firstRadio = group.querySelector('input[type="radio"]');
+                    if (firstRadio) {
+                        firstRadio.checked = true;
+                        var parentLabel = firstRadio.closest('.radio-option');
+                        var siblings = group.querySelectorAll('.radio-option');
+                        siblings.forEach(function(sib) { sib.classList.remove('selected'); });
+                        parentLabel.classList.add('selected');
+                    }
+                }
+            });
+
+            // Checkboxes - uncheck all
             document.querySelectorAll('.checkbox-option input[type="checkbox"]').forEach(function(checkbox) {
                 checkbox.checked = false;
                 checkbox.closest('.checkbox-option').classList.remove('selected');
             });
 
-            updateCustomizeTotal();
+            updateCustomizeTotals();
+        }
+
+        // Legacy reset (kept for compatibility)
+        function resetCustomizations() {
+            resetToBase();
+        }
+
+        // ============================================
+        // CALCULATION ENGINE (Price + Calories)
+        // ============================================
+        function calculateTotals() {
+            var totalPrice = basePrice;
+            var totalCalories = 0;
+
+            // Always include static ingredients (single-choice) regardless of view
+            document.querySelectorAll('.static-ingredient input[type="hidden"]').forEach(function(hidden) {
+                var priceMod = parseFloat(hidden.dataset.priceModifier) || 0;
+                var calMod = parseInt(hidden.dataset.calories, 10) || 0;
+                totalPrice += priceMod;
+                totalCalories += calMod;
+            });
+
+            // Only apply interactive customizations if the customization step is visible
+            var isCustomizeVisible = stepCustomize && stepCustomize.style.display !== 'none';
+            if (!isCustomizeVisible) {
+                return { price: totalPrice, calories: totalCalories };
+            }
+
+            // 1. Radio selections (choice groups)
+            document.querySelectorAll('.customization-radio-group input[type="radio"]:checked').forEach(function(radio) {
+                if (radio.value) {
+                    var priceMod = parseFloat(radio.dataset.priceModifier) || 0;
+                    var calMod = parseInt(radio.dataset.calories, 10) || 0;
+                    totalPrice += priceMod;
+                    totalCalories += calMod;
+                }
+            });
+
+            // 2. Select dropdowns (if any)
+            document.querySelectorAll('.customization-select').forEach(function(select) {
+                var selectedOption = select.options[select.selectedIndex];
+                if (selectedOption && selectedOption.value && selectedOption.value !== '') {
+                    var priceMod = parseFloat(selectedOption.dataset.priceModifier) || 0;
+                    totalPrice += priceMod;
+                }
+            });
+
+            // 3. Modifier quantities
+            document.querySelectorAll('.modifier-option').forEach(function(option) {
+                var qtySpan = option.querySelector('.modifier-quantity');
+                if (qtySpan) {
+                    var qty = parseInt(qtySpan.textContent, 10) || 0;
+                    if (qty > 0) {
+                        var priceMod = parseFloat(option.dataset.priceModifier) || 0;
+                        var calMod = parseInt(option.dataset.calories, 10) || 0;
+                        totalPrice += priceMod * qty;
+                        totalCalories += calMod * qty;
+                    }
+                }
+            });
+
+            // 4. Checkbox selections
+            document.querySelectorAll('.checkbox-option input[type="checkbox"]:checked').forEach(function(checkbox) {
+                var priceMod = parseFloat(checkbox.dataset.priceModifier) || 0;
+                var calMod = parseInt(checkbox.dataset.calories, 10) || 0;
+                totalPrice += priceMod;
+                totalCalories += calMod;
+            });
+
+            return { price: totalPrice, calories: totalCalories };
+        }
+
+        function updateMainTotals() {
+            var totals = calculateTotals();
+            var qty = parseInt(quantityInput ? quantityInput.value : 1, 10) || 1;
+            var finalPrice = totals.price * qty;
+            var finalCalories = totals.calories * qty;
+
+            if (mainTotalPrice) mainTotalPrice.textContent = '₱' + finalPrice.toFixed(2);
+            if (mainCaloriesTotal) mainCaloriesTotal.textContent = finalCalories + ' kcal';
+        }
+
+        function updateCustomizeTotals() {
+            var totals = calculateTotals();
+            var qty = parseInt(quantityInput ? quantityInput.value : 1, 10) || 1;
+            var finalPrice = totals.price * qty;
+            var finalCalories = totals.calories * qty;
+
+            if (customizeTotalPrice) customizeTotalPrice.textContent = '₱' + finalPrice.toFixed(2);
+            if (customizeTotalCalories) customizeTotalCalories.textContent = finalCalories + ' kcal';
+            if (totalPriceInput) totalPriceInput.value = finalPrice.toFixed(2);
+            if (totalCaloriesInput) totalCaloriesInput.value = finalCalories.toString();
         }
 
         // ============================================
@@ -292,7 +371,33 @@
         function buildCustomizationsData() {
             var customizations = [];
 
-            // Select dropdowns
+            // Static ingredients (hidden)
+            document.querySelectorAll('.static-ingredient input[type="hidden"]').forEach(function(hidden) {
+                customizations.push({
+                    ingredient_id: hidden.value,
+                    selected_option: 'selected',
+                    quantity: 1,
+                    price_modifier: parseFloat(hidden.dataset.priceModifier) || 0,
+                    calories: parseInt(hidden.dataset.calories, 10) || 0
+                });
+            });
+
+            // Radio selections
+            document.querySelectorAll('.customization-radio-group input[type="radio"]:checked').forEach(function(radio) {
+                if (radio.value) {
+                    var group = radio.closest('.customization-group');
+                    customizations.push({
+                        component_id: group ? group.dataset.componentId : null,
+                        ingredient_id: radio.value,
+                        selected_option: 'selected',
+                        quantity: 1,
+                        price_modifier: parseFloat(radio.dataset.priceModifier) || 0,
+                        calories: parseInt(radio.dataset.calories, 10) || 0
+                    });
+                }
+            });
+
+            // Select dropdowns (if any)
             document.querySelectorAll('.customization-select').forEach(function(select) {
                 var group = select.closest('.customization-group');
                 var selectedOption = select.options[select.selectedIndex];
@@ -302,29 +407,26 @@
                         ingredient_id: selectedOption.value,
                         selected_option: 'selected',
                         quantity: 1,
-                        price_modifier: parseFloat(selectedOption.dataset.priceModifier) || 0
+                        price_modifier: parseFloat(selectedOption.dataset.priceModifier) || 0,
+                        calories: 0
                     });
                 }
             });
 
-            // Modifiers
+            // Modifiers - include all ingredients (including those with quantity 0)
             document.querySelectorAll('.modifier-option').forEach(function(option) {
                 var qtySpan = option.querySelector('.modifier-quantity');
                 if (qtySpan) {
                     var qty = parseInt(qtySpan.textContent, 10) || 0;
-                    if (qty > 0) {
-                        var group = option.closest('.customization-group');
-                        var ingredientId = option.dataset.ingredientId;
-                        var priceModifier = parseFloat(option.dataset.priceModifier) || 0;
-
-                        customizations.push({
-                            component_id: group ? group.dataset.componentId : null,
-                            ingredient_id: ingredientId,
-                            selected_option: 'add',
-                            quantity: qty,
-                            price_modifier: priceModifier
-                        });
-                    }
+                    var group = option.closest('.customization-group');
+                    customizations.push({
+                        component_id: group ? group.dataset.componentId : null,
+                        ingredient_id: option.dataset.ingredientId,
+                        selected_option: qty > 0 ? 'add' : 'remove',
+                        quantity: qty,
+                        price_modifier: parseFloat(option.dataset.priceModifier) || 0,
+                        calories: parseInt(option.dataset.calories, 10) || 0
+                    });
                 }
             });
 
@@ -337,7 +439,8 @@
                     ingredient_id: checkbox.value,
                     selected_option: 'selected',
                     quantity: 1,
-                    price_modifier: parseFloat(checkbox.dataset.priceModifier) || 0
+                    price_modifier: parseFloat(checkbox.dataset.priceModifier) || 0,
+                    calories: parseInt(checkbox.dataset.calories, 10) || 0
                 });
             });
 
@@ -354,7 +457,7 @@
         }
 
         // ============================================
-        // SET REDIRECT TO MENU.PHP
+        // APPLY CUSTOMIZATIONS & SUBMIT
         // ============================================
         function setRedirectToMenu() {
             if (redirectInput) {
@@ -362,25 +465,26 @@
             }
         }
 
-        // ============================================
-        // APPLY CUSTOMIZATIONS & ADD TO ORDER
-        // ============================================
         function applyCustomizationsAndAdd() {
             currentCustomizations = buildCustomizationsData();
             if (customizationsData) {
                 customizationsData.value = JSON.stringify(currentCustomizations);
             }
 
-            var total = calculateTotalPrice();
+            var totals = calculateTotals();
             var qty = parseInt(quantityInput ? quantityInput.value : 1, 10) || 1;
+            var finalPrice = totals.price * qty;
+            var finalCalories = totals.calories * qty;
+
             if (totalPriceInput) {
-                totalPriceInput.value = (total * qty).toFixed(2);
+                totalPriceInput.value = finalPrice.toFixed(2);
+            }
+            if (totalCaloriesInput) {
+                totalCaloriesInput.value = finalCalories.toString();
             }
 
-            // FIXED: Always redirect to menu.php
             setRedirectToMenu();
-
-            updateMainTotal();
+            updateMainTotals();
             showMainStep();
 
             if (form) {
@@ -400,65 +504,47 @@
         }
 
         // ============================================
-        // MAIN BUTTON HANDLERS - FIXED: Redirect to menu.php
+        // ADD TO ORDER / CART BUTTONS (Main view)
         // ============================================
-        
-        // Add to Order button
-        if (addToOrderBtn && form) {
-            addToOrderBtn.addEventListener('click', function(e) {
+        function handleMainSubmit(button) {
+            return function(e) {
                 e.preventDefault();
-                
-                // FIXED: Set redirect to menu.php
-                setRedirectToMenu();
 
+                var customData = buildCustomizationsData();
                 if (customizationsData) {
-                    var customData = buildCustomizationsData();
                     customizationsData.value = JSON.stringify(customData);
                 }
 
-                var total = calculateTotalPrice();
+                var totals = calculateTotals();
                 var qty = parseInt(quantityInput ? quantityInput.value : 1, 10) || 1;
+                var finalPrice = totals.price * qty;
+                var finalCalories = totals.calories * qty;
+
                 if (totalPriceInput) {
-                    totalPriceInput.value = (total * qty).toFixed(2);
+                    totalPriceInput.value = finalPrice.toFixed(2);
+                }
+                if (totalCaloriesInput) {
+                    totalCaloriesInput.value = finalCalories.toString();
                 }
 
-                addToOrderBtn.disabled = true;
-                addToOrderBtn.classList.add('loading');
-                addToOrderBtn.textContent = 'Adding...';
+                setRedirectToMenu();
+
+                button.disabled = true;
+                button.classList.add('loading');
+                button.textContent = 'Adding...';
 
                 setTimeout(function() {
                     form.submit();
                 }, 300);
-            });
+            };
         }
 
-        // Add to Queue button (formerly "Add to Cart")
+        if (addToOrderBtn && form) {
+            addToOrderBtn.addEventListener('click', handleMainSubmit(addToOrderBtn));
+        }
+
         if (addToCartBtn && form) {
-            addToCartBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                
-                // FIXED: Set redirect to menu.php
-                setRedirectToMenu();
-
-                if (customizationsData) {
-                    var customData = buildCustomizationsData();
-                    customizationsData.value = JSON.stringify(customData);
-                }
-
-                var total = calculateTotalPrice();
-                var qty = parseInt(quantityInput ? quantityInput.value : 1, 10) || 1;
-                if (totalPriceInput) {
-                    totalPriceInput.value = (total * qty).toFixed(2);
-                }
-
-                addToCartBtn.disabled = true;
-                addToCartBtn.classList.add('loading');
-                addToCartBtn.textContent = 'Adding...';
-
-                setTimeout(function() {
-                    form.submit();
-                }, 300);
-            });
+            addToCartBtn.addEventListener('click', handleMainSubmit(addToCartBtn));
         }
 
         // ============================================
@@ -477,29 +563,23 @@
         });
 
         // ============================================
-        // INITIALIZE
+        // INITIALISE
         // ============================================
-        document.querySelectorAll('.customization-option.selected').forEach(function(option) {
-            var input = option.querySelector('input');
-            if (input) {
-                input.checked = true;
-            }
+        document.querySelectorAll('.customization-radio-group input[type="radio"]:checked').forEach(function(radio) {
+            var parentLabel = radio.closest('.radio-option');
+            parentLabel.classList.add('selected');
         });
 
-        // Set initial redirect to menu.php
         setRedirectToMenu();
 
+        // Initialize with base values (required ingredients at min_quantity)
+        resetToBase();
+
         setTimeout(function() {
-            updateMainTotal();
-            updateCustomizeTotal();
+            updateMainTotals();
+            updateCustomizeTotals();
         }, 100);
 
-        document.querySelectorAll('.customization-textarea').forEach(function(input) {
-            input.addEventListener('input', function() {
-                // Update data when notes change
-            });
-        });
-
-        console.log('Product Detail JS v4.4 - Fixed queue redirect to menu.php');
+        console.log('Product Detail JS v5.4 - Required ingredients start at min_quantity');
     });
 })();

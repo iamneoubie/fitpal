@@ -1,10 +1,10 @@
 <?php
 /**
  * FitPal Place Order Handler
- * Version 4.1 - Move customizations from cart.customization_data to customization_instance
- * 
+ * Version 4.2 - Checkout integration with address selection
+ *
  * @package FitPal
- * @version 4.1
+ * @version 4.2
  */
 
 declare(strict_types=1);
@@ -21,6 +21,8 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
 }
 
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
+require_once __DIR__ . '/../database/cart-queries.php';
+require_once __DIR__ . '/../database/customer-queries.php';
 
 // CSRF validation
 if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== ($_SESSION['csrf_token'] ?? '')) {
@@ -30,16 +32,11 @@ if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== ($_SESSION['csrf_to
 }
 
 // Input validation
-$address = trim($_POST['address'] ?? '');
-$paymentMethod = trim($_POST['payment_method'] ?? '');
+$addressId = isset($_POST['address_id']) ? (int)$_POST['address_id'] : 0;
+$paymentMethod = isset($_POST['payment_method']) ? trim($_POST['payment_method']) : 'COD';
 $customerId = (int)$_SESSION['customer_id'];
 
-if (empty($address)) {
-    $_SESSION['order_error'] = 'Please enter a delivery address.';
-    header('Location: ../../pages/checkout.php');
-    exit;
-}
-
+// Validate payment method
 $validPaymentMethods = ['COD', 'Wallet', 'Online'];
 if (!in_array($paymentMethod, $validPaymentMethods, true)) {
     $_SESSION['order_error'] = 'Invalid payment method selected.';
@@ -47,63 +44,82 @@ if (!in_array($paymentMethod, $validPaymentMethods, true)) {
     exit;
 }
 
+// Fetch the selected address
+try {
+    $stmt = $database_connection->prepare(
+        "SELECT block, barangay, city, province, region, postal_code, country
+         FROM customer_address
+         WHERE customer_address_id = :address_id"
+    );
+    $stmt->execute([':address_id' => $addressId]);
+    $addressData = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$addressData) {
+        throw new RuntimeException('Invalid address selected.');
+    }
+    // Build full address string
+    $addressParts = array_filter([
+        $addressData['block'] ?? '',
+        $addressData['barangay'] ?? '',
+        $addressData['city'] ?? '',
+        $addressData['province'] ?? '',
+        $addressData['region'] ?? '',
+        $addressData['postal_code'] ?? '',
+        $addressData['country'] ?? 'Philippines'
+    ]);
+    $fullAddress = implode(', ', $addressParts);
+    if (empty($fullAddress)) {
+        throw new RuntimeException('Incomplete address. Please update your address.');
+    }
+} catch (PDOException $e) {
+    error_log('Address fetch error: ' . $e->getMessage());
+    $_SESSION['order_error'] = 'Could not retrieve address. Please try again.';
+    header('Location: ../../pages/checkout.php');
+    exit;
+} catch (RuntimeException $e) {
+    $_SESSION['order_error'] = $e->getMessage();
+    header('Location: ../../pages/checkout.php');
+    exit;
+}
+
+// Proceed with order creation using the full address string
 try {
     $database_connection->beginTransaction();
 
-    // Get cart items grouped by branch with customization_data
-    $cartStmt = $database_connection->prepare(
-        "SELECT 
-            c.product_id,
-            c.quantity,
-            c.price,
-            c.customization_data,
-            p.name AS product_name,
-            p.price AS unit_price,
-            p.base_price,
-            p.restaurant_branch_id,
-            rb.restaurant_id,
-            rb.branch_name,
-            r.business_name AS restaurant_name
-        FROM cart c
-        JOIN product p ON c.product_id = p.product_id
-        JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
-        JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
-        WHERE c.customer_id = :customer_id"
-    );
-    $cartStmt->execute([':customer_id' => $customerId]);
-    $cartItems = $cartStmt->fetchAll(PDO::FETCH_ASSOC);
-
-    if (empty($cartItems)) {
+    // Get cart items grouped by branch (should all be same branch)
+    $cartGrouped = getCartGroupedByBranch($database_connection, $customerId);
+    if (empty($cartGrouped)) {
         throw new RuntimeException('Your cart is empty.');
     }
 
-    // Check branch consistency
-    $branchIds = array_unique(array_column($cartItems, 'restaurant_branch_id'));
+    // Ensure all items are from the same branch (should already be validated in checkout)
+    $branchIds = array_keys($cartGrouped);
     if (count($branchIds) > 1) {
         throw new RuntimeException('All items must be from the same restaurant branch.');
     }
-
     $branchId = (int)$branchIds[0];
-    
-    // Calculate totals
+    $branchInfo = $cartGrouped[$branchId];
+    $cartItems = $branchInfo['items'];
+
+    // Calculate subtotal
     $subtotal = 0;
     foreach ($cartItems as $item) {
         $subtotal += (float)$item['price'] * (int)$item['quantity'];
     }
-    
+
+    // Delivery fee
     $deliveryFee = $subtotal > 500 ? 0 : 50.00;
     $totalAmount = $subtotal + $deliveryFee;
 
     // Create order
     $orderStmt = $database_connection->prepare(
-        "INSERT INTO orders 
+        "INSERT INTO orders
             (customer_id, destination_address, payment_method, subtotal, delivery_charge, total_amount, order_status)
-         VALUES 
+         VALUES
             (:customer_id, :address, :payment_method, :subtotal, :delivery_charge, :total_amount, 'pending')"
     );
     $orderStmt->execute([
         ':customer_id' => $customerId,
-        ':address' => $address,
+        ':address' => $fullAddress,
         ':payment_method' => $paymentMethod,
         ':subtotal' => $subtotal,
         ':delivery_charge' => $deliveryFee,
@@ -111,72 +127,96 @@ try {
     ]);
     $orderId = (int)$database_connection->lastInsertId();
 
-    // Insert queue items and create customization_instance records
+    // Insert queue items with customizations
     foreach ($cartItems as $item) {
+        $productId = (int)$item['product_id'];
+        $quantity = (int)$item['quantity'];
+        $price = (float)$item['price'];
+        $customizations = $item['customizations'] ?? [];
+
         // Insert queue item
         $queueStmt = $database_connection->prepare(
-            "INSERT INTO queue_item 
-                (order_id, branch_id, product_id, queue_quantity, unit_price, total_price, is_customized)
-             VALUES 
-                (:order_id, :branch_id, :product_id, :quantity, :unit_price, :total_price, :is_customized)"
+            "INSERT INTO queue_item
+                (order_id, branch_id, product_id, queue_quantity, unit_price, total_price, is_customized,
+                 base_price_snapshot, final_price)
+             VALUES
+                (:order_id, :branch_id, :product_id, :quantity, :unit_price, :total_price, :is_customized,
+                 :base_price, :final_price)"
         );
-        
-        $itemTotal = (float)$item['price'] * (int)$item['quantity'];
-        $isCustomized = !empty($item['customization_data']) ? 1 : 0;
-        
+        $itemTotal = $price * $quantity;
+        $isCustomized = !empty($customizations);
+        $basePrice = $price; // snapshot
+        $finalPrice = $price; // Will be updated if customizations add price
+
         $queueStmt->execute([
             ':order_id' => $orderId,
             ':branch_id' => $branchId,
-            ':product_id' => (int)$item['product_id'],
-            ':quantity' => (int)$item['quantity'],
-            ':unit_price' => (float)$item['price'],
+            ':product_id' => $productId,
+            ':quantity' => $quantity,
+            ':unit_price' => $price,
             ':total_price' => $itemTotal,
-            ':is_customized' => $isCustomized
+            ':is_customized' => $isCustomized ? 1 : 0,
+            ':base_price' => $basePrice,
+            ':final_price' => $finalPrice
         ]);
-        
         $queueItemId = (int)$database_connection->lastInsertId();
-        
-        // FIXED: Create customization_instance records from JSON data
-        if (!empty($item['customization_data'])) {
-            $customizations = json_decode($item['customization_data'], true);
-            if (is_array($customizations)) {
-                foreach ($customizations as $cust) {
-                    // Skip notes
-                    if (isset($cust['type']) && in_array($cust['type'], ['notes', 'component_notes'])) {
-                        continue;
-                    }
-                    
+
+        // Insert customizations from cart.customization_data (if any)
+        // We need to fetch customization_data from cart for this item
+        // For simplicity, we assume cart already has customization_data stored as JSON (from add-to-cart)
+        // We'll retrieve it from the cart table
+        $cartCustomStmt = $database_connection->prepare(
+            "SELECT customization_data FROM cart WHERE customer_id = :customer_id AND product_id = :product_id"
+        );
+        $cartCustomStmt->execute([
+            ':customer_id' => $customerId,
+            ':product_id' => $productId
+        ]);
+        $cartRow = $cartCustomStmt->fetch(PDO::FETCH_ASSOC);
+        if ($cartRow && !empty($cartRow['customization_data'])) {
+            $customizationsData = json_decode($cartRow['customization_data'], true);
+            if (is_array($customizationsData)) {
+                foreach ($customizationsData as $cust) {
+                    // Skip notes or non-ingredient entries
+                    if (isset($cust['type']) && $cust['type'] === 'notes') continue;
                     $ingredientId = (int)($cust['ingredient_id'] ?? 0);
-                    if ($ingredientId > 0) {
-                        // Get price for this ingredient at order time
-                        $ingPriceStmt = $database_connection->prepare(
-                            "SELECT unit_price, calories FROM ingredient WHERE ingredient_id = :ingredient_id"
-                        );
-                        $ingPriceStmt->execute([':ingredient_id' => $ingredientId]);
-                        $ingData = $ingPriceStmt->fetch(PDO::FETCH_ASSOC);
-                        
-                        $priceAtTime = (float)($cust['price_modifier'] ?? $ingData['unit_price'] ?? 0);
-                        $caloriesAtTime = (int)($ingData['calories'] ?? 0);
-                        $quantity = (int)($cust['quantity'] ?? 1);
-                        
-                        // Insert into customization_instance (links to queue_item)
-                        $custInstanceStmt = $database_connection->prepare(
-                            "INSERT INTO customization_instance 
-                                (queue_item_id, ingredient_id, quantity, price_at_time, calories_at_time, is_removed, custom_text)
-                             VALUES 
-                                (:queue_item_id, :ingredient_id, :quantity, :price_at_time, :calories_at_time, 0, :custom_text)"
-                        );
-                        $custInstanceStmt->execute([
-                            ':queue_item_id' => $queueItemId,
-                            ':ingredient_id' => $ingredientId,
-                            ':quantity' => $quantity,
-                            ':price_at_time' => $priceAtTime,
-                            ':calories_at_time' => $caloriesAtTime,
-                            ':custom_text' => $cust['notes'] ?? null
-                        ]);
-                    }
+                    if ($ingredientId <= 0) continue;
+                    $qty = (int)($cust['quantity'] ?? 1);
+                    $priceAtTime = (float)($cust['price_modifier'] ?? 0);
+                    $caloriesAtTime = (int)($cust['calories'] ?? 0);
+                    $isRemoved = (isset($cust['selected_option']) && $cust['selected_option'] === 'remove') ? 1 : 0;
+
+                    $insCustStmt = $database_connection->prepare(
+                        "INSERT INTO customization_instance
+                            (queue_item_id, ingredient_id, quantity, price_at_time, calories_at_time, is_removed, custom_text)
+                         VALUES
+                            (:queue_item_id, :ingredient_id, :quantity, :price_at_time, :calories_at_time, :is_removed, :custom_text)"
+                    );
+                    $insCustStmt->execute([
+                        ':queue_item_id' => $queueItemId,
+                        ':ingredient_id' => $ingredientId,
+                        ':quantity' => $qty,
+                        ':price_at_time' => $priceAtTime,
+                        ':calories_at_time' => $caloriesAtTime,
+                        ':is_removed' => $isRemoved,
+                        ':custom_text' => $cust['notes'] ?? null
+                    ]);
                 }
             }
+        }
+
+        // Decrease product stock (already handled in add-to-cart? Actually we need to decrease now)
+        // We'll decrement stock here to avoid double deduction (add-to-cart only reserves? It currently does not decrement)
+        // So we need to decrement stock now.
+        $stockStmt = $database_connection->prepare(
+            "UPDATE product SET stock = stock - :quantity WHERE product_id = :product_id AND stock >= :quantity"
+        );
+        $stockStmt->execute([
+            ':product_id' => $productId,
+            ':quantity' => $quantity
+        ]);
+        if ($stockStmt->rowCount() === 0) {
+            throw new RuntimeException('Stock insufficient for product: ' . $productId);
         }
     }
 
@@ -197,7 +237,6 @@ try {
     $_SESSION['order_error'] = $e->getMessage();
     header('Location: ../../pages/checkout.php');
     exit;
-
 } catch (PDOException $e) {
     if ($database_connection->inTransaction()) {
         $database_connection->rollBack();

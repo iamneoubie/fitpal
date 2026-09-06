@@ -1,9 +1,9 @@
 /**
  * FitPal Product Detail Page Styles
- * Version 4.5 - True 50/50 split layout
- * 
+ * Version 5.1 - Unchangeable ingredients, vertical actions, green calories
+ *
  * @package FitPal
- * @version 4.5
+ * @version 5.1
  */
 
 /* ============================================
@@ -779,64 +779,125 @@
     color: var(--text);
 }
 
+.badge-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.1rem 0.7rem;
+    border-radius: var(--radius-full);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
 .required-badge {
-    font-size: var(--font-size-xs);
-    color: var(--danger);
-    font-weight: 500;
-    margin-left: 6px;
+    background-color: var(--primary-light);
+    color: var(--primary-dark);
 }
 
 .optional-badge {
-    font-size: var(--font-size-xs);
-    color: var(--gray-500);
-    font-weight: 400;
-    margin-left: 6px;
-    background: var(--gray-100);
-    padding: 2px 8px;
-    border-radius: var(--radius-full);
+    background-color: var(--gray-200);
+    color: var(--gray-600);
 }
 
-.selection-hint {
-    font-size: var(--font-size-xs);
-    color: var(--gray-500);
+.unchangeable-badge {
+    background-color: var(--gray-300);
+    color: var(--gray-700);
 }
 
 /* ============================================
-   SELECT DROPDOWN
+   STATIC INGREDIENT (single choice)
    ============================================ */
-.customization-select {
-    width: 100%;
+.static-ingredient {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     padding: 10px 14px;
-    border: 2px solid var(--gray-200);
+    background: var(--gray-50);
     border-radius: var(--radius-base);
-    font-size: var(--font-size-base);
-    font-weight: 500;
+    border: 1px solid var(--gray-200);
     color: var(--text);
+}
+
+.static-name {
+    flex: 1;
+    font-weight: 500;
+}
+
+.static-price {
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.static-calories {
+    font-weight: 500;
+    color: var(--gray-600);
+    font-size: var(--font-size-sm);
+}
+
+/* ============================================
+   RADIO GROUP & OPTIONS
+   ============================================ */
+.customization-radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 8px 0 12px 0;
+    border: none;
+    padding: 0;
+}
+
+.radio-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: var(--radius-base);
+    border: 2px solid var(--gray-200);
     background: var(--white);
     cursor: pointer;
-    appearance: none;
-    -webkit-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23718296' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 14px center;
-    padding-right: 40px;
-    transition: border-color var(--transition-fast);
-    box-sizing: border-box;
-    max-width: 100%;
+    transition: border-color 0.15s ease;
 }
 
-.customization-select:hover {
-    border-color: var(--gray-300);
-}
-
-.customization-select:focus {
-    outline: none;
+.radio-option.selected {
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
+    background: #f0fdf0;
 }
 
-.customization-select option {
-    padding: 8px 12px;
+.radio-option input[type="radio"] {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+    cursor: pointer;
+    margin: 0;
+}
+
+.radio-option .option-name {
+    flex: 1;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--text);
+}
+
+.radio-option .option-price {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--primary);
+    margin-right: 8px;
+    white-space: nowrap;
+}
+
+.radio-option .option-calories {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    white-space: nowrap;
 }
 
 /* ============================================
@@ -884,6 +945,12 @@
     font-weight: 600;
     color: var(--primary);
     white-space: nowrap;
+}
+
+.modifier-info .option-calories {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    margin-left: 8px;
 }
 
 .modifier-controls {
@@ -945,10 +1012,6 @@
     margin-bottom: 0;
 }
 
-.checkbox-option:hover {
-    border-color: var(--gray-300);
-}
-
 .checkbox-option.selected {
     border-color: var(--primary);
     background: #f0fdf0;
@@ -975,6 +1038,12 @@
     white-space: nowrap;
 }
 
+.checkbox-option .option-calories {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    margin-left: 8px;
+}
+
 /* ============================================
    SPECIAL INSTRUCTIONS
    ============================================ */
@@ -993,7 +1062,7 @@
     font-size: var(--font-size-sm);
     background: var(--white);
     color: var(--text);
-    resize: vertical;
+    /* resize: none is already in global.css – do not redeclare */
     font-family: inherit;
     box-sizing: border-box;
     max-width: 100%;
@@ -1006,80 +1075,95 @@
 }
 
 /* ============================================
-   CUSTOMIZATION ACTIONS
+   CUSTOMIZATION ACTIONS - VERTICAL STACK
    ============================================ */
 .customization-actions {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
+    gap: 16px;
     padding: 16px 20px;
     background: var(--gray-50);
     border-top: 1px solid var(--gray-200);
-    gap: 16px;
-    flex-wrap: wrap;
 }
 
 .customization-total {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
-    gap: 8px;
-    white-space: nowrap;
+    gap: 16px 32px;
+    width: 100%;
 }
 
-.customization-total-label {
-    font-size: var(--font-size-sm);
+.customization-total-item {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: var(--font-size-base);
+}
+
+.customization-total-item .customization-total-label {
     color: var(--gray-500);
+    font-weight: 500;
 }
 
-.customization-total-price {
+.customization-total-item span:last-child {
     font-size: var(--font-size-xl);
     font-weight: 700;
     color: var(--text);
-    white-space: nowrap;
+}
+
+/* Calories in green */
+.customization-total-item:last-child span:last-child {
+    color: var(--success);
 }
 
 .customization-buttons {
     display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
 }
 
 .customization-buttons .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 10px 20px;
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    border-radius: var(--radius-base);
-    border: none;
-    cursor: pointer;
-    transition: none;
-    min-height: 40px;
-    white-space: nowrap;
-}
-
-.customization-buttons .btn svg {
-    width: 18px;
-    height: 18px;
-    flex-shrink: 0;
-}
-
-.customization-buttons .btn:active {
-    transform: scale(0.97);
+    width: 100%;
+    justify-content: center;
+    padding: 12px 20px;
+    font-size: var(--font-size-base);
 }
 
 .customization-buttons .btn-outline {
-    background: #1a1a1a;
+    background-color: #1a1a1a;
     color: #ffffff;
     border: none;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-.customization-buttons .btn-primary {
-    background: var(--primary);
-    color: #ffffff;
-    border: none;
+/* Override any row behaviour on desktop */
+@media (min-width: 769px) {
+    .customization-actions {
+        flex-direction: column;
+    }
+    .customization-buttons {
+        flex-direction: column;
+    }
+}
+
+/* ============================================
+   CALORIE DISPLAYS (Main & Customize) - GREEN
+   ============================================ */
+.product-calories-section {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    margin-bottom: 16px;
+    padding: 0 4px;
+}
+
+.product-calories-total {
+    font-weight: 600;
+    color: var(--success);
 }
 
 /* ============================================
@@ -1202,7 +1286,7 @@
         padding: 16px 24px;
     }
 
-    .customization-total-price {
+    .customization-total-item span:last-child {
         font-size: var(--font-size-2xl);
     }
 
@@ -1340,4 +1424,3 @@ input[type=number] {
         transform: rotate(360deg);
     }
 }
-
