@@ -1,6 +1,7 @@
 -- =====================================================
 -- DATABASE: fitpal_food_delivery
 -- Dietary Meal Ordering and Restaurant Nutrition Analytics System
+-- WITH FULL CUSTOMIZABLE MEAL SUPPORT
 -- ACID Compliant with Proper Constraints
 -- =====================================================
 
@@ -302,11 +303,14 @@ CREATE TABLE IF NOT EXISTS dietary_information (
         fat IS NULL
         OR fat >= 0
     ),
+    serving_size VARCHAR(50) NULL,
+    serving_unit VARCHAR(20) NULL,
     INDEX idx_category (category)
 ) COMMENT = 'Nutritional and dietary information for products';
 
 -- =====================================================
 -- 13. PRODUCT (depends on restaurant_branch and dietary_information)
+-- MODIFIED: Added customization fields
 -- =====================================================
 CREATE TABLE IF NOT EXISTS product (
     product_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -316,17 +320,76 @@ CREATE TABLE IF NOT EXISTS product (
     description TEXT NULL,
     price DECIMAL(8, 2) NOT NULL CHECK (price >= 0),
     stock INT NOT NULL DEFAULT 0 CHECK (stock >= 0),
+    is_customizable TINYINT(1) DEFAULT 0,
+    customization_type VARCHAR(20) NULL CHECK (
+        customization_type IN (
+            'structured',
+            'freeform',
+            'mixed',
+            'none'
+        )
+    ),
+    base_price DECIMAL(8, 2) DEFAULT 0.00 CHECK (base_price >= 0),
     is_active TINYINT(1) DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (restaurant_branch_id) REFERENCES restaurant_branch (restaurant_branch_id) ON DELETE CASCADE,
     FOREIGN KEY (dietary_information_id) REFERENCES dietary_information (dietary_information_id) ON DELETE CASCADE,
     INDEX idx_restaurant_branch_id (restaurant_branch_id),
-    INDEX idx_is_active (is_active)
-) COMMENT = 'Product listings with nutritional information';
+    INDEX idx_is_active (is_active),
+    INDEX idx_customizable (is_customizable)
+) COMMENT = 'Product listings with nutritional information and customization support';
 
 -- =====================================================
--- 14. CART (depends on customer and product)
+-- 14. INGREDIENT (NEW) - Master list of all food components
+-- =====================================================
+CREATE TABLE IF NOT EXISTS ingredient (
+    ingredient_id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    description TEXT NULL,
+    unit_price DECIMAL(8, 2) DEFAULT 0.00 CHECK (unit_price >= 0),
+    calories INT NULL CHECK (calories >= 0),
+    protein DECIMAL(5, 2) NULL CHECK (protein >= 0),
+    carbs DECIMAL(5, 2) NULL CHECK (carbs >= 0),
+    fat DECIMAL(5, 2) NULL CHECK (fat >= 0),
+    dietary_tags JSON NULL,
+    allergens JSON NULL,
+    stock_quantity INT DEFAULT 0 CHECK (stock_quantity >= 0),
+    is_active TINYINT(1) DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_name (name),
+    INDEX idx_is_active (is_active)
+) COMMENT = 'Master list of all ingredients for product customization';
+
+-- =====================================================
+-- 15. PRODUCT_COMPOSITION (NEW) - Customization rules per product
+-- =====================================================
+CREATE TABLE IF NOT EXISTS product_composition (
+    composition_id INT AUTO_INCREMENT PRIMARY KEY,
+    product_id INT NOT NULL,
+    ingredient_id INT NOT NULL,
+    is_default TINYINT(1) DEFAULT 0,
+    default_quantity INT DEFAULT 0 CHECK (default_quantity >= 0),
+    max_quantity INT DEFAULT 1 CHECK (max_quantity >= 0),
+    price_modifier DECIMAL(8, 2) DEFAULT 0.00,
+    alternatives JSON NULL,
+    display_order INT DEFAULT 0,
+    is_required TINYINT(1) DEFAULT 0,
+    min_quantity INT DEFAULT 0 CHECK (min_quantity >= 0),
+    max_quantity_per_item INT DEFAULT 1 CHECK (max_quantity_per_item >= 0),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES product (product_id) ON DELETE CASCADE,
+    FOREIGN KEY (ingredient_id) REFERENCES ingredient (ingredient_id) ON DELETE CASCADE,
+    INDEX idx_product (product_id),
+    INDEX idx_ingredient (ingredient_id),
+    INDEX idx_default (is_default),
+    UNIQUE KEY unique_product_ingredient (product_id, ingredient_id)
+) COMMENT = 'Defines which ingredients can be customized for each product';
+
+-- =====================================================
+-- 16. CART (depends on customer and product)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS cart (
     cart_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -335,23 +398,17 @@ CREATE TABLE IF NOT EXISTS cart (
     quantity INT NOT NULL DEFAULT 1 CHECK (quantity > 0),
     price DECIMAL(8, 2) NOT NULL CHECK (price >= 0),
     added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    customization_data JSON NULL,
     FOREIGN KEY (customer_id) REFERENCES customer (customer_id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES product (product_id) ON DELETE CASCADE,
     INDEX idx_customer_id (customer_id),
     INDEX idx_product_id (product_id),
     UNIQUE KEY unique_cart_item (customer_id, product_id)
-) COMMENT = 'Shopping cart items';
+) COMMENT = 'Shopping cart items with customization data';
 
 -- =====================================================
--- 15. SPECIFIC_INSTRUCTION (no dependencies)
--- =====================================================
-CREATE TABLE IF NOT EXISTS specific_instruction (
-    specific_instruction_id INT AUTO_INCREMENT PRIMARY KEY,
-    instruction_text TEXT NOT NULL
-) COMMENT = 'Per-item custom instructions';
-
--- =====================================================
--- 16. ORDERS (depends on customer and delivery_rider)
+-- 17. ORDERS (depends on customer and delivery_rider)
+-- MODIFIED: Added has_unread_messages
 -- =====================================================
 CREATE TABLE IF NOT EXISTS orders (
     order_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -364,7 +421,8 @@ CREATE TABLE IF NOT EXISTS orders (
             'preparing',
             'delivering',
             'delivered',
-            'cancelled'
+            'cancelled',
+            'refunded'
         )
     ),
     payment_method VARCHAR(20) NOT NULL DEFAULT 'COD' CHECK (
@@ -382,6 +440,7 @@ CREATE TABLE IF NOT EXISTS orders (
             'admin'
         )
     ),
+    has_unread_messages TINYINT(1) DEFAULT 0,
     order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     delivered_at TIMESTAMP NULL,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -391,10 +450,11 @@ CREATE TABLE IF NOT EXISTS orders (
     INDEX idx_delivery_rider_id (delivery_rider_id),
     INDEX idx_order_status (order_status),
     INDEX idx_order_date (order_date)
-) COMMENT = 'Order transactions';
+) COMMENT = 'Order transactions with messaging support';
 
 -- =====================================================
--- 17. QUEUE_ITEM (depends on orders, restaurant_branch, product, specific_instruction)
+-- 18. QUEUE_ITEM (depends on orders, restaurant_branch, product)
+-- MODIFIED: Removed specific_instruction_id, added customization fields
 -- =====================================================
 CREATE TABLE IF NOT EXISTS queue_item (
     queue_item_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -404,18 +464,42 @@ CREATE TABLE IF NOT EXISTS queue_item (
     queue_quantity INT NOT NULL CHECK (queue_quantity > 0),
     unit_price DECIMAL(8, 2) NOT NULL CHECK (unit_price >= 0),
     total_price DECIMAL(10, 2) GENERATED ALWAYS AS (queue_quantity * unit_price) STORED,
-    specific_instruction_id INT NULL,
+    is_customized TINYINT(1) DEFAULT 0,
+    base_price_snapshot DECIMAL(8, 2) NULL CHECK (base_price_snapshot >= 0),
+    final_price DECIMAL(10, 2) NULL CHECK (final_price >= 0),
+    custom_instructions TEXT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (order_id) REFERENCES orders (order_id) ON DELETE CASCADE,
     FOREIGN KEY (branch_id) REFERENCES restaurant_branch (restaurant_branch_id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES product (product_id) ON DELETE CASCADE,
-    FOREIGN KEY (specific_instruction_id) REFERENCES specific_instruction (specific_instruction_id) ON DELETE SET NULL,
     INDEX idx_order_id (order_id),
     INDEX idx_branch_id (branch_id),
-    INDEX idx_product_id (product_id)
-) COMMENT = 'Kitchen queue items with per-item instructions';
+    INDEX idx_product_id (product_id),
+    INDEX idx_customized (is_customized)
+) COMMENT = 'Kitchen queue items with customization support';
 
 -- =====================================================
--- 18. TRANSACTION (depends on financial_account and orders)
+-- 19. CUSTOMIZATION_INSTANCE (NEW) - Customer selections
+-- =====================================================
+CREATE TABLE IF NOT EXISTS customization_instance (
+    instance_id INT AUTO_INCREMENT PRIMARY KEY,
+    queue_item_id INT NOT NULL,
+    ingredient_id INT NOT NULL,
+    quantity INT NOT NULL CHECK (quantity >= 0),
+    price_at_time DECIMAL(8, 2) NOT NULL CHECK (price_at_time >= 0),
+    calories_at_time INT NULL CHECK (calories_at_time >= 0),
+    is_removed TINYINT(1) DEFAULT 0,
+    custom_text TEXT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (queue_item_id) REFERENCES queue_item (queue_item_id) ON DELETE CASCADE,
+    FOREIGN KEY (ingredient_id) REFERENCES ingredient (ingredient_id) ON DELETE CASCADE,
+    INDEX idx_queue_item (queue_item_id),
+    INDEX idx_ingredient (ingredient_id),
+    UNIQUE KEY unique_queue_ingredient (queue_item_id, ingredient_id)
+) COMMENT = 'Customer customizations for each order item';
+
+-- =====================================================
+-- 20. TRANSACTION (depends on financial_account and orders)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS transaction (
     transaction_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -447,7 +531,7 @@ CREATE TABLE IF NOT EXISTS transaction (
 ) COMMENT = 'Financial transaction history';
 
 -- =====================================================
--- 19. FEEDBACK (depends on product, customer, orders)
+-- 21. FEEDBACK (depends on product, customer, orders)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS feedback (
     feedback_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -466,7 +550,7 @@ CREATE TABLE IF NOT EXISTS feedback (
 ) COMMENT = 'Product reviews and feedback';
 
 -- =====================================================
--- 20. NOTIFICATION (no foreign keys - polymorphic)
+-- 22. NOTIFICATION (no foreign keys - polymorphic)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS notification (
     notification_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -486,6 +570,53 @@ CREATE TABLE IF NOT EXISTS notification (
     INDEX idx_recipient (recipient_type, recipient_id),
     INDEX idx_is_read (is_read)
 ) COMMENT = 'System notifications';
+
+-- =====================================================
+-- 23. MESSAGE (NEW) - All communication between parties
+-- =====================================================
+CREATE TABLE IF NOT EXISTS message (
+    message_id INT AUTO_INCREMENT PRIMARY KEY,
+    order_id INT NOT NULL,
+    sender_type VARCHAR(20) NOT NULL CHECK (
+        sender_type IN (
+            'customer',
+            'restaurant',
+            'restaurant_staff',
+            'delivery_rider',
+            'administrator',
+            'system'
+        )
+    ),
+    sender_id INT NOT NULL,
+    recipient_type VARCHAR(20) NOT NULL CHECK (
+        recipient_type IN (
+            'customer',
+            'restaurant',
+            'restaurant_staff',
+            'delivery_rider',
+            'administrator',
+            'all'
+        )
+    ),
+    recipient_id INT NULL,
+    message_type VARCHAR(20) DEFAULT 'text' CHECK (
+        message_type IN (
+            'text',
+            'image',
+            'system_notification',
+            'instruction'
+        )
+    ),
+    content TEXT NOT NULL,
+    is_read TINYINT(1) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (order_id) REFERENCES orders (order_id) ON DELETE CASCADE,
+    INDEX idx_order_id (order_id),
+    INDEX idx_sender (sender_type, sender_id),
+    INDEX idx_recipient (recipient_type, recipient_id),
+    INDEX idx_created_at (created_at),
+    INDEX idx_unread (is_read)
+) COMMENT = 'All communication between parties';
 
 -- =====================================================
 -- ADDITIONAL INDEXES for Performance
@@ -517,6 +648,8 @@ CREATE INDEX idx_transaction_account_date ON transaction (
     financial_account_id,
     transaction_date DESC
 );
+
+CREATE INDEX idx_customization_instance_queue ON customization_instance (queue_item_id, ingredient_id);
 
 -- =====================================================
 -- TRIGGERS for Data Integrity (ACID Compliance)
@@ -647,6 +780,46 @@ BEGIN
     END IF;
 END$$
 
+-- Trigger: Update final_price when customization instances are added
+CREATE TRIGGER after_customization_instance_insert
+AFTER INSERT ON customization_instance
+FOR EACH ROW
+BEGIN
+    DECLARE total_customization_price DECIMAL(10,2);
+    
+    -- Recalculate total customization price for the queue item
+    SELECT COALESCE(SUM(price_at_time * quantity), 0) INTO total_customization_price
+    FROM customization_instance
+    WHERE queue_item_id = NEW.queue_item_id
+    AND is_removed = 0;
+    
+    -- Update queue_item with final price
+    UPDATE queue_item
+    SET final_price = base_price_snapshot + total_customization_price
+    WHERE queue_item_id = NEW.queue_item_id;
+END$$
+
+-- Trigger: Validate customization quantity limits
+CREATE TRIGGER before_customization_instance_insert
+BEFORE INSERT ON customization_instance
+FOR EACH ROW
+BEGIN
+    DECLARE max_qty INT;
+    DECLARE current_qty INT;
+    
+    -- Check max quantity limit from product_composition
+    SELECT pc.max_quantity_per_item INTO max_qty
+    FROM product_composition pc
+    JOIN queue_item qi ON pc.product_id = qi.product_id
+    WHERE qi.queue_item_id = NEW.queue_item_id
+    AND pc.ingredient_id = NEW.ingredient_id;
+    
+    IF max_qty IS NOT NULL AND NEW.quantity > max_qty THEN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'Quantity exceeds maximum allowed';
+    END IF;
+END$$
+
 DELIMITER;
 
 -- =====================================================
@@ -700,13 +873,21 @@ BEGIN
         branch_id,
         product_id,
         queue_quantity,
-        unit_price
+        unit_price,
+        base_price_snapshot,
+        custom_instructions,
+        is_customized,
+        final_price
     )
     SELECT 
         p_order_id,
         p.restaurant_branch_id,
         c.product_id,
         c.quantity,
+        c.price,
+        c.price,
+        JSON_EXTRACT(c.customization_data, '$.instructions'),
+        CASE WHEN JSON_EXTRACT(c.customization_data, '$.customizations') IS NOT NULL THEN 1 ELSE 0 END,
         c.price
     FROM cart c
     JOIN product p ON c.product_id = p.product_id
@@ -714,6 +895,48 @@ BEGIN
     
     DELETE FROM cart WHERE customer_id = p_customer_id;
     
+    COMMIT;
+END$$
+
+-- Procedure: Add customization to existing queue item
+CREATE PROCEDURE sp_add_customization(
+    IN p_queue_item_id INT,
+    IN p_ingredient_id INT,
+    IN p_quantity INT,
+    IN p_price DECIMAL(8,2),
+    IN p_calories INT,
+    OUT p_success BOOLEAN
+)
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SET p_success = FALSE;
+        RESIGNAL;
+    END;
+    
+    START TRANSACTION;
+    
+    INSERT INTO customization_instance (
+        queue_item_id,
+        ingredient_id,
+        quantity,
+        price_at_time,
+        calories_at_time
+    ) VALUES (
+        p_queue_item_id,
+        p_ingredient_id,
+        p_quantity,
+        p_price,
+        p_calories
+    );
+    
+    -- Mark queue item as customized
+    UPDATE queue_item
+    SET is_customized = 1
+    WHERE queue_item_id = p_queue_item_id;
+    
+    SET p_success = TRUE;
     COMMIT;
 END$$
 
@@ -837,6 +1060,54 @@ BEGIN
     COMMIT;
 END$$
 
+-- Procedure: Get product customization options
+CREATE PROCEDURE sp_get_product_customizations(
+    IN p_product_id INT
+)
+BEGIN
+    SELECT 
+        i.ingredient_id,
+        i.name AS ingredient_name,
+        i.unit_price,
+        i.calories,
+        i.dietary_tags,
+        i.allergens,
+        pc.is_default,
+        pc.default_quantity,
+        pc.max_quantity,
+        pc.price_modifier,
+        pc.display_order,
+        pc.is_required,
+        pc.min_quantity,
+        pc.max_quantity_per_item
+    FROM ingredient i
+    JOIN product_composition pc ON i.ingredient_id = pc.ingredient_id
+    WHERE pc.product_id = p_product_id
+    AND i.is_active = 1
+    ORDER BY pc.display_order ASC, i.name ASC;
+END$$
+
+-- Procedure: Get order item customizations
+CREATE PROCEDURE sp_get_order_customizations(
+    IN p_queue_item_id INT
+)
+BEGIN
+    SELECT 
+        ci.instance_id,
+        ci.ingredient_id,
+        i.name AS ingredient_name,
+        ci.quantity,
+        ci.price_at_time,
+        ci.calories_at_time,
+        ci.is_removed,
+        ci.custom_text,
+        ci.created_at
+    FROM customization_instance ci
+    JOIN ingredient i ON ci.ingredient_id = i.ingredient_id
+    WHERE ci.queue_item_id = p_queue_item_id
+    ORDER BY ci.created_at ASC;
+END$$
+
 DELIMITER;
 
 -- =====================================================
@@ -865,11 +1136,13 @@ SELECT
     qi.queue_quantity,
     qi.unit_price,
     qi.total_price AS item_total,
+    qi.is_customized,
+    qi.final_price AS item_final_price,
     p.name AS product_name,
     p.product_id,
     rb.branch_name,
     r.business_name AS restaurant_name,
-    si.instruction_text AS specific_instructions
+    qi.custom_instructions
 FROM
     orders o
     JOIN customer c ON o.customer_id = c.customer_id
@@ -877,8 +1150,7 @@ FROM
     LEFT JOIN queue_item qi ON o.order_id = qi.order_id
     LEFT JOIN product p ON qi.product_id = p.product_id
     LEFT JOIN restaurant_branch rb ON qi.branch_id = rb.restaurant_branch_id
-    LEFT JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
-    LEFT JOIN specific_instruction si ON qi.specific_instruction_id = si.specific_instruction_id;
+    LEFT JOIN restaurant r ON rb.restaurant_id = r.restaurant_id;
 
 CREATE OR REPLACE VIEW kitchen_queue_view AS
 SELECT
@@ -892,20 +1164,35 @@ SELECT
     qi.queue_quantity,
     qi.unit_price,
     qi.total_price,
-    si.instruction_text AS custom_instructions,
+    qi.is_customized,
+    qi.final_price,
+    qi.custom_instructions,
     di.allergens,
     di.dietary_tags,
     o.special_instructions AS order_notes,
-    o.order_status
+    o.order_status,
+    GROUP_CONCAT(
+        CONCAT(
+            i.name,
+            ' (x',
+            ci.quantity,
+            ')'
+        )
+        ORDER BY ci.created_at SEPARATOR ', '
+    ) AS customizations
 FROM
     queue_item qi
     JOIN orders o ON qi.order_id = o.order_id
     JOIN product p ON qi.product_id = p.product_id
     JOIN restaurant_branch rb ON qi.branch_id = rb.restaurant_branch_id
-    LEFT JOIN specific_instruction si ON qi.specific_instruction_id = si.specific_instruction_id
     LEFT JOIN dietary_information di ON p.dietary_information_id = di.dietary_information_id
+    LEFT JOIN customization_instance ci ON qi.queue_item_id = ci.queue_item_id
+    AND ci.is_removed = 0
+    LEFT JOIN ingredient i ON ci.ingredient_id = i.ingredient_id
 WHERE
     o.order_status IN ('pending', 'preparing')
+GROUP BY
+    qi.queue_item_id
 ORDER BY o.order_date ASC;
 
 CREATE OR REPLACE VIEW restaurant_performance AS
@@ -919,7 +1206,13 @@ SELECT
     COALESCE(AVG(o.total_amount), 0) AS average_order_value,
     COUNT(DISTINCT o.customer_id) AS unique_customers,
     COALESCE(AVG(f.rating), 0) AS average_rating,
-    COUNT(f.feedback_id) AS total_reviews
+    COUNT(f.feedback_id) AS total_reviews,
+    AVG(
+        CASE
+            WHEN qi.is_customized = 1 THEN 1
+            ELSE 0
+        END
+    ) * 100 AS customization_rate
 FROM
     restaurant r
     JOIN restaurant_branch rb ON r.restaurant_id = rb.restaurant_id
@@ -940,7 +1233,13 @@ SELECT
     cp.fitness_goal,
     COUNT(DISTINCT o.order_id) AS total_orders,
     COALESCE(AVG(f.rating), 0) AS average_rating,
-    GROUP_CONCAT(DISTINCT di.dietary_tags) AS ordered_dietary_tags
+    GROUP_CONCAT(DISTINCT di.dietary_tags) AS ordered_dietary_tags,
+    AVG(
+        CASE
+            WHEN qi.is_customized = 1 THEN 1
+            ELSE 0
+        END
+    ) * 100 AS customization_frequency
 FROM
     customer c
     JOIN customer_profile cp ON c.customer_id = cp.customer_id
@@ -995,3 +1294,27 @@ FROM
     LEFT JOIN transaction t ON fa.financial_account_id = t.financial_account_id
 GROUP BY
     fa.financial_account_id;
+
+CREATE OR REPLACE VIEW customization_analytics AS
+SELECT
+    p.product_id,
+    p.name AS product_name,
+    COUNT(DISTINCT qi.queue_item_id) AS times_customized,
+    COUNT(DISTINCT qi.order_id) AS orders_with_customization,
+    AVG(ci.quantity) AS avg_quantity_per_ingredient,
+    COUNT(DISTINCT ci.ingredient_id) AS unique_ingredients_used,
+    SUM(
+        ci.price_at_time * ci.quantity
+    ) AS total_customization_revenue
+FROM
+    product p
+    JOIN queue_item qi ON p.product_id = qi.product_id
+    JOIN customization_instance ci ON qi.queue_item_id = ci.queue_item_id
+WHERE
+    ci.is_removed = 0
+GROUP BY
+    p.product_id;
+
+-- =====================================================
+-- END OF SCHEMA
+-- =====================================================

@@ -47,7 +47,7 @@ $featuredRestaurants = [
         'cuisine' => 'Vegan',
         'rating' => 4.8,
         'reviews' => 234,
-        'image' => $assetBase . 'assets/images/restaurants/green-bowl.jpg',
+        'image' => $assetBase . 'assets/images/showcase/variety.png',
         'tags' => ['Vegan', 'Gluten-Free', 'Organic']
     ],
     [
@@ -127,7 +127,7 @@ $featuredRestaurants = [
                 </div>
             </div>
             <div class="hero-image">
-                <img src="<?php echo $assetBase; ?>assets/images/hero-image.svg"
+                <img src="<?php echo $assetBase; ?>assets/images/showcase/hero-image.png"
                     alt="Healthy food ordering illustration" class="hero-illustration"
                     onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/file-warning-fill.svg'">
             </div>
@@ -165,7 +165,8 @@ $featuredRestaurants = [
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/list-settings-fill.svg" alt="Allergy management"
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/list-settings-fill.svg"
+                            alt="Allergy management"
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
                     <p class="feature-title">Allergy Management</p>
@@ -196,7 +197,8 @@ $featuredRestaurants = [
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/chart-line-up.svg" alt="Nutrition analytics"
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/chart-line-up.svg"
+                            alt="Nutrition analytics"
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
                     <p class="feature-title">Nutrition Analytics</p>
@@ -219,7 +221,8 @@ $featuredRestaurants = [
                 <div class="step-card">
                     <div class="step-number">1</div>
                     <div class="step-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="Create account"
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg"
+                            alt="Create account"
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
                     <p class="step-title">Create Account</p>

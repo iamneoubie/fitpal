@@ -538,66 +538,69 @@ function hasActiveFilters(): bool {
         </div>
     </div>
     <?php endif; ?>
-
     <!-- ============================================
-         QUEUE PANEL - Persistent Cart
-         ============================================ -->
-    <div class="queue-panel" id="queuePanel" role="dialog" aria-label="Your order queue">
-        <!-- Panel Header -->
-        <div class="queue-panel-header" id="queuePanelHeader">
-            <div class="queue-panel-title">
-                <span>Your Order</span>
-                <span class="queue-item-count" id="queueItemCount" style="display:none;">0</span>
-            </div>
-            <div class="queue-panel-summary">
-                <span class="queue-item-count-label" id="queueItemCountLabel">0 items</span>
-            </div>
-            <button type="button" class="queue-panel-toggle" id="queuePanelToggle" aria-expanded="false"
-                aria-label="Toggle order panel">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="6,9 12,15 18,9"></polyline>
-                </svg>
-            </button>
-        </div>
+     QUEUE PANEL - Persistent Cart (Fixed Alignment)
+     ============================================ -->
+    <div class="queue-panel-wrapper" id="queuePanelWrapper" style="display:none;">
+        <div class="queue-panel" id="queuePanel">
+            <div class="queue-panel-inner" id="queuePanelInner">
 
-        <!-- Panel Body -->
-        <div class="queue-panel-body">
-            <div class="queue-items-container" id="queueItemsContainer">
-                <!-- Items rendered by JavaScript -->
-            </div>
-
-            <div class="queue-empty-state" id="queueEmptyState" style="display:none;">
-                <div class="queue-empty-icon">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/cart-shopping.svg" alt="Empty cart">
-                </div>
-                <p class="queue-empty-text">Your queue is empty. Start adding items!</p>
-            </div>
-
-            <div class="queue-footer">
-                <div class="queue-footer-total">
-                    <span class="queue-footer-label">Total:</span>
-                    <span class="queue-footer-grand-total" id="queueGrandTotal">₱0.00</span>
-                    <span class="queue-footer-item-count" id="queueFooterItemCount">0 items</span>
-                </div>
-                <div class="queue-footer-actions">
-                    <button type="button" class="queue-btn-cancel" id="queueCancelBtn">
-                        Cancel Order
-                    </button>
-                    <a href="checkout.php" class="queue-btn-checkout" id="queueCheckoutBtn" disabled>
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
-                            <line x1="3" y1="6" x2="21" y2="6" />
-                            <path d="M16 10a4 4 0 0 1-8 0" />
+                <!-- Panel Header -->
+                <div class="queue-panel-header" id="queuePanelHeader">
+                    <div class="queue-panel-title">
+                        <span>Your Order</span>
+                        <span class="queue-item-count" id="queueItemCount" style="display:none;">0</span>
+                    </div>
+                    <div class="queue-panel-summary">
+                        <span class="queue-item-count-label" id="queueItemCountLabel">0 items</span>
+                    </div>
+                    <button type="button" class="queue-panel-toggle" id="queuePanelToggle" aria-expanded="false"
+                        aria-label="Toggle order panel">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6,9 12,15 18,9"></polyline>
                         </svg>
-                        Checkout
-                    </a>
+                    </button>
+                </div>
+
+                <!-- Panel Body -->
+                <div class="queue-panel-body">
+                    <div class="queue-items-container" id="queueItemsContainer">
+                        <!-- Items rendered by JavaScript -->
+                    </div>
+
+                    <div class="queue-empty-state" id="queueEmptyState" style="display:none;">
+                        <div class="queue-empty-icon">
+                            <img src="<?php echo $assetBase; ?>assets/images/icons/cart-shopping.svg" alt="Empty cart">
+                        </div>
+                        <p class="queue-empty-text">Your queue is empty. Start adding items!</p>
+                    </div>
+
+                    <div class="queue-footer">
+                        <div class="queue-footer-total">
+                            <span class="queue-footer-label">Total:</span>
+                            <span class="queue-footer-grand-total" id="queueGrandTotal">₱0.00</span>
+                            <span class="queue-footer-item-count" id="queueFooterItemCount">0 items</span>
+                        </div>
+                        <div class="queue-footer-actions">
+                            <button type="button" class="queue-btn-cancel" id="queueCancelBtn">
+                                Cancel Order
+                            </button>
+                            <a href="checkout.php" class="queue-btn-checkout" id="queueCheckoutBtn" disabled>
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+                                    <line x1="3" y1="6" x2="21" y2="6" />
+                                    <path d="M16 10a4 4 0 0 1-8 0" />
+                                </svg>
+                                Checkout
+                            </a>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-
     <!-- ============================================
          MODAL - Remove Item Confirmation
          ============================================ -->

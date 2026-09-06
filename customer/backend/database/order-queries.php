@@ -1,9 +1,10 @@
 <?php
 /**
  * Order Database Queries with Full ACID Transaction Support
+ * Updated for new database schema with QUEUE_ITEM changes.
  *
  * @package FitPal
- * @version 1.1
+ * @version 2.0
  */
 
 declare(strict_types=1);
@@ -12,12 +13,7 @@ require_once __DIR__ . '/branch-queries.php';
 
 /**
  * Create order from cart with stock validation (ACID compliant)
- * Uses FOR UPDATE row locking to prevent race conditions.
- *
- * Business Rules:
- * - All products must be from the same restaurant branch
- * - Stock is validated and locked for all products
- * - Delivery fee is calculated based on subtotal
+ * Updated to handle QUEUE_ITEM new columns: is_customized, base_price_snapshot, final_price
  *
  * @param PDO $db Database connection
  * @param int $customerId Customer ID
@@ -25,7 +21,6 @@ require_once __DIR__ . '/branch-queries.php';
  * @param string $paymentMethod Payment method
  * @return int Order ID
  * @throws RuntimeException If stock is insufficient, branch mismatch, or any other business error occurs
- * @throws PDOException If database error occurs
  */
 function createOrderFromCart(PDO $db, int $customerId, string $address, string $paymentMethod): int
 {
@@ -59,7 +54,8 @@ function createOrderFromCart(PDO $db, int $customerId, string $address, string $
         $placeholders = implode(',', array_fill(0, count($productIds), '?'));
 
         $stockStmt = $db->prepare(
-            "SELECT product_id, name, stock, is_active, price, restaurant_branch_id
+            "SELECT product_id, name, stock, is_active, price, base_price, is_customizable,
+                    restaurant_branch_id
              FROM product 
              WHERE product_id IN ({$placeholders}) 
              FOR UPDATE"
@@ -71,7 +67,7 @@ function createOrderFromCart(PDO $db, int $customerId, string $address, string $
             $products[$row['product_id']] = $row;
         }
 
-        // 4. Validate all products exist, are active, and have sufficient stock
+        // 4. Validate all products and calculate total
         $totalPrice = 0;
         foreach ($cartItems as $item) {
             $productId = $item['product_id'];
@@ -83,7 +79,6 @@ function createOrderFromCart(PDO $db, int $customerId, string $address, string $
 
             $product = $products[$productId];
 
-            // Verify branch consistency (redundant but safe)
             if ((int)$product['restaurant_branch_id'] !== $branchId) {
                 throw new RuntimeException(
                     'Branch mismatch for product: ' . $product['name']
@@ -101,19 +96,22 @@ function createOrderFromCart(PDO $db, int $customerId, string $address, string $
                 );
             }
 
-            $totalPrice += (float)$product['price'] * $quantity;
+            // Use the cart price (which may include customizations)
+            $totalPrice += (float)$item['price'] * $quantity;
         }
 
-        // 5. Calculate delivery fee (business rule)
+        // 5. Calculate delivery fee
         $deliveryFee = $totalPrice > 500 ? 0 : 50.00;
         $grandTotal = $totalPrice + $deliveryFee;
 
-        // 6. Create order record
+        // 6. Create order record - includes has_unread_messages
         $orderStmt = $db->prepare(
             "INSERT INTO orders 
-                (customer_id, destination_address, payment_method, subtotal, delivery_charge, total_amount, order_status)
+                (customer_id, destination_address, payment_method, subtotal, 
+                 delivery_charge, total_amount, order_status, has_unread_messages)
              VALUES 
-                (:customer_id, :address, :payment_method, :subtotal, :delivery_charge, :total_amount, 'pending')"
+                (:customer_id, :address, :payment_method, :subtotal, 
+                 :delivery_charge, :total_amount, 'pending', 0)"
         );
         $orderStmt->execute([
             ':customer_id' => $customerId,
@@ -126,28 +124,78 @@ function createOrderFromCart(PDO $db, int $customerId, string $address, string $
 
         $orderId = (int)$db->lastInsertId();
 
-        // 7. Insert queue items and update stock (atomic)
+        // 7. Insert queue items with new columns
         foreach ($cartItems as $item) {
             $productId = $item['product_id'];
             $quantity = (int)$item['quantity'];
             $product = $products[$productId];
-
-            // Add to queue
+            
+            // Get customizations for this cart item
+            $custStmt = $db->prepare(
+                "SELECT 
+                    ci.customization_instance_id,
+                    ci.selected_option,
+                    ci.customization_notes,
+                    ci.ingredient_id,
+                    i.name AS ingredient_name,
+                    i.price_modifier,
+                    pc.composition_type,
+                    pc.is_required
+                FROM customization_instance ci
+                JOIN product_composition pc ON ci.product_composition_id = pc.product_composition_id
+                LEFT JOIN ingredient i ON ci.ingredient_id = i.ingredient_id
+                WHERE ci.cart_id = :cart_id"
+            );
+            $custStmt->execute([':cart_id' => $item['cart_id'] ?? 0]);
+            $customizations = $custStmt->fetchAll(PDO::FETCH_ASSOC);
+            
+            // Calculate base and final prices
+            $basePriceSnapshot = (float)($product['base_price'] ?? $product['price']);
+            $finalPrice = (float)$item['price']; // Use cart price
+            
+            // Insert queue item with new columns
             $queueStmt = $db->prepare(
                 "INSERT INTO queue_item 
-                    (order_id, branch_id, product_id, queue_quantity, unit_price)
+                    (order_id, branch_id, product_id, queue_quantity, unit_price,
+                     is_customized, base_price_snapshot, final_price)
                  VALUES 
-                    (:order_id, :branch_id, :product_id, :quantity, :price)"
+                    (:order_id, :branch_id, :product_id, :quantity, :price,
+                     :is_customized, :base_price, :final_price)"
             );
             $queueStmt->execute([
                 ':order_id' => $orderId,
                 ':branch_id' => $branchId,
                 ':product_id' => $productId,
                 ':quantity' => $quantity,
-                ':price' => $product['price']
+                ':price' => $product['price'],
+                ':is_customized' => !empty($customizations) ? 1 : 0,
+                ':base_price' => $basePriceSnapshot,
+                ':final_price' => $finalPrice
             ]);
+            
+            $queueItemId = (int)$db->lastInsertId();
+            
+            // Insert customizations for this queue item
+            if (!empty($customizations)) {
+                foreach ($customizations as $cust) {
+                    $insCustStmt = $db->prepare(
+                        "INSERT INTO customization_instance 
+                            (queue_item_id, product_composition_id, selected_option, 
+                             customization_notes, ingredient_id)
+                         VALUES 
+                            (:queue_item_id, :comp_id, :selected_option, :notes, :ingredient_id)"
+                    );
+                    $insCustStmt->execute([
+                        ':queue_item_id' => $queueItemId,
+                        ':comp_id' => $cust['product_composition_id'],
+                        ':selected_option' => $cust['selected_option'] ?? null,
+                        ':notes' => $cust['customization_notes'] ?? null,
+                        ':ingredient_id' => $cust['ingredient_id'] ?? null
+                    ]);
+                }
+            }
 
-            // Decrease stock with verification
+            // Decrease stock
             $stockStmt = $db->prepare(
                 "UPDATE product 
                  SET stock = stock - :quantity 
@@ -159,7 +207,6 @@ function createOrderFromCart(PDO $db, int $customerId, string $address, string $
                 ':quantity' => $quantity
             ]);
 
-            // Verify stock was actually updated (prevents race condition)
             if ($stockStmt->rowCount() === 0) {
                 throw new RuntimeException(
                     'Stock update failed for product: ' . $product['name'] . 
@@ -184,82 +231,7 @@ function createOrderFromCart(PDO $db, int $customerId, string $address, string $
 }
 
 /**
- * Cancel order and restore stock (ACID compliant)
- *
- * @param PDO $db Database connection
- * @param int $orderId Order ID
- * @param string $cancelledBy Who cancelled (customer, restaurant, rider, admin)
- * @return bool True on success
- * @throws RuntimeException If order cannot be cancelled
- */
-function cancelOrderAndRestoreStock(PDO $db, int $orderId, string $cancelledBy): bool
-{
-    $db->beginTransaction();
-
-    try {
-        // Check if order can be cancelled
-        $checkStmt = $db->prepare(
-            "SELECT order_status FROM orders WHERE order_id = :order_id"
-        );
-        $checkStmt->execute([':order_id' => $orderId]);
-        $order = $checkStmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$order) {
-            throw new RuntimeException('Order not found.');
-        }
-
-        $cancellableStatuses = ['pending', 'preparing'];
-        if (!in_array($order['order_status'], $cancellableStatuses, true)) {
-            throw new RuntimeException(
-                'Order cannot be cancelled in its current state: ' . $order['order_status']
-            );
-        }
-
-        // Lock and get queue items
-        $queueStmt = $db->prepare(
-            "SELECT product_id, queue_quantity 
-             FROM queue_item 
-             WHERE order_id = :order_id 
-             FOR UPDATE"
-        );
-        $queueStmt->execute([':order_id' => $orderId]);
-        $items = $queueStmt->fetchAll(PDO::FETCH_ASSOC);
-
-        // Restore stock for each item
-        foreach ($items as $item) {
-            $restoreStmt = $db->prepare(
-                "UPDATE product SET stock = stock + :quantity WHERE product_id = :product_id"
-            );
-            $restoreStmt->execute([
-                ':product_id' => $item['product_id'],
-                ':quantity' => $item['queue_quantity']
-            ]);
-        }
-
-        // Update order status
-        $updateStmt = $db->prepare(
-            "UPDATE orders 
-             SET order_status = 'cancelled', cancelled_by = :cancelled_by 
-             WHERE order_id = :order_id"
-        );
-        $updateStmt->execute([
-            ':order_id' => $orderId,
-            ':cancelled_by' => $cancelledBy
-        ]);
-
-        $db->commit();
-        return true;
-
-    } catch (Exception $e) {
-        if ($db->inTransaction()) {
-            $db->rollBack();
-        }
-        throw $e;
-    }
-}
-
-/**
- * Get order details with all items
+ * Get order details with items and customizations
  *
  * @param PDO $db Database connection
  * @param int $orderId Order ID
@@ -279,9 +251,11 @@ function getOrderDetails(PDO $db, int $orderId): array|false
             o.total_amount,
             o.order_date,
             o.delivered_at,
+            o.has_unread_messages,
             c.first_name,
             c.last_name,
-            c.email
+            c.email,
+            c.contact_number
         FROM orders o
         JOIN customer c ON o.customer_id = c.customer_id
         WHERE o.order_id = :order_id"
@@ -297,7 +271,7 @@ function getOrderDetails(PDO $db, int $orderId): array|false
     $branch = getOrderBranch($db, $orderId);
     $order['branch'] = $branch;
 
-    // Get order items
+    // Get order items with new QUEUE_ITEM columns
     $itemStmt = $db->prepare(
         "SELECT 
             qi.queue_item_id,
@@ -305,6 +279,9 @@ function getOrderDetails(PDO $db, int $orderId): array|false
             qi.queue_quantity AS quantity,
             qi.unit_price,
             qi.total_price,
+            qi.is_customized,
+            qi.base_price_snapshot,
+            qi.final_price,
             p.name AS product_name,
             p.description,
             di.dietary_tags,
@@ -315,95 +292,36 @@ function getOrderDetails(PDO $db, int $orderId): array|false
         WHERE qi.order_id = :order_id"
     );
     $itemStmt->execute([':order_id' => $orderId]);
-    $order['items'] = $itemStmt->fetchAll(PDO::FETCH_ASSOC);
+    $items = $itemStmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Get customizations for each item
+    foreach ($items as &$item) {
+        $custStmt = $db->prepare(
+            "SELECT 
+                ci.customization_instance_id,
+                ci.selected_option,
+                ci.customization_notes,
+                ci.ingredient_id,
+                i.name AS ingredient_name,
+                i.price_modifier,
+                pc.composition_type,
+                pc.is_required
+            FROM customization_instance ci
+            JOIN product_composition pc ON ci.product_composition_id = pc.product_composition_id
+            LEFT JOIN ingredient i ON ci.ingredient_id = i.ingredient_id
+            WHERE ci.queue_item_id = :queue_item_id"
+        );
+        $custStmt->execute([':queue_item_id' => $item['queue_item_id']]);
+        $item['customizations'] = $custStmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    
+    $order['items'] = $items;
 
     return $order;
 }
 
 /**
- * Get restaurant branch for an order
- *
- * @param PDO $db Database connection
- * @param int $orderId Order ID
- * @return array|false Branch information or false if not found
- */
-function getOrderBranch(PDO $db, int $orderId): array|false
-{
-    $stmt = $db->prepare(
-        "SELECT 
-            rb.restaurant_branch_id,
-            rb.branch_name,
-            rb.branch_code,
-            rb.barangay,
-            rb.city,
-            rb.province,
-            r.business_name AS restaurant_name,
-            r.restaurant_id
-        FROM queue_item qi
-        JOIN restaurant_branch rb ON qi.branch_id = rb.restaurant_branch_id
-        JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
-        WHERE qi.order_id = :order_id
-        LIMIT 1"
-    );
-    $stmt->execute([':order_id' => $orderId]);
-    return $stmt->fetch(PDO::FETCH_ASSOC);
-}
-
-/**
- * Get orders by customer ID with pagination
- *
- * @param PDO $db Database connection
- * @param int $customerId Customer ID
- * @param int $limit Number of orders to return
- * @param int $offset Offset for pagination
- * @return array List of orders
- */
-function getCustomerOrders(PDO $db, int $customerId, int $limit = 10, int $offset = 0): array
-{
-    $stmt = $db->prepare(
-        "SELECT 
-            o.order_id,
-            o.order_status,
-            o.total_amount,
-            o.order_date,
-            o.delivery_charge,
-            o.subtotal,
-            COUNT(qi.queue_item_id) AS item_count,
-            rb.branch_name
-        FROM orders o
-        LEFT JOIN queue_item qi ON o.order_id = qi.order_id
-        LEFT JOIN restaurant_branch rb ON qi.branch_id = rb.restaurant_branch_id
-        WHERE o.customer_id = :customer_id
-        GROUP BY o.order_id
-        ORDER BY o.order_date DESC
-        LIMIT :limit OFFSET :offset"
-    );
-    $stmt->bindValue(':customer_id', $customerId, PDO::PARAM_INT);
-    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-    $stmt->execute();
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
-}
-
-/**
- * Count total orders for a customer
- *
- * @param PDO $db Database connection
- * @param int $customerId Customer ID
- * @return int Total order count
- */
-function countCustomerOrders(PDO $db, int $customerId): int
-{
-    $stmt = $db->prepare(
-        "SELECT COUNT(*) AS total FROM orders WHERE customer_id = :customer_id"
-    );
-    $stmt->execute([':customer_id' => $customerId]);
-    return (int)$stmt->fetchColumn();
-}
-
-
-/**
- * Get customer's active order (for the tracker)
+ * Get active order with new columns
  *
  * @param PDO $db Database connection
  * @param int $customerId Customer ID
@@ -420,6 +338,7 @@ function getActiveOrder(PDO $db, int $customerId): array|false
             o.order_status,
             o.total_amount,
             o.order_date,
+            o.has_unread_messages,
             r.business_name AS restaurant_name,
             rb.branch_name
         FROM orders o

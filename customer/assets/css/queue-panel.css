@@ -1,43 +1,77 @@
 /**
  * FitPal Customer Queue Panel Styles
- * 
- * Clean, aligned queue panel with proper spacing and positioning.
+ * Version 3.3 - Fixed panel visibility and smooth transitions
  * 
  * @package FitPal
- * @version 2.1
+ * @version 3.3
  */
 
 /* ============================================
-   QUEUE PANEL - Bottom aligned with container
+   QUEUE PANEL - Fixed positioning with smooth transitions
    ============================================ */
 
-.queue-panel {
+.queue-panel-wrapper {
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
+    z-index: 200;
+    display: block;
+    pointer-events: none;
+    /* Start hidden - slid down */
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    /* Ensure the panel doesn't create scroll issues */
+    overflow: visible;
+}
+
+/* When items exist - slide up */
+.queue-panel-wrapper.has-items {
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+/* When empty - slide down (explicit state) */
+.queue-panel-wrapper.empty {
+    transform: translateY(100%);
+    pointer-events: none;
+}
+
+.queue-panel {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 16px;
+    width: 100%;
+    background: transparent;
+    pointer-events: none;
+}
+
+/* Inner panel container - matches menu page container width */
+.queue-panel-inner {
     background: var(--white);
     border-top: 2px solid var(--primary);
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
-    z-index: 200;
-    max-height: 75vh;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    max-height: 70vh;
     display: flex;
     flex-direction: column;
     transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: auto;
+    overflow: hidden;
 }
 
 /* Closed state - only header visible */
-.queue-panel.closed {
+.queue-panel.closed .queue-panel-inner {
     transform: translateY(calc(100% - 56px));
 }
 
 /* Open state - full panel visible */
-.queue-panel.open {
+.queue-panel.open .queue-panel-inner {
     transform: translateY(0);
 }
 
 /* ============================================
-   PANEL HEADER - Clean, minimal
+   PANEL HEADER - Clean, minimal, aligned
    ============================================ */
 
 .queue-panel-header {
@@ -51,6 +85,7 @@
     min-height: 56px;
     cursor: pointer;
     transition: background var(--transition-fast);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
 .queue-panel-header:hover {
@@ -149,7 +184,7 @@
 }
 
 /* ============================================
-   QUEUE ITEM - Clean design
+   QUEUE ITEM - Clean, aligned design
    ============================================ */
 
 .queue-item {
@@ -304,7 +339,7 @@
 }
 
 /* ============================================
-   EMPTY STATE
+   EMPTY STATE - Hidden when no items
    ============================================ */
 
 .queue-empty-state {
@@ -435,7 +470,7 @@
 }
 
 /* ============================================
-   MODAL - Remove Item Confirmation
+   QUEUE MODALS
    ============================================ */
 
 .queue-modal {
@@ -444,14 +479,19 @@
     left: 0;
     width: 100%;
     height: 100%;
-    z-index: 1000;
-    display: none;
+    background: rgba(5, 10, 4, 0.5);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 9999;
+    display: none !important;
     align-items: center;
     justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
 }
 
 .queue-modal.active {
-    display: flex;
+    display: flex !important;
 }
 
 .queue-modal-overlay {
@@ -460,23 +500,25 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    cursor: pointer;
+    z-index: 0;
 }
 
 .queue-modal-content {
     position: relative;
     background: var(--white);
-    border-radius: var(--radius-xl);
-    padding: 28px 32px;
-    max-width: 400px;
-    width: 90%;
-    box-shadow: var(--shadow-xl);
-    animation: modalSlideIn 0.25s ease;
+    border-radius: var(--radius-lg);
+    padding: 28px 32px 32px;
+    max-width: 440px;
+    width: 100%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: queueModalFadeIn 0.25s ease;
+    z-index: 1;
+    max-height: 90vh;
+    overflow-y: auto;
 }
 
-@keyframes modalSlideIn {
+@keyframes queueModalFadeIn {
     from {
         opacity: 0;
         transform: scale(0.95) translateY(-20px);
@@ -491,26 +533,28 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding-bottom: 12px;
-    margin-bottom: 12px;
-    border-bottom: 1px solid var(--gray-200);
+    padding-bottom: 14px;
+    margin-bottom: 18px;
+    border-bottom: 1px solid var(--gray-100);
 }
 
 .queue-modal-title {
     font-size: var(--font-size-lg);
-    font-weight: 700;
+    font-weight: var(--font-weight-bold);
     color: var(--text);
+    margin: 0;
 }
 
 .queue-modal-close {
     background: none;
     border: none;
-    font-size: 24px;
+    font-size: 26px;
+    line-height: 1;
     color: var(--gray-400);
     cursor: pointer;
-    padding: 0 4px;
-    line-height: 1;
+    padding: 0 6px;
     transition: color var(--transition-fast);
+    font-weight: 300;
 }
 
 .queue-modal-close:hover {
@@ -518,69 +562,121 @@
 }
 
 .queue-modal-body {
-    padding: 8px 0 16px;
+    margin-bottom: 24px;
 }
 
 .queue-modal-body p {
+    margin: 0 0 4px 0;
     font-size: var(--font-size-base);
     color: var(--gray-700);
-    margin: 0;
     line-height: 1.6;
 }
 
-.queue-modal-body strong {
+.queue-modal-body p strong {
     color: var(--text);
+}
+
+.queue-modal-body .text-muted {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    margin-top: 4px;
 }
 
 .queue-modal-footer {
     display: flex;
+    gap: 12px;
     justify-content: flex-end;
-    gap: 10px;
-    padding-top: 12px;
-    border-top: 1px solid var(--gray-200);
+    padding-top: 4px;
+}
+
+.queue-modal-btn-cancel,
+.queue-modal-btn-confirm {
+    padding: 10px 28px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    border: none;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    min-width: 80px;
 }
 
 .queue-modal-btn-cancel {
-    padding: 8px 20px;
-    border-radius: var(--radius-base);
-    border: 1px solid var(--gray-300);
-    background: transparent;
+    background: var(--gray-100);
     color: var(--gray-600);
-    font-weight: 500;
-    cursor: pointer;
-    transition: all var(--transition-fast);
 }
 
 .queue-modal-btn-cancel:hover {
-    background: var(--gray-50);
-    border-color: var(--gray-400);
+    background: var(--gray-200);
+    color: var(--gray-700);
 }
 
 .queue-modal-btn-confirm {
-    padding: 8px 20px;
-    border-radius: var(--radius-base);
-    border: none;
     background: var(--danger);
     color: var(--white);
-    font-weight: 600;
-    cursor: pointer;
-    transition: all var(--transition-fast);
 }
 
 .queue-modal-btn-confirm:hover {
     background: #bd2130;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+}
+
+.queue-modal-btn-confirm:active {
+    transform: translateY(0);
 }
 
 /* ============================================
-   RESPONSIVE
+   MODAL RESPONSIVE
+   ============================================ */
+
+@media (max-width: 480px) {
+    .queue-modal {
+        padding: 12px;
+    }
+    
+    .queue-modal-content {
+        padding: 20px 18px 22px;
+        border-radius: var(--radius-base);
+    }
+    
+    .queue-modal-header {
+        padding-bottom: 10px;
+        margin-bottom: 12px;
+    }
+    
+    .queue-modal-title {
+        font-size: var(--font-size-base);
+    }
+    
+    .queue-modal-body p {
+        font-size: var(--font-size-sm);
+    }
+    
+    .queue-modal-footer {
+        flex-direction: column-reverse;
+        gap: 8px;
+    }
+    
+    .queue-modal-btn-cancel,
+    .queue-modal-btn-confirm {
+        padding: 12px 20px;
+        width: 100%;
+        justify-content: center;
+        text-align: center;
+    }
+}
+
+/* ============================================
+   RESPONSIVE - Queue Panel
    ============================================ */
 
 @media (max-width: 768px) {
     .queue-panel {
-        max-height: 70vh;
+        padding: 0 12px;
     }
     
-    .queue-panel.closed {
+    .queue-panel.closed .queue-panel-inner {
         transform: translateY(calc(100% - 50px));
     }
     
@@ -661,19 +757,14 @@
         padding: 10px 12px;
         font-size: var(--font-size-sm);
     }
-    
-    .queue-modal-content {
-        padding: 20px 24px;
-        max-width: 340px;
-    }
 }
 
 @media (max-width: 480px) {
     .queue-panel {
-        max-height: 80vh;
+        padding: 0 8px;
     }
     
-    .queue-panel.closed {
+    .queue-panel.closed .queue-panel-inner {
         transform: translateY(calc(100% - 44px));
     }
     
@@ -751,22 +842,9 @@
         font-size: var(--font-size-lg);
     }
     
-    .queue-btn-cancel,a
+    .queue-btn-cancel,
     .queue-btn-checkout {
         padding: 8px 12px;
         font-size: var(--font-size-xs);
-    }
-    
-    .queue-modal-content {
-        padding: 16px 18px;
-        max-width: 300px;
-    }
-    
-    .queue-modal-title {
-        font-size: var(--font-size-base);
-    }
-    
-    .queue-modal-body p {
-        font-size: var(--font-size-sm);
     }
 }
