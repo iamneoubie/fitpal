@@ -117,8 +117,8 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
             </div>
 
             <!-- Mobile Toggle (shared pattern) -->
-            <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation menu"
-                aria-expanded="false" type="button">
+            <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation menu" aria-expanded="false"
+                type="button">
                 <span class="menu-icon">
                     <span class="bar"></span>
                     <span class="bar"></span>
@@ -152,10 +152,11 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
                     <div class="user-profile-circle"
                         title="<?php echo htmlspecialchars($userName, ENT_QUOTES, 'UTF-8'); ?>">
                         <?php if (!empty($userInitial)): ?>
-                        <span class="user-initial"><?php echo htmlspecialchars($userInitial, ENT_QUOTES, 'UTF-8'); ?></span>
+                        <span
+                            class="user-initial"><?php echo htmlspecialchars($userInitial, ENT_QUOTES, 'UTF-8'); ?></span>
                         <?php else: ?>
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg"
-                            alt="Profile" class="profile-icon">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="Profile"
+                            class="profile-icon">
                         <?php endif; ?>
                     </div>
                     <a href="../backend/handlers/sign-out-handler.php" data-signout
@@ -197,7 +198,8 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
             <li class="mobile-nav-item mobile-user-greeting">
                 <div class="mobile-user-avatar">
                     <?php if (!empty($userInitial)): ?>
-                    <span class="user-initial-large"><?php echo htmlspecialchars($userInitial, ENT_QUOTES, 'UTF-8'); ?></span>
+                    <span
+                        class="user-initial-large"><?php echo htmlspecialchars($userInitial, ENT_QUOTES, 'UTF-8'); ?></span>
                     <?php else: ?>
                     <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="Profile">
                     <?php endif; ?>
@@ -247,5 +249,5 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
 
     <main class="main-content" role="main">
 
-    <!-- Load ONLY the customer header JS (not the shared one) -->
-    <script src="../assets/ui/js/header.js" defer></script>
+        <!-- Load ONLY the customer header JS (not the shared one) -->
+        <script src="../assets/ui/js/header.js" defer></script>

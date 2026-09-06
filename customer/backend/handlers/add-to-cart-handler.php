@@ -1,12 +1,10 @@
 <?php
 /**
- * FitPal Add to Cart Handler
- *
- * Processes adding a product to the customer's cart.
- * Updated for new database schema with customization support.
- *
+ * FitPal Add to Queue Handler
+ * Version 4.2 - Queue-based ordering with redirect to menu.php
+ * 
  * @package FitPal
- * @version 3.0
+ * @version 4.2
  */
 
 declare(strict_types=1);
@@ -17,7 +15,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 // Authentication check
 if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
-    $_SESSION['cart_error'] = 'Please sign in to add items to your cart.';
+    $_SESSION['queue_error'] = 'Please sign in to add items to your queue.';
     header('Location: ../../pages/sign-in.php');
     exit;
 }
@@ -26,7 +24,7 @@ require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 
 // CSRF validation
 if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== ($_SESSION['csrf_token'] ?? '')) {
-    $_SESSION['cart_error'] = 'Security validation failed. Please try again.';
+    $_SESSION['queue_error'] = 'Security validation failed. Please try again.';
     header('Location: ../../pages/menu.php');
     exit;
 }
@@ -34,28 +32,30 @@ if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== ($_SESSION['csrf_to
 // Input validation
 $productId = isset($_POST['product_id']) ? (int)$_POST['product_id'] : 0;
 $quantity = isset($_POST['quantity']) ? (int)$_POST['quantity'] : 1;
+$totalPrice = isset($_POST['total_price']) ? (float)$_POST['total_price'] : 0;
 $customerId = (int)$_SESSION['customer_id'];
-$customizations = isset($_POST['customizations']) ? json_decode($_POST['customizations'], true) : [];
+$customizationsJson = isset($_POST['customizations']) ? $_POST['customizations'] : '';
+$customizations = !empty($customizationsJson) ? json_decode($customizationsJson, true) : [];
+
+// Validate quantity
+if ($quantity < 1) {
+    $_SESSION['queue_error'] = 'Quantity must be at least 1.';
+    header('Location: ../../pages/menu.php');
+    exit;
+}
 
 if ($productId <= 0) {
-    $_SESSION['cart_error'] = 'Invalid product selected.';
+    $_SESSION['queue_error'] = 'Invalid product selected.';
     header('Location: ../../pages/menu.php');
     exit;
 }
 
-if ($quantity < 1) {
-    $_SESSION['cart_error'] = 'Quantity must be at least 1.';
-    header('Location: ../../pages/menu.php');
-    exit;
-}
-
-// Process add to cart (ACID compliant with row locking)
 try {
     $database_connection->beginTransaction();
 
-    // Lock the product row - include new columns
+    // Lock and fetch product
     $stmt = $database_connection->prepare(
-        "SELECT stock, is_active, price, base_price, is_customizable, customization_type 
+        "SELECT stock, is_active, price, base_price, is_customizable 
          FROM product 
          WHERE product_id = :product_id 
          FOR UPDATE"
@@ -78,30 +78,28 @@ try {
         );
     }
 
-    // Calculate final price (base price + customization modifiers)
+    // Calculate final price
     $basePrice = (float)($product['base_price'] ?? $product['price']);
     $finalPrice = $basePrice;
-    
-    // If customizable, calculate price with modifiers
-    if ($product['is_customizable'] && !empty($customizations)) {
+
+    // Add customization modifiers if provided
+    if (!empty($customizations)) {
         foreach ($customizations as $cust) {
-            if (!empty($cust['ingredient_id'])) {
-                $ingStmt = $database_connection->prepare(
-                    "SELECT price_modifier FROM ingredient WHERE ingredient_id = :ingredient_id"
-                );
-                $ingStmt->execute([':ingredient_id' => $cust['ingredient_id']]);
-                $ingredient = $ingStmt->fetch(PDO::FETCH_ASSOC);
-                if ($ingredient) {
-                    $finalPrice += (float)($ingredient['price_modifier'] ?? 0);
-                }
+            if (isset($cust['price_modifier']) && isset($cust['quantity'])) {
+                $finalPrice += (float)$cust['price_modifier'] * (int)$cust['quantity'];
             }
         }
     }
-    
-    // Use final price (or fallback to product price)
-    $price = $finalPrice > 0 ? $finalPrice : (float)$product['price'];
 
-    // Check if item already in cart
+    $priceToUse = $totalPrice > 0 ? $totalPrice / $quantity : $finalPrice;
+    if ($priceToUse <= 0) {
+        $priceToUse = (float)$product['price'];
+    }
+
+    // Store customizations as JSON in cart.customization_data (this is the queue storage)
+    $customizationData = !empty($customizations) ? json_encode($customizations) : null;
+
+    // Check if item already in queue
     $checkStmt = $database_connection->prepare(
         "SELECT cart_id, quantity FROM cart 
          WHERE customer_id = :customer_id AND product_id = :product_id"
@@ -111,80 +109,39 @@ try {
         ':product_id' => $productId
     ]);
     $existing = $checkStmt->fetch(PDO::FETCH_ASSOC);
-    $cartId = null;
 
     if ($existing) {
-        // Update existing cart item
-        $cartId = $existing['cart_id'];
-        $newQuantity = $existing['quantity'] + $quantity;
+        // Update existing queue item
+        $newQuantity = (int)$existing['quantity'] + $quantity;
         $updateStmt = $database_connection->prepare(
-            "UPDATE cart SET quantity = :quantity, price = :price, updated_at = NOW() 
+            "UPDATE cart SET quantity = :quantity, price = :price, customization_data = :customization_data
              WHERE cart_id = :cart_id"
         );
         $updateStmt->execute([
             ':quantity' => $newQuantity,
-            ':price' => $price,
-            ':cart_id' => $cartId
+            ':price' => $priceToUse,
+            ':customization_data' => $customizationData,
+            ':cart_id' => $existing['cart_id']
         ]);
-        
-        // Delete existing customizations for this cart item
-        $delCustStmt = $database_connection->prepare(
-            "DELETE FROM customization_instance WHERE cart_id = :cart_id"
-        );
-        $delCustStmt->execute([':cart_id' => $cartId]);
     } else {
-        // Insert new cart item
+        // Insert new queue item
         $insertStmt = $database_connection->prepare(
-            "INSERT INTO cart (customer_id, product_id, quantity, price, added_at) 
-             VALUES (:customer_id, :product_id, :quantity, :price, NOW())"
+            "INSERT INTO cart (customer_id, product_id, quantity, price, added_at, customization_data) 
+             VALUES (:customer_id, :product_id, :quantity, :price, NOW(), :customization_data)"
         );
         $insertStmt->execute([
             ':customer_id' => $customerId,
             ':product_id' => $productId,
             ':quantity' => $quantity,
-            ':price' => $price
+            ':price' => $priceToUse,
+            ':customization_data' => $customizationData
         ]);
-        $cartId = (int)$database_connection->lastInsertId();
-    }
-    
-    // Insert customizations if product is customizable
-    if ($product['is_customizable'] && !empty($customizations) && $cartId) {
-        foreach ($customizations as $cust) {
-            // Get product_composition_id
-            $compStmt = $database_connection->prepare(
-                "SELECT product_composition_id FROM product_composition 
-                 WHERE product_id = :product_id 
-                 AND composition_type = :composition_type"
-            );
-            $compStmt->execute([
-                ':product_id' => $productId,
-                ':composition_type' => $cust['composition_type'] ?? 'modifier'
-            ]);
-            $comp = $compStmt->fetch(PDO::FETCH_ASSOC);
-            $compId = $comp ? $comp['product_composition_id'] : null;
-            
-            if ($compId) {
-                $insertCustStmt = $database_connection->prepare(
-                    "INSERT INTO customization_instance 
-                        (cart_id, product_composition_id, selected_option, 
-                         customization_notes, ingredient_id)
-                     VALUES 
-                        (:cart_id, :comp_id, :selected_option, :notes, :ingredient_id)"
-                );
-                $insertCustStmt->execute([
-                    ':cart_id' => $cartId,
-                    ':comp_id' => $compId,
-                    ':selected_option' => $cust['selected_option'] ?? null,
-                    ':notes' => $cust['customization_notes'] ?? null,
-                    ':ingredient_id' => $cust['ingredient_id'] ?? null
-                ]);
-            }
-        }
     }
 
     $database_connection->commit();
     
-    $_SESSION['cart_success'] = 'Item added to cart successfully.';
+    // FIXED: Use queue_success message and redirect to menu.php
+    $_SESSION['queue_success'] = 'Item added to your order queue!';
     header('Location: ../../pages/menu.php');
     exit;
 
@@ -192,16 +149,16 @@ try {
     if ($database_connection->inTransaction()) {
         $database_connection->rollBack();
     }
-    $_SESSION['cart_error'] = $e->getMessage();
-    header('Location: ../../pages/menu.php');
+    $_SESSION['queue_error'] = $e->getMessage();
+    header('Location: ../../pages/product-detail.php?id=' . $productId);
     exit;
 
 } catch (PDOException $e) {
     if ($database_connection->inTransaction()) {
         $database_connection->rollBack();
     }
-    error_log('Add to cart database error: ' . $e->getMessage());
-    $_SESSION['cart_error'] = 'A system error occurred. Please try again.';
-    header('Location: ../../pages/menu.php');
+    error_log('Add to queue database error: ' . $e->getMessage());
+    $_SESSION['queue_error'] = 'A system error occurred. Please try again.';
+    header('Location: ../../pages/product-detail.php?id=' . $productId);
     exit;
 }

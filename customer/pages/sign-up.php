@@ -67,8 +67,7 @@ unset($_SESSION['registration_error']);
         <div class="register-card">
 
             <!-- Progress Steps -->
-            <div class="register-progress" role="progressbar"
-                aria-valuenow="1" aria-valuemin="1" aria-valuemax="4">
+            <div class="register-progress" role="progressbar" aria-valuenow="1" aria-valuemin="1" aria-valuemax="4">
                 <div class="progress-step active" data-step="1">
                     <span class="step-number">1</span>
                     <span class="step-label">Personal Info</span>
@@ -105,8 +104,8 @@ unset($_SESSION['registration_error']);
             </div>
             <?php endif; ?>
 
-            <form method="POST" action="../backend/handlers/sign-up-handler.php"
-                class="register-form" id="registerForm" novalidate>
+            <form method="POST" action="../backend/handlers/sign-up-handler.php" class="register-form" id="registerForm"
+                novalidate>
 
                 <input type="hidden" name="csrf_token"
                     value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
@@ -208,8 +207,8 @@ unset($_SESSION['registration_error']);
                             <div class="password-wrapper">
                                 <input type="password" id="password" name="password" class="form-control"
                                     placeholder="Create a password" required autocomplete="new-password">
-                                <button type="button" class="password-toggle" id="togglePassword"
-                                    tabindex="-1" aria-label="Toggle password visibility">
+                                <button type="button" class="password-toggle" id="togglePassword" tabindex="-1"
+                                    aria-label="Toggle password visibility">
                                     <img src="<?php echo $assetBase; ?>assets/images/icons/password-hide.svg"
                                         alt="Hide password" id="passwordIcon">
                                 </button>
@@ -224,10 +223,10 @@ unset($_SESSION['registration_error']);
                             </label>
                             <div class="password-wrapper">
                                 <input type="password" id="confirm_password" name="confirm_password"
-                                    class="form-control" placeholder="Confirm your password"
-                                    required autocomplete="new-password">
-                                <button type="button" class="password-toggle" id="toggleConfirmPassword"
-                                    tabindex="-1" aria-label="Toggle confirm password visibility">
+                                    class="form-control" placeholder="Confirm your password" required
+                                    autocomplete="new-password">
+                                <button type="button" class="password-toggle" id="toggleConfirmPassword" tabindex="-1"
+                                    aria-label="Toggle confirm password visibility">
                                     <img src="<?php echo $assetBase; ?>assets/images/icons/password-hide.svg"
                                         alt="Hide password" id="confirmPasswordIcon">
                                 </button>
@@ -238,7 +237,7 @@ unset($_SESSION['registration_error']);
 
                     <div class="step-actions">
                         <button type="button" class="btn btn-primary btn-next" data-next="2">
-                            Next Step &rarr;
+                            Next Step
                         </button>
                     </div>
                 </div>
@@ -253,8 +252,8 @@ unset($_SESSION['registration_error']);
                         <?php foreach ($dietaryOptions as $value => $label): ?>
                         <div class="option-card" data-value="<?php echo $value; ?>">
                             <div class="option-check">
-                                <input type="checkbox" id="diet_<?php echo $value; ?>"
-                                    name="dietary_preferences[]" value="<?php echo $value; ?>">
+                                <input type="checkbox" id="diet_<?php echo $value; ?>" name="dietary_preferences[]"
+                                    value="<?php echo $value; ?>">
                                 <label for="diet_<?php echo $value; ?>">
                                     <span class="option-label">
                                         <?php echo htmlspecialchars($label, ENT_QUOTES, 'UTF-8'); ?>
@@ -267,7 +266,7 @@ unset($_SESSION['registration_error']);
 
                     <div class="step-actions">
                         <button type="button" class="btn btn-outline btn-prev" data-prev="1">
-                            &larr; Back
+                            Back
                         </button>
                         <button type="button" class="btn btn-primary btn-step-action" id="dietAction">
                             Skip Step
@@ -285,8 +284,8 @@ unset($_SESSION['registration_error']);
                         <?php foreach ($allergyOptions as $value => $label): ?>
                         <div class="option-card" data-value="<?php echo $value; ?>">
                             <div class="option-check">
-                                <input type="checkbox" id="allergy_<?php echo $value; ?>"
-                                    name="allergies[]" value="<?php echo $value; ?>">
+                                <input type="checkbox" id="allergy_<?php echo $value; ?>" name="allergies[]"
+                                    value="<?php echo $value; ?>">
                                 <label for="allergy_<?php echo $value; ?>">
                                     <span class="option-label">
                                         <?php echo htmlspecialchars($label, ENT_QUOTES, 'UTF-8'); ?>
@@ -299,7 +298,7 @@ unset($_SESSION['registration_error']);
 
                     <div class="step-actions">
                         <button type="button" class="btn btn-outline btn-prev" data-prev="2">
-                            &larr; Back
+                            Back
                         </button>
                         <button type="button" class="btn btn-primary btn-step-action" id="allergyAction">
                             Skip Step
@@ -351,11 +350,11 @@ unset($_SESSION['registration_error']);
                             <span class="custom-checkbox"></span>
                             <label for="terms" class="terms-label">
                                 I agree to the
-                                <a href="<?php echo $assetBase; ?>pages/terms-conditions.php"
-                                    target="_blank" rel="noopener noreferrer">Terms and Conditions</a>
+                                <a href="<?php echo $assetBase; ?>pages/terms-conditions.php" target="_blank"
+                                    rel="noopener noreferrer">Terms and Conditions</a>
                                 and
-                                <a href="<?php echo $assetBase; ?>pages/privacy-policy.php"
-                                    target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
+                                <a href="<?php echo $assetBase; ?>pages/privacy-policy.php" target="_blank"
+                                    rel="noopener noreferrer">Privacy Policy</a>.
                             </label>
                         </div>
                         <div class="form-error" id="termsError"></div>
@@ -363,7 +362,7 @@ unset($_SESSION['registration_error']);
 
                     <div class="step-actions">
                         <button type="button" class="btn btn-outline btn-prev" data-prev="3">
-                            &larr; Back
+                            Back
                         </button>
                         <button type="submit" class="btn btn-primary" id="registerBtn">
                             Create Account

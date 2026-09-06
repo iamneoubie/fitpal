@@ -1053,7 +1053,8 @@
             var html = '';
             queue.forEach(function(item, index) {
                 var itemTotal = (item.price || 0) * (item.quantity || 0);
-                var imageSrc = item.image || '../assets/images/icons/restaurant.svg';
+                var defaultIcon = (window.FITPAL_ASSET_BASE || '../../shared/') + 'assets/images/icons/restaurant.svg';
+var imageSrc = (item.image && item.image.trim() !== '') ? item.image : defaultIcon;
 
                 html += `
                     <div class="queue-item" data-index="${index}" data-product-id="${item.product_id}">

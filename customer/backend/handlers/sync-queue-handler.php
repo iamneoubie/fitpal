@@ -1,12 +1,10 @@
 <?php
 /**
  * FitPal Sync Queue Handler
- * 
- * AJAX endpoint to sync queue items with the database.
- * Updated for new database schema with customization support.
+ * Version 4.1 - Sync using cart.customization_data JSON
  * 
  * @package FitPal
- * @version 3.0
+ * @version 4.1
  */
 
 declare(strict_types=1);
@@ -46,7 +44,7 @@ try {
     // Start transaction
     $database_connection->beginTransaction();
     
-    // Get current cart items with cart_ids
+    // Get current cart items
     $stmt = $database_connection->prepare(
         "SELECT cart_id, product_id FROM cart WHERE customer_id = :customer_id"
     );
@@ -61,17 +59,9 @@ try {
     // New item IDs from queue
     $newIds = array_column($queue, 'product_id');
     
-    // Remove items not in queue and their customizations
+    // Remove items not in queue
     foreach ($currentItems as $item) {
         if (!in_array($item['product_id'], $newIds)) {
-            // Delete customizations first
-            $delCustStmt = $database_connection->prepare(
-                "DELETE ci FROM customization_instance ci
-                 WHERE ci.cart_id = :cart_id"
-            );
-            $delCustStmt->execute([':cart_id' => $item['cart_id']]);
-            
-            // Delete cart item
             $deleteStmt = $database_connection->prepare(
                 "DELETE FROM cart WHERE customer_id = :customer_id AND product_id = :product_id"
             );
@@ -86,19 +76,12 @@ try {
     foreach ($queue as $item) {
         $productId = (int)$item['product_id'];
         $quantity = (int)$item['quantity'];
+        $price = (float)($item['price'] ?? 0);
         $customizations = $item['customizations'] ?? [];
         
         if ($quantity <= 0) {
             // Remove if quantity is 0
-            $existingCartId = $currentMap[$productId] ?? null;
-            if ($existingCartId) {
-                // Delete customizations
-                $delCustStmt = $database_connection->prepare(
-                    "DELETE ci FROM customization_instance ci
-                     WHERE ci.cart_id = :cart_id"
-                );
-                $delCustStmt->execute([':cart_id' => $existingCartId]);
-                
+            if (isset($currentMap[$productId])) {
                 $deleteStmt = $database_connection->prepare(
                     "DELETE FROM cart WHERE customer_id = :customer_id AND product_id = :product_id"
                 );
@@ -110,90 +93,49 @@ try {
             continue;
         }
         
-        // Get product details (including new columns)
+        // Get product details
         $productStmt = $database_connection->prepare(
             "SELECT price, base_price, is_customizable FROM product WHERE product_id = :product_id"
         );
         $productStmt->execute([':product_id' => $productId]);
         $productData = $productStmt->fetch(PDO::FETCH_ASSOC);
-        $price = $productData ? (float)$productData['price'] : 0;
-        $basePrice = $productData ? (float)($productData['base_price'] ?? $productData['price']) : 0;
-        $isCustomizable = $productData ? (bool)($productData['is_customizable'] ?? false) : false;
+        
+        if ($productData) {
+            $price = (float)$productData['price'];
+        }
+        
+        // Store customizations as JSON
+        $customizationData = !empty($customizations) ? json_encode($customizations) : null;
         
         // Check if exists
         $exists = in_array($productId, $currentIds);
-        $cartId = null;
         
         if ($exists) {
             // Update existing cart item
-            $cartId = $currentMap[$productId];
             $updateStmt = $database_connection->prepare(
-                "UPDATE cart SET quantity = :quantity, updated_at = NOW() 
+                "UPDATE cart SET quantity = :quantity, price = :price, customization_data = :customization_data
                  WHERE customer_id = :customer_id AND product_id = :product_id"
             );
             $updateStmt->execute([
                 ':customer_id' => $customerId,
                 ':product_id' => $productId,
-                ':quantity' => $quantity
+                ':quantity' => $quantity,
+                ':price' => $price,
+                ':customization_data' => $customizationData
             ]);
-            
-            // Update customizations if product is customizable
-            if ($isCustomizable) {
-                // Delete existing customizations
-                $delCustStmt = $database_connection->prepare(
-                    "DELETE ci FROM customization_instance ci
-                     WHERE ci.cart_id = :cart_id"
-                );
-                $delCustStmt->execute([':cart_id' => $cartId]);
-            }
         } else {
             // Insert new cart item
             $insertStmt = $database_connection->prepare(
-                "INSERT INTO cart (customer_id, product_id, quantity, price, added_at) 
-                 VALUES (:customer_id, :product_id, :quantity, :price, NOW())"
+                "INSERT INTO cart (customer_id, product_id, quantity, price, added_at, customization_data) 
+                 VALUES (:customer_id, :product_id, :quantity, :price, NOW(), :customization_data)"
             );
             $insertStmt->execute([
                 ':customer_id' => $customerId,
                 ':product_id' => $productId,
                 ':quantity' => $quantity,
-                ':price' => $price
+                ':price' => $price,
+                ':customization_data' => $customizationData
             ]);
-            $cartId = (int)$database_connection->lastInsertId();
-        }
-        
-        // Insert customizations if product is customizable
-        if ($isCustomizable && !empty($customizations) && $cartId) {
-            foreach ($customizations as $cust) {
-                // Get product_composition_id
-                $compStmt = $database_connection->prepare(
-                    "SELECT product_composition_id FROM product_composition 
-                     WHERE product_id = :product_id 
-                     AND composition_type = :composition_type"
-                );
-                $compStmt->execute([
-                    ':product_id' => $productId,
-                    ':composition_type' => $cust['composition_type'] ?? 'modifier'
-                ]);
-                $comp = $compStmt->fetch(PDO::FETCH_ASSOC);
-                $compId = $comp ? $comp['product_composition_id'] : null;
-                
-                if ($compId) {
-                    $insertCustStmt = $database_connection->prepare(
-                        "INSERT INTO customization_instance 
-                            (cart_id, product_composition_id, selected_option, 
-                             customization_notes, ingredient_id)
-                         VALUES 
-                            (:cart_id, :comp_id, :selected_option, :notes, :ingredient_id)"
-                    );
-                    $insertCustStmt->execute([
-                        ':cart_id' => $cartId,
-                        ':comp_id' => $compId,
-                        ':selected_option' => $cust['selected_option'] ?? null,
-                        ':notes' => $cust['customization_notes'] ?? null,
-                        ':ingredient_id' => $cust['ingredient_id'] ?? null
-                    ]);
-                }
-            }
         }
     }
     

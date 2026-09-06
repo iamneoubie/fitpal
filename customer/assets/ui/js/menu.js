@@ -183,29 +183,32 @@
             });
         });
 
-        // ============================================
-        // ADD-TO-CART FORM HANDLING - FIXED to not interfere with clicks
-        // ============================================
-        document.querySelectorAll('.add-to-cart-form').forEach(function(form) {
-            // Prevent clicks inside form from bubbling
-            form.addEventListener('click', function(e) {
-                e.stopPropagation();
-            });
+       // ============================================
+// ADD-TO-CART FORM HANDLING
+// ============================================
+document.querySelectorAll('.add-to-cart-form').forEach(function(form) {
+    // Prevent clicks inside form from bubbling
+    form.addEventListener('click', function(e) {
+        e.stopPropagation();
+    });
 
-            form.addEventListener('submit', function(e) {
-                e.stopPropagation(); // Prevent event from bubbling
-                var submitBtn = this.querySelector('.add-btn');
-                if (submitBtn) {
-                    submitBtn.disabled = true;
-                    submitBtn.textContent = 'Adding...';
-
-                    setTimeout(function() {
-                        submitBtn.disabled = false;
-                        submitBtn.textContent = 'Add';
-                    }, 5000);
-                }
-            });
-        });
+    form.addEventListener('submit', function(e) {
+        e.stopPropagation();
+        var submitBtn = this.querySelector('.add-btn');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            
+            // Add loading state class instead of changing innerHTML
+            submitBtn.classList.add('loading');
+            
+            // Reset after 5 seconds (or when the response comes)
+            setTimeout(function() {
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('loading');
+            }, 3000);
+        }
+    });
+});
 
         // ============================================
         // FILTER AUTO-SUBMIT

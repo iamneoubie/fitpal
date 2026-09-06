@@ -470,7 +470,7 @@
 }
 
 /* ============================================
-   QUEUE MODALS
+   QUEUE MODALS - Updated to match sign-up modal style
    ============================================ */
 
 .queue-modal {
@@ -480,8 +480,8 @@
     width: 100%;
     height: 100%;
     background: rgba(5, 10, 4, 0.5);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     z-index: 9999;
     display: none !important;
     align-items: center;
@@ -507,15 +507,14 @@
 .queue-modal-content {
     position: relative;
     background: var(--white);
-    border-radius: var(--radius-lg);
-    padding: 28px 32px 32px;
-    max-width: 440px;
+    border-radius: var(--radius-xl);
+    padding: 40px 32px 32px;
+    max-width: 400px;
     width: 100%;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-    animation: queueModalFadeIn 0.25s ease;
+    text-align: center;
+    box-shadow: var(--shadow-xl);
+    animation: queueModalFadeIn 0.3s ease;
     z-index: 1;
-    max-height: 90vh;
-    overflow-y: auto;
 }
 
 @keyframes queueModalFadeIn {
@@ -529,40 +528,31 @@
     }
 }
 
+/* Modal Header - Hidden for icon-only style */
 .queue-modal-header {
+    display: none;
+}
+
+/* Modal Icon - Same as sign-up success modal */
+.queue-modal-icon {
+    margin: 0 auto 20px;
+    width: 72px;
+    height: 72px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding-bottom: 14px;
-    margin-bottom: 18px;
-    border-bottom: 1px solid var(--gray-100);
+    justify-content: center;
+    background: rgba(220, 53, 69, 0.1);
+    border-radius: var(--radius-full);
 }
 
-.queue-modal-title {
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-bold);
-    color: var(--text);
-    margin: 0;
+.queue-modal-icon img {
+    width: 36px;
+    height: 36px;
 }
 
-.queue-modal-close {
-    background: none;
-    border: none;
-    font-size: 26px;
-    line-height: 1;
-    color: var(--gray-400);
-    cursor: pointer;
-    padding: 0 6px;
-    transition: color var(--transition-fast);
-    font-weight: 300;
-}
-
-.queue-modal-close:hover {
-    color: var(--text);
-}
-
+/* Modal Body - Centered text */
 .queue-modal-body {
-    margin-bottom: 24px;
+    margin-bottom: 28px;
 }
 
 .queue-modal-body p {
@@ -570,6 +560,13 @@
     font-size: var(--font-size-base);
     color: var(--gray-700);
     line-height: 1.6;
+}
+
+.queue-modal-body .queue-modal-title-text {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--text);
+    margin: 0 0 8px 0;
 }
 
 .queue-modal-body p strong {
@@ -582,48 +579,61 @@
     margin-top: 4px;
 }
 
+/* Modal Footer - 50/50 button layout */
 .queue-modal-footer {
     display: flex;
     gap: 12px;
-    justify-content: flex-end;
+    justify-content: center;
     padding-top: 4px;
+    width: 100%;
 }
 
 .queue-modal-btn-cancel,
 .queue-modal-btn-confirm {
-    padding: 10px 28px;
+    flex: 1;
+    width: 50%;
+    padding: 14px 20px;
     border-radius: var(--radius-base);
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-base);
     font-weight: var(--font-weight-semibold);
-    border: none;
+    border: 2px solid transparent;
     cursor: pointer;
     transition: all var(--transition-fast);
-    min-width: 80px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    min-width: 0;
 }
 
+/* Cancel Button - Black background, white text (matching sign-up back button) */
 .queue-modal-btn-cancel {
-    background: var(--gray-100);
-    color: var(--gray-600);
+    background: var(--black);
+    color: var(--white);
+    border-color: var(--black);
 }
 
-.queue-modal-btn-cancel:hover {
-    background: var(--gray-200);
-    color: var(--gray-700);
+.queue-modal-btn-cancel:hover,
+.queue-modal-btn-cancel:focus {
+    background: var(--black);
+    color: var(--white);
+    border-color: var(--black);
+    opacity: 0.85;
 }
 
+/* Confirm Button - Danger color (for destructive actions) */
 .queue-modal-btn-confirm {
     background: var(--danger);
     color: var(--white);
+    border-color: var(--danger);
 }
 
-.queue-modal-btn-confirm:hover {
+.queue-modal-btn-confirm:hover,
+.queue-modal-btn-confirm:focus {
     background: #bd2130;
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-sm);
-}
-
-.queue-modal-btn-confirm:active {
-    transform: translateY(0);
+    border-color: #bd2130;
+    color: var(--white);
 }
 
 /* ============================================
@@ -636,17 +646,23 @@
     }
     
     .queue-modal-content {
-        padding: 20px 18px 22px;
-        border-radius: var(--radius-base);
+        padding: 24px 16px 20px;
+        border-radius: var(--radius-lg);
     }
     
-    .queue-modal-header {
-        padding-bottom: 10px;
-        margin-bottom: 12px;
+    .queue-modal-icon {
+        width: 52px;
+        height: 52px;
+        margin-bottom: 16px;
     }
     
-    .queue-modal-title {
-        font-size: var(--font-size-base);
+    .queue-modal-icon img {
+        width: 26px;
+        height: 26px;
+    }
+    
+    .queue-modal-body .queue-modal-title-text {
+        font-size: var(--font-size-lg);
     }
     
     .queue-modal-body p {
@@ -654,197 +670,18 @@
     }
     
     .queue-modal-footer {
-        flex-direction: column-reverse;
+        flex-direction: column;
         gap: 8px;
+        align-items: stretch;
     }
     
     .queue-modal-btn-cancel,
     .queue-modal-btn-confirm {
-        padding: 12px 20px;
         width: 100%;
-        justify-content: center;
-        text-align: center;
-    }
-}
-
-/* ============================================
-   RESPONSIVE - Queue Panel
-   ============================================ */
-
-@media (max-width: 768px) {
-    .queue-panel {
-        padding: 0 12px;
-    }
-    
-    .queue-panel.closed .queue-panel-inner {
-        transform: translateY(calc(100% - 50px));
-    }
-    
-    .queue-panel-header {
-        padding: 10px 14px;
-        min-height: 50px;
-    }
-    
-    .queue-panel-title {
+        flex: none;
+        padding: 12px 20px;
+        height: 44px;
         font-size: var(--font-size-sm);
-    }
-    
-    .queue-panel-summary {
-        font-size: var(--font-size-xs);
-    }
-    
-    .queue-items-container {
-        padding: 6px 12px;
-        max-height: 40vh;
-    }
-    
-    .queue-item {
-        padding: 8px 10px;
-        gap: 10px;
-    }
-    
-    .queue-item-image {
-        width: 40px;
-        height: 40px;
-    }
-    
-    .queue-item-name {
-        font-size: var(--font-size-xs);
-    }
-    
-    .queue-item-actions {
-        gap: 4px;
-    }
-    
-    .queue-item-qty .qty-btn {
-        width: 26px;
-        height: 26px;
-        font-size: 12px;
-    }
-    
-    .queue-item-qty .qty-input {
-        width: 28px;
-        height: 26px;
-        font-size: var(--font-size-xs);
-    }
-    
-    .queue-item-total {
-        font-size: var(--font-size-xs);
-        min-width: 44px;
-    }
-    
-    .queue-footer {
-        padding: 10px 14px;
-        flex-direction: column;
-        align-items: stretch;
-        gap: 10px;
-    }
-    
-    .queue-footer-total {
-        justify-content: space-between;
-        padding: 0 4px;
-    }
-    
-    .queue-footer-actions {
-        justify-content: stretch;
-        gap: 8px;
-    }
-    
-    .queue-btn-cancel,
-    .queue-btn-checkout {
-        flex: 1;
-        justify-content: center;
-        padding: 10px 12px;
-        font-size: var(--font-size-sm);
-    }
-}
-
-@media (max-width: 480px) {
-    .queue-panel {
-        padding: 0 8px;
-    }
-    
-    .queue-panel.closed .queue-panel-inner {
-        transform: translateY(calc(100% - 44px));
-    }
-    
-    .queue-panel-header {
-        padding: 8px 12px;
-        min-height: 44px;
-    }
-    
-    .queue-panel-title {
-        font-size: var(--font-size-sm);
-    }
-    
-    .queue-item-count {
-        font-size: 10px;
-        min-width: 20px;
-        height: 20px;
-        padding: 0 6px;
-    }
-    
-    .queue-items-container {
-        padding: 4px 8px;
-        max-height: 35vh;
-    }
-    
-    .queue-item {
-        padding: 6px 8px;
-        gap: 8px;
-    }
-    
-    .queue-item-image {
-        width: 32px;
-        height: 32px;
-    }
-    
-    .queue-item-name {
-        font-size: 11px;
-    }
-    
-    .queue-item-meta {
-        font-size: 10px;
-    }
-    
-    .queue-item-qty .qty-btn {
-        width: 22px;
-        height: 22px;
-        font-size: 11px;
-    }
-    
-    .queue-item-qty .qty-input {
-        width: 24px;
-        height: 22px;
-        font-size: 10px;
-    }
-    
-    .queue-item-remove {
-        width: 22px;
-        height: 22px;
-    }
-    
-    .queue-item-remove svg {
-        width: 12px;
-        height: 12px;
-    }
-    
-    .queue-item-total {
-        font-size: 10px;
-        min-width: 36px;
-    }
-    
-    .queue-footer {
-        padding: 8px 12px;
-    }
-    
-    .queue-footer-grand-total {
-        font-size: var(--font-size-lg);
-    }
-    
-    .queue-btn-cancel,
-    .queue-btn-checkout {
-        padding: 8px 12px;
-        font-size: var(--font-size-xs);
+        min-width: unset;
     }
 }

@@ -1,12 +1,10 @@
 <?php
 /**
  * FitPal Place Order Handler
- *
- * Processes order creation from cart with ACID transaction support.
- * Thin coordinator - validation only, database work delegated to order-queries.php.
- *
+ * Version 4.1 - Move customizations from cart.customization_data to customization_instance
+ * 
  * @package FitPal
- * @version 1.0
+ * @version 4.1
  */
 
 declare(strict_types=1);
@@ -23,9 +21,6 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
 }
 
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
-require_once __DIR__ . '/../database/order-queries.php';
-require_once __DIR__ . '/../database/cart-queries.php';
-require_once __DIR__ . '/../database/branch-queries.php';
 
 // CSRF validation
 if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== ($_SESSION['csrf_token'] ?? '')) {
@@ -52,44 +47,162 @@ if (!in_array($paymentMethod, $validPaymentMethods, true)) {
     exit;
 }
 
-// Quick check if cart is empty (no transaction needed yet)
-$cartItems = getCustomerCart($database_connection, $customerId);
-if (empty($cartItems)) {
-    $_SESSION['order_error'] = 'Your cart is empty.';
-    header('Location: ../../pages/menu.php');
-    exit;
-}
-
-// Check branch consistency before transaction (quick validation)
-$branchIds = getCartBranchIds($database_connection, $customerId);
-if (count($branchIds) > 1) {
-    $_SESSION['order_error'] = 'All items in your cart must be from the same restaurant branch.';
-    header('Location: ../../pages/checkout.php');
-    exit;
-}
-
-// Process order (ACID compliant with row locking)
 try {
-    $orderId = createOrderFromCart(
-        $database_connection,
-        $customerId,
-        $address,
-        $paymentMethod
-    );
+    $database_connection->beginTransaction();
 
-    $_SESSION['order_success'] = 'Order #' . $orderId . ' placed successfully.';
+    // Get cart items grouped by branch with customization_data
+    $cartStmt = $database_connection->prepare(
+        "SELECT 
+            c.product_id,
+            c.quantity,
+            c.price,
+            c.customization_data,
+            p.name AS product_name,
+            p.price AS unit_price,
+            p.base_price,
+            p.restaurant_branch_id,
+            rb.restaurant_id,
+            rb.branch_name,
+            r.business_name AS restaurant_name
+        FROM cart c
+        JOIN product p ON c.product_id = p.product_id
+        JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
+        JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
+        WHERE c.customer_id = :customer_id"
+    );
+    $cartStmt->execute([':customer_id' => $customerId]);
+    $cartItems = $cartStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if (empty($cartItems)) {
+        throw new RuntimeException('Your cart is empty.');
+    }
+
+    // Check branch consistency
+    $branchIds = array_unique(array_column($cartItems, 'restaurant_branch_id'));
+    if (count($branchIds) > 1) {
+        throw new RuntimeException('All items must be from the same restaurant branch.');
+    }
+
+    $branchId = (int)$branchIds[0];
+    
+    // Calculate totals
+    $subtotal = 0;
+    foreach ($cartItems as $item) {
+        $subtotal += (float)$item['price'] * (int)$item['quantity'];
+    }
+    
+    $deliveryFee = $subtotal > 500 ? 0 : 50.00;
+    $totalAmount = $subtotal + $deliveryFee;
+
+    // Create order
+    $orderStmt = $database_connection->prepare(
+        "INSERT INTO orders 
+            (customer_id, destination_address, payment_method, subtotal, delivery_charge, total_amount, order_status)
+         VALUES 
+            (:customer_id, :address, :payment_method, :subtotal, :delivery_charge, :total_amount, 'pending')"
+    );
+    $orderStmt->execute([
+        ':customer_id' => $customerId,
+        ':address' => $address,
+        ':payment_method' => $paymentMethod,
+        ':subtotal' => $subtotal,
+        ':delivery_charge' => $deliveryFee,
+        ':total_amount' => $totalAmount
+    ]);
+    $orderId = (int)$database_connection->lastInsertId();
+
+    // Insert queue items and create customization_instance records
+    foreach ($cartItems as $item) {
+        // Insert queue item
+        $queueStmt = $database_connection->prepare(
+            "INSERT INTO queue_item 
+                (order_id, branch_id, product_id, queue_quantity, unit_price, total_price, is_customized)
+             VALUES 
+                (:order_id, :branch_id, :product_id, :quantity, :unit_price, :total_price, :is_customized)"
+        );
+        
+        $itemTotal = (float)$item['price'] * (int)$item['quantity'];
+        $isCustomized = !empty($item['customization_data']) ? 1 : 0;
+        
+        $queueStmt->execute([
+            ':order_id' => $orderId,
+            ':branch_id' => $branchId,
+            ':product_id' => (int)$item['product_id'],
+            ':quantity' => (int)$item['quantity'],
+            ':unit_price' => (float)$item['price'],
+            ':total_price' => $itemTotal,
+            ':is_customized' => $isCustomized
+        ]);
+        
+        $queueItemId = (int)$database_connection->lastInsertId();
+        
+        // FIXED: Create customization_instance records from JSON data
+        if (!empty($item['customization_data'])) {
+            $customizations = json_decode($item['customization_data'], true);
+            if (is_array($customizations)) {
+                foreach ($customizations as $cust) {
+                    // Skip notes
+                    if (isset($cust['type']) && in_array($cust['type'], ['notes', 'component_notes'])) {
+                        continue;
+                    }
+                    
+                    $ingredientId = (int)($cust['ingredient_id'] ?? 0);
+                    if ($ingredientId > 0) {
+                        // Get price for this ingredient at order time
+                        $ingPriceStmt = $database_connection->prepare(
+                            "SELECT unit_price, calories FROM ingredient WHERE ingredient_id = :ingredient_id"
+                        );
+                        $ingPriceStmt->execute([':ingredient_id' => $ingredientId]);
+                        $ingData = $ingPriceStmt->fetch(PDO::FETCH_ASSOC);
+                        
+                        $priceAtTime = (float)($cust['price_modifier'] ?? $ingData['unit_price'] ?? 0);
+                        $caloriesAtTime = (int)($ingData['calories'] ?? 0);
+                        $quantity = (int)($cust['quantity'] ?? 1);
+                        
+                        // Insert into customization_instance (links to queue_item)
+                        $custInstanceStmt = $database_connection->prepare(
+                            "INSERT INTO customization_instance 
+                                (queue_item_id, ingredient_id, quantity, price_at_time, calories_at_time, is_removed, custom_text)
+                             VALUES 
+                                (:queue_item_id, :ingredient_id, :quantity, :price_at_time, :calories_at_time, 0, :custom_text)"
+                        );
+                        $custInstanceStmt->execute([
+                            ':queue_item_id' => $queueItemId,
+                            ':ingredient_id' => $ingredientId,
+                            ':quantity' => $quantity,
+                            ':price_at_time' => $priceAtTime,
+                            ':calories_at_time' => $caloriesAtTime,
+                            ':custom_text' => $cust['notes'] ?? null
+                        ]);
+                    }
+                }
+            }
+        }
+    }
+
+    // Clear cart
+    $clearStmt = $database_connection->prepare("DELETE FROM cart WHERE customer_id = :customer_id");
+    $clearStmt->execute([':customer_id' => $customerId]);
+
+    $database_connection->commit();
+
+    $_SESSION['order_success'] = 'Order #' . $orderId . ' placed successfully!';
     header('Location: ../../pages/order-confirmation.php?id=' . $orderId);
     exit;
 
 } catch (RuntimeException $e) {
-    // Business logic errors (insufficient stock, branch mismatch, empty cart, etc.)
+    if ($database_connection->inTransaction()) {
+        $database_connection->rollBack();
+    }
     $_SESSION['order_error'] = $e->getMessage();
     header('Location: ../../pages/checkout.php');
     exit;
 
 } catch (PDOException $e) {
-    // Database errors
-    error_log('Order database error: ' . $e->getMessage());
+    if ($database_connection->inTransaction()) {
+        $database_connection->rollBack();
+    }
+    error_log('Place order error: ' . $e->getMessage());
     $_SESSION['order_error'] = 'A system error occurred. Please try again.';
     header('Location: ../../pages/checkout.php');
     exit;

@@ -1,12 +1,10 @@
 <?php
 /**
  * FitPal Get Queue Handler
- * 
- * AJAX endpoint to retrieve the customer's current queue (cart).
- * Updated for new database schema with customization support.
+ * Version 4.1 - Read customizations from cart.customization_data JSON
  * 
  * @package FitPal
- * @version 3.0
+ * @version 4.1
  */
 
 declare(strict_types=1);
@@ -28,14 +26,15 @@ require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 $customerId = (int)$_SESSION['customer_id'];
 
 try {
-    // Get cart items with product details - Updated for new PRODUCT columns
+    // Get cart items with product details - read customization_data as JSON
     $stmt = $database_connection->prepare(
         "SELECT 
             c.product_id,
-            p.name AS product_name,
-            p.description,
             c.quantity,
             c.price,
+            c.customization_data,
+            p.name AS product_name,
+            p.description,
             p.stock AS product_stock,
             p.is_customizable,
             p.customization_type,
@@ -56,28 +55,13 @@ try {
     
     $queue = [];
     foreach ($cartItems as $item) {
-        // Check for customizations on this item
+        // Parse customizations from JSON stored in cart
         $customizations = [];
-        if ($item['is_customizable']) {
-            $custStmt = $database_connection->prepare(
-                "SELECT 
-                    ci.customization_instance_id,
-                    ci.selected_option,
-                    ci.customization_notes,
-                    ci.ingredient_id,
-                    i.name AS ingredient_name,
-                    i.price_modifier,
-                    pc.composition_type,
-                    pc.is_required,
-                    pc.max_selections
-                FROM customization_instance ci
-                JOIN product_composition pc ON ci.product_composition_id = pc.product_composition_id
-                LEFT JOIN ingredient i ON ci.ingredient_id = i.ingredient_id
-                WHERE ci.cart_id = c.cart_id
-                AND ci.cart_id = :cart_id"
-            );
-            $custStmt->execute([':cart_id' => $item['cart_id'] ?? 0]);
-            $customizations = $custStmt->fetchAll(PDO::FETCH_ASSOC);
+        if (!empty($item['customization_data'])) {
+            $customizations = json_decode($item['customization_data'], true);
+            if (!is_array($customizations)) {
+                $customizations = [];
+            }
         }
         
         $queue[] = [

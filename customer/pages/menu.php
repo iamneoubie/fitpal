@@ -384,14 +384,14 @@ function hasActiveFilters(): bool {
                                     <span class="tags-label">Dietary Tags:</span>
                                     <div class="product-tags">
                                         <?php 
-                                        $displayTags = array_slice($product['dietary_tags'], 0, 5);
-                                        foreach ($displayTags as $tag): ?>
+                $displayTags = array_slice($product['dietary_tags'], 0, 5);
+                foreach ($displayTags as $tag): ?>
                                         <span
                                             class="tag dietary-tag"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $tag)), ENT_QUOTES, 'UTF-8'); ?></span>
                                         <?php endforeach; ?>
                                         <?php if (count($product['dietary_tags']) > 5): ?>
-                                        <span class="tag tag-more">+<?php echo count($product['dietary_tags']) - 5; ?>
-                                            more</span>
+                                        <span
+                                            class="tag tag-more">+<?php echo count($product['dietary_tags']) - 5; ?></span>
                                         <?php endif; ?>
                                     </div>
                                 </div>
@@ -402,14 +402,14 @@ function hasActiveFilters(): bool {
                                     <span class="allergen-label">Allergens:</span>
                                     <div class="product-allergens-tags">
                                         <?php if (!empty($product['allergens'])): 
-                                        $displayAllergens = array_slice($product['allergens'], 0, 5);
-                                        foreach ($displayAllergens as $allergen): ?>
+                $displayAllergens = array_slice($product['allergens'], 0, 5);
+                foreach ($displayAllergens as $allergen): ?>
                                         <span
                                             class="tag allergen-tag"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $allergen)), ENT_QUOTES, 'UTF-8'); ?></span>
                                         <?php endforeach; ?>
                                         <?php if (count($product['allergens']) > 5): ?>
-                                        <span class="tag tag-more">+<?php echo count($product['allergens']) - 5; ?>
-                                            more</span>
+                                        <span
+                                            class="tag tag-more">+<?php echo count($product['allergens']) - 5; ?></span>
                                         <?php endif; ?>
                                         <?php else: ?>
                                         <span class="tag-none">None</span>
@@ -428,13 +428,17 @@ function hasActiveFilters(): bool {
                                     <div class="action-row">
                                         <div class="quantity-control">
                                             <button type="button" class="qty-btn qty-minus"
-                                                aria-label="Decrease quantity">-</button>
+                                                aria-label="Decrease quantity">−</button>
                                             <input type="number" name="quantity" value="1" min="1"
                                                 max="<?php echo $product['stock']; ?>" class="qty-input">
                                             <button type="button" class="qty-btn qty-plus"
                                                 aria-label="Increase quantity">+</button>
                                         </div>
-                                        <button type="submit" class="btn btn-primary btn-sm add-btn">Add</button>
+                                        <button type="submit" class="btn btn-primary btn-sm add-btn"
+                                            aria-label="Add to order">
+                                            <img src="<?php echo $assetBase; ?>assets/images/icons/add-circle-empty.svg"
+                                                alt="Add to order" class="btn-icon" width="18" height="18">
+                                        </button>
                                     </div>
                                 </form>
                                 <?php elseif (!$isLoggedIn): ?>
@@ -458,7 +462,7 @@ function hasActiveFilters(): bool {
                     <?php if ($page > 1): ?>
                     <li class="pagination-item">
                         <a href="<?php echo htmlspecialchars(buildQueryString(['page' => $page-1]), ENT_QUOTES, 'UTF-8'); ?>"
-                            class="pagination-link">&larr; Previous</a>
+                            class="pagination-link">Previous</a>
                     </li>
                     <?php endif; ?>
 
@@ -492,7 +496,7 @@ function hasActiveFilters(): bool {
                     <?php if ($page < $totalPages): ?>
                     <li class="pagination-item">
                         <a href="<?php echo htmlspecialchars(buildQueryString(['page' => $page+1]), ENT_QUOTES, 'UTF-8'); ?>"
-                            class="pagination-link">Next &rarr;</a>
+                            class="pagination-link">Next</a>
                     </li>
                     <?php endif; ?>
                 </ul>
@@ -602,16 +606,16 @@ function hasActiveFilters(): bool {
         </div>
     </div>
     <!-- ============================================
-         MODAL - Remove Item Confirmation
-         ============================================ -->
+     MODAL - Remove Item Confirmation
+     ============================================ -->
     <div class="queue-modal" id="queueRemoveModal" style="display:none;">
         <div class="queue-modal-overlay"></div>
         <div class="queue-modal-content">
-            <div class="queue-modal-header">
-                <span class="queue-modal-title">Remove Item</span>
-                <button type="button" class="queue-modal-close" id="queueModalClose">&times;</button>
+            <div class="queue-modal-icon">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/trash.svg" alt="Remove item">
             </div>
             <div class="queue-modal-body">
+                <p class="queue-modal-title-text">Remove Item</p>
                 <p>Are you sure you want to remove <strong id="queueModalItemName"></strong> from your order?</p>
             </div>
             <div class="queue-modal-footer">
@@ -622,25 +626,21 @@ function hasActiveFilters(): bool {
     </div>
 
     <!-- ============================================
-         MODAL - Cancel Entire Order Confirmation
-         ============================================ -->
+     MODAL - Cancel Entire Order Confirmation
+     ============================================ -->
     <div class="queue-modal" id="queueCancelModal" style="display:none;">
         <div class="queue-modal-overlay"></div>
         <div class="queue-modal-content">
-            <div class="queue-modal-header">
-                <span class="queue-modal-title">Cancel Order</span>
-                <button type="button" class="queue-modal-close" id="queueCancelModalClose">&times;</button>
+            <div class="queue-modal-icon">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/trash.svg" alt="Cancel order">
             </div>
             <div class="queue-modal-body">
+                <p class="queue-modal-title-text">Cancel Order</p>
                 <p>Are you sure you want to cancel your entire order?</p>
-                <p style="font-size: var(--font-size-sm); color: var(--gray-500); margin-top: 4px;">
-                    This will remove <strong id="queueCancelItemCount">0</strong> items from your queue.
-                </p>
             </div>
             <div class="queue-modal-footer">
                 <button type="button" class="queue-modal-btn-cancel" id="queueCancelModalCancel">Cancel</button>
-                <button type="button" class="queue-modal-btn-confirm" id="queueCancelModalConfirm">Yes, Cancel
-                    Order</button>
+                <button type="button" class="queue-modal-btn-confirm" id="queueCancelModalConfirm">Yes</button>
             </div>
         </div>
     </div>
@@ -650,8 +650,10 @@ function hasActiveFilters(): bool {
      SCRIPTS
      ============================================ -->
 <script src="../assets/ui/js/menu.js" defer></script>
+<script>
+window.FITPAL_ASSET_BASE = '<?php echo $assetBase; ?>';
+</script>
 <script src="../assets/ui/js/queue-panel.js" defer></script>
-
 <script>
 /**
  * Handle add to queue from product card forms
@@ -697,14 +699,13 @@ function hasActiveFilters(): bool {
 
             var btn = form.querySelector('.add-btn');
             if (btn) {
-                var originalText = btn.textContent;
-                btn.textContent = '✓ Added';
-                btn.style.background = 'var(--success)';
-                btn.style.color = 'white';
+                // Show added state with SVG icon
+                btn.classList.add('added');
+                btn.disabled = true;
+
                 setTimeout(function() {
-                    btn.textContent = originalText;
-                    btn.style.background = '';
-                    btn.style.color = '';
+                    btn.classList.remove('added');
+                    btn.disabled = false;
                 }, 1500);
             }
         } else {
