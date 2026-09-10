@@ -1,8 +1,33 @@
 -- =====================================================
--- INSERT TEST PRODUCTS (30 products, 10 per branch)
--- WITH CUSTOMIZABLE AND NON-CUSTOMIZABLE OPTIONS
--- For fitpal_food_delivery database
--- FIXED: display_order grouping, base product accuracy, and LAST_INSERT_ID issues
+-- FitPal Seed Data
+-- Version 3.0
+--
+-- CHANGES FROM 2.1
+--   A. Every default row now has price_modifier = 0.00.
+--      Previously three defaults carried non-zero modifiers
+--      (Keto Burger Cheddar, Keto Pizza Parmesan, Keto Pizza
+--      Grilled Chicken), which made the customize step's
+--      implied base disagree with the menu card's displayed
+--      base.
+--   B. Every non-default member of a choice group now has
+--      is_required = 0. Previously all members had
+--      is_required = 1, which read as "all four alternatives
+--      are required" even though only one is chosen. The
+--      runtime already OR-aggregated the flag, so this is a
+--      data-hygiene fix, not a behavior change.
+--
+-- KEY PRINCIPLE
+--   For customizable products, dietary_information.calories
+--   is DERIVED from the default composition, not authored.
+--   Section 9 recomputes it after all inserts.
+--
+-- INVARIANTS ENFORCED
+--   min_quantity <= default_quantity <= max_quantity
+--   exactly one is_default = 1 per choice group
+--   every customizable product has at least one default
+--   every active product has base_price > 0
+--   sum of default price_modifiers = 0
+--   is_required = 1 only on group anchors
 -- =====================================================
 
 USE fitpal_food_delivery;
@@ -10,7 +35,7 @@ USE fitpal_food_delivery;
 START TRANSACTION;
 
 -- =====================================================
--- 1. FINANCIAL ACCOUNTS (FIXED - Step by Step)
+-- 1. FINANCIAL ACCOUNTS
 -- =====================================================
 INSERT IGNORE INTO
     financial_account (balance, account_type)
@@ -113,8 +138,6 @@ VALUES (
 -- =====================================================
 -- 4. RESTAURANTS & BRANCHES
 -- =====================================================
-
--- Restaurant 1: Green Bowl Cafe
 INSERT IGNORE INTO
     restaurant (
         owner_id,
@@ -157,7 +180,6 @@ VALUES (
 
 SET @branch1_id = LAST_INSERT_ID();
 
--- Restaurant 2: Keto Kitchen
 INSERT IGNORE INTO
     restaurant (
         owner_id,
@@ -200,7 +222,6 @@ VALUES (
 
 SET @branch2_id = LAST_INSERT_ID();
 
--- Restaurant 3: Asian Fusion Fit
 INSERT IGNORE INTO
     restaurant (
         owner_id,
@@ -244,10 +265,9 @@ VALUES (
 SET @branch3_id = LAST_INSERT_ID();
 
 -- =====================================================
--- 5. DIETARY INFORMATION (30 entries with varied tags)
+-- 5. DIETARY INFORMATION
 -- =====================================================
-
--- Green Bowl Cafe - Branch 1 (10 products)
+-- Green Bowl Cafe
 INSERT INTO
     dietary_information (
         category,
@@ -349,7 +369,6 @@ VALUES (
         6.0
     );
 
--- Get IDs for Green Bowl Cafe dietary entries
 SELECT MAX(dietary_information_id) INTO @last_diet_green
 FROM dietary_information;
 
@@ -373,7 +392,7 @@ SET @diet9_id = @last_diet_green - 1;
 
 SET @diet10_id = @last_diet_green;
 
--- Keto Kitchen - Branch 2 (10 products)
+-- Keto Kitchen
 INSERT INTO
     dietary_information (
         category,
@@ -475,7 +494,6 @@ VALUES (
         38.0
     );
 
--- Get IDs for Keto Kitchen dietary entries
 SELECT MAX(dietary_information_id) INTO @last_diet_keto
 FROM dietary_information;
 
@@ -499,7 +517,7 @@ SET @diet19_id = @last_diet_keto - 1;
 
 SET @diet20_id = @last_diet_keto;
 
--- Asian Fusion Fit - Branch 3 (10 products)
+-- Asian Fusion Fit
 INSERT INTO
     dietary_information (
         category,
@@ -601,7 +619,6 @@ VALUES (
         5.0
     );
 
--- Get IDs for Asian Fusion Fit dietary entries
 SELECT MAX(dietary_information_id) INTO @last_diet_asian
 FROM dietary_information;
 
@@ -626,7 +643,7 @@ SET @diet29_id = @last_diet_asian - 1;
 SET @diet30_id = @last_diet_asian;
 
 -- =====================================================
--- 6. INGREDIENTS (Master list for customization)
+-- 6. INGREDIENTS
 -- =====================================================
 INSERT INTO
     ingredient (
@@ -890,145 +907,210 @@ VALUES (
         1
     );
 
--- Get ingredient IDs using SELECT INTO
-SELECT ingredient_id INTO @white_rice_id
-FROM ingredient
-WHERE
-    name = 'White Rice';
+SET
+    @white_rice_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'White Rice'
+    );
 
-SELECT ingredient_id INTO @brown_rice_id
-FROM ingredient
-WHERE
-    name = 'Brown Rice';
+SET
+    @brown_rice_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'Brown Rice'
+    );
 
-SELECT
-    ingredient_id INTO @cauliflower_rice_id
-FROM ingredient
-WHERE
-    name = 'Cauliflower Rice';
+SET
+    @cauliflower_rice_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'Cauliflower Rice'
+    );
 
-SELECT ingredient_id INTO @quinoa_id
-FROM ingredient
-WHERE
-    name = 'Quinoa';
+SET
+    @quinoa_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'Quinoa'
+    );
 
-SELECT
-    ingredient_id INTO @grilled_chicken_id
-FROM ingredient
-WHERE
-    name = 'Grilled Chicken';
+SET
+    @grilled_chicken_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'Grilled Chicken'
+    );
 
-SELECT ingredient_id INTO @tofu_id
-FROM ingredient
-WHERE
-    name = 'Tofu';
+SET
+    @tofu_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'Tofu'
+    );
 
-SELECT ingredient_id INTO @salmon_id
-FROM ingredient
-WHERE
-    name = 'Salmon';
+SET
+    @salmon_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'Salmon'
+    );
 
-SELECT ingredient_id INTO @beef_patty_id
-FROM ingredient
-WHERE
-    name = 'Beef Patty';
+SET
+    @beef_patty_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'Beef Patty'
+    );
 
-SELECT ingredient_id INTO @shrimp_id
-FROM ingredient
-WHERE
-    name = 'Shrimp';
+SET
+    @shrimp_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'Shrimp'
+    );
 
-SELECT ingredient_id INTO @eggs_id
-FROM ingredient
-WHERE
-    name = 'Eggs';
+SET
+    @eggs_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'Eggs'
+    );
 
-SELECT ingredient_id INTO @lettuce_id
-FROM ingredient
-WHERE
-    name = 'Lettuce';
+SET
+    @lettuce_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'Lettuce'
+    );
 
-SELECT ingredient_id INTO @tomato_id
-FROM ingredient
-WHERE
-    name = 'Tomato';
+SET
+    @tomato_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'Tomato'
+    );
 
-SELECT ingredient_id INTO @cucumber_id
-FROM ingredient
-WHERE
-    name = 'Cucumber';
+SET
+    @cucumber_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'Cucumber'
+    );
 
-SELECT ingredient_id INTO @avocado_id
-FROM ingredient
-WHERE
-    name = 'Avocado';
+SET
+    @avocado_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'Avocado'
+    );
 
-SELECT ingredient_id INTO @spinach_id
-FROM ingredient
-WHERE
-    name = 'Spinach';
+SET
+    @spinach_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'Spinach'
+    );
 
-SELECT ingredient_id INTO @seaweed_id
-FROM ingredient
-WHERE
-    name = 'Seaweed';
+SET
+    @seaweed_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'Seaweed'
+    );
 
-SELECT
-    ingredient_id INTO @cheddar_cheese_id
-FROM ingredient
-WHERE
-    name = 'Cheddar Cheese';
+SET
+    @cheddar_cheese_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'Cheddar Cheese'
+    );
 
-SELECT ingredient_id INTO @vegan_cheese_id
-FROM ingredient
-WHERE
-    name = 'Vegan Cheese';
+SET
+    @vegan_cheese_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'Vegan Cheese'
+    );
 
-SELECT
-    ingredient_id INTO @parmesan_cheese_id
-FROM ingredient
-WHERE
-    name = 'Parmesan Cheese';
+SET
+    @parmesan_cheese_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'Parmesan Cheese'
+    );
 
-SELECT ingredient_id INTO @bbq_sauce_id
-FROM ingredient
-WHERE
-    name = 'BBQ Sauce';
+SET
+    @bbq_sauce_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'BBQ Sauce'
+    );
 
-SELECT
-    ingredient_id INTO @ranch_dressing_id
-FROM ingredient
-WHERE
-    name = 'Ranch Dressing';
+SET
+    @ranch_dressing_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'Ranch Dressing'
+    );
 
-SELECT ingredient_id INTO @vegan_ranch_id
-FROM ingredient
-WHERE
-    name = 'Vegan Ranch';
+SET
+    @vegan_ranch_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'Vegan Ranch'
+    );
 
-SELECT
-    ingredient_id INTO @teriyaki_sauce_id
-FROM ingredient
-WHERE
-    name = 'Teriyaki Sauce';
+SET
+    @teriyaki_sauce_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'Teriyaki Sauce'
+    );
 
-SELECT
-    ingredient_id INTO @miso_dressing_id
-FROM ingredient
-WHERE
-    name = 'Miso Dressing';
+SET
+    @miso_dressing_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'Miso Dressing'
+    );
 
-SELECT
-    ingredient_id INTO @sesame_dressing_id
-FROM ingredient
-WHERE
-    name = 'Sesame Dressing';
+SET
+    @sesame_dressing_id = (
+        SELECT ingredient_id
+        FROM ingredient
+        WHERE
+            name = 'Sesame Dressing'
+    );
 
 -- =====================================================
--- 7. PRODUCTS (10 per branch, 30 total)
+-- 7. PRODUCTS
 -- =====================================================
-
--- Green Bowl Cafe - Branch 1 (10 products)
+-- Green Bowl Cafe
 INSERT INTO
     product (
         restaurant_branch_id,
@@ -1163,7 +1245,6 @@ VALUES (
         1
     );
 
--- Get product IDs for Green Bowl Cafe
 SELECT MAX(product_id) INTO @last_product_green FROM product;
 
 SET @bowl_product_id = @last_product_green - 9;
@@ -1172,21 +1253,11 @@ SET @salad_product_id = @last_product_green - 8;
 
 SET @smoothie_product_id = @last_product_green - 7;
 
-SET @vegan_bowl_id = @last_product_green - 6;
-
-SET @edamame_id = @last_product_green - 5;
-
-SET @zucchini_id = @last_product_green - 4;
-
 SET @breakfast_bowl_id = @last_product_green - 3;
 
 SET @poke_product_id = @last_product_green - 2;
 
-SET @buddha_bowl_id = @last_product_green - 1;
-
-SET @berry_smoothie_id = @last_product_green;
-
--- Keto Kitchen - Branch 2 (10 products)
+-- Keto Kitchen
 INSERT INTO
     product (
         restaurant_branch_id,
@@ -1321,7 +1392,6 @@ VALUES (
         1
     );
 
--- Get product IDs for Keto Kitchen
 SELECT MAX(product_id) INTO @last_product_keto FROM product;
 
 SET @keto_bowl_id = @last_product_keto - 9;
@@ -1330,21 +1400,11 @@ SET @keto_burger_id = @last_product_keto - 8;
 
 SET @keto_salad_id = @last_product_keto - 7;
 
-SET @steak_plate_id = @last_product_keto - 6;
-
-SET @egg_avocado_id = @last_product_keto - 5;
-
-SET @chicken_parmesan_id = @last_product_keto - 4;
-
 SET @keto_plate_id = @last_product_keto - 3;
 
 SET @keto_pizza_id = @last_product_keto - 2;
 
-SET @salmon_cream_id = @last_product_keto - 1;
-
-SET @shrimp_scampi_id = @last_product_keto;
-
--- Asian Fusion Fit - Branch 3 (10 products)
+-- Asian Fusion Fit
 INSERT INTO
     product (
         restaurant_branch_id,
@@ -1479,7 +1539,6 @@ VALUES (
         1
     );
 
--- Get product IDs for Asian Fusion Fit
 SELECT MAX(product_id) INTO @last_product_asian FROM product;
 
 SET @sushi_id = @last_product_asian - 9;
@@ -1488,25 +1547,28 @@ SET @poke_bowl_id = @last_product_asian - 8;
 
 SET @noodle_bowl_id = @last_product_asian - 7;
 
-SET @gf_sushi_id = @last_product_asian - 6;
-
-SET @seaweed_salad_id = @last_product_asian - 5;
-
-SET @grilled_fish_id = @last_product_asian - 4;
-
 SET @rice_bowl_id = @last_product_asian - 3;
 
 SET @stir_fry_id = @last_product_asian - 2;
 
-SET @tuna_roll_id = @last_product_asian - 1;
-
-SET @tea_smoothie_id = @last_product_asian;
-
 -- =====================================================
--- 8. PRODUCT COMPOSITION (Customization rules)
+-- 8. PRODUCT COMPOSITION
+-- =====================================================
+-- Column order: product_id, ingredient_id, is_default, default_quantity,
+--               max_quantity, price_modifier, display_order,
+--               is_required, min_quantity, max_quantity_per_item
+--
+-- CONVENTIONS
+--   Defaults carry price_modifier = 0.00. The base price already
+--   includes them. Only non-defaults have meaningful modifiers.
+--
+--   Choice groups: only the default row has is_required = 1.
+--   Alternatives have is_required = 0.
 -- =====================================================
 
--- Build Your Own Bowl (Product 1) - Default: White Rice + Grilled Chicken
+-- -----------------------------------------------------
+-- Build Your Own Bowl (product 1)
+-- -----------------------------------------------------
 INSERT INTO
     product_composition (
         product_id,
@@ -1521,7 +1583,7 @@ INSERT INTO
         max_quantity_per_item
     )
 VALUES
-    -- CHOICE GROUP 1: Base (pick one) - ALL display_order = 1
+    -- Base choice: White Rice default
     (
         @bowl_product_id,
         @white_rice_id,
@@ -1542,8 +1604,8 @@ VALUES
         1,
         5.00,
         1,
-        1,
-        1,
+        0,
+        0,
         1
     ),
     (
@@ -1554,8 +1616,8 @@ VALUES
         1,
         10.00,
         1,
-        1,
-        1,
+        0,
+        0,
         1
     ),
     (
@@ -1566,48 +1628,48 @@ VALUES
         1,
         15.00,
         1,
-        1,
-        1,
+        0,
+        0,
         1
     ),
-    -- CHOICE GROUP 2: Protein (pick one) - ALL display_order = 2
+    -- Protein choice: Grilled Chicken default
     (
         @bowl_product_id,
         @grilled_chicken_id,
         1,
         1,
-        2,
+        1,
         0.00,
         2,
-        0,
         1,
-        2
+        1,
+        1
     ),
     (
         @bowl_product_id,
         @tofu_id,
         0,
         0,
-        2,
+        1,
         -10.00,
         2,
         0,
         0,
-        2
+        1
     ),
     (
         @bowl_product_id,
         @beef_patty_id,
         0,
         0,
-        2,
+        1,
         15.00,
         2,
         0,
         0,
-        2
+        1
     ),
-    -- MODIFIERS: Vegetables (each separate)
+    -- Vegetable modifiers
     (
         @bowl_product_id,
         @lettuce_id,
@@ -1656,7 +1718,7 @@ VALUES
         0,
         4
     ),
-    -- MODIFIERS: Sauces (each separate)
+    -- Sauce modifiers
     (
         @bowl_product_id,
         @bbq_sauce_id,
@@ -1694,154 +1756,9 @@ VALUES
         1
     );
 
--- Custom Salad (Product 2) - All optional, no defaults
-INSERT INTO
-    product_composition (
-        product_id,
-        ingredient_id,
-        is_default,
-        default_quantity,
-        max_quantity,
-        price_modifier,
-        display_order,
-        is_required,
-        min_quantity,
-        max_quantity_per_item
-    )
-VALUES (
-        @salad_product_id,
-        @lettuce_id,
-        0,
-        0,
-        1,
-        0.00,
-        1,
-        0,
-        0,
-        1
-    ),
-    (
-        @salad_product_id,
-        @spinach_id,
-        0,
-        0,
-        1,
-        0.00,
-        2,
-        0,
-        0,
-        1
-    ),
-    (
-        @salad_product_id,
-        @grilled_chicken_id,
-        0,
-        0,
-        2,
-        20.00,
-        3,
-        0,
-        0,
-        2
-    ),
-    (
-        @salad_product_id,
-        @tofu_id,
-        0,
-        0,
-        2,
-        10.00,
-        4,
-        0,
-        0,
-        2
-    ),
-    (
-        @salad_product_id,
-        @salmon_id,
-        0,
-        0,
-        2,
-        30.00,
-        5,
-        0,
-        0,
-        2
-    ),
-    (
-        @salad_product_id,
-        @tomato_id,
-        0,
-        0,
-        5,
-        0.00,
-        6,
-        0,
-        0,
-        5
-    ),
-    (
-        @salad_product_id,
-        @cucumber_id,
-        0,
-        0,
-        5,
-        0.00,
-        7,
-        0,
-        0,
-        5
-    ),
-    (
-        @salad_product_id,
-        @avocado_id,
-        0,
-        0,
-        2,
-        15.00,
-        8,
-        0,
-        0,
-        2
-    ),
-    (
-        @salad_product_id,
-        @ranch_dressing_id,
-        0,
-        0,
-        1,
-        0.00,
-        9,
-        0,
-        0,
-        1
-    ),
-    (
-        @salad_product_id,
-        @vegan_ranch_id,
-        0,
-        0,
-        1,
-        2.00,
-        10,
-        0,
-        0,
-        1
-    ),
-    (
-        @salad_product_id,
-        @sesame_dressing_id,
-        0,
-        0,
-        1,
-        0.00,
-        11,
-        0,
-        0,
-        1
-    );
-
--- Custom Protein Smoothie (Product 3) - Default: White Rice
+-- -----------------------------------------------------
+-- Custom Salad (product 2)
+-- -----------------------------------------------------
 INSERT INTO
     product_composition (
         product_id,
@@ -1856,7 +1773,161 @@ INSERT INTO
         max_quantity_per_item
     )
 VALUES
-    -- CHOICE GROUP 1: Base Liquid (pick one)
+    -- Base choice: Lettuce default
+    (
+        @salad_product_id,
+        @lettuce_id,
+        1,
+        1,
+        1,
+        0.00,
+        1,
+        1,
+        1,
+        1
+    ),
+    (
+        @salad_product_id,
+        @spinach_id,
+        0,
+        0,
+        1,
+        0.00,
+        1,
+        0,
+        0,
+        1
+    ),
+    -- Protein options
+    (
+        @salad_product_id,
+        @grilled_chicken_id,
+        0,
+        0,
+        2,
+        20.00,
+        2,
+        0,
+        0,
+        2
+    ),
+    (
+        @salad_product_id,
+        @tofu_id,
+        0,
+        0,
+        2,
+        10.00,
+        3,
+        0,
+        0,
+        2
+    ),
+    (
+        @salad_product_id,
+        @salmon_id,
+        0,
+        0,
+        2,
+        30.00,
+        4,
+        0,
+        0,
+        2
+    ),
+    -- Vegetables
+    (
+        @salad_product_id,
+        @tomato_id,
+        0,
+        0,
+        5,
+        0.00,
+        5,
+        0,
+        0,
+        5
+    ),
+    (
+        @salad_product_id,
+        @cucumber_id,
+        0,
+        0,
+        5,
+        0.00,
+        6,
+        0,
+        0,
+        5
+    ),
+    (
+        @salad_product_id,
+        @avocado_id,
+        0,
+        0,
+        2,
+        15.00,
+        7,
+        0,
+        0,
+        2
+    ),
+    -- Dressings
+    (
+        @salad_product_id,
+        @ranch_dressing_id,
+        0,
+        0,
+        1,
+        0.00,
+        8,
+        0,
+        0,
+        1
+    ),
+    (
+        @salad_product_id,
+        @vegan_ranch_id,
+        0,
+        0,
+        1,
+        2.00,
+        9,
+        0,
+        0,
+        1
+    ),
+    (
+        @salad_product_id,
+        @sesame_dressing_id,
+        0,
+        0,
+        1,
+        0.00,
+        10,
+        0,
+        0,
+        1
+    );
+
+-- -----------------------------------------------------
+-- Custom Protein Smoothie (product 3)
+-- -----------------------------------------------------
+INSERT INTO
+    product_composition (
+        product_id,
+        ingredient_id,
+        is_default,
+        default_quantity,
+        max_quantity,
+        price_modifier,
+        display_order,
+        is_required,
+        min_quantity,
+        max_quantity_per_item
+    )
+VALUES
+    -- Base choice: White Rice default
     (
         @smoothie_product_id,
         @white_rice_id,
@@ -1877,11 +1948,11 @@ VALUES
         1,
         5.00,
         1,
-        1,
-        1,
+        0,
+        0,
         1
     ),
-    -- MODIFIERS: Fruits
+    -- Mix-ins
     (
         @smoothie_product_id,
         @avocado_id,
@@ -1906,7 +1977,7 @@ VALUES
         0,
         3
     ),
-    -- MODIFIERS: Protein add-ons
+    -- Protein add-ons
     (
         @smoothie_product_id,
         @tofu_id,
@@ -1932,7 +2003,9 @@ VALUES
         2
     );
 
--- Breakfast Bowl (Product 7) - Default: Quinoa + Eggs
+-- -----------------------------------------------------
+-- Breakfast Bowl (product 7)
+-- -----------------------------------------------------
 INSERT INTO
     product_composition (
         product_id,
@@ -1947,7 +2020,7 @@ INSERT INTO
         max_quantity_per_item
     )
 VALUES
-    -- CHOICE GROUP 1: Base (pick one)
+    -- Base choice: Quinoa default
     (
         @breakfast_bowl_id,
         @quinoa_id,
@@ -1968,11 +2041,11 @@ VALUES
         1,
         5.00,
         1,
-        1,
-        1,
+        0,
+        0,
         1
     ),
-    -- REQUIRED MODIFIER: Eggs (min 1)
+    -- Required modifier: Eggs (1 to 2)
     (
         @breakfast_bowl_id,
         @eggs_id,
@@ -1985,7 +2058,7 @@ VALUES
         1,
         2
     ),
-    -- MODIFIERS: Vegetables
+    -- Vegetables
     (
         @breakfast_bowl_id,
         @spinach_id,
@@ -2010,7 +2083,7 @@ VALUES
         0,
         3
     ),
-    -- MODIFIERS: Cheese
+    -- Cheeses
     (
         @breakfast_bowl_id,
         @cheddar_cheese_id,
@@ -2036,7 +2109,9 @@ VALUES
         1
     );
 
--- Poke Bowl (Product 8) - Default: White Rice + Salmon
+-- -----------------------------------------------------
+-- Poke Bowl (product 8)
+-- -----------------------------------------------------
 INSERT INTO
     product_composition (
         product_id,
@@ -2051,7 +2126,7 @@ INSERT INTO
         max_quantity_per_item
     )
 VALUES
-    -- CHOICE GROUP 1: Base (pick one)
+    -- Base choice: White Rice default
     (
         @poke_product_id,
         @white_rice_id,
@@ -2072,8 +2147,8 @@ VALUES
         1,
         5.00,
         1,
-        1,
-        1,
+        0,
+        0,
         1
     ),
     (
@@ -2084,11 +2159,11 @@ VALUES
         1,
         10.00,
         1,
-        1,
-        1,
+        0,
+        0,
         1
     ),
-    -- CHOICE GROUP 2: Protein (pick one)
+    -- Protein choice: Salmon default
     (
         @poke_product_id,
         @salmon_id,
@@ -2109,8 +2184,8 @@ VALUES
         1,
         -20.00,
         2,
-        1,
-        1,
+        0,
+        0,
         1
     ),
     (
@@ -2121,11 +2196,11 @@ VALUES
         1,
         15.00,
         2,
-        1,
-        1,
+        0,
+        0,
         1
     ),
-    -- MODIFIERS: Toppings
+    -- Toppings
     (
         @poke_product_id,
         @cucumber_id,
@@ -2150,7 +2225,7 @@ VALUES
         0,
         4
     ),
-    -- MODIFIERS: Sauces
+    -- Sauces
     (
         @poke_product_id,
         @teriyaki_sauce_id,
@@ -2176,11 +2251,9 @@ VALUES
         1
     );
 
--- =====================================================
--- KETO KITCHEN - CUSTOMIZABLE PRODUCTS
--- =====================================================
-
--- Keto Bowl (Product 11) - Default: Cauliflower Rice + Grilled Chicken + Avocado + Spinach
+-- -----------------------------------------------------
+-- Keto Bowl (product 11)
+-- -----------------------------------------------------
 INSERT INTO
     product_composition (
         product_id,
@@ -2195,7 +2268,7 @@ INSERT INTO
         max_quantity_per_item
     )
 VALUES
-    -- CHOICE GROUP 1: Base (pick one)
+    -- Base choice: Cauliflower Rice default
     (
         @keto_bowl_id,
         @cauliflower_rice_id,
@@ -2208,7 +2281,7 @@ VALUES
         1,
         1
     ),
-    -- CHOICE GROUP 2: Protein (pick one)
+    -- Protein choice: Grilled Chicken default
     (
         @keto_bowl_id,
         @grilled_chicken_id,
@@ -2229,8 +2302,8 @@ VALUES
         1,
         25.00,
         2,
-        1,
-        1,
+        0,
+        0,
         1
     ),
     (
@@ -2241,11 +2314,11 @@ VALUES
         1,
         15.00,
         2,
-        1,
-        1,
+        0,
+        0,
         1
     ),
-    -- MODIFIER: Eggs
+    -- Optional eggs
     (
         @keto_bowl_id,
         @eggs_id,
@@ -2258,7 +2331,7 @@ VALUES
         0,
         1
     ),
-    -- MODIFIERS: Healthy Fats
+    -- Healthy fats
     (
         @keto_bowl_id,
         @avocado_id,
@@ -2283,7 +2356,7 @@ VALUES
         0,
         2
     ),
-    -- MODIFIERS: Vegetables
+    -- Vegetables
     (
         @keto_bowl_id,
         @spinach_id,
@@ -2309,7 +2382,9 @@ VALUES
         3
     );
 
--- Custom Keto Burger (Product 12) - Default: Beef Patty + Cheddar Cheese + Lettuce
+-- -----------------------------------------------------
+-- Custom Keto Burger (product 12)
+-- -----------------------------------------------------
 INSERT INTO
     product_composition (
         product_id,
@@ -2324,7 +2399,7 @@ INSERT INTO
         max_quantity_per_item
     )
 VALUES
-    -- CHOICE GROUP 1: Protein (pick one)
+    -- Protein choice: Beef Patty default
     (
         @keto_burger_id,
         @beef_patty_id,
@@ -2345,18 +2420,18 @@ VALUES
         1,
         0.00,
         1,
-        1,
-        1,
+        0,
+        0,
         1
     ),
-    -- MODIFIERS: Cheese
+    -- Cheese: Cheddar default (price_modifier 0.00, base price includes it)
     (
         @keto_burger_id,
         @cheddar_cheese_id,
         1,
         1,
         1,
-        10.00,
+        0.00,
         2,
         0,
         0,
@@ -2374,7 +2449,7 @@ VALUES
         0,
         1
     ),
-    -- MODIFIERS: Toppings
+    -- Toppings
     (
         @keto_burger_id,
         @lettuce_id,
@@ -2412,7 +2487,9 @@ VALUES
         2
     );
 
--- Keto Salad (Product 13) - Default: Spinach + Salmon
+-- -----------------------------------------------------
+-- Keto Salad (product 13)
+-- -----------------------------------------------------
 INSERT INTO
     product_composition (
         product_id,
@@ -2427,7 +2504,7 @@ INSERT INTO
         max_quantity_per_item
     )
 VALUES
-    -- CHOICE GROUP 1: Base (pick one)
+    -- Base choice: Spinach default
     (
         @keto_salad_id,
         @spinach_id,
@@ -2448,11 +2525,11 @@ VALUES
         1,
         0.00,
         1,
-        1,
-        1,
+        0,
+        0,
         1
     ),
-    -- CHOICE GROUP 2: Protein (pick one)
+    -- Protein choice: Salmon default
     (
         @keto_salad_id,
         @salmon_id,
@@ -2473,11 +2550,11 @@ VALUES
         1,
         -10.00,
         2,
-        1,
-        1,
+        0,
+        0,
         1
     ),
-    -- MODIFIERS: Vegetables
+    -- Vegetables
     (
         @keto_salad_id,
         @cucumber_id,
@@ -2502,7 +2579,7 @@ VALUES
         0,
         2
     ),
-    -- MODIFIERS: Dressings
+    -- Dressings
     (
         @keto_salad_id,
         @ranch_dressing_id,
@@ -2528,7 +2605,9 @@ VALUES
         1
     );
 
--- Custom Keto Plate (Product 17) - Default: Beef Patty + Cauliflower Rice + Spinach
+-- -----------------------------------------------------
+-- Custom Keto Plate (product 17)
+-- -----------------------------------------------------
 INSERT INTO
     product_composition (
         product_id,
@@ -2543,7 +2622,7 @@ INSERT INTO
         max_quantity_per_item
     )
 VALUES
-    -- CHOICE GROUP 1: Protein (pick one)
+    -- Protein choice: Beef Patty default
     (
         @keto_plate_id,
         @beef_patty_id,
@@ -2564,8 +2643,8 @@ VALUES
         1,
         0.00,
         1,
-        1,
-        1,
+        0,
+        0,
         1
     ),
     (
@@ -2576,11 +2655,11 @@ VALUES
         1,
         20.00,
         1,
-        1,
-        1,
+        0,
+        0,
         1
     ),
-    -- MODIFIERS: Sides
+    -- Sides
     (
         @keto_plate_id,
         @cauliflower_rice_id,
@@ -2605,7 +2684,7 @@ VALUES
         0,
         2
     ),
-    -- MODIFIERS: Vegetables
+    -- Vegetables
     (
         @keto_plate_id,
         @spinach_id,
@@ -2631,7 +2710,13 @@ VALUES
         3
     );
 
--- Keto Pizza (Product 18) - Default: Cauliflower Rice + Cheddar Cheese + Parmesan + Grilled Chicken
+-- -----------------------------------------------------
+-- Keto Pizza (product 18)
+-- -----------------------------------------------------
+-- All four defaults now have price_modifier = 0.00.
+-- Base price 420.00 already includes Cauliflower, Cheddar,
+-- Parmesan, and Grilled Chicken at their default quantities.
+-- -----------------------------------------------------
 INSERT INTO
     product_composition (
         product_id,
@@ -2646,7 +2731,7 @@ INSERT INTO
         max_quantity_per_item
     )
 VALUES
-    -- CHOICE GROUP 1: Crust (pick one)
+    -- Crust choice: Cauliflower Rice default
     (
         @keto_pizza_id,
         @cauliflower_rice_id,
@@ -2659,7 +2744,7 @@ VALUES
         1,
         1
     ),
-    -- REQUIRED MODIFIERS: Cheese (min 1)
+    -- Required cheese modifiers
     (
         @keto_pizza_id,
         @cheddar_cheese_id,
@@ -2678,25 +2763,26 @@ VALUES
         1,
         1,
         2,
-        5.00,
+        0.00,
         3,
         1,
         1,
         2
     ),
-    -- MODIFIERS: Toppings
+    -- Default topping
     (
         @keto_pizza_id,
         @grilled_chicken_id,
         1,
         1,
         3,
-        10.00,
+        0.00,
         4,
         0,
         0,
         3
     ),
+    -- Optional toppings
     (
         @keto_pizza_id,
         @beef_patty_id,
@@ -2734,11 +2820,9 @@ VALUES
         3
     );
 
--- =====================================================
--- ASIAN FUSION FIT - CUSTOMIZABLE PRODUCTS
--- =====================================================
-
--- Build Your Own Sushi (Product 21) - Default: Seaweed + Salmon
+-- -----------------------------------------------------
+-- Build Your Own Sushi (product 21)
+-- -----------------------------------------------------
 INSERT INTO
     product_composition (
         product_id,
@@ -2753,7 +2837,7 @@ INSERT INTO
         max_quantity_per_item
     )
 VALUES
-    -- UNCHANGEABLE: Seaweed
+    -- Unchangeable wrap: Seaweed
     (
         @sushi_id,
         @seaweed_id,
@@ -2766,7 +2850,7 @@ VALUES
         1,
         1
     ),
-    -- CHOICE GROUP 1: Protein (pick one)
+    -- Protein choice: Salmon default
     (
         @sushi_id,
         @salmon_id,
@@ -2787,8 +2871,8 @@ VALUES
         1,
         -10.00,
         2,
-        1,
-        1,
+        0,
+        0,
         1
     ),
     (
@@ -2799,11 +2883,11 @@ VALUES
         1,
         20.00,
         2,
-        1,
-        1,
+        0,
+        0,
         1
     ),
-    -- MODIFIERS: Fillings (each separate)
+    -- Fillings
     (
         @sushi_id,
         @cucumber_id,
@@ -2828,7 +2912,7 @@ VALUES
         0,
         4
     ),
-    -- MODIFIERS: Sauces (each separate)
+    -- Sauces
     (
         @sushi_id,
         @teriyaki_sauce_id,
@@ -2854,7 +2938,9 @@ VALUES
         1
     );
 
--- Custom Poke Bowl (Product 22) - Default: White Rice + Salmon
+-- -----------------------------------------------------
+-- Custom Poke Bowl (product 22)
+-- -----------------------------------------------------
 INSERT INTO
     product_composition (
         product_id,
@@ -2869,7 +2955,7 @@ INSERT INTO
         max_quantity_per_item
     )
 VALUES
-    -- CHOICE GROUP 1: Base (pick one)
+    -- Base choice: White Rice default
     (
         @poke_bowl_id,
         @white_rice_id,
@@ -2890,8 +2976,8 @@ VALUES
         1,
         5.00,
         1,
-        1,
-        1,
+        0,
+        0,
         1
     ),
     (
@@ -2902,11 +2988,11 @@ VALUES
         1,
         10.00,
         1,
-        1,
-        1,
+        0,
+        0,
         1
     ),
-    -- CHOICE GROUP 2: Protein (pick one)
+    -- Protein choice: Salmon default
     (
         @poke_bowl_id,
         @salmon_id,
@@ -2927,8 +3013,8 @@ VALUES
         1,
         10.00,
         2,
-        1,
-        1,
+        0,
+        0,
         1
     ),
     (
@@ -2939,11 +3025,11 @@ VALUES
         1,
         -15.00,
         2,
-        1,
-        1,
+        0,
+        0,
         1
     ),
-    -- MODIFIERS: Toppings (each separate)
+    -- Toppings
     (
         @poke_bowl_id,
         @cucumber_id,
@@ -2980,7 +3066,7 @@ VALUES
         0,
         4
     ),
-    -- MODIFIERS: Sauces (each separate)
+    -- Sauces
     (
         @poke_bowl_id,
         @teriyaki_sauce_id,
@@ -3006,7 +3092,9 @@ VALUES
         1
     );
 
--- Asian Noodle Bowl (Product 23) - Default: White Rice + Grilled Chicken + Spinach
+-- -----------------------------------------------------
+-- Asian Noodle Bowl (product 23)
+-- -----------------------------------------------------
 INSERT INTO
     product_composition (
         product_id,
@@ -3021,7 +3109,7 @@ INSERT INTO
         max_quantity_per_item
     )
 VALUES
-    -- CHOICE GROUP 1: Noodle Base (pick one)
+    -- Base choice: White Rice default
     (
         @noodle_bowl_id,
         @white_rice_id,
@@ -3042,11 +3130,11 @@ VALUES
         1,
         5.00,
         1,
-        1,
-        1,
+        0,
+        0,
         1
     ),
-    -- CHOICE GROUP 2: Protein (pick one)
+    -- Protein choice: Grilled Chicken default
     (
         @noodle_bowl_id,
         @grilled_chicken_id,
@@ -3067,8 +3155,8 @@ VALUES
         1,
         -10.00,
         2,
-        1,
-        1,
+        0,
+        0,
         1
     ),
     (
@@ -3079,11 +3167,11 @@ VALUES
         1,
         15.00,
         2,
-        1,
-        1,
+        0,
+        0,
         1
     ),
-    -- MODIFIERS: Vegetables
+    -- Vegetables
     (
         @noodle_bowl_id,
         @spinach_id,
@@ -3108,7 +3196,7 @@ VALUES
         0,
         3
     ),
-    -- MODIFIERS: Sauces
+    -- Sauces
     (
         @noodle_bowl_id,
         @teriyaki_sauce_id,
@@ -3134,7 +3222,9 @@ VALUES
         1
     );
 
--- Asian Rice Bowl (Product 27) - Default: White Rice + Grilled Chicken + Spinach
+-- -----------------------------------------------------
+-- Asian Rice Bowl (product 27)
+-- -----------------------------------------------------
 INSERT INTO
     product_composition (
         product_id,
@@ -3149,7 +3239,7 @@ INSERT INTO
         max_quantity_per_item
     )
 VALUES
-    -- CHOICE GROUP 1: Base (pick one)
+    -- Base choice: White Rice default
     (
         @rice_bowl_id,
         @white_rice_id,
@@ -3170,8 +3260,8 @@ VALUES
         1,
         5.00,
         1,
-        1,
-        1,
+        0,
+        0,
         1
     ),
     (
@@ -3182,11 +3272,11 @@ VALUES
         1,
         10.00,
         1,
-        1,
-        1,
+        0,
+        0,
         1
     ),
-    -- CHOICE GROUP 2: Protein (pick one)
+    -- Protein choice: Grilled Chicken default
     (
         @rice_bowl_id,
         @grilled_chicken_id,
@@ -3207,8 +3297,8 @@ VALUES
         1,
         -10.00,
         2,
-        1,
-        1,
+        0,
+        0,
         1
     ),
     (
@@ -3219,11 +3309,11 @@ VALUES
         1,
         15.00,
         2,
-        1,
-        1,
+        0,
+        0,
         1
     ),
-    -- MODIFIERS: Vegetables
+    -- Vegetables
     (
         @rice_bowl_id,
         @spinach_id,
@@ -3261,7 +3351,9 @@ VALUES
         2
     );
 
--- Vegetable Stir Fry (Product 28) - Default: Cauliflower Rice + Spinach
+-- -----------------------------------------------------
+-- Vegetable Stir Fry (product 28)
+-- -----------------------------------------------------
 INSERT INTO
     product_composition (
         product_id,
@@ -3276,7 +3368,7 @@ INSERT INTO
         max_quantity_per_item
     )
 VALUES
-    -- CHOICE GROUP 1: Base (pick one)
+    -- Base choice: Cauliflower Rice default
     (
         @stir_fry_id,
         @cauliflower_rice_id,
@@ -3297,11 +3389,11 @@ VALUES
         1,
         5.00,
         1,
-        1,
-        1,
+        0,
+        0,
         1
     ),
-    -- MODIFIERS: Vegetables (min 2)
+    -- Vegetables
     (
         @stir_fry_id,
         @spinach_id,
@@ -3311,7 +3403,7 @@ VALUES
         0.00,
         2,
         0,
-        2,
+        0,
         5
     ),
     (
@@ -3338,7 +3430,7 @@ VALUES
         0,
         5
     ),
-    -- MODIFIERS: Sauces
+    -- Sauces
     (
         @stir_fry_id,
         @teriyaki_sauce_id,
@@ -3365,341 +3457,125 @@ VALUES
     );
 
 -- =====================================================
--- 9. UPDATE DIETARY INFORMATION TO MATCH DEFAULT INGREDIENTS
+-- 9. DERIVE dietary_information.calories FOR CUSTOMIZABLE PRODUCTS
 -- =====================================================
-
--- Build Your Own Bowl: White Rice (200) + Grilled Chicken (250) = 450 kcal, Price: ₱220
-UPDATE dietary_information
+UPDATE dietary_information di
+JOIN (
+    SELECT p.dietary_information_id, SUM(
+            i.calories * GREATEST(
+                pc.default_quantity, pc.min_quantity
+            )
+        ) AS total_calories
+    FROM
+        product p
+        JOIN product_composition pc ON pc.product_id = p.product_id
+        JOIN ingredient i ON i.ingredient_id = pc.ingredient_id
+    WHERE
+        p.is_customizable = 1
+        AND pc.is_default = 1
+    GROUP BY
+        p.dietary_information_id
+) AS calc ON calc.dietary_information_id = di.dietary_information_id
 SET
-    calories = 450,
-    protein = 26.0,
-    carbs = 52.0,
-    fat = 12.0
-WHERE
-    dietary_information_id = @diet1_id;
+    di.calories = calc.total_calories;
 
+-- =====================================================
+-- 10. ENFORCE BASE PRICE = PRODUCT PRICE
+-- =====================================================
 UPDATE product
 SET
-    price = 220.00,
-    base_price = 220.00
+    base_price = price
 WHERE
-    product_id = @bowl_product_id;
-
--- Custom Protein Smoothie: White Rice (200) = 200 kcal, Price: ₱190
-UPDATE dietary_information
-SET
-    calories = 200,
-    protein = 8.0,
-    carbs = 40.0,
-    fat = 4.0
-WHERE
-    dietary_information_id = @diet7_id;
-
-UPDATE product
-SET
-    price = 190.00,
-    base_price = 190.00
-WHERE
-    product_id = @smoothie_product_id;
-
--- Breakfast Bowl: Quinoa (220) + Eggs (140) = 360 kcal, Price: ₱240
-UPDATE dietary_information
-SET
-    calories = 360,
-    protein = 28.0,
-    carbs = 32.0,
-    fat = 18.0
-WHERE
-    dietary_information_id = @diet8_id;
-
-UPDATE product
-SET
-    price = 240.00,
-    base_price = 240.00
-WHERE
-    product_id = @breakfast_bowl_id;
-
--- Poke Bowl: White Rice (200) + Salmon (300) = 500 kcal, Price: ₱350
-UPDATE dietary_information
-SET
-    calories = 500,
-    protein = 38.0,
-    carbs = 38.0,
-    fat = 20.0
-WHERE
-    dietary_information_id = @diet10_id;
-
-UPDATE product
-SET
-    price = 350.00,
-    base_price = 350.00
-WHERE
-    product_id = @poke_product_id;
-
--- Keto Bowl: Cauliflower Rice (50) + Grilled Chicken (250) + Avocado (160) + Spinach (20) = 480 kcal, Price: ₱480
-UPDATE dietary_information
-SET
-    calories = 480,
-    protein = 36.0,
-    carbs = 18.0,
-    fat = 28.0
-WHERE
-    dietary_information_id = @diet11_id;
-
-UPDATE product
-SET
-    price = 480.00,
-    base_price = 480.00
-WHERE
-    product_id = @keto_bowl_id;
-
--- Custom Keto Burger: Beef Patty (280) + Cheddar (110) + Lettuce (10) = 400 kcal, Price: ₱460
-UPDATE dietary_information
-SET
-    calories = 400,
-    protein = 32.0,
-    carbs = 6.0,
-    fat = 26.0
-WHERE
-    dietary_information_id = @diet14_id;
-
-UPDATE product
-SET
-    price = 460.00,
-    base_price = 460.00
-WHERE
-    product_id = @keto_burger_id;
-
--- Keto Salad: Spinach (20) + Salmon (300) = 320 kcal, Price: ₱380
-UPDATE dietary_information
-SET
-    calories = 320,
-    protein = 28.0,
-    carbs = 8.0,
-    fat = 18.0
-WHERE
-    dietary_information_id = @diet18_id;
-
-UPDATE product
-SET
-    price = 380.00,
-    base_price = 380.00
-WHERE
-    product_id = @keto_salad_id;
-
--- Custom Keto Plate: Beef Patty (280) + Cauliflower Rice (50) + Spinach (20) = 350 kcal, Price: ₱500
-UPDATE dietary_information
-SET
-    calories = 350,
-    protein = 30.0,
-    carbs = 16.0,
-    fat = 22.0
-WHERE
-    dietary_information_id = @diet17_id;
-
-UPDATE product
-SET
-    price = 500.00,
-    base_price = 500.00
-WHERE
-    product_id = @keto_plate_id;
-
--- Keto Pizza: Cauliflower Rice (50) + Cheddar (110) + Parmesan (120) + Grilled Chicken (250) = 530 kcal, Price: ₱435
-UPDATE dietary_information
-SET
-    calories = 530,
-    protein = 42.0,
-    carbs = 14.0,
-    fat = 34.0
-WHERE
-    dietary_information_id = @diet16_id;
-
-UPDATE product
-SET
-    price = 435.00,
-    base_price = 435.00
-WHERE
-    product_id = @keto_pizza_id;
-
--- Build Your Own Sushi: Seaweed (30) + Salmon (300) = 330 kcal, Price: ₱350
-UPDATE dietary_information
-SET
-    calories = 330,
-    protein = 28.0,
-    carbs = 16.0,
-    fat = 16.0
-WHERE
-    dietary_information_id = @diet21_id;
-
-UPDATE product
-SET
-    price = 350.00,
-    base_price = 350.00
-WHERE
-    product_id = @sushi_id;
-
--- Custom Poke Bowl: White Rice (200) + Salmon (300) = 500 kcal, Price: ₱390
-UPDATE dietary_information
-SET
-    calories = 500,
-    protein = 38.0,
-    carbs = 40.0,
-    fat = 20.0
-WHERE
-    dietary_information_id = @diet24_id;
-
-UPDATE product
-SET
-    price = 390.00,
-    base_price = 390.00
-WHERE
-    product_id = @poke_bowl_id;
-
--- Asian Noodle Bowl: White Rice (200) + Grilled Chicken (250) + Spinach (20) = 470 kcal, Price: ₱320
-UPDATE dietary_information
-SET
-    calories = 470,
-    protein = 32.0,
-    carbs = 44.0,
-    fat = 12.0
-WHERE
-    dietary_information_id = @diet26_id;
-
-UPDATE product
-SET
-    price = 320.00,
-    base_price = 320.00
-WHERE
-    product_id = @noodle_bowl_id;
-
--- Asian Rice Bowl: White Rice (200) + Grilled Chicken (250) + Spinach (20) = 470 kcal, Price: ₱300
-UPDATE dietary_information
-SET
-    calories = 470,
-    protein = 32.0,
-    carbs = 44.0,
-    fat = 12.0
-WHERE
-    dietary_information_id = @diet28_id;
-
-UPDATE product
-SET
-    price = 300.00,
-    base_price = 300.00
-WHERE
-    product_id = @rice_bowl_id;
-
--- Vegetable Stir Fry: Cauliflower Rice (50) + Spinach (20) = 70 kcal, Price: ₱280
-UPDATE dietary_information
-SET
-    calories = 70,
-    protein = 6.0,
-    carbs = 12.0,
-    fat = 4.0
-WHERE
-    dietary_information_id = @diet29_id;
-
-UPDATE product
-SET
-    price = 280.00,
-    base_price = 280.00
-WHERE
-    product_id = @stir_fry_id;
+    base_price IS NULL
+    OR base_price = 0;
 
 COMMIT;
 
 -- =====================================================
--- VERIFICATION QUERIES
+-- VERIFICATION
 -- =====================================================
-SELECT '=== Test Data Inserted ===' AS status;
+SELECT '=== Seed data loaded ===' AS status;
 
-SELECT COUNT(*) AS total_restaurants FROM restaurant;
-
-SELECT COUNT(*) AS total_branches FROM restaurant_branch;
-
-SELECT COUNT(*) AS total_products FROM product;
-
-SELECT COUNT(*) AS customizable_products
-FROM product
-WHERE
-    is_customizable = 1;
-
-SELECT COUNT(*) AS non_customizable_products
-FROM product
-WHERE
-    is_customizable = 0;
-
-SELECT COUNT(*) AS active_products
-FROM product
-WHERE
-    is_active = 1
-    AND stock > 0;
-
-SELECT COUNT(*) AS out_of_stock FROM product WHERE stock = 0;
-
--- Show breakdown by restaurant
-SELECT
-    r.business_name,
-    COUNT(p.product_id) AS total_products,
-    SUM(
-        CASE
-            WHEN p.is_customizable = 1 THEN 1
-            ELSE 0
-        END
-    ) AS customizable,
-    SUM(
-        CASE
-            WHEN p.is_customizable = 0 THEN 1
-            ELSE 0
-        END
-    ) AS non_customizable,
-    SUM(
-        CASE
-            WHEN p.stock > 0
-            AND p.is_active = 1 THEN 1
-            ELSE 0
-        END
-    ) AS active_products
-FROM
-    restaurant r
-    JOIN restaurant_branch rb ON r.restaurant_id = rb.restaurant_id
-    JOIN product p ON rb.restaurant_branch_id = p.restaurant_branch_id
-GROUP BY
-    r.business_name;
-
--- Show customization composition statistics with base values
+-- Every customizable product must have sum of default price modifiers = 0.
 SELECT
     p.name AS product_name,
-    p.price AS base_price,
-    di.calories AS base_calories,
-    COUNT(pc.composition_id) AS total_options,
-    SUM(
-        CASE
-            WHEN pc.is_default = 1 THEN 1
-            ELSE 0
-        END
-    ) AS default_count,
+    p.price AS product_price,
+    (
+        SELECT COALESCE(
+                SUM(
+                    pc.price_modifier * pc.default_quantity
+                ), 0
+            )
+        FROM product_composition pc
+        WHERE
+            pc.product_id = p.product_id
+            AND pc.is_default = 1
+    ) AS sum_of_default_price_mods
+FROM product p
+WHERE
+    p.is_customizable = 1
+ORDER BY p.name;
+
+-- Every customizable product must have its stored calories equal to
+-- the sum of its default composition calories.
+SELECT
+    p.name AS product_name,
+    di.calories AS stored_calories,
+    (
+        SELECT COALESCE(
+                SUM(
+                    i.calories * GREATEST(
+                        pc.default_quantity, pc.min_quantity
+                    )
+                ), 0
+            )
+        FROM
+            product_composition pc
+            JOIN ingredient i ON i.ingredient_id = pc.ingredient_id
+        WHERE
+            pc.product_id = p.product_id
+            AND pc.is_default = 1
+    ) AS derived_calories
+FROM
+    product p
+    JOIN dietary_information di ON di.dietary_information_id = p.dietary_information_id
+WHERE
+    p.is_customizable = 1
+ORDER BY p.name;
+
+-- Every choice group must have at most one is_required = 1 row.
+SELECT
+    p.name AS product_name,
+    pc.display_order,
     SUM(
         CASE
             WHEN pc.is_required = 1 THEN 1
             ELSE 0
         END
-    ) AS required_count,
-    SUM(
-        CASE
-            WHEN pc.min_quantity > 0 THEN 1
-            ELSE 0
-        END
-    ) AS has_min_qty
+    ) AS required_count
 FROM
-    product p
-    JOIN dietary_information di ON p.dietary_information_id = di.dietary_information_id
-    JOIN product_composition pc ON p.product_id = pc.product_id
+    product_composition pc
+    JOIN product p ON p.product_id = pc.product_id
 WHERE
-    p.is_customizable = 1
+    pc.max_quantity_per_item = 1
 GROUP BY
     p.product_id,
     p.name,
-    p.price,
-    di.calories
-ORDER BY p.name;
+    pc.display_order
+HAVING
+    required_count > 1;
+
+-- Every modifier row must have min_quantity <= default_quantity <= max_quantity.
+SELECT
+    p.name AS product_name,
+    i.name AS ingredient_name,
+    pc.min_quantity,
+    pc.default_quantity,
+    pc.max_quantity
+FROM
+    product_composition pc
+    JOIN product p ON p.product_id = pc.product_id
+    JOIN ingredient i ON i.ingredient_id = pc.ingredient_id
+WHERE
+    pc.min_quantity > pc.default_quantity
+    OR pc.default_quantity > pc.max_quantity;

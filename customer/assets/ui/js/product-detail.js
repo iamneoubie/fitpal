@@ -1,585 +1,495 @@
 /**
  * FitPal Product Detail JavaScript
- * Version 5.4 - Required ingredients start at min_quantity
+ * Version 7.0
+ *
+ * Base price and base calories are read once from the page root.
+ * Every subsequent change is a delta against the default state.
  *
  * @package FitPal
- * @version 5.4
+ * @version 7.0
  */
-
-(function() {
+(function () {
     'use strict';
 
-    document.addEventListener('DOMContentLoaded', function() {
-        // ============================================
-        // DOM REFERENCES
-        // ============================================
-        var stepMain = document.getElementById('stepMain');
-        var stepCustomize = document.getElementById('stepCustomize');
-        var customizeBtn = document.getElementById('customizeBtn');
-        var backToMainBtn = document.getElementById('backToMainBtn');
-        var cancelCustomizeBtn = document.getElementById('cancelCustomizeBtn');
-        var applyCustomizeBtn = document.getElementById('applyCustomizeBtn');
-        var addToOrderBtn = document.getElementById('addToOrderBtn');
-        var addToCartBtn = document.getElementById('addToCartBtn');
-        var quantityInput = document.getElementById('productQuantity');
-        var mainTotalPrice = document.getElementById('mainTotalPrice');
-        var mainCaloriesTotal = document.getElementById('mainCaloriesTotal');
-        var customizeTotalPrice = document.getElementById('customizeTotalPrice');
-        var customizeTotalCalories = document.getElementById('customizeTotalCalories');
-        var basePriceDisplay = document.getElementById('productBasePrice');
-        var customizationsData = document.getElementById('customizationsData');
-        var totalPriceInput = document.getElementById('totalPriceInput');
-        var totalCaloriesInput = document.getElementById('totalCaloriesInput');
-        var redirectInput = document.querySelector('input[name="redirect"]');
-        var form = document.getElementById('actionControlForm');
-        var pageContainer = document.getElementById('productDetailPage');
+    document.addEventListener('DOMContentLoaded', function () {
 
-        // ============================================
-        // STATE
-        // ============================================
-        var basePrice = parseFloat(pageContainer.dataset.basePrice) || 0;
-        var baseCalories = parseInt(pageContainer.dataset.baseCalories) || 0;
-        var quantity = 1;
-        var currentCustomizations = [];
-        var isFirstLoad = true;
+        // ----------------------------------------------------------
+        // DOM
+        // ----------------------------------------------------------
+        const stepMain               = document.getElementById('stepMain');
+        const stepCustomize          = document.getElementById('stepCustomize');
+        const customizeBtn           = document.getElementById('customizeBtn');
+        const backToMainBtn          = document.getElementById('backToMainBtn');
+        const cancelCustomizeBtn     = document.getElementById('cancelCustomizeBtn');
+        const applyCustomizeBtn      = document.getElementById('applyCustomizeBtn');
+        const addToOrderBtn          = document.getElementById('addToOrderBtn');
+        const addToCartBtn           = document.getElementById('addToCartBtn');
+        const quantityInput          = document.getElementById('productQuantity');
+        const mainTotalPrice         = document.getElementById('mainTotalPrice');
+        const mainCaloriesBadge      = document.getElementById('mainCaloriesBadge');
+        const customizeTotalPrice    = document.getElementById('customizeTotalPrice');
+        const customizeTotalCalories = document.getElementById('customizeTotalCalories');
+        const customizationsData     = document.getElementById('customizationsData');
+        const totalPriceInput        = document.getElementById('totalPriceInput');
+        const totalCaloriesInput     = document.getElementById('totalCaloriesInput');
+        const redirectInput          = document.querySelector('input[name="redirect"]');
+        const form                   = document.getElementById('actionControlForm');
+        const pageRoot               = document.getElementById('productDetailPage');
 
-        // ============================================
+        // ----------------------------------------------------------
+        // BASE (from PHP, derived from defaults)
+        // ----------------------------------------------------------
+        const BASE_PRICE    = parseFloat(pageRoot.dataset.basePrice) || 0;
+        const BASE_CALORIES = parseInt(pageRoot.dataset.baseCalories, 10) || 0;
+
+        // ----------------------------------------------------------
+        // HELPERS
+        // ----------------------------------------------------------
+        function radiosInGroup(groupEl) {
+            return Array.from(groupEl.querySelectorAll('input[type="radio"]'));
+        }
+
+        function findDefaultRadio(groupEl) {
+            return groupEl.querySelector('input[type="radio"][data-is-default="1"]');
+        }
+
+        function findCheckedRadio(groupEl) {
+            return groupEl.querySelector('input[type="radio"]:checked');
+        }
+
+        function syncRadioLabels(groupEl, chosenInput) {
+            groupEl.querySelectorAll('.radio-option').forEach(function (lbl) {
+                lbl.classList.remove('selected');
+            });
+            if (chosenInput) {
+                const lbl = chosenInput.closest('.radio-option');
+                if (lbl) lbl.classList.add('selected');
+            }
+        }
+
+        // ----------------------------------------------------------
+        // SYNC DOM FROM DEFAULTS
+        // ----------------------------------------------------------
+        function syncDomFromDefaults() {
+
+            // ---- Radios ----
+            document.querySelectorAll('.customization-group[data-component-kind="choice"]').forEach(function (group) {
+                const fieldset = group.querySelector('.customization-radio-group');
+                if (!fieldset) return;
+
+                const defaultRadio = findDefaultRadio(fieldset);
+                let chosen = defaultRadio;
+
+                if (!chosen) {
+                    chosen = findCheckedRadio(fieldset);
+                }
+                if (!chosen) {
+                    const first = fieldset.querySelector('input[type="radio"]');
+                    if (first) chosen = first;
+                }
+
+                radiosInGroup(fieldset).forEach(function (r) { r.checked = false; });
+                if (chosen) chosen.checked = true;
+
+                syncRadioLabels(fieldset, chosen);
+            });
+
+            // ---- Checkboxes ----
+            document.querySelectorAll('.customization-group[data-component-kind="multi"]').forEach(function (group) {
+                group.querySelectorAll('.checkbox-option').forEach(function (lbl) {
+                    const cb = lbl.querySelector('input[type="checkbox"]');
+                    if (!cb) return;
+                    const isDefault = cb.dataset.isDefault === '1';
+                    cb.checked = isDefault;
+                    lbl.classList.toggle('selected', isDefault);
+                });
+            });
+
+            // ---- Modifiers ----
+            document.querySelectorAll('.customization-group[data-component-kind="modifier"]').forEach(function (group) {
+                const option = group.querySelector('.modifier-option');
+                if (!option) return;
+
+                const minQty     = parseInt(option.dataset.minQty, 10) || 0;
+                const maxQty     = parseInt(option.dataset.maxQty, 10) || 1;
+                const defaultQty = parseInt(option.dataset.defaultQuantity, 10) || 0;
+
+                // Clamp into range — this is what PHP already did when rendering,
+                // so the DOM will not visually shift.
+                let startQty = defaultQty;
+                if (startQty < minQty) startQty = minQty;
+                if (startQty > maxQty) startQty = maxQty;
+
+                const qtySpan  = option.querySelector('.modifier-quantity');
+                const minusBtn = option.querySelector('.modifier-minus');
+                const plusBtn  = option.querySelector('.modifier-plus');
+
+                if (qtySpan)  qtySpan.textContent = String(startQty);
+                if (minusBtn) minusBtn.disabled = startQty <= minQty;
+                if (plusBtn)  plusBtn.disabled  = startQty >= maxQty;
+                option.classList.toggle('selected', startQty > 0);
+            });
+
+            // ---- Static ----
+            // Nothing to sync; their hidden input always has data-is-default="1".
+        }
+
+        // ----------------------------------------------------------
+        // CALCULATE TOTALS
+        // ----------------------------------------------------------
+        function calculateTotals() {
+            let price    = BASE_PRICE;
+            let calories = BASE_CALORIES;
+
+            // Choice groups: delta between selected and default.
+            document.querySelectorAll('.customization-group[data-component-kind="choice"]').forEach(function (group) {
+                const fieldset = group.querySelector('.customization-radio-group');
+                if (!fieldset) return;
+
+                const defaultRadio  = findDefaultRadio(fieldset);
+                const selectedRadio = findCheckedRadio(fieldset);
+
+                const dp = defaultRadio  ? (parseFloat(defaultRadio.dataset.priceModifier)  || 0) : 0;
+                const dc = defaultRadio  ? (parseInt(defaultRadio.dataset.calories,  10) || 0) : 0;
+
+                const sp = selectedRadio ? (parseFloat(selectedRadio.dataset.priceModifier)  || 0) : 0;
+                const sc = selectedRadio ? (parseInt(selectedRadio.dataset.calories,  10) || 0) : 0;
+
+                price    += sp - dp;
+                calories += sc - dc;
+            });
+
+            // Multi groups: only flips count.
+            document.querySelectorAll('.customization-group[data-component-kind="multi"]').forEach(function (group) {
+                group.querySelectorAll('.checkbox-option').forEach(function (lbl) {
+                    const cb = lbl.querySelector('input[type="checkbox"]');
+                    if (!cb) return;
+
+                    const isDefault = cb.dataset.isDefault === '1';
+                    const isChecked = cb.checked;
+                    if (isChecked === isDefault) return;
+
+                    const p = parseFloat(cb.dataset.priceModifier) || 0;
+                    const c = parseInt(cb.dataset.calories, 10) || 0;
+
+                    if (isChecked) {
+                        price    += p;
+                        calories += c;
+                    } else {
+                        price    -= p;
+                        calories -= c;
+                    }
+                });
+            });
+
+            // Modifiers: delta in units × per-unit values.
+            document.querySelectorAll('.customization-group[data-component-kind="modifier"]').forEach(function (group) {
+                const option = group.querySelector('.modifier-option');
+                if (!option) return;
+
+                const qtySpan    = option.querySelector('.modifier-quantity');
+                const currentQty = parseInt(qtySpan ? qtySpan.textContent : '0', 10) || 0;
+                const defaultQty = parseInt(option.dataset.defaultQuantity, 10) || 0;
+                if (currentQty === defaultQty) return;
+
+                const p = parseFloat(option.dataset.priceModifier) || 0;
+                const c = parseInt(option.dataset.calories, 10) || 0;
+
+                const delta = currentQty - defaultQty;
+                price    += p * delta;
+                calories += c * delta;
+            });
+
+            if (price    < 0) price    = 0;
+            if (calories < 0) calories = 0;
+
+            return { price: price, calories: calories };
+        }
+
+        // ----------------------------------------------------------
+        // UI UPDATERS
+        // ----------------------------------------------------------
+        function getQuantity() {
+            return parseInt(quantityInput ? quantityInput.value : '1', 10) || 1;
+        }
+
+        function updateMainTotals() {
+            const qty = getQuantity();
+            if (mainTotalPrice)    mainTotalPrice.textContent    = '₱' + (BASE_PRICE    * qty).toFixed(2);
+            if (mainCaloriesBadge) mainCaloriesBadge.textContent = (BASE_CALORIES * qty) + ' kcal';
+        }
+
+        function updateCustomizeTotals() {
+            const t = calculateTotals();
+            const qty = getQuantity();
+            const finalPrice = t.price * qty;
+            const finalCal   = t.calories * qty;
+
+            if (customizeTotalPrice)    customizeTotalPrice.textContent    = '₱' + finalPrice.toFixed(2);
+            if (customizeTotalCalories) customizeTotalCalories.textContent = finalCal + ' kcal';
+            if (totalPriceInput)        totalPriceInput.value              = finalPrice.toFixed(2);
+            if (totalCaloriesInput)     totalCaloriesInput.value           = String(finalCal);
+        }
+
+        // ----------------------------------------------------------
         // STEP NAVIGATION
-        // ============================================
+        // ----------------------------------------------------------
         function showCustomizeStep() {
             if (stepMain) stepMain.style.display = 'none';
             if (stepCustomize) {
                 stepCustomize.style.display = 'block';
                 stepCustomize.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
-            if (isFirstLoad) {
-                resetToBase();
-                isFirstLoad = false;
-            }
             updateCustomizeTotals();
         }
 
         function showMainStep() {
             if (stepCustomize) stepCustomize.style.display = 'none';
-            if (stepMain) stepMain.style.display = 'block';
+            if (stepMain)      stepMain.style.display      = 'block';
             updateMainTotals();
         }
 
         if (customizeBtn) {
-            customizeBtn.addEventListener('click', function(e) {
+            customizeBtn.addEventListener('click', function (e) {
                 e.preventDefault();
                 showCustomizeStep();
             });
         }
-
         if (backToMainBtn) {
-            backToMainBtn.addEventListener('click', function(e) {
+            backToMainBtn.addEventListener('click', function (e) {
                 e.preventDefault();
                 showMainStep();
             });
         }
-
         if (cancelCustomizeBtn) {
-            cancelCustomizeBtn.addEventListener('click', function(e) {
+            cancelCustomizeBtn.addEventListener('click', function (e) {
                 e.preventDefault();
-                resetToBase();
+                syncDomFromDefaults();
+                updateCustomizeTotals();
                 showMainStep();
             });
         }
 
-        // ============================================
-        // QUANTITY CONTROLS
-        // ============================================
-        var minusBtn = document.querySelector('.qty-minus');
-        var plusBtn = document.querySelector('.qty-plus');
+        // ----------------------------------------------------------
+        // QUANTITY CONTROLS (main view)
+        // ----------------------------------------------------------
+        const minusBtn = document.querySelector('.qty-minus');
+        const plusBtn  = document.querySelector('.qty-plus');
 
         if (minusBtn && plusBtn && quantityInput) {
-            function updateQuantity(delta) {
-                var val = parseInt(quantityInput.value, 10) || 1;
-                var max = parseInt(quantityInput.max, 10) || 999;
-                var newVal = val + delta;
-                if (newVal < 1) newVal = 1;
-                if (newVal > max) newVal = max;
-                quantityInput.value = newVal;
-                quantity = newVal;
+            function bump(delta) {
+                const cur = parseInt(quantityInput.value, 10) || 1;
+                const max = parseInt(quantityInput.max, 10) || 999;
+                let next = cur + delta;
+                if (next < 1) next = 1;
+                if (next > max) next = max;
+                quantityInput.value = next;
                 updateMainTotals();
                 updateCustomizeTotals();
             }
-
-            minusBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                updateQuantity(-1);
-            });
-
-            plusBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                updateQuantity(1);
-            });
-
-            quantityInput.addEventListener('change', function() {
-                var val = parseInt(this.value, 10) || 1;
-                var max = parseInt(this.max, 10) || 999;
-                if (val < 1) val = 1;
-                if (val > max) val = max;
-                this.value = val;
-                quantity = val;
+            minusBtn.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); bump(-1); });
+            plusBtn .addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); bump(1);  });
+            quantityInput.addEventListener('change', function () {
+                const val = parseInt(this.value, 10) || 1;
+                const max = parseInt(this.max, 10) || 999;
+                const clamped = Math.min(Math.max(val, 1), max);
+                this.value = clamped;
                 updateMainTotals();
                 updateCustomizeTotals();
             });
-
-            quantityInput.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    this.blur();
-                }
+            quantityInput.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') { e.preventDefault(); this.blur(); }
             });
         }
 
-        // ============================================
-        // CUSTOMIZATION EVENT BINDING
-        // ============================================
-
-        // ---- Radio Buttons ----
-        document.querySelectorAll('.customization-radio-group input[type="radio"]').forEach(function(radio) {
-            radio.addEventListener('change', function() {
-                var parentLabel = this.closest('.radio-option');
-                var siblings = parentLabel.parentElement.querySelectorAll('.radio-option');
-                siblings.forEach(function(sib) {
-                    sib.classList.remove('selected');
-                });
-                parentLabel.classList.add('selected');
+        // ----------------------------------------------------------
+        // CUSTOMIZATION EVENTS
+        // ----------------------------------------------------------
+        document.querySelectorAll('.customization-radio-group input[type="radio"]').forEach(function (radio) {
+            radio.addEventListener('change', function () {
+                const fieldset = this.closest('.customization-radio-group');
+                if (fieldset) syncRadioLabels(fieldset, this);
                 updateCustomizeTotals();
             });
         });
 
-        // ---- Select Dropdowns (fallback if any) ----
-        document.querySelectorAll('.customization-select').forEach(function(select) {
-            select.addEventListener('change', function() {
+        document.querySelectorAll('.checkbox-option input[type="checkbox"]').forEach(function (cb) {
+            cb.addEventListener('change', function () {
+                const lbl = this.closest('.checkbox-option');
+                if (lbl) lbl.classList.toggle('selected', this.checked);
                 updateCustomizeTotals();
             });
         });
 
-        // ---- Modifier ----
-        document.querySelectorAll('.modifier-option').forEach(function(option) {
-            var minusBtn = option.querySelector('.modifier-minus');
-            var plusBtn = option.querySelector('.modifier-plus');
-            var quantitySpan = option.querySelector('.modifier-quantity');
-            var minQty = parseInt(option.dataset.minQty, 10) || 0;
-            var maxQty = parseInt(option.dataset.maxQty, 10) || 10;
+        document.querySelectorAll('.modifier-option').forEach(function (option) {
+            const qtySpan = option.querySelector('.modifier-quantity');
+            const minus   = option.querySelector('.modifier-minus');
+            const plus    = option.querySelector('.modifier-plus');
+            const minQty  = parseInt(option.dataset.minQty, 10) || 0;
+            const maxQty  = parseInt(option.dataset.maxQty, 10) || 1;
 
-            if (minusBtn && plusBtn && quantitySpan) {
-                var currentModifierQty = parseInt(quantitySpan.textContent, 10) || 0;
-
-                function updateModifierQty(delta) {
-                    var newQty = currentModifierQty + delta;
-                    if (newQty < minQty) newQty = minQty;
-                    if (newQty > maxQty) newQty = maxQty;
-                    currentModifierQty = newQty;
-                    quantitySpan.textContent = newQty;
-                    option.classList.toggle('selected', newQty > 0);
-                    
-                    minusBtn.disabled = (newQty <= minQty);
-                    plusBtn.disabled = (newQty >= maxQty);
-                    
-                    updateCustomizeTotals();
-                }
-
-                minusBtn.disabled = (currentModifierQty <= minQty);
-                plusBtn.disabled = (currentModifierQty >= maxQty);
-
-                minusBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    var currentQty = parseInt(quantitySpan.textContent, 10) || 0;
-                    if (currentQty > minQty) {
-                        updateModifierQty(-1);
-                    }
-                });
-
-                plusBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    var currentQty = parseInt(quantitySpan.textContent, 10) || 0;
-                    if (currentQty < maxQty) {
-                        updateModifierQty(1);
-                    }
-                });
-            }
-        });
-
-        // ---- Checkbox ----
-        document.querySelectorAll('.checkbox-option input[type="checkbox"]').forEach(function(checkbox) {
-            checkbox.addEventListener('change', function() {
-                var parent = this.closest('.customization-option');
-                parent.classList.toggle('selected', this.checked);
+            function setQty(next) {
+                if (next < minQty) next = minQty;
+                if (next > maxQty) next = maxQty;
+                if (qtySpan) qtySpan.textContent = String(next);
+                if (minus) minus.disabled = next <= minQty;
+                if (plus)  plus.disabled  = next >= maxQty;
+                option.classList.toggle('selected', next > 0);
                 updateCustomizeTotals();
-            });
-        });
-
-        // ============================================
-        // RESET FUNCTIONS
-        // ============================================
-
-        // Reset to base: required ingredients at min_quantity, optional at 0
-        function resetToBase() {
-            // Modifiers - respect min_quantity
-            document.querySelectorAll('.modifier-option').forEach(function(option) {
-                var qtySpan = option.querySelector('.modifier-quantity');
-                var minusBtn = option.querySelector('.modifier-minus');
-                var plusBtn = option.querySelector('.modifier-plus');
-                var minQty = parseInt(option.dataset.minQty, 10) || 0;
-                var maxQty = parseInt(option.dataset.maxQty, 10) || 10;
-                
-                if (qtySpan) {
-                    // REQUIRED: Set to min_quantity (1 for required, 0 for optional)
-                    var defaultQty = minQty;
-                    qtySpan.textContent = defaultQty;
-                    option.classList.toggle('selected', defaultQty > 0);
-                    
-                    if (minusBtn) minusBtn.disabled = (defaultQty <= minQty);
-                    if (plusBtn) plusBtn.disabled = (defaultQty >= maxQty);
-                }
-            });
-
-            // Radio groups - select default option
-            document.querySelectorAll('.customization-radio-group').forEach(function(group) {
-                var defaultRadio = group.querySelector('input[type="radio"][checked]');
-                if (defaultRadio) {
-                    defaultRadio.checked = true;
-                    var parentLabel = defaultRadio.closest('.radio-option');
-                    var siblings = group.querySelectorAll('.radio-option');
-                    siblings.forEach(function(sib) { sib.classList.remove('selected'); });
-                    parentLabel.classList.add('selected');
-                } else {
-                    var firstRadio = group.querySelector('input[type="radio"]');
-                    if (firstRadio) {
-                        firstRadio.checked = true;
-                        var parentLabel = firstRadio.closest('.radio-option');
-                        var siblings = group.querySelectorAll('.radio-option');
-                        siblings.forEach(function(sib) { sib.classList.remove('selected'); });
-                        parentLabel.classList.add('selected');
-                    }
-                }
-            });
-
-            // Checkboxes - uncheck all
-            document.querySelectorAll('.checkbox-option input[type="checkbox"]').forEach(function(checkbox) {
-                checkbox.checked = false;
-                checkbox.closest('.checkbox-option').classList.remove('selected');
-            });
-
-            updateCustomizeTotals();
-        }
-
-        // Legacy reset (kept for compatibility)
-        function resetCustomizations() {
-            resetToBase();
-        }
-
-        // ============================================
-        // CALCULATION ENGINE (Price + Calories)
-        // ============================================
-        function calculateTotals() {
-            var totalPrice = basePrice;
-            var totalCalories = 0;
-
-            // Always include static ingredients (single-choice) regardless of view
-            document.querySelectorAll('.static-ingredient input[type="hidden"]').forEach(function(hidden) {
-                var priceMod = parseFloat(hidden.dataset.priceModifier) || 0;
-                var calMod = parseInt(hidden.dataset.calories, 10) || 0;
-                totalPrice += priceMod;
-                totalCalories += calMod;
-            });
-
-            // Only apply interactive customizations if the customization step is visible
-            var isCustomizeVisible = stepCustomize && stepCustomize.style.display !== 'none';
-            if (!isCustomizeVisible) {
-                return { price: totalPrice, calories: totalCalories };
             }
 
-            // 1. Radio selections (choice groups)
-            document.querySelectorAll('.customization-radio-group input[type="radio"]:checked').forEach(function(radio) {
-                if (radio.value) {
-                    var priceMod = parseFloat(radio.dataset.priceModifier) || 0;
-                    var calMod = parseInt(radio.dataset.calories, 10) || 0;
-                    totalPrice += priceMod;
-                    totalCalories += calMod;
-                }
+            if (minus) minus.addEventListener('click', function (e) {
+                e.preventDefault(); e.stopPropagation();
+                const cur = parseInt(qtySpan.textContent, 10) || 0;
+                setQty(cur - 1);
             });
-
-            // 2. Select dropdowns (if any)
-            document.querySelectorAll('.customization-select').forEach(function(select) {
-                var selectedOption = select.options[select.selectedIndex];
-                if (selectedOption && selectedOption.value && selectedOption.value !== '') {
-                    var priceMod = parseFloat(selectedOption.dataset.priceModifier) || 0;
-                    totalPrice += priceMod;
-                }
+            if (plus) plus.addEventListener('click', function (e) {
+                e.preventDefault(); e.stopPropagation();
+                const cur = parseInt(qtySpan.textContent, 10) || 0;
+                setQty(cur + 1);
             });
+        });
 
-            // 3. Modifier quantities
-            document.querySelectorAll('.modifier-option').forEach(function(option) {
-                var qtySpan = option.querySelector('.modifier-quantity');
-                if (qtySpan) {
-                    var qty = parseInt(qtySpan.textContent, 10) || 0;
-                    if (qty > 0) {
-                        var priceMod = parseFloat(option.dataset.priceModifier) || 0;
-                        var calMod = parseInt(option.dataset.calories, 10) || 0;
-                        totalPrice += priceMod * qty;
-                        totalCalories += calMod * qty;
-                    }
-                }
-            });
-
-            // 4. Checkbox selections
-            document.querySelectorAll('.checkbox-option input[type="checkbox"]:checked').forEach(function(checkbox) {
-                var priceMod = parseFloat(checkbox.dataset.priceModifier) || 0;
-                var calMod = parseInt(checkbox.dataset.calories, 10) || 0;
-                totalPrice += priceMod;
-                totalCalories += calMod;
-            });
-
-            return { price: totalPrice, calories: totalCalories };
-        }
-
-        function updateMainTotals() {
-            var totals = calculateTotals();
-            var qty = parseInt(quantityInput ? quantityInput.value : 1, 10) || 1;
-            var finalPrice = totals.price * qty;
-            var finalCalories = totals.calories * qty;
-
-            if (mainTotalPrice) mainTotalPrice.textContent = '₱' + finalPrice.toFixed(2);
-            if (mainCaloriesTotal) mainCaloriesTotal.textContent = finalCalories + ' kcal';
-        }
-
-        function updateCustomizeTotals() {
-            var totals = calculateTotals();
-            var qty = parseInt(quantityInput ? quantityInput.value : 1, 10) || 1;
-            var finalPrice = totals.price * qty;
-            var finalCalories = totals.calories * qty;
-
-            if (customizeTotalPrice) customizeTotalPrice.textContent = '₱' + finalPrice.toFixed(2);
-            if (customizeTotalCalories) customizeTotalCalories.textContent = finalCalories + ' kcal';
-            if (totalPriceInput) totalPriceInput.value = finalPrice.toFixed(2);
-            if (totalCaloriesInput) totalCaloriesInput.value = finalCalories.toString();
-        }
-
-        // ============================================
-        // BUILD CUSTOMIZATIONS DATA
-        // ============================================
+        // ----------------------------------------------------------
+        // PAYLOAD
+        // ----------------------------------------------------------
         function buildCustomizationsData() {
-            var customizations = [];
+            const out = [];
 
-            // Static ingredients (hidden)
-            document.querySelectorAll('.static-ingredient input[type="hidden"]').forEach(function(hidden) {
-                customizations.push({
-                    ingredient_id: hidden.value,
+            // Static
+            document.querySelectorAll('.static-ingredient input[type="hidden"]').forEach(function (h) {
+                out.push({
+                    ingredient_id: parseInt(h.value, 10) || 0,
                     selected_option: 'selected',
-                    quantity: 1,
-                    price_modifier: parseFloat(hidden.dataset.priceModifier) || 0,
-                    calories: parseInt(hidden.dataset.calories, 10) || 0
+                    quantity: parseInt(h.dataset.defaultQuantity, 10) || 1,
+                    price_modifier: parseFloat(h.dataset.priceModifier) || 0,
+                    calories: parseInt(h.dataset.calories, 10) || 0
                 });
             });
 
-            // Radio selections
-            document.querySelectorAll('.customization-radio-group input[type="radio"]:checked').forEach(function(radio) {
-                if (radio.value) {
-                    var group = radio.closest('.customization-group');
-                    customizations.push({
-                        component_id: group ? group.dataset.componentId : null,
-                        ingredient_id: radio.value,
-                        selected_option: 'selected',
-                        quantity: 1,
-                        price_modifier: parseFloat(radio.dataset.priceModifier) || 0,
-                        calories: parseInt(radio.dataset.calories, 10) || 0
-                    });
-                }
-            });
+            // Choice
+            document.querySelectorAll('.customization-group[data-component-kind="choice"]').forEach(function (group) {
+                const fieldset = group.querySelector('.customization-radio-group');
+                if (!fieldset) return;
+                const checked = fieldset.querySelector('input[type="radio"]:checked');
+                if (!checked) return;
 
-            // Select dropdowns (if any)
-            document.querySelectorAll('.customization-select').forEach(function(select) {
-                var group = select.closest('.customization-group');
-                var selectedOption = select.options[select.selectedIndex];
-                if (selectedOption && selectedOption.value) {
-                    customizations.push({
-                        component_id: group ? group.dataset.componentId : null,
-                        ingredient_id: selectedOption.value,
-                        selected_option: 'selected',
-                        quantity: 1,
-                        price_modifier: parseFloat(selectedOption.dataset.priceModifier) || 0,
+                if (!checked.value) {
+                    out.push({
+                        component_id: group.dataset.componentId || null,
+                        ingredient_id: 0,
+                        selected_option: 'remove',
+                        quantity: 0,
+                        price_modifier: 0,
                         calories: 0
                     });
+                    return;
                 }
-            });
-
-            // Modifiers - include all ingredients (including those with quantity 0)
-            document.querySelectorAll('.modifier-option').forEach(function(option) {
-                var qtySpan = option.querySelector('.modifier-quantity');
-                if (qtySpan) {
-                    var qty = parseInt(qtySpan.textContent, 10) || 0;
-                    var group = option.closest('.customization-group');
-                    customizations.push({
-                        component_id: group ? group.dataset.componentId : null,
-                        ingredient_id: option.dataset.ingredientId,
-                        selected_option: qty > 0 ? 'add' : 'remove',
-                        quantity: qty,
-                        price_modifier: parseFloat(option.dataset.priceModifier) || 0,
-                        calories: parseInt(option.dataset.calories, 10) || 0
-                    });
-                }
-            });
-
-            // Checkboxes
-            document.querySelectorAll('.checkbox-option input[type="checkbox"]:checked').forEach(function(checkbox) {
-                var option = checkbox.closest('.customization-option');
-                var group = option.closest('.customization-group');
-                customizations.push({
-                    component_id: group ? group.dataset.componentId : null,
-                    ingredient_id: checkbox.value,
+                out.push({
+                    component_id: group.dataset.componentId || null,
+                    ingredient_id: parseInt(checked.value, 10) || 0,
                     selected_option: 'selected',
                     quantity: 1,
-                    price_modifier: parseFloat(checkbox.dataset.priceModifier) || 0,
-                    calories: parseInt(checkbox.dataset.calories, 10) || 0
+                    price_modifier: parseFloat(checked.dataset.priceModifier) || 0,
+                    calories: parseInt(checked.dataset.calories, 10) || 0
+                });
+            });
+
+            // Multi
+            document.querySelectorAll('.customization-group[data-component-kind="multi"]').forEach(function (group) {
+                group.querySelectorAll('.checkbox-option input[type="checkbox"]').forEach(function (cb) {
+                    out.push({
+                        component_id: group.dataset.componentId || null,
+                        ingredient_id: parseInt(cb.value, 10) || 0,
+                        selected_option: cb.checked ? 'selected' : 'remove',
+                        quantity: cb.checked ? 1 : 0,
+                        price_modifier: parseFloat(cb.dataset.priceModifier) || 0,
+                        calories: parseInt(cb.dataset.calories, 10) || 0
+                    });
+                });
+            });
+
+            // Modifier
+            document.querySelectorAll('.customization-group[data-component-kind="modifier"]').forEach(function (group) {
+                const option = group.querySelector('.modifier-option');
+                if (!option) return;
+                const qtySpan = option.querySelector('.modifier-quantity');
+                const qty = parseInt(qtySpan ? qtySpan.textContent : '0', 10) || 0;
+
+                out.push({
+                    component_id: group.dataset.componentId || null,
+                    ingredient_id: parseInt(option.dataset.ingredientId, 10) || 0,
+                    selected_option: qty > 0 ? 'add' : 'remove',
+                    quantity: qty,
+                    price_modifier: parseFloat(option.dataset.priceModifier) || 0,
+                    calories: parseInt(option.dataset.calories, 10) || 0
                 });
             });
 
             // Notes
-            var globalNotes = document.getElementById('globalNotes');
-            if (globalNotes && globalNotes.value.trim()) {
-                customizations.push({
-                    type: 'notes',
-                    notes: globalNotes.value.trim()
-                });
+            const notes = document.getElementById('globalNotes');
+            if (notes && notes.value.trim()) {
+                out.push({ type: 'notes', notes: notes.value.trim() });
             }
-
-            return customizations;
+            return out;
         }
 
-        // ============================================
-        // APPLY CUSTOMIZATIONS & SUBMIT
-        // ============================================
-        function setRedirectToMenu() {
-            if (redirectInput) {
-                redirectInput.value = 'menu.php';
-            }
-        }
-
-        function applyCustomizationsAndAdd() {
-            currentCustomizations = buildCustomizationsData();
-            if (customizationsData) {
-                customizationsData.value = JSON.stringify(currentCustomizations);
-            }
-
-            var totals = calculateTotals();
-            var qty = parseInt(quantityInput ? quantityInput.value : 1, 10) || 1;
-            var finalPrice = totals.price * qty;
-            var finalCalories = totals.calories * qty;
-
-            if (totalPriceInput) {
-                totalPriceInput.value = finalPrice.toFixed(2);
-            }
-            if (totalCaloriesInput) {
-                totalCaloriesInput.value = finalCalories.toString();
-            }
-
-            setRedirectToMenu();
-            updateMainTotals();
-            showMainStep();
-
-            if (form) {
-                if (applyCustomizeBtn) {
-                    applyCustomizeBtn.disabled = true;
-                    applyCustomizeBtn.classList.add('loading');
-                }
-                form.submit();
-            }
+        function prepareSubmission() {
+            if (customizationsData) customizationsData.value = JSON.stringify(buildCustomizationsData());
+            const t = calculateTotals();
+            const qty = getQuantity();
+            if (totalPriceInput)    totalPriceInput.value    = (t.price * qty).toFixed(2);
+            if (totalCaloriesInput) totalCaloriesInput.value = String(t.calories * qty);
+            if (redirectInput)      redirectInput.value      = 'menu.php';
         }
 
         if (applyCustomizeBtn) {
-            applyCustomizeBtn.addEventListener('click', function(e) {
+            applyCustomizeBtn.addEventListener('click', function (e) {
                 e.preventDefault();
-                applyCustomizationsAndAdd();
+                prepareSubmission();
+                this.disabled = true;
+                this.classList.add('loading');
+                if (form) form.submit();
             });
         }
 
-        // ============================================
-        // ADD TO ORDER / CART BUTTONS (Main view)
-        // ============================================
         function handleMainSubmit(button) {
-            return function(e) {
+            return function (e) {
                 e.preventDefault();
-
-                var customData = buildCustomizationsData();
-                if (customizationsData) {
-                    customizationsData.value = JSON.stringify(customData);
-                }
-
-                var totals = calculateTotals();
-                var qty = parseInt(quantityInput ? quantityInput.value : 1, 10) || 1;
-                var finalPrice = totals.price * qty;
-                var finalCalories = totals.calories * qty;
-
-                if (totalPriceInput) {
-                    totalPriceInput.value = finalPrice.toFixed(2);
-                }
-                if (totalCaloriesInput) {
-                    totalCaloriesInput.value = finalCalories.toString();
-                }
-
-                setRedirectToMenu();
-
+                prepareSubmission();
                 button.disabled = true;
                 button.classList.add('loading');
-                button.textContent = 'Adding...';
-
-                setTimeout(function() {
-                    form.submit();
-                }, 300);
+                setTimeout(function () { if (form) form.submit(); }, 200);
             };
         }
 
-        if (addToOrderBtn && form) {
-            addToOrderBtn.addEventListener('click', handleMainSubmit(addToOrderBtn));
-        }
+        if (addToOrderBtn && form) addToOrderBtn.addEventListener('click', handleMainSubmit(addToOrderBtn));
+        if (addToCartBtn  && form) addToCartBtn .addEventListener('click', handleMainSubmit(addToCartBtn));
 
-        if (addToCartBtn && form) {
-            addToCartBtn.addEventListener('click', handleMainSubmit(addToCartBtn));
-        }
-
-        // ============================================
-        // KEYBOARD SUPPORT
-        // ============================================
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                if (stepCustomize && stepCustomize.style.display !== 'none') {
-                    showMainStep();
-                }
-                var active = document.activeElement;
-                if (active && active.closest('.customization-textarea')) {
-                    active.blur();
-                }
+        // ----------------------------------------------------------
+        // KEYBOARD
+        // ----------------------------------------------------------
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && stepCustomize && stepCustomize.style.display !== 'none') {
+                showMainStep();
             }
         });
 
-        // ============================================
-        // INITIALISE
-        // ============================================
-        document.querySelectorAll('.customization-radio-group input[type="radio"]:checked').forEach(function(radio) {
-            var parentLabel = radio.closest('.radio-option');
-            parentLabel.classList.add('selected');
-        });
+        // ----------------------------------------------------------
+        // INIT
+        // ----------------------------------------------------------
+        syncDomFromDefaults();
+        updateMainTotals();
+        updateCustomizeTotals();
 
-        setRedirectToMenu();
-
-        // Initialize with base values (required ingredients at min_quantity)
-        resetToBase();
-
-        setTimeout(function() {
+        // One re-sync after paint, in case any other deferred script
+        // momentarily touched the DOM. Same code path, idempotent.
+        requestAnimationFrame(function () {
+            syncDomFromDefaults();
             updateMainTotals();
             updateCustomizeTotals();
-        }, 100);
+        });
 
-        console.log('Product Detail JS v5.4 - Required ingredients start at min_quantity');
+        console.log('Product Detail JS v7.0 initialized');
     });
 })();
