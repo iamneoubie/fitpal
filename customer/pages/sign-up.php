@@ -38,6 +38,7 @@ $dietaryOptions = [
     'dairy_free'    => 'Dairy Free',
     'pescatarian'   => 'Pescatarian',
     'mediterranean' => 'Mediterranean',
+    'halal'         => 'Halal',
 ];
 
 $allergyOptions = [

@@ -3,7 +3,7 @@
  * FitPal Product Queries - FIXED FOR YOUR SCHEMA
  * 
  * @package FitPal
- * @version 4.0
+ * @version 4.2 - Added allergen exclusion filter
  */
 
 declare(strict_types=1);
@@ -60,7 +60,6 @@ function getProductById(PDO $db, int $productId): ?array
     
     // Get customization rules if product is customizable
     if ($product['is_customizable']) {
-        // FIXED: Use composition_id, direct ingredient join
         $compStmt = $db->prepare(
             "SELECT 
                 pc.composition_id,
@@ -90,7 +89,6 @@ function getProductById(PDO $db, int $productId): ?array
         $ingredientRows = $compStmt->fetchAll(PDO::FETCH_ASSOC);
 
         if (!empty($ingredientRows)) {
-            // Group by composition (each ingredient is a separate composition row in your schema)
             $components = [];
             foreach ($ingredientRows as $row) {
                 $compId = $row['composition_id'];
@@ -135,6 +133,17 @@ function getProductById(PDO $db, int $productId): ?array
 
 /**
  * Get menu data with pagination
+ *
+ * @param PDO $db Database connection
+ * @param int $page Current page
+ * @param int $perPage Items per page
+ * @param array $selectedTags Dietary tags to include (OR logic)
+ * @param string $search Search term
+ * @param int $restaurantId Restaurant filter
+ * @param float $minPrice Minimum price
+ * @param float $maxPrice Maximum price
+ * @param array $excludeAllergens Allergens to exclude (products containing these will be hidden)
+ * @return array Menu data with restaurants, pagination info
  */
 function getMenuDataPaginated(
     PDO $db,
@@ -144,7 +153,8 @@ function getMenuDataPaginated(
     string $search = '',
     int $restaurantId = 0,
     float $minPrice = 0.0,
-    float $maxPrice = 0.0
+    float $maxPrice = 0.0,
+    array $excludeAllergens = []
 ): array {
     $offset = ($page - 1) * $perPage;
 
@@ -184,14 +194,36 @@ function getMenuDataPaginated(
         $bindValues[] = $maxPrice;
     }
 
-    // Dietary tags filter
+    // Dietary tags filter (include - OR logic)
     if (!empty($selectedTags)) {
         $tagConditions = [];
         foreach ($selectedTags as $tag) {
-            $tagConditions[] = "FIND_IN_SET(?, COALESCE(di.dietary_tags, '')) > 0";
-            $bindValues[] = $tag;
+            $tagConditions[] = "FIND_IN_SET(?, REPLACE(COALESCE(di.dietary_tags, ''), ' ', '')) > 0";
+            $bindValues[] = trim($tag);
         }
         $conditions[] = "(" . implode(' OR ', $tagConditions) . ")";
+    }
+
+    // ============================================================
+    // ALLERGEN EXCLUSION FILTER
+    // Products containing ANY of the excluded allergens are hidden.
+    // This is a hard exclusion - if a product's allergens field
+    // contains any of the user's allergies, it is removed entirely.
+    // ============================================================
+    if (!empty($excludeAllergens)) {
+        $allergenConditions = [];
+        foreach ($excludeAllergens as $allergen) {
+            $allergen = trim($allergen);
+            if ($allergen === '' || $allergen === 'none') {
+                continue;
+            }
+            // NOT FIND_IN_SET: product allergens must NOT contain this allergen
+            $allergenConditions[] = "NOT FIND_IN_SET(?, REPLACE(COALESCE(di.allergens, ''), ' ', ''))";
+            $bindValues[] = $allergen;
+        }
+        if (!empty($allergenConditions)) {
+            $conditions[] = "(" . implode(' AND ', $allergenConditions) . ")";
+        }
     }
 
     if (!empty($conditions)) {
@@ -362,6 +394,46 @@ function getDistinctDietaryTags(PDO $db): array
     return $tags;
 }
 
+/**
+ * Get all distinct allergens from dietary_information
+ *
+ * @param PDO $db Database connection
+ * @return array List of allergen strings
+ */
+function getAllDistinctAllergens(PDO $db): array
+{
+    $stmt = $db->query(
+        "SELECT allergens FROM dietary_information 
+         WHERE allergens IS NOT NULL AND allergens != '' AND allergens != 'none'"
+    );
+    
+    $allergenCounts = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        if (!empty($row['allergens'])) {
+            $parts = array_map('trim', explode(',', $row['allergens']));
+            foreach ($parts as $allergen) {
+                $allergen = trim($allergen);
+                if ($allergen !== '' && $allergen !== 'none') {
+                    $allergenCounts[$allergen] = ($allergenCounts[$allergen] ?? 0) + 1;
+                }
+            }
+        }
+    }
+    
+    ksort($allergenCounts);
+    
+    $result = [];
+    foreach ($allergenCounts as $allergen => $count) {
+        $result[] = [
+            'allergen' => $allergen,
+            'count' => $count,
+            'label' => ucwords(str_replace('_', ' ', $allergen))
+        ];
+    }
+    
+    return $result;
+}
+
 function getAllRestaurants(PDO $db): array
 {
     $stmt = $db->prepare(
@@ -409,7 +481,6 @@ function getDistinctDietaryTagsWithCount(PDO $db): array
 
 function getProductCustomizationComponents(PDO $db, int $productId): array
 {
-    // FIXED: Direct join without junction table
     $stmt = $db->prepare(
         "SELECT 
             pc.composition_id,
@@ -438,7 +509,6 @@ function getProductCustomizationComponents(PDO $db, int $productId): array
     $stmt->execute([':product_id' => $productId]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    // Group by composition_id
     $grouped = [];
     foreach ($rows as $row) {
         $compId = $row['composition_id'];

@@ -5,8 +5,13 @@
  * Displays restaurants and their menu items with dietary filtering and pagination.
  * Queue panel replaces alert-based feedback with persistent cart display.
  *
+ * Features:
+ * - Dietary tag filter (include)
+ * - Allergen filter (exclude) - automatically excludes user's allergies
+ * - Auto-applies user's dietary preferences as checked filters
+ *
  * @package FitPal
- * @version 5.3 - Cancel order with modal confirmation
+ * @version 6.1 - Fixed pagination consistency + removed inline JS
  */
 
 declare(strict_types=1);
@@ -30,23 +35,118 @@ $perPage = 10;
 $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
 $search = isset($_GET['search']) ? trim($_GET['search']) : '';
 $selectedTags = isset($_GET['tags']) && is_array($_GET['tags']) ? array_filter($_GET['tags']) : [];
+$selectedAllergens = isset($_GET['allergens']) && is_array($_GET['allergens']) ? array_filter($_GET['allergens']) : [];
 $restaurantId = isset($_GET['restaurant_id']) ? max(0, (int)$_GET['restaurant_id']) : 0;
 $minPrice = isset($_GET['min_price']) && $_GET['min_price'] !== '' ? max(0, (float)$_GET['min_price']) : 0.0;
 $maxPrice = isset($_GET['max_price']) && $_GET['max_price'] !== '' ? max(0, (float)$_GET['max_price']) : 0.0;
 
-// Fetch menu data with pagination
-$menuData = getMenuDataPaginated($database_connection, $page, $perPage, $selectedTags, $search, $restaurantId, $minPrice, $maxPrice);
+// ============================================
+// LOAD USER PREFERENCES (if logged in)
+// ============================================
+$userDietaryPreferences = [];
+$userAllergies = [];
+$isLoggedIn = isset($_SESSION['customer_id']) && !empty($_SESSION['customer_id']);
+
+if ($isLoggedIn) {
+    try {
+        $prefStmt = $database_connection->prepare(
+            "SELECT dietary_preferences, allergies 
+             FROM customer_profile 
+             WHERE customer_id = :customer_id 
+             LIMIT 1"
+        );
+        $prefStmt->execute([':customer_id' => (int)$_SESSION['customer_id']]);
+        $prefData = $prefStmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($prefData) {
+            if (!empty($prefData['dietary_preferences'])) {
+                $userDietaryPreferences = array_filter(
+                    array_map('trim', explode(',', $prefData['dietary_preferences'])),
+                    fn($v) => $v !== '' && $v !== 'none'
+                );
+            }
+            if (!empty($prefData['allergies'])) {
+                $userAllergies = array_filter(
+                    array_map('trim', explode(',', $prefData['allergies'])),
+                    fn($v) => $v !== '' && $v !== 'none'
+                );
+            }
+        }
+    } catch (PDOException $e) {
+        error_log('Menu preferences fetch error: ' . $e->getMessage());
+    }
+}
+
+// ============================================
+// AUTO-APPLY USER PREFERENCES (when no filter is set)
+// ============================================
+$isFilterSubmitted = isset($_GET['filter_applied']) || 
+                     isset($_GET['search']) || 
+                     isset($_GET['tags']) || 
+                     isset($_GET['allergens']) ||
+                     isset($_GET['restaurant_id']) || 
+                     isset($_GET['min_price']) || 
+                     isset($_GET['max_price']);
+
+if ($isLoggedIn && !$isFilterSubmitted) {
+    // Auto-check user's dietary preferences
+    if (!empty($userDietaryPreferences)) {
+        $selectedTags = $userDietaryPreferences;
+    }
+    // Auto-check user's allergies (exclusion filter)
+    if (!empty($userAllergies)) {
+        $selectedAllergens = $userAllergies;
+    }
+}
+
+// ============================================
+// FETCH MENU DATA with allergen exclusion
+// ============================================
+$menuData = getMenuDataPaginated(
+    $database_connection,
+    $page,
+    $perPage,
+    $selectedTags,
+    $search,
+    $restaurantId,
+    $minPrice,
+    $maxPrice,
+    $selectedAllergens
+);
 $restaurants = $menuData['restaurants'] ?? [];
 $totalProducts = $menuData['totalProducts'] ?? 0;
 $totalPages = $menuData['totalPages'] ?? 1;
 
 // Get all dietary tags for filter checkboxes
-$allDietaryTags = getDistinctDietaryTags($database_connection);
+$allDietaryTags = [
+    'vegan',
+    'vegetarian',
+    'keto',
+    'high_protein',
+    'low_carb',
+    'gluten_free',
+    'dairy_free',
+    'pescatarian',
+    'mediterranean',
+    'halal',
+];
+
+// Get all allergens for filter checkboxes
+$allAllergens = [
+    'nuts',
+    'dairy',
+    'eggs',
+    'soy',
+    'wheat',
+    'shellfish',
+    'fish',
+    'peanuts',
+    'sesame',
+];
 
 // Get all restaurants for the restaurant switcher
 $allRestaurants = getAllRestaurants($database_connection);
 
-$isLoggedIn = isset($_SESSION['customer_id']) && !empty($_SESSION['customer_id']);
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
@@ -94,6 +194,9 @@ function buildQueryString(array $params = []): string {
     if (isset($_GET['tags']) && !isset($params['tags'])) {
         $params['tags'] = $_GET['tags'];
     }
+    if (isset($_GET['allergens']) && !isset($params['allergens'])) {
+        $params['allergens'] = $_GET['allergens'];
+    }
     if (isset($_GET['restaurant_id']) && !isset($params['restaurant_id'])) {
         $params['restaurant_id'] = $_GET['restaurant_id'];
     }
@@ -134,10 +237,15 @@ function truncateText(string $text, int $length = 60): string {
 function hasActiveFilters(): bool {
     return !empty($_GET['search']) || 
            !empty($_GET['tags']) || 
+           !empty($_GET['allergens']) ||
            (isset($_GET['restaurant_id']) && (int)$_GET['restaurant_id'] > 0) ||
            (isset($_GET['min_price']) && (float)$_GET['min_price'] > 0) ||
            (isset($_GET['max_price']) && (float)$_GET['max_price'] > 0);
 }
+
+// Determine if auto-filters were applied (for showing a notice)
+$autoFiltersApplied = $isLoggedIn && !$isFilterSubmitted && 
+                      (!empty($userDietaryPreferences) || !empty($userAllergies));
 ?>
 <link rel="stylesheet" href="../assets/css/menu.css">
 <link rel="stylesheet" href="../assets/css/menu-filter.css">
@@ -168,21 +276,18 @@ function hasActiveFilters(): bool {
                     <!-- Controls -->
                     <div class="filter-controls-group">
                         <!-- Dietary Tags Dropdown -->
-                        <div class="filter-dropdown">
+                        <div class="filter-dropdown filter-dietary">
                             <button type="button" class="filter-dropdown-toggle" id="dietaryToggle"
                                 aria-expanded="false" aria-haspopup="true">
-                                <img src="<?php echo $assetBase; ?>assets/images/icons/equalizer-line.svg"
-                                    alt="Dietary tags" class="filter-icon">
-                                <span class="filter-dropdown-label">Dietary</span>
+                                <span class="filter-dropdown-left">
+                                    <img src="<?php echo $assetBase; ?>assets/images/icons/equalizer-line.svg" alt=""
+                                        class="filter-icon">
+                                    <span class="filter-dropdown-label">Dietary</span>
+                                </span>
                                 <span
                                     class="filter-dropdown-badge <?php echo !empty($selectedTags) ? 'has-selection' : ''; ?>">
                                     <?php echo !empty($selectedTags) ? count($selectedTags) : ''; ?>
                                 </span>
-                                <svg class="filter-dropdown-arrow" width="12" height="8" viewBox="0 0 12 8" fill="none"
-                                    stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
-                                    stroke-linejoin="round">
-                                    <polyline points="1,1 6,6 11,1"></polyline>
-                                </svg>
                             </button>
                             <div class="filter-dropdown-menu" id="dietaryDropdown" role="menu">
                                 <div class="filter-dropdown-header">
@@ -204,31 +309,66 @@ function hasActiveFilters(): bool {
                             </div>
                         </div>
 
+                        <!-- Allergen Filter Dropdown (EXCLUDE) -->
+                        <div class="filter-dropdown filter-allergen">
+                            <button type="button" class="filter-dropdown-toggle" id="allergenToggle"
+                                aria-expanded="false" aria-haspopup="true">
+                                <span class="filter-dropdown-left">
+                                    <img src="<?php echo $assetBase; ?>assets/images/icons/list-settings-fill.svg"
+                                        alt="" class="filter-icon">
+                                    <span class="filter-dropdown-label">Allergens</span>
+                                </span>
+                                <span
+                                    class="filter-dropdown-badge <?php echo !empty($selectedAllergens) ? 'has-selection' : ''; ?>">
+                                    <?php echo !empty($selectedAllergens) ? count($selectedAllergens) : ''; ?>
+                                </span>
+                            </button>
+                            <div class="filter-dropdown-menu" id="allergenDropdown" role="menu">
+                                <div class="filter-dropdown-header">
+                                    <span class="filter-dropdown-title">Exclude Allergens</span>
+                                    <button type="button" class="filter-dropdown-close"
+                                        aria-label="Close allergen filters">&times;</button>
+                                </div>
+                                <div class="filter-dropdown-options">
+                                    <?php foreach ($allAllergens as $allergen): ?>
+                                    <label class="filter-check">
+                                        <input type="checkbox" name="allergens[]"
+                                            value="<?php echo htmlspecialchars($allergen, ENT_QUOTES, 'UTF-8'); ?>"
+                                            <?php echo in_array($allergen, $selectedAllergens) ? 'checked' : ''; ?>
+                                            onchange="document.getElementById('filterForm').submit()">
+                                        <span><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $allergen)), ENT_QUOTES, 'UTF-8'); ?></span>
+                                    </label>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Restaurant Dropdown -->
                         <div class="filter-dropdown filter-restaurant">
                             <button type="button" class="filter-dropdown-toggle" id="restaurantToggle"
                                 aria-expanded="false" aria-haspopup="true">
-                                <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt="Restaurant"
-                                    class="filter-icon">
-                                <span class="filter-dropdown-label">
-                                    <?php
-                                    $selectedRestaurantName = 'Restaurant';
-                                    if ($restaurantId > 0) {
-                                        foreach ($allRestaurants as $rest) {
-                                            if ((int)$rest['restaurant_id'] === $restaurantId) {
-                                                $selectedRestaurantName = htmlspecialchars($rest['business_name'], ENT_QUOTES, 'UTF-8');
-                                                break;
+                                <span class="filter-dropdown-left">
+                                    <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt=""
+                                        class="filter-icon">
+                                    <span class="filter-dropdown-label">
+                                        <?php
+                                        $selectedRestaurantName = 'Restaurant';
+                                        if ($restaurantId > 0) {
+                                            foreach ($allRestaurants as $rest) {
+                                                if ((int)$rest['restaurant_id'] === $restaurantId) {
+                                                    $selectedRestaurantName = htmlspecialchars($rest['business_name'], ENT_QUOTES, 'UTF-8');
+                                                    break;
+                                                }
                                             }
                                         }
-                                    }
-                                    echo $selectedRestaurantName;
-                                    ?>
+                                        echo $selectedRestaurantName;
+                                        ?>
+                                    </span>
                                 </span>
-                                <svg class="filter-dropdown-arrow" width="12" height="8" viewBox="0 0 12 8" fill="none"
-                                    stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
-                                    stroke-linejoin="round">
-                                    <polyline points="1,1 6,6 11,1"></polyline>
-                                </svg>
+                                <span
+                                    class="filter-dropdown-badge <?php echo $restaurantId > 0 ? 'has-selection' : ''; ?>">
+                                    <?php echo $restaurantId > 0 ? '1' : ''; ?>
+                                </span>
                             </button>
                             <div class="filter-dropdown-menu" id="restaurantDropdown" role="menu">
                                 <div class="filter-dropdown-header">
@@ -258,7 +398,7 @@ function hasActiveFilters(): bool {
 
                         <!-- Price Range -->
                         <div class="filter-price-group">
-                            <span class="price-label">Price: </span>
+                            <span class="price-label">Price:</span>
                             <div class="price-range-inputs">
                                 <input type="number" name="min_price" class="form-control price-input" placeholder="Min"
                                     min="0" step="1"
@@ -273,19 +413,9 @@ function hasActiveFilters(): bool {
                     </div>
                 </div>
                 <input type="hidden" name="page" value="1">
+                <input type="hidden" name="filter_applied" value="1">
             </form>
         </div>
-
-        <!-- Results Info -->
-        <?php if (!empty($restaurants)): ?>
-        <div class="results-info">
-            <span class="text-muted">Showing <?php echo count($restaurants); ?> restaurants •
-                <?php echo $totalProducts; ?> products</span>
-            <span class="text-muted" style="margin-left: 12px; font-size: 13px; color: var(--gray-400);">
-                (<?php echo $perPage; ?> per page)
-            </span>
-        </div>
-        <?php endif; ?>
 
         <!-- Restaurant List -->
         <section class="restaurant-list" aria-label="Restaurants and menu items">
@@ -298,6 +428,8 @@ function hasActiveFilters(): bool {
                 <p class="text-muted">
                     <?php if (!empty($search)): ?>
                     No products match "<strong><?php echo htmlspecialchars($search, ENT_QUOTES, 'UTF-8'); ?></strong>"
+                    <?php elseif (!empty($selectedAllergens)): ?>
+                    No products match your filters after excluding selected allergens
                     <?php elseif (!empty($selectedTags)): ?>
                     No products match your dietary preferences
                     <?php elseif ($restaurantId > 0): ?>
@@ -307,7 +439,7 @@ function hasActiveFilters(): bool {
                     <?php endif; ?>
                 </p>
                 <?php if (hasActiveFilters()): ?>
-                <a href="menu.php" class="btn btn-outline btn-sm" style="margin-top: 12px;">
+                <a href="menu.php?filter_applied=1" class="btn btn-outline btn-sm" style="margin-top: 12px;">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round">
                         <line x1="18" y1="6" x2="6" y2="18" />
@@ -383,16 +515,10 @@ function hasActiveFilters(): bool {
                                 <div class="product-tags-section">
                                     <span class="tags-label">Dietary Tags:</span>
                                     <div class="product-tags">
-                                        <?php 
-                $displayTags = array_slice($product['dietary_tags'], 0, 5);
-                foreach ($displayTags as $tag): ?>
+                                        <?php foreach ($product['dietary_tags'] as $tag): ?>
                                         <span
                                             class="tag dietary-tag"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $tag)), ENT_QUOTES, 'UTF-8'); ?></span>
                                         <?php endforeach; ?>
-                                        <?php if (count($product['dietary_tags']) > 5): ?>
-                                        <span
-                                            class="tag tag-more">+<?php echo count($product['dietary_tags']) - 5; ?></span>
-                                        <?php endif; ?>
                                     </div>
                                 </div>
                                 <?php endif; ?>
@@ -401,16 +527,11 @@ function hasActiveFilters(): bool {
                                 <div class="product-allergens-section">
                                     <span class="allergen-label">Allergens:</span>
                                     <div class="product-allergens-tags">
-                                        <?php if (!empty($product['allergens'])): 
-                $displayAllergens = array_slice($product['allergens'], 0, 5);
-                foreach ($displayAllergens as $allergen): ?>
+                                        <?php if (!empty($product['allergens'])): ?>
+                                        <?php foreach ($product['allergens'] as $allergen): ?>
                                         <span
                                             class="tag allergen-tag"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $allergen)), ENT_QUOTES, 'UTF-8'); ?></span>
                                         <?php endforeach; ?>
-                                        <?php if (count($product['allergens']) > 5): ?>
-                                        <span
-                                            class="tag tag-more">+<?php echo count($product['allergens']) - 5; ?></span>
-                                        <?php endif; ?>
                                         <?php else: ?>
                                         <span class="tag-none">None</span>
                                         <?php endif; ?>
@@ -421,8 +542,7 @@ function hasActiveFilters(): bool {
                             <!-- Product Actions -->
                             <div class="product-actions">
                                 <?php if ($isLoggedIn && $product['stock'] > 0): ?>
-                                <form method="POST" action="#" class="add-to-cart-form" style="width: 100%;"
-                                    onsubmit="return handleAddToQueue(this, event);">
+                                <form method="POST" action="#" class="add-to-cart-form" style="width: 100%;">
                                     <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
                                     <input type="hidden" name="product_id" value="<?php echo (int)$product['id']; ?>">
                                     <div class="action-row">
@@ -455,48 +575,94 @@ function hasActiveFilters(): bool {
             </div>
             <?php endforeach; ?>
 
-            <!-- Pagination -->
-            <?php if ($totalPages > 1): ?>
+            <!-- ============================================
+                 PAGINATION - Consistent layout with disabled states
+                 Always shows Previous and Next, disabled when at bounds.
+                 ============================================ -->
+            <?php if ($totalPages > 0): ?>
             <nav class="pagination" role="navigation" aria-label="Product pagination">
                 <ul class="pagination-list">
+                    <!-- Previous Button - always visible, disabled on page 1 -->
                     <?php if ($page > 1): ?>
                     <li class="pagination-item">
-                        <a href="<?php echo htmlspecialchars(buildQueryString(['page' => $page-1]), ENT_QUOTES, 'UTF-8'); ?>"
-                            class="pagination-link">Previous</a>
+                        <a href="<?php echo htmlspecialchars(buildQueryString(['page' => $page - 1]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="pagination-link pagination-prev" aria-label="Previous page">
+                            Previous
+                        </a>
+                    </li>
+                    <?php else: ?>
+                    <li class="pagination-item">
+                        <span class="pagination-link pagination-prev disabled" aria-label="Previous page"
+                            aria-disabled="true">
+                            Previous
+                        </span>
                     </li>
                     <?php endif; ?>
 
                     <?php
-                        $startPage = max(1, $page - 2);
-                        $endPage = min($totalPages, $page + 2);
-                        if ($startPage > 1) {
-                            echo '<li class="pagination-item"><a href="' . htmlspecialchars(buildQueryString(['page' => 1]), ENT_QUOTES, 'UTF-8') . '" class="pagination-link">1</a></li>';
-                            if ($startPage > 2) {
-                                echo '<li class="pagination-item pagination-ellipsis"><span>...</span></li>';
-                            }
-                        }
-                        for ($i = $startPage; $i <= $endPage; $i++) {
-                            $activeClass = $i === $page ? 'active' : '';
-                            echo '<li class="pagination-item">';
-                            if ($i === $page) {
-                                echo '<span class="pagination-link active">' . $i . '</span>';
-                            } else {
-                                echo '<a href="' . htmlspecialchars(buildQueryString(['page' => $i]), ENT_QUOTES, 'UTF-8') . '" class="pagination-link">' . $i . '</a>';
-                            }
-                            echo '</li>';
-                        }
-                        if ($endPage < $totalPages) {
-                            if ($endPage < $totalPages - 1) {
-                                echo '<li class="pagination-item pagination-ellipsis"><span>...</span></li>';
-                            }
-                            echo '<li class="pagination-item"><a href="' . htmlspecialchars(buildQueryString(['page' => $totalPages]), ENT_QUOTES, 'UTF-8') . '" class="pagination-link">' . $totalPages . '</a></li>';
-                        }
-                        ?>
+                    // Show up to 5 page numbers centered around current page
+                    $maxVisible = 5;
+                    $startPage = max(1, $page - floor($maxVisible / 2));
+                    $endPage = min($totalPages, $startPage + $maxVisible - 1);
+                    
+                    // Adjust start if we're near the end
+                    if ($endPage - $startPage + 1 < $maxVisible) {
+                        $startPage = max(1, $endPage - $maxVisible + 1);
+                    }
 
+                    // First page + ellipsis
+                    if ($startPage > 1): ?>
+                    <li class="pagination-item">
+                        <a href="<?php echo htmlspecialchars(buildQueryString(['page' => 1]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="pagination-link" aria-label="Page 1">1</a>
+                    </li>
+                    <?php if ($startPage > 2): ?>
+                    <li class="pagination-item pagination-ellipsis"><span>...</span></li>
+                    <?php endif; ?>
+                    <?php endif; ?>
+
+                    <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
+                    <li class="pagination-item">
+                        <?php if ($i === $page): ?>
+                        <span class="pagination-link active" aria-current="page" aria-label="Page <?php echo $i; ?>">
+                            <?php echo $i; ?>
+                        </span>
+                        <?php else: ?>
+                        <a href="<?php echo htmlspecialchars(buildQueryString(['page' => $i]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="pagination-link" aria-label="Page <?php echo $i; ?>">
+                            <?php echo $i; ?>
+                        </a>
+                        <?php endif; ?>
+                    </li>
+                    <?php endfor; ?>
+
+                    <?php // Last page + ellipsis
+                    if ($endPage < $totalPages): ?>
+                    <?php if ($endPage < $totalPages - 1): ?>
+                    <li class="pagination-item pagination-ellipsis"><span>...</span></li>
+                    <?php endif; ?>
+                    <li class="pagination-item">
+                        <a href="<?php echo htmlspecialchars(buildQueryString(['page' => $totalPages]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="pagination-link" aria-label="Page <?php echo $totalPages; ?>">
+                            <?php echo $totalPages; ?>
+                        </a>
+                    </li>
+                    <?php endif; ?>
+
+                    <!-- Next Button - always visible, disabled on last page -->
                     <?php if ($page < $totalPages): ?>
                     <li class="pagination-item">
-                        <a href="<?php echo htmlspecialchars(buildQueryString(['page' => $page+1]), ENT_QUOTES, 'UTF-8'); ?>"
-                            class="pagination-link">Next</a>
+                        <a href="<?php echo htmlspecialchars(buildQueryString(['page' => $page + 1]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="pagination-link pagination-next" aria-label="Next page">
+                            Next
+                        </a>
+                    </li>
+                    <?php else: ?>
+                    <li class="pagination-item">
+                        <span class="pagination-link pagination-next disabled" aria-label="Next page"
+                            aria-disabled="true">
+                            Next
+                        </span>
                     </li>
                     <?php endif; ?>
                 </ul>
@@ -542,8 +708,9 @@ function hasActiveFilters(): bool {
         </div>
     </div>
     <?php endif; ?>
+
     <!-- ============================================
-     QUEUE PANEL - Persistent Cart (Fixed Alignment)
+     QUEUE PANEL - Persistent Cart
      ============================================ -->
     <div class="queue-panel-wrapper" id="queuePanelWrapper" style="display:none;">
         <div class="queue-panel" id="queuePanel">
@@ -605,6 +772,7 @@ function hasActiveFilters(): bool {
             </div>
         </div>
     </div>
+
     <!-- ============================================
      MODAL - Remove Item Confirmation
      ============================================ -->
@@ -649,73 +817,10 @@ function hasActiveFilters(): bool {
 <!-- ============================================
      SCRIPTS
      ============================================ -->
-<script src="../assets/ui/js/menu.js" defer></script>
 <script>
 window.FITPAL_ASSET_BASE = '<?php echo $assetBase; ?>';
 </script>
+<script src="../assets/ui/js/menu.js" defer></script>
 <script src="../assets/ui/js/queue-panel.js" defer></script>
-<script>
-/**
- * Handle add to queue from product card forms
- */
-(function() {
-    'use strict';
-
-    window.handleAddToQueue = function(form, event) {
-        if (event) {
-            event.preventDefault();
-        }
-
-        var productCard = form.closest('.product-card');
-        if (!productCard) {
-            console.warn('Product card not found');
-            return false;
-        }
-
-        var productId = productCard.dataset.productId;
-        var name = productCard.dataset.productName || 'Product';
-        var price = parseFloat(productCard.dataset.productPrice) || 0;
-        var stock = parseInt(productCard.dataset.productStock) || 999;
-        var image = productCard.dataset.productImage || '';
-        var restaurantName = productCard.dataset.restaurantName || '';
-        var branchName = productCard.dataset.branchName || '';
-        var quantityInput = form.querySelector('input[name="quantity"]');
-        var quantity = parseInt(quantityInput ? quantityInput.value : 1, 10) || 1;
-
-        if (quantity < 1) quantity = 1;
-        if (quantity > stock) quantity = stock;
-
-        if (typeof window.addToQueue === 'function') {
-            window.addToQueue(
-                parseInt(productId, 10),
-                name,
-                price,
-                quantity,
-                image,
-                stock,
-                restaurantName,
-                branchName
-            );
-
-            var btn = form.querySelector('.add-btn');
-            if (btn) {
-                // Show added state with SVG icon
-                btn.classList.add('added');
-                btn.disabled = true;
-
-                setTimeout(function() {
-                    btn.classList.remove('added');
-                    btn.disabled = false;
-                }, 1500);
-            }
-        } else {
-            form.submit();
-        }
-
-        return false;
-    };
-
-})();
-</script>
 
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>

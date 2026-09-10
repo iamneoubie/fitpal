@@ -1,9 +1,10 @@
 /**
  * FitPal Checkout Page Styles
- * Version 3.6 - Fixed 2x2 grid layout with proper row-based grouping
+ * Version 3.7 - Custom-drawn radios (green fill + white dot) for
+ *                payment methods and address selection.
  *
  * @package FitPal
- * @version 3.6
+ * @version 3.7
  */
 
 /* ============================================
@@ -360,6 +361,89 @@
 }
 
 /* ============================================
+   CUSTOM RADIO BUTTONS
+   Green fill + white dot when checked.
+   Shared by payment options and address list.
+   ============================================ */
+
+/* Hide the native input but keep it focusable / clickable via its label */
+.payment-option input[type="radio"],
+.address-option input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    padding: 0;
+    pointer-events: none;
+}
+
+/* The label span carries the visible circle + text */
+.payment-option input[type="radio"] + label,
+.address-option input[type="radio"] + label {
+    position: relative;
+    padding-left: 32px;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: flex-start;
+    width: 100%;
+    margin: 0;
+}
+
+/* Base circle */
+.payment-option input[type="radio"] + label::before,
+.address-option input[type="radio"] + label::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--gray-300);
+    background: var(--white);
+    border-radius: 50%;
+    box-sizing: border-box;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+/* White dot */
+.payment-option input[type="radio"] + label::after,
+.address-option input[type="radio"] + label::after {
+    content: '';
+    position: absolute;
+    left: 6px;
+    top: 50%;
+    transform: translateY(-50%) scale(0);
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--white);
+    transition: transform 0.12s ease;
+    pointer-events: none;
+}
+
+/* Checked state — green fill */
+.payment-option input[type="radio"]:checked + label::before,
+.address-option input[type="radio"]:checked + label::before {
+    background: var(--primary);
+    border-color: var(--primary);
+}
+
+/* Checked state — dot scales in */
+.payment-option input[type="radio"]:checked + label::after,
+.address-option input[type="radio"]:checked + label::after {
+    transform: translateY(-50%) scale(1);
+}
+
+/* Keyboard focus ring */
+.payment-option input[type="radio"]:focus-visible + label::before,
+.address-option input[type="radio"]:focus-visible + label::before {
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.25);
+}
+
+/* ============================================
    PAYMENT OPTIONS
    ============================================ */
 
@@ -371,6 +455,7 @@
 }
 
 .payment-option {
+    position: relative;
     display: flex;
     align-items: center;
     padding: 14px 16px;
@@ -388,23 +473,6 @@
 .payment-option.selected {
     border-color: var(--primary);
     background: #f6fcf5;
-}
-
-.payment-option input[type="radio"] {
-    width: 18px;
-    height: 18px;
-    accent-color: var(--primary);
-    cursor: pointer;
-    flex-shrink: 0;
-    margin: 0 14px 0 0;
-}
-
-.payment-option label {
-    display: flex;
-    align-items: center;
-    width: 100%;
-    cursor: pointer;
-    margin: 0;
 }
 
 .payment-icon {
@@ -640,6 +708,7 @@
 }
 
 .address-option {
+    position: relative;
     display: flex;
     align-items: flex-start;
     padding: 14px 16px;
@@ -657,22 +726,6 @@
 .address-option.selected {
     border-color: var(--primary);
     background: #f6fcf5;
-}
-
-.address-option input[type="radio"] {
-    width: 18px;
-    height: 18px;
-    accent-color: var(--primary);
-    cursor: pointer;
-    flex-shrink: 0;
-    margin: 2px 14px 0 0;
-}
-
-.address-option label {
-    display: flex;
-    width: 100%;
-    cursor: pointer;
-    margin: 0;
 }
 
 .address-option-content {
@@ -834,12 +887,6 @@
         padding: 12px 14px;
     }
 
-    .payment-option input[type="radio"] {
-        width: 16px;
-        height: 16px;
-        margin-right: 10px;
-    }
-
     .payment-icon {
         margin-right: 10px;
     }
@@ -855,6 +902,25 @@
 
     .payment-description {
         font-size: 0.65rem;
+    }
+
+    /* Smaller custom radios on mobile */
+    .payment-option input[type="radio"] + label,
+    .address-option input[type="radio"] + label {
+        padding-left: 28px;
+    }
+
+    .payment-option input[type="radio"] + label::before,
+    .address-option input[type="radio"] + label::before {
+        width: 18px;
+        height: 18px;
+    }
+
+    .payment-option input[type="radio"] + label::after,
+    .address-option input[type="radio"] + label::after {
+        left: 5px;
+        width: 8px;
+        height: 8px;
     }
 
     .address-display {
@@ -925,12 +991,6 @@
         padding: 12px 14px;
     }
 
-    .address-option input[type="radio"] {
-        width: 16px;
-        height: 16px;
-        margin-right: 10px;
-    }
-
     .address-option-label {
         font-size: var(--font-size-xs);
     }
@@ -974,12 +1034,6 @@
         padding: 10px 12px;
     }
 
-    .payment-option input[type="radio"] {
-        width: 14px;
-        height: 14px;
-        margin-right: 8px;
-    }
-
     .payment-icon {
         margin-right: 8px;
     }
@@ -987,6 +1041,26 @@
     .payment-icon img {
         width: 18px;
         height: 18px;
+    }
+
+    /* Even smaller custom radios on very small screens */
+    .payment-option input[type="radio"] + label,
+    .address-option input[type="radio"] + label {
+        padding-left: 26px;
+    }
+
+    .payment-option input[type="radio"] + label::before,
+    .address-option input[type="radio"] + label::before {
+        width: 16px;
+        height: 16px;
+        border-width: 1.5px;
+    }
+
+    .payment-option input[type="radio"] + label::after,
+    .address-option input[type="radio"] + label::after {
+        left: 4px;
+        width: 8px;
+        height: 8px;
     }
 
     .checkout-actions {
@@ -1045,12 +1119,6 @@
 
     .address-option {
         padding: 10px 12px;
-    }
-
-    .address-option input[type="radio"] {
-        width: 14px;
-        height: 14px;
-        margin-right: 8px;
     }
 
     .modal-body {

@@ -1,12 +1,12 @@
 /**
  * FitPal Product Detail JavaScript
- * Version 7.0
+ * Version 7.1
  *
  * Base price and base calories are read once from the page root.
  * Every subsequent change is a delta against the default state.
  *
  * @package FitPal
- * @version 7.0
+ * @version 7.1
  */
 (function () {
     'use strict';
@@ -39,8 +39,8 @@
         // ----------------------------------------------------------
         // BASE (from PHP, derived from defaults)
         // ----------------------------------------------------------
-        const BASE_PRICE    = parseFloat(pageRoot.dataset.basePrice) || 0;
-        const BASE_CALORIES = parseInt(pageRoot.dataset.baseCalories, 10) || 0;
+        const BASE_PRICE    = pageRoot ? (parseFloat(pageRoot.dataset.basePrice)       || 0) : 0;
+        const BASE_CALORIES = pageRoot ? (parseInt(pageRoot.dataset.baseCalories, 10)  || 0) : 0;
 
         // ----------------------------------------------------------
         // HELPERS
@@ -114,8 +114,8 @@
                 const maxQty     = parseInt(option.dataset.maxQty, 10) || 1;
                 const defaultQty = parseInt(option.dataset.defaultQuantity, 10) || 0;
 
-                // Clamp into range — this is what PHP already did when rendering,
-                // so the DOM will not visually shift.
+                // Clamp into range — PHP already applied the same clamp
+                // when it rendered, so the DOM does not visually shift.
                 let startQty = defaultQty;
                 if (startQty < minQty) startQty = minQty;
                 if (startQty > maxQty) startQty = maxQty;
@@ -482,14 +482,6 @@
         updateMainTotals();
         updateCustomizeTotals();
 
-        // One re-sync after paint, in case any other deferred script
-        // momentarily touched the DOM. Same code path, idempotent.
-        requestAnimationFrame(function () {
-            syncDomFromDefaults();
-            updateMainTotals();
-            updateCustomizeTotals();
-        });
-
-        console.log('Product Detail JS v7.0 initialized');
+        console.log('Product Detail JS v7.1 initialized');
     });
 })();

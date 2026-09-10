@@ -1,7 +1,7 @@
 <?php
 /**
  * FitPal Product Detail Page
- * Version 7.0
+ * Version 7.1
  *
  * Emits data-default-quantity on every modifier so the JS can
  * compute deltas against the true starting state. Base price and
@@ -9,7 +9,7 @@
  * customize step's initial total matches the menu card.
  *
  * @package FitPal
- * @version 7.0
+ * @version 7.1
  */
 declare(strict_types=1);
 
@@ -280,7 +280,10 @@ $productImage = $product['product_image'] !== ''
  *
  * For each component, sum the calories that its *default* state
  * contributes. This is the number the customize step starts at.
- * For non-customizable products, fall back to the stored value.
+ *
+ * For non-customizable products — or for a customizable product
+ * whose composition has no active rows — fall back to the stored
+ * value from dietary_information.
  * ============================================================
  */
 $baseCalories = 0;
@@ -319,7 +322,7 @@ foreach ($components as $component) {
     }
 }
 
-if (!$hasCustomizations) {
+if (!$hasCustomizations || $baseCalories === 0) {
     $baseCalories = (int)$product['calories'];
 }
 
@@ -328,8 +331,9 @@ $formattedPrice = '₱' . number_format($basePrice, 2);
 
 <link rel="stylesheet" href="../assets/css/product-detail.css">
 
-<div class="content product-detail-page" id="productDetailPage" data-base-price="<?php echo $basePrice; ?>"
-    data-base-calories="<?php echo $baseCalories; ?>">
+<div class="content product-detail-page" id="productDetailPage"
+    data-base-price="<?php echo htmlspecialchars((string)$basePrice, ENT_QUOTES, 'UTF-8'); ?>"
+    data-base-calories="<?php echo htmlspecialchars((string)$baseCalories, ENT_QUOTES, 'UTF-8'); ?>">
 
     <!-- ============================================
          STEP 1: MAIN VIEW
@@ -354,10 +358,6 @@ $formattedPrice = '₱' . number_format($basePrice, 2);
             <div class="back-nav">
                 <a href="menu.php<?php echo isset($_GET['restaurant_id']) ? '?restaurant_id=' . (int)$_GET['restaurant_id'] : ''; ?>"
                     class="back-btn">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="15 18 9 12 15 6" />
-                    </svg>
                     <span>Back to Menu</span>
                 </a>
             </div>
@@ -649,10 +649,9 @@ $formattedPrice = '₱' . number_format($basePrice, 2);
                                 $maxQty     = (int)$ing['max_quantity'];
                                 $defQty     = (int)$ing['default_quantity'];
 
-                                // CHANGED: startQty is the value PHP puts in the DOM and the
-                                // value JS reads back from data-default-quantity. Clamped
-                                // into [minQty, maxQty] so the stepper always reflects what
-                                // the user can actually do.
+                                // startQty is the clamped starting quantity for the stepper.
+                                // It MUST be emitted as data-default-quantity so the JS can
+                                // compute deltas against the true initial state.
                                 $startQty = $defQty;
                                 if ($startQty < $minQty) $startQty = $minQty;
                                 if ($startQty > $maxQty) $startQty = $maxQty;
@@ -664,7 +663,6 @@ $formattedPrice = '₱' . number_format($basePrice, 2);
                                 data-price-modifier="<?php echo $ing['price_modifier']; ?>"
                                 data-calories="<?php echo $ing['calories']; ?>" data-min-qty="<?php echo $minQty; ?>"
                                 data-max-qty="<?php echo $maxQty; ?>" data-default-quantity="<?php echo $startQty; ?>">
-                                <!-- CHANGED: attribute added -->
                                 <div class="modifier-info">
                                     <span
                                         class="option-name"><?php echo htmlspecialchars($ing['name'], ENT_QUOTES, 'UTF-8'); ?></span>

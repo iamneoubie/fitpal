@@ -1,13 +1,28 @@
 /**
  * FitPal Menu Page Styles
- * Version 2.0 - Improved empty state and responsive design
- * 
+ * Version 3.0
+ *
+ * Scope:
+ *   - Page wrapper (.content, .menu-page, .container)
+ *   - Alerts
+ *   - Results info
+ *   - Empty state
+ *   - Restaurant list / card / header / branch
+ *   - Pagination
+ *   - Utility (number input spinners)
+ *
+ * NOT in scope (lives in menu-product.css):
+ *   - .product-grid, .product-card and children
+ *   - .product-image, .product-info, .product-meta
+ *   - .product-tags, .product-allergens
+ *   - .product-actions, .quantity-control, .add-btn
+ *
  * @package FitPal
- * @version 2.0
+ * @version 3.0
  */
 
 /* ============================================
-   BASE - Mobile First
+   CONTENT WRAPPER
    ============================================ */
 
 .content {
@@ -95,7 +110,7 @@
 }
 
 /* ============================================
-   EMPTY STATE - IMPROVED VERSION
+   EMPTY STATE
    ============================================ */
 
 .empty-state {
@@ -168,12 +183,6 @@
     margin-top: 16px;
 }
 
-.empty-state .btn-outline:hover {
-    background: var(--gray-50);
-    border-color: var(--gray-400);
-    transform: translateY(-1px);
-}
-
 .empty-state .btn-outline:active {
     transform: translateY(0);
 }
@@ -185,7 +194,7 @@
 }
 
 /* ============================================
-   RESTAURANT LIST
+   RESTAURANT LIST / CARD / BRANCH
    ============================================ */
 
 .restaurant-list {
@@ -201,10 +210,6 @@
     border: 1px solid var(--gray-100);
     box-shadow: var(--shadow-sm);
     transition: box-shadow var(--transition-base);
-}
-
-.restaurant-card:hover {
-    box-shadow: var(--shadow-md);
 }
 
 .restaurant-header {
@@ -234,279 +239,6 @@
 }
 
 /* ============================================
-   PRODUCT GRID
-   ============================================ */
-
-.product-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 16px;
-}
-
-/* ============================================
-   PRODUCT CARD
-   ============================================ */
-
-.product-card {
-    display: flex;
-    flex-direction: column;
-    background: var(--white);
-    border-radius: var(--radius-base);
-    overflow: hidden;
-    border: 1px solid var(--gray-100);
-    transition: all var(--transition-base);
-}
-
-.product-card:hover {
-    border-color: var(--gray-200);
-    box-shadow: var(--shadow-sm);
-}
-
-/* Product Image */
-.product-image-link {
-    display: block;
-    width: 100%;
-    aspect-ratio: 1 / 1;
-    overflow: hidden;
-    background: var(--gray-100);
-    text-decoration: none;
-}
-
-.product-image-link .product-image {
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-}
-
-.product-image-link .product-image img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    transition: transform var(--transition-base);
-}
-
-.product-card:hover .product-image-link .product-image img {
-    transform: scale(1.05);
-}
-
-/* Product Info */
-.product-info {
-    padding: 12px 14px;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.product-name-link {
-    text-decoration: none;
-    color: var(--text);
-}
-
-.product-name-link .heading-6 {
-    margin: 0;
-    font-size: var(--font-size-base);
-    font-weight: 600;
-    transition: color var(--transition-fast);
-    line-height: 1.3;
-}
-
-.product-name-link:hover .heading-6 {
-    color: var(--primary);
-}
-
-.product-description {
-    margin: 0;
-    font-size: var(--font-size-sm);
-    color: var(--gray-500);
-    line-height: 1.4;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
-.product-meta {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-top: 4px;
-}
-
-.product-price {
-    font-size: var(--font-size-lg);
-    font-weight: 700;
-    color: var(--text);
-}
-
-.product-calories {
-    font-size: var(--font-size-sm);
-    color: var(--gray-500);
-}
-
-/* Tags */
-.product-tags-section,
-.product-allergens-section {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    gap: 4px;
-    margin-top: 4px;
-}
-
-.tags-label,
-.allergen-label {
-    font-size: var(--font-size-xs);
-    color: var(--gray-500);
-    font-weight: 500;
-    white-space: nowrap;
-    padding-top: 2px;
-}
-
-.product-tags,
-.product-allergens-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-}
-
-.tag {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: var(--radius-full);
-    font-size: var(--font-size-xs);
-    font-weight: 500;
-    line-height: 1.5;
-}
-
-.dietary-tag {
-    color: #1d4ed8;
-    background: #dbeafe;
-}
-
-.allergen-tag {
-    color: #dc2626;
-    background: #fee2e2;
-}
-
-.tag-more {
-    color: var(--gray-500);
-    background: var(--gray-100);
-}
-
-.tag-none {
-    font-size: var(--font-size-xs);
-    color: var(--gray-400);
-}
-
-/* Product Actions */
-.product-actions {
-    padding: 0 14px 14px 14px;
-    margin-top: auto;
-}
-
-.action-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-}
-
-.quantity-control {
-    display: flex;
-    align-items: center;
-    border: 1px solid var(--gray-300);
-    border-radius: var(--radius-base);
-    overflow: hidden;
-    flex-shrink: 0;
-    background: var(--white);
-}
-
-.quantity-control .qty-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border: none;
-    background: var(--gray-50);
-    cursor: pointer;
-    transition: background var(--transition-fast);
-    color: var(--text);
-    font-size: 16px;
-    font-weight: 600;
-}
-
-.quantity-control .qty-btn:hover {
-    background: var(--gray-200);
-}
-
-.quantity-control .qty-btn:active {
-    background: var(--gray-300);
-}
-
-.quantity-control .qty-input {
-    width: 36px;
-    height: 32px;
-    border: none;
-    background: var(--white);
-    text-align: center;
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    padding: 0 2px;
-    -moz-appearance: textfield;
-}
-
-.quantity-control .qty-input::-webkit-inner-spin-button,
-.quantity-control .qty-input::-webkit-outer-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-}
-
-.quantity-control .qty-input:focus {
-    outline: none;
-}
-
-.btn-sm {
-    padding: 6px 14px;
-    font-size: var(--font-size-sm);
-    border-radius: var(--radius-base);
-    border: none;
-    cursor: pointer;
-    font-weight: 500;
-    transition: all var(--transition-fast);
-    white-space: nowrap;
-}
-
-.btn-primary.btn-sm {
-    background: var(--primary);
-    color: white;
-}
-
-.btn-primary.btn-sm:hover {
-    background: var(--primary-dark);
-}
-
-.btn-outline.btn-sm {
-    background: transparent;
-    color: var(--primary);
-    border: 1px solid var(--primary);
-}
-
-.btn-outline.btn-sm:hover {
-    background: var(--primary);
-    color: white;
-}
-
-.btn-disabled {
-    background: var(--gray-100);
-    color: var(--gray-400);
-    cursor: not-allowed;
-    pointer-events: none;
-}
-
-/* ============================================
    PAGINATION
    ============================================ */
 
@@ -525,6 +257,7 @@
     padding: 0;
     margin: 0;
     flex-wrap: wrap;
+    justify-content: center;
 }
 
 .pagination-item {
@@ -532,7 +265,7 @@
 }
 
 .pagination-link {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     padding: 8px 14px;
@@ -543,16 +276,38 @@
     font-weight: 500;
     transition: all var(--transition-fast);
     min-width: 36px;
+    height: 36px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
 }
 
-.pagination-link:hover {
-    background: var(--gray-100);
+.pagination-link:hover:not(.disabled):not(.active) {
+    background: var(--gray-50);
+    border-color: var(--gray-300);
     color: var(--text);
 }
 
 .pagination-link.active {
     background: var(--primary);
-    color: white;
+    color: var(--white);
+    border-color: var(--primary);
+    cursor: default;
+}
+
+.pagination-link.disabled {
+    color: var(--gray-300);
+    background: var(--gray-50);
+    border-color: var(--gray-100);
+    cursor: not-allowed;
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.pagination-prev,
+.pagination-next {
+    padding: 8px 18px;
+    min-width: 80px;
+    font-weight: 600;
 }
 
 .pagination-ellipsis {
@@ -560,10 +315,13 @@
     align-items: center;
     padding: 8px 4px;
     color: var(--gray-400);
+    font-size: var(--font-size-sm);
+    min-width: 24px;
+    justify-content: center;
 }
 
 /* ============================================
-   RESPONSIVE - Tablet
+   RESPONSIVE
    ============================================ */
 
 @media (min-width: 768px) {
@@ -577,11 +335,6 @@
 
     .menu-page.has-order-tracker {
         padding-bottom: 160px;
-    }
-
-    .product-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 16px;
     }
 
     .empty-state {
@@ -607,27 +360,10 @@
     }
 }
 
-/* ============================================
-   RESPONSIVE - Desktop
-   ============================================ */
-
 @media (min-width: 1024px) {
     .menu-page .container {
         padding: 0 32px;
         max-width: 1200px;
-    }
-
-    .product-grid {
-        grid-template-columns: repeat(3, 1fr);
-        gap: 20px;
-    }
-
-    .product-card {
-        flex-direction: column;
-    }
-
-    .product-image-link .product-image {
-        aspect-ratio: 1 / 1;
     }
 
     .empty-state {
@@ -641,31 +377,58 @@
     }
 }
 
-/* ============================================
-   RESPONSIVE - Large Desktop
-   ============================================ */
-
 @media (min-width: 1400px) {
     .menu-page .container {
         padding: 0 40px;
     }
+}
 
-    .product-grid {
-        grid-template-columns: repeat(4, 1fr);
-        gap: 24px;
+/* ============================================
+   PAGINATION - Mobile
+   ============================================ */
+
+@media (max-width: 480px) {
+    .pagination-link {
+        padding: 6px 10px;
+        font-size: var(--font-size-xs);
+        min-width: 32px;
+        height: 32px;
+    }
+
+    .pagination-prev,
+    .pagination-next {
+        padding: 6px 12px;
+        min-width: 64px;
+        font-size: var(--font-size-xs);
+    }
+
+    .pagination-list {
+        gap: 2px;
+    }
+}
+
+@media (max-width: 360px) {
+    .pagination-link {
+        padding: 4px 8px;
+        font-size: 11px;
+        min-width: 28px;
+        height: 28px;
+    }
+
+    .pagination-prev,
+    .pagination-next {
+        padding: 4px 8px;
+        min-width: 52px;
+        font-size: 11px;
     }
 }
 
 /* ============================================
-   UTILITY - Hide scrollbar on number inputs
+   UTILITY - Hide number input spinners
    ============================================ */
 
 input[type=number]::-webkit-inner-spin-button,
 input[type=number]::-webkit-outer-spin-button {
     -webkit-appearance: none;
     margin: 0;
-}
-
-input[type=number] {
-    -moz-appearance: textfield;
 }

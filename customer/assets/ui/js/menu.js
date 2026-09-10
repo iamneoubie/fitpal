@@ -1,12 +1,19 @@
 /**
  * FitPal Menu Page JavaScript
- * Version 3.1 - Fixed product detail navigation, improved performance
+ * Version 5.0 - Consolidated all menu-related logic including add-to-queue
  *
- * Handles quantity controls, add-to-cart feedback, sticky filter behavior,
- * dropdown toggles, and active order tracker with auto-hide.
+ * Handles:
+ * - Quantity controls
+ * - Add-to-cart/queue form submission
+ * - Sticky filter behavior
+ * - Dropdown toggles
+ * - Search debounce
+ * - Price input auto-submit
+ * - Active order tracker with auto-hide
+ * - Add to queue integration
  *
  * @package FitPal
- * @version 3.1
+ * @version 5.0
  */
 
 (function() {
@@ -63,7 +70,7 @@
         }, { passive: true });
 
         // ============================================
-        // DROPDOWN TOGGLES - FIXED to not interfere with clicks
+        // DROPDOWN TOGGLES
         // ============================================
         var dropdowns = document.querySelectorAll('.filter-dropdown');
 
@@ -126,7 +133,7 @@
         });
 
         // ============================================
-        // QUANTITY CONTROLS - FIXED to not interfere with clicks
+        // QUANTITY CONTROLS
         // ============================================
         document.querySelectorAll('.quantity-control').forEach(function(control) {
             var minusBtn = control.querySelector('.qty-minus');
@@ -146,18 +153,18 @@
 
             minusBtn.addEventListener('click', function(e) {
                 e.preventDefault();
-                e.stopPropagation(); // Prevent event from bubbling
+                e.stopPropagation();
                 updateValue(-1);
             });
 
             plusBtn.addEventListener('click', function(e) {
                 e.preventDefault();
-                e.stopPropagation(); // Prevent event from bubbling
+                e.stopPropagation();
                 updateValue(1);
             });
 
             input.addEventListener('change', function(e) {
-                e.stopPropagation(); // Prevent event from bubbling
+                e.stopPropagation();
                 var val = parseInt(this.value, 10) || 1;
                 var max = parseInt(this.max, 10) || 999;
                 if (val < 1) val = 1;
@@ -168,7 +175,7 @@
             input.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    e.stopPropagation(); // Prevent event from bubbling
+                    e.stopPropagation();
                     var form = this.closest('.add-to-cart-form');
                     if (form) {
                         var submitBtn = form.querySelector('.add-btn');
@@ -177,44 +184,77 @@
                 }
             });
 
-            // Prevent click on quantity control from bubbling to parent
             control.addEventListener('click', function(e) {
                 e.stopPropagation();
             });
         });
 
-       // ============================================
-// ADD-TO-CART FORM HANDLING
-// ============================================
-document.querySelectorAll('.add-to-cart-form').forEach(function(form) {
-    // Prevent clicks inside form from bubbling
-    form.addEventListener('click', function(e) {
-        e.stopPropagation();
-    });
+        // ============================================
+        // ADD-TO-CART FORM HANDLING
+        // Integrated with queue panel
+        // ============================================
+        document.querySelectorAll('.add-to-cart-form').forEach(function(form) {
+            form.addEventListener('click', function(e) {
+                e.stopPropagation();
+            });
 
-    form.addEventListener('submit', function(e) {
-        e.stopPropagation();
-        var submitBtn = this.querySelector('.add-btn');
-        if (submitBtn) {
-            submitBtn.disabled = true;
-            
-            // Add loading state class instead of changing innerHTML
-            submitBtn.classList.add('loading');
-            
-            // Reset after 5 seconds (or when the response comes)
-            setTimeout(function() {
-                submitBtn.disabled = false;
-                submitBtn.classList.remove('loading');
-            }, 3000);
-        }
-    });
-});
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                var productCard = this.closest('.product-card');
+                if (!productCard) {
+                    console.warn('Product card not found');
+                    return;
+                }
+
+                var productId = productCard.dataset.productId;
+                var name = productCard.dataset.productName || 'Product';
+                var price = parseFloat(productCard.dataset.productPrice) || 0;
+                var stock = parseInt(productCard.dataset.productStock) || 999;
+                var image = productCard.dataset.productImage || '';
+                var restaurantName = productCard.dataset.restaurantName || '';
+                var branchName = productCard.dataset.branchName || '';
+                var quantityInput = this.querySelector('input[name="quantity"]');
+                var quantity = parseInt(quantityInput ? quantityInput.value : 1, 10) || 1;
+
+                if (quantity < 1) quantity = 1;
+                if (quantity > stock) quantity = stock;
+
+                // Use the queue panel API if available
+                if (typeof window.addToQueue === 'function') {
+                    window.addToQueue(
+                        parseInt(productId, 10),
+                        name,
+                        price,
+                        quantity,
+                        image,
+                        stock,
+                        restaurantName,
+                        branchName
+                    );
+
+                    // Visual feedback
+                    var btn = this.querySelector('.add-btn');
+                    if (btn) {
+                        btn.classList.add('added');
+                        btn.disabled = true;
+
+                        setTimeout(function() {
+                            btn.classList.remove('added');
+                            btn.disabled = false;
+                        }, 1500);
+                    }
+                } else {
+                    // Fallback: submit the form normally
+                    this.submit();
+                }
+            });
+        });
 
         // ============================================
         // FILTER AUTO-SUBMIT
         // ============================================
-        // Checkboxes in dropdowns already submit via onchange
-        // Radio buttons in restaurant dropdown also submit via onchange
 
         // Price inputs - auto-submit on blur or Enter
         var priceInputs = document.querySelectorAll('.price-input');
@@ -222,7 +262,7 @@ document.querySelectorAll('.add-to-cart-form').forEach(function(form) {
             input.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    e.stopPropagation(); // Prevent event from bubbling
+                    e.stopPropagation();
                     if (filterForm) {
                         filterForm.submit();
                     }
@@ -230,7 +270,7 @@ document.querySelectorAll('.add-to-cart-form').forEach(function(form) {
             });
 
             input.addEventListener('blur', function(e) {
-                e.stopPropagation(); // Prevent event from bubbling
+                e.stopPropagation();
                 var defaultValue = this.getAttribute('data-default') || '';
                 if (this.value !== defaultValue) {
                     if (filterForm) {
@@ -239,10 +279,8 @@ document.querySelectorAll('.add-to-cart-form').forEach(function(form) {
                 }
             });
 
-            // Store initial value for blur comparison
             input.setAttribute('data-default', input.value);
 
-            // Prevent click on price input from bubbling
             input.addEventListener('click', function(e) {
                 e.stopPropagation();
             });
@@ -252,7 +290,7 @@ document.querySelectorAll('.add-to-cart-form').forEach(function(form) {
         document.querySelectorAll('.price-apply-btn').forEach(function(btn) {
             btn.addEventListener('click', function(e) {
                 e.preventDefault();
-                e.stopPropagation(); // Prevent event from bubbling
+                e.stopPropagation();
                 if (filterForm) {
                     filterForm.submit();
                 }
@@ -265,7 +303,7 @@ document.querySelectorAll('.add-to-cart-form').forEach(function(form) {
         var searchTimeout = null;
         if (searchInput) {
             searchInput.addEventListener('input', function(e) {
-                e.stopPropagation(); // Prevent event from bubbling
+                e.stopPropagation();
                 clearTimeout(searchTimeout);
                 searchTimeout = setTimeout(function() {
                     if (filterForm) {
@@ -277,7 +315,7 @@ document.querySelectorAll('.add-to-cart-form').forEach(function(form) {
             searchInput.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    e.stopPropagation(); // Prevent event from bubbling
+                    e.stopPropagation();
                     clearTimeout(searchTimeout);
                     if (filterForm) {
                         filterForm.submit();
@@ -285,7 +323,6 @@ document.querySelectorAll('.add-to-cart-form').forEach(function(form) {
                 }
             });
 
-            // Prevent click on search input from bubbling
             searchInput.addEventListener('click', function(e) {
                 e.stopPropagation();
             });
@@ -297,6 +334,7 @@ document.querySelectorAll('.add-to-cart-form').forEach(function(form) {
         var urlParams = new URLSearchParams(window.location.search);
         var hasFilters = urlParams.has('search') ||
                          urlParams.has('tags') ||
+                         urlParams.has('allergens') ||
                          urlParams.has('restaurant_id') ||
                          urlParams.has('min_price') ||
                          urlParams.has('max_price');
@@ -364,47 +402,18 @@ document.querySelectorAll('.add-to-cart-form').forEach(function(form) {
         }
 
         // ============================================
-        // RESTAURANT TAB CLICK - Scroll to filter
+        // PRODUCT CARD CLICK HANDLING
         // ============================================
-        document.querySelectorAll('.restaurant-tab').forEach(function(tab) {
-            tab.addEventListener('click', function(e) {
-                if (menuFilters) {
-                    var headerHeight = header ? header.offsetHeight : 0;
-                    var scrollPosition = menuFilters.getBoundingClientRect().top + window.pageYOffset - headerHeight - 10;
-                    window.scrollTo({
-                        top: scrollPosition,
-                        behavior: 'smooth'
-                    });
-                }
-            });
-        });
-
-        // ============================================
-        // PRODUCT CARD CLICK HANDLING - FIXED
-        // ============================================
-        // Ensure product cards don't have click handlers that interfere
         document.querySelectorAll('.product-card').forEach(function(card) {
-            // Remove any existing click listeners that might have been added
-            // by other scripts (like menu.js v3.0)
             var links = card.querySelectorAll('a');
             links.forEach(function(link) {
-                // Ensure links work normally
                 link.addEventListener('click', function(e) {
                     // Allow the link to work normally
-                    // Don't prevent default
                 });
-            });
-
-            // Prevent accidental drag selection
-            card.addEventListener('mousedown', function(e) {
-                // Allow clicks, just prevent text selection on drag
-                if (e.button === 0) {
-                    // Left click only
-                }
             });
         });
 
-        console.log('Menu JS v3.1 - Fixed product navigation initialized');
+        console.log('Menu JS v5.0 - Consolidated with queue panel integration');
 
     });
 })();

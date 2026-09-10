@@ -88,10 +88,6 @@
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
-.queue-panel-header:hover {
-    background: var(--gray-50);
-}
-
 .queue-panel-title {
     font-size: var(--font-size-base);
     font-weight: 700;
@@ -140,10 +136,6 @@
     transform: rotate(180deg);
 }
 
-.queue-panel-toggle:hover {
-    color: var(--gray-600);
-}
-
 /* ============================================
    PANEL BODY - Scrollable content
    ============================================ */
@@ -179,9 +171,6 @@
     background: var(--gray-300);
     border-radius: 3px;
 }
-.queue-items-container::-webkit-scrollbar-thumb:hover {
-    background: var(--gray-400);
-}
 
 /* ============================================
    QUEUE ITEM - Clean, aligned design
@@ -198,11 +187,6 @@
     transition: all var(--transition-fast);
     border: 1px solid transparent;
     box-shadow: var(--shadow-sm);
-}
-
-.queue-item:hover {
-    border-color: var(--gray-200);
-    box-shadow: var(--shadow-md);
 }
 
 .queue-item-image {
@@ -283,9 +267,6 @@
     transition: background var(--transition-fast);
 }
 
-.queue-item-qty .qty-btn:hover {
-    background: var(--gray-200);
-}
 .queue-item-qty .qty-btn:active {
     background: var(--gray-300);
 }
@@ -299,7 +280,6 @@
     font-size: var(--font-size-sm);
     font-weight: 600;
     padding: 0 2px;
-    -moz-appearance: textfield;
 }
 
 .queue-item-qty .qty-input::-webkit-inner-spin-button,
@@ -323,11 +303,6 @@
     cursor: pointer;
     border-radius: var(--radius-sm);
     transition: all var(--transition-fast);
-}
-
-.queue-item-remove:hover {
-    background: rgba(220, 53, 69, 0.1);
-    color: var(--danger);
 }
 
 .queue-item-total {
@@ -418,16 +393,10 @@
     font-weight: 600;
     border-radius: var(--radius-base);
     border: 1px solid var(--gray-300);
-    background: transparent;
-    color: var(--gray-600);
+    background: var(--black);
+    color: var(--white);
     cursor: pointer;
     transition: all var(--transition-fast);
-}
-
-.queue-btn-cancel:hover {
-    background: rgba(220, 53, 69, 0.08);
-    border-color: var(--danger);
-    color: var(--danger);
 }
 
 .queue-btn-cancel:disabled {
@@ -450,12 +419,6 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-}
-
-.queue-btn-checkout:hover {
-    background: var(--primary-dark);
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
 }
 
 .queue-btn-checkout:active {
@@ -614,26 +577,11 @@
     border-color: var(--black);
 }
 
-.queue-modal-btn-cancel:hover,
-.queue-modal-btn-cancel:focus {
-    background: var(--black);
-    color: var(--white);
-    border-color: var(--black);
-    opacity: 0.85;
-}
-
 /* Confirm Button - Danger color (for destructive actions) */
 .queue-modal-btn-confirm {
     background: var(--danger);
     color: var(--white);
     border-color: var(--danger);
-}
-
-.queue-modal-btn-confirm:hover,
-.queue-modal-btn-confirm:focus {
-    background: #bd2130;
-    border-color: #bd2130;
-    color: var(--white);
 }
 
 /* ============================================

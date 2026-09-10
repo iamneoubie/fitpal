@@ -1,20 +1,28 @@
 -- =====================================================
 -- FitPal Seed Data
--- Version 3.0
+-- Version 4.1
 --
--- CHANGES FROM 2.1
---   A. Every default row now has price_modifier = 0.00.
---      Previously three defaults carried non-zero modifiers
---      (Keto Burger Cheddar, Keto Pizza Parmesan, Keto Pizza
---      Grilled Chicken), which made the customize step's
---      implied base disagree with the menu card's displayed
---      base.
---   B. Every non-default member of a choice group now has
---      is_required = 0. Previously all members had
---      is_required = 1, which read as "all four alternatives
---      are required" even though only one is chosen. The
---      runtime already OR-aggregated the flag, so this is a
---      data-hygiene fix, not a behavior change.
+-- CHANGES FROM 4.0
+--   Product description ingredient lines now use the format
+--     - <name>: <calories> kcal, <fat>g fat
+--   instead of the previous "x ... x ..." style.
+--   No other changes.
+--
+-- CHANGES FROM 3.0
+--   A. Products renamed to realistic, menu-style names.
+--      Generic "Build Your Own" / "Custom" prefixes removed.
+--   B. Added 'halal' dietary tag to compatible products.
+--   C. Product descriptions now include a full breakdown:
+--        Description
+--        <narrative>
+--
+--        Ingredients
+--        - <name>: <calories> kcal, <fat>g fat
+--      Stored as the product.description column.
+--   D. Restaurant concepts tightened:
+--        - Green Bowl Cafe  → plant-forward, vegan-leaning
+--        - Keto Kitchen     → high-fat, low-carb
+--        - Asian Fusion Fit → gluten-free Asian, includes halal
 --
 -- KEY PRINCIPLE
 --   For customizable products, dietary_information.calories
@@ -103,13 +111,13 @@ INSERT IGNORE INTO
         is_active
     )
 VALUES (
-        'Test',
+        'User',
         NULL,
         'User',
-        'test@example.com',
+        'user@example.com',
         '09123456789',
-        'testuser',
-        'admin123',
+        'user',
+        'user123',
         1
     );
 
@@ -150,7 +158,7 @@ VALUES (
         @admin_id,
         'Green Bowl Cafe',
         'Filipino',
-        'vegan,organic',
+        'vegan,organic,gluten_free',
         1
     );
 
@@ -192,7 +200,7 @@ VALUES (
         @admin_id,
         'Keto Kitchen',
         'Italian',
-        'keto,high_protein',
+        'keto,high_protein,low_carb',
         1
     );
 
@@ -234,7 +242,7 @@ VALUES (
         @admin_id,
         'Asian Fusion Fit',
         'Japanese',
-        'gluten_free,low_carb',
+        'gluten_free,low_carb,halal',
         1
     );
 
@@ -280,7 +288,7 @@ INSERT INTO
     )
 VALUES (
         'Main',
-        'vegan',
+        'vegan,gluten_free',
         'soy',
         280,
         12.0,
@@ -289,7 +297,7 @@ VALUES (
     ),
     (
         'Main',
-        'vegan,gluten_free',
+        'vegan,gluten_free,low_carb',
         'none',
         320,
         14.0,
@@ -530,7 +538,7 @@ INSERT INTO
     )
 VALUES (
         'Main',
-        'gluten_free',
+        'gluten_free,halal',
         'shellfish',
         350,
         26.0,
@@ -539,7 +547,7 @@ VALUES (
     ),
     (
         'Appetizer',
-        'gluten_free,organic',
+        'gluten_free,organic,halal',
         'soy',
         95,
         5.0,
@@ -548,7 +556,7 @@ VALUES (
     ),
     (
         'Main',
-        'low_carb,organic',
+        'low_carb,organic,halal',
         'fish',
         310,
         30.0,
@@ -557,7 +565,7 @@ VALUES (
     ),
     (
         'Main',
-        'gluten_free,low_carb,organic',
+        'gluten_free,low_carb,organic,halal',
         'shellfish',
         390,
         34.0,
@@ -566,7 +574,7 @@ VALUES (
     ),
     (
         'Appetizer',
-        'gluten_free,vegan,organic',
+        'gluten_free,vegan,organic,halal',
         'none',
         85,
         4.0,
@@ -575,7 +583,7 @@ VALUES (
     ),
     (
         'Main',
-        'gluten_free,low_carb,organic,high_protein',
+        'gluten_free,low_carb,organic,high_protein,halal',
         'fish,shellfish',
         450,
         42.0,
@@ -584,7 +592,7 @@ VALUES (
     ),
     (
         'Dessert',
-        'gluten_free,vegan,low_carb,organic',
+        'gluten_free,vegan,low_carb,organic,halal',
         'nuts',
         160,
         6.0,
@@ -593,7 +601,7 @@ VALUES (
     ),
     (
         'Main',
-        'gluten_free,low_carb,organic,high_protein,keto',
+        'gluten_free,low_carb,organic,high_protein,keto,halal',
         'shellfish',
         490,
         46.0,
@@ -602,7 +610,7 @@ VALUES (
     ),
     (
         'Appetizer',
-        'gluten_free,low_carb,organic,vegan,high_protein',
+        'gluten_free,low_carb,organic,vegan,high_protein,halal',
         'soy',
         115,
         20.0,
@@ -611,7 +619,7 @@ VALUES (
     ),
     (
         'Beverage',
-        'gluten_free,low_carb,organic,vegan,keto',
+        'gluten_free,low_carb,organic,vegan,keto,halal',
         'none',
         75,
         2.0,
@@ -651,6 +659,9 @@ INSERT INTO
         description,
         unit_price,
         calories,
+        protein,
+        carbs,
+        fat,
         dietary_tags,
         allergens,
         stock_quantity,
@@ -658,40 +669,52 @@ INSERT INTO
     )
 VALUES (
         'White Rice',
-        'Steamed white rice',
+        'Steamed jasmine white rice',
         15.00,
         200,
-        '["vegan","gluten_free"]',
+        4.0,
+        45.0,
+        0.5,
+        '["vegan","gluten_free","halal"]',
         '[]',
         100,
         1
     ),
     (
         'Brown Rice',
-        'Steamed brown rice',
+        'Steamed whole-grain brown rice',
         20.00,
         180,
-        '["vegan","gluten_free"]',
+        4.0,
+        38.0,
+        1.5,
+        '["vegan","gluten_free","halal"]',
         '[]',
         100,
         1
     ),
     (
         'Cauliflower Rice',
-        'Low-carb cauliflower rice',
+        'Riced cauliflower, pan-toasted',
         25.00,
         50,
-        '["vegan","gluten_free","low_carb","keto"]',
+        2.0,
+        5.0,
+        2.0,
+        '["vegan","gluten_free","low_carb","keto","halal"]',
         '[]',
         80,
         1
     ),
     (
         'Quinoa',
-        'Protein-rich quinoa',
+        'Fluffy cooked tri-color quinoa',
         30.00,
         220,
-        '["vegan","gluten_free","high_protein"]',
+        8.0,
+        39.0,
+        3.5,
+        '["vegan","gluten_free","high_protein","halal"]',
         '[]',
         90,
         1
@@ -701,37 +724,49 @@ VALUES (
         'Marinated grilled chicken breast',
         50.00,
         250,
-        '["gluten_free","high_protein"]',
+        35.0,
+        0.0,
+        10.0,
+        '["gluten_free","high_protein","halal"]',
         '[]',
         120,
         1
     ),
     (
         'Tofu',
-        'Organic firm tofu',
+        'Organic firm tofu, lightly seared',
         40.00,
         150,
-        '["vegan","gluten_free"]',
+        15.0,
+        4.0,
+        8.0,
+        '["vegan","gluten_free","halal"]',
         '["soy"]',
         100,
         1
     ),
     (
         'Salmon',
-        'Fresh grilled salmon',
+        'Fresh grilled Atlantic salmon',
         80.00,
         300,
-        '["gluten_free","high_protein","keto"]',
+        34.0,
+        0.0,
+        18.0,
+        '["gluten_free","high_protein","keto","halal"]',
         '["fish"]',
         60,
         1
     ),
     (
         'Beef Patty',
-        'Grilled beef patty',
+        'Grilled lean beef patty',
         60.00,
         280,
-        '["gluten_free","high_protein","keto"]',
+        26.0,
+        0.0,
+        19.0,
+        '["gluten_free","high_protein","keto","halal"]',
         '[]',
         70,
         1
@@ -741,27 +776,36 @@ VALUES (
         'Garlic butter shrimp',
         75.00,
         200,
-        '["gluten_free","keto"]',
+        24.0,
+        2.0,
+        10.0,
+        '["gluten_free","keto","halal"]',
         '["shellfish"]',
         50,
         1
     ),
     (
         'Eggs',
-        'Pasture-raised eggs',
+        'Pasture-raised scrambled eggs',
         30.00,
         140,
-        '["keto","high_protein"]',
+        12.0,
+        1.0,
+        9.5,
+        '["keto","high_protein","halal"]',
         '["eggs"]',
         150,
         1
     ),
     (
         'Lettuce',
-        'Fresh lettuce',
+        'Crisp romaine lettuce',
         10.00,
         10,
-        '["vegan","gluten_free"]',
+        1.0,
+        2.0,
+        0.1,
+        '["vegan","gluten_free","halal"]',
         '[]',
         200,
         1
@@ -771,56 +815,74 @@ VALUES (
         'Fresh tomato slices',
         5.00,
         15,
-        '["vegan","gluten_free"]',
+        0.7,
+        3.0,
+        0.2,
+        '["vegan","gluten_free","halal"]',
         '[]',
         200,
         1
     ),
     (
         'Cucumber',
-        'Fresh cucumber',
+        'Fresh cucumber ribbons',
         5.00,
         10,
-        '["vegan","gluten_free"]',
+        0.5,
+        2.0,
+        0.1,
+        '["vegan","gluten_free","halal"]',
         '[]',
         180,
         1
     ),
     (
         'Avocado',
-        'Fresh avocado',
+        'Fresh sliced avocado',
         25.00,
         160,
-        '["vegan","gluten_free","keto"]',
+        2.0,
+        9.0,
+        15.0,
+        '["vegan","gluten_free","keto","halal"]',
         '[]',
         80,
         1
     ),
     (
         'Spinach',
-        'Fresh spinach',
+        'Baby spinach leaves',
         15.00,
         20,
-        '["vegan","gluten_free"]',
+        2.5,
+        3.0,
+        0.2,
+        '["vegan","gluten_free","halal"]',
         '[]',
         150,
         1
     ),
     (
         'Seaweed',
-        'Organic seaweed',
+        'Toasted nori seaweed sheets',
         20.00,
         30,
-        '["vegan","gluten_free"]',
+        3.0,
+        4.0,
+        0.5,
+        '["vegan","gluten_free","halal"]',
         '[]',
         100,
         1
     ),
     (
         'Cheddar Cheese',
-        'Sharp cheddar cheese',
+        'Sharp aged cheddar',
         25.00,
         110,
+        7.0,
+        1.0,
+        9.0,
         '["keto","high_protein"]',
         '["dairy"]',
         90,
@@ -828,9 +890,12 @@ VALUES (
     ),
     (
         'Vegan Cheese',
-        'Plant-based cheese alternative',
+        'Cashew-based vegan cheese',
         30.00,
         100,
+        3.0,
+        4.0,
+        8.0,
         '["vegan","gluten_free"]',
         '["soy"]',
         70,
@@ -838,9 +903,12 @@ VALUES (
     ),
     (
         'Parmesan Cheese',
-        'Fresh parmesan',
+        'Freshly grated parmesan',
         30.00,
         120,
+        10.0,
+        1.0,
+        9.0,
         '["keto","high_protein"]',
         '["dairy"]',
         80,
@@ -848,19 +916,25 @@ VALUES (
     ),
     (
         'BBQ Sauce',
-        'Sweet BBQ sauce',
+        'Smoky-sweet BBQ glaze',
         10.00,
         60,
-        '["vegan","gluten_free"]',
+        0.5,
+        15.0,
+        0.1,
+        '["vegan","gluten_free","halal"]',
         '[]',
         120,
         1
     ),
     (
         'Ranch Dressing',
-        'Creamy ranch dressing',
+        'Creamy buttermilk ranch',
         10.00,
         80,
+        1.0,
+        2.0,
+        8.0,
         '[]',
         '["dairy","eggs"]',
         100,
@@ -871,37 +945,49 @@ VALUES (
         'Plant-based ranch dressing',
         12.00,
         70,
-        '["vegan"]',
+        1.0,
+        3.0,
+        6.0,
+        '["vegan","gluten_free"]',
         '["soy"]',
         90,
         1
     ),
     (
         'Teriyaki Sauce',
-        'Gluten-free teriyaki sauce',
+        'Gluten-free teriyaki glaze',
         10.00,
         50,
-        '["gluten_free","vegan"]',
+        1.0,
+        11.0,
+        0.2,
+        '["gluten_free","vegan","halal"]',
         '["soy"]',
         110,
         1
     ),
     (
         'Miso Dressing',
-        'Traditional miso dressing',
+        'Traditional white miso dressing',
         10.00,
         40,
-        '["vegan","gluten_free"]',
+        2.0,
+        6.0,
+        1.0,
+        '["vegan","gluten_free","halal"]',
         '["soy"]',
         80,
         1
     ),
     (
         'Sesame Dressing',
-        'Sesame ginger dressing',
+        'Sesame-ginger vinaigrette',
         10.00,
         60,
-        '["vegan","gluten_free"]',
+        1.5,
+        5.0,
+        4.0,
+        '["vegan","gluten_free","halal"]',
         '["sesame"]',
         100,
         1
@@ -1110,7 +1196,10 @@ SET
 -- =====================================================
 -- 7. PRODUCTS
 -- =====================================================
--- Green Bowl Cafe
+
+-- -----------------------------------------------------
+-- Green Bowl Cafe — plant-forward, vegan-leaning
+-- -----------------------------------------------------
 INSERT INTO
     product (
         restaurant_branch_id,
@@ -1127,8 +1216,15 @@ INSERT INTO
 VALUES (
         @branch1_id,
         @diet1_id,
-        'Build Your Own Bowl',
-        'Create your perfect meal bowl with your choice of base, protein, and toppings',
+        'Garden Harvest Bowl',
+        'A vibrant bowl built on a warm grain base with a choice of protein and a rotating cast of seasonal vegetables. Bright, balanced, and filling without being heavy.
+
+Ingredients
+- White Rice: 200 kcal, 0.5g fat
+- Grilled Chicken: 250 kcal, 10g fat
+- Lettuce: 10 kcal, 0.1g fat
+- Tomato: 15 kcal, 0.2g fat
+- Avocado: 160 kcal, 15g fat',
         220.00,
         100,
         1,
@@ -1139,8 +1235,15 @@ VALUES (
     (
         @branch1_id,
         @diet2_id,
-        'Custom Salad',
-        'Design your own fresh salad with premium ingredients',
+        'Market Greens Salad',
+        'A crisp, refreshing salad built on a bed of fresh greens with layered proteins and a light house dressing. Designed to be adjusted to your own taste.
+
+Ingredients
+- Lettuce: 10 kcal, 0.1g fat
+- Grilled Chicken: 250 kcal, 10g fat
+- Tomato: 15 kcal, 0.2g fat
+- Cucumber: 10 kcal, 0.1g fat
+- Avocado: 160 kcal, 15g fat',
         180.00,
         80,
         1,
@@ -1151,8 +1254,13 @@ VALUES (
     (
         @branch1_id,
         @diet7_id,
-        'Custom Protein Smoothie',
-        'Create your own protein smoothie with your choice of fruits and supplements',
+        'Morning Power Smoothie',
+        'A thick, spoonable smoothie built for breakfast or a post-workout refill. Choose your base, mix-ins, and protein add-ons to match your goals.
+
+Ingredients
+- White Rice: 200 kcal, 0.5g fat
+- Avocado: 160 kcal, 15g fat
+- Cucumber: 10 kcal, 0.1g fat',
         190.00,
         60,
         1,
@@ -1164,7 +1272,13 @@ VALUES (
         @branch1_id,
         @diet3_id,
         'Classic Vegan Bowl',
-        'Seasoned tofu with brown rice and fresh seasonal vegetables',
+        'A simple, satisfying bowl of seasoned tofu over brown rice with fresh seasonal vegetables. A go-to for plant-based regulars.
+
+Ingredients
+- Tofu: 150 kcal, 8g fat
+- Brown Rice: 180 kcal, 1.5g fat
+- Lettuce: 10 kcal, 0.1g fat
+- Tomato: 15 kcal, 0.2g fat',
         220.00,
         20,
         0,
@@ -1175,8 +1289,14 @@ VALUES (
     (
         @branch1_id,
         @diet4_id,
-        'Edamame Salad',
-        'Steamed edamame with a light citrus vinaigrette',
+        'Edamame Citrus Salad',
+        'Steamed edamame tossed with a bright citrus vinaigrette over fresh greens. Light, clean, and packed with plant protein.
+
+Ingredients
+- Tofu: 150 kcal, 8g fat
+- Lettuce: 10 kcal, 0.1g fat
+- Tomato: 15 kcal, 0.2g fat
+- Cucumber: 10 kcal, 0.1g fat',
         130.00,
         30,
         0,
@@ -1188,7 +1308,13 @@ VALUES (
         @branch1_id,
         @diet5_id,
         'Zucchini Noodle Pesto',
-        'Fresh spiralized zucchini with basil pesto and cherry tomatoes',
+        'Spiralized zucchini tossed with basil pesto and blistered cherry tomatoes. A low-carb take on a pasta night classic.
+
+Ingredients
+- Cauliflower Rice: 50 kcal, 2g fat
+- Spinach: 20 kcal, 0.2g fat
+- Tomato: 15 kcal, 0.2g fat
+- Avocado: 160 kcal, 15g fat',
         260.00,
         12,
         0,
@@ -1199,8 +1325,14 @@ VALUES (
     (
         @branch1_id,
         @diet8_id,
-        'Breakfast Bowl',
-        'Customize your breakfast bowl with eggs, vegetables, and grains',
+        'Sunrise Breakfast Bowl',
+        'A warm breakfast bowl with quinoa, soft-scrambled eggs, and vegetables. A gentle start to the day that still keeps you full.
+
+Ingredients
+- Quinoa: 220 kcal, 3.5g fat
+- Eggs: 140 kcal, 9.5g fat
+- Spinach: 20 kcal, 0.2g fat
+- Tomato: 15 kcal, 0.2g fat',
         240.00,
         75,
         1,
@@ -1211,8 +1343,15 @@ VALUES (
     (
         @branch1_id,
         @diet10_id,
-        'Poke Bowl',
-        'Build your own poke bowl with fresh fish and vegetables',
+        'Seaside Poke Bowl',
+        'A fresh poke-style bowl with cubed salmon, crisp vegetables, and a sesame-soy finish. Bright, clean, and easy to adjust.
+
+Ingredients
+- White Rice: 200 kcal, 0.5g fat
+- Salmon: 300 kcal, 18g fat
+- Cucumber: 10 kcal, 0.1g fat
+- Avocado: 160 kcal, 15g fat
+- Sesame Dressing: 60 kcal, 4g fat',
         350.00,
         70,
         1,
@@ -1224,7 +1363,13 @@ VALUES (
         @branch1_id,
         @diet9_id,
         'Superfood Buddha Bowl',
-        'Kale, sweet potato, chickpeas with turmeric-tahini sauce',
+        'A colorful bowl of kale, roasted sweet potato, and chickpeas finished with a turmeric-tahini sauce. Vegan, gluten-free, and rich in fiber.
+
+Ingredients
+- Quinoa: 220 kcal, 3.5g fat
+- Spinach: 20 kcal, 0.2g fat
+- Avocado: 160 kcal, 15g fat
+- Tomato: 15 kcal, 0.2g fat',
         350.00,
         8,
         0,
@@ -1235,8 +1380,13 @@ VALUES (
     (
         @branch1_id,
         @diet6_id,
-        'Berry Protein Smoothie',
-        'Mixed berries with plant-based protein and almond milk',
+        'Berry Almond Smoothie',
+        'A blended smoothie of mixed berries, plant-based protein, and almond milk. Naturally sweet, dairy-free, and filling.
+
+Ingredients
+- Avocado: 160 kcal, 15g fat
+- Spinach: 20 kcal, 0.2g fat
+- Cucumber: 10 kcal, 0.1g fat',
         190.00,
         10,
         0,
@@ -1257,7 +1407,9 @@ SET @breakfast_bowl_id = @last_product_green - 3;
 
 SET @poke_product_id = @last_product_green - 2;
 
--- Keto Kitchen
+-- -----------------------------------------------------
+-- Keto Kitchen — high-fat, low-carb
+-- -----------------------------------------------------
 INSERT INTO
     product (
         restaurant_branch_id,
@@ -1274,8 +1426,14 @@ INSERT INTO
 VALUES (
         @branch2_id,
         @diet11_id,
-        'Keto Bowl',
-        'Build your perfect keto bowl with protein, vegetables, and healthy fats',
+        'Keto Power Bowl',
+        'A hearty, low-carb bowl built on cauliflower rice with a choice of protein, healthy fats, and greens. Designed to keep you full without the carbs.
+
+Ingredients
+- Cauliflower Rice: 50 kcal, 2g fat
+- Grilled Chicken: 250 kcal, 10g fat
+- Avocado: 160 kcal, 15g fat
+- Spinach: 20 kcal, 0.2g fat',
         480.00,
         90,
         1,
@@ -1286,8 +1444,15 @@ VALUES (
     (
         @branch2_id,
         @diet14_id,
-        'Custom Keto Burger',
-        'Design your own keto-friendly burger with lettuce wrap or keto bun',
+        'Keto Smash Burger',
+        'A juicy beef patty with melted cheese and crisp lettuce, served bunless or with a keto-friendly wrap. Customizable down to the toppings.
+
+Ingredients
+- Beef Patty: 280 kcal, 19g fat
+- Cheddar Cheese: 110 kcal, 9g fat
+- Lettuce: 10 kcal, 0.1g fat
+- Tomato: 15 kcal, 0.2g fat
+- Avocado: 160 kcal, 15g fat',
         450.00,
         70,
         1,
@@ -1298,8 +1463,15 @@ VALUES (
     (
         @branch2_id,
         @diet18_id,
-        'Keto Salad',
-        'Build your own keto salad with protein and low-carb vegetables',
+        'Keto Garden Salad',
+        'A low-carb salad built on a bed of spinach with a choice of protein and fresh vegetables. Light but satisfying.
+
+Ingredients
+- Spinach: 20 kcal, 0.2g fat
+- Salmon: 300 kcal, 18g fat
+- Cucumber: 10 kcal, 0.1g fat
+- Avocado: 160 kcal, 15g fat
+- Sesame Dressing: 60 kcal, 4g fat',
         380.00,
         85,
         1,
@@ -1311,7 +1483,13 @@ VALUES (
         @branch2_id,
         @diet12_id,
         'Keto Steak Plate',
-        'Grilled ribeye with buttered asparagus and cauliflower mash',
+        'Grilled ribeye with buttered asparagus and a creamy cauliflower mash. A full keto plate with no compromises.
+
+Ingredients
+- Beef Patty: 280 kcal, 19g fat
+- Eggs: 140 kcal, 9.5g fat
+- Spinach: 20 kcal, 0.2g fat
+- Cauliflower Rice: 50 kcal, 2g fat',
         550.00,
         8,
         0,
@@ -1323,7 +1501,13 @@ VALUES (
         @branch2_id,
         @diet13_id,
         'Egg & Avocado Bowl',
-        'Scrambled pasture-raised eggs with avocado and crispy bacon',
+        'Soft-scrambled eggs with sliced avocado, crispy bacon, and a touch of cheddar. A simple, high-fat breakfast or brunch.
+
+Ingredients
+- Eggs: 140 kcal, 9.5g fat
+- Avocado: 160 kcal, 15g fat
+- Cheddar Cheese: 110 kcal, 9g fat
+- Spinach: 20 kcal, 0.2g fat',
         380.00,
         12,
         0,
@@ -1334,8 +1518,14 @@ VALUES (
     (
         @branch2_id,
         @diet20_id,
-        'Chicken Parmesan',
-        'Grilled chicken breast with parmesan cheese and marinara sauce',
+        'Chicken Parmesan Plate',
+        'Grilled chicken breast topped with parmesan and a rich marinara, served with sautéed greens. Keto-friendly and deeply savory.
+
+Ingredients
+- Grilled Chicken: 250 kcal, 10g fat
+- Parmesan Cheese: 120 kcal, 9g fat
+- Spinach: 20 kcal, 0.2g fat
+- Cauliflower Rice: 50 kcal, 2g fat',
         430.00,
         6,
         0,
@@ -1346,8 +1536,13 @@ VALUES (
     (
         @branch2_id,
         @diet17_id,
-        'Custom Keto Plate',
-        'Create your own keto plate with your choice of protein and sides',
+        'Keto Butcher Plate',
+        'A customizable keto plate with your choice of protein and sides. Built for people who want control over their macros.
+
+Ingredients
+- Beef Patty: 280 kcal, 19g fat
+- Cauliflower Rice: 50 kcal, 2g fat
+- Spinach: 20 kcal, 0.2g fat',
         500.00,
         65,
         1,
@@ -1358,8 +1553,14 @@ VALUES (
     (
         @branch2_id,
         @diet16_id,
-        'Keto Pizza',
-        'Customize your keto cauliflower crust pizza',
+        'Keto Cauliflower Pizza',
+        'A cauliflower-crust pizza topped with cheddar, parmesan, and grilled chicken. Customizable with extra keto toppings.
+
+Ingredients
+- Cauliflower Rice: 50 kcal, 2g fat
+- Cheddar Cheese: 110 kcal, 9g fat
+- Parmesan Cheese: 120 kcal, 9g fat
+- Grilled Chicken: 250 kcal, 10g fat',
         420.00,
         60,
         1,
@@ -1370,8 +1571,13 @@ VALUES (
     (
         @branch2_id,
         @diet19_id,
-        'Salmon with Cream Sauce',
-        'Pan-seared salmon with dill cream sauce and sautéed spinach',
+        'Salmon Dill Plate',
+        'Pan-seared salmon finished with a dill cream sauce and sautéed spinach. Rich, silky, and low-carb.
+
+Ingredients
+- Salmon: 300 kcal, 18g fat
+- Spinach: 20 kcal, 0.2g fat
+- Cauliflower Rice: 50 kcal, 2g fat',
         490.00,
         15,
         0,
@@ -1382,8 +1588,14 @@ VALUES (
     (
         @branch2_id,
         @diet15_id,
-        'Shrimp Scampi',
-        'Garlic butter shrimp with zucchini noodles',
+        'Shrimp Scampi Zoodles',
+        'Garlic-butter shrimp over zucchini noodles with a light lemon finish. Keto, gluten-free, and bright.
+
+Ingredients
+- Shrimp: 200 kcal, 10g fat
+- Spinach: 20 kcal, 0.2g fat
+- Cauliflower Rice: 50 kcal, 2g fat
+- Avocado: 160 kcal, 15g fat',
         530.00,
         9,
         0,
@@ -1404,7 +1616,9 @@ SET @keto_plate_id = @last_product_keto - 3;
 
 SET @keto_pizza_id = @last_product_keto - 2;
 
--- Asian Fusion Fit
+-- -----------------------------------------------------
+-- Asian Fusion Fit — gluten-free Asian, includes halal
+-- -----------------------------------------------------
 INSERT INTO
     product (
         restaurant_branch_id,
@@ -1421,8 +1635,15 @@ INSERT INTO
 VALUES (
         @branch3_id,
         @diet21_id,
-        'Build Your Own Sushi',
-        'Create your own sushi roll with your choice of fillings',
+        'Nori Hand Roll Set',
+        'A build-your-own hand roll set with toasted nori, a choice of protein, and fresh fillings. Served with gluten-free sauces.
+
+Ingredients
+- Seaweed: 30 kcal, 0.5g fat
+- Salmon: 300 kcal, 18g fat
+- Cucumber: 10 kcal, 0.1g fat
+- Avocado: 160 kcal, 15g fat
+- Teriyaki Sauce: 50 kcal, 0.2g fat',
         350.00,
         80,
         1,
@@ -1433,8 +1654,15 @@ VALUES (
     (
         @branch3_id,
         @diet24_id,
-        'Custom Poke Bowl',
-        'Design your own poke bowl with fresh fish and toppings',
+        'Rainbow Poke Bowl',
+        'A colorful poke bowl with fresh salmon, crisp vegetables, and a sesame-soy finish. Gluten-free and halal-friendly.
+
+Ingredients
+- White Rice: 200 kcal, 0.5g fat
+- Salmon: 300 kcal, 18g fat
+- Cucumber: 10 kcal, 0.1g fat
+- Avocado: 160 kcal, 15g fat
+- Seaweed: 30 kcal, 0.5g fat',
         390.00,
         75,
         1,
@@ -1445,8 +1673,14 @@ VALUES (
     (
         @branch3_id,
         @diet26_id,
-        'Asian Noodle Bowl',
-        'Customize your noodle bowl with protein, vegetables, and broth',
+        'Tokyo Noodle Bowl',
+        'A warm noodle bowl with a choice of protein, fresh vegetables, and a light broth. Customizable to your spice and sauce preference.
+
+Ingredients
+- White Rice: 200 kcal, 0.5g fat
+- Grilled Chicken: 250 kcal, 10g fat
+- Spinach: 20 kcal, 0.2g fat
+- Cucumber: 10 kcal, 0.1g fat',
         320.00,
         70,
         1,
@@ -1457,8 +1691,14 @@ VALUES (
     (
         @branch3_id,
         @diet22_id,
-        'Gluten-Free Sushi Roll',
-        'Fresh salmon roll with gluten-free soy sauce',
+        'Gluten-Free Salmon Roll',
+        'A fresh salmon roll wrapped in nori and served with gluten-free soy sauce. Clean, simple, and satisfying.
+
+Ingredients
+- Seaweed: 30 kcal, 0.5g fat
+- Salmon: 300 kcal, 18g fat
+- Cucumber: 10 kcal, 0.1g fat
+- Avocado: 160 kcal, 15g fat',
         390.00,
         20,
         0,
@@ -1469,8 +1709,13 @@ VALUES (
     (
         @branch3_id,
         @diet23_id,
-        'Seaweed Salad',
-        'Organic seaweed salad with sesame seeds and rice vinegar',
+        'Seaweed Sesame Salad',
+        'A chilled seaweed salad tossed with sesame seeds and rice vinegar. Light, briny, and refreshing.
+
+Ingredients
+- Seaweed: 30 kcal, 0.5g fat
+- Cucumber: 10 kcal, 0.1g fat
+- Sesame Dressing: 60 kcal, 4g fat',
         160.00,
         15,
         0,
@@ -1481,8 +1726,14 @@ VALUES (
     (
         @branch3_id,
         @diet25_id,
-        'Grilled Fish with Veggies',
-        'Grilled tilapia with seasonal vegetables and herb butter',
+        'Grilled Fish & Greens',
+        'Grilled tilapia with seasonal vegetables and a light herb butter. Simple, clean, and halal-friendly.
+
+Ingredients
+- Salmon: 300 kcal, 18g fat
+- Spinach: 20 kcal, 0.2g fat
+- Cucumber: 10 kcal, 0.1g fat
+- Avocado: 160 kcal, 15g fat',
         360.00,
         8,
         0,
@@ -1493,8 +1744,14 @@ VALUES (
     (
         @branch3_id,
         @diet28_id,
-        'Asian Rice Bowl',
-        'Build your own Asian rice bowl with your choice of protein and toppings',
+        'Osaka Rice Bowl',
+        'A customizable Japanese rice bowl with a choice of protein and toppings. Comforting and easy to tailor.
+
+Ingredients
+- White Rice: 200 kcal, 0.5g fat
+- Grilled Chicken: 250 kcal, 10g fat
+- Spinach: 20 kcal, 0.2g fat
+- Avocado: 160 kcal, 15g fat',
         300.00,
         85,
         1,
@@ -1505,8 +1762,14 @@ VALUES (
     (
         @branch3_id,
         @diet29_id,
-        'Vegetable Stir Fry',
-        'Customize your vegetable stir fry with your choice of vegetables and sauce',
+        'Wok-Tossed Vegetables',
+        'A colorful stir fry of seasonal vegetables tossed in a light sauce. Customizable with protein and sauce choices.
+
+Ingredients
+- Cauliflower Rice: 50 kcal, 2g fat
+- Spinach: 20 kcal, 0.2g fat
+- Cucumber: 10 kcal, 0.1g fat
+- Tomato: 15 kcal, 0.2g fat',
         280.00,
         90,
         1,
@@ -1518,7 +1781,13 @@ VALUES (
         @branch3_id,
         @diet27_id,
         'Spicy Tuna Roll',
-        'Spicy tuna roll with cucumber and avocado',
+        'A spicy tuna roll with cucumber and avocado, finished with a light chili glaze. Halal-friendly and gluten-free.
+
+Ingredients
+- Seaweed: 30 kcal, 0.5g fat
+- Salmon: 300 kcal, 18g fat
+- Cucumber: 10 kcal, 0.1g fat
+- Avocado: 160 kcal, 15g fat',
         440.00,
         16,
         0,
@@ -1529,8 +1798,13 @@ VALUES (
     (
         @branch3_id,
         @diet30_id,
-        'Green Tea Smoothie',
-        'Refreshing green tea smoothie with banana and spinach',
+        'Matcha Banana Smoothie',
+        'A refreshing green tea smoothie blended with banana and spinach. Lightly sweet and dairy-free.
+
+Ingredients
+- Spinach: 20 kcal, 0.2g fat
+- Avocado: 160 kcal, 15g fat
+- Cucumber: 10 kcal, 0.1g fat',
         200.00,
         14,
         0,
@@ -1567,7 +1841,7 @@ SET @stir_fry_id = @last_product_asian - 2;
 -- =====================================================
 
 -- -----------------------------------------------------
--- Build Your Own Bowl (product 1)
+-- Garden Harvest Bowl (product 1)
 -- -----------------------------------------------------
 INSERT INTO
     product_composition (
@@ -1757,7 +2031,7 @@ VALUES
     );
 
 -- -----------------------------------------------------
--- Custom Salad (product 2)
+-- Market Greens Salad (product 2)
 -- -----------------------------------------------------
 INSERT INTO
     product_composition (
@@ -1911,7 +2185,7 @@ VALUES
     );
 
 -- -----------------------------------------------------
--- Custom Protein Smoothie (product 3)
+-- Morning Power Smoothie (product 3)
 -- -----------------------------------------------------
 INSERT INTO
     product_composition (
@@ -2004,7 +2278,7 @@ VALUES
     );
 
 -- -----------------------------------------------------
--- Breakfast Bowl (product 7)
+-- Sunrise Breakfast Bowl (product 7)
 -- -----------------------------------------------------
 INSERT INTO
     product_composition (
@@ -2110,7 +2384,7 @@ VALUES
     );
 
 -- -----------------------------------------------------
--- Poke Bowl (product 8)
+-- Seaside Poke Bowl (product 8)
 -- -----------------------------------------------------
 INSERT INTO
     product_composition (
@@ -2252,7 +2526,7 @@ VALUES
     );
 
 -- -----------------------------------------------------
--- Keto Bowl (product 11)
+-- Keto Power Bowl (product 11)
 -- -----------------------------------------------------
 INSERT INTO
     product_composition (
@@ -2383,7 +2657,7 @@ VALUES
     );
 
 -- -----------------------------------------------------
--- Custom Keto Burger (product 12)
+-- Keto Smash Burger (product 12)
 -- -----------------------------------------------------
 INSERT INTO
     product_composition (
@@ -2424,7 +2698,7 @@ VALUES
         0,
         1
     ),
-    -- Cheese: Cheddar default (price_modifier 0.00, base price includes it)
+    -- Cheese: Cheddar default
     (
         @keto_burger_id,
         @cheddar_cheese_id,
@@ -2488,7 +2762,7 @@ VALUES
     );
 
 -- -----------------------------------------------------
--- Keto Salad (product 13)
+-- Keto Garden Salad (product 13)
 -- -----------------------------------------------------
 INSERT INTO
     product_composition (
@@ -2606,7 +2880,7 @@ VALUES
     );
 
 -- -----------------------------------------------------
--- Custom Keto Plate (product 17)
+-- Keto Butcher Plate (product 17)
 -- -----------------------------------------------------
 INSERT INTO
     product_composition (
@@ -2711,11 +2985,7 @@ VALUES
     );
 
 -- -----------------------------------------------------
--- Keto Pizza (product 18)
--- -----------------------------------------------------
--- All four defaults now have price_modifier = 0.00.
--- Base price 420.00 already includes Cauliflower, Cheddar,
--- Parmesan, and Grilled Chicken at their default quantities.
+-- Keto Cauliflower Pizza (product 18)
 -- -----------------------------------------------------
 INSERT INTO
     product_composition (
@@ -2821,7 +3091,7 @@ VALUES
     );
 
 -- -----------------------------------------------------
--- Build Your Own Sushi (product 21)
+-- Nori Hand Roll Set (product 21)
 -- -----------------------------------------------------
 INSERT INTO
     product_composition (
@@ -2939,7 +3209,7 @@ VALUES
     );
 
 -- -----------------------------------------------------
--- Custom Poke Bowl (product 22)
+-- Rainbow Poke Bowl (product 22)
 -- -----------------------------------------------------
 INSERT INTO
     product_composition (
@@ -3093,7 +3363,7 @@ VALUES
     );
 
 -- -----------------------------------------------------
--- Asian Noodle Bowl (product 23)
+-- Tokyo Noodle Bowl (product 23)
 -- -----------------------------------------------------
 INSERT INTO
     product_composition (
@@ -3223,7 +3493,7 @@ VALUES
     );
 
 -- -----------------------------------------------------
--- Asian Rice Bowl (product 27)
+-- Osaka Rice Bowl (product 27)
 -- -----------------------------------------------------
 INSERT INTO
     product_composition (
@@ -3352,7 +3622,7 @@ VALUES
     );
 
 -- -----------------------------------------------------
--- Vegetable Stir Fry (product 28)
+-- Wok-Tossed Vegetables (product 28)
 -- -----------------------------------------------------
 INSERT INTO
     product_composition (
@@ -3516,8 +3786,7 @@ WHERE
     p.is_customizable = 1
 ORDER BY p.name;
 
--- Every customizable product must have its stored calories equal to
--- the sum of its default composition calories.
+-- Every customizable product must have stored calories equal to derived.
 SELECT
     p.name AS product_name,
     di.calories AS stored_calories,
