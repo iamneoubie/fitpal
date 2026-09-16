@@ -1,19 +1,10 @@
 <?php
 /**
  * FitPal Customer Cart Page
- *
- * Displays the customer's persistent cart (from the `cart` table),
- * separate from the session-based order queue on menu.php.
- *
- * Features:
- * - Lists cart items with product info, price, and customizations
- * - Separates available and unavailable items
- * - Quantity editing with live subtotal recalculation
- * - Remove item with confirmation modal
- * - Order summary with checkout CTA
+ * Version 2.3 — Reads parsed customizations from cart-queries.php.
  *
  * @package FitPal
- * @version 1.0
+ * @version 2.3
  */
 
 declare(strict_types=1);
@@ -22,7 +13,6 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Redirect if not logged in
 if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     header('Location: sign-in.php');
     exit;
@@ -33,70 +23,26 @@ require_once __DIR__ . '/../backend/database/cart-queries.php';
 
 $customerId = (int)$_SESSION['customer_id'];
 
-// ============================================
-// FETCH CART ITEMS
-// ============================================
-$allItems         = [];
+$allItems         = getCartItemsWithProductDetails($database_connection, $customerId);
 $availableItems   = [];
 $unavailableItems = [];
 $subtotal         = 0.0;
 
-try {
-    $stmt = $database_connection->prepare(
-        "SELECT
-            c.cart_id,
-            c.quantity,
-            c.price,
-            c.customization_data,
-            p.product_id,
-            p.name,
-            p.price       AS current_price,
-            p.stock,
-            p.is_active,
-            p.is_customizable,
-            p.base_price,
-            rb.restaurant_branch_id,
-            rb.branch_name,
-            r.restaurant_id,
-            r.business_name,
-            COALESCE(di.images, '') AS product_image
-         FROM cart c
-         JOIN product p ON c.product_id = p.product_id
-         JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
-         JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
-         LEFT JOIN dietary_information di ON p.dietary_information_id = di.dietary_information_id
-         WHERE c.customer_id = :customer_id
-         ORDER BY
-            p.is_active DESC,
-            p.stock > 0 DESC,
-            c.added_at DESC"
-    );
-    $stmt->execute([':customer_id' => $customerId]);
-    $allItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    foreach ($allItems as $item) {
-        $isAvailable = ((int)$item['is_active'] === 1) && ((int)$item['stock'] > 0);
-
-        if ($isAvailable) {
-            $availableItems[] = $item;
-            $subtotal += (float)$item['price'] * (int)$item['quantity'];
-        } else {
-            $unavailableItems[] = $item;
-        }
+foreach ($allItems as $item) {
+    $isAvailable = ((int)$item['is_active'] === 1) && ((int)$item['stock'] > 0);
+    if ($isAvailable) {
+        $availableItems[] = $item;
+        $subtotal += (float)$item['price'] * (int)$item['quantity'];
+    } else {
+        $unavailableItems[] = $item;
     }
-} catch (PDOException $e) {
-    error_log('Cart fetch error: ' . $e->getMessage());
 }
 
-$hasAnyItems = !empty($allItems);
+$hasAnyItems  = !empty($allItems);
 $hasAvailable = !empty($availableItems);
 
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
-
 /**
- * Build the cart product image URL, falling back to a placeholder icon.
+ * Resolve a cart product image path, falling back to a placeholder icon.
  */
 function getCartImageUrl(string $mediaPath, string $assetBase): string
 {
@@ -107,78 +53,21 @@ function getCartImageUrl(string $mediaPath, string $assetBase): string
 }
 
 /**
- * Format currency in Philippine peso.
+ * Format a numeric amount as Philippine pesos.
  */
 function formatCurrency(float|string|null $amount): string
 {
     return '₱' . number_format((float)($amount ?? 0), 2);
 }
 
-/**
- * Parse customization_data JSON into a display list.
- *
- * @return array<int, array{name:string, price:float, quantity:int}>
- */
-function parseCustomizations(?string $json): array
-{
-    if (empty($json)) {
-        return [];
-    }
-
-    $decoded = json_decode($json, true);
-    if (!is_array($decoded)) {
-        return [];
-    }
-
-    $out = [];
-    foreach ($decoded as $cust) {
-        if (!is_array($cust)) {
-            continue;
-        }
-        // Skip note-only entries
-        if (isset($cust['type']) && $cust['type'] === 'notes') {
-            continue;
-        }
-        $name = $cust['ingredient_name'] ?? $cust['name'] ?? null;
-        if ($name === null) {
-            continue;
-        }
-        $out[] = [
-            'name'     => (string)$name,
-            'price'    => (float)($cust['price_modifier'] ?? 0),
-            'quantity' => (int)($cust['quantity'] ?? 1),
-        ];
-    }
-    return $out;
-}
-
-/**
- * Truncate text with ellipsis.
- */
-function truncateText(string $text, int $length = 80): string
-{
-    $text = trim($text);
-    if (mb_strlen($text) <= $length) {
-        return $text;
-    }
-    return mb_substr($text, 0, $length) . '…';
-}
-
-// ============================================
-// CSRF TOKEN
-// ============================================
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 $csrfToken = $_SESSION['csrf_token'];
 
-// ============================================
-// INCLUDE HEADER
-// ============================================
 require_once __DIR__ . '/../includes/header.php';
-
-// $assetBase is provided by header.php
 ?>
+
 <link rel="stylesheet" href="../assets/css/cart.css">
 
 <div class="content cart-page">
@@ -252,7 +141,9 @@ require_once __DIR__ . '/../includes/header.php';
                         $stock        = (int)$item['stock'];
                         $itemSubtotal = $price * $quantity;
                         $imageUrl     = getCartImageUrl($item['product_image'] ?? '', $assetBase);
-                        $customs      = parseCustomizations($item['customization_data'] ?? null);
+
+                        // cart-queries.php already returns parsed customizations.
+                        $customs      = $item['customizations'] ?? [];
                     ?>
                     <div class="cart-item" data-cart-id="<?php echo $cartId; ?>"
                         data-product-id="<?php echo $productId; ?>" data-price="<?php echo $price; ?>"
@@ -285,10 +176,10 @@ require_once __DIR__ . '/../includes/header.php';
                             <ul class="cart-item-customizations">
                                 <?php foreach ($customs as $c): ?>
                                 <li>
-                                    <?php echo htmlspecialchars($c['name'], ENT_QUOTES, 'UTF-8'); ?>
-                                    <?php if ($c['price'] != 0): ?>
+                                    <?php echo htmlspecialchars($c['ingredient_name'] ?? $c['name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
+                                    <?php if (($c['price_modifier'] ?? $c['price'] ?? 0) != 0): ?>
                                     <span class="cart-item-custom-price">
-                                        (<?php echo $c['price'] > 0 ? '+' : '−'; ?><?php echo formatCurrency(abs($c['price'])); ?>)
+                                        (<?php echo ($c['price_modifier'] ?? $c['price']) > 0 ? '+' : '−'; ?><?php echo formatCurrency(abs($c['price_modifier'] ?? $c['price'])); ?>)
                                     </span>
                                     <?php endif; ?>
                                 </li>

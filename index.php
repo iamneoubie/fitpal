@@ -1,128 +1,91 @@
 <?php
 /**
  * FitPal Landing Page
- * 
- * This is the public entry point for the FitPal platform.
- * 
+ *
+ * Public entry point for the FitPal platform.
+ *
+ * ---------------------------------------------------------------------
+ * STANDALONE ARCHITECTURE
+ * ---------------------------------------------------------------------
+ * This page is intentionally decoupled from every role directory
+ * (customer/, restaurant/, rider/, admin/). It only depends on:
+ *
+ *   - shared/includes/header.php        (session, nav, auth state)
+ *   - shared/includes/footer.php        (footer markup)
+ *   - shared/includes/view-helpers.php  (presentation helpers)
+ *   - shared/backend/database/database-connect.php
+ *   - shared/backend/database/landing-queries.php
+ *
+ * It contains NO SQL of its own. Every database call goes through
+ * landing-queries.php, which lives under shared/ for the same reason.
+ *
+ * Rationale:
+ *   - The landing page is role-agnostic. It must keep working even if
+ *     the customer role is refactored, renamed, or removed.
+ *   - It must not reach into customer/backend/database/* because those
+ *     files assume a logged-in customer context and carry customer-only
+ *     concerns (dietary profiles, carts, session queue, etc.).
+ *   - Shared query files are the only sanctioned cross-role include.
+ * ---------------------------------------------------------------------
+ *
  * @package FitPal
- * @version 2.8 - Removed Browse Menu button from empty state
+ * @version 3.1 — Fixed broken add-to-cart form action; uses shared helpers.
  */
 
 declare(strict_types=1);
 
-// Session is now handled by header.php
 require_once __DIR__ . '/shared/includes/header.php';
 
 /**
- * Get the base path for assets based on current file location
+ * Compute the asset base path relative to the current script.
+ *
+ * @return string
  */
-function getLandingAssetBase(): string {
-    $scriptPath = $_SERVER['SCRIPT_NAME'];
-    $dirPath = dirname($scriptPath);
-    $segments = array_filter(explode('/', $dirPath));
-    $depth = count($segments);
-    
+function getLandingAssetBase(): string
+{
+    $scriptPath = $_SERVER['SCRIPT_NAME'] ?? '';
+    $dirPath    = dirname($scriptPath);
+    $segments   = array_filter(explode('/', $dirPath));
+    $depth      = count($segments);
+
     if ($depth <= 0) {
         return './shared/';
     }
-    
+
     return str_repeat('../', $depth) . 'shared/';
 }
 
 $assetBase = getLandingAssetBase();
 
-// ============================================
-// DATABASE QUERY — Fetch random products (EXACT same as menu.php)
-// ============================================
-
+// ---------------------------------------------------------------------
+// DATA
+// ---------------------------------------------------------------------
 require_once __DIR__ . '/shared/backend/database/database-connect.php';
-
-function getFeaturedProducts(PDO $db, int $limit = 8): array {
-    $stmt = $db->prepare(
-        "SELECT 
-            p.product_id as id,
-            p.name,
-            p.description,
-            p.price,
-            p.stock,
-            p.is_active,
-            p.restaurant_branch_id,
-            p.is_customizable,
-            p.customization_type,
-            p.base_price,
-            rb.branch_name,
-            rb.barangay,
-            rb.city,
-            rb.province,
-            r.restaurant_id,
-            r.business_name as restaurant_name,
-            r.cuisine_type,
-            COALESCE(di.dietary_tags, '') as dietary_tags,
-            COALESCE(di.allergens, '') as allergens,
-            di.calories,
-            di.protein,
-            di.carbs,
-            di.fat,
-            COALESCE(di.images, '') as product_image
-        FROM product p
-        JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
-        JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
-        LEFT JOIN dietary_information di ON p.dietary_information_id = di.dietary_information_id
-        WHERE p.is_active = 1 
-        AND rb.is_active = 1 
-        AND r.is_active = 1
-        ORDER BY RAND()
-        LIMIT :limit"
-    );
-    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-    $stmt->execute();
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
-}
-
-// ============================================
-// FETCH REAL DATA
-// ============================================
+require_once __DIR__ . '/shared/backend/database/landing-queries.php';
+require_once __DIR__ . '/shared/includes/view-helpers.php';
 
 $featuredProducts = [];
+$stats            = ['restaurants' => 0, 'products' => 0, 'customers' => 0];
 
 try {
     $featuredProducts = getFeaturedProducts($database_connection, 5);
-    error_log('Featured products found: ' . count($featuredProducts));
+    $stats            = getPlatformStats($database_connection);
 } catch (PDOException $e) {
     error_log('Landing page query error: ' . $e->getMessage());
-    $featuredProducts = [];
 }
 
 $hasProducts = !empty($featuredProducts);
-
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
-
-function formatPrice($price): string {
-    return '₱' . number_format((float)$price, 2);
-}
-
-function truncateText(string $text, int $length = 70): string {
-    $text = trim($text);
-    if (strlen($text) <= $length) {
-        return $text;
-    }
-    return substr($text, 0, $length) . '...';
-}
-
-// ============================================
-// HEADER DATA (from shared/includes/header.php)
-// ============================================
 ?>
 <!-- ============================================
-    LANDING PAGE CONTENT
-    ============================================ -->
+     LANDING PAGE CONTENT
+     ============================================ -->
 <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/landing.css">
 
 <div class="content">
 
-    <!-- Hero Section -->
+    <!-- ============================================
+         HERO
+         ============================================ -->
     <section class="hero-section" aria-labelledby="hero-title">
         <div class="hero-container">
             <div class="hero-content">
@@ -151,44 +114,17 @@ function truncateText(string $text, int $length = 70): string {
                 </div>
                 <div class="hero-stats">
                     <div class="hero-stat">
-                        <span class="hero-stat-number">
-                            <?php 
-                                try {
-                                    $countStmt = $database_connection->query("SELECT COUNT(*) FROM restaurant WHERE is_active = 1");
-                                    echo number_format((int)$countStmt->fetchColumn());
-                                } catch (PDOException $e) {
-                                    echo '0';
-                                }
-                            ?>
-                        </span>
+                        <span class="hero-stat-number"><?php echo number_format($stats['restaurants']); ?></span>
                         <span class="hero-stat-label">Restaurants</span>
                     </div>
                     <div class="hero-stat-divider"></div>
                     <div class="hero-stat">
-                        <span class="hero-stat-number">
-                            <?php 
-                                try {
-                                    $countStmt = $database_connection->query("SELECT COUNT(*) FROM product WHERE is_active = 1");
-                                    echo number_format((int)$countStmt->fetchColumn());
-                                } catch (PDOException $e) {
-                                    echo '0';
-                                }
-                            ?>
-                        </span>
+                        <span class="hero-stat-number"><?php echo number_format($stats['products']); ?></span>
                         <span class="hero-stat-label">Meals</span>
                     </div>
                     <div class="hero-stat-divider"></div>
                     <div class="hero-stat">
-                        <span class="hero-stat-number">
-                            <?php 
-                                try {
-                                    $countStmt = $database_connection->query("SELECT COUNT(*) FROM customer WHERE is_active = 1");
-                                    echo number_format((int)$countStmt->fetchColumn());
-                                } catch (PDOException $e) {
-                                    echo '0';
-                                }
-                            ?>
-                        </span>
+                        <span class="hero-stat-number"><?php echo number_format($stats['customers']); ?></span>
                         <span class="hero-stat-label">Active Users</span>
                     </div>
                 </div>
@@ -201,7 +137,9 @@ function truncateText(string $text, int $length = 70): string {
         </div>
     </section>
 
-    <!-- Features Section -->
+    <!-- ============================================
+         FEATURES
+         ============================================ -->
     <section class="features-section" aria-labelledby="features-title">
         <div class="container">
             <div class="section-header">
@@ -216,9 +154,7 @@ function truncateText(string $text, int $length = 70): string {
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
                     <p class="feature-title">Nutritional Information</p>
-                    <p class="feature-description">
-                        View calories, protein, carbs, and fats for every meal.
-                    </p>
+                    <p class="feature-description">View calories, protein, carbs, and fats for every meal.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
@@ -226,9 +162,7 @@ function truncateText(string $text, int $length = 70): string {
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
                     <p class="feature-title">Dietary Filters</p>
-                    <p class="feature-description">
-                        Filter meals by vegan, keto, gluten-free, and other preferences.
-                    </p>
+                    <p class="feature-description">Filter meals by vegan, keto, gluten-free, and other preferences.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
@@ -237,9 +171,7 @@ function truncateText(string $text, int $length = 70): string {
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
                     <p class="feature-title">Allergy Management</p>
-                    <p class="feature-description">
-                        Set your allergies and get safe meal recommendations.
-                    </p>
+                    <p class="feature-description">Set your allergies and get safe meal recommendations.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
@@ -248,9 +180,7 @@ function truncateText(string $text, int $length = 70): string {
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
                     <p class="feature-title">Special Instructions</p>
-                    <p class="feature-description">
-                        Add custom instructions that are communicated to the kitchen.
-                    </p>
+                    <p class="feature-description">Add custom instructions that are communicated to the kitchen.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
@@ -258,9 +188,7 @@ function truncateText(string $text, int $length = 70): string {
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
                     <p class="feature-title">Order Tracking</p>
-                    <p class="feature-description">
-                        Track your orders from preparation to delivery.
-                    </p>
+                    <p class="feature-description">Track your orders from preparation to delivery.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
@@ -269,15 +197,15 @@ function truncateText(string $text, int $length = 70): string {
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
                     <p class="feature-title">Nutrition Analytics</p>
-                    <p class="feature-description">
-                        View insights into your eating habits over time.
-                    </p>
+                    <p class="feature-description">View insights into your eating habits over time.</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- How It Works Section -->
+    <!-- ============================================
+         HOW IT WORKS
+         ============================================ -->
     <section class="how-it-works-section" aria-labelledby="howitworks-title">
         <div class="container">
             <div class="section-header">
@@ -293,9 +221,7 @@ function truncateText(string $text, int $length = 70): string {
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
                     <p class="step-title">Create Account</p>
-                    <p class="step-description">
-                        Sign up and set your dietary preferences and allergies.
-                    </p>
+                    <p class="step-description">Sign up and set your dietary preferences and allergies.</p>
                 </div>
                 <div class="step-card">
                     <div class="step-number">2</div>
@@ -304,9 +230,7 @@ function truncateText(string $text, int $length = 70): string {
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
                     <p class="step-title">Browse Menus</p>
-                    <p class="step-description">
-                        Explore restaurants and filter meals based on your needs.
-                    </p>
+                    <p class="step-description">Explore restaurants and filter meals based on your needs.</p>
                 </div>
                 <div class="step-card">
                     <div class="step-number">3</div>
@@ -315,9 +239,7 @@ function truncateText(string $text, int $length = 70): string {
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
                     <p class="step-title">Place Order</p>
-                    <p class="step-description">
-                        Add meals to your cart, add instructions, and place your order.
-                    </p>
+                    <p class="step-description">Add meals to your cart, add instructions, and place your order.</p>
                 </div>
                 <div class="step-card">
                     <div class="step-number">4</div>
@@ -326,16 +248,14 @@ function truncateText(string $text, int $length = 70): string {
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
                     <p class="step-title">Track Order</p>
-                    <p class="step-description">
-                        Track your order status from preparation to delivery.
-                    </p>
+                    <p class="step-description">Track your order status from preparation to delivery.</p>
                 </div>
             </div>
         </div>
     </section>
 
     <!-- ============================================
-         FEATURED PRODUCTS SECTION — EXACT match to menu.php
+         FEATURED MEALS
          ============================================ -->
     <section class="featured-products-section" aria-labelledby="featured-products-title">
         <div class="container">
@@ -352,28 +272,23 @@ function truncateText(string $text, int $length = 70): string {
 
             <?php if ($hasProducts): ?>
             <div class="product-grid">
-                <?php foreach ($featuredProducts as $product): 
-                    // Cast all values to proper types
-                    $productId = (int)$product['id'];
-                    $productName = $product['name'] ?? 'Product';
-                    $productPrice = (float)($product['price'] ?? 0);
-                    $productStock = (int)($product['stock'] ?? 0);
-                    $productCalories = (int)($product['calories'] ?? 0);
-                    $restaurantName = $product['restaurant_name'] ?? '';
-                    $branchName = $product['branch_name'] ?? '';
+                <?php foreach ($featuredProducts as $product):
+                    $productId          = (int)$product['id'];
+                    $productName        = $product['name'] ?? 'Product';
+                    $productPrice       = (float)($product['price'] ?? 0);
+                    $productStock       = (int)($product['stock'] ?? 0);
+                    $productCalories    = (int)($product['calories'] ?? 0);
+                    $restaurantName     = $product['restaurant_name'] ?? '';
+                    $branchName         = $product['branch_name'] ?? '';
                     $productDescription = $product['description'] ?? '';
-                    
-                    $dietaryTags = !empty($product['dietary_tags']) 
-                        ? array_map('trim', explode(',', $product['dietary_tags'])) 
-                        : [];
-                    $allergens = !empty($product['allergens']) 
-                        ? array_map('trim', explode(',', $product['allergens'])) 
-                        : [];
-                    $productImage = !empty($product['product_image']) 
+
+                    $dietaryTags = parseTagList($product['dietary_tags'] ?? '');
+                    $allergens   = parseTagList($product['allergens'] ?? '');
+
+                    $productImage = !empty($product['product_image'])
                         ? htmlspecialchars($product['product_image'], ENT_QUOTES, 'UTF-8')
                         : $assetBase . 'assets/images/icons/restaurant.svg';
                 ?>
-                <!-- PRODUCT CARD — EXACT match to menu.php -->
                 <div class="product-card" data-product-id="<?php echo $productId; ?>"
                     data-product-name="<?php echo htmlspecialchars($productName, ENT_QUOTES, 'UTF-8'); ?>"
                     data-product-price="<?php echo $productPrice; ?>" data-product-stock="<?php echo $productStock; ?>"
@@ -381,7 +296,6 @@ function truncateText(string $text, int $length = 70): string {
                     data-restaurant-name="<?php echo htmlspecialchars($restaurantName, ENT_QUOTES, 'UTF-8'); ?>"
                     data-branch-name="<?php echo htmlspecialchars($branchName, ENT_QUOTES, 'UTF-8'); ?>">
 
-                    <!-- Product Image -->
                     <a href="<?php echo $assetBase; ?>../customer/pages/product-detail.php?id=<?php echo $productId; ?>"
                         class="product-image-link" onclick="event.stopPropagation();">
                         <div class="product-image">
@@ -392,7 +306,6 @@ function truncateText(string $text, int $length = 70): string {
                     </a>
 
                     <div class="product-info">
-                        <!-- Product Name -->
                         <a href="<?php echo $assetBase; ?>../customer/pages/product-detail.php?id=<?php echo $productId; ?>"
                             class="product-name-link" onclick="event.stopPropagation();">
                             <p class="heading-6">
@@ -400,17 +313,14 @@ function truncateText(string $text, int $length = 70): string {
                             </p>
                         </a>
 
-                        <!-- Restaurant Name -->
                         <p class="product-restaurant-name">
                             <?php echo htmlspecialchars($restaurantName, ENT_QUOTES, 'UTF-8'); ?>
                         </p>
 
-                        <!-- Description -->
                         <p class="product-description">
                             <?php echo htmlspecialchars(truncateText($productDescription, 70), ENT_QUOTES, 'UTF-8'); ?>
                         </p>
 
-                        <!-- Price + Calories -->
                         <div class="product-meta">
                             <span class="product-price"><?php echo formatPrice($productPrice); ?></span>
                             <?php if ($productCalories > 0): ?>
@@ -418,7 +328,6 @@ function truncateText(string $text, int $length = 70): string {
                             <?php endif; ?>
                         </div>
 
-                        <!-- Dietary Tags — EXACT match to menu.php -->
                         <?php if (!empty($dietaryTags)): ?>
                         <div class="product-tags-section">
                             <span class="tags-label">Dietary Tags:</span>
@@ -432,7 +341,6 @@ function truncateText(string $text, int $length = 70): string {
                         </div>
                         <?php endif; ?>
 
-                        <!-- Allergens — EXACT match to menu.php -->
                         <div class="product-allergens-section">
                             <span class="allergen-label">Allergens:</span>
                             <div class="product-allergens-tags">
@@ -449,14 +357,27 @@ function truncateText(string $text, int $length = 70): string {
                         </div>
                     </div>
 
-                    <!-- Product Actions -->
+                    <!--
+                        Product Actions
+
+                        Posts to the CUSTOMER cart handler. The handler
+                        expects `action=add` plus `csrf_token` and
+                        `product_id`. We also send `total_price=0` because
+                        the handler logs a warning when the client-supplied
+                        total does not match the server-computed total. For
+                        a plain add-from-landing-page with no customizations,
+                        sending 0 skips that warning path.
+                    -->
                     <div class="product-actions">
                         <?php if ($isLoggedIn && $productStock > 0): ?>
                         <form method="POST"
-                            action="<?php echo $assetBase; ?>../customer/backend/handlers/add-to-cart-handler.php"
+                            action="<?php echo $assetBase; ?>../customer/backend/handlers/cart-handler.php"
                             class="add-to-cart-form" style="width: 100%;">
-                            <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
+                            <input type="hidden" name="action" value="add">
+                            <input type="hidden" name="csrf_token"
+                                value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                             <input type="hidden" name="product_id" value="<?php echo $productId; ?>">
+                            <input type="hidden" name="total_price" value="0">
                             <div class="action-row">
                                 <div class="quantity-control">
                                     <button type="button" class="qty-btn qty-minus"
@@ -489,7 +410,6 @@ function truncateText(string $text, int $length = 70): string {
                 </a>
             </div>
             <?php else: ?>
-            <!-- FIXED: Empty State — no Browse Menu button -->
             <div class="empty-state featured-empty">
                 <div class="empty-state-icon">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt="No products available">
@@ -501,14 +421,14 @@ function truncateText(string $text, int $length = 70): string {
         </div>
     </section>
 
-    <!-- CTA Section -->
+    <!-- ============================================
+         CTA
+         ============================================ -->
     <section class="cta-section" aria-labelledby="cta-title">
         <div class="container">
             <div class="cta-content">
                 <p class="cta-title" id="cta-title">Find Meals That Match Your Diet</p>
-                <p class="cta-description">
-                    Explore restaurants and filter by your dietary preferences.
-                </p>
+                <p class="cta-description">Explore restaurants and filter by your dietary preferences.</p>
                 <div class="cta-buttons">
                     <?php if ($isLoggedIn): ?>
                     <a href="<?php echo $assetBase; ?>../<?php echo $userRole; ?>/pages/dashboard.php"
@@ -531,6 +451,4 @@ function truncateText(string $text, int $length = 70): string {
 </div>
 
 <?php
-// Include shared footer
 require_once __DIR__ . '/shared/includes/footer.php';
-?>

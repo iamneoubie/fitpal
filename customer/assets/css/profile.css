@@ -1,9 +1,9 @@
 /**
  * FitPal Customer Profile Page Styles
- * Version 2.4 - Fixed delete modal centering
+ * Version 2.7 — Back button unified with product-detail back button
  *
  * @package FitPal
- * @version 2.4
+ * @version 2.7
  */
 
 /* ============================================
@@ -25,18 +25,26 @@
 }
 
 .profile-page .container {
-    max-width: 820px;
+    max-width: 1200px;
     margin: 0 auto;
     padding: 0 16px;
     width: 100%;
+    box-sizing: border-box;
 }
 
 /* ============================================
-   PAGE HEADER
+   PAGE HEADER - with back button
    ============================================ */
 
 .page-title-header {
     margin-bottom: 24px;
+}
+
+.page-title-header-top {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
 }
 
 .page-title-header h1 {
@@ -44,6 +52,38 @@
     font-weight: 700;
     color: var(--text);
     margin: 0;
+}
+
+/* Back button — matches product-detail .back-btn */
+.page-title-header .back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #ffffff;
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    font-family: inherit;
+    padding: 10px 18px;
+    border-radius: var(--radius-base);
+    transition: none;
+    background: #1a1a1a;
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.page-title-header .back-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.page-title-header .back-btn svg {
+    width: 20px;
+    height: 20px;
+    stroke: #ffffff;
+    flex-shrink: 0;
 }
 
 /* ============================================
@@ -964,8 +1004,10 @@ select.form-control:not(:disabled) {
    ============================================ */
 
 @media (max-width: 768px) {
-    .profile-page .container {
-        padding: 0 12px;
+    /* Container padding stays 16px to match header */
+
+    .page-title-header-top {
+        gap: 12px;
     }
 
     .profile-header-card {
@@ -1091,6 +1133,14 @@ select.form-control:not(:disabled) {
 }
 
 @media (max-width: 480px) {
+    .page-title-header-top {
+        gap: 10px;
+    }
+
+    .page-title-header h1 {
+        font-size: var(--font-size-xl);
+    }
+
     .profile-avatar-placeholder {
         width: 48px;
         height: 48px;
@@ -1190,5 +1240,17 @@ select.form-control:not(:disabled) {
 
     #deleteAddressModal .modal-icon {
         padding: 20px 0 10px 0;
+    }
+}
+
+/* ============================================
+   DESKTOP - Back button matches product-detail
+   (min-width: 768px in product-detail.css)
+   ============================================ */
+
+@media (min-width: 768px) {
+    .page-title-header .back-btn {
+        padding: 12px 20px;
+        font-size: var(--font-size-base);
     }
 }

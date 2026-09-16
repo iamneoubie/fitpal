@@ -1,15 +1,31 @@
 /**
  * FitPal Customer Checkout JavaScript
- * Version 3.5 - Optimized modal with proper fade transitions
+ * Version 5.0
+ *
+ * - Payment method handling (Wallet balance check, Online QR modal)
+ * - Place Order button routes to profile when no address
+ * - Address selection persists to session via checkout-handler.php
+ * - Back-forward-cache restore forces a reload so the server
+ *   re-renders against the current session's checkout address
+ * - Optimized fade transitions on all modals
  *
  * @package FitPal
- * @version 3.5
+ * @version 5.0
  */
 
 (function() {
     'use strict';
 
     document.addEventListener('DOMContentLoaded', function() {
+
+        // ============================================
+        // CONFIG
+        // ============================================
+        var CFG = window.FITPAL_CHECKOUT || {};
+        var ORDER_TOTAL = parseFloat(CFG.total) || 0;
+        var WALLET_BALANCE = parseFloat(CFG.walletBalance) || 0;
+        var HAS_ADDRESS = CFG.hasAddress === true;
+        var CSRF_TOKEN = CFG.csrfToken || '';
 
         // ============================================
         // DOM REFERENCES
@@ -27,11 +43,47 @@
         var selectedAddressText = document.getElementById('selectedAddressText');
         var hiddenPaymentMethod = document.getElementById('hiddenPaymentMethod');
 
+        // QR modal
+        var qrModal = document.getElementById('qrPaymentModal');
+        var closeQrModal = document.getElementById('closeQrModal');
+        var cancelQrModal = document.getElementById('cancelQrModal');
+        var confirmQrPayment = document.getElementById('confirmQrPayment');
+
+        // Wallet modal
+        var walletModal = document.getElementById('walletInsufficientModal');
+        var closeWalletModal = document.getElementById('closeWalletModal');
+        var cancelWalletModal = document.getElementById('cancelWalletModal');
+        var proceedWalletRecharge = document.getElementById('proceedWalletRecharge');
+
         // ============================================
         // STATE
         // ============================================
         var currentAddressId = selectedAddressId ? selectedAddressId.value : '';
         var isModalOpen = false;
+        var isQrOpen = false;
+        var isWalletOpen = false;
+
+        // ============================================
+        // GENERIC MODAL HELPERS
+        // ============================================
+        function openModal(modal) {
+            if (!modal) return;
+            modal.style.display = 'flex';
+            void modal.offsetWidth;
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal(modal) {
+            if (!modal) return;
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+            setTimeout(function() {
+                if (!modal.classList.contains('active')) {
+                    modal.style.display = 'none';
+                }
+            }, 250);
+        }
 
         // ============================================
         // UPDATE ADDRESS DISPLAY
@@ -67,12 +119,44 @@
         }
 
         // ============================================
-        // MODAL FUNCTIONS (optimized fade - queue panel pattern)
+        // PERSIST CHECKOUT ADDRESS
+        //
+        // Fire-and-forget POST to checkout-handler.php so the
+        // server records the customer's choice in the session.
+        // The UI already updated optimistically; if the network
+        // call fails, the server will fall back to the default
+        // on the next page load, which is acceptable.
+        // ============================================
+        function persistCheckoutAddress(addressId) {
+            if (!addressId || addressId === '0') return;
+
+            var body = new URLSearchParams();
+            body.append('csrf_token', CSRF_TOKEN);
+            body.append('address_id', String(addressId));
+
+            fetch('../backend/handlers/checkout-handler.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body.toString(),
+                credentials: 'same-origin'
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (!data || data.status !== 'success') {
+                    console.warn('[checkout] Could not persist address choice:', data);
+                }
+            })
+            .catch(function(err) {
+                console.warn('[checkout] Could not persist address choice:', err);
+            });
+        }
+
+        // ============================================
+        // ADDRESS MODAL
         // ============================================
         function openAddressModal() {
             if (!addressModal || isModalOpen) return;
 
-            // Highlight current selection
             var options = document.querySelectorAll('.address-option');
             for (var i = 0; i < options.length; i++) {
                 var opt = options[i];
@@ -84,57 +168,37 @@
                 }
             }
 
-            // Use the active class for fade transitions
-            addressModal.style.display = 'flex';
-            // Force reflow for smooth animation
-            void addressModal.offsetWidth;
-            addressModal.classList.add('active');
-            document.body.style.overflow = 'hidden';
+            openModal(addressModal);
             isModalOpen = true;
         }
 
         function closeAddressModalHandler() {
             if (!addressModal || !isModalOpen) return;
-
-            // Remove active class first for fade out
-            addressModal.classList.remove('active');
-            document.body.style.overflow = '';
-
-            // Wait for animation to complete before hiding
-            setTimeout(function() {
-                if (!addressModal.classList.contains('active')) {
-                    addressModal.style.display = 'none';
-                }
-            }, 250);
-
+            closeModal(addressModal);
             isModalOpen = false;
         }
 
-        // ============================================
-        // ADDRESS AUTO-SELECT (radio click = auto-confirm)
-        // ============================================
         if (addressList) {
-            // Event delegation for performance
             addressList.addEventListener('click', function(e) {
                 var option = e.target.closest('.address-option');
                 if (!option) return;
 
                 var radio = option.querySelector('input[type="radio"]');
-                if (radio) {
-                    radio.checked = true;
+                if (!radio) return;
 
-                    var allOptions = document.querySelectorAll('.address-option');
-                    for (var i = 0; i < allOptions.length; i++) {
-                        allOptions[i].classList.remove('selected');
-                    }
-                    option.classList.add('selected');
+                radio.checked = true;
 
-                    updateAddressDisplay(radio.value);
-                    closeAddressModalHandler();
+                var allOptions = document.querySelectorAll('.address-option');
+                for (var i = 0; i < allOptions.length; i++) {
+                    allOptions[i].classList.remove('selected');
                 }
+                option.classList.add('selected');
+
+                updateAddressDisplay(radio.value);
+                persistCheckoutAddress(radio.value);
+                closeAddressModalHandler();
             });
 
-            // Handle radio change events
             addressList.addEventListener('change', function(e) {
                 if (e.target && e.target.type === 'radio' && e.target.name === 'modal_address') {
                     var option = e.target.closest('.address-option');
@@ -145,46 +209,12 @@
                         }
                         option.classList.add('selected');
                         updateAddressDisplay(e.target.value);
+                        persistCheckoutAddress(e.target.value);
                         closeAddressModalHandler();
                     }
                 }
             });
         }
-
-        // ============================================
-        // PAYMENT METHOD SELECTION
-        // ============================================
-        var paymentOptions = document.querySelectorAll('.payment-option');
-
-        for (var p = 0; p < paymentOptions.length; p++) {
-            (function(option) {
-                option.addEventListener('click', function() {
-                    var radio = this.querySelector('input[type="radio"]');
-                    if (radio) {
-                        radio.checked = true;
-                        for (var j = 0; j < paymentOptions.length; j++) {
-                            paymentOptions[j].classList.remove('selected');
-                        }
-                        this.classList.add('selected');
-                        if (hiddenPaymentMethod) {
-                            hiddenPaymentMethod.value = radio.value;
-                        }
-                    }
-                });
-            })(paymentOptions[p]);
-        }
-
-        var checkedRadio = document.querySelector('.payment-option input[type="radio"]:checked');
-        if (checkedRadio) {
-            checkedRadio.closest('.payment-option').classList.add('selected');
-            if (hiddenPaymentMethod) {
-                hiddenPaymentMethod.value = checkedRadio.value;
-            }
-        }
-
-        // ============================================
-        // MODAL EVENT BINDING
-        // ============================================
 
         if (changeAddressBtn) {
             changeAddressBtn.addEventListener('click', function(e) {
@@ -207,7 +237,6 @@
             });
         }
 
-        // Click on overlay
         if (addressModal) {
             addressModal.addEventListener('click', function(e) {
                 if (e.target === addressModal || e.target.classList.contains('modal-overlay')) {
@@ -216,30 +245,183 @@
             });
         }
 
-        // Escape key
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && isModalOpen) {
-                closeAddressModalHandler();
-            }
-        });
-
-        // ============================================
-        // ADD ADDRESS
-        // ============================================
+        // Add Address -> deep-link to profile with auto-open
         if (addAddressModalBtn) {
             addAddressModalBtn.addEventListener('click', function(e) {
                 e.preventDefault();
                 closeAddressModalHandler();
-                window.location.href = 'profile.php#addresses';
+                window.location.href = 'profile.php#add-address';
             });
         }
 
         // ============================================
-        // PLACE ORDER
+        // QR PAYMENT MODAL
         // ============================================
+        function openQrModal() {
+            if (!qrModal || isQrOpen) return;
+            openModal(qrModal);
+            isQrOpen = true;
+        }
+
+        function closeQrModalHandler() {
+            if (!qrModal || !isQrOpen) return;
+            closeModal(qrModal);
+            isQrOpen = false;
+        }
+
+        if (closeQrModal) {
+            closeQrModal.addEventListener('click', function(e) {
+                e.preventDefault();
+                closeQrModalHandler();
+            });
+        }
+        if (cancelQrModal) {
+            cancelQrModal.addEventListener('click', function(e) {
+                e.preventDefault();
+                closeQrModalHandler();
+            });
+        }
+        if (qrModal) {
+            qrModal.addEventListener('click', function(e) {
+                if (e.target === qrModal || e.target.classList.contains('modal-overlay')) {
+                    closeQrModalHandler();
+                }
+            });
+        }
+
+        if (confirmQrPayment) {
+            confirmQrPayment.addEventListener('click', function(e) {
+                e.preventDefault();
+                closeQrModalHandler();
+                submitOrder();
+            });
+        }
+
+        // ============================================
+        // WALLET INSUFFICIENT MODAL
+        // ============================================
+        function openWalletModal() {
+            if (!walletModal || isWalletOpen) return;
+            openModal(walletModal);
+            isWalletOpen = true;
+        }
+
+        function closeWalletModalHandler() {
+            if (!walletModal || !isWalletOpen) return;
+            closeModal(walletModal);
+            isWalletOpen = false;
+        }
+
+        if (closeWalletModal) {
+            closeWalletModal.addEventListener('click', function(e) {
+                e.preventDefault();
+                closeWalletModalHandler();
+            });
+        }
+        if (cancelWalletModal) {
+            cancelWalletModal.addEventListener('click', function(e) {
+                e.preventDefault();
+                closeWalletModalHandler();
+            });
+        }
+        if (walletModal) {
+            walletModal.addEventListener('click', function(e) {
+                if (e.target === walletModal || e.target.classList.contains('modal-overlay')) {
+                    closeWalletModalHandler();
+                }
+            });
+        }
+
+        if (proceedWalletRecharge) {
+            proceedWalletRecharge.addEventListener('click', function() {
+                closeWalletModalHandler();
+            });
+        }
+
+        // ============================================
+        // PAYMENT METHOD SELECTION
+        // ============================================
+        var paymentOptions = document.querySelectorAll('.payment-option');
+
+        function selectPaymentMethod(value) {
+            if (hiddenPaymentMethod) hiddenPaymentMethod.value = value;
+        }
+
+        function markSelected(selectedOption) {
+            for (var i = 0; i < paymentOptions.length; i++) {
+                paymentOptions[i].classList.remove('selected');
+            }
+            selectedOption.classList.add('selected');
+        }
+
+        for (var p = 0; p < paymentOptions.length; p++) {
+            (function(option) {
+                option.addEventListener('click', function() {
+                    var radio = this.querySelector('input[type="radio"]');
+                    if (!radio) return;
+
+                    var method = radio.value;
+
+                    // Wallet — check balance first
+                    if (method === 'Wallet' && WALLET_BALANCE < ORDER_TOTAL) {
+                        openWalletModal();
+                        return;
+                    }
+
+                    // Online — confirm via QR modal
+                    if (method === 'Online') {
+                        radio.checked = true;
+                        markSelected(this);
+                        selectPaymentMethod(method);
+                        openQrModal();
+                        return;
+                    }
+
+                    // COD or valid Wallet
+                    radio.checked = true;
+                    markSelected(this);
+                    selectPaymentMethod(method);
+                });
+            })(paymentOptions[p]);
+        }
+
+        // Initialize selected state from server-rendered checked radio
+        var checkedRadio = document.querySelector('.payment-option input[type="radio"]:checked');
+        if (checkedRadio) {
+            checkedRadio.closest('.payment-option').classList.add('selected');
+            selectPaymentMethod(checkedRadio.value);
+        }
+
+        // ============================================
+        // SUBMIT ORDER
+        // ============================================
+        function submitOrder() {
+            if (!placeOrderBtn) return;
+
+            var addressId = hiddenAddressId ? hiddenAddressId.value : '';
+            if (!addressId || addressId === '0') {
+                window.location.href = 'profile.php#add-address';
+                return;
+            }
+
+            placeOrderBtn.disabled = true;
+            placeOrderBtn.classList.add('loading');
+            placeOrderBtn.textContent = 'Placing Order...';
+
+            if (checkoutForm) {
+                checkoutForm.submit();
+            }
+        }
+
         if (placeOrderBtn) {
             placeOrderBtn.addEventListener('click', function(e) {
                 e.preventDefault();
+
+                // No address -> route to profile
+                if (!HAS_ADDRESS) {
+                    window.location.href = 'profile.php#add-address';
+                    return;
+                }
 
                 var addressId = hiddenAddressId ? hiddenAddressId.value : '';
                 if (!addressId || addressId === '0') {
@@ -247,15 +429,48 @@
                     return;
                 }
 
-                this.disabled = true;
-                this.classList.add('loading');
-                this.textContent = 'Placing Order...';
+                var method = hiddenPaymentMethod ? hiddenPaymentMethod.value : 'COD';
 
-                if (checkoutForm) {
-                    checkoutForm.submit();
+                // Wallet safety net
+                if (method === 'Wallet' && WALLET_BALANCE < ORDER_TOTAL) {
+                    openWalletModal();
+                    return;
                 }
+
+                // Online -> confirm QR if not already confirmed
+                if (method === 'Online') {
+                    openQrModal();
+                    return;
+                }
+
+                submitOrder();
             });
         }
+
+        // ============================================
+        // ESCAPE KEY
+        // ============================================
+        document.addEventListener('keydown', function(e) {
+            if (e.key !== 'Escape') return;
+            if (isModalOpen) closeAddressModalHandler();
+            if (isQrOpen) closeQrModalHandler();
+            if (isWalletOpen) closeWalletModalHandler();
+        });
+
+        // ============================================
+        // BACK-FORWARD-CACHE RESTORE
+        //
+        // When the browser restores this page from bfcache (i.e. the
+        // user pressed Back to return here from profile.php or from
+        // another page), the server-rendered snapshot of the selected
+        // address may be stale. Force a reload so PHP can re-render
+        // against the current session's checkout_address_id.
+        // ============================================
+        window.addEventListener('pageshow', function(e) {
+            if (e.persisted) {
+                window.location.reload();
+            }
+        });
 
         // ============================================
         // INITIAL SETUP
@@ -264,7 +479,10 @@
             updateAddressDisplay(currentAddressId);
         }
 
-        console.log('Checkout v3.5 initialized with optimized modal transitions');
-
+        console.log('Checkout v5.0 initialized', {
+            total: ORDER_TOTAL,
+            walletBalance: WALLET_BALANCE,
+            hasAddress: HAS_ADDRESS
+        });
     });
 })();

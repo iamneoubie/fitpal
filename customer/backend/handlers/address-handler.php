@@ -1,10 +1,11 @@
 <?php
 /**
  * FitPal Address Handler
- * Version 1.1 - Fixed customer_address_id update
  *
  * @package FitPal
- * @version 1.1
+ * @version 2.2 — Invalidates $_SESSION['checkout_address_id'] on every
+ *                successful add/update/delete so that checkout.php
+ *                re-resolves against the current default on its next load.
  */
 
 declare(strict_types=1);
@@ -15,7 +16,6 @@ if (session_status() === PHP_SESSION_NONE) {
 
 header('Content-Type: application/json');
 
-// Authentication check
 if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     http_response_code(401);
     echo json_encode(['status' => 'error', 'message' => 'Not authenticated']);
@@ -23,27 +23,21 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
 }
 
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
+require_once __DIR__ . '/../database/address-queries.php';
 
-// CSRF validation
 if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== ($_SESSION['csrf_token'] ?? '')) {
     echo json_encode(['status' => 'error', 'message' => 'Security validation failed']);
     exit;
 }
 
 $customerId = (int)$_SESSION['customer_id'];
-$action = $_POST['action'] ?? '';
+$action     = $_POST['action'] ?? '';
 
 try {
     switch ($action) {
-        case 'add_address':
-            handleAddAddress($database_connection, $customerId);
-            break;
-        case 'update_address':
-            handleUpdateAddress($database_connection, $customerId);
-            break;
-        case 'delete_address':
-            handleDeleteAddress($database_connection, $customerId);
-            break;
+        case 'add_address':    handleAddAddress($database_connection, $customerId);    break;
+        case 'update_address': handleUpdateAddress($database_connection, $customerId); break;
+        case 'delete_address': handleDeleteAddress($database_connection, $customerId); break;
         default:
             echo json_encode(['status' => 'error', 'message' => 'Invalid action']);
     }
@@ -52,54 +46,56 @@ try {
     echo json_encode(['status' => 'error', 'message' => 'Database error occurred']);
 }
 
+// -----------------------------------------------------------------
+
+function readAddressInput(): array
+{
+    return [
+        'label'       => trim($_POST['label'] ?? ''),
+        'block'       => trim($_POST['block'] ?? ''),
+        'barangay'    => trim($_POST['barangay'] ?? ''),
+        'city'        => trim($_POST['city'] ?? ''),
+        'province'    => trim($_POST['province'] ?? ''),
+        'region'      => trim($_POST['region'] ?? ''),
+        'postal_code' => trim($_POST['postal_code'] ?? ''),
+        'country'     => trim($_POST['country'] ?? 'Philippines'),
+    ];
+}
+
 function handleAddAddress(PDO $db, int $customerId): void
 {
-    $label = trim($_POST['label'] ?? '');
-    $block = trim($_POST['block'] ?? '');
-    $barangay = trim($_POST['barangay'] ?? '');
-    $city = trim($_POST['city'] ?? '');
-    $province = trim($_POST['province'] ?? '');
-    $region = trim($_POST['region'] ?? '');
-    $postalCode = trim($_POST['postal_code'] ?? '');
-    $country = trim($_POST['country'] ?? 'Philippines');
+    $data = readAddressInput();
 
-    if (empty($block) || empty($city)) {
+    if ($data['block'] === '' || $data['city'] === '') {
         echo json_encode(['status' => 'error', 'message' => 'Block/Street and City are required']);
         return;
     }
 
     $db->beginTransaction();
-
     try {
-        // Insert address
-        $stmt = $db->prepare(
-            "INSERT INTO customer_address (label, block, barangay, city, province, region, postal_code, country)
-             VALUES (:label, :block, :barangay, :city, :province, :region, :postal_code, :country)"
-        );
-        $stmt->execute([
-            ':label' => $label ?: null,
-            ':block' => $block,
-            ':barangay' => $barangay ?: null,
-            ':city' => $city,
-            ':province' => $province ?: null,
-            ':region' => $region ?: null,
-            ':postal_code' => $postalCode ?: null,
-            ':country' => $country
-        ]);
-        $addressId = (int)$db->lastInsertId();
+        $addressId = createAddress($db, $customerId, $data);
 
-        // ===== FIX: Update customer's default address =====
-        $stmt = $db->prepare(
-            "UPDATE customer SET customer_address_id = :address_id WHERE customer_id = :customer_id"
-        );
-        $stmt->execute([
-            ':address_id' => $addressId,
-            ':customer_id' => $customerId
-        ]);
+        // Policy: a newly added address becomes the customer's default.
+        // This overrides whatever createAddress() decided for is_default.
+        $promoted = setCustomerDefaultAddress($db, $customerId, $addressId);
+        if (!$promoted) {
+            $db->rollBack();
+            echo json_encode(['status' => 'error', 'message' => 'Could not set address as default']);
+            return;
+        }
 
         $db->commit();
-        echo json_encode(['status' => 'success', 'message' => 'Address added successfully', 'address_id' => $addressId]);
 
+        // The address landscape changed. Any previously chosen checkout
+        // address is now stale by policy, so drop it. Next checkout load
+        // re-resolves from the (new) default.
+        unset($_SESSION['checkout_address_id']);
+
+        echo json_encode([
+            'status'     => 'success',
+            'message'    => 'Address added successfully',
+            'address_id' => $addressId,
+        ]);
     } catch (PDOException $e) {
         $db->rollBack();
         throw $e;
@@ -114,64 +110,42 @@ function handleUpdateAddress(PDO $db, int $customerId): void
         return;
     }
 
-    $label = trim($_POST['label'] ?? '');
-    $block = trim($_POST['block'] ?? '');
-    $barangay = trim($_POST['barangay'] ?? '');
-    $city = trim($_POST['city'] ?? '');
-    $province = trim($_POST['province'] ?? '');
-    $region = trim($_POST['region'] ?? '');
-    $postalCode = trim($_POST['postal_code'] ?? '');
-    $country = trim($_POST['country'] ?? 'Philippines');
-
-    if (empty($block) || empty($city)) {
+    $data = readAddressInput();
+    if ($data['block'] === '' || $data['city'] === '') {
         echo json_encode(['status' => 'error', 'message' => 'Block/Street and City are required']);
         return;
     }
 
-    // Verify address exists
-    $stmt = $db->prepare(
-        "SELECT customer_address_id FROM customer_address WHERE customer_address_id = :address_id"
-    );
-    $stmt->execute([':address_id' => $addressId]);
-    if (!$stmt->fetch()) {
+    // Scoped ownership check. getAddressById() now requires customerId,
+    // so this only finds the address if it belongs to the current user.
+    if (!getAddressById($db, $addressId, $customerId)) {
         echo json_encode(['status' => 'error', 'message' => 'Address not found']);
         return;
     }
 
     $db->beginTransaction();
-
     try {
-        // Update address
-        $stmt = $db->prepare(
-            "UPDATE customer_address 
-             SET label = :label, block = :block, barangay = :barangay, city = :city,
-                 province = :province, region = :region, postal_code = :postal_code, country = :country
-             WHERE customer_address_id = :address_id"
-        );
-        $stmt->execute([
-            ':label' => $label ?: null,
-            ':block' => $block,
-            ':barangay' => $barangay ?: null,
-            ':city' => $city,
-            ':province' => $province ?: null,
-            ':region' => $region ?: null,
-            ':postal_code' => $postalCode ?: null,
-            ':country' => $country,
-            ':address_id' => $addressId
-        ]);
+        // updateAddress() returns false both for "wrong owner" and for
+        // "identical values, no rows changed". We've already confirmed
+        // ownership above, so a false here just means the values matched.
+        updateAddress($db, $addressId, $customerId, $data);
 
-        // ===== FIX: Ensure customer points to this address =====
-        $stmt = $db->prepare(
-            "UPDATE customer SET customer_address_id = :address_id WHERE customer_id = :customer_id"
-        );
-        $stmt->execute([
-            ':address_id' => $addressId,
-            ':customer_id' => $customerId
-        ]);
+        // Policy: editing an address makes it the customer's default.
+        $promoted = setCustomerDefaultAddress($db, $customerId, $addressId);
+        if (!$promoted) {
+            $db->rollBack();
+            echo json_encode(['status' => 'error', 'message' => 'Address not found']);
+            return;
+        }
 
         $db->commit();
-        echo json_encode(['status' => 'success', 'message' => 'Address updated successfully']);
 
+        // The selected address may have had its fields changed, or its
+        // default status flipped. Either way, checkout should re-resolve
+        // rather than trust a cached session value.
+        unset($_SESSION['checkout_address_id']);
+
+        echo json_encode(['status' => 'success', 'message' => 'Address updated successfully']);
     } catch (PDOException $e) {
         $db->rollBack();
         throw $e;
@@ -186,30 +160,37 @@ function handleDeleteAddress(PDO $db, int $customerId): void
         return;
     }
 
-    // Check if this is the customer's current address
-    $stmt = $db->prepare(
-        "SELECT customer_address_id FROM customer WHERE customer_id = :customer_id"
-    );
-    $stmt->execute([':customer_id' => $customerId]);
-    $result = $stmt->fetch(PDO::FETCH_ASSOC);
-    $currentAddressId = (int)($result['customer_address_id'] ?? 0);
+    // Scoped ownership check.
+    if (!getAddressById($db, $addressId, $customerId)) {
+        echo json_encode(['status' => 'error', 'message' => 'Address not found']);
+        return;
+    }
 
-    if ($addressId === $currentAddressId) {
-        echo json_encode(['status' => 'error', 'message' => 'Cannot delete your default address']);
+    // Policy: the customer must keep at least one address.
+    // (deleteAddress() enforces this too, but checking here lets us
+    // return a specific message instead of a generic failure.)
+    $allAddresses = getCustomerAddresses($db, $customerId);
+    if (count($allAddresses) <= 1) {
+        echo json_encode(['status' => 'error', 'message' => 'You must keep at least one address']);
         return;
     }
 
     $db->beginTransaction();
-
     try {
-        $stmt = $db->prepare(
-            "DELETE FROM customer_address WHERE customer_address_id = :address_id"
-        );
-        $stmt->execute([':address_id' => $addressId]);
-
+        $deleted = deleteAddress($db, $addressId, $customerId);
+        if (!$deleted) {
+            $db->rollBack();
+            echo json_encode(['status' => 'error', 'message' => 'Could not delete address']);
+            return;
+        }
         $db->commit();
-        echo json_encode(['status' => 'success', 'message' => 'Address deleted successfully']);
 
+        // The user may have deleted the address they were using for
+        // checkout. Drop the cached session value so the next load picks
+        // the new default (or, if none, renders the empty state).
+        unset($_SESSION['checkout_address_id']);
+
+        echo json_encode(['status' => 'success', 'message' => 'Address deleted successfully']);
     } catch (PDOException $e) {
         $db->rollBack();
         throw $e;

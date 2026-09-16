@@ -1,10 +1,10 @@
 <?php
 /**
  * FitPal Customer Profile Page
- * Version 2.4 - Fetch ALL addresses, not just the default one
+ * Version 3.1 — Adds back navigation with a whitelisted return slug.
  *
  * @package FitPal
- * @version 2.4
+ * @version 3.1
  */
 
 declare(strict_types=1);
@@ -13,95 +13,60 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Redirect if not logged in
 if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     header('Location: sign-in.php');
     exit;
 }
 
+// ---------------------------------------------------------------
+// Return destination tracking
+//
+// Pages that link here (e.g. checkout) append ?from=<slug>. We record
+// the slug in the session so the back button can return the customer
+// where they came from — even after the form-reload cycle wipes the
+// query string. Whitelisted; unknown values fall back to the default.
+// ---------------------------------------------------------------
+const PROFILE_RETURN_DESTINATIONS = [
+    'checkout'  => 'checkout.php',
+    'menu'      => 'menu.php',
+    'orders'    => 'orders.php',
+    'cart'      => 'cart.php',
+    'wallet'    => 'wallet.php',
+    'dashboard' => 'dashboard.php',
+];
+
+$returnSlug = isset($_GET['from']) ? strtolower(trim((string)$_GET['from'])) : '';
+if ($returnSlug !== '' && isset(PROFILE_RETURN_DESTINATIONS[$returnSlug])) {
+    $_SESSION['profile_return_slug'] = $returnSlug;
+}
+
+$returnSlug  = $_SESSION['profile_return_slug'] ?? '';
+$returnHref  = $returnSlug !== '' ? PROFILE_RETURN_DESTINATIONS[$returnSlug] : '';
+$returnLabel = $returnSlug !== '' ? ucfirst($returnSlug) : '';
+
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../backend/database/customer-queries.php';
+require_once __DIR__ . '/../backend/database/address-queries.php';
 
 $customerId = (int)$_SESSION['customer_id'];
 
-// Fetch customer profile data
-$profileData = null;
-try {
-    $stmt = $database_connection->prepare(
-        "SELECT 
-            c.customer_id,
-            c.first_name,
-            c.middle_name,
-            c.last_name,
-            c.email,
-            c.username,
-            c.contact_number,
-            c.birthdate,
-            c.gender,
-            c.customer_address_id,
-            cp.dietary_preferences,
-            cp.allergies,
-            cp.fitness_goal,
-            cp.height_cm,
-            cp.weight_kg,
-            fa.balance
-        FROM customer c
-        LEFT JOIN customer_profile cp ON c.customer_id = cp.customer_id
-        LEFT JOIN financial_account fa ON cp.financial_account_id = fa.financial_account_id
-        WHERE c.customer_id = :customer_id
-        LIMIT 1"
-    );
-    $stmt->execute([':customer_id' => $customerId]);
-    $profileData = $stmt->fetch(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    error_log('Profile fetch error: ' . $e->getMessage());
-}
+$profileData = getCustomerProfile($database_connection, $customerId) ?: null;
+$addresses   = getCustomerAddresses($database_connection, $customerId);
 
-// ===== FIX: Fetch ALL addresses for this customer =====
-$addresses = [];
-try {
-    $stmt = $database_connection->prepare(
-        "SELECT 
-            ca.customer_address_id,
-            ca.label,
-            ca.block,
-            ca.barangay,
-            ca.city,
-            ca.province,
-            ca.region,
-            ca.postal_code,
-            ca.country,
-            CASE 
-                WHEN ca.customer_address_id = c.customer_address_id THEN 1 
-                ELSE 0 
-            END AS is_default
-        FROM customer_address ca
-        CROSS JOIN customer c
-        WHERE c.customer_id = :customer_id
-        ORDER BY is_default DESC, ca.customer_address_id"
-    );
-    $stmt->execute([':customer_id' => $customerId]);
-    $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    error_log('Address fetch error: ' . $e->getMessage());
-}
-
-// CSRF token
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 $csrfToken = $_SESSION['csrf_token'];
 
-// Helper functions
 function formatAddress(array $addr): string {
     $parts = [];
-    if (!empty($addr['block'])) $parts[] = $addr['block'];
-    if (!empty($addr['barangay'])) $parts[] = $addr['barangay'];
-    if (!empty($addr['city'])) $parts[] = $addr['city'];
-    if (!empty($addr['province'])) $parts[] = $addr['province'];
-    if (!empty($addr['region'])) $parts[] = $addr['region'];
+    if (!empty($addr['block']))       $parts[] = $addr['block'];
+    if (!empty($addr['barangay']))    $parts[] = $addr['barangay'];
+    if (!empty($addr['city']))        $parts[] = $addr['city'];
+    if (!empty($addr['province']))    $parts[] = $addr['province'];
+    if (!empty($addr['region']))      $parts[] = $addr['region'];
     if (!empty($addr['postal_code'])) $parts[] = $addr['postal_code'];
-    if (!empty($addr['country'])) $parts[] = $addr['country'];
+    if (!empty($addr['country']))     $parts[] = $addr['country'];
     return implode(', ', $parts);
 }
 
@@ -110,8 +75,8 @@ function formatCurrency(float|string|null $amount): string {
 }
 
 $hasAddresses = !empty($addresses);
-$fullName = trim(($profileData['first_name'] ?? '') . ' ' . ($profileData['last_name'] ?? ''));
-$balance = (float)($profileData['balance'] ?? 0);
+$fullName     = trim(($profileData['first_name'] ?? '') . ' ' . ($profileData['last_name'] ?? ''));
+$balance      = (float)($profileData['balance'] ?? 0);
 ?>
 
 <link rel="stylesheet" href="../assets/css/profile.css">
@@ -119,7 +84,13 @@ $balance = (float)($profileData['balance'] ?? 0);
 <div class="content profile-page">
     <div class="container">
         <div class="page-title-header">
-            <h1>My Profile</h1>
+            <div class="page-title-header-top">
+                <button type="button" id="profileBackBtn" class="back-btn"
+                    data-fallback-href="<?php echo $returnHref !== '' ? htmlspecialchars($returnHref, ENT_QUOTES, 'UTF-8') : ''; ?>">
+                    <span>Back<?php echo $returnLabel !== '' ? ' to ' . htmlspecialchars($returnLabel, ENT_QUOTES, 'UTF-8') : ''; ?></span>
+                </button>
+                <h1>My Profile</h1>
+            </div>
         </div>
 
         <?php if (isset($_SESSION['profile_success'])): ?>
@@ -161,14 +132,11 @@ $balance = (float)($profileData['balance'] ?? 0);
 
         <!-- Tabs -->
         <div class="profile-tabs">
-            <button type="button" class="profile-tab active" data-tab="personal">
+            <button type="button" id="tabBtnPersonal" class="profile-tab active" data-tab="personal">
                 Personal Information
             </button>
-            <button type="button" class="profile-tab" data-tab="addresses">
+            <button type="button" id="tabBtnAddresses" class="profile-tab" data-tab="addresses">
                 Delivery Addresses
-                <?php if ($hasAddresses): ?>
-                <span class="tab-badge"><?php echo count($addresses); ?></span>
-                <?php endif; ?>
             </button>
         </div>
 

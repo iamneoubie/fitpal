@@ -1,37 +1,51 @@
 /**
  * FitPal Customer Profile JavaScript
- * Version 2.4 - Fixed multi-step modal step display
+ * Version 3.1
+ *
+ * - Tabs, profile edit mode
+ * - Multi-step address modal (add / edit)
+ * - Delete confirmation
+ * - Deep-link hash is consumed once on load and stripped from the URL
+ *   so reloads do not re-trigger the modal
+ * - Back navigation wired to a whitelisted origin slug, with a
+ *   history.back() fallback when no origin was recorded
+ * - Field-level input filters ported from sign-up.js:
+ *     names        -> letters, spaces, hyphens, apostrophes (auto-capitalized)
+ *     barangay/city/province/region -> same rule
+ *     postal code  -> digits only
  *
  * @package FitPal
- * @version 2.4
+ * @version 3.1
  */
 
 (function() {
     'use strict';
 
     document.addEventListener('DOMContentLoaded', function() {
-        // ===== DOM ELEMENTS =====
-        // Tabs
-        var tabs = document.querySelectorAll('.profile-tab');
-        var tabContents = document.querySelectorAll('.profile-tab-content');
 
-        // Profile Edit
+        // ============================================
+        // DOM ELEMENTS
+        // ============================================
+        var tabs         = document.querySelectorAll('.profile-tab');
+        var tabContents  = document.querySelectorAll('.profile-tab-content');
+
+        // Profile edit
         var editProfileBtn = document.getElementById('editProfileBtn');
-        var cancelEditBtn = document.getElementById('cancelEditBtn');
+        var cancelEditBtn  = document.getElementById('cancelEditBtn');
         var profileActions = document.getElementById('profileActions');
-        var profileForm = document.getElementById('profileForm');
-        var formInputs = profileForm ? profileForm.querySelectorAll('input, select') : [];
+        var profileForm    = document.getElementById('profileForm');
+        var formInputs     = profileForm ? profileForm.querySelectorAll('input, select') : [];
 
-        // Address Modal - Multi-step
-        var addAddressBtn = document.getElementById('addAddressBtn');
-        var addressModal = document.getElementById('addressModal');
-        var closeAddressModal = document.getElementById('closeAddressModal');
-        var addressForm = document.getElementById('addressForm');
-        var addressModalTitle = document.getElementById('addressModalTitle');
-        var addressId = document.getElementById('addressId');
-        var saveAddressBtn = document.getElementById('saveAddressBtn');
+        // Address modal
+        var addAddressBtn       = document.getElementById('addAddressBtn');
+        var addressModal        = document.getElementById('addressModal');
+        var closeAddressModal   = document.getElementById('closeAddressModal');
+        var addressForm         = document.getElementById('addressForm');
+        var addressModalTitle   = document.getElementById('addressModalTitle');
+        var addressId           = document.getElementById('addressId');
+        var saveAddressBtn      = document.getElementById('saveAddressBtn');
 
-        // Modal steps - FIXED: Get all step elements
+        // Modal steps
         var modalStep1 = document.getElementById('modalStep1');
         var modalStep2 = document.getElementById('modalStep2');
         var modalStep3 = document.getElementById('modalStep3');
@@ -39,24 +53,64 @@
 
         var progressSteps = document.querySelectorAll('.modal-progress .progress-step');
         var progressLines = document.querySelectorAll('.modal-progress .progress-line');
-        var nextStepBtns = document.querySelectorAll('.btn-next-step');
-        var prevStepBtns = document.querySelectorAll('.btn-prev-step');
+        var nextStepBtns  = document.querySelectorAll('.btn-next-step');
+        var prevStepBtns  = document.querySelectorAll('.btn-prev-step');
 
-        // Delete Address Modal
+        // Delete modal
         var deleteAddressModal = document.getElementById('deleteAddressModal');
-        var cancelDeleteModal = document.getElementById('cancelDeleteModal');
+        var cancelDeleteModal  = document.getElementById('cancelDeleteModal');
         var confirmDeleteModal = document.getElementById('confirmDeleteModal');
 
-        var editAddressBtns = document.querySelectorAll('.edit-address');
+        var editAddressBtns   = document.querySelectorAll('.edit-address');
         var deleteAddressBtns = document.querySelectorAll('.delete-address');
 
-        // ===== STATE =====
-        var isEditing = false;
-        var deleteAddressId = null;
-        var currentModalStep = 1;
-        var totalModalSteps = 3;
+        // Inputs subject to filtering
+        var textFieldsForNames = [
+            document.getElementById('block'),
+            document.getElementById('barangay'),
+            document.getElementById('city'),
+            document.getElementById('province'),
+            document.getElementById('region')
+        ];
+        var postalCodeField = document.getElementById('postal_code');
 
-        // ===== TABS =====
+        // ============================================
+        // STATE
+        // ============================================
+        var isEditing        = false;
+        var deleteAddressId  = null;
+        var currentModalStep = 1;
+        var totalModalSteps  = 3;
+
+        // ============================================
+        // BACK NAVIGATION
+        //
+        // The button carries a data-fallback-href that points to the
+        // whitelisted origin page (e.g. checkout.php). If present, use it.
+        // Otherwise fall back to browser history, then to menu.php.
+        // ============================================
+        var profileBackBtn = document.getElementById('profileBackBtn');
+        if (profileBackBtn) {
+            profileBackBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+
+                var fallback = this.getAttribute('data-fallback-href') || '';
+                if (fallback !== '') {
+                    window.location.href = fallback;
+                    return;
+                }
+
+                if (window.history.length > 1 && document.referrer !== '') {
+                    window.history.back();
+                } else {
+                    window.location.href = 'menu.php';
+                }
+            });
+        }
+
+        // ============================================
+        // TABS
+        // ============================================
         function switchTab(tabId) {
             tabs.forEach(function(tab) {
                 tab.classList.remove('active');
@@ -75,17 +129,18 @@
 
         tabs.forEach(function(tab) {
             tab.addEventListener('click', function() {
-                var tabId = this.dataset.tab;
-                switchTab(tabId);
+                switchTab(this.dataset.tab);
             });
         });
 
-        // ===== PROFILE EDIT MODE =====
+        // ============================================
+        // PROFILE EDIT MODE
+        // ============================================
         if (editProfileBtn) {
             editProfileBtn.addEventListener('click', function() {
                 isEditing = true;
                 this.style.display = 'none';
-                profileActions.style.display = 'flex';
+                if (profileActions) profileActions.style.display = 'flex';
                 formInputs.forEach(function(input) {
                     input.disabled = false;
                 });
@@ -95,39 +150,108 @@
         if (cancelEditBtn) {
             cancelEditBtn.addEventListener('click', function() {
                 isEditing = false;
-                editProfileBtn.style.display = 'inline-flex';
-                profileActions.style.display = 'none';
+                if (editProfileBtn) editProfileBtn.style.display = 'inline-flex';
+                if (profileActions) profileActions.style.display = 'none';
                 formInputs.forEach(function(input) {
                     input.disabled = true;
                 });
-                location.reload();
+                window.location.reload();
             });
         }
 
-        // ===== MODAL STEP NAVIGATION - FIXED =====
+        // ============================================
+        // INPUT FILTERS
+        // ============================================
+
+        /**
+         * Restrict a text field to letters, spaces, hyphens and
+         * apostrophes, and auto-capitalize the first letter of each word.
+         *
+         * @param {HTMLElement|null} input
+         */
+        function setupNameField(input) {
+            if (!input) return;
+
+            input.addEventListener('input', function() {
+                var start = this.selectionStart;
+                var end   = this.selectionEnd;
+
+                var filtered    = this.value.replace(/[^A-Za-z\s\-']/g, '');
+                var capitalized = filtered.replace(/\b\w/g, function(ch) {
+                    return ch.toUpperCase();
+                });
+
+                if (this.value !== capitalized) {
+                    this.value = capitalized;
+                    var newStart = Math.min(start, this.value.length);
+                    this.setSelectionRange(newStart, newStart);
+                }
+            });
+
+            input.addEventListener('blur', function() {
+                if (this.value.length > 0) {
+                    var capitalized = this.value.replace(/\b\w/g, function(ch) {
+                        return ch.toUpperCase();
+                    });
+                    if (this.value !== capitalized) {
+                        this.value = capitalized;
+                    }
+                }
+            });
+        }
+
+        /**
+         * Restrict a field to digits only.
+         *
+         * @param {HTMLElement|null} input
+         */
+        function setupDigitsOnlyField(input) {
+            if (!input) return;
+
+            input.addEventListener('input', function() {
+                var cleaned = this.value.replace(/[^0-9]/g, '');
+                if (this.value !== cleaned) {
+                    this.value = cleaned;
+                }
+            });
+
+            input.addEventListener('paste', function(e) {
+                var paste = (e.clipboardData || window.clipboardData).getData('text');
+                if (!/^[0-9]+$/.test(paste)) {
+                    e.preventDefault();
+                    var cleaned = paste.replace(/[^0-9]/g, '');
+                    if (cleaned) {
+                        document.execCommand('insertText', false, cleaned);
+                    }
+                }
+            });
+        }
+
+        textFieldsForNames.forEach(setupNameField);
+        setupDigitsOnlyField(postalCodeField);
+
+        // ============================================
+        // MODAL STEP NAVIGATION
+        // ============================================
         function goToModalStep(step) {
-            // Validate current step before moving forward
             if (step > currentModalStep && !validateModalStep(currentModalStep)) {
                 return;
             }
 
             currentModalStep = step;
 
-            // Update steps - show/hide
             modalSteps.forEach(function(el, index) {
+                if (!el) return;
                 var stepNumber = index + 1;
-                if (el) {
-                    if (stepNumber === step) {
-                        el.classList.add('active');
-                        el.style.display = 'block';
-                    } else {
-                        el.classList.remove('active');
-                        el.style.display = 'none';
-                    }
+                if (stepNumber === step) {
+                    el.classList.add('active');
+                    el.style.display = 'block';
+                } else {
+                    el.classList.remove('active');
+                    el.style.display = 'none';
                 }
             });
 
-            // Update progress
             progressSteps.forEach(function(el, index) {
                 var n = index + 1;
                 el.classList.remove('active', 'completed');
@@ -145,12 +269,10 @@
                 }
             });
 
-            // Update address preview on step 3
             if (step === 3) {
                 updateAddressPreview();
             }
 
-            // Focus first input in the current step
             var currentStepEl = document.getElementById('modalStep' + step);
             if (currentStepEl) {
                 var firstInput = currentStepEl.querySelector('input, select');
@@ -165,7 +287,7 @@
                 var block = document.getElementById('block');
                 if (!block || !block.value.trim()) {
                     showNotification('Block/Street is required.', 'error');
-                    block?.focus();
+                    if (block) block.focus();
                     return false;
                 }
             }
@@ -173,7 +295,7 @@
                 var city = document.getElementById('city');
                 if (!city || !city.value.trim()) {
                     showNotification('City is required.', 'error');
-                    city?.focus();
+                    if (city) city.focus();
                     return false;
                 }
             }
@@ -184,23 +306,28 @@
             var previewText = document.getElementById('addressPreviewText');
             if (!previewText) return;
 
-            var label = document.getElementById('address_label')?.value || '';
-            var block = document.getElementById('block')?.value || '';
-            var barangay = document.getElementById('barangay')?.value || '';
-            var city = document.getElementById('city')?.value || '';
-            var province = document.getElementById('province')?.value || '';
-            var region = document.getElementById('region')?.value || '';
-            var postalCode = document.getElementById('postal_code')?.value || '';
-            var country = document.getElementById('country')?.value || 'Philippines';
+            var getVal = function(id) {
+                var el = document.getElementById(id);
+                return el ? el.value : '';
+            };
+
+            var label      = getVal('address_label');
+            var block      = getVal('block');
+            var barangay   = getVal('barangay');
+            var city       = getVal('city');
+            var province   = getVal('province');
+            var region     = getVal('region');
+            var postalCode = getVal('postal_code');
+            var country    = getVal('country') || 'Philippines';
 
             var parts = [];
-            if (block) parts.push(block);
-            if (barangay) parts.push(barangay);
-            if (city) parts.push(city);
-            if (province) parts.push(province);
-            if (region) parts.push(region);
+            if (block)      parts.push(block);
+            if (barangay)   parts.push(barangay);
+            if (city)       parts.push(city);
+            if (province)   parts.push(province);
+            if (region)     parts.push(region);
             if (postalCode) parts.push(postalCode);
-            if (country) parts.push(country);
+            if (country)    parts.push(country);
 
             if (parts.length > 0) {
                 var labelText = label ? '[' + label + '] ' : '';
@@ -210,7 +337,6 @@
             }
         }
 
-        // Next step buttons
         nextStepBtns.forEach(function(btn) {
             btn.addEventListener('click', function() {
                 var nextStep = parseInt(this.dataset.next, 10);
@@ -220,7 +346,6 @@
             });
         });
 
-        // Previous step buttons
         prevStepBtns.forEach(function(btn) {
             btn.addEventListener('click', function() {
                 var prevStep = parseInt(this.dataset.prev, 10);
@@ -230,44 +355,57 @@
             });
         });
 
-        // ===== ADDRESS MODAL =====
+        // ============================================
+        // ADDRESS MODAL OPEN/CLOSE
+        // ============================================
         function openAddressModal(title, addressData) {
             addressData = addressData || null;
-            addressModalTitle.textContent = title;
+            if (addressModalTitle) addressModalTitle.textContent = title;
 
-            // Reset to step 1
             goToModalStep(1);
 
             if (addressData && addressData.customer_address_id) {
-                addressId.value = addressData.customer_address_id || '';
-                document.getElementById('address_label').value = addressData.label || '';
-                document.getElementById('block').value = addressData.block || '';
-                document.getElementById('barangay').value = addressData.barangay || '';
-                document.getElementById('city').value = addressData.city || '';
-                document.getElementById('province').value = addressData.province || '';
-                document.getElementById('region').value = addressData.region || '';
-                document.getElementById('postal_code').value = addressData.postal_code || '';
-                document.getElementById('country').value = addressData.country || 'Philippines';
-                addressForm.querySelector('input[name="action"]').value = 'update_address';
+                if (addressId) addressId.value = addressData.customer_address_id || '';
+
+                setFieldValue('address_label', addressData.label       || '');
+                setFieldValue('block',         addressData.block       || '');
+                setFieldValue('barangay',      addressData.barangay    || '');
+                setFieldValue('city',          addressData.city        || '');
+                setFieldValue('province',      addressData.province    || '');
+                setFieldValue('region',        addressData.region      || '');
+                setFieldValue('postal_code',   addressData.postal_code || '');
+                setFieldValue('country',       addressData.country     || 'Philippines');
+
+                if (addressForm) {
+                    var actionInput = addressForm.querySelector('input[name="action"]');
+                    if (actionInput) actionInput.value = 'update_address';
+                }
             } else {
-                addressForm.reset();
-                document.getElementById('country').value = 'Philippines';
-                addressForm.querySelector('input[name="action"]').value = 'add_address';
+                if (addressForm) addressForm.reset();
+                setFieldValue('country', 'Philippines');
+                if (addressForm) {
+                    var actionInput2 = addressForm.querySelector('input[name="action"]');
+                    if (actionInput2) actionInput2.value = 'add_address';
+                }
             }
 
-            addressModal.classList.add('active');
+            if (addressModal) addressModal.classList.add('active');
             document.body.style.overflow = 'hidden';
 
-            setTimeout(function() {
-                updateAddressPreview();
-            }, 100);
+            setTimeout(updateAddressPreview, 100);
+        }
+
+        function setFieldValue(id, value) {
+            var el = document.getElementById(id);
+            if (el) el.value = value;
         }
 
         function closeAddressModalHandler() {
-            addressModal.classList.remove('active');
+            if (addressModal) addressModal.classList.remove('active');
             document.body.style.overflow = '';
-            addressForm.reset();
-            document.getElementById('country').value = 'Philippines';
+
+            if (addressForm) addressForm.reset();
+            setFieldValue('country', 'Philippines');
             goToModalStep(1);
         }
 
@@ -282,54 +420,56 @@
             closeAddressModal.addEventListener('click', closeAddressModalHandler);
         }
 
-        addressModal.addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeAddressModalHandler();
-            }
-        });
-
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                if (addressModal.classList.contains('active')) {
+        if (addressModal) {
+            addressModal.addEventListener('click', function(e) {
+                if (e.target === this) {
                     closeAddressModalHandler();
                 }
-                if (deleteAddressModal.classList.contains('active')) {
-                    closeDeleteModal();
-                }
+            });
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key !== 'Escape') return;
+
+            if (addressModal && addressModal.classList.contains('active')) {
+                closeAddressModalHandler();
+            }
+            if (deleteAddressModal && deleteAddressModal.classList.contains('active')) {
+                closeDeleteModal();
             }
         });
 
         // Real-time preview updates
         document.querySelectorAll('#addressForm .form-control').forEach(function(input) {
             input.addEventListener('input', function() {
-                if (currentModalStep === 3) {
-                    updateAddressPreview();
-                }
+                if (currentModalStep === 3) updateAddressPreview();
             });
             input.addEventListener('change', function() {
-                if (currentModalStep === 3) {
-                    updateAddressPreview();
-                }
+                if (currentModalStep === 3) updateAddressPreview();
             });
         });
 
-        // ===== EDIT ADDRESS =====
+        // ============================================
+        // EDIT ADDRESS
+        // ============================================
         editAddressBtns.forEach(function(btn) {
             btn.addEventListener('click', function() {
-                var addressIdValue = this.dataset.id;
-                openAddressModal('Edit Address', { customer_address_id: addressIdValue });
+                var id = this.dataset.id;
+                openAddressModal('Edit Address', { customer_address_id: id });
             });
         });
 
-        // ===== DELETE ADDRESS =====
+        // ============================================
+        // DELETE ADDRESS
+        // ============================================
         function openDeleteModal(addressIdValue) {
             deleteAddressId = addressIdValue;
-            deleteAddressModal.classList.add('active');
+            if (deleteAddressModal) deleteAddressModal.classList.add('active');
             document.body.style.overflow = 'hidden';
         }
 
         function closeDeleteModal() {
-            deleteAddressModal.classList.remove('active');
+            if (deleteAddressModal) deleteAddressModal.classList.remove('active');
             document.body.style.overflow = '';
             deleteAddressId = null;
         }
@@ -337,8 +477,7 @@
         deleteAddressBtns.forEach(function(btn) {
             btn.addEventListener('click', function() {
                 if (this.disabled) return;
-                var addressIdValue = this.dataset.id;
-                openDeleteModal(addressIdValue);
+                openDeleteModal(this.dataset.id);
             });
         });
 
@@ -346,11 +485,13 @@
             cancelDeleteModal.addEventListener('click', closeDeleteModal);
         }
 
-        deleteAddressModal.addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeDeleteModal();
-            }
-        });
+        if (deleteAddressModal) {
+            deleteAddressModal.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeDeleteModal();
+                }
+            });
+        }
 
         if (confirmDeleteModal) {
             confirmDeleteModal.addEventListener('click', function() {
@@ -370,6 +511,15 @@
                 .then(function(data) {
                     if (data.status === 'success') {
                         showNotification('Address deleted successfully', 'success');
+
+                        if (window.location.hash) {
+                            history.replaceState(
+                                null,
+                                '',
+                                window.location.pathname + window.location.search
+                            );
+                        }
+
                         setTimeout(function() {
                             window.location.reload();
                         }, 1000);
@@ -387,31 +537,35 @@
             });
         }
 
-        // ===== ADDRESS FORM SUBMISSION =====
+        // ============================================
+        // ADDRESS FORM SUBMISSION
+        // ============================================
         if (addressForm) {
             addressForm.addEventListener('submit', function(e) {
                 e.preventDefault();
 
-                // Final validation
                 var block = document.getElementById('block');
-                var city = document.getElementById('city');
+                var city  = document.getElementById('city');
+
                 if (!block || !block.value.trim()) {
                     showNotification('Block/Street is required.', 'error');
                     goToModalStep(1);
-                    block?.focus();
+                    if (block) block.focus();
                     return;
                 }
                 if (!city || !city.value.trim()) {
                     showNotification('City is required.', 'error');
                     goToModalStep(2);
-                    city?.focus();
+                    if (city) city.focus();
                     return;
                 }
 
                 var formData = new FormData(this);
 
-                saveAddressBtn.disabled = true;
-                saveAddressBtn.textContent = 'Saving...';
+                if (saveAddressBtn) {
+                    saveAddressBtn.disabled = true;
+                    saveAddressBtn.textContent = 'Saving...';
+                }
 
                 fetch('../backend/handlers/address-handler.php', {
                     method: 'POST',
@@ -422,6 +576,15 @@
                     if (data.status === 'success') {
                         showNotification('Address saved successfully', 'success');
                         closeAddressModalHandler();
+
+                        if (window.location.hash) {
+                            history.replaceState(
+                                null,
+                                '',
+                                window.location.pathname + window.location.search
+                            );
+                        }
+
                         setTimeout(function() {
                             window.location.reload();
                         }, 1000);
@@ -434,18 +597,20 @@
                     showNotification('Network error. Please try again.', 'error');
                 })
                 .finally(function() {
-                    saveAddressBtn.disabled = false;
-                    saveAddressBtn.textContent = 'Save Address';
+                    if (saveAddressBtn) {
+                        saveAddressBtn.disabled = false;
+                        saveAddressBtn.textContent = 'Save Address';
+                    }
                 });
             });
         }
 
-        // ===== NOTIFICATION SYSTEM =====
+        // ============================================
+        // NOTIFICATION SYSTEM
+        // ============================================
         function showNotification(message, type) {
-            var existingNotification = document.querySelector('.profile-notification');
-            if (existingNotification) {
-                existingNotification.remove();
-            }
+            var existing = document.querySelector('.profile-notification');
+            if (existing) existing.remove();
 
             var notification = document.createElement('div');
             notification.className = 'profile-notification ' + type;
@@ -469,8 +634,9 @@
             }, 3000);
         }
 
-        // ===== INITIAL SETUP =====
-        // Ensure first tab is active
+        // ============================================
+        // INITIAL SETUP
+        // ============================================
         var firstActiveTab = document.querySelector('.profile-tab.active');
         if (!firstActiveTab) {
             var firstTab = document.querySelector('.profile-tab');
@@ -478,24 +644,56 @@
                 firstTab.classList.add('active');
                 var firstTabId = firstTab.dataset.tab;
                 var firstContent = document.getElementById('tab-' + firstTabId);
-                if (firstContent) {
-                    firstContent.classList.add('active');
-                }
+                if (firstContent) firstContent.classList.add('active');
             }
         }
 
-        // Ensure step 1 is visible initially
         if (modalStep1) {
             modalStep1.classList.add('active');
             modalStep1.style.display = 'block';
         }
-        if (modalStep2) {
-            modalStep2.style.display = 'none';
-        }
-        if (modalStep3) {
-            modalStep3.style.display = 'none';
-        }
+        if (modalStep2) modalStep2.style.display = 'none';
+        if (modalStep3) modalStep3.style.display = 'none';
 
-        console.log('Profile JS v2.4 initialized');
+        // ============================================
+        // DEEP-LINK HANDLING (consumed once)
+        // ============================================
+        (function consumeDeepLink() {
+            if (!window.location.hash) return;
+
+            var hash = window.location.hash.toLowerCase().replace(/^#/, '');
+
+            var isAddressesHash =
+                hash === 'addresses' ||
+                hash === 'add-address' ||
+                hash === 'addaddress' ||
+                hash === 'edit-address' ||
+                hash === 'editaddress';
+
+            if (!isAddressesHash) return;
+
+            history.replaceState(
+                null,
+                '',
+                window.location.pathname + window.location.search
+            );
+
+            var addressesTab = document.getElementById('tabBtnAddresses');
+            if (addressesTab) {
+                addressesTab.click();
+            } else {
+                var fallback = document.querySelector('.profile-tab[data-tab="addresses"]');
+                if (fallback) fallback.click();
+            }
+
+            if (hash === 'add-address' || hash === 'addaddress') {
+                setTimeout(function() {
+                    var btn = document.getElementById('addAddressBtn');
+                    if (btn) btn.click();
+                }, 250);
+            }
+        })();
+
+        console.log('Profile JS v3.1 initialized');
     });
 })();

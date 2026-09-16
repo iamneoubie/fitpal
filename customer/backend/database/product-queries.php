@@ -1,24 +1,28 @@
 <?php
 /**
- * FitPal Product Queries - FIXED FOR YOUR SCHEMA
- * 
+ * FitPal Product Queries
+ *
+ * Pure data-access layer for product, product_composition, and
+ * dietary_information. No $_POST, no header(), no echo.
+ *
  * @package FitPal
- * @version 4.2 - Added allergen exclusion filter
+ * @version 5.1 — Removed stale `max_quantity_per_item` column reference
+ *                (not present in current schema; use `max_quantity`).
  */
 
 declare(strict_types=1);
 
 /**
- * Get a single product by ID with full details and customization rules
+ * Get a single product by ID with full details and customization rules.
  *
- * @param PDO $db Database connection
- * @param int $productId Product ID
- * @return array|null Product details or null if not found
+ * @param PDO $db
+ * @param int $productId
+ * @return array<string, mixed>|null
  */
 function getProductById(PDO $db, int $productId): ?array
 {
     $stmt = $db->prepare(
-        "SELECT 
+        "SELECT
             p.product_id,
             p.name AS product_name,
             p.description,
@@ -28,9 +32,9 @@ function getProductById(PDO $db, int $productId): ?array
             p.restaurant_branch_id,
             p.is_customizable,
             p.customization_type,
-            p.base_price,
-            COALESCE(di.dietary_tags, '') as dietary_tags,
-            COALESCE(di.allergens, '') as allergens,
+            COALESCE(NULLIF(p.base_price, 0), p.price, 0) AS base_price,
+            COALESCE(di.dietary_tags, '') AS dietary_tags,
+            COALESCE(di.allergens, '')    AS allergens,
             di.calories,
             di.protein,
             di.carbs,
@@ -42,108 +46,173 @@ function getProductById(PDO $db, int $productId): ?array
             rb.province,
             r.business_name AS restaurant_name,
             r.cuisine_type
-        FROM product p
-        JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
-        JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
-        LEFT JOIN dietary_information di ON p.dietary_information_id = di.dietary_information_id
-        WHERE p.product_id = :product_id
-        AND p.is_active = 1
-        AND rb.is_active = 1
-        AND r.is_active = 1"
+         FROM product p
+         JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
+         JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
+         LEFT JOIN dietary_information di ON p.dietary_information_id = di.dietary_information_id
+         WHERE p.product_id = :product_id
+           AND p.is_active = 1
+           AND rb.is_active = 1
+           AND r.is_active = 1"
     );
     $stmt->execute([':product_id' => $productId]);
     $product = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    if (!$product) {
-        return null;
-    }
-    
-    // Get customization rules if product is customizable
-    if ($product['is_customizable']) {
-        $compStmt = $db->prepare(
-            "SELECT 
-                pc.composition_id,
-                pc.product_id,
-                pc.ingredient_id,
-                pc.is_default,
-                pc.default_quantity,
-                pc.max_quantity,
-                pc.price_modifier,
-                pc.display_order,
-                pc.is_required,
-                pc.min_quantity,
-                pc.max_quantity_per_item,
-                i.name AS ingredient_name,
-                i.unit_price,
-                i.calories AS ingredient_calories,
-                i.dietary_tags,
-                i.allergens,
-                i.is_active
-            FROM product_composition pc
-            LEFT JOIN ingredient i ON pc.ingredient_id = i.ingredient_id
-            WHERE pc.product_id = :product_id
-            AND (i.is_active = 1 OR i.is_active IS NULL)
-            ORDER BY pc.display_order ASC, pc.composition_id ASC"
-        );
-        $compStmt->execute([':product_id' => $productId]);
-        $ingredientRows = $compStmt->fetchAll(PDO::FETCH_ASSOC);
-
-        if (!empty($ingredientRows)) {
-            $components = [];
-            foreach ($ingredientRows as $row) {
-                $compId = $row['composition_id'];
-                if (!isset($components[$compId])) {
-                    $maxQty = (int)($row['max_quantity_per_item'] ?? 1);
-                    $isRequired = (bool)($row['is_required'] ?? false);
-                    $components[$compId] = [
-                        'composition_id' => $compId,
-                        'product_id' => (int)$row['product_id'],
-                        'type' => $maxQty <= 1 ? 'choice' : 'modifier',
-                        'is_required' => $isRequired,
-                        'max_selections' => $maxQty,
-                        'display_order' => (int)($row['display_order'] ?? 0),
-                        'ingredients' => []
-                    ];
-                }
-
-                if ($row['ingredient_id'] && $row['is_active']) {
-                    $priceModifier = (float)($row['price_modifier'] ?? 0);
-                    if ($priceModifier == 0) {
-                        $priceModifier = (float)($row['unit_price'] ?? 0);
-                    }
-
-                    $components[$compId]['ingredients'][] = [
-                        'id' => (int)$row['ingredient_id'],
-                        'name' => $row['ingredient_name'],
-                        'price_modifier' => $priceModifier,
-                        'is_default' => (bool)($row['is_default'] ?? false),
-                        'is_active' => (bool)($row['is_active'] ?? true),
-                        'max_quantity' => (int)($row['max_quantity'] ?? 1),
-                        'default_quantity' => (int)($row['default_quantity'] ?? 0),
-                        'min_quantity' => (int)($row['min_quantity'] ?? 0)
-                    ];
-                }
-            }
-            $product['customization_components'] = array_values($components);
-        }
-    }
-    
-    return $product;
+    return $product ?: null;
 }
 
 /**
- * Get menu data with pagination
+ * Fetch customization components for a product and group them into
+ * presentation-ready shapes (static / choice / modifier / multi).
  *
- * @param PDO $db Database connection
- * @param int $page Current page
- * @param int $perPage Items per page
- * @param array $selectedTags Dietary tags to include (OR logic)
- * @param string $search Search term
- * @param int $restaurantId Restaurant filter
- * @param float $minPrice Minimum price
- * @param float $maxPrice Maximum price
- * @param array $excludeAllergens Allergens to exclude (products containing these will be hidden)
- * @return array Menu data with restaurants, pagination info
+ * Rows are grouped by `display_order`; the kind is derived from the
+ * shape of each group. Per-ingredient maximums come from
+ * `product_composition.max_quantity`.
+ *
+ * @param PDO $db
+ * @param int $productId
+ * @return array<int, array<string, mixed>>
+ */
+function getProductComponentsGrouped(PDO $db, int $productId): array
+{
+    $stmt = $db->prepare(
+        "SELECT
+            pc.composition_id,
+            pc.product_id,
+            pc.ingredient_id,
+            pc.is_default,
+            pc.default_quantity,
+            pc.max_quantity,
+            pc.price_modifier,
+            pc.display_order,
+            pc.is_required,
+            pc.min_quantity,
+            i.name AS ingredient_name,
+            i.unit_price,
+            i.calories AS ingredient_calories,
+            i.dietary_tags,
+            i.allergens,
+            i.is_active
+         FROM product_composition pc
+         JOIN ingredient i ON pc.ingredient_id = i.ingredient_id
+         WHERE pc.product_id = :product_id
+           AND i.is_active = 1
+         ORDER BY pc.display_order ASC, i.name ASC"
+    );
+    $stmt->execute([':product_id' => $productId]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if (empty($rows)) {
+        return [];
+    }
+
+    $byOrder = [];
+    foreach ($rows as $r) {
+        $order = (int)$r['display_order'];
+        $byOrder[$order][] = $r;
+    }
+
+    $components = [];
+
+    foreach ($byOrder as $order => $groupRows) {
+        $count = count($groupRows);
+
+        $groupRequired   = false;
+        $groupMaxPerItem = 1;
+        $defaultCount    = 0;
+
+        foreach ($groupRows as $r) {
+            if ((bool)$r['is_required']) {
+                $groupRequired = true;
+            }
+            $maxPer = (int)($r['max_quantity'] ?? 1);
+            if ($maxPer > $groupMaxPerItem) {
+                $groupMaxPerItem = $maxPer;
+            }
+            if ((bool)$r['is_default']) {
+                $defaultCount++;
+            }
+        }
+
+        $ingredients = [];
+        foreach ($groupRows as $r) {
+            $ingredients[] = [
+                'id'               => (int)$r['ingredient_id'],
+                'name'             => $r['ingredient_name'],
+                'price_modifier'   => (float)($r['price_modifier'] ?? 0),
+                'is_default'       => (bool)$r['is_default'],
+                'calories'         => (int)($r['ingredient_calories'] ?? 0),
+                'max_quantity'     => (int)($r['max_quantity'] ?? 1),
+                'default_quantity' => (int)($r['default_quantity'] ?? 0),
+                'min_quantity'     => (int)($r['min_quantity'] ?? 0),
+            ];
+        }
+
+        $sortIngredients = static function (array $a, array $b): int {
+            if ($a['is_default'] !== $b['is_default']) {
+                return $a['is_default'] ? -1 : 1;
+            }
+            return strcmp($a['name'], $b['name']);
+        };
+
+        if ($groupMaxPerItem === 1) {
+            if ($count === 1 && $groupRequired && (int)$ingredients[0]['min_quantity'] === 1) {
+                $components[] = [
+                    'kind'          => 'static',
+                    'label'         => ucwords(str_replace('_', ' ', $ingredients[0]['name'])),
+                    'display_order' => $order,
+                    'ingredient'    => $ingredients[0],
+                ];
+            } else {
+                usort($ingredients, $sortIngredients);
+                $components[] = [
+                    'kind'          => 'choice',
+                    'label'         => ucwords(str_replace('_', ' ', $ingredients[0]['name']))
+                                        . ($count > 1 ? ' Choice' : ''),
+                    'display_order' => $order,
+                    'is_required'   => $groupRequired,
+                    'has_default'   => $defaultCount > 0,
+                    'ingredients'   => $ingredients,
+                ];
+            }
+        } elseif ($count === 1) {
+            $components[] = [
+                'kind'          => 'modifier',
+                'label'         => ucwords(str_replace('_', ' ', $ingredients[0]['name'])),
+                'display_order' => $order,
+                'is_required'   => $groupRequired,
+                'ingredient'    => $ingredients[0],
+            ];
+        } else {
+            usort($ingredients, $sortIngredients);
+            $components[] = [
+                'kind'           => 'multi',
+                'label'          => ucwords(str_replace('_', ' ', $ingredients[0]['name'])) . ' (multiple)',
+                'display_order'  => $order,
+                'is_required'    => $groupRequired,
+                'max_selections' => $groupMaxPerItem,
+                'ingredients'    => $ingredients,
+            ];
+        }
+    }
+
+    usort($components, static fn($a, $b) => $a['display_order'] <=> $b['display_order']);
+
+    return $components;
+}
+
+/**
+ * Get menu data with pagination.
+ *
+ * @param PDO $db
+ * @param int $page
+ * @param int $perPage
+ * @param array $selectedTags
+ * @param string $search
+ * @param int $restaurantId
+ * @param float $minPrice
+ * @param float $maxPrice
+ * @param array $excludeAllergens
+ * @return array<string, mixed>
  */
 function getMenuDataPaginated(
     PDO $db,
@@ -168,7 +237,6 @@ function getMenuDataPaginated(
     $bindValues = [];
     $hasSearch = false;
 
-    // Search filter
     if (!empty($search)) {
         $hasSearch = true;
         $searchTerm = '%' . trim($search) . '%';
@@ -178,13 +246,11 @@ function getMenuDataPaginated(
         $bindValues[] = $searchTerm;
     }
 
-    // Restaurant filter
     if ($restaurantId > 0) {
         $conditions[] = "r.restaurant_id = ?";
         $bindValues[] = $restaurantId;
     }
 
-    // Price filters
     if ($minPrice > 0) {
         $conditions[] = "p.price >= ?";
         $bindValues[] = $minPrice;
@@ -194,7 +260,6 @@ function getMenuDataPaginated(
         $bindValues[] = $maxPrice;
     }
 
-    // Dietary tags filter (include - OR logic)
     if (!empty($selectedTags)) {
         $tagConditions = [];
         foreach ($selectedTags as $tag) {
@@ -204,12 +269,6 @@ function getMenuDataPaginated(
         $conditions[] = "(" . implode(' OR ', $tagConditions) . ")";
     }
 
-    // ============================================================
-    // ALLERGEN EXCLUSION FILTER
-    // Products containing ANY of the excluded allergens are hidden.
-    // This is a hard exclusion - if a product's allergens field
-    // contains any of the user's allergies, it is removed entirely.
-    // ============================================================
     if (!empty($excludeAllergens)) {
         $allergenConditions = [];
         foreach ($excludeAllergens as $allergen) {
@@ -217,7 +276,6 @@ function getMenuDataPaginated(
             if ($allergen === '' || $allergen === 'none') {
                 continue;
             }
-            // NOT FIND_IN_SET: product allergens must NOT contain this allergen
             $allergenConditions[] = "NOT FIND_IN_SET(?, REPLACE(COALESCE(di.allergens, ''), ' ', ''))";
             $bindValues[] = $allergen;
         }
@@ -230,7 +288,6 @@ function getMenuDataPaginated(
         $where .= " AND " . implode(" AND ", $conditions);
     }
 
-    // Count query
     $countSql = "SELECT COUNT(DISTINCT p.product_id) as total $from $where";
     $countStmt = $db->prepare($countSql);
     $countStmt->execute($bindValues);
@@ -247,10 +304,9 @@ function getMenuDataPaginated(
         ];
     }
 
-    // Product query
-    $orderBy = $hasSearch && !empty($search) 
-        ? "ORDER BY 
-            CASE 
+    $orderBy = $hasSearch && !empty($search)
+        ? "ORDER BY
+            CASE
                 WHEN p.name LIKE ? THEN 1
                 WHEN r.business_name LIKE ? THEN 2
                 WHEN p.description LIKE ? THEN 3
@@ -290,20 +346,19 @@ function getMenuDataPaginated(
 
     $stmt = $db->prepare($productSql);
     $execValues = $bindValues;
-    
+
     if ($hasSearch && !empty($search)) {
         $searchForOrder = '%' . trim($search) . '%';
         $execValues[] = $searchForOrder;
         $execValues[] = $searchForOrder;
         $execValues[] = $searchForOrder;
     }
-    
+
     $execValues[] = $perPage;
     $execValues[] = $offset;
     $stmt->execute($execValues);
     $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Group results by restaurant and branch
     $restaurants = [];
     foreach ($products as $product) {
         $restId = (int)$product['restaurant_id'];
@@ -349,6 +404,7 @@ function getMenuDataPaginated(
     foreach ($restaurants as &$rest) {
         $rest['branches'] = array_values($rest['branches']);
     }
+    unset($rest);
 
     return [
         'restaurants' => array_values($restaurants),
@@ -360,53 +416,19 @@ function getMenuDataPaginated(
     ];
 }
 
-// ================================================================
-// HELPER FUNCTIONS
-// ================================================================
-
-function getDistinctDietaryTags(PDO $db): array
-{
-    $stmt = $db->query(
-        "SELECT DISTINCT 
-            TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(
-                COALESCE(di.dietary_tags, ''), ',', numbers.n), ',', -1)) AS tag
-        FROM dietary_information di
-        CROSS JOIN (
-            SELECT 1 n UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 
-            UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 
-            UNION SELECT 9 UNION SELECT 10
-        ) numbers
-        WHERE COALESCE(di.dietary_tags, '') != ''
-        AND CHAR_LENGTH(COALESCE(di.dietary_tags, '')) - 
-            CHAR_LENGTH(REPLACE(COALESCE(di.dietary_tags, ''), ',', '')) >= numbers.n - 1
-        HAVING tag != ''
-        ORDER BY tag"
-    );
-    
-    $tags = $stmt->fetchAll(PDO::FETCH_COLUMN);
-    $tags = array_filter($tags, function($tag) {
-        return !empty(trim($tag));
-    });
-    $tags = array_map('trim', $tags);
-    $tags = array_unique($tags);
-    sort($tags);
-    
-    return $tags;
-}
-
 /**
- * Get all distinct allergens from dietary_information
+ * Get all distinct allergens from dietary_information.
  *
- * @param PDO $db Database connection
- * @return array List of allergen strings
+ * @param PDO $db
+ * @return array<int, array<string, mixed>>
  */
 function getAllDistinctAllergens(PDO $db): array
 {
     $stmt = $db->query(
-        "SELECT allergens FROM dietary_information 
+        "SELECT allergens FROM dietary_information
          WHERE allergens IS NOT NULL AND allergens != '' AND allergens != 'none'"
     );
-    
+
     $allergenCounts = [];
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         if (!empty($row['allergens'])) {
@@ -419,9 +441,9 @@ function getAllDistinctAllergens(PDO $db): array
             }
         }
     }
-    
+
     ksort($allergenCounts);
-    
+
     $result = [];
     foreach ($allergenCounts as $allergen => $count) {
         $result[] = [
@@ -430,124 +452,41 @@ function getAllDistinctAllergens(PDO $db): array
             'label' => ucwords(str_replace('_', ' ', $allergen))
         ];
     }
-    
+
     return $result;
 }
 
+/**
+ * Get all active restaurants for filter dropdowns.
+ *
+ * @param PDO $db
+ * @return array<int, array<string, mixed>>
+ */
 function getAllRestaurants(PDO $db): array
 {
     $stmt = $db->prepare(
-        "SELECT restaurant_id, business_name 
-         FROM restaurant 
-         WHERE is_active = 1 
+        "SELECT restaurant_id, business_name
+         FROM restaurant
+         WHERE is_active = 1
          ORDER BY business_name"
     );
     $stmt->execute();
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-function getDistinctDietaryTagsWithCount(PDO $db): array
-{
-    $stmt = $db->query(
-        "SELECT dietary_tags FROM dietary_information 
-         WHERE dietary_tags IS NOT NULL AND dietary_tags != ''"
-    );
-    
-    $tagCounts = [];
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        if (!empty($row['dietary_tags'])) {
-            $parts = array_map('trim', explode(',', $row['dietary_tags']));
-            foreach ($parts as $tag) {
-                if (!empty($tag)) {
-                    $tagCounts[$tag] = ($tagCounts[$tag] ?? 0) + 1;
-                }
-            }
-        }
-    }
-    
-    ksort($tagCounts);
-    
-    $result = [];
-    foreach ($tagCounts as $tag => $count) {
-        $result[] = [
-            'tag' => $tag,
-            'count' => $count,
-            'label' => ucwords(str_replace('_', ' ', $tag))
-        ];
-    }
-    
-    return $result;
-}
-
-function getProductCustomizationComponents(PDO $db, int $productId): array
-{
-    $stmt = $db->prepare(
-        "SELECT 
-            pc.composition_id,
-            pc.product_id,
-            pc.ingredient_id,
-            pc.is_default,
-            pc.default_quantity,
-            pc.max_quantity,
-            pc.price_modifier,
-            pc.display_order,
-            pc.is_required,
-            pc.min_quantity,
-            pc.max_quantity_per_item,
-            i.name AS ingredient_name,
-            i.unit_price,
-            i.calories AS ingredient_calories,
-            i.dietary_tags,
-            i.allergens,
-            i.is_active
-        FROM product_composition pc
-        LEFT JOIN ingredient i ON pc.ingredient_id = i.ingredient_id
-        WHERE pc.product_id = :product_id
-        AND (i.is_active = 1 OR i.is_active IS NULL)
-        ORDER BY pc.display_order ASC, pc.composition_id ASC"
-    );
-    $stmt->execute([':product_id' => $productId]);
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    $grouped = [];
-    foreach ($rows as $row) {
-        $compId = $row['composition_id'];
-        if (!isset($grouped[$compId])) {
-            $grouped[$compId] = [
-                'composition_id' => $compId,
-                'product_id' => (int)$row['product_id'],
-                'is_required' => (bool)($row['is_required'] ?? false),
-                'max_selections' => (int)($row['max_quantity_per_item'] ?? 1),
-                'ingredients' => []
-            ];
-        }
-        
-        if ($row['ingredient_id'] && $row['is_active']) {
-            $priceModifier = (float)($row['price_modifier'] ?? 0);
-            if ($priceModifier == 0) {
-                $priceModifier = (float)($row['unit_price'] ?? 0);
-            }
-            
-            $grouped[$compId]['ingredients'][] = [
-                'ingredient_id' => (int)$row['ingredient_id'],
-                'ingredient_name' => $row['ingredient_name'],
-                'price_modifier' => $priceModifier,
-                'is_default' => (bool)($row['is_default'] ?? false),
-                'is_active' => (bool)($row['is_active'] ?? true),
-                'max_quantity' => (int)($row['max_quantity'] ?? 1),
-                'default_quantity' => (int)($row['default_quantity'] ?? 0),
-                'min_quantity' => (int)($row['min_quantity'] ?? 0)
-            ];
-        }
-    }
-    
-    return array_values($grouped);
-}
-
+/**
+ * Get related products for a product detail page.
+ *
+ * @param PDO $db
+ * @param int $productId
+ * @param int $branchId
+ * @param int $limit
+ * @return array<int, array<string, mixed>>
+ */
 function getRelatedProducts(PDO $db, int $productId, int $branchId, int $limit = 4): array
 {
     $stmt = $db->prepare(
-        "SELECT 
+        "SELECT
             p.product_id,
             p.name AS product_name,
             p.price,
@@ -559,8 +498,8 @@ function getRelatedProducts(PDO $db, int $productId, int $branchId, int $limit =
         FROM product p
         LEFT JOIN dietary_information di ON p.dietary_information_id = di.dietary_information_id
         WHERE p.restaurant_branch_id = :branch_id
-        AND p.product_id != :product_id
-        AND p.is_active = 1
+          AND p.product_id != :product_id
+          AND p.is_active = 1
         LIMIT :limit"
     );
     $stmt->bindValue(':branch_id', $branchId, PDO::PARAM_INT);

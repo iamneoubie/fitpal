@@ -1,6 +1,6 @@
 /**
  * FitPal Menu Page Styles
- * Version 3.0
+ * Version 3.1
  *
  * Scope:
  *   - Page wrapper (.content, .menu-page, .container)
@@ -18,7 +18,7 @@
  *   - .product-actions, .quantity-control, .add-btn
  *
  * @package FitPal
- * @version 3.0
+ * @version 3.1 — Container padding unified with header (16px at all breakpoints)
  */
 
 /* ============================================
@@ -42,8 +42,9 @@
 .menu-page .container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 0 12px;
+    padding: 0 16px;
     width: 100%;
+    box-sizing: border-box;
 }
 
 .menu-page.has-order-tracker {
@@ -329,9 +330,7 @@
         padding: 24px 0 100px 0;
     }
 
-    .menu-page .container {
-        padding: 0 24px;
-    }
+    /* Container padding stays 16px to match header */
 
     .menu-page.has-order-tracker {
         padding-bottom: 160px;
@@ -361,10 +360,7 @@
 }
 
 @media (min-width: 1024px) {
-    .menu-page .container {
-        padding: 0 32px;
-        max-width: 1200px;
-    }
+    /* Container padding stays 16px to match header */
 
     .empty-state {
         padding: 100px 60px;
@@ -378,9 +374,7 @@
 }
 
 @media (min-width: 1400px) {
-    .menu-page .container {
-        padding: 0 40px;
-    }
+    /* Container padding stays 16px to match header */
 }
 
 /* ============================================

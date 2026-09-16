@@ -3,6 +3,11 @@
 -- Dietary Meal Ordering and Restaurant Nutrition Analytics System
 -- WITH FULL CUSTOMIZABLE MEAL SUPPORT
 -- ACID Compliant with Proper Constraints
+--
+-- Totals policy: orders no longer store subtotal, delivery_charge,
+-- or total_amount. They are computed on read from queue_item
+-- (queue_quantity × COALESCE(final_price, unit_price)) plus the
+-- fee schedule (base delivery + per-branch surcharge + service + VAT).
 -- =====================================================
 
 DROP DATABASE IF EXISTS fitpal_food_delivery;
@@ -14,7 +19,7 @@ USE fitpal_food_delivery;
 -- =====================================================
 -- 1. FINANCIAL_ACCOUNT (no dependencies)
 -- =====================================================
-CREATE TABLE IF NOT EXISTS financial_account (
+CREATE TABLE financial_account (
     financial_account_id INT AUTO_INCREMENT PRIMARY KEY,
     balance DECIMAL(10, 2) NOT NULL DEFAULT 0.00 CHECK (balance >= 0),
     account_type VARCHAR(20) NOT NULL CHECK (
@@ -29,47 +34,10 @@ CREATE TABLE IF NOT EXISTS financial_account (
 ) COMMENT = 'Financial accounts for all users';
 
 -- =====================================================
--- 2. CUSTOMER_ADDRESS (no dependencies)
+-- 2. CUSTOMER (no address dependency now)
 -- =====================================================
-CREATE TABLE IF NOT EXISTS customer_address (
-    customer_address_id INT AUTO_INCREMENT PRIMARY KEY,
-    label VARCHAR(20) NULL CHECK (
-        label IN ('Home', 'Office', 'Other')
-    ),
-    block VARCHAR(120) NULL,
-    barangay VARCHAR(100) NULL,
-    city VARCHAR(100) NOT NULL,
-    province VARCHAR(100) NULL,
-    region VARCHAR(100) NULL,
-    postal_code VARCHAR(10) NULL,
-    country VARCHAR(100) DEFAULT 'Philippines',
-    INDEX idx_city (city)
-) COMMENT = 'Customer address storage';
-
--- =====================================================
--- 3. DELIVERY_RIDER_ADDRESS (no dependencies)
--- =====================================================
-CREATE TABLE IF NOT EXISTS delivery_rider_address (
-    delivery_rider_address_id INT AUTO_INCREMENT PRIMARY KEY,
-    label VARCHAR(20) NULL CHECK (
-        label IN ('Home', 'Base', 'Other')
-    ),
-    block VARCHAR(120) NULL,
-    barangay VARCHAR(100) NULL,
-    city VARCHAR(100) NOT NULL,
-    province VARCHAR(100) NULL,
-    region VARCHAR(100) NULL,
-    postal_code VARCHAR(10) NULL,
-    country VARCHAR(100) DEFAULT 'Philippines',
-    INDEX idx_city (city)
-) COMMENT = 'Delivery rider address storage';
-
--- =====================================================
--- 4. CUSTOMER (depends on customer_address)
--- =====================================================
-CREATE TABLE IF NOT EXISTS customer (
+CREATE TABLE customer (
     customer_id INT AUTO_INCREMENT PRIMARY KEY,
-    customer_address_id INT NULL,
     first_name VARCHAR(50) NOT NULL,
     middle_name VARCHAR(50) NULL,
     last_name VARCHAR(50) NOT NULL,
@@ -83,18 +51,40 @@ CREATE TABLE IF NOT EXISTS customer (
     password VARCHAR(255) NOT NULL,
     date_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_active TINYINT(1) DEFAULT 1,
-    FOREIGN KEY (customer_address_id) REFERENCES customer_address (customer_address_id) ON DELETE SET NULL,
     INDEX idx_email (email),
     INDEX idx_username (username),
     INDEX idx_contact_number (contact_number)
 ) COMMENT = 'Customer account information';
 
 -- =====================================================
--- 5. DELIVERY_RIDER (depends on delivery_rider_address)
+-- 3. CUSTOMER_ADDRESS (child of customer)
 -- =====================================================
-CREATE TABLE IF NOT EXISTS delivery_rider (
+CREATE TABLE customer_address (
+    customer_address_id INT AUTO_INCREMENT PRIMARY KEY,
+    customer_id INT NOT NULL,
+    label VARCHAR(20) NULL CHECK (
+        label IN ('Home', 'Office', 'Other')
+    ),
+    block VARCHAR(120) NULL,
+    barangay VARCHAR(100) NULL,
+    city VARCHAR(100) NOT NULL,
+    province VARCHAR(100) NULL,
+    region VARCHAR(100) NULL,
+    postal_code VARCHAR(10) NULL,
+    country VARCHAR(100) DEFAULT 'Philippines',
+    is_default TINYINT(1) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (customer_id) REFERENCES customer (customer_id) ON DELETE CASCADE,
+    INDEX idx_customer (customer_id),
+    INDEX idx_city (city)
+) COMMENT = 'Customer addresses (one customer -> many addresses)';
+
+-- =====================================================
+-- 4. DELIVERY_RIDER (no address dependency now)
+-- =====================================================
+CREATE TABLE delivery_rider (
     delivery_rider_id INT AUTO_INCREMENT PRIMARY KEY,
-    delivery_rider_address_id INT NULL,
     first_name VARCHAR(50) NOT NULL,
     middle_name VARCHAR(50) NULL,
     last_name VARCHAR(50) NOT NULL,
@@ -108,16 +98,39 @@ CREATE TABLE IF NOT EXISTS delivery_rider (
     password VARCHAR(255) NOT NULL,
     date_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_active TINYINT(1) DEFAULT 1,
-    FOREIGN KEY (delivery_rider_address_id) REFERENCES delivery_rider_address (delivery_rider_address_id) ON DELETE SET NULL,
     INDEX idx_email (email),
     INDEX idx_contact_number (contact_number),
     INDEX idx_username (username)
 ) COMMENT = 'Delivery rider account information';
 
 -- =====================================================
+-- 5. DELIVERY_RIDER_ADDRESS (child of delivery_rider)
+-- =====================================================
+CREATE TABLE delivery_rider_address (
+    delivery_rider_address_id INT AUTO_INCREMENT PRIMARY KEY,
+    delivery_rider_id INT NOT NULL,
+    label VARCHAR(20) NULL CHECK (
+        label IN ('Home', 'Base', 'Other')
+    ),
+    block VARCHAR(120) NULL,
+    barangay VARCHAR(100) NULL,
+    city VARCHAR(100) NOT NULL,
+    province VARCHAR(100) NULL,
+    region VARCHAR(100) NULL,
+    postal_code VARCHAR(10) NULL,
+    country VARCHAR(100) DEFAULT 'Philippines',
+    is_default TINYINT(1) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (delivery_rider_id) REFERENCES delivery_rider (delivery_rider_id) ON DELETE CASCADE,
+    INDEX idx_rider (delivery_rider_id),
+    INDEX idx_city (city)
+) COMMENT = 'Delivery rider addresses (one rider -> many addresses)';
+
+-- =====================================================
 -- 6. ADMINISTRATOR (no dependencies)
 -- =====================================================
-CREATE TABLE IF NOT EXISTS administrator (
+CREATE TABLE administrator (
     administrator_id INT AUTO_INCREMENT PRIMARY KEY,
     first_name VARCHAR(50) NOT NULL,
     middle_name VARCHAR(50) NULL,
@@ -137,9 +150,9 @@ CREATE TABLE IF NOT EXISTS administrator (
 ) COMMENT = 'Administrator account information';
 
 -- =====================================================
--- 7. CUSTOMER_PROFILE (depends on customer and financial_account)
+-- 7. CUSTOMER_PROFILE
 -- =====================================================
-CREATE TABLE IF NOT EXISTS customer_profile (
+CREATE TABLE customer_profile (
     customer_profile_id INT AUTO_INCREMENT PRIMARY KEY,
     customer_id INT NOT NULL UNIQUE,
     financial_account_id INT NOT NULL UNIQUE,
@@ -170,12 +183,11 @@ CREATE TABLE IF NOT EXISTS customer_profile (
 -- =====================================================
 -- 8. DELIVERY_RIDER_PROFILE
 -- =====================================================
-CREATE TABLE IF NOT EXISTS delivery_rider_profile (
+CREATE TABLE delivery_rider_profile (
     delivery_rider_profile_id INT AUTO_INCREMENT PRIMARY KEY,
     delivery_rider_id INT NOT NULL UNIQUE,
     financial_account_id INT NOT NULL UNIQUE,
     profile_picture VARCHAR(255) NULL,
-    address_id INT NULL,
     vehicle_type VARCHAR(20) NULL,
     vehicle_plate VARCHAR(10) NULL,
     verification_status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (
@@ -195,7 +207,6 @@ CREATE TABLE IF NOT EXISTS delivery_rider_profile (
     is_available TINYINT(1) DEFAULT 1,
     FOREIGN KEY (delivery_rider_id) REFERENCES delivery_rider (delivery_rider_id) ON DELETE CASCADE,
     FOREIGN KEY (financial_account_id) REFERENCES financial_account (financial_account_id) ON DELETE CASCADE,
-    FOREIGN KEY (address_id) REFERENCES delivery_rider_address (delivery_rider_address_id) ON DELETE SET NULL,
     FOREIGN KEY (verified_by_admin_id) REFERENCES administrator (administrator_id) ON DELETE SET NULL,
     INDEX idx_delivery_rider_id (delivery_rider_id),
     INDEX idx_financial_account_id (financial_account_id),
@@ -206,7 +217,7 @@ CREATE TABLE IF NOT EXISTS delivery_rider_profile (
 -- =====================================================
 -- 9. ADMINISTRATOR_PROFILE
 -- =====================================================
-CREATE TABLE IF NOT EXISTS administrator_profile (
+CREATE TABLE administrator_profile (
     administrator_profile_id INT AUTO_INCREMENT PRIMARY KEY,
     administrator_id INT NOT NULL UNIQUE,
     role VARCHAR(20) NOT NULL DEFAULT 'support' CHECK (
@@ -227,9 +238,9 @@ CREATE TABLE IF NOT EXISTS administrator_profile (
 ) COMMENT = 'Administrator profile with roles and permissions';
 
 -- =====================================================
--- 10. RESTAURANT (pure business entity)
+-- 10. RESTAURANT
 -- =====================================================
-CREATE TABLE IF NOT EXISTS restaurant (
+CREATE TABLE restaurant (
     restaurant_id INT AUTO_INCREMENT PRIMARY KEY,
     business_name VARCHAR(100) NOT NULL,
     description TEXT NULL,
@@ -257,7 +268,7 @@ CREATE TABLE IF NOT EXISTS restaurant (
 -- =====================================================
 -- 11. RESTAURANT_BRANCH
 -- =====================================================
-CREATE TABLE IF NOT EXISTS restaurant_branch (
+CREATE TABLE restaurant_branch (
     restaurant_branch_id INT AUTO_INCREMENT PRIMARY KEY,
     restaurant_id INT NOT NULL,
     financial_account_id INT NOT NULL UNIQUE,
@@ -281,9 +292,9 @@ CREATE TABLE IF NOT EXISTS restaurant_branch (
 ) COMMENT = 'Restaurant branches with financial accounts';
 
 -- =====================================================
--- 11b. RESTAURANT_ACCOUNT
+-- 12. RESTAURANT_ACCOUNT
 -- =====================================================
-CREATE TABLE IF NOT EXISTS restaurant_account (
+CREATE TABLE restaurant_account (
     restaurant_account_id INT AUTO_INCREMENT PRIMARY KEY,
     restaurant_id INT NOT NULL,
     branch_id INT NULL,
@@ -320,9 +331,9 @@ CREATE TABLE IF NOT EXISTS restaurant_account (
 ) COMMENT = 'All restaurant-side logins — owner, partner, manager, staff';
 
 -- =====================================================
--- 12. DIETARY_INFORMATION
+-- 13. DIETARY_INFORMATION
 -- =====================================================
-CREATE TABLE IF NOT EXISTS dietary_information (
+CREATE TABLE dietary_information (
     dietary_information_id INT AUTO_INCREMENT PRIMARY KEY,
     images VARCHAR(255) NULL,
     category VARCHAR(30) NULL CHECK (
@@ -357,9 +368,9 @@ CREATE TABLE IF NOT EXISTS dietary_information (
 ) COMMENT = 'Nutritional and dietary information for products';
 
 -- =====================================================
--- 13. PRODUCT
+-- 14. PRODUCT
 -- =====================================================
-CREATE TABLE IF NOT EXISTS product (
+CREATE TABLE product (
     product_id INT AUTO_INCREMENT PRIMARY KEY,
     restaurant_branch_id INT NOT NULL,
     dietary_information_id INT NOT NULL,
@@ -388,9 +399,9 @@ CREATE TABLE IF NOT EXISTS product (
 ) COMMENT = 'Product listings with nutritional information and customization support';
 
 -- =====================================================
--- 14. INGREDIENT
+-- 15. INGREDIENT
 -- =====================================================
-CREATE TABLE IF NOT EXISTS ingredient (
+CREATE TABLE ingredient (
     ingredient_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     description TEXT NULL,
@@ -410,21 +421,19 @@ CREATE TABLE IF NOT EXISTS ingredient (
 ) COMMENT = 'Master list of all ingredients for product customization';
 
 -- =====================================================
--- 15. PRODUCT_COMPOSITION
+-- 16. PRODUCT_COMPOSITION
 -- =====================================================
-CREATE TABLE IF NOT EXISTS product_composition (
+CREATE TABLE product_composition (
     composition_id INT AUTO_INCREMENT PRIMARY KEY,
     product_id INT NOT NULL,
     ingredient_id INT NOT NULL,
     is_default TINYINT(1) DEFAULT 0,
     default_quantity INT DEFAULT 0 CHECK (default_quantity >= 0),
+    min_quantity INT DEFAULT 0 CHECK (min_quantity >= 0),
     max_quantity INT DEFAULT 1 CHECK (max_quantity >= 0),
     price_modifier DECIMAL(8, 2) DEFAULT 0.00,
-    alternatives JSON NULL,
     display_order INT DEFAULT 0,
     is_required TINYINT(1) DEFAULT 0,
-    min_quantity INT DEFAULT 0 CHECK (min_quantity >= 0),
-    max_quantity_per_item INT DEFAULT 1 CHECK (max_quantity_per_item >= 0),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (product_id) REFERENCES product (product_id) ON DELETE CASCADE,
@@ -432,31 +441,54 @@ CREATE TABLE IF NOT EXISTS product_composition (
     INDEX idx_product (product_id),
     INDEX idx_ingredient (ingredient_id),
     INDEX idx_default (is_default),
-    UNIQUE KEY unique_product_ingredient (product_id, ingredient_id)
+    UNIQUE KEY unique_product_ingredient (product_id, ingredient_id),
+    CHECK (
+        default_quantity BETWEEN min_quantity AND max_quantity
+    )
 ) COMMENT = 'Defines which ingredients can be customized for each product';
 
 -- =====================================================
--- 16. CART
+-- 17. CART
 -- =====================================================
-CREATE TABLE IF NOT EXISTS cart (
+CREATE TABLE cart (
     cart_id INT AUTO_INCREMENT PRIMARY KEY,
     customer_id INT NOT NULL,
     product_id INT NOT NULL,
     quantity INT NOT NULL DEFAULT 1 CHECK (quantity > 0),
     price DECIMAL(8, 2) NOT NULL CHECK (price >= 0),
-    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     customization_data JSON NULL,
+    customization_hash VARCHAR(64) GENERATED ALWAYS AS (
+        SHA2(
+            COALESCE(
+                JSON_EXTRACT(
+                    customization_data,
+                    '$.customizations'
+                ),
+                ''
+            ),
+            256
+        )
+    ) STORED,
+    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (customer_id) REFERENCES customer (customer_id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES product (product_id) ON DELETE CASCADE,
     INDEX idx_customer_id (customer_id),
     INDEX idx_product_id (product_id),
-    UNIQUE KEY unique_cart_item (customer_id, product_id)
+    UNIQUE KEY unique_cart_item (
+        customer_id,
+        product_id,
+        customization_hash
+    )
 ) COMMENT = 'Shopping cart items with customization data';
 
 -- =====================================================
--- 17. ORDERS
+-- 18. ORDERS
+-- destination_address is a historical snapshot: it deliberately
+-- does NOT reference customer_address, so deleting a saved address
+-- never affects past orders. Price totals are computed from
+-- queue_item on read.
 -- =====================================================
-CREATE TABLE IF NOT EXISTS orders (
+CREATE TABLE orders (
     order_id INT AUTO_INCREMENT PRIMARY KEY,
     customer_id INT NOT NULL,
     delivery_rider_id INT NULL,
@@ -474,10 +506,6 @@ CREATE TABLE IF NOT EXISTS orders (
     payment_method VARCHAR(20) NOT NULL DEFAULT 'COD' CHECK (
         payment_method IN ('COD', 'Wallet', 'Online')
     ),
-    subtotal DECIMAL(10, 2) NOT NULL CHECK (subtotal >= 0),
-    delivery_charge DECIMAL(8, 2) NOT NULL DEFAULT 0.00 CHECK (delivery_charge >= 0),
-    total_amount DECIMAL(10, 2) GENERATED ALWAYS AS (subtotal + delivery_charge) STORED,
-    special_instructions TEXT NULL,
     cancelled_by VARCHAR(20) NULL CHECK (
         cancelled_by IN (
             'customer',
@@ -486,7 +514,6 @@ CREATE TABLE IF NOT EXISTS orders (
             'admin'
         )
     ),
-    has_unread_messages TINYINT(1) DEFAULT 0,
     order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     delivered_at TIMESTAMP NULL,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -496,12 +523,12 @@ CREATE TABLE IF NOT EXISTS orders (
     INDEX idx_delivery_rider_id (delivery_rider_id),
     INDEX idx_order_status (order_status),
     INDEX idx_order_date (order_date)
-) COMMENT = 'Order transactions with messaging support';
+) COMMENT = 'Order transactions';
 
 -- =====================================================
--- 18. QUEUE_ITEM
+-- 19. QUEUE_ITEM
 -- =====================================================
-CREATE TABLE IF NOT EXISTS queue_item (
+CREATE TABLE queue_item (
     queue_item_id INT AUTO_INCREMENT PRIMARY KEY,
     order_id INT NOT NULL,
     branch_id INT NOT NULL,
@@ -524,9 +551,9 @@ CREATE TABLE IF NOT EXISTS queue_item (
 ) COMMENT = 'Kitchen queue items with customization support';
 
 -- =====================================================
--- 19. CUSTOMIZATION_INSTANCE
+-- 20. CUSTOMIZATION_INSTANCE
 -- =====================================================
-CREATE TABLE IF NOT EXISTS customization_instance (
+CREATE TABLE customization_instance (
     instance_id INT AUTO_INCREMENT PRIMARY KEY,
     queue_item_id INT NOT NULL,
     ingredient_id INT NOT NULL,
@@ -544,9 +571,9 @@ CREATE TABLE IF NOT EXISTS customization_instance (
 ) COMMENT = 'Customer customizations for each order item';
 
 -- =====================================================
--- 20. TRANSACTION
+-- 21. TRANSACTION
 -- =====================================================
-CREATE TABLE IF NOT EXISTS transaction (
+CREATE TABLE transaction (
     transaction_id INT AUTO_INCREMENT PRIMARY KEY,
     financial_account_id INT NOT NULL,
     order_id INT NULL,
@@ -576,28 +603,29 @@ CREATE TABLE IF NOT EXISTS transaction (
 ) COMMENT = 'Financial transaction history';
 
 -- =====================================================
--- 21. FEEDBACK
+-- 22. FEEDBACK
 -- =====================================================
-CREATE TABLE IF NOT EXISTS feedback (
+CREATE TABLE feedback (
     feedback_id INT AUTO_INCREMENT PRIMARY KEY,
     product_id INT NOT NULL,
     customer_id INT NOT NULL,
-    order_id INT NOT NULL UNIQUE,
+    order_id INT NOT NULL,
     rating TINYINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
     comment TEXT NULL,
     date_posted TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (product_id) REFERENCES product (product_id) ON DELETE CASCADE,
     FOREIGN KEY (customer_id) REFERENCES customer (customer_id) ON DELETE CASCADE,
     FOREIGN KEY (order_id) REFERENCES orders (order_id) ON DELETE CASCADE,
+    UNIQUE KEY unique_review_per_product_per_order (order_id, product_id),
     INDEX idx_product_id (product_id),
     INDEX idx_customer_id (customer_id),
     INDEX idx_order_id (order_id)
 ) COMMENT = 'Product reviews and feedback';
 
 -- =====================================================
--- 22. NOTIFICATION
+-- 23. NOTIFICATION
 -- =====================================================
-CREATE TABLE IF NOT EXISTS notification (
+CREATE TABLE notification (
     notification_id INT AUTO_INCREMENT PRIMARY KEY,
     recipient_type VARCHAR(20) NOT NULL CHECK (
         recipient_type IN (
@@ -617,9 +645,9 @@ CREATE TABLE IF NOT EXISTS notification (
 ) COMMENT = 'System notifications';
 
 -- =====================================================
--- 23. MESSAGE
+-- 24. MESSAGE
 -- =====================================================
-CREATE TABLE IF NOT EXISTS message (
+CREATE TABLE message (
     message_id INT AUTO_INCREMENT PRIMARY KEY,
     order_id INT NOT NULL,
     sender_type VARCHAR(20) NOT NULL CHECK (
@@ -695,103 +723,108 @@ CREATE INDEX idx_transaction_account_date ON transaction (
 CREATE INDEX idx_customization_instance_queue ON customization_instance (queue_item_id, ingredient_id);
 
 -- =====================================================
--- TRIGGERS for Data Integrity (ACID Compliance)
+-- TRIGGERS
 -- =====================================================
-
 DELIMITER $$
 
--- [FIX] Lock stock row to prevent concurrent oversell (Isolation)
+-- Validate product/branch consistency + lock stock atomically
 CREATE TRIGGER before_queue_item_insert
 BEFORE INSERT ON queue_item
 FOR EACH ROW
 BEGIN
     DECLARE current_stock INT;
-    
-    SELECT stock INTO current_stock 
-    FROM product 
-    WHERE product_id = NEW.product_id
-    FOR UPDATE;
-    
+    DECLARE product_branch INT;
+
+    SELECT stock, restaurant_branch_id
+      INTO current_stock, product_branch
+      FROM product
+     WHERE product_id = NEW.product_id
+     FOR UPDATE;
+
     IF current_stock IS NULL THEN
-        SIGNAL SQLSTATE '45000' 
-        SET MESSAGE_TEXT = 'Product not found';
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Product not found';
     END IF;
-    
+
+    IF product_branch <> NEW.branch_id THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Product does not belong to specified branch';
+    END IF;
+
     IF NEW.queue_quantity > current_stock THEN
-        SIGNAL SQLSTATE '45000' 
-        SET MESSAGE_TEXT = 'Insufficient stock available';
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Insufficient stock available';
     END IF;
 END$$
 
--- [FIX] Removed redundant IF < 0 check (CHECK constraint + BEFORE trigger already cover it)
+-- Decrement stock after queue item insert
 CREATE TRIGGER after_queue_item_insert
 AFTER INSERT ON queue_item
 FOR EACH ROW
 BEGIN
-    UPDATE product 
-    SET stock = stock - NEW.queue_quantity
-    WHERE product_id = NEW.product_id;
+    UPDATE product
+       SET stock = stock - NEW.queue_quantity
+     WHERE product_id = NEW.product_id;
 END$$
 
--- [FIX] Idempotent stock restore — only on transition from a stock-consuming state
-CREATE TRIGGER after_order_cancelled
+-- Restore stock on cancel OR refund (idempotent on transition)
+CREATE TRIGGER after_order_stock_restore
 AFTER UPDATE ON orders
 FOR EACH ROW
 BEGIN
-    IF NEW.order_status = 'cancelled' 
-       AND OLD.order_status IN ('pending', 'preparing', 'delivering') THEN
+    IF NEW.order_status IN ('cancelled','refunded')
+       AND OLD.order_status IN ('pending','preparing','delivering')
+       AND OLD.order_status <> NEW.order_status
+    THEN
         UPDATE product p
-        JOIN queue_item qi ON p.product_id = qi.product_id
-        SET p.stock = p.stock + qi.queue_quantity
-        WHERE qi.order_id = NEW.order_id;
+          JOIN queue_item qi ON p.product_id = qi.product_id
+           SET p.stock = p.stock + qi.queue_quantity
+         WHERE qi.order_id = NEW.order_id;
     END IF;
 END$$
 
--- Update delivered_at timestamp
+-- Set delivered_at when status becomes delivered
 CREATE TRIGGER before_order_delivered
 BEFORE UPDATE ON orders
 FOR EACH ROW
 BEGIN
-    IF NEW.order_status = 'delivered' AND OLD.order_status != 'delivered' THEN
+    IF NEW.order_status = 'delivered' AND OLD.order_status <> 'delivered' THEN
         SET NEW.delivered_at = CURRENT_TIMESTAMP;
     END IF;
 END$$
 
--- Update rider statistics after delivery (idempotent — only on transition)
+-- Increment rider delivery count on transition to delivered
 CREATE TRIGGER after_order_delivered
 AFTER UPDATE ON orders
 FOR EACH ROW
 BEGIN
-    IF NEW.order_status = 'delivered' 
-       AND OLD.order_status != 'delivered' 
-       AND NEW.delivery_rider_id IS NOT NULL THEN
-        UPDATE delivery_rider_profile 
-        SET total_deliveries = total_deliveries + 1
-        WHERE delivery_rider_id = NEW.delivery_rider_id;
+    IF NEW.order_status = 'delivered'
+       AND OLD.order_status <> 'delivered'
+       AND NEW.delivery_rider_id IS NOT NULL
+    THEN
+        UPDATE delivery_rider_profile
+           SET total_deliveries = total_deliveries + 1
+         WHERE delivery_rider_id = NEW.delivery_rider_id;
     END IF;
 END$$
 
--- [FIX] Lock balance row to prevent concurrent overdraft (Isolation)
+-- Lock balance row before inserting transaction
 CREATE TRIGGER before_transaction_insert
 BEFORE INSERT ON transaction
 FOR EACH ROW
 BEGIN
     DECLARE current_balance DECIMAL(10,2);
-    
-    SELECT balance INTO current_balance 
-    FROM financial_account 
-    WHERE financial_account_id = NEW.financial_account_id
-    FOR UPDATE;
-    
+
+    SELECT balance INTO current_balance
+      FROM financial_account
+     WHERE financial_account_id = NEW.financial_account_id
+     FOR UPDATE;
+
     IF current_balance IS NULL THEN
-        SIGNAL SQLSTATE '45000' 
-        SET MESSAGE_TEXT = 'Financial account not found';
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Financial account not found';
     END IF;
-    
-    IF NEW.transaction_type IN ('payment', 'withdrawal') 
+
+    IF NEW.transaction_type IN ('payment','withdrawal')
        AND NEW.amount > current_balance THEN
-        SIGNAL SQLSTATE '45000' 
-        SET MESSAGE_TEXT = 'Insufficient balance';
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Insufficient balance';
     END IF;
 END$$
 
@@ -801,104 +834,104 @@ AFTER INSERT ON transaction
 FOR EACH ROW
 BEGIN
     IF NEW.status = 'completed' THEN
-        IF NEW.transaction_type IN ('deposit', 'refund') THEN
-            UPDATE financial_account 
-            SET balance = balance + NEW.amount
-            WHERE financial_account_id = NEW.financial_account_id;
-        ELSEIF NEW.transaction_type IN ('payment', 'withdrawal') THEN
-            UPDATE financial_account 
-            SET balance = balance - NEW.amount
-            WHERE financial_account_id = NEW.financial_account_id;
+        IF NEW.transaction_type IN ('deposit','refund') THEN
+            UPDATE financial_account
+               SET balance = balance + NEW.amount
+             WHERE financial_account_id = NEW.financial_account_id;
+        ELSEIF NEW.transaction_type IN ('payment','withdrawal') THEN
+            UPDATE financial_account
+               SET balance = balance - NEW.amount
+             WHERE financial_account_id = NEW.financial_account_id;
         END IF;
     END IF;
 END$$
 
--- [FIX] Keep balance in sync if a pending transaction is later marked completed
+-- Keep balance in sync on status transitions
 CREATE TRIGGER after_transaction_update_status
 AFTER UPDATE ON transaction
 FOR EACH ROW
 BEGIN
-    -- Only fire when status transitions to 'completed'
-    IF NEW.status = 'completed' AND OLD.status != 'completed' THEN
-        IF NEW.transaction_type IN ('deposit', 'refund') THEN
-            UPDATE financial_account 
-            SET balance = balance + NEW.amount
-            WHERE financial_account_id = NEW.financial_account_id;
-        ELSEIF NEW.transaction_type IN ('payment', 'withdrawal') THEN
-            UPDATE financial_account 
-            SET balance = balance - NEW.amount
-            WHERE financial_account_id = NEW.financial_account_id;
+    IF NEW.status = 'completed' AND OLD.status <> 'completed' THEN
+        IF NEW.transaction_type IN ('deposit','refund') THEN
+            UPDATE financial_account
+               SET balance = balance + NEW.amount
+             WHERE financial_account_id = NEW.financial_account_id;
+        ELSEIF NEW.transaction_type IN ('payment','withdrawal') THEN
+            UPDATE financial_account
+               SET balance = balance - NEW.amount
+             WHERE financial_account_id = NEW.financial_account_id;
         END IF;
     END IF;
-    
-    -- Reverse the effect if a completed transaction is reverted to pending/failed
-    IF OLD.status = 'completed' AND NEW.status != 'completed' THEN
-        IF NEW.transaction_type IN ('deposit', 'refund') THEN
-            UPDATE financial_account 
-            SET balance = balance - NEW.amount
-            WHERE financial_account_id = NEW.financial_account_id;
-        ELSEIF NEW.transaction_type IN ('payment', 'withdrawal') THEN
-            UPDATE financial_account 
-            SET balance = balance + NEW.amount
-            WHERE financial_account_id = NEW.financial_account_id;
+
+    IF OLD.status = 'completed' AND NEW.status <> 'completed' THEN
+        IF NEW.transaction_type IN ('deposit','refund') THEN
+            UPDATE financial_account
+               SET balance = balance - NEW.amount
+             WHERE financial_account_id = NEW.financial_account_id;
+        ELSEIF NEW.transaction_type IN ('payment','withdrawal') THEN
+            UPDATE financial_account
+               SET balance = balance + NEW.amount
+             WHERE financial_account_id = NEW.financial_account_id;
         END IF;
     END IF;
 END$$
 
--- Prevent duplicate active orders for same rider
+-- Cap active orders per rider
 CREATE TRIGGER before_order_rider_assign
 BEFORE UPDATE ON orders
 FOR EACH ROW
 BEGIN
     DECLARE active_orders INT;
-    
-    IF NEW.delivery_rider_id IS NOT NULL 
-       AND NEW.order_status IN ('preparing', 'delivering') THEN
+
+    IF NEW.delivery_rider_id IS NOT NULL
+       AND NEW.order_status IN ('preparing','delivering')
+    THEN
         SELECT COUNT(*) INTO active_orders
-        FROM orders
-        WHERE delivery_rider_id = NEW.delivery_rider_id
-        AND order_status IN ('preparing', 'delivering')
-        AND order_id != NEW.order_id;
-        
+          FROM orders
+         WHERE delivery_rider_id = NEW.delivery_rider_id
+           AND order_status IN ('preparing','delivering')
+           AND order_id <> NEW.order_id;
+
         IF active_orders > 2 THEN
-            SIGNAL SQLSTATE '45000' 
+            SIGNAL SQLSTATE '45000'
             SET MESSAGE_TEXT = 'Rider already has too many active orders';
         END IF;
     END IF;
 END$$
 
--- Update final_price when customization instances are added
+-- Recalculate final_price when customization instances are added
 CREATE TRIGGER after_customization_instance_insert
 AFTER INSERT ON customization_instance
 FOR EACH ROW
 BEGIN
     DECLARE total_customization_price DECIMAL(10,2);
-    
-    SELECT COALESCE(SUM(price_at_time * quantity), 0) INTO total_customization_price
-    FROM customization_instance
-    WHERE queue_item_id = NEW.queue_item_id
-    AND is_removed = 0;
-    
+
+    SELECT COALESCE(SUM(price_at_time * quantity), 0)
+      INTO total_customization_price
+      FROM customization_instance
+     WHERE queue_item_id = NEW.queue_item_id
+       AND is_removed = 0;
+
     UPDATE queue_item
-    SET final_price = base_price_snapshot + total_customization_price
-    WHERE queue_item_id = NEW.queue_item_id;
+       SET final_price = base_price_snapshot + total_customization_price
+     WHERE queue_item_id = NEW.queue_item_id;
 END$$
 
--- Validate customization quantity limits
+-- Validate customization quantity against product_composition.max_quantity
 CREATE TRIGGER before_customization_instance_insert
 BEFORE INSERT ON customization_instance
 FOR EACH ROW
 BEGIN
     DECLARE max_qty INT;
-    
-    SELECT pc.max_quantity_per_item INTO max_qty
-    FROM product_composition pc
-    JOIN queue_item qi ON pc.product_id = qi.product_id
-    WHERE qi.queue_item_id = NEW.queue_item_id
-    AND pc.ingredient_id = NEW.ingredient_id;
-    
+
+    SELECT pc.max_quantity INTO max_qty
+      FROM product_composition pc
+      JOIN queue_item qi ON pc.product_id = qi.product_id
+     WHERE qi.queue_item_id = NEW.queue_item_id
+       AND pc.ingredient_id = NEW.ingredient_id;
+
     IF max_qty IS NOT NULL AND NEW.quantity > max_qty THEN
-        SIGNAL SQLSTATE '45000' 
+        SIGNAL SQLSTATE '45000'
         SET MESSAGE_TEXT = 'Quantity exceeds maximum allowed';
     END IF;
 END$$
@@ -906,104 +939,25 @@ END$$
 DELIMITER;
 
 -- =====================================================
--- STORED PROCEDURES for Atomic Operations (TCL)
+-- STORED PROCEDURES
+--
+-- Note: sp_create_order has been removed. Order creation now
+-- lives in the PHP layer (createOrderFromCart in
+-- customer/backend/database/order-queries.php), which is the
+-- single source of truth for the fee schedule (base delivery,
+-- per-branch surcharge, service fee, VAT). The old procedure
+-- enforced single-branch carts and hardcoded a 50.00 fee,
+-- both of which contradict the current pricing model.
 -- =====================================================
-
 DELIMITER $$
 
--- [FIX] sp_create_order: guards empty cart, uses explicit subtotal, locks cart rows
-CREATE PROCEDURE sp_create_order(
-    IN p_customer_id INT,
-    IN p_destination_address VARCHAR(250),
-    IN p_payment_method VARCHAR(20),
-    IN p_special_instructions TEXT,
-    OUT p_order_id INT
-)
-BEGIN
-    DECLARE v_cart_count INT DEFAULT 0;
-    DECLARE v_subtotal DECIMAL(10,2) DEFAULT 0.00;
-    
-    DECLARE EXIT HANDLER FOR SQLEXCEPTION
-    BEGIN
-        ROLLBACK;
-        RESIGNAL;
-    END;
-    
-    START TRANSACTION;
-    
-    -- Lock the cart rows for this customer
-    SELECT COUNT(*) INTO v_cart_count
-    FROM cart
-    WHERE customer_id = p_customer_id
-    FOR UPDATE;
-    
-    IF v_cart_count = 0 THEN
-        SIGNAL SQLSTATE '45000' 
-        SET MESSAGE_TEXT = 'Cannot create order: cart is empty';
-    END IF;
-    
-    SELECT SUM(quantity * price) INTO v_subtotal
-    FROM cart
-    WHERE customer_id = p_customer_id;
-    
-    INSERT INTO orders (
-        customer_id,
-        destination_address,
-        payment_method,
-        subtotal,
-        delivery_charge,
-        special_instructions,
-        order_status
-    ) VALUES (
-        p_customer_id,
-        p_destination_address,
-        p_payment_method,
-        v_subtotal,
-        50.00,
-        p_special_instructions,
-        'pending'
-    );
-    
-    SET p_order_id = LAST_INSERT_ID();
-    
-    INSERT INTO queue_item (
-        order_id,
-        branch_id,
-        product_id,
-        queue_quantity,
-        unit_price,
-        base_price_snapshot,
-        custom_instructions,
-        is_customized,
-        final_price
-    )
-    SELECT 
-        p_order_id,
-        p.restaurant_branch_id,
-        c.product_id,
-        c.quantity,
-        c.price,
-        c.price,
-        JSON_EXTRACT(c.customization_data, '$.instructions'),
-        CASE WHEN JSON_EXTRACT(c.customization_data, '$.customizations') IS NOT NULL 
-             THEN 1 ELSE 0 END,
-        c.price
-    FROM cart c
-    JOIN product p ON c.product_id = p.product_id
-    WHERE c.customer_id = p_customer_id;
-    
-    DELETE FROM cart WHERE customer_id = p_customer_id;
-    
-    COMMIT;
-END$$
-
--- Add customization to existing queue item
+-- Add a customization to an existing queue item
 CREATE PROCEDURE sp_add_customization(
-    IN p_queue_item_id INT,
-    IN p_ingredient_id INT,
-    IN p_quantity INT,
-    IN p_price DECIMAL(8,2),
-    IN p_calories INT,
+    IN  p_queue_item_id INT,
+    IN  p_ingredient_id INT,
+    IN  p_quantity INT,
+    IN  p_price DECIMAL(8,2),
+    IN  p_calories INT,
     OUT p_success BOOLEAN
 )
 BEGIN
@@ -1013,57 +967,49 @@ BEGIN
         SET p_success = FALSE;
         RESIGNAL;
     END;
-    
+
     START TRANSACTION;
-    
+
     INSERT INTO customization_instance (
-        queue_item_id,
-        ingredient_id,
-        quantity,
-        price_at_time,
-        calories_at_time
+        queue_item_id, ingredient_id, quantity, price_at_time, calories_at_time
     ) VALUES (
-        p_queue_item_id,
-        p_ingredient_id,
-        p_quantity,
-        p_price,
-        p_calories
+        p_queue_item_id, p_ingredient_id, p_quantity, p_price, p_calories
     );
-    
+
     UPDATE queue_item
-    SET is_customized = 1
-    WHERE queue_item_id = p_queue_item_id;
-    
+       SET is_customized = 1
+     WHERE queue_item_id = p_queue_item_id;
+
     SET p_success = TRUE;
     COMMIT;
 END$$
 
--- Cancel Order with Transaction Control
+-- Cancel an order (customer/restaurant/rider/admin)
 CREATE PROCEDURE sp_cancel_order(
-    IN p_order_id INT,
-    IN p_cancelled_by VARCHAR(20),
+    IN  p_order_id INT,
+    IN  p_cancelled_by VARCHAR(20),
     OUT p_success BOOLEAN
 )
 BEGIN
     DECLARE v_rows INT DEFAULT 0;
-    
+
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
         ROLLBACK;
         SET p_success = FALSE;
         RESIGNAL;
     END;
-    
+
     START TRANSACTION;
-    
-    UPDATE orders 
-    SET order_status = 'cancelled',
-        cancelled_by = p_cancelled_by
-    WHERE order_id = p_order_id 
-    AND order_status IN ('pending', 'preparing');
-    
+
+    UPDATE orders
+       SET order_status = 'cancelled',
+           cancelled_by = p_cancelled_by
+     WHERE order_id = p_order_id
+       AND order_status IN ('pending','preparing');
+
     SET v_rows = ROW_COUNT();
-    
+
     IF v_rows = 0 THEN
         ROLLBACK;
         SET p_success = FALSE;
@@ -1073,153 +1019,143 @@ BEGIN
     END IF;
 END$$
 
--- [FIX] sp_process_refund: idempotent, validates order state
+-- Refund order (idempotent, validates state)
 CREATE PROCEDURE sp_process_refund(
-    IN p_order_id INT,
-    IN p_amount DECIMAL(10,2),
-    IN p_description VARCHAR(255),
+    IN  p_order_id INT,
+    IN  p_amount DECIMAL(10,2),
+    IN  p_description VARCHAR(255),
     OUT p_transaction_id INT
 )
 BEGIN
     DECLARE v_financial_account_id INT;
     DECLARE v_order_status VARCHAR(20);
     DECLARE v_existing_refund INT DEFAULT 0;
-    
+
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
         ROLLBACK;
         RESIGNAL;
     END;
-    
+
     START TRANSACTION;
-    
-    -- Lock the order row
+
     SELECT order_status INTO v_order_status
-    FROM orders
-    WHERE order_id = p_order_id
-    FOR UPDATE;
-    
+      FROM orders
+     WHERE order_id = p_order_id
+     FOR UPDATE;
+
     IF v_order_status IS NULL THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Order not found';
     END IF;
-    
-    IF v_order_status NOT IN ('cancelled', 'delivered') THEN
-        SIGNAL SQLSTATE '45000' 
+
+    IF v_order_status NOT IN ('cancelled','delivered') THEN
+        SIGNAL SQLSTATE '45000'
         SET MESSAGE_TEXT = 'Order must be cancelled or delivered to refund';
     END IF;
-    
-    -- Idempotency check: reject duplicate refund
+
     SELECT COUNT(*) INTO v_existing_refund
-    FROM transaction
-    WHERE order_id = p_order_id
-      AND transaction_type = 'refund'
-      AND status = 'completed';
-    
+      FROM transaction
+     WHERE order_id = p_order_id
+       AND transaction_type = 'refund'
+       AND status = 'completed';
+
     IF v_existing_refund > 0 THEN
-        SIGNAL SQLSTATE '45000' 
-        SET MESSAGE_TEXT = 'Order already refunded';
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Order already refunded';
     END IF;
-    
+
     SELECT cp.financial_account_id INTO v_financial_account_id
-    FROM orders o
-    JOIN customer c ON o.customer_id = c.customer_id
-    JOIN customer_profile cp ON c.customer_id = cp.customer_id
-    WHERE o.order_id = p_order_id;
-    
+      FROM orders o
+      JOIN customer c ON o.customer_id = c.customer_id
+      JOIN customer_profile cp ON c.customer_id = cp.customer_id
+     WHERE o.order_id = p_order_id;
+
     INSERT INTO transaction (
-        financial_account_id,
-        order_id,
-        amount,
-        transaction_type,
-        status,
-        description
+        financial_account_id, order_id, amount,
+        transaction_type, status, description
     ) VALUES (
-        v_financial_account_id,
-        p_order_id,
-        p_amount,
-        'refund',
-        'completed',
-        p_description
+        v_financial_account_id, p_order_id, p_amount,
+        'refund', 'completed', p_description
     );
-    
+
     SET p_transaction_id = LAST_INSERT_ID();
-    
-    UPDATE orders 
-    SET order_status = 'refunded'
-    WHERE order_id = p_order_id;
-    
+
+    UPDATE orders SET order_status = 'refunded' WHERE order_id = p_order_id;
+
     COMMIT;
 END$$
 
--- [FIX] sp_process_payment: idempotent, skips if already paid
+-- Process payment (idempotent; records pending for COD/Online)
 CREATE PROCEDURE sp_process_payment(
-    IN p_order_id INT,
-    IN p_amount DECIMAL(10,2),
-    IN p_payment_method VARCHAR(20),
+    IN  p_order_id INT,
+    IN  p_amount DECIMAL(10,2),
+    IN  p_payment_method VARCHAR(20),
     OUT p_transaction_id INT
 )
 BEGIN
     DECLARE v_financial_account_id INT;
     DECLARE v_existing_payment INT DEFAULT 0;
-    
+    DECLARE v_lock INT;
+
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
         ROLLBACK;
         RESIGNAL;
     END;
-    
+
+    SET p_transaction_id = NULL;
+
     START TRANSACTION;
-    
-    -- Lock the order
-    SELECT 1 INTO @dummy FROM orders WHERE order_id = p_order_id FOR UPDATE;
-    
-    -- Idempotency: reject duplicate payment
-    SELECT COUNT(*) INTO v_existing_payment
-    FROM transaction
-    WHERE order_id = p_order_id
-      AND transaction_type = 'payment'
-      AND status = 'completed';
-    
-    IF v_existing_payment > 0 THEN
-        SIGNAL SQLSTATE '45000' 
-        SET MESSAGE_TEXT = 'Order already paid';
+
+    SELECT 1 INTO v_lock FROM orders WHERE order_id = p_order_id FOR UPDATE;
+    IF v_lock IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Order not found';
     END IF;
-    
+
+    SELECT COUNT(*) INTO v_existing_payment
+      FROM transaction
+     WHERE order_id = p_order_id
+       AND transaction_type = 'payment'
+       AND status = 'completed';
+
+    IF v_existing_payment > 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Order already paid';
+    END IF;
+
     SELECT cp.financial_account_id INTO v_financial_account_id
-    FROM orders o
-    JOIN customer c ON o.customer_id = c.customer_id
-    JOIN customer_profile cp ON c.customer_id = cp.customer_id
-    WHERE o.order_id = p_order_id;
-    
+      FROM orders o
+      JOIN customer c ON o.customer_id = c.customer_id
+      JOIN customer_profile cp ON c.customer_id = cp.customer_id
+     WHERE o.order_id = p_order_id;
+
     IF p_payment_method = 'Wallet' THEN
         INSERT INTO transaction (
-            financial_account_id,
-            order_id,
-            amount,
-            transaction_type,
-            status,
-            description
+            financial_account_id, order_id, amount,
+            transaction_type, status, description
         ) VALUES (
-            v_financial_account_id,
-            p_order_id,
-            p_amount,
-            'payment',
-            'completed',
+            v_financial_account_id, p_order_id, p_amount,
+            'payment', 'completed',
             CONCAT('Payment for order #', p_order_id)
         );
-        
+        SET p_transaction_id = LAST_INSERT_ID();
+    ELSE
+        INSERT INTO transaction (
+            financial_account_id, order_id, amount,
+            transaction_type, status, description
+        ) VALUES (
+            v_financial_account_id, p_order_id, p_amount,
+            'payment', 'pending',
+            CONCAT('Pending ', p_payment_method, ' payment for order #', p_order_id)
+        );
         SET p_transaction_id = LAST_INSERT_ID();
     END IF;
-    
+
     COMMIT;
 END$$
 
 -- Get product customization options
-CREATE PROCEDURE sp_get_product_customizations(
-    IN p_product_id INT
-)
+CREATE PROCEDURE sp_get_product_customizations(IN p_product_id INT)
 BEGIN
-    SELECT 
+    SELECT
         i.ingredient_id,
         i.name AS ingredient_name,
         i.unit_price,
@@ -1228,25 +1164,22 @@ BEGIN
         i.allergens,
         pc.is_default,
         pc.default_quantity,
+        pc.min_quantity,
         pc.max_quantity,
         pc.price_modifier,
         pc.display_order,
-        pc.is_required,
-        pc.min_quantity,
-        pc.max_quantity_per_item
+        pc.is_required
     FROM ingredient i
     JOIN product_composition pc ON i.ingredient_id = pc.ingredient_id
     WHERE pc.product_id = p_product_id
-    AND i.is_active = 1
+      AND i.is_active = 1
     ORDER BY pc.display_order ASC, i.name ASC;
 END$$
 
 -- Get order item customizations
-CREATE PROCEDURE sp_get_order_customizations(
-    IN p_queue_item_id INT
-)
+CREATE PROCEDURE sp_get_order_customizations(IN p_queue_item_id INT)
 BEGIN
-    SELECT 
+    SELECT
         ci.instance_id,
         ci.ingredient_id,
         i.name AS ingredient_name,
@@ -1266,6 +1199,11 @@ DELIMITER;
 
 -- =====================================================
 -- VIEWS
+--
+-- Totals policy: orders no longer store subtotal, delivery_charge,
+-- or total_amount. Views that need totals compute them from
+-- queue_item via a derived subquery. Delivery/service/VAT fees are
+-- applied at the application layer via calculateOrderFees().
 -- =====================================================
 
 CREATE OR REPLACE VIEW customer_order_details AS
@@ -1280,12 +1218,11 @@ SELECT
     o.destination_address,
     o.order_status,
     o.payment_method,
-    o.subtotal,
-    o.delivery_charge,
-    o.total_amount,
-    o.special_instructions,
+    o.cancelled_by,
     o.order_date,
     o.delivered_at,
+    COALESCE(it.subtotal, 0) AS subtotal,
+    COALESCE(it.subtotal, 0) AS total_amount,
     qi.queue_item_id,
     qi.queue_quantity,
     qi.unit_price,
@@ -1304,7 +1241,15 @@ FROM
     LEFT JOIN queue_item qi ON o.order_id = qi.order_id
     LEFT JOIN product p ON qi.product_id = p.product_id
     LEFT JOIN restaurant_branch rb ON qi.branch_id = rb.restaurant_branch_id
-    LEFT JOIN restaurant r ON rb.restaurant_id = r.restaurant_id;
+    LEFT JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
+    LEFT JOIN (
+        SELECT order_id, SUM(
+                queue_quantity * COALESCE(final_price, unit_price)
+            ) AS subtotal
+        FROM queue_item
+        GROUP BY
+            order_id
+    ) it ON it.order_id = o.order_id;
 
 CREATE OR REPLACE VIEW kitchen_queue_view AS
 SELECT
@@ -1323,7 +1268,6 @@ SELECT
     qi.custom_instructions,
     di.allergens,
     di.dietary_tags,
-    o.special_instructions AS order_notes,
     o.order_status,
     GROUP_CONCAT(
         CONCAT(
@@ -1357,23 +1301,34 @@ SELECT
     rb.restaurant_branch_id,
     rb.branch_name,
     COUNT(DISTINCT o.order_id) AS total_orders,
-    COALESCE(SUM(o.total_amount), 0) AS total_revenue,
-    COALESCE(AVG(o.total_amount), 0) AS average_order_value,
+    COALESCE(SUM(it.subtotal), 0) AS total_revenue,
+    COALESCE(AVG(it.subtotal), 0) AS average_order_value,
     COUNT(DISTINCT o.customer_id) AS unique_customers,
     COALESCE(AVG(f.rating), 0) AS average_rating,
     COUNT(f.feedback_id) AS total_reviews,
-    AVG(
-        CASE
-            WHEN qi.is_customized = 1 THEN 1
-            ELSE 0
-        END
-    ) * 100 AS customization_rate
+    COALESCE(
+        AVG(
+            CASE
+                WHEN qi.is_customized = 1 THEN 1
+                ELSE 0
+            END
+        ) * 100,
+        0
+    ) AS customization_rate
 FROM
     restaurant r
     JOIN restaurant_branch rb ON r.restaurant_id = rb.restaurant_id
     LEFT JOIN queue_item qi ON rb.restaurant_branch_id = qi.branch_id
     LEFT JOIN orders o ON qi.order_id = o.order_id
     AND o.order_status = 'delivered'
+    LEFT JOIN (
+        SELECT order_id, SUM(
+                queue_quantity * COALESCE(final_price, unit_price)
+            ) AS subtotal
+        FROM queue_item
+        GROUP BY
+            order_id
+    ) it ON it.order_id = o.order_id
     LEFT JOIN feedback f ON o.order_id = f.order_id
 GROUP BY
     r.restaurant_id,
@@ -1389,12 +1344,15 @@ SELECT
     COUNT(DISTINCT o.order_id) AS total_orders,
     COALESCE(AVG(f.rating), 0) AS average_rating,
     GROUP_CONCAT(DISTINCT di.dietary_tags) AS ordered_dietary_tags,
-    AVG(
-        CASE
-            WHEN qi.is_customized = 1 THEN 1
-            ELSE 0
-        END
-    ) * 100 AS customization_frequency
+    COALESCE(
+        AVG(
+            CASE
+                WHEN qi.is_customized = 1 THEN 1
+                ELSE 0
+            END
+        ) * 100,
+        0
+    ) AS customization_frequency
 FROM
     customer c
     JOIN customer_profile cp ON c.customer_id = cp.customer_id

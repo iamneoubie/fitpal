@@ -1,15 +1,11 @@
 <?php
 /**
  * FitPal Customer Checkout Page
- * Version 3.7
- *
- * v3.7 — No longer redirects to profile.php when the user has no
- *         address. Instead, renders an inline "add address" state
- *         on the checkout page itself. The Place Order button is
- *         disabled until an address is selected.
+ * Version 4.3 — Tiered delivery fee (base + per-branch surcharge),
+ *                flat service fee, multi-branch carts supported.
  *
  * @package FitPal
- * @version 3.7
+ * @version 4.3
  */
 
 declare(strict_types=1);
@@ -18,9 +14,6 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// ===== ALL REDIRECTS MUST HAPPEN BEFORE INCLUDING HEADER =====
-
-// Redirect if not logged in
 if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     header('Location: sign-in.php');
     exit;
@@ -29,10 +22,54 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
 require_once __DIR__ . '/../backend/database/customer-connect.php';
 require_once __DIR__ . '/../backend/database/cart-queries.php';
 require_once __DIR__ . '/../backend/database/customer-queries.php';
+require_once __DIR__ . '/../backend/database/address-queries.php';
+require_once __DIR__ . '/../backend/database/fee-queries.php';
 
 $customerId = (int)$_SESSION['customer_id'];
 
-// Fetch cart items
+// ---- Re-sync: if the session queue has items, mirror them into the cart.
+if (!empty($_SESSION['order_queue']) && is_array($_SESSION['order_queue'])) {
+    try {
+        $database_connection->beginTransaction();
+
+        clearCart($database_connection, $customerId);
+
+        foreach ($_SESSION['order_queue'] as $qItem) {
+            if (!is_array($qItem)) continue;
+
+            $pid = (int)($qItem['product_id'] ?? 0);
+            $qty = (int)($qItem['quantity'] ?? 0);
+            if ($pid <= 0 || $qty <= 0) continue;
+
+            $unitPrice = (float)($qItem['price'] ?? 0);
+
+            $custJson = null;
+            if (isset($qItem['customization_data'])) {
+                $custJson = is_string($qItem['customization_data'])
+                    ? $qItem['customization_data']
+                    : json_encode($qItem['customization_data']);
+            }
+
+            insertCartItem(
+                $database_connection,
+                $customerId,
+                $pid,
+                $qty,
+                $unitPrice,
+                $custJson
+            );
+        }
+
+        $database_connection->commit();
+
+    } catch (Throwable $e) {
+        if ($database_connection->inTransaction()) {
+            $database_connection->rollBack();
+        }
+        error_log('Checkout queue re-sync failed: ' . $e->getMessage());
+    }
+}
+
 $cartItems = getCustomerCart($database_connection, $customerId);
 
 if (empty($cartItems)) {
@@ -41,103 +78,95 @@ if (empty($cartItems)) {
     exit;
 }
 
-// Calculate totals
-$subtotal = 0;
-$branchId = null;
-$branchName = '';
+// ---------------------------------------------------------------
+// Cart aggregation + fee calculation
+//
+// Delivery fee:
+//   Base 50.00 for the first branch.
+//   +30.00 for each additional distinct branch.
+//
+// Service fee:
+//   Flat 5.00 per order.
+//
+// Examples:
+//   1 product                        -> 50.00 + 5.00
+//   2 products, same branch          -> 50.00 + 5.00
+//   2 products, different branches   -> 80.00 + 5.00
+//   3 products, 2 same + 1 other     -> 80.00 + 5.00
+//   3 products, all different        -> 110.00 + 5.00
+// ---------------------------------------------------------------
+$subtotal       = 0.0;
+$branchIds      = [];
+$branchName     = '';
 $restaurantName = '';
-$branchConsistent = true;
 
 foreach ($cartItems as $item) {
     $subtotal += (float)$item['price'] * (int)$item['quantity'];
-    if ($branchId === null) {
-        $branchId = (int)$item['restaurant_branch_id'];
-        $branchName = $item['branch_name'];
+
+    $itemBranchId = (int)$item['restaurant_branch_id'];
+    if (!in_array($itemBranchId, $branchIds, true)) {
+        $branchIds[] = $itemBranchId;
+    }
+
+    if ($branchName === '') {
+        $branchName     = $item['branch_name'];
         $restaurantName = $item['restaurant_name'];
-    } elseif ($branchId !== (int)$item['restaurant_branch_id']) {
-        $branchConsistent = false;
     }
 }
 
-if (!$branchConsistent) {
-    $_SESSION['checkout_error'] = 'All items must be from the same restaurant branch.';
-    header('Location: menu.php');
-    exit;
-}
+$fees          = calculateOrderFees(count($branchIds), $subtotal);
+$deliveryFee   = $fees['delivery_fee'];
+$serviceFee    = $fees['service_fee'];
+$vatAmount     = $fees['vat'];
+$vatRate       = $fees['vat_rate'];
+$extraBranches = $fees['extra_branches'];
+$branchCount   = $fees['branch_count'];
+$total         = $subtotal + $deliveryFee + $serviceFee + $vatAmount;
 
-$deliveryFee = $subtotal > 500 ? 0 : 50.00;
-$total = $subtotal + $deliveryFee;
+// ---- Addresses ----
+$addresses        = getCustomerAddresses($database_connection, $customerId);
+$defaultAddressId = getCustomerDefaultAddressId($database_connection, $customerId);
+$hasAddress       = !empty($addresses);
 
-// ===== FETCH ALL ADDRESSES =====
-$addresses = [];
-$defaultAddressId = null;
-$hasAddress = false;
+// ---- User details ----
+$userDetails = getCustomerContactInfo($database_connection, $customerId) ?: [];
 
+// ---- Wallet balance ----
+$walletBalance = 0.0;
 try {
-    $stmt = $database_connection->prepare(
-        "SELECT customer_address_id FROM customer WHERE customer_id = :customer_id"
+    $walletStmt = $database_connection->prepare(
+        "SELECT fa.balance
+           FROM customer_profile cp
+           JOIN financial_account fa ON cp.financial_account_id = fa.financial_account_id
+          WHERE cp.customer_id = :customer_id
+          LIMIT 1"
     );
-    $stmt->execute([':customer_id' => $customerId]);
-    $defaultAddressId = (int)($stmt->fetchColumn() ?? 0);
-
-    $stmt = $database_connection->prepare(
-        "SELECT 
-            ca.customer_address_id, 
-            ca.label, 
-            ca.block, 
-            ca.barangay, 
-            ca.city, 
-            ca.province, 
-            ca.region, 
-            ca.postal_code, 
-            ca.country,
-            CASE 
-                WHEN ca.customer_address_id = :default_id THEN 1 
-                ELSE 0 
-            END AS is_default
-        FROM customer_address ca
-        ORDER BY is_default DESC, ca.customer_address_id"
-    );
-    $stmt->execute([
-        ':default_id' => $defaultAddressId
-    ]);
-    $addresses = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $walletStmt->execute([':customer_id' => $customerId]);
+    $walletRow = $walletStmt->fetch(PDO::FETCH_ASSOC);
+    if ($walletRow) {
+        $walletBalance = (float)$walletRow['balance'];
+    }
 } catch (PDOException $e) {
-    error_log('Checkout address fetch error: ' . $e->getMessage());
+    error_log('Checkout wallet balance error: ' . $e->getMessage());
 }
 
-$hasAddress = !empty($addresses);
-
-// ===== FETCH USER DETAILS =====
-$userDetails = [];
-try {
-    $stmt = $database_connection->prepare(
-        "SELECT first_name, last_name, email, contact_number FROM customer WHERE customer_id = :customer_id"
-    );
-    $stmt->execute([':customer_id' => $customerId]);
-    $userDetails = $stmt->fetch(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    error_log('Checkout user fetch error: ' . $e->getMessage());
-}
-
-// CSRF token
+// ---- CSRF ----
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 $csrfToken = $_SESSION['csrf_token'];
 
-// ===== NOW INCLUDE HEADER =====
 require_once __DIR__ . '/../includes/header.php';
 
 function formatAddress(array $addr): string {
     $parts = [];
-    if (!empty($addr['block'])) $parts[] = $addr['block'];
-    if (!empty($addr['barangay'])) $parts[] = $addr['barangay'];
-    if (!empty($addr['city'])) $parts[] = $addr['city'];
-    if (!empty($addr['province'])) $parts[] = $addr['province'];
-    if (!empty($addr['region'])) $parts[] = $addr['region'];
+    if (!empty($addr['block']))       $parts[] = $addr['block'];
+    if (!empty($addr['barangay']))    $parts[] = $addr['barangay'];
+    if (!empty($addr['city']))        $parts[] = $addr['city'];
+    if (!empty($addr['province']))    $parts[] = $addr['province'];
+    if (!empty($addr['region']))      $parts[] = $addr['region'];
     if (!empty($addr['postal_code'])) $parts[] = $addr['postal_code'];
-    if (!empty($addr['country'])) $parts[] = $addr['country'];
+    if (!empty($addr['country']))     $parts[] = $addr['country'];
     return implode(', ', $parts);
 }
 
@@ -145,14 +174,36 @@ function getAddressLabel(array $addr): string {
     return !empty($addr['label']) ? $addr['label'] : 'Address';
 }
 
-$selectedAddr = $hasAddress ? $addresses[0] : null;
-$selectedAddrId = $selectedAddr ? (int)$selectedAddr['customer_address_id'] : 0;
+$selectedAddr = null;
+
+if ($hasAddress) {
+    $sessionAddressId = isset($_SESSION['checkout_address_id'])
+        ? (int)$_SESSION['checkout_address_id']
+        : 0;
+
+    if ($sessionAddressId > 0) {
+        foreach ($addresses as $addr) {
+            if ((int)$addr['customer_address_id'] === $sessionAddressId) {
+                $selectedAddr = $addr;
+                break;
+            }
+        }
+    }
+
+    if ($selectedAddr === null) {
+        $selectedAddr = $addresses[0];
+        $_SESSION['checkout_address_id'] = (int)$selectedAddr['customer_address_id'];
+    }
+}
+
+$selectedAddrId      = $selectedAddr ? (int)$selectedAddr['customer_address_id'] : 0;
 $selectedAddressText = $selectedAddr ? formatAddress($selectedAddr) : '';
 
-$userName = trim(($userDetails['first_name'] ?? '') . ' ' . ($userDetails['last_name'] ?? ''));
-$userEmail = $userDetails['email'] ?? 'Not provided';
+$userName    = trim(($userDetails['first_name'] ?? '') . ' ' . ($userDetails['last_name'] ?? ''));
+$userEmail   = $userDetails['email'] ?? 'Not provided';
 $userContact = $userDetails['contact_number'] ?? 'Not provided';
 ?>
+
 <link rel="stylesheet" href="../assets/css/checkout.css">
 
 <div class="content checkout-page">
@@ -173,12 +224,8 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
         </div>
         <?php endif; ?>
 
-        <!-- ============================================ -->
-        <!-- 2x2 GRID: Personal Details + Delivery Address | Order Summary + Payment -->
-        <!-- ============================================ -->
         <div class="checkout-grid">
 
-            <!-- TOP ROW: Personal Details + Delivery Address -->
             <div class="checkout-row checkout-row-top">
 
                 <!-- Personal Details -->
@@ -243,9 +290,9 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
                             </div>
                             <p class="address-empty-title">No delivery address yet</p>
                             <p class="address-empty-text">
-                                Add a delivery address to place your order.
+                                Add a delivery address so we know where to send your order.
                             </p>
-                            <a href="profile.php#addresses" class="btn btn-primary btn-sm">
+                            <a href="profile.php?from=checkout#add-address" class="btn btn-primary btn-sm">
                                 Add Address
                             </a>
                         </div>
@@ -257,7 +304,6 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
 
             </div>
 
-            <!-- BOTTOM ROW: Order Summary + Payment Method -->
             <div class="checkout-row checkout-row-bottom">
 
                 <!-- Order Summary -->
@@ -280,7 +326,7 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
                                         <?php echo htmlspecialchars($item['product_name'], ENT_QUOTES, 'UTF-8'); ?>
                                     </p>
                                     <p class="order-item-restaurant">
-                                        <?php echo htmlspecialchars($restaurantName, ENT_QUOTES, 'UTF-8'); ?>
+                                        <?php echo htmlspecialchars($item['restaurant_name'] ?? $restaurantName, ENT_QUOTES, 'UTF-8'); ?>
                                     </p>
                                     <p class="order-item-meta">Qty: <?php echo (int)$item['quantity']; ?></p>
                                     <?php if (!empty($item['customizations'])): ?>
@@ -308,8 +354,25 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
                                 <span>₱<?php echo number_format($subtotal, 2); ?></span>
                             </div>
                             <div class="totals-row">
-                                <span>Delivery Fee</span>
-                                <span><?php echo $deliveryFee > 0 ? '₱' . number_format($deliveryFee, 2) : 'Free'; ?></span>
+                                <span>
+                                    Delivery Fee
+                                    <?php if ($extraBranches > 0): ?>
+                                    <small class="totals-row-note">(<?php echo $branchCount; ?> branches)</small>
+                                    <?php endif; ?>
+                                </span>
+                                <span>₱<?php echo number_format($deliveryFee, 2); ?></span>
+                            </div>
+                            <div class="totals-row">
+                                <span>Service Fee</span>
+                                <span>₱<?php echo number_format($serviceFee, 2); ?></span>
+                            </div>
+                            <div class="totals-row">
+                                <span>
+                                    VAT
+                                    <small
+                                        class="totals-row-note">(<?php echo number_format($vatRate * 100, 0); ?>%)</small>
+                                </span>
+                                <span>₱<?php echo number_format($vatAmount, 2); ?></span>
                             </div>
                             <div class="totals-row total">
                                 <span>Total</span>
@@ -348,7 +411,9 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
                                     </span>
                                     <span class="payment-details">
                                         <span class="payment-label">Wallet</span>
-                                        <span class="payment-description">Pay using your FitPal wallet balance</span>
+                                        <span class="payment-description">
+                                            Balance: ₱<?php echo number_format($walletBalance, 2); ?>
+                                        </span>
                                     </span>
                                 </label>
                             </div>
@@ -360,19 +425,19 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
                                     </span>
                                     <span class="payment-details">
                                         <span class="payment-label">Online Payment</span>
-                                        <span class="payment-description">Pay via GCash or Maya (simulated)</span>
+                                        <span class="payment-description">Pay via GCash or Maya</span>
                                     </span>
                                 </label>
                             </div>
                         </div>
+                    </div>
 
-                        <div class="checkout-actions">
-                            <a href="menu.php" class="btn btn-secondary">Back to Menu</a>
-                            <button type="button" id="placeOrderBtn" class="btn btn-primary"
-                                <?php echo !$hasAddress ? 'disabled' : ''; ?>>
-                                <?php echo $hasAddress ? 'Place Order' : 'Add Address to Continue'; ?>
-                            </button>
-                        </div>
+                    <div class="checkout-actions">
+                        <a href="menu.php" class="btn btn-secondary">Back to Menu</a>
+                        <button type="button" id="placeOrderBtn" class="btn btn-primary"
+                            data-has-address="<?php echo $hasAddress ? '1' : '0'; ?>">
+                            <?php echo $hasAddress ? 'Place Order' : 'Add Address to Continue'; ?>
+                        </button>
                     </div>
                 </div>
 
@@ -382,7 +447,7 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
 </div>
 
 <!-- ============================================ -->
-<!-- ADDRESS MODAL (only rendered when user has addresses) -->
+<!-- ADDRESS MODAL -->
 <!-- ============================================ -->
 <?php if ($hasAddress): ?>
 <div id="addressModal" class="modal" style="display:none;">
@@ -394,11 +459,12 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
         </div>
 
         <div class="modal-body">
-            <p class="modal-subtitle">Choose an address for delivery. <a href="profile.php#addresses">Manage
-                    addresses</a></p>
+            <p class="modal-subtitle">Choose an address for delivery.
+                <a href="profile.php?from=checkout#addresses">Manage addresses</a>
+            </p>
 
             <div class="address-list" id="addressList">
-                <?php foreach ($addresses as $addr): 
+                <?php foreach ($addresses as $addr):
                     $isDefault = (int)($addr['is_default'] ?? 0) === 1;
                     $addrId = (int)$addr['customer_address_id'];
                 ?>
@@ -428,7 +494,7 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
 
         <div class="modal-footer">
             <button type="button" class="btn btn-secondary" id="cancelAddressModal">Cancel</button>
-            <a href="profile.php#addresses" class="btn btn-primary" id="addAddressModalBtn">
+            <a href="profile.php?from=checkout#add-address" class="btn btn-primary" id="addAddressModalBtn">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="12" y1="5" x2="12" y2="19" />
                     <line x1="5" y1="12" x2="19" y2="12" />
@@ -440,6 +506,92 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
 </div>
 <?php endif; ?>
 
+<!-- ============================================ -->
+<!-- ONLINE PAYMENT QR MODAL -->
+<!-- ============================================ -->
+<div id="qrPaymentModal" class="modal" style="display:none;">
+    <div class="modal-overlay"></div>
+    <div class="modal-content qr-modal-content">
+        <div class="modal-header">
+            <p class="heading-5 modal-title">Online Payment</p>
+            <button type="button" class="modal-close" id="closeQrModal">&times;</button>
+        </div>
+
+        <div class="modal-body">
+            <div class="qr-modal-body">
+                <div class="qr-amount-block">
+                    <span class="qr-amount-label">Amount to Pay</span>
+                    <p class="qr-amount">₱<?php echo number_format($total, 2); ?></p>
+                </div>
+
+                <div class="qr-image-wrapper">
+                    <img src="<?php echo $assetBase; ?>assets/images/payment/QR.jpg" alt="Scan to pay QR code"
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
+                </div>
+
+                <p class="qr-note">
+                    <strong>Simulation Notice:</strong> This QR code is for demonstration purposes only.
+                    No real payment will be processed. Click <em>I've Paid</em> to simulate a successful
+                    transaction.
+                </p>
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" id="cancelQrModal">Cancel</button>
+            <button type="button" class="btn btn-primary" id="confirmQrPayment">I've Paid</button>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================ -->
+<!-- WALLET INSUFFICIENT MODAL -->
+<!-- ============================================ -->
+<div id="walletInsufficientModal" class="modal" style="display:none;">
+    <div class="modal-overlay"></div>
+    <div class="modal-content wallet-modal-content">
+        <div class="modal-header">
+            <p class="heading-5 modal-title">Insufficient Wallet Balance</p>
+            <button type="button" class="modal-close" id="closeWalletModal">&times;</button>
+        </div>
+
+        <div class="modal-body">
+            <div class="wallet-modal-body">
+                <div class="wallet-modal-icon">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/funds-circle-analytic-fill.svg" alt="Wallet"
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
+                </div>
+
+                <p class="wallet-modal-title">Not enough funds</p>
+                <p class="wallet-modal-text">
+                    Your FitPal wallet balance is lower than the order total. Please top up your
+                    wallet to continue, or choose a different payment method.
+                </p>
+
+                <div class="wallet-balance-card">
+                    <div class="wallet-balance-row available">
+                        <span class="label">Current Balance</span>
+                        <span class="value">₱<?php echo number_format($walletBalance, 2); ?></span>
+                    </div>
+                    <div class="wallet-balance-row">
+                        <span class="label">Order Total</span>
+                        <span class="value">₱<?php echo number_format($total, 2); ?></span>
+                    </div>
+                    <div class="wallet-balance-row shortfall">
+                        <span class="label">Shortfall</span>
+                        <span class="value">−₱<?php echo number_format(max(0, $total - $walletBalance), 2); ?></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" id="cancelWalletModal">Cancel</button>
+            <a href="wallet.php" class="btn btn-primary" id="proceedWalletRecharge">Recharge Wallet</a>
+        </div>
+    </div>
+</div>
+
 <!-- Hidden form for submitting order -->
 <form id="checkoutForm" method="POST" action="../backend/handlers/place-order-handler.php" style="display:none;">
     <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
@@ -447,8 +599,23 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
     <input type="hidden" name="payment_method" id="hiddenPaymentMethod" value="COD">
     <input type="hidden" name="subtotal" value="<?php echo $subtotal; ?>">
     <input type="hidden" name="delivery_fee" value="<?php echo $deliveryFee; ?>">
+    <input type="hidden" name="service_fee" value="<?php echo $serviceFee; ?>">
+    <input type="hidden" name="vat_amount" value="<?php echo $vatAmount; ?>">
     <input type="hidden" name="total" value="<?php echo $total; ?>">
 </form>
 
+<script>
+window.FITPAL_CHECKOUT = {
+    total: <?php echo json_encode((float)$total); ?>,
+    subtotal: <?php echo json_encode((float)$subtotal); ?>,
+    deliveryFee: <?php echo json_encode((float)$deliveryFee); ?>,
+    serviceFee: <?php echo json_encode((float)$serviceFee); ?>,
+    vatAmount: <?php echo json_encode((float)$vatAmount); ?>,
+    vatRate: <?php echo json_encode((float)$vatRate); ?>,
+    walletBalance: <?php echo json_encode((float)$walletBalance); ?>,
+    hasAddress: <?php echo $hasAddress ? 'true' : 'false'; ?>,
+    csrfToken: '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>'
+};
+</script>
 <script src="../assets/ui/js/checkout.js" defer></script>
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>

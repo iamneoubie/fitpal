@@ -441,35 +441,38 @@ $handlerPath = $customerPath . '/backend/handlers/sign-in-handler.php';
 if (file_exists($handlerPath)) {
     $handlerContent = file_get_contents($handlerPath);
     testResult('Handler Readable', true, 'File loaded', 'Handler');
-    
+
     $hasSessionStart = strpos($handlerContent, 'session_start') !== false;
     testResult('session_start()', $hasSessionStart, $hasSessionStart ? 'Found' : 'Missing', 'Handler');
-    
+
     $hasDatabase = strpos($handlerContent, 'database-connect.php') !== false;
     testResult('Database Include', $hasDatabase, $hasDatabase ? 'Found' : 'Missing', 'Handler');
-    
+
     $hasCsrfValidation = strpos($handlerContent, 'csrf_token') !== false;
     testResult('CSRF Validation', $hasCsrfValidation, $hasCsrfValidation ? 'Found' : 'Missing', 'Handler');
-    
+
     $hasPasswordVerify = strpos($handlerContent, 'password_verify') !== false;
     testResult('password_verify()', $hasPasswordVerify, $hasPasswordVerify ? 'Found' : 'Missing', 'Handler');
-    
+
     $hasSessionRegenerate = strpos($handlerContent, 'session_regenerate_id') !== false;
     testResult('Session Regenerate', $hasSessionRegenerate, $hasSessionRegenerate ? 'Found' : 'Missing', 'Handler');
-    
-    $hasSessionSet = strpos($handlerContent, 'customer_id') !== false && strpos($handlerContent, '$_SESSION') !== false;
+
+    $hasSessionSet = strpos($handlerContent, 'customer_id') !== false
+        && strpos($handlerContent, '$_SESSION') !== false;
     testResult('Session Variables Set', $hasSessionSet, $hasSessionSet ? 'Found' : 'Missing', 'Handler');
-    
+
     $redirectCorrect = strpos($handlerContent, '../../pages/dashboard.php') !== false;
     testResult('Redirect to Dashboard', $redirectCorrect, $redirectCorrect ? 'Correct path' : 'Check redirect path', 'Handler');
-    
+
     $errorRedirectCorrect = strpos($handlerContent, '../../pages/sign-in.php') !== false;
     testResult('Error Redirect to Sign-In', $errorRedirectCorrect, $errorRedirectCorrect ? 'Correct path' : 'Check error redirect path', 'Handler');
-    
+
     $hasActiveCheck = strpos($handlerContent, 'is_active') !== false;
     testResult('Account Active Check', $hasActiveCheck, $hasActiveCheck ? 'Found' : 'Missing', 'Handler');
-    
-    $hasDevBypass = strpos($handlerContent, 'APP_ENV') !== false || strpos($handlerContent, 'development') !== false;
+
+    // Development bypass — handler accepts a stored hash pasted in as plaintext
+    $hasDevBypass = strpos($handlerContent, 'hash_equals') !== false
+        && strpos($handlerContent, 'isPasswordValid') !== false;
     testResult('Development Bypass', $hasDevBypass, $hasDevBypass ? 'Found' : 'Missing', 'Handler');
 } else {
     testResult('Handler', false, 'File not found', 'Handler');

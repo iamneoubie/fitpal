@@ -1,21 +1,18 @@
 <?php
 /**
  * FitPal Product Detail Page
- * Version 8.0
- *
- * - "Add to Cart"  → queue_action = 'cart'  → database cart table
- * - "Add to Order" → queue_action = 'queue' → session order_queue
+ * Version 9.0 — All SQL moved to product-queries.php
  *
  * @package FitPal
- * @version 8.0
+ * @version 9.0
  */
+
 declare(strict_types=1);
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// ===== VALIDATE PRODUCT ID =====
 $productId = isset($_GET['id']) ? max(1, (int)$_GET['id']) : 0;
 if ($productId <= 0) {
     header('Location: menu.php');
@@ -23,217 +20,28 @@ if ($productId <= 0) {
 }
 
 require_once __DIR__ . '/../backend/database/customer-connect.php';
+require_once __DIR__ . '/../backend/database/product-queries.php';
 
-try {
-    $checkStmt = $database_connection->prepare(
-        "SELECT p.product_id, p.is_customizable
-         FROM product p
-         WHERE p.product_id = :product_id AND p.is_active = 1"
-    );
-    $checkStmt->execute([':product_id' => $productId]);
-    if (!$checkStmt->fetch()) {
-        header('Location: menu.php');
-        exit;
-    }
-
-    // ===== FETCH PRODUCT =====
-    $stmt = $database_connection->prepare(
-        "SELECT
-            p.product_id,
-            p.name AS product_name,
-            p.description,
-            p.price,
-            p.stock,
-            p.is_active,
-            p.restaurant_branch_id,
-            p.is_customizable,
-            p.customization_type,
-            COALESCE(NULLIF(p.base_price, 0), p.price, 0) AS base_price,
-            rb.branch_name,
-            rb.barangay,
-            rb.city,
-            rb.province,
-            r.business_name AS restaurant_name,
-            r.cuisine_type,
-            COALESCE(di.dietary_tags, '') AS dietary_tags,
-            COALESCE(di.allergens, '') AS allergens,
-            di.calories,
-            di.protein,
-            di.carbs,
-            di.fat,
-            COALESCE(di.images, '') AS product_image
-        FROM product p
-        JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
-        JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
-        LEFT JOIN dietary_information di ON p.dietary_information_id = di.dietary_information_id
-        WHERE p.product_id = :product_id AND p.is_active = 1"
-    );
-    $stmt->execute([':product_id' => $productId]);
-    $product = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    if (!$product) {
-        header('Location: menu.php');
-        exit;
-    }
-
-    // ===== FETCH CUSTOMIZATION COMPONENTS =====
-    $components = [];
-    $hasCustomizations = false;
-
-    if ((bool)($product['is_customizable'] ?? false)) {
-        $compStmt = $database_connection->prepare(
-            "SELECT
-                pc.composition_id,
-                pc.product_id,
-                pc.ingredient_id,
-                pc.is_default,
-                pc.default_quantity,
-                pc.max_quantity,
-                pc.price_modifier,
-                pc.display_order,
-                pc.is_required,
-                pc.min_quantity,
-                pc.max_quantity_per_item,
-                i.name AS ingredient_name,
-                i.unit_price,
-                i.calories AS ingredient_calories,
-                i.dietary_tags,
-                i.allergens,
-                i.is_active
-            FROM product_composition pc
-            JOIN ingredient i ON pc.ingredient_id = i.ingredient_id
-            WHERE pc.product_id = :product_id AND i.is_active = 1
-            ORDER BY pc.display_order ASC, i.name ASC"
-        );
-        $compStmt->execute([':product_id' => $productId]);
-        $rows = $compStmt->fetchAll(PDO::FETCH_ASSOC);
-
-        if (!empty($rows)) {
-            $hasCustomizations = true;
-
-            $byOrder = [];
-            foreach ($rows as $r) {
-                $order = (int)$r['display_order'];
-                $byOrder[$order][] = $r;
-            }
-
-            foreach ($byOrder as $order => $groupRows) {
-                $count = count($groupRows);
-
-                $groupRequired   = false;
-                $groupMaxPerItem = 1;
-                $defaultCount    = 0;
-
-                foreach ($groupRows as $r) {
-                    if ((bool)$r['is_required']) {
-                        $groupRequired = true;
-                    }
-                    $maxPer = (int)($r['max_quantity_per_item'] ?? 1);
-                    if ($maxPer > $groupMaxPerItem) {
-                        $groupMaxPerItem = $maxPer;
-                    }
-                    if ((bool)$r['is_default']) {
-                        $defaultCount++;
-                    }
-                }
-
-                $ingredients = [];
-                foreach ($groupRows as $r) {
-                    $ingredients[] = [
-                        'id'               => (int)$r['ingredient_id'],
-                        'name'             => $r['ingredient_name'],
-                        'price_modifier'   => (float)($r['price_modifier'] ?? 0),
-                        'is_default'       => (bool)$r['is_default'],
-                        'calories'         => (int)($r['ingredient_calories'] ?? 0),
-                        'max_quantity'     => (int)($r['max_quantity'] ?? 1),
-                        'default_quantity' => (int)($r['default_quantity'] ?? 0),
-                        'min_quantity'     => (int)($r['min_quantity'] ?? 0),
-                    ];
-                }
-
-                if ($groupMaxPerItem === 1) {
-                    if ($count === 1 && $groupRequired && (int)$ingredients[0]['min_quantity'] === 1) {
-                        $components[] = [
-                            'kind'          => 'static',
-                            'label'         => ucwords(str_replace('_', ' ', $ingredients[0]['name'])),
-                            'display_order' => $order,
-                            'ingredient'    => $ingredients[0],
-                        ];
-                    } else {
-                        usort($ingredients, function ($a, $b) {
-                            if ($a['is_default'] !== $b['is_default']) {
-                                return $a['is_default'] ? -1 : 1;
-                            }
-                            return strcmp($a['name'], $b['name']);
-                        });
-                        $components[] = [
-                            'kind'          => 'choice',
-                            'label'         => ucwords(str_replace('_', ' ', $ingredients[0]['name']))
-                                                . ($count > 1 ? ' Choice' : ''),
-                            'display_order' => $order,
-                            'is_required'   => $groupRequired,
-                            'has_default'   => $defaultCount > 0,
-                            'ingredients'   => $ingredients,
-                        ];
-                    }
-                } elseif ($count === 1) {
-                    $components[] = [
-                        'kind'          => 'modifier',
-                        'label'         => ucwords(str_replace('_', ' ', $ingredients[0]['name'])),
-                        'display_order' => $order,
-                        'is_required'   => $groupRequired,
-                        'ingredient'    => $ingredients[0],
-                    ];
-                } else {
-                    usort($ingredients, function ($a, $b) {
-                        if ($a['is_default'] !== $b['is_default']) {
-                            return $a['is_default'] ? -1 : 1;
-                        }
-                        return strcmp($a['name'], $b['name']);
-                    });
-                    $components[] = [
-                        'kind'          => 'multi',
-                        'label'         => ucwords(str_replace('_', ' ', $ingredients[0]['name'])) . ' (multiple)',
-                        'display_order' => $order,
-                        'is_required'   => $groupRequired,
-                        'max_selections'=> $groupMaxPerItem,
-                        'ingredients'   => $ingredients,
-                    ];
-                }
-            }
-
-            usort($components, fn($a, $b) => $a['display_order'] <=> $b['display_order']);
-        }
-    }
-
-    // ===== RELATED PRODUCTS =====
-    $relatedStmt = $database_connection->prepare(
-        "SELECT
-            p.product_id,
-            p.name AS product_name,
-            p.price,
-            p.stock,
-            COALESCE(di.dietary_tags, '') AS dietary_tags,
-            di.calories,
-            COALESCE(di.images, '') AS product_image
-        FROM product p
-        LEFT JOIN dietary_information di ON p.dietary_information_id = di.dietary_information_id
-        WHERE p.restaurant_branch_id = :branch_id
-        AND p.product_id != :product_id
-        AND p.is_active = 1
-        LIMIT 4"
-    );
-    $relatedStmt->execute([
-        ':branch_id' => $product['restaurant_branch_id'],
-        ':product_id' => $productId,
-    ]);
-    $relatedProducts = $relatedStmt->fetchAll(PDO::FETCH_ASSOC);
-
-} catch (PDOException $e) {
-    error_log('Product detail error: ' . $e->getMessage());
+$product = getProductById($database_connection, $productId);
+if (!$product) {
     header('Location: menu.php');
     exit;
 }
+
+$components        = [];
+$hasCustomizations = false;
+
+if ((bool)($product['is_customizable'] ?? false)) {
+    $components = getProductComponentsGrouped($database_connection, $productId);
+    $hasCustomizations = !empty($components);
+}
+
+$relatedProducts = getRelatedProducts(
+    $database_connection,
+    $productId,
+    (int)$product['restaurant_branch_id'],
+    4
+);
 
 require_once __DIR__ . '/../includes/header.php';
 
@@ -247,8 +55,8 @@ $csrfToken = $_SESSION['csrf_token'];
 $dietaryTags = $product['dietary_tags'] !== '' ? explode(',', $product['dietary_tags']) : [];
 $allergens   = $product['allergens']    !== '' ? explode(',', $product['allergens'])    : [];
 
-$basePrice    = (float)$product['base_price'];
-$inStock      = (int)$product['stock'] > 0 && (int)$product['is_active'] === 1;
+$basePrice = (float)$product['base_price'];
+$inStock   = (int)$product['stock'] > 0 && (int)$product['is_active'] === 1;
 
 $productImage = $product['product_image'] !== ''
     ? htmlspecialchars($product['product_image'], ENT_QUOTES, 'UTF-8')

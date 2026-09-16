@@ -5,8 +5,12 @@
  * The server (queue-handler.php) is the single source of truth;
  * this script never writes queue state to sessionStorage.
  *
+ * Customization details are NOT rendered in this panel — they are
+ * carried silently on each line (via line_key + customizations) and
+ * surfaced later on the cart / checkout / order pages.
+ *
  * @package FitPal
- * @version 4.1
+ * @version 5.1 — Clean panel rendering; customizations deferred to checkout
  */
 (function () {
     'use strict';
@@ -43,13 +47,6 @@
     // ----------------------------------------------------------------
     // NETWORK
     // ----------------------------------------------------------------
-
-    /**
-     * The menu page no longer embeds a per-product csrf_token input.
-     * The token lives in window.FITPAL_CSRF_TOKEN (set by menu.php).
-     * Fall back to the input lookup for pages that still render one
-     * (e.g. product-detail.php uses its own form, not this script).
-     */
     function csrfToken() {
         if (window.FITPAL_CSRF_TOKEN) return window.FITPAL_CSRF_TOKEN;
         var el = document.querySelector('input[name="csrf_token"]');
@@ -100,6 +97,17 @@
         }, 300);
     }
 
+    /**
+     * Resolve a stable key for a queue row. Prefers the server-supplied
+     * line_key; falls back to product_id when absent (legacy rows).
+     */
+    function rowKey(item) {
+        if (item && typeof item.line_key === 'string' && item.line_key !== '') {
+            return item.line_key;
+        }
+        return 'p::' + (item && item.product_id ? item.product_id : '0');
+    }
+
     // ----------------------------------------------------------------
     // RENDER
     // ----------------------------------------------------------------
@@ -141,16 +149,27 @@
         updateVisibility(totalItems);
     }
 
+    /**
+     * Clean, single-line rendering for the queue panel.
+     *
+     * Deliberately does NOT print customization details — the panel is
+     * a staging surface, and customization information travels with
+     * the line (line_key + customizations) to be shown at checkout.
+     * Only the effective unit price reflects the modifiers.
+     */
     function renderItem(item, index) {
         var itemTotal = (item.price || 0) * (item.quantity || 0);
         var fallback  = (window.FITPAL_ASSET_BASE || '../../shared/')
                         + 'assets/images/icons/restaurant.svg';
         var img       = (item.image && item.image.trim() !== '') ? item.image : fallback;
+        var key       = rowKey(item);
 
         return ''
-            + '<div class="queue-item" data-index="' + index + '" data-product-id="' + item.product_id + '">'
+            + '<div class="queue-item" data-index="' + index + '"'
+            +      ' data-product-id="' + (item.product_id || 0) + '"'
+            +      ' data-line-key="' + escapeAttr(key) + '">'
             +   '<div class="queue-item-image">'
-            +     '<img src="' + img + '" alt="' + escapeHtml(item.name || '') + '"'
+            +     '<img src="' + escapeAttr(img) + '" alt="' + escapeAttr(item.name || '') + '"'
             +          ' onerror="this.onerror=null; this.src=\'' + fallback + '\'">'
             +   '</div>'
             +   '<div class="queue-item-info">'
@@ -181,8 +200,12 @@
 
     function escapeHtml(text) {
         var d = document.createElement('div');
-        d.textContent = text;
+        d.textContent = String(text == null ? '' : text);
         return d.innerHTML;
+    }
+
+    function escapeAttr(text) {
+        return escapeHtml(text).replace(/"/g, '&quot;');
     }
 
     // ----------------------------------------------------------------
@@ -312,7 +335,7 @@
         if (pendingRm === null) return;
         var item = queue[pendingRm];
         if (item) {
-            post({ action: 'remove', product_id: item.product_id })
+            post({ action: 'remove', line_key: rowKey(item), index: pendingRm })
                 .then(function (data) {
                     if (data && data.status === 'success') {
                         queue = data.queue;
@@ -492,7 +515,6 @@
             if (cancelModal && cancelModal.classList.contains('active')) closeCancelModal();
         });
 
-        // Overlay clicks
         [removeModal, cancelModal].forEach(function (modal) {
             if (!modal) return;
             var overlay = modal.querySelector('.queue-modal-overlay');
@@ -504,7 +526,7 @@
             }
         });
 
-        console.log('Queue Panel v4.1 initialized');
+        console.log('Queue Panel v5.1 initialized');
     }
 
     if (document.readyState === 'loading') {

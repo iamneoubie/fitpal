@@ -1,10 +1,10 @@
 /**
  * FitPal Checkout Page Styles
- * Version 3.7 - Custom-drawn radios (green fill + white dot) for
- *                payment methods and address selection.
+ * Version 3.9 — Actions anchored to the bottom of the payment card;
+ *                adds totals-row-note for the branch-count hint.
  *
  * @package FitPal
- * @version 3.7
+ * @version 3.9
  */
 
 /* ============================================
@@ -62,8 +62,14 @@
     border-color: #f5c6cb;
 }
 
+.alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+
 /* ============================================
-   CHECKOUT GRID - 2x2 desktop (row-based)
+   CHECKOUT GRID - 2x2 desktop
    ============================================ */
 
 .checkout-grid {
@@ -78,6 +84,7 @@
     grid-template-columns: 1fr 1fr;
     gap: 24px;
     width: 100%;
+    align-items: stretch;
 }
 
 /* ============================================
@@ -91,6 +98,8 @@
     border: 1px solid var(--gray-200);
     overflow: hidden;
     transition: box-shadow var(--transition-fast);
+    display: flex;
+    flex-direction: column;
 }
 
 .card:hover {
@@ -104,6 +113,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-shrink: 0;
 }
 
 .card-header .heading-5 {
@@ -129,6 +139,7 @@
 
 .card-body {
     padding: 20px 20px 24px 20px;
+    flex: 1 1 auto;
 }
 
 /* ============================================
@@ -231,6 +242,68 @@
 .address-display .btn-outline:hover {
     background: var(--gray-100);
     border-color: var(--gray-400);
+}
+
+/* ============================================
+   ADDRESS EMPTY STATE
+   ============================================ */
+
+.address-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 32px 20px;
+    background: var(--gray-50);
+    border: 2px dashed var(--gray-300);
+    border-radius: var(--radius-base);
+    gap: 8px;
+    min-height: 220px;
+}
+
+.address-empty-icon {
+    width: 56px;
+    height: 56px;
+    margin-bottom: 4px;
+    background: var(--gray-100);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px;
+    flex-shrink: 0;
+}
+
+.address-empty-icon img {
+    width: 100%;
+    height: 100%;
+    max-width: 28px;
+    max-height: 28px;
+    object-fit: contain;
+    opacity: 0.5;
+    display: block;
+}
+
+.address-empty-title {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+    margin: 0;
+    line-height: 1.3;
+}
+
+.address-empty-text {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    margin: 0 0 12px 0;
+    line-height: 1.5;
+    max-width: 260px;
+}
+
+.address-empty-state .btn {
+    min-width: 160px;
+    justify-content: center;
 }
 
 /* ============================================
@@ -346,6 +419,13 @@
     color: var(--gray-600);
 }
 
+.totals-row-note {
+    font-size: var(--font-size-xs);
+    color: var(--gray-400);
+    font-weight: 400;
+    margin-left: 2px;
+}
+
 .totals-row.total {
     font-weight: var(--font-weight-bold);
     font-size: var(--font-size-lg);
@@ -362,11 +442,8 @@
 
 /* ============================================
    CUSTOM RADIO BUTTONS
-   Green fill + white dot when checked.
-   Shared by payment options and address list.
    ============================================ */
 
-/* Hide the native input but keep it focusable / clickable via its label */
 .payment-option input[type="radio"],
 .address-option input[type="radio"] {
     position: absolute;
@@ -378,7 +455,6 @@
     pointer-events: none;
 }
 
-/* The label span carries the visible circle + text */
 .payment-option input[type="radio"] + label,
 .address-option input[type="radio"] + label {
     position: relative;
@@ -391,7 +467,6 @@
     margin: 0;
 }
 
-/* Base circle */
 .payment-option input[type="radio"] + label::before,
 .address-option input[type="radio"] + label::before {
     content: '';
@@ -408,7 +483,6 @@
     transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-/* White dot */
 .payment-option input[type="radio"] + label::after,
 .address-option input[type="radio"] + label::after {
     content: '';
@@ -424,20 +498,17 @@
     pointer-events: none;
 }
 
-/* Checked state — green fill */
 .payment-option input[type="radio"]:checked + label::before,
 .address-option input[type="radio"]:checked + label::before {
     background: var(--primary);
     border-color: var(--primary);
 }
 
-/* Checked state — dot scales in */
 .payment-option input[type="radio"]:checked + label::after,
 .address-option input[type="radio"]:checked + label::after {
     transform: translateY(-50%) scale(1);
 }
 
-/* Keyboard focus ring */
 .payment-option input[type="radio"]:focus-visible + label::before,
 .address-option input[type="radio"]:focus-visible + label::before {
     box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.25);
@@ -510,13 +581,17 @@
 }
 
 /* ============================================
-   CHECKOUT ACTIONS
+   CHECKOUT ACTIONS — anchored to card bottom
    ============================================ */
 
 .checkout-actions {
     display: flex;
     gap: 12px;
-    margin-top: 4px;
+    margin-top: auto;
+    padding: 16px 20px 20px 20px;
+    border-top: 1px solid var(--gray-100);
+    background: var(--white);
+    flex-shrink: 0;
 }
 
 .checkout-actions .btn {
@@ -586,7 +661,7 @@
 }
 
 /* ============================================
-   ADDRESS MODAL (optimized fade - queue panel pattern)
+   MODAL
    ============================================ */
 
 .modal {
@@ -766,7 +841,7 @@
 }
 
 /* ============================================
-   MODAL FOOTER - 50/50
+   MODAL FOOTER
    ============================================ */
 
 .modal-footer {
@@ -820,7 +895,172 @@
 }
 
 /* ============================================
-   RESPONSIVE - MOBILE (stacked)
+   QR PAYMENT MODAL
+   ============================================ */
+
+.qr-modal-content {
+    max-width: 400px;
+}
+
+.qr-modal-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    text-align: center;
+}
+
+.qr-amount-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.qr-amount-label {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: var(--font-weight-semibold);
+}
+
+.qr-amount {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--primary);
+    margin: 0;
+    line-height: 1.2;
+}
+
+.qr-image-wrapper {
+    width: 220px;
+    height: 220px;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    border: 4px solid var(--primary);
+    background: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-md);
+    padding: 8px;
+    box-sizing: border-box;
+}
+
+.qr-image-wrapper img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.qr-note {
+    padding: 10px 14px;
+    background: #fff3cd;
+    border-left: 3px solid var(--warning);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    color: #856404;
+    line-height: 1.5;
+    text-align: left;
+    width: 100%;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+.qr-note strong {
+    color: #856404;
+}
+
+/* ============================================
+   WALLET INSUFFICIENT MODAL
+   ============================================ */
+
+.wallet-modal-content {
+    max-width: 420px;
+}
+
+.wallet-modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    text-align: center;
+    padding: 4px 0;
+}
+
+.wallet-modal-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto;
+    background: rgba(255, 193, 7, 0.15);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.wallet-modal-icon img {
+    width: 32px;
+    height: 32px;
+    opacity: 0.75;
+    display: block;
+}
+
+.wallet-modal-title {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-bold);
+    color: var(--text);
+    margin: 0;
+    line-height: 1.3;
+}
+
+.wallet-modal-text {
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    line-height: 1.6;
+    margin: 0;
+}
+
+.wallet-balance-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 16px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    text-align: left;
+}
+
+.wallet-balance-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: var(--font-size-sm);
+}
+
+.wallet-balance-row .label {
+    color: var(--gray-500);
+    font-weight: var(--font-weight-medium);
+}
+
+.wallet-balance-row .value {
+    font-weight: var(--font-weight-bold);
+    color: var(--text);
+}
+
+.wallet-balance-row.available .value {
+    color: var(--primary);
+}
+
+.wallet-balance-row.shortfall .value {
+    color: var(--danger);
+}
+
+/* ============================================
+   RESPONSIVE - TABLET
    ============================================ */
 
 @media (max-width: 768px) {
@@ -904,7 +1144,6 @@
         font-size: 0.65rem;
     }
 
-    /* Smaller custom radios on mobile */
     .payment-option input[type="radio"] + label,
     .address-option input[type="radio"] + label {
         padding-left: 28px;
@@ -946,7 +1185,32 @@
         font-size: 0.65rem;
     }
 
+    .address-empty-state {
+        padding: 24px 16px;
+        min-height: 190px;
+    }
+
+    .address-empty-icon {
+        width: 48px;
+        height: 48px;
+        padding: 12px;
+    }
+
+    .address-empty-icon img {
+        max-width: 24px;
+        max-height: 24px;
+    }
+
+    .address-empty-title {
+        font-size: var(--font-size-sm);
+    }
+
+    .address-empty-text {
+        font-size: var(--font-size-xs);
+    }
+
     .checkout-actions {
+        padding: 14px 16px 16px 16px;
         flex-direction: row;
         gap: 8px;
     }
@@ -1015,7 +1279,34 @@
     .detail-row {
         padding: 6px 0;
     }
+
+    .qr-image-wrapper {
+        width: 180px;
+        height: 180px;
+    }
+
+    .qr-amount {
+        font-size: var(--font-size-xl);
+    }
+
+    .wallet-modal-icon {
+        width: 56px;
+        height: 56px;
+    }
+
+    .wallet-modal-icon img {
+        width: 28px;
+        height: 28px;
+    }
+
+    .wallet-modal-title {
+        font-size: var(--font-size-base);
+    }
 }
+
+/* ============================================
+   RESPONSIVE - MOBILE
+   ============================================ */
 
 @media (max-width: 480px) {
     .checkout-page .container {
@@ -1043,7 +1334,6 @@
         height: 18px;
     }
 
-    /* Even smaller custom radios on very small screens */
     .payment-option input[type="radio"] + label,
     .address-option input[type="radio"] + label {
         padding-left: 26px;
@@ -1064,6 +1354,7 @@
     }
 
     .checkout-actions {
+        padding: 12px 12px 14px 12px;
         flex-direction: column;
         gap: 10px;
     }
@@ -1136,5 +1427,18 @@
         flex: none;
         min-height: 38px;
         padding: 8px 14px;
+    }
+
+    .qr-image-wrapper {
+        width: 160px;
+        height: 160px;
+    }
+
+    .wallet-balance-card {
+        padding: 12px 14px;
+    }
+
+    .wallet-modal-text {
+        font-size: var(--font-size-xs);
     }
 }

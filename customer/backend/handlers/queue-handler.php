@@ -2,22 +2,15 @@
 /**
  * FitPal Customer Queue Handler
  *
- * Session-based order queue. This is the staging area on menu.php,
- * NOT the database cart.
- *
- * Actions:
- *   get     → return the current queue
- *   add     → add or merge one item into the queue
- *   update  → set quantity of one item
- *   remove  → drop one item
- *   clear   → empty the queue
- *   sync    → replace the queue with the client's version
- *   commit  → copy the queue into the DB cart, then clear it
- *
- * Accepts JSON bodies (AJAX) and form POST (redirect).
+ * Session-based order queue. The queue lives in
+ * $_SESSION['order_queue']; this handler reads/writes it and uses
+ * the DB only to enrich items or commit into the persistent cart.
  *
  * @package FitPal
- * @version 1.1
+ * @version 3.1 — Commit no longer clears the session queue, so the
+ *                menu page's queue panel survives a trip to checkout.
+ *                The queue is cleared only by `clear` or by placing
+ *                the order (place-order-handler.php).
  */
 
 declare(strict_types=1);
@@ -26,32 +19,15 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// ---------------------------------------------------------------
-// INPUT
-//
-// php://input is only readable for JSON and urlencoded bodies.
-// For multipart/form-data (FormData + fetch), php://input is
-// EMPTY. So we read it defensively and fall back to $_POST.
-// ---------------------------------------------------------------
 $raw    = file_get_contents('php://input');
 $json   = ($raw !== '' && $raw !== false) ? json_decode($raw, true) : null;
 $isJson = is_array($json);
 $input  = $isJson ? $json : $_POST;
 
-// A request is "AJAX" if:
-//   - it sent a JSON body, OR
-//   - it explicitly set X-Requested-With: XMLHttpRequest
-//
-// We intentionally do NOT treat form POSTs as AJAX, because
-// product-detail.php's "Add to Order" button posts via a real
-// form navigation and expects a 302 redirect back to menu.php.
 $isAjax = $isJson
     || (isset($_SERVER['HTTP_X_REQUESTED_WITH'])
         && strtolower((string)$_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
 
-// ---------------------------------------------------------------
-// AUTH
-// ---------------------------------------------------------------
 if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     if ($isAjax) {
         header('Content-Type: application/json; charset=utf-8');
@@ -66,35 +42,18 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
 $customerId = (int)$_SESSION['customer_id'];
 
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
+require_once __DIR__ . '/../database/cart-queries.php';
+require_once __DIR__ . '/../database/queue-queries.php';
 
-// ---------------------------------------------------------------
-// ACTION RESOLUTION
-//
-// Resolve the action BEFORE the CSRF check, so we can decide
-// whether CSRF is even required.
-//
-// `get` is read-only and returns only the caller's own queue,
-// which is already gated by the session auth above. It does not
-// need a CSRF token, and demanding one is what was breaking the
-// initial panel load on menu.php.
-//
-// Every mutating action (add/update/remove/clear/sync/commit)
-// requires a valid CSRF token.
-// ---------------------------------------------------------------
 $action = (string)($input['action'] ?? '');
-
-// Backwards-compat: product-detail.php's "Add to Order" form
-// sends queue_action=queue instead of action=add.
 if ($action === '' && ($input['queue_action'] ?? '') === 'queue') {
     $action = 'add';
 }
 
 $requiresCsrf = !in_array($action, ['get', ''], true);
-
 if ($requiresCsrf) {
     $given = (string)($input['csrf_token'] ?? '');
     $sess  = (string)($_SESSION['csrf_token'] ?? '');
-
     if ($sess === '' || $given === '' || !hash_equals($sess, $given)) {
         if ($isAjax) {
             header('Content-Type: application/json; charset=utf-8');
@@ -109,8 +68,9 @@ if ($requiresCsrf) {
 }
 
 // ---------------------------------------------------------------
-// HELPERS
+// Session queue helpers
 // ---------------------------------------------------------------
+
 function queueGet(): array
 {
     $q = $_SESSION['order_queue'] ?? [];
@@ -123,34 +83,54 @@ function queuePut(array $queue): void
 }
 
 /**
- * Normalize a `customizations` payload into a JSON string or null.
+ * Normalize incoming customizations to a JSON string (or null).
+ * Also returns the decoded array for immediate use.
  *
- * Accepts:
- *   - already-decoded array (from JSON bodies)
- *   - JSON string (from FormData)
- *   - empty / missing (returns null)
+ * @return array{0: ?string, 1: array<int, array<string, mixed>>}
  */
-function queueNormalizeCustomizations(mixed $raw): ?string
+function queueNormalizeCustomizations(mixed $raw): array
 {
     if ($raw === null || $raw === '' || $raw === []) {
-        return null;
+        return [null, []];
     }
 
+    $decoded = null;
     if (is_array($raw)) {
-        return empty($raw) ? null : json_encode($raw);
-    }
-
-    if (is_string($raw)) {
-        $decoded = json_decode($raw, true);
-        if (is_array($decoded) && !empty($decoded)) {
-            return json_encode($decoded);
+        $decoded = $raw;
+    } elseif (is_string($raw)) {
+        $attempt = json_decode($raw, true);
+        if (is_array($attempt)) {
+            $decoded = $attempt;
         }
-        return null;
     }
 
-    return null;
+    if (!is_array($decoded) || empty($decoded)) {
+        return [null, []];
+    }
+
+    return [json_encode($decoded), $decoded];
 }
 
+/**
+ * Build a stable identity hash for a queue line. Two lines with the
+ * same product but different customizations must NOT merge.
+ */
+function queueLineKey(int $productId, ?string $customizationJson): string
+{
+    return $productId . '::' . sha1((string)$customizationJson);
+}
+
+/**
+ * Enrich a queued item with live product data from the database.
+ *
+ * Effective price is computed as:
+ *     product.base_price
+ *   + Σ(composition.price_modifier × requested_quantity)
+ * for every composition row where the client indicated the ingredient
+ * is present. The client sends {ingredient_id, quantity, selected_option}
+ * and we ignore its price_modifier entirely — the server is the single
+ * source of truth for money.
+ */
 function queueEnrich(PDO $db, array $item): ?array
 {
     $productId = (int)($item['product_id'] ?? 0);
@@ -159,42 +139,78 @@ function queueEnrich(PDO $db, array $item): ?array
         return null;
     }
 
-    $stmt = $db->prepare(
-        "SELECT
-            p.product_id,
-            p.name,
-            p.price,
-            p.stock,
-            p.is_active,
-            p.is_customizable,
-            p.restaurant_branch_id,
-            rb.branch_name,
-            r.business_name AS restaurant_name,
-            COALESCE(di.images, '') AS product_image
-         FROM product p
-         JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
-         JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
-         LEFT JOIN dietary_information di ON p.dietary_information_id = di.dietary_information_id
-         WHERE p.product_id = :product_id AND p.is_active = 1"
-    );
-    $stmt->execute([':product_id' => $productId]);
-    $p = $stmt->fetch(PDO::FETCH_ASSOC);
+    $p = getProductForQueue($db, $productId);
     if (!$p) {
         return null;
     }
 
     $maxStock = (int)$p['stock'];
-    if ($quantity > $maxStock) {
-        $quantity = $maxStock;
+    if ($quantity > $maxStock) $quantity = $maxStock;
+    if ($quantity <= 0) return null;
+
+    $customizations = [];
+    if (!empty($item['customization_data'])) {
+        $decoded = is_string($item['customization_data'])
+            ? json_decode($item['customization_data'], true)
+            : $item['customization_data'];
+        if (is_array($decoded)) {
+            $customizations = $decoded;
+        }
     }
-    if ($quantity <= 0) {
-        return null;
+
+    $rules = [];
+    $ruleStmt = $db->prepare(
+        "SELECT ingredient_id, price_modifier, min_quantity, max_quantity,
+                is_required, is_default, default_quantity
+           FROM product_composition
+          WHERE product_id = :product_id"
+    );
+    $ruleStmt->execute([':product_id' => $productId]);
+    while ($r = $ruleStmt->fetch(PDO::FETCH_ASSOC)) {
+        $rules[(int)$r['ingredient_id']] = $r;
+    }
+
+    $basePrice = (float)($p['base_price'] ?? 0);
+    if ($basePrice <= 0) {
+        $basePrice = (float)$p['price'];
+    }
+
+    $unitPrice     = $basePrice;
+    $caloriesDelta = 0;
+
+    foreach ($customizations as $cust) {
+        if (!is_array($cust)) continue;
+        if (($cust['type'] ?? '') === 'notes') continue;
+
+        $ingredientId = (int)($cust['ingredient_id'] ?? 0);
+        if ($ingredientId <= 0) continue;
+        if (!isset($rules[$ingredientId])) continue;
+
+        $option = (string)($cust['selected_option'] ?? 'selected');
+        if ($option === 'remove') continue;
+
+        $requestedQty = (int)($cust['quantity'] ?? 0);
+        if ($requestedQty <= 0) continue;
+
+        $rule     = $rules[$ingredientId];
+        $modifier = (float)$rule['price_modifier'];
+        $maxQty   = (int)$rule['max_quantity'];
+        if ($maxQty > 0 && $requestedQty > $maxQty) {
+            $requestedQty = $maxQty;
+        }
+
+        $unitPrice += $modifier * $requestedQty;
+    }
+
+    if ($unitPrice < 0) {
+        $unitPrice = 0.0;
     }
 
     return [
         'product_id'           => (int)$p['product_id'],
         'name'                 => (string)$p['name'],
-        'price'                => (float)$p['price'],
+        'price'                => round($unitPrice, 2),
+        'base_price'           => $basePrice,
         'quantity'             => $quantity,
         'image'                => (string)$p['product_image'],
         'stock'                => $maxStock,
@@ -213,7 +229,6 @@ function queueRespond(array $payload, bool $isAjax, string $redirect = '../../pa
         echo json_encode($payload);
         exit;
     }
-
     if (($payload['status'] ?? '') === 'success') {
         if (!empty($payload['message'])) {
             $_SESSION['queue_success'] = $payload['message'];
@@ -226,36 +241,25 @@ function queueRespond(array $payload, bool $isAjax, string $redirect = '../../pa
 }
 
 // ---------------------------------------------------------------
-// DISPATCH
+// Dispatch
 // ---------------------------------------------------------------
 try {
     switch ($action) {
 
-        // -------------------------------------------------------
-        // get
-        // -------------------------------------------------------
         case 'get': {
             $q = queueGet();
-            queueRespond([
-                'status' => 'success',
-                'queue'  => $q,
-                'count'  => count($q),
-            ], true);
+            queueRespond(['status' => 'success', 'queue' => $q, 'count' => count($q)], true);
         }
 
-        // -------------------------------------------------------
-        // add
-        // -------------------------------------------------------
         case 'add': {
             $productId  = (int)($input['product_id'] ?? 0);
             $quantity   = max(1, (int)($input['quantity'] ?? 1));
-            $customJson = queueNormalizeCustomizations($input['customizations'] ?? null);
+            [$customJson, $parsedCustomizations] = queueNormalizeCustomizations(
+                $input['customizations'] ?? null
+            );
 
             if ($productId <= 0) {
-                queueRespond([
-                    'status'  => 'error',
-                    'message' => 'Invalid product selected.',
-                ], $isAjax);
+                queueRespond(['status' => 'error', 'message' => 'Invalid product selected.'], $isAjax);
             }
 
             $enriched = queueEnrich($database_connection, [
@@ -265,22 +269,40 @@ try {
             ]);
 
             if ($enriched === null) {
-                queueRespond([
-                    'status'  => 'error',
-                    'message' => 'That product is not available.',
-                ], $isAjax);
+                queueRespond(['status' => 'error', 'message' => 'That product is not available.'], $isAjax);
             }
+
+            $enriched['customizations'] = $parsedCustomizations;
+            $enriched['line_key']       = queueLineKey($productId, $customJson);
 
             $queue = queueGet();
             $found = false;
+
             foreach ($queue as &$row) {
-                if ((int)$row['product_id'] === $productId) {
+                $rowKey = $row['line_key']
+                    ?? queueLineKey(
+                        (int)$row['product_id'],
+                        is_string($row['customization_data'] ?? null)
+                            ? $row['customization_data']
+                            : (isset($row['customization_data'])
+                                ? json_encode($row['customization_data'])
+                                : null)
+                    );
+
+                if ($rowKey === $enriched['line_key']) {
                     $row['quantity'] = min(
                         (int)$row['quantity'] + $quantity,
                         (int)$enriched['stock']
                     );
-                    if ($customJson !== null) {
-                        $row['customization_data'] = $customJson;
+                    $rebuilt = queueEnrich($database_connection, [
+                        'product_id'         => $productId,
+                        'quantity'           => (int)$row['quantity'],
+                        'customization_data' => $customJson,
+                    ]);
+                    if ($rebuilt !== null) {
+                        $rebuilt['customizations'] = $parsedCustomizations;
+                        $rebuilt['line_key']       = $enriched['line_key'];
+                        $row = $rebuilt;
                     }
                     $found = true;
                     break;
@@ -302,162 +324,164 @@ try {
             ], $isAjax);
         }
 
-        // -------------------------------------------------------
-        // update
-        // -------------------------------------------------------
         case 'update': {
-            $productId = (int)($input['product_id'] ?? 0);
-            $quantity  = (int)($input['quantity'] ?? 0);
+            $lineKey  = (string)($input['line_key'] ?? '');
+            $index    = isset($input['index']) ? (int)$input['index'] : -1;
+            $quantity = (int)($input['quantity'] ?? 0);
 
             $queue = queueGet();
-            foreach ($queue as $i => $row) {
-                if ((int)$row['product_id'] === $productId) {
-                    if ($quantity <= 0) {
-                        array_splice($queue, $i, 1);
-                    } else {
-                        $max = (int)($row['stock'] ?? 999);
-                        $queue[$i]['quantity'] = min($quantity, $max);
+            $targetIndex = -1;
+
+            if ($lineKey !== '') {
+                foreach ($queue as $i => $row) {
+                    $rowKey = $row['line_key']
+                        ?? queueLineKey(
+                            (int)$row['product_id'],
+                            is_string($row['customization_data'] ?? null)
+                                ? $row['customization_data']
+                                : (isset($row['customization_data'])
+                                    ? json_encode($row['customization_data'])
+                                    : null)
+                        );
+                    if ($rowKey === $lineKey) {
+                        $targetIndex = $i;
+                        break;
                     }
-                    break;
+                }
+            } elseif ($index >= 0 && $index < count($queue)) {
+                $targetIndex = $index;
+            }
+
+            if ($targetIndex >= 0) {
+                if ($quantity <= 0) {
+                    array_splice($queue, $targetIndex, 1);
+                } else {
+                    $max = (int)($queue[$targetIndex]['stock'] ?? 999);
+                    $queue[$targetIndex]['quantity'] = min($quantity, $max);
                 }
             }
-            queuePut($queue);
 
-            queueRespond([
-                'status' => 'success',
-                'queue'  => $queue,
-                'count'  => count($queue),
-            ], $isAjax);
+            queuePut($queue);
+            queueRespond(['status' => 'success', 'queue' => $queue, 'count' => count($queue)], $isAjax);
         }
 
-        // -------------------------------------------------------
-        // remove
-        // -------------------------------------------------------
         case 'remove': {
-            $productId = (int)($input['product_id'] ?? 0);
+            $lineKey = (string)($input['line_key'] ?? '');
+            $index   = isset($input['index']) ? (int)$input['index'] : -1;
 
             $queue = queueGet();
-            foreach ($queue as $i => $row) {
-                if ((int)$row['product_id'] === $productId) {
-                    array_splice($queue, $i, 1);
-                    break;
-                }
-            }
-            queuePut($queue);
+            $targetIndex = -1;
 
-            queueRespond([
-                'status' => 'success',
-                'queue'  => $queue,
-                'count'  => count($queue),
-            ], $isAjax);
+            if ($lineKey !== '') {
+                foreach ($queue as $i => $row) {
+                    $rowKey = $row['line_key']
+                        ?? queueLineKey(
+                            (int)$row['product_id'],
+                            is_string($row['customization_data'] ?? null)
+                                ? $row['customization_data']
+                                : (isset($row['customization_data'])
+                                    ? json_encode($row['customization_data'])
+                                    : null)
+                        );
+                    if ($rowKey === $lineKey) {
+                        $targetIndex = $i;
+                        break;
+                    }
+                }
+            } elseif ($index >= 0 && $index < count($queue)) {
+                $targetIndex = $index;
+            }
+
+            if ($targetIndex >= 0) {
+                array_splice($queue, $targetIndex, 1);
+            }
+
+            queuePut($queue);
+            queueRespond(['status' => 'success', 'queue' => $queue, 'count' => count($queue)], $isAjax);
         }
 
-        // -------------------------------------------------------
-        // clear
-        // -------------------------------------------------------
         case 'clear': {
             queuePut([]);
-            queueRespond([
-                'status' => 'success',
-                'queue'  => [],
-                'count'  => 0,
-            ], $isAjax);
+            queueRespond(['status' => 'success', 'queue' => [], 'count' => 0], $isAjax);
         }
 
-        // -------------------------------------------------------
-        // sync
-        // -------------------------------------------------------
         case 'sync': {
             $incoming = $input['queue'] ?? [];
-            if (!is_array($incoming)) {
-                $incoming = [];
-            }
+            if (!is_array($incoming)) $incoming = [];
 
             $new = [];
             foreach ($incoming as $item) {
-                if (!is_array($item)) {
-                    continue;
-                }
-                $enriched = queueEnrich($database_connection, $item);
+                if (!is_array($item)) continue;
+
+                $productId = (int)($item['product_id'] ?? 0);
+                $quantity  = max(1, (int)($item['quantity'] ?? 1));
+                [$customJson] = queueNormalizeCustomizations(
+                    $item['customization_data'] ?? null
+                );
+
+                $enriched = queueEnrich($database_connection, [
+                    'product_id'         => $productId,
+                    'quantity'           => $quantity,
+                    'customization_data' => $customJson,
+                ]);
+
                 if ($enriched !== null) {
                     $new[] = $enriched;
                 }
             }
             queuePut($new);
-
-            queueRespond([
-                'status' => 'success',
-                'queue'  => $new,
-                'count'  => count($new),
-            ], $isAjax);
+            queueRespond(['status' => 'success', 'queue' => $new, 'count' => count($new)], $isAjax);
         }
 
-        // -------------------------------------------------------
-        // commit
-        // -------------------------------------------------------
         case 'commit': {
             $queue = queueGet();
             if (empty($queue)) {
-                queueRespond([
-                    'status'  => 'error',
-                    'message' => 'Your order is empty.',
-                ], $isAjax);
+                queueRespond(['status' => 'error', 'message' => 'Your order is empty.'], $isAjax);
             }
 
             $database_connection->beginTransaction();
 
             try {
-                $lockStmt = $database_connection->prepare(
-                    "SELECT cart_id, product_id, quantity
-                     FROM cart
-                     WHERE customer_id = :cid
-                     FOR UPDATE"
-                );
-                $lockStmt->execute([':cid' => $customerId]);
-
-                $existing = [];
-                while ($row = $lockStmt->fetch(PDO::FETCH_ASSOC)) {
-                    $existing[(int)$row['product_id']] = $row;
-                }
-
-                $updateStmt = $database_connection->prepare(
-                    "UPDATE cart SET quantity = :qty WHERE cart_id = :cid"
-                );
-                $insertStmt = $database_connection->prepare(
-                    "INSERT INTO cart
-                        (customer_id, product_id, quantity, price, added_at, customization_data)
-                     VALUES
-                        (:cust, :prod, :qty, :price, NOW(), :custom)"
-                );
+                // The session queue is the authoritative list of what the
+                // user wants to check out right now. Replace the cart
+                // wholesale so repeat commits are idempotent: the cart
+                // always mirrors the queue exactly as of the last commit.
+                clearCart($database_connection, $customerId);
 
                 foreach ($queue as $item) {
                     $productId = (int)$item['product_id'];
                     $qty       = (int)$item['quantity'];
+                    $unitPrice = (float)($item['price'] ?? 0);
 
-                    if (isset($existing[$productId])) {
-                        $merged = (int)$existing[$productId]['quantity'] + $qty;
-                        $updateStmt->execute([
-                            ':qty' => $merged,
-                            ':cid' => $existing[$productId]['cart_id'],
-                        ]);
-                    } else {
-                        $insertStmt->execute([
-                            ':cust'   => $customerId,
-                            ':prod'   => $productId,
-                            ':qty'    => $qty,
-                            ':price'  => (float)$item['price'],
-                            ':custom' => $item['customization_data'] ?? null,
-                        ]);
-                    }
+                    insertCartItem(
+                        $database_connection,
+                        $customerId,
+                        $productId,
+                        $qty,
+                        $unitPrice,
+                        is_string($item['customization_data'] ?? null)
+                            ? $item['customization_data']
+                            : (isset($item['customization_data'])
+                                ? json_encode($item['customization_data'])
+                                : null)
+                    );
                 }
 
                 $database_connection->commit();
-                queuePut([]);
+
+                // IMPORTANT: do NOT queuePut([]) here. The session queue
+                // stays populated so the menu page's queue panel remains
+                // visible if the user navigates back from checkout. The
+                // queue is cleared only by `clear` (Cancel Order) or by
+                // place-order-handler.php (successful order placement).
 
                 queueRespond([
                     'status'  => 'success',
                     'message' => 'Order ready for checkout',
+                    'queue'   => $queue,
+                    'count'   => count($queue),
                 ], $isAjax);
+
             } catch (Throwable $e) {
                 if ($database_connection->inTransaction()) {
                     $database_connection->rollBack();
@@ -467,27 +491,15 @@ try {
         }
 
         default:
-            queueRespond([
-                'status'  => 'error',
-                'message' => 'Invalid action: ' . $action,
-            ], $isAjax);
+            queueRespond(['status' => 'error', 'message' => 'Invalid action: ' . $action], $isAjax);
     }
+
 } catch (PDOException $e) {
-    if ($database_connection->inTransaction()) {
-        $database_connection->rollBack();
-    }
+    if ($database_connection->inTransaction()) $database_connection->rollBack();
     error_log('Queue handler DB error: ' . $e->getMessage());
-    queueRespond([
-        'status'  => 'error',
-        'message' => 'A system error occurred. Please try again.',
-    ], $isAjax);
+    queueRespond(['status' => 'error', 'message' => 'A system error occurred. Please try again.'], $isAjax);
 } catch (Throwable $e) {
-    if ($database_connection->inTransaction()) {
-        $database_connection->rollBack();
-    }
+    if ($database_connection->inTransaction()) $database_connection->rollBack();
     error_log('Queue handler error: ' . $e->getMessage());
-    queueRespond([
-        'status'  => 'error',
-        'message' => 'A system error occurred. Please try again.',
-    ], $isAjax);
+    queueRespond(['status' => 'error', 'message' => 'A system error occurred. Please try again.'], $isAjax);
 }

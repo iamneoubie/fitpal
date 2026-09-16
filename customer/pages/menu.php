@@ -23,6 +23,7 @@ require_once __DIR__ . '/../includes/header.php';
 
 require_once __DIR__ . '/../backend/database/product-queries.php';
 require_once __DIR__ . '/../backend/database/order-queries.php';
+require_once __DIR__ . '/../backend/database/customer-queries.php';
 
 // ============================================
 // CONFIGURATION
@@ -46,14 +47,7 @@ $isLoggedIn             = isset($_SESSION['customer_id']) && !empty($_SESSION['c
 
 if ($isLoggedIn) {
     try {
-        $prefStmt = $database_connection->prepare(
-            "SELECT dietary_preferences, allergies
-             FROM customer_profile
-             WHERE customer_id = :customer_id
-             LIMIT 1"
-        );
-        $prefStmt->execute([':customer_id' => (int)$_SESSION['customer_id']]);
-        $prefData = $prefStmt->fetch(PDO::FETCH_ASSOC);
+        $prefData = getCustomerDietaryProfile($database_connection, (int)$_SESSION['customer_id']);
 
         if ($prefData) {
             if (!empty($prefData['dietary_preferences'])) {

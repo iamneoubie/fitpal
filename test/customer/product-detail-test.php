@@ -336,7 +336,7 @@ $criticalFiles = [
     'product-detail.php'         => $customerPath . '/pages/product-detail.php',
     'product-detail.css'         => $customerPath . '/assets/css/product-detail.css',
     'product-detail.js'          => $customerPath . '/assets/ui/js/product-detail.js',
-    'add-to-cart-handler.php'    => $customerPath . '/backend/handlers/add-to-cart-handler.php',
+    'cart-handler.php'           => $customerPath . '/backend/handlers/cart-handler.php',
     'customer header.php'        => $customerPath . '/includes/header.php',
     'shared footer.php'          => $sharedPath   . '/includes/footer.php',
     'database-connect.php'       => $sharedPath   . '/backend/database/database-connect.php',
@@ -796,7 +796,7 @@ if ($db !== null) {
 // SECTION G — HANDLER CONTRACT
 // The add-to-cart handler must accept what product-detail.php submits.
 // ============================================
-$handlerPath = $customerPath . '/backend/handlers/add-to-cart-handler.php';
+$handlerPath = $customerPath . '/backend/handlers/cart-handler.php';
 if (file_exists($handlerPath)) {
     $h = file_get_contents($handlerPath);
 

@@ -1,9 +1,9 @@
 /**
  * FitPal Product Detail Page Styles
- * Version 5.1 - Unchangeable ingredients, vertical actions, green calories
+ * Version 5.5 — Customize step full-width, aligned with header
  *
  * @package FitPal
- * @version 5.1
+ * @version 5.5
  */
 
 /* ============================================
@@ -30,7 +30,7 @@
 .product-detail-page .container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 0 12px;
+    padding: 0 16px;
     width: 100%;
     box-sizing: border-box;
 }
@@ -886,7 +886,7 @@
 }
 
 .radio-option .option-price {
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-s);
     font-weight: 600;
     color: var(--primary);
     margin-right: 8px;
@@ -894,8 +894,8 @@
 }
 
 .radio-option .option-calories {
-    font-size: var(--font-size-xs);
-    color: var(--gray-500);
+    font-size: var(--font-size-s);
+    font-weight: 600;
     white-space: nowrap;
 }
 
@@ -1254,9 +1254,7 @@
         padding: 24px 0 20px 0;
     }
 
-    .product-detail-page .container {
-        padding: 0 24px;
-    }
+    /* Container padding stays 16px to match header */
 
     .product-info-section {
         padding: 24px;
@@ -1307,9 +1305,7 @@
         padding: 32px 0 20px 0;
     }
 
-    .product-detail-page .container {
-        padding: 0 32px;
-    }
+    /* Container padding stays 16px to match header */
 
     .product-detail-card {
         display: grid;
@@ -1357,16 +1353,11 @@
         gap: 20px;
     }
 
-    .customization-card {
-        max-width: 800px;
-        margin: 0 auto;
-    }
+    /* Customize card fills the full container — no max-width cap */
 }
 
 @media (min-width: 1400px) {
-    .product-detail-page .container {
-        padding: 0 40px;
-    }
+    /* Container padding stays 16px to match header */
 
     .product-info-section {
         padding: 40px;

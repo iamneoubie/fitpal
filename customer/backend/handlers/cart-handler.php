@@ -17,7 +17,7 @@
  * Responds with JSON when X-Requested-With: XMLHttpRequest.
  *
  * @package FitPal
- * @version 3.1
+ * @version 4.0 — All SQL moved to cart-queries.php
  */
 
 declare(strict_types=1);
@@ -77,13 +77,10 @@ if ($sessToken === '' || $givenToken === '' || !hash_equals($sessToken, $givenTo
 }
 
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
+require_once __DIR__ . '/../database/cart-queries.php';
 
 // =====================================================
 // ACTION RESOLUTION
-//
-// The form on product-detail.php sends `action=add` directly, so
-// the first branch below catches it. The `queue_action=cart` alias
-// is kept for older markup that may still be cached in a browser.
 // =====================================================
 $action = (string)($_POST['action'] ?? '');
 
@@ -155,15 +152,7 @@ function handleAdd(PDO $db, int $customerId, bool $isAjax): void
 
     $db->beginTransaction();
 
-    $stmt = $db->prepare(
-        "SELECT product_id, name, stock, is_active, price, base_price
-         FROM product
-         WHERE product_id = :product_id
-         FOR UPDATE"
-    );
-    $stmt->execute([':product_id' => $productId]);
-    $product = $stmt->fetch(PDO::FETCH_ASSOC);
-
+    $product = getProductForCart($db, $productId);
     if (!$product) {
         throw new RuntimeException('Product not found.');
     }
@@ -171,16 +160,7 @@ function handleAdd(PDO $db, int $customerId, bool $isAjax): void
         throw new RuntimeException('Product is not available.');
     }
 
-    $checkStmt = $db->prepare(
-        "SELECT cart_id, quantity FROM cart
-         WHERE customer_id = :customer_id AND product_id = :product_id"
-    );
-    $checkStmt->execute([
-        ':customer_id' => $customerId,
-        ':product_id'  => $productId,
-    ]);
-    $existing = $checkStmt->fetch(PDO::FETCH_ASSOC);
-
+    $existing    = getCartItemByProduct($db, $customerId, $productId);
     $newQuantity = $existing ? ((int)$existing['quantity'] + $quantity) : $quantity;
 
     if ((int)$product['stock'] < $newQuantity) {
@@ -222,33 +202,22 @@ function handleAdd(PDO $db, int $customerId, bool $isAjax): void
     $customizationData = !empty($customizations) ? json_encode($customizations) : null;
 
     if ($existing) {
-        $updateStmt = $db->prepare(
-            "UPDATE cart
-             SET quantity = :quantity,
-                 price = :price,
-                 customization_data = :customization_data
-             WHERE cart_id = :cart_id"
+        updateCartItem(
+            $db,
+            (int)$existing['cart_id'],
+            $newQuantity,
+            $serverUnitPrice,
+            $customizationData
         );
-        $updateStmt->execute([
-            ':quantity'           => $newQuantity,
-            ':price'              => $serverUnitPrice,
-            ':customization_data' => $customizationData,
-            ':cart_id'            => $existing['cart_id'],
-        ]);
     } else {
-        $insertStmt = $db->prepare(
-            "INSERT INTO cart
-                (customer_id, product_id, quantity, price, added_at, customization_data)
-             VALUES
-                (:customer_id, :product_id, :quantity, :price, NOW(), :customization_data)"
+        insertCartItem(
+            $db,
+            $customerId,
+            $productId,
+            $quantity,
+            $serverUnitPrice,
+            $customizationData
         );
-        $insertStmt->execute([
-            ':customer_id'        => $customerId,
-            ':product_id'         => $productId,
-            ':quantity'           => $quantity,
-            ':price'              => $serverUnitPrice,
-            ':customization_data' => $customizationData,
-        ]);
     }
 
     $cartCount = getCartCount($db, $customerId);
@@ -273,16 +242,7 @@ function handleUpdateQuantity(PDO $db, int $customerId, bool $isAjax): void
         throw new RuntimeException('Invalid cart item.');
     }
 
-    $stmt = $db->prepare(
-        "SELECT c.cart_id, p.stock
-         FROM cart c
-         JOIN product p ON c.product_id = p.product_id
-         WHERE c.cart_id = :cart_id AND c.customer_id = :customer_id
-         LIMIT 1"
-    );
-    $stmt->execute([':cart_id' => $cartId, ':customer_id' => $customerId]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
-
+    $row = getCartItemForUpdate($db, $cartId, $customerId);
     if (!$row) {
         throw new RuntimeException('Cart item not found.');
     }
@@ -291,15 +251,7 @@ function handleUpdateQuantity(PDO $db, int $customerId, bool $isAjax): void
     if ($quantity < 1)         $quantity = 1;
     if ($quantity > $maxStock) $quantity = $maxStock;
 
-    $updateStmt = $db->prepare(
-        "UPDATE cart SET quantity = :quantity
-         WHERE cart_id = :cart_id AND customer_id = :customer_id"
-    );
-    $updateStmt->execute([
-        ':quantity'    => $quantity,
-        ':cart_id'     => $cartId,
-        ':customer_id' => $customerId,
-    ]);
+    updateCartItemQuantity($db, $cartId, $customerId, $quantity);
 
     cartSuccess(
         ['message' => 'Quantity updated', 'quantity' => $quantity],
@@ -315,18 +267,14 @@ function handleRemoveItem(PDO $db, int $customerId, bool $isAjax): void
         throw new RuntimeException('Invalid cart item.');
     }
 
-    $deleteStmt = $db->prepare(
-        "DELETE FROM cart WHERE cart_id = :cart_id AND customer_id = :customer_id"
-    );
-    $deleteStmt->execute([':cart_id' => $cartId, ':customer_id' => $customerId]);
+    deleteCartItem($db, $cartId, $customerId);
 
     cartSuccess(['message' => 'Item removed'], $isAjax, '../../pages/cart.php');
 }
 
 function handleClear(PDO $db, int $customerId, bool $isAjax): void
 {
-    $deleteStmt = $db->prepare("DELETE FROM cart WHERE customer_id = :customer_id");
-    $deleteStmt->execute([':customer_id' => $customerId]);
+    clearCart($db, $customerId);
 
     cartSuccess(['message' => 'Cart cleared', 'cart_count' => 0], $isAjax, '../../pages/cart.php');
 }
@@ -336,13 +284,4 @@ function handleGetCount(PDO $db, int $customerId): void
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['status' => 'success', 'count' => getCartCount($db, $customerId)]);
     exit;
-}
-
-function getCartCount(PDO $db, int $customerId): int
-{
-    $stmt = $db->prepare(
-        "SELECT COALESCE(SUM(quantity), 0) FROM cart WHERE customer_id = :customer_id"
-    );
-    $stmt->execute([':customer_id' => $customerId]);
-    return (int)$stmt->fetchColumn();
 }
