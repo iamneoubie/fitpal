@@ -467,3 +467,31 @@
         font-size: var(--font-size-base);
     }
 }
+
+
+/* NEW FEATURE */
+
+/* ============================================
+   NAV BADGE (Cart Count)
+   ============================================ */
+
+.nav-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    margin-left: 4px;
+    border-radius: var(--radius-full);
+    background: var(--primary);
+    color: var(--white);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    vertical-align: middle;
+}
+
+.mobile-nav-link .nav-badge {
+    margin-left: 6px;
+}

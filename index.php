@@ -5,7 +5,7 @@
  * This is the public entry point for the FitPal platform.
  * 
  * @package FitPal
- * @version 2.5 - Exact match to menu.php product cards
+ * @version 2.8 - Removed Browse Menu button from empty state
  */
 
 declare(strict_types=1);
@@ -418,39 +418,30 @@ function truncateText(string $text, int $length = 70): string {
                             <?php endif; ?>
                         </div>
 
-                        <!-- Dietary Tags -->
+                        <!-- Dietary Tags — EXACT match to menu.php -->
                         <?php if (!empty($dietaryTags)): ?>
                         <div class="product-tags-section">
                             <span class="tags-label">Dietary Tags:</span>
                             <div class="product-tags">
-                                <?php 
-                                $displayTags = array_slice($dietaryTags, 0, 5);
-                                foreach ($displayTags as $tag): ?>
+                                <?php foreach ($dietaryTags as $tag): ?>
                                 <span class="tag dietary-tag">
                                     <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $tag)), ENT_QUOTES, 'UTF-8'); ?>
                                 </span>
                                 <?php endforeach; ?>
-                                <?php if (count($dietaryTags) > 5): ?>
-                                <span class="tag tag-more">+<?php echo count($dietaryTags) - 5; ?></span>
-                                <?php endif; ?>
                             </div>
                         </div>
                         <?php endif; ?>
 
-                        <!-- Allergens -->
+                        <!-- Allergens — EXACT match to menu.php -->
                         <div class="product-allergens-section">
                             <span class="allergen-label">Allergens:</span>
                             <div class="product-allergens-tags">
-                                <?php if (!empty($allergens)): 
-                                $displayAllergens = array_slice($allergens, 0, 4);
-                                foreach ($displayAllergens as $allergen): ?>
+                                <?php if (!empty($allergens)): ?>
+                                <?php foreach ($allergens as $allergen): ?>
                                 <span class="tag allergen-tag">
                                     <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $allergen)), ENT_QUOTES, 'UTF-8'); ?>
                                 </span>
                                 <?php endforeach; ?>
-                                <?php if (count($allergens) > 4): ?>
-                                <span class="tag tag-more">+<?php echo count($allergens) - 4; ?></span>
-                                <?php endif; ?>
                                 <?php else: ?>
                                 <span class="tag-none">None</span>
                                 <?php endif; ?>
@@ -498,22 +489,19 @@ function truncateText(string $text, int $length = 70): string {
                 </a>
             </div>
             <?php else: ?>
+            <!-- FIXED: Empty State — no Browse Menu button -->
             <div class="empty-state featured-empty">
-                <div class="empty-icon">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt="No products">
+                <div class="empty-state-icon">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt="No products available">
                 </div>
                 <p class="heading-4">No products available</p>
                 <p class="text-muted">Check back later for featured meals.</p>
-                <a href="<?php echo $assetBase; ?>../customer/pages/menu.php" class="btn btn-primary"
-                    style="margin-top: 16px;">
-                    Browse Menu
-                </a>
             </div>
             <?php endif; ?>
         </div>
     </section>
 
-    <!-- CTA Section — FIXED with better spacing -->
+    <!-- CTA Section -->
     <section class="cta-section" aria-labelledby="cta-title">
         <div class="container">
             <div class="cta-content">

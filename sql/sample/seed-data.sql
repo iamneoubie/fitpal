@@ -1,12 +1,26 @@
 -- =====================================================
 -- FitPal Seed Data
--- Version 4.1
+-- Version 4.3
+--
+-- CHANGES FROM 4.2
+--   Section 4 extended:
+--     - 1 manager and 1 staff per restaurant (branch-scoped)
+--     - 3 delivery riders with financial accounts and profiles
+--   No changes to ingredients, products, or compositions.
+--
+-- CHANGES FROM 4.1
+--   Section 4 revised to match new schema:
+--     - restaurant no longer has owner_id
+--     - restaurant now has description, verification_status,
+--       verified_by_admin_id, verified_at
+--     - owners are now restaurant_account rows (role = 'owner')
+--     - each restaurant gets a dedicated owner login
+--   No changes to ingredients, products, or compositions.
 --
 -- CHANGES FROM 4.0
 --   Product description ingredient lines now use the format
 --     - <name>: <calories> kcal, <fat>g fat
 --   instead of the previous "x ... x ..." style.
---   No other changes.
 --
 -- CHANGES FROM 3.0
 --   A. Products renamed to realistic, menu-style names.
@@ -20,9 +34,9 @@
 --        - <name>: <calories> kcal, <fat>g fat
 --      Stored as the product.description column.
 --   D. Restaurant concepts tightened:
---        - Green Bowl Cafe  → plant-forward, vegan-leaning
---        - Keto Kitchen     → high-fat, low-carb
---        - Asian Fusion Fit → gluten-free Asian, includes halal
+--        - Green Bowl Cafe  -> plant-forward, vegan-leaning
+--        - Keto Kitchen     -> high-fat, low-carb
+--        - Asian Fusion Fit -> gluten-free Asian, includes halal
 --
 -- KEY PRINCIPLE
 --   For customizable products, dietary_information.calories
@@ -144,25 +158,69 @@ VALUES (
     );
 
 -- =====================================================
--- 4. RESTAURANTS & BRANCHES
+-- 4. RESTAURANTS, OWNERS, BRANCHES, MANAGERS, STAFF & RIDERS
 -- =====================================================
+
+-- -----------------------------------------------------
+-- Green Bowl Cafe — plant-forward, vegan-leaning
+-- -----------------------------------------------------
 INSERT IGNORE INTO
     restaurant (
-        owner_id,
         business_name,
+        description,
         cuisine_type,
         dietary_tags,
+        verification_status,
+        verified_by_admin_id,
+        verified_at,
         is_active
     )
 VALUES (
-        @admin_id,
         'Green Bowl Cafe',
+        'Plant-forward cafe serving vibrant grain bowls, crisp salads, and dairy-free smoothies. The menu leans vegan and gluten-free, with a rotating cast of seasonal vegetables and clean proteins.',
         'Filipino',
         'vegan,organic,gluten_free',
+        'verified',
+        @admin_id,
+        CURRENT_TIMESTAMP,
         1
     );
 
 SET @rest1_id = LAST_INSERT_ID();
+
+INSERT IGNORE INTO
+    restaurant_account (
+        restaurant_id,
+        branch_id,
+        first_name,
+        middle_name,
+        last_name,
+        birthdate,
+        gender,
+        email,
+        contact_number,
+        username,
+        password,
+        role,
+        is_active
+    )
+VALUES (
+        @rest1_id,
+        NULL,
+        'Gina',
+        NULL,
+        'Bautista',
+        NULL,
+        NULL,
+        'owner@greenbowl.ph',
+        '09171111111',
+        'greenbowl_owner',
+        'owner123',
+        'owner',
+        1
+    );
+
+SET @owner1_id = LAST_INSERT_ID();
 
 INSERT IGNORE INTO
     restaurant_branch (
@@ -188,23 +246,114 @@ VALUES (
 
 SET @branch1_id = LAST_INSERT_ID();
 
+-- Green Bowl Cafe — manager & staff (branch-scoped)
 INSERT IGNORE INTO
-    restaurant (
-        owner_id,
-        business_name,
-        cuisine_type,
-        dietary_tags,
+    restaurant_account (
+        restaurant_id,
+        branch_id,
+        first_name,
+        middle_name,
+        last_name,
+        birthdate,
+        gender,
+        email,
+        contact_number,
+        username,
+        password,
+        role,
         is_active
     )
 VALUES (
-        @admin_id,
+        @rest1_id,
+        @branch1_id,
+        'Rafael',
+        NULL,
+        'Cruz',
+        '1990-05-14',
+        'Male',
+        'manager@greenbowl.ph',
+        '09181111111',
+        'greenbowl_manager',
+        'manager123',
+        'manager',
+        1
+    ),
+    (
+        @rest1_id,
+        @branch1_id,
+        'Liza',
+        NULL,
+        'Reyes',
+        '1998-11-02',
+        'Female',
+        'staff@greenbowl.ph',
+        '09182222222',
+        'greenbowl_staff',
+        'staff123',
+        'staff',
+        1
+    );
+
+-- -----------------------------------------------------
+-- Keto Kitchen — high-fat, low-carb
+-- -----------------------------------------------------
+INSERT IGNORE INTO
+    restaurant (
+        business_name,
+        description,
+        cuisine_type,
+        dietary_tags,
+        verification_status,
+        verified_by_admin_id,
+        verified_at,
+        is_active
+    )
+VALUES (
         'Keto Kitchen',
+        'A high-fat, low-carb kitchen built for keto and performance-focused diners. Every plate is macro-conscious, from bunless smash burgers to cauliflower-crust pizza and buttered steak plates.',
         'Italian',
         'keto,high_protein,low_carb',
+        'verified',
+        @admin_id,
+        CURRENT_TIMESTAMP,
         1
     );
 
 SET @rest2_id = LAST_INSERT_ID();
+
+INSERT IGNORE INTO
+    restaurant_account (
+        restaurant_id,
+        branch_id,
+        first_name,
+        middle_name,
+        last_name,
+        birthdate,
+        gender,
+        email,
+        contact_number,
+        username,
+        password,
+        role,
+        is_active
+    )
+VALUES (
+        @rest2_id,
+        NULL,
+        'Marco',
+        NULL,
+        'Villanueva',
+        NULL,
+        NULL,
+        'owner@ketokitchen.ph',
+        '09172222222',
+        'keto_owner',
+        'owner123',
+        'owner',
+        1
+    );
+
+SET @owner2_id = LAST_INSERT_ID();
 
 INSERT IGNORE INTO
     restaurant_branch (
@@ -230,23 +379,114 @@ VALUES (
 
 SET @branch2_id = LAST_INSERT_ID();
 
+-- Keto Kitchen — manager & staff (branch-scoped)
 INSERT IGNORE INTO
-    restaurant (
-        owner_id,
-        business_name,
-        cuisine_type,
-        dietary_tags,
+    restaurant_account (
+        restaurant_id,
+        branch_id,
+        first_name,
+        middle_name,
+        last_name,
+        birthdate,
+        gender,
+        email,
+        contact_number,
+        username,
+        password,
+        role,
         is_active
     )
 VALUES (
-        @admin_id,
+        @rest2_id,
+        @branch2_id,
+        'Daniel',
+        NULL,
+        'Lopez',
+        '1988-03-22',
+        'Male',
+        'manager@ketokitchen.ph',
+        '09183333333',
+        'keto_manager',
+        'manager123',
+        'manager',
+        1
+    ),
+    (
+        @rest2_id,
+        @branch2_id,
+        'Bea',
+        NULL,
+        'Mendoza',
+        '2000-07-19',
+        'Female',
+        'staff@ketokitchen.ph',
+        '09184444444',
+        'keto_staff',
+        'staff123',
+        'staff',
+        1
+    );
+
+-- -----------------------------------------------------
+-- Asian Fusion Fit — gluten-free Asian, includes halal
+-- -----------------------------------------------------
+INSERT IGNORE INTO
+    restaurant (
+        business_name,
+        description,
+        cuisine_type,
+        dietary_tags,
+        verification_status,
+        verified_by_admin_id,
+        verified_at,
+        is_active
+    )
+VALUES (
         'Asian Fusion Fit',
+        'Gluten-free Asian fusion with a halal-friendly menu. Fresh hand rolls, rainbow poke bowls, and light noodle plates built for clean eating without losing flavor.',
         'Japanese',
         'gluten_free,low_carb,halal',
+        'verified',
+        @admin_id,
+        CURRENT_TIMESTAMP,
         1
     );
 
 SET @rest3_id = LAST_INSERT_ID();
+
+INSERT IGNORE INTO
+    restaurant_account (
+        restaurant_id,
+        branch_id,
+        first_name,
+        middle_name,
+        last_name,
+        birthdate,
+        gender,
+        email,
+        contact_number,
+        username,
+        password,
+        role,
+        is_active
+    )
+VALUES (
+        @rest3_id,
+        NULL,
+        'Aiko',
+        NULL,
+        'Tanaka',
+        NULL,
+        NULL,
+        'owner@asianfusionfit.ph',
+        '09173333333',
+        'aff_owner',
+        'owner123',
+        'owner',
+        1
+    );
+
+SET @owner3_id = LAST_INSERT_ID();
 
 INSERT IGNORE INTO
     restaurant_branch (
@@ -271,6 +511,242 @@ VALUES (
     );
 
 SET @branch3_id = LAST_INSERT_ID();
+
+-- Asian Fusion Fit — manager & staff (branch-scoped)
+INSERT IGNORE INTO
+    restaurant_account (
+        restaurant_id,
+        branch_id,
+        first_name,
+        middle_name,
+        last_name,
+        birthdate,
+        gender,
+        email,
+        contact_number,
+        username,
+        password,
+        role,
+        is_active
+    )
+VALUES (
+        @rest3_id,
+        @branch3_id,
+        'Hiroshi',
+        NULL,
+        'Yamada',
+        '1992-09-08',
+        'Male',
+        'manager@asianfusionfit.ph',
+        '09185555555',
+        'aff_manager',
+        'manager123',
+        'manager',
+        1
+    ),
+    (
+        @rest3_id,
+        @branch3_id,
+        'Mika',
+        NULL,
+        'Suzuki',
+        '1999-12-01',
+        'Female',
+        'staff@asianfusionfit.ph',
+        '09186666666',
+        'aff_staff',
+        'staff123',
+        'staff',
+        1
+    );
+
+-- -----------------------------------------------------
+-- Delivery riders (3)
+-- Each rider needs: financial_account -> delivery_rider -> delivery_rider_profile
+-- -----------------------------------------------------
+
+INSERT IGNORE INTO
+    financial_account (balance, account_type)
+VALUES (0.00, 'rider');
+
+SET @rider1_financial_id = LAST_INSERT_ID();
+
+INSERT IGNORE INTO
+    financial_account (balance, account_type)
+VALUES (0.00, 'rider');
+
+SET @rider2_financial_id = LAST_INSERT_ID();
+
+INSERT IGNORE INTO
+    financial_account (balance, account_type)
+VALUES (0.00, 'rider');
+
+SET @rider3_financial_id = LAST_INSERT_ID();
+
+-- Rider 1: Motorcycle, verified, available
+INSERT IGNORE INTO
+    delivery_rider (
+        first_name,
+        middle_name,
+        last_name,
+        birthdate,
+        gender,
+        email,
+        contact_number,
+        username,
+        password,
+        is_active
+    )
+VALUES (
+        'Carlos',
+        NULL,
+        'Dela Cruz',
+        '1995-04-12',
+        'Male',
+        'rider1@fitpal.com',
+        '09187777777',
+        'rider_carlos',
+        'rider123',
+        1
+    );
+
+SET @rider1_id = LAST_INSERT_ID();
+
+INSERT IGNORE INTO
+    delivery_rider_profile (
+        delivery_rider_id,
+        financial_account_id,
+        vehicle_type,
+        vehicle_plate,
+        verification_status,
+        verified_by_admin_id,
+        verified_at,
+        average_rating,
+        total_deliveries,
+        is_available
+    )
+VALUES (
+        @rider1_id,
+        @rider1_financial_id,
+        'motorcycle',
+        'ABC1234',
+        'verified',
+        @admin_id,
+        CURRENT_TIMESTAMP,
+        4.8,
+        0,
+        1
+    );
+
+-- Rider 2: Car, verified, available
+INSERT IGNORE INTO
+    delivery_rider (
+        first_name,
+        middle_name,
+        last_name,
+        birthdate,
+        gender,
+        email,
+        contact_number,
+        username,
+        password,
+        is_active
+    )
+VALUES (
+        'Miguel',
+        NULL,
+        'Santos',
+        '1993-08-27',
+        'Male',
+        'rider2@fitpal.com',
+        '09188888888',
+        'rider_miguel',
+        'rider123',
+        1
+    );
+
+SET @rider2_id = LAST_INSERT_ID();
+
+INSERT IGNORE INTO
+    delivery_rider_profile (
+        delivery_rider_id,
+        financial_account_id,
+        vehicle_type,
+        vehicle_plate,
+        verification_status,
+        verified_by_admin_id,
+        verified_at,
+        average_rating,
+        total_deliveries,
+        is_available
+    )
+VALUES (
+        @rider2_id,
+        @rider2_financial_id,
+        'car',
+        'XYZ5678',
+        'verified',
+        @admin_id,
+        CURRENT_TIMESTAMP,
+        4.6,
+        0,
+        1
+    );
+
+-- Rider 3: Bicycle, pending verification, not yet available
+INSERT IGNORE INTO
+    delivery_rider (
+        first_name,
+        middle_name,
+        last_name,
+        birthdate,
+        gender,
+        email,
+        contact_number,
+        username,
+        password,
+        is_active
+    )
+VALUES (
+        'Andrei',
+        NULL,
+        'Fernandez',
+        '2000-01-30',
+        'Male',
+        'rider3@fitpal.com',
+        '09189999999',
+        'rider_andrei',
+        'rider123',
+        1
+    );
+
+SET @rider3_id = LAST_INSERT_ID();
+
+INSERT IGNORE INTO
+    delivery_rider_profile (
+        delivery_rider_id,
+        financial_account_id,
+        vehicle_type,
+        vehicle_plate,
+        verification_status,
+        verified_by_admin_id,
+        verified_at,
+        average_rating,
+        total_deliveries,
+        is_available
+    )
+VALUES (
+        @rider3_id,
+        @rider3_financial_id,
+        'bicycle',
+        NULL,
+        'pending',
+        NULL,
+        NULL,
+        0.0,
+        0,
+        0
+    );
 
 -- =====================================================
 -- 5. DIETARY INFORMATION

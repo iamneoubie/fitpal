@@ -1,10 +1,32 @@
 /**
  * FitPal Database Connection Error Styles
- * Clean, modern error page with purposeful layout
+ * 
+ * Aligned with FitPal design standards:
+ * - Consistent card-based layout
+ * - Same border radius, shadows, and spacing scale
+ * - Icon system matches platform icons
+ * - Typography uses heading classes and body text
+ * 
+ * @package FitPal
+ * @version 2.0
  */
 
 /* ============================================
-   ERROR PAGE – Full viewport
+   ERROR PAGE BODY
+   ============================================ */
+
+.error-page-body {
+    background: var(--gray-50);
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ============================================
+   ERROR PAGE LAYOUT
    ============================================ */
 
 .error-page {
@@ -13,9 +35,9 @@
     justify-content: center;
     min-height: 100vh;
     width: 100%;
-    background: var(--background);
     padding: var(--spacing-4);
     margin: 0;
+    box-sizing: border-box;
 }
 
 .error-card {
@@ -25,20 +47,31 @@
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-xl);
     overflow: hidden;
+    border: 1px solid var(--gray-100);
 }
 
 /* ============================================
-   STATUS BAR
+   STATUS HEADER
    ============================================ */
 
 .error-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-2);
     background: var(--danger);
     color: var(--white);
-    text-align: center;
-    padding: var(--spacing-2);
-    font-weight: var(--font-weight-bold);
+    padding: var(--spacing-3) var(--spacing-4);
+    font-weight: var(--font-weight-semibold);
     font-size: var(--font-size-sm);
-    letter-spacing: 2px;
+    letter-spacing: 0.5px;
+}
+
+.error-status-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
 }
 
 /* ============================================
@@ -51,40 +84,29 @@
 }
 
 /* ============================================
-   DATABASE ICON
+   ICON
    ============================================ */
 
-.error-icon {
+.error-icon-wrapper {
     display: flex;
     justify-content: center;
     margin-bottom: var(--spacing-6);
 }
 
-.db-stack {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 3px;
-    width: 48px;
-}
-
-.db-stack span {
-    display: block;
-    width: 100%;
-    height: 10px;
-    background: var(--danger);
+.error-icon {
+    width: 72px;
+    height: 72px;
     border-radius: var(--radius-full);
-    opacity: 0.6;
+    background: rgba(220, 53, 69, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--danger);
 }
 
-.db-stack span:nth-child(2) {
-    height: 14px;
-    opacity: 0.8;
-}
-
-.db-stack span:nth-child(3) {
-    height: 18px;
-    opacity: 1;
+.error-icon svg {
+    width: 32px;
+    height: 32px;
 }
 
 /* ============================================
@@ -98,6 +120,7 @@
 .error-title {
     font-size: var(--font-size-2xl);
     font-weight: var(--font-weight-bold);
+    line-height: var(--line-height-tight);
     color: var(--text);
     margin: 0 0 var(--spacing-3) 0;
 }
@@ -109,7 +132,7 @@
 .error-message {
     font-size: var(--font-size-base);
     color: var(--gray-500);
-    line-height: 1.6;
+    line-height: var(--line-height-relaxed);
     margin: 0;
 }
 
@@ -120,70 +143,84 @@
 .error-debug {
     background: var(--gray-50);
     border-radius: var(--radius-base);
-    padding: var(--spacing-3);
     margin-bottom: var(--spacing-6);
     text-align: left;
     border: 1px solid var(--gray-200);
+    overflow: hidden;
+}
+
+.debug-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-2) var(--spacing-3);
+    background: var(--gray-100);
+    border-bottom: 1px solid var(--gray-200);
 }
 
 .debug-label {
     font-size: var(--font-size-xs);
     font-weight: var(--font-weight-semibold);
-    color: var(--gray-500);
+    color: var(--gray-600);
     text-transform: uppercase;
-    letter-spacing: 1px;
-    margin: 0 0 var(--spacing-2) 0;
+    letter-spacing: 0.5px;
+    margin: 0;
 }
 
 .error-debug code {
     display: block;
+    padding: var(--spacing-3);
     font-size: var(--font-size-xs);
     color: var(--gray-700);
     word-break: break-all;
     white-space: pre-wrap;
-    font-family: 'Courier New', monospace;
-    line-height: 1.5;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    line-height: 1.6;
+    background: var(--white);
 }
 
 /* ============================================
-   RETRY BUTTON
+   ACTION
    ============================================ */
 
 .error-action {
     margin-bottom: var(--spacing-6);
 }
 
-.btn-retry {
+.error-action .btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: var(--spacing-2);
     padding: var(--spacing-3) var(--spacing-8);
-    background: var(--primary);
-    color: var(--white);
-    border-radius: var(--radius-full);
-    font-weight: var(--font-weight-medium);
     font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    border-radius: var(--radius-full);
     text-decoration: none;
     transition: all var(--transition-fast);
-    border: none;
+    border: 2px solid transparent;
     cursor: pointer;
 }
 
-.btn-retry:hover {
+.error-action .btn-primary {
+    background: var(--primary);
+    color: var(--white);
+    border-color: var(--primary);
+}
+
+.error-action .btn-primary:hover {
     background: var(--primary-dark);
+    border-color: var(--primary-dark);
     transform: translateY(-1px);
     box-shadow: var(--shadow-md);
 }
 
-.btn-retry:active {
+.error-action .btn-primary:active {
     transform: translateY(0);
 }
 
-.retry-icon {
-    font-size: var(--font-size-lg);
-    line-height: 1;
-    display: inline-block;
+.error-action .btn svg {
+    flex-shrink: 0;
 }
 
 /* ============================================
@@ -193,17 +230,13 @@
 .error-help {
     font-size: var(--font-size-sm);
     color: var(--gray-400);
-    line-height: 1.6;
+    line-height: var(--line-height-relaxed);
     padding-top: var(--spacing-4);
     border-top: 1px solid var(--gray-100);
 }
 
-.error-help code {
-    background: var(--gray-100);
-    padding: 0 var(--spacing-1);
-    border-radius: var(--radius-sm);
-    color: var(--gray-600);
-    font-size: 0.9em;
+.error-help p {
+    margin: 0;
 }
 
 /* ============================================
@@ -212,7 +245,7 @@
 
 @media (max-width: 768px) {
     .error-content {
-        padding: var(--spacing-6) var(--spacing-4);
+        padding: var(--spacing-6) var(--spacing-4) var(--spacing-4);
     }
 
     .error-title {
@@ -223,39 +256,55 @@
         font-size: var(--font-size-sm);
     }
 
-    .btn-retry {
-        padding: var(--spacing-2) var(--spacing-6);
-        font-size: var(--font-size-xs);
+    .error-icon {
+        width: 60px;
+        height: 60px;
+    }
+
+    .error-icon svg {
+        width: 26px;
+        height: 26px;
+    }
+
+    .error-action .btn {
         width: 100%;
+        padding: var(--spacing-3) var(--spacing-6);
     }
 }
 
 @media (max-width: 576px) {
+    .error-page {
+        padding: var(--spacing-3);
+    }
+
+    .error-card {
+        border-radius: var(--radius-lg);
+    }
+
     .error-content {
-        padding: var(--spacing-4) var(--spacing-3);
+        padding: var(--spacing-5) var(--spacing-3) var(--spacing-3);
     }
 
     .error-title {
         font-size: var(--font-size-lg);
     }
 
-    .db-stack {
-        width: 36px;
+    .error-icon {
+        width: 52px;
+        height: 52px;
     }
 
-    .db-stack span {
-        height: 8px;
-    }
-
-    .db-stack span:nth-child(2) {
-        height: 11px;
-    }
-
-    .db-stack span:nth-child(3) {
-        height: 14px;
+    .error-icon svg {
+        width: 22px;
+        height: 22px;
     }
 
     .error-debug code {
+        font-size: 11px;
+    }
+
+    .error-status {
         font-size: var(--font-size-xs);
+        padding: var(--spacing-2) var(--spacing-3);
     }
 }

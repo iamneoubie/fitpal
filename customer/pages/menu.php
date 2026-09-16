@@ -3,15 +3,14 @@
  * FitPal Customer Menu Page
  *
  * Displays restaurants and their menu items with dietary filtering and pagination.
- * Queue panel replaces alert-based feedback with persistent cart display.
  *
- * Features:
- * - Dietary tag filter (include)
- * - Allergen filter (exclude) - automatically excludes user's allergies
- * - Auto-applies user's dietary preferences as checked filters
+ * The queue panel is the sole "order staging" surface on this page. It reads
+ * and writes the session-based order_queue (NOT the database cart). The cart
+ * is a separate, persistent concept managed on product-detail.php via the
+ * "Add to Cart" button.
  *
  * @package FitPal
- * @version 6.1 - Fixed pagination consistency + removed inline JS
+ * @version 9.0 — Add button now type="button" with delegated click handler in menu.js
  */
 
 declare(strict_types=1);
@@ -22,37 +21,35 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once __DIR__ . '/../includes/header.php';
 
-// Use product queries for menu and product operations
 require_once __DIR__ . '/../backend/database/product-queries.php';
 require_once __DIR__ . '/../backend/database/order-queries.php';
 
 // ============================================
-// CONFIGURATION - Products per page
+// CONFIGURATION
 // ============================================
 $perPage = 10;
 
-// Get filters from GET
-$page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
-$search = isset($_GET['search']) ? trim($_GET['search']) : '';
-$selectedTags = isset($_GET['tags']) && is_array($_GET['tags']) ? array_filter($_GET['tags']) : [];
+$page              = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+$search            = isset($_GET['search']) ? trim($_GET['search']) : '';
+$selectedTags      = isset($_GET['tags']) && is_array($_GET['tags']) ? array_filter($_GET['tags']) : [];
 $selectedAllergens = isset($_GET['allergens']) && is_array($_GET['allergens']) ? array_filter($_GET['allergens']) : [];
-$restaurantId = isset($_GET['restaurant_id']) ? max(0, (int)$_GET['restaurant_id']) : 0;
-$minPrice = isset($_GET['min_price']) && $_GET['min_price'] !== '' ? max(0, (float)$_GET['min_price']) : 0.0;
-$maxPrice = isset($_GET['max_price']) && $_GET['max_price'] !== '' ? max(0, (float)$_GET['max_price']) : 0.0;
+$restaurantId      = isset($_GET['restaurant_id']) ? max(0, (int)$_GET['restaurant_id']) : 0;
+$minPrice          = isset($_GET['min_price']) && $_GET['min_price'] !== '' ? max(0, (float)$_GET['min_price']) : 0.0;
+$maxPrice          = isset($_GET['max_price']) && $_GET['max_price'] !== '' ? max(0, (float)$_GET['max_price']) : 0.0;
 
 // ============================================
-// LOAD USER PREFERENCES (if logged in)
+// LOAD USER PREFERENCES
 // ============================================
 $userDietaryPreferences = [];
-$userAllergies = [];
-$isLoggedIn = isset($_SESSION['customer_id']) && !empty($_SESSION['customer_id']);
+$userAllergies          = [];
+$isLoggedIn             = isset($_SESSION['customer_id']) && !empty($_SESSION['customer_id']);
 
 if ($isLoggedIn) {
     try {
         $prefStmt = $database_connection->prepare(
-            "SELECT dietary_preferences, allergies 
-             FROM customer_profile 
-             WHERE customer_id = :customer_id 
+            "SELECT dietary_preferences, allergies
+             FROM customer_profile
+             WHERE customer_id = :customer_id
              LIMIT 1"
         );
         $prefStmt->execute([':customer_id' => (int)$_SESSION['customer_id']]);
@@ -78,29 +75,27 @@ if ($isLoggedIn) {
 }
 
 // ============================================
-// AUTO-APPLY USER PREFERENCES (when no filter is set)
+// AUTO-APPLY USER PREFERENCES
 // ============================================
-$isFilterSubmitted = isset($_GET['filter_applied']) || 
-                     isset($_GET['search']) || 
-                     isset($_GET['tags']) || 
+$isFilterSubmitted = isset($_GET['filter_applied']) ||
+                     isset($_GET['search']) ||
+                     isset($_GET['tags']) ||
                      isset($_GET['allergens']) ||
-                     isset($_GET['restaurant_id']) || 
-                     isset($_GET['min_price']) || 
+                     isset($_GET['restaurant_id']) ||
+                     isset($_GET['min_price']) ||
                      isset($_GET['max_price']);
 
 if ($isLoggedIn && !$isFilterSubmitted) {
-    // Auto-check user's dietary preferences
     if (!empty($userDietaryPreferences)) {
         $selectedTags = $userDietaryPreferences;
     }
-    // Auto-check user's allergies (exclusion filter)
     if (!empty($userAllergies)) {
         $selectedAllergens = $userAllergies;
     }
 }
 
 // ============================================
-// FETCH MENU DATA with allergen exclusion
+// FETCH MENU DATA
 // ============================================
 $menuData = getMenuDataPaginated(
     $database_connection,
@@ -113,102 +108,76 @@ $menuData = getMenuDataPaginated(
     $maxPrice,
     $selectedAllergens
 );
-$restaurants = $menuData['restaurants'] ?? [];
+$restaurants   = $menuData['restaurants'] ?? [];
 $totalProducts = $menuData['totalProducts'] ?? 0;
-$totalPages = $menuData['totalPages'] ?? 1;
+$totalPages    = $menuData['totalPages'] ?? 1;
 
-// Get all dietary tags for filter checkboxes
+// ============================================
+// FILTER OPTIONS
+// ============================================
 $allDietaryTags = [
-    'vegan',
-    'vegetarian',
-    'keto',
-    'high_protein',
-    'low_carb',
-    'gluten_free',
-    'dairy_free',
-    'pescatarian',
-    'mediterranean',
-    'halal',
+    'vegan', 'vegetarian', 'keto', 'high_protein', 'low_carb',
+    'gluten_free', 'dairy_free', 'pescatarian', 'mediterranean', 'halal',
 ];
 
-// Get all allergens for filter checkboxes
 $allAllergens = [
-    'nuts',
-    'dairy',
-    'eggs',
-    'soy',
-    'wheat',
-    'shellfish',
-    'fish',
-    'peanuts',
-    'sesame',
+    'nuts', 'dairy', 'eggs', 'soy', 'wheat',
+    'shellfish', 'fish', 'peanuts', 'sesame',
 ];
 
-// Get all restaurants for the restaurant switcher
 $allRestaurants = getAllRestaurants($database_connection);
 
+// ============================================
+// CSRF TOKEN
+// ============================================
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 $csrfToken = $_SESSION['csrf_token'];
 
-// Fetch the customer's active order for the fixed order tracker
+// ============================================
+// ACTIVE ORDER
+// ============================================
 $activeOrder = null;
 if ($isLoggedIn) {
     $activeOrder = getActiveOrder($database_connection, (int)$_SESSION['customer_id']);
 }
 
-/**
- * Map an order status to how many of the 4 tracker steps are completed.
- */
+// ============================================
+// HELPERS
+// ============================================
+
 function getTrackerStepIndex(string $status): int {
     return match ($status) {
-        'pending' => 1,
-        'confirmed' => 2,
-        'preparing' => 2,
+        'pending'          => 1,
+        'confirmed'        => 2,
+        'preparing'        => 2,
         'out_for_delivery' => 3,
-        'delivered' => 4,
-        default => 1,
+        'delivered'        => 4,
+        default            => 1,
     };
 }
 
-/**
- * Human-readable label for an order status shown in the tracker.
- */
 function getTrackerStatusLabel(string $status): string {
     return match ($status) {
-        'pending' => 'Order Placed',
-        'confirmed' => 'Confirmed',
-        'preparing' => 'Preparing',
+        'pending'          => 'Order Placed',
+        'confirmed'        => 'Confirmed',
+        'preparing'        => 'Preparing',
         'out_for_delivery' => 'Out for Delivery',
-        default => ucfirst(str_replace('_', ' ', $status)),
+        default            => ucfirst(str_replace('_', ' ', $status)),
     };
 }
 
-// Build query string for pagination links (preserve filters)
 function buildQueryString(array $params = []): string {
     $base = [];
-    if (isset($_GET['search']) && !isset($params['search'])) {
-        $params['search'] = $_GET['search'];
-    }
-    if (isset($_GET['tags']) && !isset($params['tags'])) {
-        $params['tags'] = $_GET['tags'];
-    }
-    if (isset($_GET['allergens']) && !isset($params['allergens'])) {
-        $params['allergens'] = $_GET['allergens'];
-    }
-    if (isset($_GET['restaurant_id']) && !isset($params['restaurant_id'])) {
-        $params['restaurant_id'] = $_GET['restaurant_id'];
-    }
-    if (isset($_GET['min_price']) && !isset($params['min_price'])) {
-        $params['min_price'] = $_GET['min_price'];
-    }
-    if (isset($_GET['max_price']) && !isset($params['max_price'])) {
-        $params['max_price'] = $_GET['max_price'];
-    }
-    if (isset($_GET['per_page']) && !isset($params['per_page'])) {
-        $params['per_page'] = $_GET['per_page'];
-    }
+    if (isset($_GET['search']) && !isset($params['search']))         { $params['search'] = $_GET['search']; }
+    if (isset($_GET['tags']) && !isset($params['tags']))             { $params['tags'] = $_GET['tags']; }
+    if (isset($_GET['allergens']) && !isset($params['allergens']))   { $params['allergens'] = $_GET['allergens']; }
+    if (isset($_GET['restaurant_id']) && !isset($params['restaurant_id'])) { $params['restaurant_id'] = $_GET['restaurant_id']; }
+    if (isset($_GET['min_price']) && !isset($params['min_price']))   { $params['min_price'] = $_GET['min_price']; }
+    if (isset($_GET['max_price']) && !isset($params['max_price']))   { $params['max_price'] = $_GET['max_price']; }
+    if (isset($_GET['per_page']) && !isset($params['per_page']))     { $params['per_page'] = $_GET['per_page']; }
+
     foreach ($params as $key => $val) {
         if (is_array($val)) {
             foreach ($val as $v) {
@@ -221,9 +190,6 @@ function buildQueryString(array $params = []): string {
     return $base ? '?' . implode('&', $base) : '';
 }
 
-/**
- * Truncate text to a specified length with ellipsis.
- */
 function truncateText(string $text, int $length = 60): string {
     if (strlen($text) <= $length) {
         return $text;
@@ -231,21 +197,14 @@ function truncateText(string $text, int $length = 60): string {
     return substr($text, 0, $length) . '...';
 }
 
-/**
- * Check if any filters are applied
- */
 function hasActiveFilters(): bool {
-    return !empty($_GET['search']) || 
-           !empty($_GET['tags']) || 
+    return !empty($_GET['search']) ||
+           !empty($_GET['tags']) ||
            !empty($_GET['allergens']) ||
            (isset($_GET['restaurant_id']) && (int)$_GET['restaurant_id'] > 0) ||
            (isset($_GET['min_price']) && (float)$_GET['min_price'] > 0) ||
            (isset($_GET['max_price']) && (float)$_GET['max_price'] > 0);
 }
-
-// Determine if auto-filters were applied (for showing a notice)
-$autoFiltersApplied = $isLoggedIn && !$isFilterSubmitted && 
-                      (!empty($userDietaryPreferences) || !empty($userAllergies));
 ?>
 <link rel="stylesheet" href="../assets/css/menu.css">
 <link rel="stylesheet" href="../assets/css/menu-filter.css">
@@ -254,6 +213,21 @@ $autoFiltersApplied = $isLoggedIn && !$isFilterSubmitted &&
 
 <div class="content menu-page<?php echo $activeOrder ? ' has-order-tracker' : ''; ?>">
     <div class="container">
+
+        <!-- Queue flash messages (set by queue-handler.php on non-AJAX add) -->
+        <?php if (isset($_SESSION['queue_success'])): ?>
+        <div class="alert alert-success" role="alert">
+            <?php echo htmlspecialchars($_SESSION['queue_success'], ENT_QUOTES, 'UTF-8'); ?>
+            <?php unset($_SESSION['queue_success']); ?>
+        </div>
+        <?php endif; ?>
+
+        <?php if (isset($_SESSION['queue_error'])): ?>
+        <div class="alert alert-danger" role="alert">
+            <?php echo htmlspecialchars($_SESSION['queue_error'], ENT_QUOTES, 'UTF-8'); ?>
+            <?php unset($_SESSION['queue_error']); ?>
+        </div>
+        <?php endif; ?>
 
         <!-- Sticky Filter Bar -->
         <div class="menu-filters" id="menuFilters">
@@ -542,9 +516,8 @@ $autoFiltersApplied = $isLoggedIn && !$isFilterSubmitted &&
                             <!-- Product Actions -->
                             <div class="product-actions">
                                 <?php if ($isLoggedIn && $product['stock'] > 0): ?>
-                                <form method="POST" action="#" class="add-to-cart-form" style="width: 100%;">
-                                    <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
-                                    <input type="hidden" name="product_id" value="<?php echo (int)$product['id']; ?>">
+                                <div class="add-to-cart-form" style="width: 100%;"
+                                    data-product-id="<?php echo (int)$product['id']; ?>">
                                     <div class="action-row">
                                         <div class="quantity-control">
                                             <button type="button" class="qty-btn qty-minus"
@@ -554,13 +527,13 @@ $autoFiltersApplied = $isLoggedIn && !$isFilterSubmitted &&
                                             <button type="button" class="qty-btn qty-plus"
                                                 aria-label="Increase quantity">+</button>
                                         </div>
-                                        <button type="submit" class="btn btn-primary btn-sm add-btn"
+                                        <button type="button" class="btn btn-primary btn-sm add-btn"
                                             aria-label="Add to order">
                                             <img src="<?php echo $assetBase; ?>assets/images/icons/add-circle-empty.svg"
                                                 alt="Add to order" class="btn-icon" width="18" height="18">
                                         </button>
                                     </div>
-                                </form>
+                                </div>
                                 <?php elseif (!$isLoggedIn): ?>
                                 <a href="sign-in.php" class="btn btn-outline btn-sm">Login to Order</a>
                                 <?php else: ?>
@@ -575,42 +548,30 @@ $autoFiltersApplied = $isLoggedIn && !$isFilterSubmitted &&
             </div>
             <?php endforeach; ?>
 
-            <!-- ============================================
-                 PAGINATION - Consistent layout with disabled states
-                 Always shows Previous and Next, disabled when at bounds.
-                 ============================================ -->
+            <!-- Pagination -->
             <?php if ($totalPages > 0): ?>
             <nav class="pagination" role="navigation" aria-label="Product pagination">
                 <ul class="pagination-list">
-                    <!-- Previous Button - always visible, disabled on page 1 -->
                     <?php if ($page > 1): ?>
                     <li class="pagination-item">
                         <a href="<?php echo htmlspecialchars(buildQueryString(['page' => $page - 1]), ENT_QUOTES, 'UTF-8'); ?>"
-                            class="pagination-link pagination-prev" aria-label="Previous page">
-                            Previous
-                        </a>
+                            class="pagination-link pagination-prev" aria-label="Previous page">Previous</a>
                     </li>
                     <?php else: ?>
                     <li class="pagination-item">
                         <span class="pagination-link pagination-prev disabled" aria-label="Previous page"
-                            aria-disabled="true">
-                            Previous
-                        </span>
+                            aria-disabled="true">Previous</span>
                     </li>
                     <?php endif; ?>
 
                     <?php
-                    // Show up to 5 page numbers centered around current page
                     $maxVisible = 5;
-                    $startPage = max(1, $page - floor($maxVisible / 2));
-                    $endPage = min($totalPages, $startPage + $maxVisible - 1);
-                    
-                    // Adjust start if we're near the end
+                    $startPage  = max(1, $page - floor($maxVisible / 2));
+                    $endPage    = min($totalPages, $startPage + $maxVisible - 1);
                     if ($endPage - $startPage + 1 < $maxVisible) {
                         $startPage = max(1, $endPage - $maxVisible + 1);
                     }
 
-                    // First page + ellipsis
                     if ($startPage > 1): ?>
                     <li class="pagination-item">
                         <a href="<?php echo htmlspecialchars(buildQueryString(['page' => 1]), ENT_QUOTES, 'UTF-8'); ?>"
@@ -624,45 +585,35 @@ $autoFiltersApplied = $isLoggedIn && !$isFilterSubmitted &&
                     <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
                     <li class="pagination-item">
                         <?php if ($i === $page): ?>
-                        <span class="pagination-link active" aria-current="page" aria-label="Page <?php echo $i; ?>">
-                            <?php echo $i; ?>
-                        </span>
+                        <span class="pagination-link active" aria-current="page"
+                            aria-label="Page <?php echo $i; ?>"><?php echo $i; ?></span>
                         <?php else: ?>
                         <a href="<?php echo htmlspecialchars(buildQueryString(['page' => $i]), ENT_QUOTES, 'UTF-8'); ?>"
-                            class="pagination-link" aria-label="Page <?php echo $i; ?>">
-                            <?php echo $i; ?>
-                        </a>
+                            class="pagination-link" aria-label="Page <?php echo $i; ?>"><?php echo $i; ?></a>
                         <?php endif; ?>
                     </li>
                     <?php endfor; ?>
 
-                    <?php // Last page + ellipsis
-                    if ($endPage < $totalPages): ?>
+                    <?php if ($endPage < $totalPages): ?>
                     <?php if ($endPage < $totalPages - 1): ?>
                     <li class="pagination-item pagination-ellipsis"><span>...</span></li>
                     <?php endif; ?>
                     <li class="pagination-item">
                         <a href="<?php echo htmlspecialchars(buildQueryString(['page' => $totalPages]), ENT_QUOTES, 'UTF-8'); ?>"
-                            class="pagination-link" aria-label="Page <?php echo $totalPages; ?>">
-                            <?php echo $totalPages; ?>
-                        </a>
+                            class="pagination-link"
+                            aria-label="Page <?php echo $totalPages; ?>"><?php echo $totalPages; ?></a>
                     </li>
                     <?php endif; ?>
 
-                    <!-- Next Button - always visible, disabled on last page -->
                     <?php if ($page < $totalPages): ?>
                     <li class="pagination-item">
                         <a href="<?php echo htmlspecialchars(buildQueryString(['page' => $page + 1]), ENT_QUOTES, 'UTF-8'); ?>"
-                            class="pagination-link pagination-next" aria-label="Next page">
-                            Next
-                        </a>
+                            class="pagination-link pagination-next" aria-label="Next page">Next</a>
                     </li>
                     <?php else: ?>
                     <li class="pagination-item">
                         <span class="pagination-link pagination-next disabled" aria-label="Next page"
-                            aria-disabled="true">
-                            Next
-                        </span>
+                            aria-disabled="true">Next</span>
                     </li>
                     <?php endif; ?>
                 </ul>
@@ -676,7 +627,7 @@ $autoFiltersApplied = $isLoggedIn && !$isFilterSubmitted &&
     <!-- Fixed Order Tracker -->
     <?php if ($activeOrder): ?>
     <?php
-        $trackerStep = getTrackerStepIndex($activeOrder['order_status']);
+        $trackerStep        = getTrackerStepIndex($activeOrder['order_status']);
         $trackerStatusLabel = getTrackerStatusLabel($activeOrder['order_status']);
         $trackerStatusClass = 'tracker-status-' . $activeOrder['order_status'];
     ?>
@@ -709,14 +660,11 @@ $autoFiltersApplied = $isLoggedIn && !$isFilterSubmitted &&
     </div>
     <?php endif; ?>
 
-    <!-- ============================================
-     QUEUE PANEL - Persistent Cart
-     ============================================ -->
-    <div class="queue-panel-wrapper" id="queuePanelWrapper" style="display:none;">
+    <!-- Queue Panel -->
+    <div class="queue-panel-wrapper empty" id="queuePanelWrapper" data-queue-empty="true" aria-hidden="true">
         <div class="queue-panel" id="queuePanel">
             <div class="queue-panel-inner" id="queuePanelInner">
 
-                <!-- Panel Header -->
                 <div class="queue-panel-header" id="queuePanelHeader">
                     <div class="queue-panel-title">
                         <span>Your Order</span>
@@ -734,11 +682,8 @@ $autoFiltersApplied = $isLoggedIn && !$isFilterSubmitted &&
                     </button>
                 </div>
 
-                <!-- Panel Body -->
                 <div class="queue-panel-body">
-                    <div class="queue-items-container" id="queueItemsContainer">
-                        <!-- Items rendered by JavaScript -->
-                    </div>
+                    <div class="queue-items-container" id="queueItemsContainer"></div>
 
                     <div class="queue-empty-state" id="queueEmptyState" style="display:none;">
                         <div class="queue-empty-icon">
@@ -754,9 +699,7 @@ $autoFiltersApplied = $isLoggedIn && !$isFilterSubmitted &&
                             <span class="queue-footer-item-count" id="queueFooterItemCount">0 items</span>
                         </div>
                         <div class="queue-footer-actions">
-                            <button type="button" class="queue-btn-cancel" id="queueCancelBtn">
-                                Cancel Order
-                            </button>
+                            <button type="button" class="queue-btn-cancel" id="queueCancelBtn">Cancel Order</button>
                             <a href="checkout.php" class="queue-btn-checkout" id="queueCheckoutBtn" disabled>
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2">
@@ -773,9 +716,7 @@ $autoFiltersApplied = $isLoggedIn && !$isFilterSubmitted &&
         </div>
     </div>
 
-    <!-- ============================================
-     MODAL - Remove Item Confirmation
-     ============================================ -->
+    <!-- Modal: Remove Item -->
     <div class="queue-modal" id="queueRemoveModal" style="display:none;">
         <div class="queue-modal-overlay"></div>
         <div class="queue-modal-content">
@@ -793,9 +734,7 @@ $autoFiltersApplied = $isLoggedIn && !$isFilterSubmitted &&
         </div>
     </div>
 
-    <!-- ============================================
-     MODAL - Cancel Entire Order Confirmation
-     ============================================ -->
+    <!-- Modal: Cancel Entire Order -->
     <div class="queue-modal" id="queueCancelModal" style="display:none;">
         <div class="queue-modal-overlay"></div>
         <div class="queue-modal-content">
@@ -814,11 +753,9 @@ $autoFiltersApplied = $isLoggedIn && !$isFilterSubmitted &&
     </div>
 </div>
 
-<!-- ============================================
-     SCRIPTS
-     ============================================ -->
 <script>
 window.FITPAL_ASSET_BASE = '<?php echo $assetBase; ?>';
+window.FITPAL_CSRF_TOKEN = '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>';
 </script>
 <script src="../assets/ui/js/menu.js" defer></script>
 <script src="../assets/ui/js/queue-panel.js" defer></script>

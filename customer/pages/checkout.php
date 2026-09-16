@@ -1,10 +1,15 @@
 <?php
 /**
  * FitPal Customer Checkout Page
- * Version 3.6 - Fixed 2x2 layout with proper row-based grouping
+ * Version 3.7
+ *
+ * v3.7 — No longer redirects to profile.php when the user has no
+ *         address. Instead, renders an inline "add address" state
+ *         on the checkout page itself. The Place Order button is
+ *         disabled until an address is selected.
  *
  * @package FitPal
- * @version 3.6
+ * @version 3.7
  */
 
 declare(strict_types=1);
@@ -66,6 +71,8 @@ $total = $subtotal + $deliveryFee;
 // ===== FETCH ALL ADDRESSES =====
 $addresses = [];
 $defaultAddressId = null;
+$hasAddress = false;
+
 try {
     $stmt = $database_connection->prepare(
         "SELECT customer_address_id FROM customer WHERE customer_id = :customer_id"
@@ -99,11 +106,7 @@ try {
     error_log('Checkout address fetch error: ' . $e->getMessage());
 }
 
-if (empty($addresses)) {
-    $_SESSION['checkout_error'] = 'Please add a delivery address in your profile before checking out.';
-    header('Location: profile.php');
-    exit;
-}
+$hasAddress = !empty($addresses);
 
 // ===== FETCH USER DETAILS =====
 $userDetails = [];
@@ -142,7 +145,7 @@ function getAddressLabel(array $addr): string {
     return !empty($addr['label']) ? $addr['label'] : 'Address';
 }
 
-$selectedAddr = $addresses[0] ?? null;
+$selectedAddr = $hasAddress ? $addresses[0] : null;
 $selectedAddrId = $selectedAddr ? (int)$selectedAddr['customer_address_id'] : 0;
 $selectedAddressText = $selectedAddr ? formatAddress($selectedAddr) : '';
 
@@ -160,6 +163,13 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
         <div class="alert alert-danger" role="alert">
             <?php echo htmlspecialchars($_SESSION['checkout_error'], ENT_QUOTES, 'UTF-8'); ?>
             <?php unset($_SESSION['checkout_error']); ?>
+        </div>
+        <?php endif; ?>
+
+        <?php if (isset($_SESSION['cart_success'])): ?>
+        <div class="alert alert-success" role="alert">
+            <?php echo htmlspecialchars($_SESSION['cart_success'], ENT_QUOTES, 'UTF-8'); ?>
+            <?php unset($_SESSION['cart_success']); ?>
         </div>
         <?php endif; ?>
 
@@ -201,6 +211,7 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
                         <p class="heading-5">Delivery Address</p>
                     </div>
                     <div class="card-body">
+                        <?php if ($hasAddress): ?>
                         <div class="address-display">
                             <div class="address-display-icon">
                                 <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg"
@@ -224,6 +235,23 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
                         <input type="hidden" id="selectedAddressId" value="<?php echo $selectedAddrId; ?>">
                         <input type="hidden" id="selectedAddressText"
                             value="<?php echo htmlspecialchars($selectedAddressText, ENT_QUOTES, 'UTF-8'); ?>">
+                        <?php else: ?>
+                        <div class="address-empty-state">
+                            <div class="address-empty-icon">
+                                <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg"
+                                    alt="No address">
+                            </div>
+                            <p class="address-empty-title">No delivery address yet</p>
+                            <p class="address-empty-text">
+                                Add a delivery address to place your order.
+                            </p>
+                            <a href="profile.php#addresses" class="btn btn-primary btn-sm">
+                                Add Address
+                            </a>
+                        </div>
+                        <input type="hidden" id="selectedAddressId" value="0">
+                        <input type="hidden" id="selectedAddressText" value="">
+                        <?php endif; ?>
                     </div>
                 </div>
 
@@ -259,7 +287,7 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
                                     <ul class="order-item-customizations">
                                         <?php foreach ($item['customizations'] as $cust): ?>
                                         <li><?php echo htmlspecialchars($cust['ingredient_name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
-                                            <?php if ($cust['price_modifier'] != 0): ?>
+                                            <?php if (($cust['price_modifier'] ?? 0) != 0): ?>
                                             (+₱<?php echo number_format((float)$cust['price_modifier'], 2); ?>)
                                             <?php endif; ?>
                                         </li>
@@ -340,7 +368,10 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
 
                         <div class="checkout-actions">
                             <a href="menu.php" class="btn btn-secondary">Back to Menu</a>
-                            <button type="button" id="placeOrderBtn" class="btn btn-primary">Place Order</button>
+                            <button type="button" id="placeOrderBtn" class="btn btn-primary"
+                                <?php echo !$hasAddress ? 'disabled' : ''; ?>>
+                                <?php echo $hasAddress ? 'Place Order' : 'Add Address to Continue'; ?>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -351,8 +382,9 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
 </div>
 
 <!-- ============================================ -->
-<!-- ADDRESS MODAL (queue panel pattern - optimized fade) -->
+<!-- ADDRESS MODAL (only rendered when user has addresses) -->
 <!-- ============================================ -->
+<?php if ($hasAddress): ?>
 <div id="addressModal" class="modal" style="display:none;">
     <div class="modal-overlay"></div>
     <div class="modal-content">
@@ -396,16 +428,17 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
 
         <div class="modal-footer">
             <button type="button" class="btn btn-secondary" id="cancelAddressModal">Cancel</button>
-            <button type="button" class="btn btn-primary" id="addAddressModalBtn">
+            <a href="profile.php#addresses" class="btn btn-primary" id="addAddressModalBtn">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="12" y1="5" x2="12" y2="19" />
                     <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
                 Add Address
-            </button>
+            </a>
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 <!-- Hidden form for submitting order -->
 <form id="checkoutForm" method="POST" action="../backend/handlers/place-order-handler.php" style="display:none;">

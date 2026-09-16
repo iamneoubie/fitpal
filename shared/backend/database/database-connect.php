@@ -6,12 +6,12 @@
  * All roles use this single connection instance.
  * 
  * Usage:
- *   require_once __DIR__ . '/shared/backend/database/database_connect.php';
+ *   require_once __DIR__ . '/shared/backend/database/database-connect.php';
  *   $statement = $database_connection->prepare("SELECT * FROM users WHERE id = ?");
  *   $statement->execute([$user_id]);
  * 
  * @package FitPal
- * @version 1.0
+ * @version 1.1 - Aligned error page with FitPal design standards
  */
 
 declare(strict_types=1);
@@ -98,32 +98,68 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FitPal - Service Unavailable</title>
     <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/global.css">
-    <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/database_connect.css">
+    <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/database-connect.css">
 </head>
 
-<body>
+<body class="error-page-body">
     <div class="error-page">
         <div class="error-card">
-            <div class="error-status">500</div>
+            <!-- Status Header -->
+            <div class="error-status">
+                <span class="error-status-icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                </span>
+                <span>Service Unavailable</span>
+            </div>
+
+            <!-- Error Content -->
             <div class="error-content">
-                <div class="error-icon">
-                    <div class="db-stack"><span></span><span></span><span></span></div>
+                <!-- Icon -->
+                <div class="error-icon-wrapper">
+                    <div class="error-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                        </svg>
+                    </div>
                 </div>
+
+                <!-- Text -->
                 <div class="error-text">
-                    <p class="error-title">We're <span>Having Trouble</span></p>
+                    <h1 class="error-title">We're <span>Having Trouble</span></h1>
                     <p class="error-message"><?php echo htmlspecialchars($error_message, ENT_QUOTES, 'UTF-8'); ?></p>
                 </div>
+
+                <!-- Debug Info (Development Only) -->
                 <?php if (getenv('APP_ENV') === 'development'): ?>
                 <div class="error-debug">
-                    <p class="debug-label">Error Details</p>
+                    <div class="debug-header">
+                        <span class="debug-label">Error Details</span>
+                    </div>
                     <code><?php echo htmlspecialchars($detailed_error, ENT_QUOTES, 'UTF-8'); ?></code>
                 </div>
                 <?php endif; ?>
+
+                <!-- Action -->
                 <div class="error-action">
-                    <a href="javascript:location.reload()" class="btn-retry">
-                        <span class="retry-icon">&#8635;</span> Retry
+                    <a href="javascript:location.reload()" class="btn btn-primary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                        </svg>
+                        Retry
                     </a>
                 </div>
+
+                <!-- Help Text -->
                 <div class="error-help">
                     <p>If this keeps happening, please try again shortly.</p>
                 </div>

@@ -1,15 +1,13 @@
 <?php
 /**
  * FitPal Product Detail Page
- * Version 7.1
+ * Version 8.0
  *
- * Emits data-default-quantity on every modifier so the JS can
- * compute deltas against the true starting state. Base price and
- * base calories are both derived from composition defaults, so the
- * customize step's initial total matches the menu card.
+ * - "Add to Cart"  → queue_action = 'cart'  → database cart table
+ * - "Add to Order" → queue_action = 'queue' → session order_queue
  *
  * @package FitPal
- * @version 7.1
+ * @version 8.0
  */
 declare(strict_types=1);
 
@@ -113,18 +111,6 @@ try {
         if (!empty($rows)) {
             $hasCustomizations = true;
 
-            /*
-             * GROUPING LOGIC
-             *
-             * Every row is one ingredient belonging to a (product, display_order) group.
-             * All ingredients sharing the same display_order form a single UI group.
-             *
-             * A group becomes one of:
-             *   static   — single required ingredient, max_per_item = 1, min = 1
-             *   choice   — one or more ingredients, max_per_item = 1 (radio)
-             *   modifier — single ingredient, max_per_item > 1 (quantity stepper)
-             *   multi    — multiple ingredients, max_per_item > 1 (checkboxes)
-             */
             $byOrder = [];
             foreach ($rows as $r) {
                 $order = (int)$r['display_order'];
@@ -167,7 +153,6 @@ try {
 
                 if ($groupMaxPerItem === 1) {
                     if ($count === 1 && $groupRequired && (int)$ingredients[0]['min_quantity'] === 1) {
-                        // Static unchangeable ingredient
                         $components[] = [
                             'kind'          => 'static',
                             'label'         => ucwords(str_replace('_', ' ', $ingredients[0]['name'])),
@@ -175,7 +160,6 @@ try {
                             'ingredient'    => $ingredients[0],
                         ];
                     } else {
-                        // Radio choice
                         usort($ingredients, function ($a, $b) {
                             if ($a['is_default'] !== $b['is_default']) {
                                 return $a['is_default'] ? -1 : 1;
@@ -193,7 +177,6 @@ try {
                         ];
                     }
                 } elseif ($count === 1) {
-                    // Modifier with quantity stepper
                     $components[] = [
                         'kind'          => 'modifier',
                         'label'         => ucwords(str_replace('_', ' ', $ingredients[0]['name'])),
@@ -202,7 +185,6 @@ try {
                         'ingredient'    => $ingredients[0],
                     ];
                 } else {
-                    // Multi-select checkbox list
                     usort($ingredients, function ($a, $b) {
                         if ($a['is_default'] !== $b['is_default']) {
                             return $a['is_default'] ? -1 : 1;
@@ -254,8 +236,6 @@ try {
 }
 
 require_once __DIR__ . '/../includes/header.php';
-require_once __DIR__ . '/../backend/database/product-queries.php';
-require_once __DIR__ . '/../backend/database/order-queries.php';
 
 $isLoggedIn = isset($_SESSION['customer_id']) && !empty($_SESSION['customer_id']);
 
@@ -274,18 +254,6 @@ $productImage = $product['product_image'] !== ''
     ? htmlspecialchars($product['product_image'], ENT_QUOTES, 'UTF-8')
     : $assetBase . 'assets/images/icons/restaurant.svg';
 
-/*
- * ============================================================
- * DERIVE BASE CALORIES FROM COMPOSITION DEFAULTS
- *
- * For each component, sum the calories that its *default* state
- * contributes. This is the number the customize step starts at.
- *
- * For non-customizable products — or for a customizable product
- * whose composition has no active rows — fall back to the stored
- * value from dietary_information.
- * ============================================================
- */
 $baseCalories = 0;
 
 foreach ($components as $component) {
@@ -427,16 +395,17 @@ $formattedPrice = '₱' . number_format($basePrice, 2);
 
                     <div class="action-control" id="actionControl">
                         <?php if ($isLoggedIn && $inStock): ?>
-                        <form method="POST" action="../backend/handlers/add-to-cart-handler.php"
-                            class="action-control-form" id="actionControlForm">
+                        <form method="POST" action="../backend/handlers/cart-handler.php" class="action-control-form"
+                            id="actionControlForm" data-cart-url="../backend/handlers/cart-handler.php"
+                            data-queue-url="../backend/handlers/queue-handler.php">
                             <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
                             <input type="hidden" name="product_id" value="<?php echo $productId; ?>">
-                            <input type="hidden" name="redirect" value="menu.php">
                             <input type="hidden" name="customizations" id="customizationsData" value="">
                             <input type="hidden" name="total_price" id="totalPriceInput"
                                 value="<?php echo $basePrice; ?>">
                             <input type="hidden" name="total_calories" id="totalCaloriesInput"
                                 value="<?php echo $baseCalories; ?>">
+                            <input type="hidden" name="action" id="queueActionInput" value="add">
 
                             <div class="action-row action-row-a">
                                 <div class="action-col action-col-qty">
@@ -473,10 +442,10 @@ $formattedPrice = '₱' . number_format($basePrice, 2);
                                     <span>Customize</span>
                                 </button>
                                 <?php endif; ?>
-                                <button type="submit" class="action-btn add-to-cart-btn" id="addToCartBtn">
+                                <button type="button" class="action-btn add-to-cart-btn" id="addToCartBtn">
                                     <span>Add to Cart</span>
                                 </button>
-                                <button type="submit" class="action-btn add-to-order-btn" id="addToOrderBtn">
+                                <button type="button" class="action-btn add-to-order-btn" id="addToOrderBtn">
                                     <span>Add to Order</span>
                                 </button>
                             </div>
@@ -649,9 +618,6 @@ $formattedPrice = '₱' . number_format($basePrice, 2);
                                 $maxQty     = (int)$ing['max_quantity'];
                                 $defQty     = (int)$ing['default_quantity'];
 
-                                // startQty is the clamped starting quantity for the stepper.
-                                // It MUST be emitted as data-default-quantity so the JS can
-                                // compute deltas against the true initial state.
                                 $startQty = $defQty;
                                 if ($startQty < $minQty) $startQty = $minQty;
                                 if ($startQty > $maxQty) $startQty = $maxQty;
@@ -737,7 +703,7 @@ $formattedPrice = '₱' . number_format($basePrice, 2);
                     </div>
                     <div class="customization-buttons">
                         <button type="button" class="btn btn-outline" id="cancelCustomizeBtn">Cancel</button>
-                        <button type="button" class="btn btn-primary" id="applyCustomizeBtn">
+                        <button type="button" class="btn btn-primary" id="applyCustomizeBtn" data-queue-action="queue">
                             <span>Apply and Add to Order</span>
                         </button>
                     </div>

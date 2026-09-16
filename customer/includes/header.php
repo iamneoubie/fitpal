@@ -5,7 +5,7 @@
  * Customer-specific header with conditional navigation based on login status.
  *
  * @package FitPal
- * @version 1.2
+ * @version 1.3 - Added Cart and Wallet navigation
  */
 
 declare(strict_types=1);
@@ -63,6 +63,20 @@ if (isset($_SESSION['customer_id']) && !empty($_SESSION['customer_id'])) {
     }
 }
 
+// ===== CART COUNT (optional badge) =====
+$cartCount = 0;
+if ($isLoggedIn) {
+    try {
+        $stmt = $database_connection->prepare(
+            "SELECT COALESCE(SUM(quantity), 0) FROM cart WHERE customer_id = :id"
+        );
+        $stmt->execute([':id' => $_SESSION['customer_id']]);
+        $cartCount = (int)$stmt->fetchColumn();
+    } catch (PDOException $e) {
+        // Silently fail — badge simply won't show
+    }
+}
+
 // ===== CURRENT PAGE =====
 $currentPage = basename($_SERVER['PHP_SELF']);
 
@@ -73,9 +87,10 @@ $pageCssMap = [
     'dashboard.php' => 'dashboard.css',
     'menu.php'      => 'menu.css',
     'orders.php'    => 'orders.css',
-    'profile.php'   => 'profile.css',
     'cart.php'      => 'cart.css',
     'checkout.php'  => 'checkout.css',
+    'wallet.php'    => 'wallet.css',
+    'profile.php'   => 'profile.css',
 ];
 
 $pageCssFile = $pageCssMap[$currentPage] ?? '';
@@ -141,6 +156,19 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
                     <li class="nav-item">
                         <a href="orders.php"
                             class="nav-link <?php echo ($currentPage === 'orders.php') ? 'active' : ''; ?>">Orders</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="cart.php"
+                            class="nav-link <?php echo ($currentPage === 'cart.php') ? 'active' : ''; ?>">
+                            Cart
+                            <?php if ($cartCount > 0): ?>
+                            <span class="nav-badge"><?php echo $cartCount; ?></span>
+                            <?php endif; ?>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="wallet.php"
+                            class="nav-link <?php echo ($currentPage === 'wallet.php') ? 'active' : ''; ?>">Wallet</a>
                     </li>
                     <li class="nav-item">
                         <a href="profile.php"
@@ -218,6 +246,18 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
             <li class="mobile-nav-item">
                 <a href="orders.php"
                     class="mobile-nav-link <?php echo ($currentPage === 'orders.php') ? 'active' : ''; ?>">Orders</a>
+            </li>
+            <li class="mobile-nav-item">
+                <a href="cart.php" class="mobile-nav-link <?php echo ($currentPage === 'cart.php') ? 'active' : ''; ?>">
+                    Cart
+                    <?php if ($cartCount > 0): ?>
+                    <span class="nav-badge"><?php echo $cartCount; ?></span>
+                    <?php endif; ?>
+                </a>
+            </li>
+            <li class="mobile-nav-item">
+                <a href="wallet.php"
+                    class="mobile-nav-link <?php echo ($currentPage === 'wallet.php') ? 'active' : ''; ?>">Wallet</a>
             </li>
             <li class="mobile-nav-item">
                 <a href="profile.php"

@@ -168,7 +168,7 @@ CREATE TABLE IF NOT EXISTS customer_profile (
 ) COMMENT = 'Customer profile with dietary and health information';
 
 -- =====================================================
--- 8. DELIVERY_RIDER_PROFILE (depends on delivery_rider, financial_account, delivery_rider_address)
+-- 8. DELIVERY_RIDER_PROFILE
 -- =====================================================
 CREATE TABLE IF NOT EXISTS delivery_rider_profile (
     delivery_rider_profile_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -176,15 +176,18 @@ CREATE TABLE IF NOT EXISTS delivery_rider_profile (
     financial_account_id INT NOT NULL UNIQUE,
     profile_picture VARCHAR(255) NULL,
     address_id INT NULL,
-    vehicle_type VARCHAR(20) NULL CHECK (
-        vehicle_type IN (
-            'motorcycle',
-            'car',
-            'bicycle'
+    vehicle_type VARCHAR(20) NULL,
+    vehicle_plate VARCHAR(10) NULL,
+    verification_status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (
+        verification_status IN (
+            'pending',
+            'verified',
+            'denied',
+            'suspended'
         )
     ),
-    vehicle_plate VARCHAR(10) NULL,
-    is_verified TINYINT(1) DEFAULT 0,
+    verified_by_admin_id INT NULL,
+    verified_at TIMESTAMP NULL,
     average_rating DECIMAL(2, 1) DEFAULT 0.0 CHECK (
         average_rating BETWEEN 0 AND 5
     ),
@@ -193,13 +196,15 @@ CREATE TABLE IF NOT EXISTS delivery_rider_profile (
     FOREIGN KEY (delivery_rider_id) REFERENCES delivery_rider (delivery_rider_id) ON DELETE CASCADE,
     FOREIGN KEY (financial_account_id) REFERENCES financial_account (financial_account_id) ON DELETE CASCADE,
     FOREIGN KEY (address_id) REFERENCES delivery_rider_address (delivery_rider_address_id) ON DELETE SET NULL,
+    FOREIGN KEY (verified_by_admin_id) REFERENCES administrator (administrator_id) ON DELETE SET NULL,
     INDEX idx_delivery_rider_id (delivery_rider_id),
     INDEX idx_financial_account_id (financial_account_id),
+    INDEX idx_verification_status (verification_status),
     INDEX idx_is_available (is_available)
 ) COMMENT = 'Delivery rider profile with verification and performance data';
 
 -- =====================================================
--- 9. ADMINISTRATOR_PROFILE (depends on administrator)
+-- 9. ADMINISTRATOR_PROFILE
 -- =====================================================
 CREATE TABLE IF NOT EXISTS administrator_profile (
     administrator_profile_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -222,31 +227,35 @@ CREATE TABLE IF NOT EXISTS administrator_profile (
 ) COMMENT = 'Administrator profile with roles and permissions';
 
 -- =====================================================
--- 10. RESTAURANT (depends on administrator)
+-- 10. RESTAURANT (pure business entity)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS restaurant (
     restaurant_id INT AUTO_INCREMENT PRIMARY KEY,
-    owner_id INT NOT NULL,
     business_name VARCHAR(100) NOT NULL,
-    cuisine_type VARCHAR(50) NULL CHECK (
-        cuisine_type IN (
-            'Filipino',
-            'Italian',
-            'Japanese',
-            'Chinese'
+    description TEXT NULL,
+    cuisine_type VARCHAR(50) NULL,
+    dietary_tags TEXT NULL,
+    verification_status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (
+        verification_status IN (
+            'pending',
+            'verified',
+            'denied',
+            'suspended'
         )
     ),
-    dietary_tags TEXT NULL,
+    verified_by_admin_id INT NULL,
+    verified_at TIMESTAMP NULL,
     is_active TINYINT(1) DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (owner_id) REFERENCES administrator (administrator_id) ON DELETE CASCADE,
-    INDEX idx_owner_id (owner_id),
-    INDEX idx_business_name (business_name)
-) COMMENT = 'Restaurant information';
+    FOREIGN KEY (verified_by_admin_id) REFERENCES administrator (administrator_id) ON DELETE SET NULL,
+    INDEX idx_business_name (business_name),
+    INDEX idx_verification_status (verification_status),
+    INDEX idx_is_active (is_active)
+) COMMENT = 'Restaurant business entity — credentials live in restaurant_account';
 
 -- =====================================================
--- 11. RESTAURANT_BRANCH (depends on restaurant and financial_account)
+-- 11. RESTAURANT_BRANCH
 -- =====================================================
 CREATE TABLE IF NOT EXISTS restaurant_branch (
     restaurant_branch_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -272,7 +281,46 @@ CREATE TABLE IF NOT EXISTS restaurant_branch (
 ) COMMENT = 'Restaurant branches with financial accounts';
 
 -- =====================================================
--- 12. DIETARY_INFORMATION (no dependencies)
+-- 11b. RESTAURANT_ACCOUNT
+-- =====================================================
+CREATE TABLE IF NOT EXISTS restaurant_account (
+    restaurant_account_id INT AUTO_INCREMENT PRIMARY KEY,
+    restaurant_id INT NOT NULL,
+    branch_id INT NULL,
+    first_name VARCHAR(50) NOT NULL,
+    middle_name VARCHAR(50) NULL,
+    last_name VARCHAR(50) NOT NULL,
+    birthdate DATE NULL,
+    gender VARCHAR(10) NULL CHECK (
+        gender IN ('Male', 'Female', 'Other')
+    ),
+    email VARCHAR(100) NOT NULL UNIQUE,
+    contact_number VARCHAR(15) NULL UNIQUE,
+    username VARCHAR(30) NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    role VARCHAR(20) NOT NULL DEFAULT 'staff' CHECK (
+        role IN (
+            'owner',
+            'partner',
+            'manager',
+            'staff',
+            'cashier',
+            'kitchen'
+        )
+    ),
+    is_active TINYINT(1) DEFAULT 1,
+    date_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (restaurant_id) REFERENCES restaurant (restaurant_id) ON DELETE CASCADE,
+    FOREIGN KEY (branch_id) REFERENCES restaurant_branch (restaurant_branch_id) ON DELETE SET NULL,
+    INDEX idx_restaurant (restaurant_id),
+    INDEX idx_branch (branch_id),
+    INDEX idx_role (role),
+    INDEX idx_email (email)
+) COMMENT = 'All restaurant-side logins — owner, partner, manager, staff';
+
+-- =====================================================
+-- 12. DIETARY_INFORMATION
 -- =====================================================
 CREATE TABLE IF NOT EXISTS dietary_information (
     dietary_information_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -309,8 +357,7 @@ CREATE TABLE IF NOT EXISTS dietary_information (
 ) COMMENT = 'Nutritional and dietary information for products';
 
 -- =====================================================
--- 13. PRODUCT (depends on restaurant_branch and dietary_information)
--- MODIFIED: Added customization fields
+-- 13. PRODUCT
 -- =====================================================
 CREATE TABLE IF NOT EXISTS product (
     product_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -341,7 +388,7 @@ CREATE TABLE IF NOT EXISTS product (
 ) COMMENT = 'Product listings with nutritional information and customization support';
 
 -- =====================================================
--- 14. INGREDIENT (NEW) - Master list of all food components
+-- 14. INGREDIENT
 -- =====================================================
 CREATE TABLE IF NOT EXISTS ingredient (
     ingredient_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -363,7 +410,7 @@ CREATE TABLE IF NOT EXISTS ingredient (
 ) COMMENT = 'Master list of all ingredients for product customization';
 
 -- =====================================================
--- 15. PRODUCT_COMPOSITION (NEW) - Customization rules per product
+-- 15. PRODUCT_COMPOSITION
 -- =====================================================
 CREATE TABLE IF NOT EXISTS product_composition (
     composition_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -389,7 +436,7 @@ CREATE TABLE IF NOT EXISTS product_composition (
 ) COMMENT = 'Defines which ingredients can be customized for each product';
 
 -- =====================================================
--- 16. CART (depends on customer and product)
+-- 16. CART
 -- =====================================================
 CREATE TABLE IF NOT EXISTS cart (
     cart_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -407,8 +454,7 @@ CREATE TABLE IF NOT EXISTS cart (
 ) COMMENT = 'Shopping cart items with customization data';
 
 -- =====================================================
--- 17. ORDERS (depends on customer and delivery_rider)
--- MODIFIED: Added has_unread_messages
+-- 17. ORDERS
 -- =====================================================
 CREATE TABLE IF NOT EXISTS orders (
     order_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -453,8 +499,7 @@ CREATE TABLE IF NOT EXISTS orders (
 ) COMMENT = 'Order transactions with messaging support';
 
 -- =====================================================
--- 18. QUEUE_ITEM (depends on orders, restaurant_branch, product)
--- MODIFIED: Removed specific_instruction_id, added customization fields
+-- 18. QUEUE_ITEM
 -- =====================================================
 CREATE TABLE IF NOT EXISTS queue_item (
     queue_item_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -479,7 +524,7 @@ CREATE TABLE IF NOT EXISTS queue_item (
 ) COMMENT = 'Kitchen queue items with customization support';
 
 -- =====================================================
--- 19. CUSTOMIZATION_INSTANCE (NEW) - Customer selections
+-- 19. CUSTOMIZATION_INSTANCE
 -- =====================================================
 CREATE TABLE IF NOT EXISTS customization_instance (
     instance_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -499,7 +544,7 @@ CREATE TABLE IF NOT EXISTS customization_instance (
 ) COMMENT = 'Customer customizations for each order item';
 
 -- =====================================================
--- 20. TRANSACTION (depends on financial_account and orders)
+-- 20. TRANSACTION
 -- =====================================================
 CREATE TABLE IF NOT EXISTS transaction (
     transaction_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -531,7 +576,7 @@ CREATE TABLE IF NOT EXISTS transaction (
 ) COMMENT = 'Financial transaction history';
 
 -- =====================================================
--- 21. FEEDBACK (depends on product, customer, orders)
+-- 21. FEEDBACK
 -- =====================================================
 CREATE TABLE IF NOT EXISTS feedback (
     feedback_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -550,7 +595,7 @@ CREATE TABLE IF NOT EXISTS feedback (
 ) COMMENT = 'Product reviews and feedback';
 
 -- =====================================================
--- 22. NOTIFICATION (no foreign keys - polymorphic)
+-- 22. NOTIFICATION
 -- =====================================================
 CREATE TABLE IF NOT EXISTS notification (
     notification_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -559,7 +604,7 @@ CREATE TABLE IF NOT EXISTS notification (
             'customer',
             'delivery_rider',
             'administrator',
-            'restaurant_owner'
+            'restaurant_account'
         )
     ),
     recipient_id INT NOT NULL,
@@ -572,7 +617,7 @@ CREATE TABLE IF NOT EXISTS notification (
 ) COMMENT = 'System notifications';
 
 -- =====================================================
--- 23. MESSAGE (NEW) - All communication between parties
+-- 23. MESSAGE
 -- =====================================================
 CREATE TABLE IF NOT EXISTS message (
     message_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -580,8 +625,7 @@ CREATE TABLE IF NOT EXISTS message (
     sender_type VARCHAR(20) NOT NULL CHECK (
         sender_type IN (
             'customer',
-            'restaurant',
-            'restaurant_staff',
+            'restaurant_account',
             'delivery_rider',
             'administrator',
             'system'
@@ -591,8 +635,7 @@ CREATE TABLE IF NOT EXISTS message (
     recipient_type VARCHAR(20) NOT NULL CHECK (
         recipient_type IN (
             'customer',
-            'restaurant',
-            'restaurant_staff',
+            'restaurant_account',
             'delivery_rider',
             'administrator',
             'all'
@@ -619,7 +662,7 @@ CREATE TABLE IF NOT EXISTS message (
 ) COMMENT = 'All communication between parties';
 
 -- =====================================================
--- ADDITIONAL INDEXES for Performance
+-- ADDITIONAL INDEXES
 -- =====================================================
 CREATE INDEX idx_orders_customer_status ON orders (customer_id, order_status);
 
@@ -657,7 +700,7 @@ CREATE INDEX idx_customization_instance_queue ON customization_instance (queue_i
 
 DELIMITER $$
 
--- Trigger: Prevent negative stock on order creation
+-- [FIX] Lock stock row to prevent concurrent oversell (Isolation)
 CREATE TRIGGER before_queue_item_insert
 BEFORE INSERT ON queue_item
 FOR EACH ROW
@@ -666,7 +709,13 @@ BEGIN
     
     SELECT stock INTO current_stock 
     FROM product 
-    WHERE product_id = NEW.product_id;
+    WHERE product_id = NEW.product_id
+    FOR UPDATE;
+    
+    IF current_stock IS NULL THEN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'Product not found';
+    END IF;
     
     IF NEW.queue_quantity > current_stock THEN
         SIGNAL SQLSTATE '45000' 
@@ -674,7 +723,7 @@ BEGIN
     END IF;
 END$$
 
--- Trigger: Update stock when order is placed
+-- [FIX] Removed redundant IF < 0 check (CHECK constraint + BEFORE trigger already cover it)
 CREATE TRIGGER after_queue_item_insert
 AFTER INSERT ON queue_item
 FOR EACH ROW
@@ -682,19 +731,15 @@ BEGIN
     UPDATE product 
     SET stock = stock - NEW.queue_quantity
     WHERE product_id = NEW.product_id;
-    
-    IF (SELECT stock FROM product WHERE product_id = NEW.product_id) < 0 THEN
-        SIGNAL SQLSTATE '45000' 
-        SET MESSAGE_TEXT = 'Stock would become negative';
-    END IF;
 END$$
 
--- Trigger: Restore stock when order is cancelled
+-- [FIX] Idempotent stock restore — only on transition from a stock-consuming state
 CREATE TRIGGER after_order_cancelled
 AFTER UPDATE ON orders
 FOR EACH ROW
 BEGIN
-    IF NEW.order_status = 'cancelled' AND OLD.order_status != 'cancelled' THEN
+    IF NEW.order_status = 'cancelled' 
+       AND OLD.order_status IN ('pending', 'preparing', 'delivering') THEN
         UPDATE product p
         JOIN queue_item qi ON p.product_id = qi.product_id
         SET p.stock = p.stock + qi.queue_quantity
@@ -702,7 +747,7 @@ BEGIN
     END IF;
 END$$
 
--- Trigger: Update delivered_at timestamp
+-- Update delivered_at timestamp
 CREATE TRIGGER before_order_delivered
 BEFORE UPDATE ON orders
 FOR EACH ROW
@@ -712,19 +757,21 @@ BEGIN
     END IF;
 END$$
 
--- Trigger: Update rider statistics after delivery
+-- Update rider statistics after delivery (idempotent — only on transition)
 CREATE TRIGGER after_order_delivered
 AFTER UPDATE ON orders
 FOR EACH ROW
 BEGIN
-    IF NEW.order_status = 'delivered' AND OLD.order_status != 'delivered' AND NEW.delivery_rider_id IS NOT NULL THEN
+    IF NEW.order_status = 'delivered' 
+       AND OLD.order_status != 'delivered' 
+       AND NEW.delivery_rider_id IS NOT NULL THEN
         UPDATE delivery_rider_profile 
         SET total_deliveries = total_deliveries + 1
         WHERE delivery_rider_id = NEW.delivery_rider_id;
     END IF;
 END$$
 
--- Trigger: Prevent negative balance in financial account
+-- [FIX] Lock balance row to prevent concurrent overdraft (Isolation)
 CREATE TRIGGER before_transaction_insert
 BEFORE INSERT ON transaction
 FOR EACH ROW
@@ -733,15 +780,22 @@ BEGIN
     
     SELECT balance INTO current_balance 
     FROM financial_account 
-    WHERE financial_account_id = NEW.financial_account_id;
+    WHERE financial_account_id = NEW.financial_account_id
+    FOR UPDATE;
     
-    IF NEW.transaction_type IN ('payment', 'withdrawal') AND NEW.amount > current_balance THEN
+    IF current_balance IS NULL THEN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'Financial account not found';
+    END IF;
+    
+    IF NEW.transaction_type IN ('payment', 'withdrawal') 
+       AND NEW.amount > current_balance THEN
         SIGNAL SQLSTATE '45000' 
         SET MESSAGE_TEXT = 'Insufficient balance';
     END IF;
 END$$
 
--- Trigger: Update balance after transaction
+-- Update balance after transaction insert
 CREATE TRIGGER after_transaction_insert
 AFTER INSERT ON transaction
 FOR EACH ROW
@@ -759,14 +813,47 @@ BEGIN
     END IF;
 END$$
 
--- Trigger: Prevent duplicate active orders for same rider
+-- [FIX] Keep balance in sync if a pending transaction is later marked completed
+CREATE TRIGGER after_transaction_update_status
+AFTER UPDATE ON transaction
+FOR EACH ROW
+BEGIN
+    -- Only fire when status transitions to 'completed'
+    IF NEW.status = 'completed' AND OLD.status != 'completed' THEN
+        IF NEW.transaction_type IN ('deposit', 'refund') THEN
+            UPDATE financial_account 
+            SET balance = balance + NEW.amount
+            WHERE financial_account_id = NEW.financial_account_id;
+        ELSEIF NEW.transaction_type IN ('payment', 'withdrawal') THEN
+            UPDATE financial_account 
+            SET balance = balance - NEW.amount
+            WHERE financial_account_id = NEW.financial_account_id;
+        END IF;
+    END IF;
+    
+    -- Reverse the effect if a completed transaction is reverted to pending/failed
+    IF OLD.status = 'completed' AND NEW.status != 'completed' THEN
+        IF NEW.transaction_type IN ('deposit', 'refund') THEN
+            UPDATE financial_account 
+            SET balance = balance - NEW.amount
+            WHERE financial_account_id = NEW.financial_account_id;
+        ELSEIF NEW.transaction_type IN ('payment', 'withdrawal') THEN
+            UPDATE financial_account 
+            SET balance = balance + NEW.amount
+            WHERE financial_account_id = NEW.financial_account_id;
+        END IF;
+    END IF;
+END$$
+
+-- Prevent duplicate active orders for same rider
 CREATE TRIGGER before_order_rider_assign
 BEFORE UPDATE ON orders
 FOR EACH ROW
 BEGIN
     DECLARE active_orders INT;
     
-    IF NEW.delivery_rider_id IS NOT NULL AND NEW.order_status IN ('preparing', 'delivering') THEN
+    IF NEW.delivery_rider_id IS NOT NULL 
+       AND NEW.order_status IN ('preparing', 'delivering') THEN
         SELECT COUNT(*) INTO active_orders
         FROM orders
         WHERE delivery_rider_id = NEW.delivery_rider_id
@@ -780,34 +867,30 @@ BEGIN
     END IF;
 END$$
 
--- Trigger: Update final_price when customization instances are added
+-- Update final_price when customization instances are added
 CREATE TRIGGER after_customization_instance_insert
 AFTER INSERT ON customization_instance
 FOR EACH ROW
 BEGIN
     DECLARE total_customization_price DECIMAL(10,2);
     
-    -- Recalculate total customization price for the queue item
     SELECT COALESCE(SUM(price_at_time * quantity), 0) INTO total_customization_price
     FROM customization_instance
     WHERE queue_item_id = NEW.queue_item_id
     AND is_removed = 0;
     
-    -- Update queue_item with final price
     UPDATE queue_item
     SET final_price = base_price_snapshot + total_customization_price
     WHERE queue_item_id = NEW.queue_item_id;
 END$$
 
--- Trigger: Validate customization quantity limits
+-- Validate customization quantity limits
 CREATE TRIGGER before_customization_instance_insert
 BEFORE INSERT ON customization_instance
 FOR EACH ROW
 BEGIN
     DECLARE max_qty INT;
-    DECLARE current_qty INT;
     
-    -- Check max quantity limit from product_composition
     SELECT pc.max_quantity_per_item INTO max_qty
     FROM product_composition pc
     JOIN queue_item qi ON pc.product_id = qi.product_id
@@ -828,7 +911,7 @@ DELIMITER;
 
 DELIMITER $$
 
--- Procedure: Create Order with Transaction Control
+-- [FIX] sp_create_order: guards empty cart, uses explicit subtotal, locks cart rows
 CREATE PROCEDURE sp_create_order(
     IN p_customer_id INT,
     IN p_destination_address VARCHAR(250),
@@ -837,6 +920,9 @@ CREATE PROCEDURE sp_create_order(
     OUT p_order_id INT
 )
 BEGIN
+    DECLARE v_cart_count INT DEFAULT 0;
+    DECLARE v_subtotal DECIMAL(10,2) DEFAULT 0.00;
+    
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
         ROLLBACK;
@@ -844,6 +930,21 @@ BEGIN
     END;
     
     START TRANSACTION;
+    
+    -- Lock the cart rows for this customer
+    SELECT COUNT(*) INTO v_cart_count
+    FROM cart
+    WHERE customer_id = p_customer_id
+    FOR UPDATE;
+    
+    IF v_cart_count = 0 THEN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'Cannot create order: cart is empty';
+    END IF;
+    
+    SELECT SUM(quantity * price) INTO v_subtotal
+    FROM cart
+    WHERE customer_id = p_customer_id;
     
     INSERT INTO orders (
         customer_id,
@@ -853,18 +954,15 @@ BEGIN
         delivery_charge,
         special_instructions,
         order_status
-    )
-    SELECT 
+    ) VALUES (
         p_customer_id,
         p_destination_address,
         p_payment_method,
-        SUM(c.quantity * c.price),
+        v_subtotal,
         50.00,
         p_special_instructions,
         'pending'
-    FROM cart c
-    WHERE c.customer_id = p_customer_id
-    GROUP BY c.customer_id;
+    );
     
     SET p_order_id = LAST_INSERT_ID();
     
@@ -887,7 +985,8 @@ BEGIN
         c.price,
         c.price,
         JSON_EXTRACT(c.customization_data, '$.instructions'),
-        CASE WHEN JSON_EXTRACT(c.customization_data, '$.customizations') IS NOT NULL THEN 1 ELSE 0 END,
+        CASE WHEN JSON_EXTRACT(c.customization_data, '$.customizations') IS NOT NULL 
+             THEN 1 ELSE 0 END,
         c.price
     FROM cart c
     JOIN product p ON c.product_id = p.product_id
@@ -898,7 +997,7 @@ BEGIN
     COMMIT;
 END$$
 
--- Procedure: Add customization to existing queue item
+-- Add customization to existing queue item
 CREATE PROCEDURE sp_add_customization(
     IN p_queue_item_id INT,
     IN p_ingredient_id INT,
@@ -931,7 +1030,6 @@ BEGIN
         p_calories
     );
     
-    -- Mark queue item as customized
     UPDATE queue_item
     SET is_customized = 1
     WHERE queue_item_id = p_queue_item_id;
@@ -940,13 +1038,15 @@ BEGIN
     COMMIT;
 END$$
 
--- Procedure: Cancel Order with Transaction Control
+-- Cancel Order with Transaction Control
 CREATE PROCEDURE sp_cancel_order(
     IN p_order_id INT,
     IN p_cancelled_by VARCHAR(20),
     OUT p_success BOOLEAN
 )
 BEGIN
+    DECLARE v_rows INT DEFAULT 0;
+    
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
         ROLLBACK;
@@ -962,11 +1062,18 @@ BEGIN
     WHERE order_id = p_order_id 
     AND order_status IN ('pending', 'preparing');
     
-    SET p_success = TRUE;
-    COMMIT;
+    SET v_rows = ROW_COUNT();
+    
+    IF v_rows = 0 THEN
+        ROLLBACK;
+        SET p_success = FALSE;
+    ELSE
+        SET p_success = TRUE;
+        COMMIT;
+    END IF;
 END$$
 
--- Procedure: Process Refund with Transaction Control
+-- [FIX] sp_process_refund: idempotent, validates order state
 CREATE PROCEDURE sp_process_refund(
     IN p_order_id INT,
     IN p_amount DECIMAL(10,2),
@@ -975,6 +1082,9 @@ CREATE PROCEDURE sp_process_refund(
 )
 BEGIN
     DECLARE v_financial_account_id INT;
+    DECLARE v_order_status VARCHAR(20);
+    DECLARE v_existing_refund INT DEFAULT 0;
+    
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
         ROLLBACK;
@@ -982,6 +1092,33 @@ BEGIN
     END;
     
     START TRANSACTION;
+    
+    -- Lock the order row
+    SELECT order_status INTO v_order_status
+    FROM orders
+    WHERE order_id = p_order_id
+    FOR UPDATE;
+    
+    IF v_order_status IS NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Order not found';
+    END IF;
+    
+    IF v_order_status NOT IN ('cancelled', 'delivered') THEN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'Order must be cancelled or delivered to refund';
+    END IF;
+    
+    -- Idempotency check: reject duplicate refund
+    SELECT COUNT(*) INTO v_existing_refund
+    FROM transaction
+    WHERE order_id = p_order_id
+      AND transaction_type = 'refund'
+      AND status = 'completed';
+    
+    IF v_existing_refund > 0 THEN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'Order already refunded';
+    END IF;
     
     SELECT cp.financial_account_id INTO v_financial_account_id
     FROM orders o
@@ -1014,7 +1151,7 @@ BEGIN
     COMMIT;
 END$$
 
--- Procedure: Process Payment with Transaction Control
+-- [FIX] sp_process_payment: idempotent, skips if already paid
 CREATE PROCEDURE sp_process_payment(
     IN p_order_id INT,
     IN p_amount DECIMAL(10,2),
@@ -1023,6 +1160,8 @@ CREATE PROCEDURE sp_process_payment(
 )
 BEGIN
     DECLARE v_financial_account_id INT;
+    DECLARE v_existing_payment INT DEFAULT 0;
+    
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
         ROLLBACK;
@@ -1030,6 +1169,21 @@ BEGIN
     END;
     
     START TRANSACTION;
+    
+    -- Lock the order
+    SELECT 1 INTO @dummy FROM orders WHERE order_id = p_order_id FOR UPDATE;
+    
+    -- Idempotency: reject duplicate payment
+    SELECT COUNT(*) INTO v_existing_payment
+    FROM transaction
+    WHERE order_id = p_order_id
+      AND transaction_type = 'payment'
+      AND status = 'completed';
+    
+    IF v_existing_payment > 0 THEN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'Order already paid';
+    END IF;
     
     SELECT cp.financial_account_id INTO v_financial_account_id
     FROM orders o
@@ -1060,7 +1214,7 @@ BEGIN
     COMMIT;
 END$$
 
--- Procedure: Get product customization options
+-- Get product customization options
 CREATE PROCEDURE sp_get_product_customizations(
     IN p_product_id INT
 )
@@ -1087,7 +1241,7 @@ BEGIN
     ORDER BY pc.display_order ASC, i.name ASC;
 END$$
 
--- Procedure: Get order item customizations
+-- Get order item customizations
 CREATE PROCEDURE sp_get_order_customizations(
     IN p_queue_item_id INT
 )
@@ -1111,7 +1265,7 @@ END$$
 DELIMITER;
 
 -- =====================================================
--- VIEWS for Common Queries
+-- VIEWS
 -- =====================================================
 
 CREATE OR REPLACE VIEW customer_order_details AS
@@ -1199,6 +1353,7 @@ CREATE OR REPLACE VIEW restaurant_performance AS
 SELECT
     r.restaurant_id,
     r.business_name,
+    r.verification_status,
     rb.restaurant_branch_id,
     rb.branch_name,
     COUNT(DISTINCT o.order_id) AS total_orders,
