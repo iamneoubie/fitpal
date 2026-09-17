@@ -1,16 +1,32 @@
 /**
  * FitPal Customer Wallet JavaScript
- * Version 1.1
+ * Version 2.2
  *
  * Handles:
  *   - Recharge amount modal (validation, quick amounts)
  *   - QR payment modal (initiate → confirm, or cancel)
  *   - Success modal (new balance display)
- *   - Back button navigation
+ *   - Back button navigation (origin-aware)
  *   - Pending-recharge cleanup on any QR dismissal
+ *   - Background balance refresh with burst cooldown
+ *
+ * Balance refresh policy:
+ *   - pageshow after the first    → refresh
+ *   - visibilitychange → visible  → refresh
+ *   - window focus                → refresh
+ *   - top-up response             → read new_balance from the
+ *     response, no extra fetch
+ *
+ * Bursts of refresh triggers (pageshow + visibilitychange + focus
+ * on tab-return) are collapsed by a 1500 ms cooldown. The cooldown
+ * only gates automatic triggers; explicit callers can pass
+ * { force: true } to bypass it.
+ *
+ * The refresh is silent. No toast fires when the background check
+ * finds a different number — the display just updates in place.
  *
  * @package FitPal
- * @version 1.1
+ * @version 2.2
  */
 
 (function() {
@@ -64,6 +80,17 @@
         // transaction. Set true right before confirm_qr succeeds.
         var pendingWasConfirmed    = false;
 
+        // ---- Balance refresh state ----
+        var knownBalance           = Number(CFG.balance) || 0;
+        var refreshing             = false;
+        var lastRefreshAt          = 0;
+        var isFirstPageShow        = true;
+
+        // Collapse burst triggers (pageshow + visibilitychange + focus
+        // on tab-return) into a single request. Bypassed with
+        // { force: true } for explicit user-initiated refreshes.
+        var REFRESH_COOLDOWN_MS    = 1500;
+
         // ============================================
         // HELPERS
         // ============================================
@@ -115,6 +142,101 @@
         }
 
         // ============================================
+        // BALANCE REFRESH
+        // ============================================
+
+        /**
+         * Update the balance display. No-op if the value hasn't
+         * actually moved — avoids forcing a layout pass on the
+         * balance span for identical numbers.
+         */
+        function applyBalance(newBalance) {
+            var n = Number(newBalance);
+            if (!isFinite(n) || isNaN(n)) return;
+
+            if (Math.abs(n - knownBalance) < 0.005) {
+                return;
+            }
+
+            knownBalance = n;
+
+            if (balanceEl) {
+                balanceEl.textContent = formatPeso(n);
+            }
+        }
+
+        /**
+         * Fetch the current balance from the server.
+         *
+         * @param {Object}  [opts]
+         * @param {boolean} [opts.force=false]  Skip the cooldown. Use
+         *   for user-initiated refreshes that must always hit the
+         *   server.
+         */
+        function refreshBalance(opts) {
+            opts = opts || {};
+
+            if (refreshing) return;
+
+            if (!opts.force) {
+                var sinceLast = Date.now() - lastRefreshAt;
+                if (sinceLast < REFRESH_COOLDOWN_MS) return;
+            }
+
+            refreshing = true;
+
+            var body = new URLSearchParams();
+            body.append('csrf_token', CSRF_TOKEN);
+            body.append('action', 'get_balance');
+
+            fetch('../backend/handlers/wallet-handler.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: body.toString(),
+                credentials: 'same-origin',
+                cache: 'no-store'
+            })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (data && data.status === 'success' && typeof data.balance === 'number') {
+                    applyBalance(data.balance);
+                }
+            })
+            .catch(function() {
+                // Silent. A failed background refresh should never
+                // interrupt the user. The next trigger will retry.
+            })
+            .finally(function() {
+                refreshing    = false;
+                lastRefreshAt = Date.now();
+            });
+        }
+
+        // ---- pageshow: any re-show after the first ----
+        window.addEventListener('pageshow', function() {
+            if (isFirstPageShow) {
+                isFirstPageShow = false;
+                return;
+            }
+            refreshBalance();
+        });
+
+        // ---- visibilitychange: back from a hidden tab ----
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible') {
+                refreshBalance();
+            }
+        });
+
+        // ---- focus: window regained focus ----
+        window.addEventListener('focus', function() {
+            refreshBalance();
+        });
+
+        // ============================================
         // BACK BUTTON
         // ============================================
         if (backBtn) {
@@ -135,9 +257,6 @@
 
         // ============================================
         // PENDING RECHARGE CLEANUP
-        //
-        // Called whenever the QR modal closes without a successful
-        // confirmation. Fire-and-forget; the UI doesn't wait.
         // ============================================
         function cancelPendingQr() {
             if (!pendingTransactionId) return;
@@ -145,8 +264,6 @@
 
             var txnId = pendingTransactionId;
 
-            // Clear local state immediately so a second close doesn't
-            // fire a duplicate cancel for the same ID.
             pendingTransactionId = null;
             pendingAmount        = 0;
 
@@ -248,13 +365,6 @@
             isQrModalOpen = true;
         }
 
-        /**
-         * Close the QR modal.
-         *
-         * @param {boolean} [skipCancel=false]  When true, do not fire
-         *   the server-side cancel. Used after a successful confirm,
-         *   where the transaction has already moved to completed.
-         */
         function closeQrModalHandler(skipCancel) {
             if (!qrModal || !isQrModalOpen) return;
 
@@ -307,7 +417,6 @@
         if (doneBtn) {
             doneBtn.addEventListener('click', function() {
                 closeSuccessModalHandler();
-                // Reload so the transaction list and balance reflect the deposit.
                 setTimeout(function() { window.location.reload(); }, 300);
             });
         }
@@ -395,10 +504,15 @@
                 .then(function(data) {
                     if (data && data.status === 'success') {
                         var newBalance = Number(data.new_balance) || 0;
-                        if (balanceEl) balanceEl.textContent = formatPeso(newBalance);
+                        applyBalance(newBalance);
 
-                        // Mark confirmed BEFORE closing so the close handler
-                        // does not fire a cancel for a completed transaction.
+                        // Suppress the next automatic refresh — the
+                        // number we just learned is current. Without
+                        // this, the next visibility/focus event within
+                        // the cooldown window would fire a redundant
+                        // get_balance that returns the same value.
+                        lastRefreshAt = Date.now();
+
                         pendingWasConfirmed = true;
                         closeQrModalHandler(true);
 
@@ -407,8 +521,6 @@
                         pendingTransactionId = null;
                         pendingWasConfirmed  = false;
                     } else {
-                        // Confirmation failed. The pending row is cancelled
-                        // by closeQrModalHandler so it doesn't linger.
                         closeQrModalHandler(false);
                         openAmountModal();
                         setAmountError((data && data.message) || 'Could not confirm the payment.');
@@ -428,11 +540,6 @@
 
         // ============================================
         // PAGE TEARDOWN SAFETY NET
-        //
-        // If the user closes the tab or navigates away while the QR
-        // modal is open, the pending transaction would be orphaned.
-        // sendBeacon is the only transport guaranteed to survive
-        // unload, so use it here.
         // ============================================
         window.addEventListener('beforeunload', function() {
             if (!pendingTransactionId || pendingWasConfirmed) return;
@@ -466,6 +573,6 @@
             else if (isAmountModalOpen) closeAmountModalHandler();
         });
 
-        console.log('Wallet v1.1 initialized');
+        console.log('Wallet v2.2 initialized');
     });
 })();

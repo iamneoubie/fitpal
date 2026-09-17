@@ -12,10 +12,13 @@
  *                       Legacy orders (no payment on record) cancel
  *                       cleanly with no refund.
  *   get_order_details → return an order as JSON
+ *   reorder           → rebuild the session order queue from a past
+ *                       order, validating each product against the
+ *                       current database state. Appends to the
+ *                       existing queue rather than replacing it.
  *
  * @package FitPal
- * @version 3.0 — Legacy-order cancels no longer surface as errors;
- *                response includes the final order_status.
+ * @version 4.0 — Adds server-validated reorder action.
  */
 
 declare(strict_types=1);
@@ -56,6 +59,10 @@ try {
             handleGetOrderDetails($database_connection, $customerId);
             break;
 
+        case 'reorder':
+            handleReorder($database_connection, $customerId);
+            break;
+
         default:
             echo json_encode(['status' => 'error', 'message' => 'Invalid action']);
     }
@@ -89,7 +96,6 @@ function handleCancelOrder(PDO $db, int $customerId): void
         return;
     }
 
-    // ---- Verify ownership and cancellable state ----
     $stmt = $db->prepare(
         "SELECT order_id, order_status, payment_method
            FROM orders
@@ -119,14 +125,6 @@ function handleCancelOrder(PDO $db, int $customerId): void
     $paymentMethod  = (string)$order['payment_method'];
     $requiresRefund = in_array($paymentMethod, ['Wallet', 'Online'], true);
 
-    // -----------------------------------------------------------
-    // Cancel the order first.
-    //
-    // refundOrderToWallet() opens its own transaction, so we can't
-    // nest it inside ours. Committing the cancel first means a
-    // failed refund leaves the order correctly cancelled — support
-    // can retry the refund without re-cancelling.
-    // -----------------------------------------------------------
     $finalStatus = $requiresRefund ? 'refunded' : 'cancelled';
 
     $db->beginTransaction();
@@ -165,16 +163,6 @@ function handleCancelOrder(PDO $db, int $customerId): void
         throw $e;
     }
 
-    // -----------------------------------------------------------
-    // Attempt the refund.
-    //
-    // refundOrderToWallet() returns:
-    //   true  → a refund was issued (or COD cleanup ran)
-    //   false → no refund was needed (already refunded, or no
-    //           payment on record)
-    //
-    // It only throws on genuine errors (missing account, DB failure).
-    // -----------------------------------------------------------
     $refunded = false;
 
     try {
@@ -191,14 +179,6 @@ function handleCancelOrder(PDO $db, int $customerId): void
         return;
     }
 
-    // -----------------------------------------------------------
-    // Compose the response message.
-    //
-    // Three cases matter here:
-    //   COD                                     → simple cancel
-    //   Wallet/Online with refund issued        → confirm refund
-    //   Wallet/Online with no payment on record → cancel, no refund
-    // -----------------------------------------------------------
     $message = match (true) {
         !$requiresRefund
             => 'Order cancelled successfully',
@@ -254,4 +234,351 @@ function handleGetOrderDetails(PDO $db, int $customerId): void
         'status' => 'success',
         'order'  => $order,
     ]);
+}
+
+/**
+ * Rebuild the session order queue from a past order.
+ *
+ * For each line in the original order:
+ *   1. Check the product still exists, is active, and is in stock.
+ *      Branches and restaurants must be active too.
+ *   2. Re-apply the original customizations against the CURRENT
+ *      product_composition rules. Quantities are clamped to
+ *      max_quantity; ingredients no longer in the composition are
+ *      dropped.
+ *   3. Compute a fresh unit price from base_price + modifiers.
+ *      The historical price_at_time is only used to reconstruct
+ *      what the customer asked for — never trusted as money.
+ *   4. Merge with an existing queue line that has the same
+ *      (product_id + customization) signature, or append.
+ *
+ * Failures are collected per-line into `skipped` so the UI can
+ * show exactly what could not be re-added and why. The queue is
+ * always APPENDED to — the user can clear it via the queue panel's
+ * Cancel Order button if they want a clean slate.
+ *
+ * Response shape:
+ *   {
+ *     status:  'success' | 'partial' | 'error',
+ *     message: string,
+ *     added:   [ { name, quantity } ... ],
+ *     skipped: [ { name, reason } ... ],
+ *     queue:   [ ... final session queue ... ],
+ *     redirect: 'menu.php'
+ *   }
+ */
+function handleReorder(PDO $db, int $customerId): void
+{
+    $orderId = (int)($_POST['order_id'] ?? 0);
+    if ($orderId <= 0) {
+        echo json_encode(['status' => 'error', 'message' => 'Invalid order ID']);
+        return;
+    }
+
+    $orderItems = getReorderableItems($db, $orderId, $customerId);
+
+    if (empty($orderItems)) {
+        echo json_encode([
+            'status'  => 'error',
+            'message' => 'That order has no items to reorder.',
+        ]);
+        return;
+    }
+
+    $queue = $_SESSION['order_queue'] ?? [];
+    if (!is_array($queue)) {
+        $queue = [];
+    }
+
+    $added   = [];
+    $skipped = [];
+
+    foreach ($orderItems as $item) {
+        $productId = (int)$item['product_id'];
+        $name      = (string)$item['product_name'];
+        $qty       = (int)$item['quantity'];
+
+        // Rebuild the customization payload in the shape the queue
+        // expects — the same shape queue-handler.php's add action
+        // accepts from product-detail.js.
+        $customizations = [];
+        foreach (($item['customizations'] ?? []) as $cust) {
+            $customizations[] = [
+                'ingredient_id'   => (int)$cust['ingredient_id'],
+                'quantity'        => (int)$cust['quantity'],
+                'price_modifier'  => (float)$cust['price_at_time'],
+                'calories'        => (int)($cust['calories_at_time'] ?? 0),
+                'selected_option' => ((int)$cust['is_removed'] === 1) ? 'remove' : 'selected',
+                'notes'           => $cust['custom_text'] ?? null,
+            ];
+        }
+
+        $customJson = !empty($customizations) ? json_encode($customizations) : null;
+
+        $enriched = buildReorderLine($db, [
+            'product_id'         => $productId,
+            'quantity'           => $qty,
+            'customization_data' => $customJson,
+        ], $skipped, $name);
+
+        if ($enriched === null) {
+            continue;
+        }
+
+        $lineKey = $productId . '::' . sha1((string)$customJson);
+        $enriched['customizations'] = $customizations;
+        $enriched['line_key']       = $lineKey;
+
+        // Merge with an existing line that has the same signature,
+        // or append. This mirrors queue-handler.php's add action.
+        $merged = false;
+        foreach ($queue as &$row) {
+            $rowKey = $row['line_key']
+                ?? ($row['product_id'] . '::' . sha1((string)(
+                    is_string($row['customization_data'] ?? null)
+                        ? $row['customization_data']
+                        : json_encode($row['customization_data'] ?? null)
+                )));
+
+            if ($rowKey === $lineKey) {
+                $newQty = (int)$row['quantity'] + $qty;
+                $max    = (int)($enriched['stock'] ?? 999);
+                $row['quantity'] = min($newQty, $max);
+                $row['price']    = $enriched['price'];
+                $merged = true;
+                break;
+            }
+        }
+        unset($row);
+
+        if (!$merged) {
+            $queue[] = $enriched;
+        }
+
+        $added[] = [
+            'name'     => $name,
+            'quantity' => $qty,
+        ];
+    }
+
+    $_SESSION['order_queue'] = array_values($queue);
+
+    $addedCount   = count($added);
+    $skippedCount = count($skipped);
+
+    if ($addedCount === 0) {
+        echo json_encode([
+            'status'   => 'error',
+            'message'  => 'None of the items from that order are available right now.',
+            'added'    => [],
+            'skipped'  => $skipped,
+            'queue'    => $_SESSION['order_queue'],
+            'redirect' => 'menu.php',
+        ]);
+        return;
+    }
+
+    if ($skippedCount === 0) {
+        echo json_encode([
+            'status'   => 'success',
+            'message'  => sprintf(
+                'Added %d item%s to your order.',
+                $addedCount,
+                $addedCount === 1 ? '' : 's'
+            ),
+            'added'    => $added,
+            'skipped'  => [],
+            'queue'    => $_SESSION['order_queue'],
+            'redirect' => 'menu.php',
+        ]);
+        return;
+    }
+
+    echo json_encode([
+        'status'   => 'partial',
+        'message'  => sprintf(
+            'Added %d item%s. %d item%s unavailable.',
+            $addedCount,
+            $addedCount === 1 ? '' : 's',
+            $skippedCount,
+            $skippedCount === 1 ? ' was' : 's were'
+        ),
+        'added'    => $added,
+        'skipped'  => $skipped,
+        'queue'    => $_SESSION['order_queue'],
+        'redirect' => 'menu.php',
+    ]);
+}
+
+/**
+ * Build a single enriched queue line for reorder, or push a reason
+ * into $skipped and return null.
+ *
+ * This deliberately re-implements the pricing/validation logic from
+ * queue-handler.php's queueEnrich() rather than including that file
+ * (which is a script, not a library). The rules must stay in sync:
+ *
+ *   - product exists, is_active, stock > 0
+ *   - branch and restaurant are active
+ *   - customizations are matched against current product_composition
+ *   - quantities are clamped to max_quantity
+ *   - removed ingredients are skipped
+ *   - unit price = base_price + Σ(modifier × qty)
+ */
+function buildReorderLine(
+    PDO $db,
+    array $item,
+    array &$skipped,
+    string $name
+): ?array {
+    $productId = (int)($item['product_id'] ?? 0);
+    $quantity  = (int)($item['quantity'] ?? 0);
+
+    if ($productId <= 0 || $quantity <= 0) {
+        $skipped[] = ['name' => $name, 'reason' => 'Invalid product'];
+        return null;
+    }
+
+    // Availability probe. Kept separate from the enrichment query so
+    // the skip reason can be precise: "no longer on the menu" reads
+    // differently from "out of stock" or "restaurant is closed".
+    $checkStmt = $db->prepare(
+        "SELECT
+            p.is_active,
+            p.stock,
+            rb.is_active AS branch_active,
+            r.is_active  AS restaurant_active
+         FROM product p
+         JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
+         JOIN restaurant r         ON rb.restaurant_id       = r.restaurant_id
+         WHERE p.product_id = :product_id
+         LIMIT 1"
+    );
+    $checkStmt->execute([':product_id' => $productId]);
+    $check = $checkStmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$check) {
+        $skipped[] = ['name' => $name, 'reason' => 'No longer on the menu'];
+        return null;
+    }
+    if (!(int)$check['is_active']) {
+        $skipped[] = ['name' => $name, 'reason' => 'No longer available'];
+        return null;
+    }
+    if (!(int)$check['branch_active'] || !(int)$check['restaurant_active']) {
+        $skipped[] = ['name' => $name, 'reason' => 'Restaurant is closed'];
+        return null;
+    }
+    if ((int)$check['stock'] <= 0) {
+        $skipped[] = ['name' => $name, 'reason' => 'Out of stock'];
+        return null;
+    }
+
+    // Full product row for pricing + presentation.
+    $prodStmt = $db->prepare(
+        "SELECT
+            p.product_id, p.name, p.price, p.base_price, p.stock,
+            p.is_customizable, p.restaurant_branch_id,
+            rb.branch_name,
+            r.business_name AS restaurant_name,
+            COALESCE(di.images, '') AS product_image
+         FROM product p
+         JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
+         JOIN restaurant r         ON rb.restaurant_id       = r.restaurant_id
+         LEFT JOIN dietary_information di ON p.dietary_information_id = di.dietary_information_id
+         WHERE p.product_id = :product_id
+           AND p.is_active = 1
+           AND rb.is_active = 1
+           AND r.is_active = 1
+         LIMIT 1"
+    );
+    $prodStmt->execute([':product_id' => $productId]);
+    $p = $prodStmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$p) {
+        $skipped[] = ['name' => $name, 'reason' => 'No longer on the menu'];
+        return null;
+    }
+
+    $maxStock = (int)$p['stock'];
+    if ($quantity > $maxStock) {
+        $quantity = $maxStock;
+    }
+
+    // Decode customizations.
+    $customizations = [];
+    if (!empty($item['customization_data'])) {
+        $decoded = is_string($item['customization_data'])
+            ? json_decode($item['customization_data'], true)
+            : $item['customization_data'];
+        if (is_array($decoded)) {
+            $customizations = $decoded;
+        }
+    }
+
+    // Current composition rules.
+    $rules = [];
+    $ruleStmt = $db->prepare(
+        "SELECT ingredient_id, price_modifier, min_quantity, max_quantity,
+                is_required, is_default, default_quantity
+           FROM product_composition
+          WHERE product_id = :product_id"
+    );
+    $ruleStmt->execute([':product_id' => $productId]);
+    while ($r = $ruleStmt->fetch(PDO::FETCH_ASSOC)) {
+        $rules[(int)$r['ingredient_id']] = $r;
+    }
+
+    $basePrice = (float)($p['base_price'] ?? 0);
+    if ($basePrice <= 0) {
+        $basePrice = (float)$p['price'];
+    }
+
+    $unitPrice = $basePrice;
+
+    foreach ($customizations as $cust) {
+        if (!is_array($cust)) continue;
+        if (($cust['type'] ?? '') === 'notes') continue;
+
+        $ingredientId = (int)($cust['ingredient_id'] ?? 0);
+        if ($ingredientId <= 0) continue;
+
+        // Ingredient was dropped from the composition since the
+        // original order. Skip it — do not add its modifier.
+        if (!isset($rules[$ingredientId])) continue;
+
+        $option = (string)($cust['selected_option'] ?? 'selected');
+        if ($option === 'remove') continue;
+
+        $requestedQty = (int)($cust['quantity'] ?? 0);
+        if ($requestedQty <= 0) continue;
+
+        $rule     = $rules[$ingredientId];
+        $modifier = (float)$rule['price_modifier'];
+        $maxQty   = (int)$rule['max_quantity'];
+        if ($maxQty > 0 && $requestedQty > $maxQty) {
+            $requestedQty = $maxQty;
+        }
+
+        $unitPrice += $modifier * $requestedQty;
+    }
+
+    if ($unitPrice < 0) {
+        $unitPrice = 0.0;
+    }
+
+    return [
+        'product_id'           => (int)$p['product_id'],
+        'name'                 => (string)$p['name'],
+        'price'                => round($unitPrice, 2),
+        'base_price'           => $basePrice,
+        'quantity'             => $quantity,
+        'image'                => (string)$p['product_image'],
+        'stock'                => $maxStock,
+        'restaurant_name'      => (string)$p['restaurant_name'],
+        'branch_name'          => (string)$p['branch_name'],
+        'restaurant_branch_id' => (int)$p['restaurant_branch_id'],
+        'is_customizable'      => (bool)$p['is_customizable'],
+        'customization_data'   => $item['customization_data'] ?? null,
+    ];
 }

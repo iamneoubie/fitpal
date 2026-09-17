@@ -7,14 +7,15 @@
  *   initiate_qr     — create a pending deposit, return its ID
  *   confirm_qr      — flip a pending deposit to completed
  *   cancel_qr       — delete a pending deposit (user backed out)
+ *   get_balance     — return the current balance as JSON (used by
+ *                     the wallet page's background refresh)
  *
  * Every successful recharge inserts a row into `transaction`. The
  * database trigger `after_transaction_insert` moves the balance, so
  * this handler never writes to financial_account.balance directly.
  *
  * @package FitPal
- * @version 1.1 — Adds cancel_qr so pending recharges don't linger
- *                after the user dismisses the QR modal.
+ * @version 1.2 — Adds get_balance for background refresh.
  */
 
 declare(strict_types=1);
@@ -55,7 +56,6 @@ function parseAmount(mixed $raw): ?float
     if ($value < WALLET_MIN_RECHARGE || $value > WALLET_MAX_RECHARGE) {
         return null;
     }
-    // Round to two decimals to match DECIMAL(10,2).
     return round($value, 2);
 }
 
@@ -71,8 +71,20 @@ try {
     switch ($action) {
 
         // -------------------------------------------------------------
-        // Immediate recharge — used for the manual path where the
-        // customer just wants to top up (no QR scan needed).
+        // Read-only balance check. Cheap single-row lookup. Used by
+        // the wallet page's background refresh on bfcache restore
+        // and long tab-away.
+        // -------------------------------------------------------------
+        case 'get_balance': {
+            echo json_encode([
+                'status'  => 'success',
+                'balance' => (float)$account['balance'],
+            ]);
+            exit;
+        }
+
+        // -------------------------------------------------------------
+        // Immediate recharge — manual top-up, no QR scan.
         // -------------------------------------------------------------
         case 'recharge': {
             $amount = parseAmount($_POST['amount'] ?? null);
@@ -102,7 +114,6 @@ try {
                 throw $e;
             }
 
-            // Re-read the balance after the trigger has run.
             $updated = getWalletAccount($database_connection, $customerId);
 
             echo json_encode([
@@ -117,8 +128,6 @@ try {
 
         // -------------------------------------------------------------
         // QR flow — step 1: reserve the recharge as a pending row.
-        // The trigger does NOT fire for pending, so the balance stays
-        // unchanged until confirm_qr runs.
         // -------------------------------------------------------------
         case 'initiate_qr': {
             $amount = parseAmount($_POST['amount'] ?? null);
@@ -159,7 +168,6 @@ try {
 
         // -------------------------------------------------------------
         // QR flow — step 2: mark the pending row as completed.
-        // The trigger now fires and the balance moves.
         // -------------------------------------------------------------
         case 'confirm_qr': {
             $txnId = (int)($_POST['transaction_id'] ?? 0);
@@ -207,18 +215,10 @@ try {
 
         // -------------------------------------------------------------
         // QR flow — cancel: user backed out before confirming.
-        // Deletes the pending deposit so it doesn't linger in history
-        // and can't be confused with a later, real recharge.
-        //
-        // Best-effort: any failure is logged but still reported as
-        // success, because the UI already moved on and there is no
-        // useful action the customer could take.
         // -------------------------------------------------------------
         case 'cancel_qr': {
             $txnId = (int)($_POST['transaction_id'] ?? 0);
             if ($txnId <= 0) {
-                // Nothing to cancel — treat as success so the caller
-                // doesn't surface an error for a no-op.
                 echo json_encode(['status' => 'success', 'message' => 'Nothing to cancel']);
                 exit;
             }

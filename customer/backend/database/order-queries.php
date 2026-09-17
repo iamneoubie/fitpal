@@ -34,7 +34,7 @@
  * is no persistent cart.
  *
  * @package FitPal
- * @version 6.1 — Legacy-order cancels no longer throw during refund.
+ * @version 6.2 — Adds getReorderableItems() for the reorder flow.
  */
 
 declare(strict_types=1);
@@ -861,4 +861,88 @@ function canReviewProduct(PDO $db, int $orderId, int $productId, int $customerId
     ]);
 
     return !$stmt->fetch();
+}
+
+/**
+ * Fetch the items from a past order, shaped for re-adding to the
+ * session queue. Only returns lines that belong to the given
+ * customer.
+ *
+ * Returns one row per queue_item with its original customizations
+ * attached. Does NOT validate availability — that's the handler's
+ * job (buildReorderLine in order-handler.php), so the handler can
+ * report per-line reasons.
+ *
+ * @param PDO $db
+ * @param int $orderId
+ * @param int $customerId
+ * @return array<int, array<string, mixed>>
+ */
+function getReorderableItems(PDO $db, int $orderId, int $customerId): array
+{
+    $ownerStmt = $db->prepare(
+        "SELECT 1 FROM orders
+          WHERE order_id = :order_id AND customer_id = :customer_id"
+    );
+    $ownerStmt->execute([
+        ':order_id'    => $orderId,
+        ':customer_id' => $customerId,
+    ]);
+    if ($ownerStmt->fetchColumn() === false) {
+        return [];
+    }
+
+    $itemStmt = $db->prepare(
+        "SELECT
+            qi.queue_item_id,
+            qi.product_id,
+            qi.branch_id,
+            qi.queue_quantity AS quantity,
+            qi.unit_price,
+            qi.final_price,
+            qi.is_customized,
+            qi.base_price_snapshot,
+            p.name AS product_name
+         FROM queue_item qi
+         JOIN product p ON qi.product_id = p.product_id
+         WHERE qi.order_id = :order_id
+         ORDER BY qi.queue_item_id ASC"
+    );
+    $itemStmt->execute([':order_id' => $orderId]);
+    $items = $itemStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if (empty($items)) {
+        return [];
+    }
+
+    $queueItemIds = array_column($items, 'queue_item_id');
+    $placeholders = implode(',', array_fill(0, count($queueItemIds), '?'));
+
+    $custStmt = $db->prepare(
+        "SELECT
+            ci.queue_item_id,
+            ci.ingredient_id,
+            ci.quantity,
+            ci.price_at_time,
+            ci.calories_at_time,
+            ci.is_removed,
+            ci.custom_text
+         FROM customization_instance ci
+         WHERE ci.queue_item_id IN ({$placeholders})
+         ORDER BY ci.queue_item_id ASC, ci.instance_id ASC"
+    );
+    $custStmt->execute($queueItemIds);
+
+    $custByItem = [];
+    while ($row = $custStmt->fetch(PDO::FETCH_ASSOC)) {
+        $custByItem[(int)$row['queue_item_id']][] = $row;
+    }
+
+    foreach ($items as &$item) {
+        $qiId = (int)$item['queue_item_id'];
+        $item['customizations'] = $custByItem[$qiId] ?? [];
+    }
+    unset($item);
+
+    return $items;
 }

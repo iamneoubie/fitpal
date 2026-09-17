@@ -1,9 +1,10 @@
 /**
  * FitPal Customer Orders Page JavaScript
- * Version 4.0 — Adds reorder flow (server-validated queue rebuild).
+ * Version 5.0 — Reorder handles partial success and renders
+ *                per-item skip reasons; no more silent drops.
  *
  * @package FitPal
- * @version 4.0
+ * @version 5.0
  */
 
 (function () {
@@ -241,6 +242,7 @@
 
             const originalHTML = btn.innerHTML;
             btn.disabled = true;
+            btn.classList.add('loading');
             btn.innerHTML = '<span>Adding…</span>';
 
             const body = new URLSearchParams();
@@ -259,28 +261,37 @@
             })
             .then(function (r) { return r.json(); })
             .then(function (data) {
-                if (data && data.status === 'success') {
-                    showToast(data.message || 'Items added to your order', 'success');
+                // ---- Success / partial: report + redirect ----
+                if (data && (data.status === 'success' || data.status === 'partial')) {
+                    showReorderToast(data);
 
-                    if (Array.isArray(data.skipped) && data.skipped.length > 0) {
-                        const names = data.skipped.map(function (s) {
-                            return s.name + ' (' + s.reason + ')';
-                        }).join('\n');
-                        console.warn('[reorder] Skipped items:\n' + names);
-                    }
-
+                    // Give the toast a beat to be read before leaving
+                    // the page. Partial results especially need this —
+                    // the user has to see WHICH items were skipped.
+                    const delay = (data.status === 'partial') ? 1600 : 700;
                     const redirect = data.redirect || 'menu.php';
-                    setTimeout(function () { window.location.href = redirect; }, 600);
-                } else {
-                    showToast((data && data.message) || 'Could not re-order', 'error');
-                    btn.disabled = false;
-                    btn.innerHTML = originalHTML;
+
+                    setTimeout(function () {
+                        window.location.href = redirect;
+                    }, delay);
+
+                    return;
                 }
+
+                // ---- Full failure: keep the user here ----
+                showReorderToast(data || {
+                    status: 'error',
+                    message: 'Could not re-order.'
+                });
+                btn.disabled = false;
+                btn.classList.remove('loading');
+                btn.innerHTML = originalHTML;
             })
             .catch(function (err) {
                 console.error('Reorder failed:', err);
                 showToast('Network error. Please try again.', 'error');
                 btn.disabled = false;
+                btn.classList.remove('loading');
                 btn.innerHTML = originalHTML;
             });
         }
@@ -430,6 +441,66 @@
         }
 
         // ============================================
+        // REORDER TOAST (richer than showToast)
+        //
+        // Renders the handler's message plus a bullet list of any
+        // skipped items with their reasons. Auto-dismiss is longer
+        // for partials because there's more to read.
+        // ============================================
+        function showReorderToast(data) {
+            let toast = document.getElementById('reorderToast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'reorderToast';
+                toast.style.cssText = [
+                    'position:fixed', 'top:80px', 'right:20px',
+                    'padding:14px 18px', 'border-radius:8px',
+                    'font-size:14px', 'font-weight:500', 'z-index:9999',
+                    'max-width:380px', 'box-shadow:0 4px 16px rgba(0,0,0,.15)',
+                    'transform:translateX(120%)',
+                    'transition:transform .3s cubic-bezier(.4,0,.2,1)'
+                ].join(';');
+                document.body.appendChild(toast);
+            }
+
+            const palette = {
+                success: ['#d1fae5', '#065f46'],
+                partial: ['#fef3c7', '#92400e'],
+                error:   ['#fee2e2', '#991b1b']
+            };
+            const colors = palette[data.status] || palette.error;
+            toast.style.background = colors[0];
+            toast.style.color      = colors[1];
+
+            let html = '<div>' + escapeHtml(data.message || '') + '</div>';
+
+            if (Array.isArray(data.skipped) && data.skipped.length > 0) {
+                html += '<ul style="margin:8px 0 0 16px;padding:0;font-size:12px;font-weight:400;">';
+                data.skipped.forEach(function (s) {
+                    html += '<li>' + escapeHtml(s.name) + ' — ' + escapeHtml(s.reason) + '</li>';
+                });
+                html += '</ul>';
+            }
+
+            toast.innerHTML = html;
+
+            void toast.offsetWidth;
+            toast.style.transform = 'translateX(0)';
+
+            clearTimeout(toast._timer);
+            const dismissMs = (data.status === 'partial') ? 4000 : 3000;
+            toast._timer = setTimeout(function () {
+                toast.style.transform = 'translateX(120%)';
+            }, dismissMs);
+        }
+
+        function escapeHtml(text) {
+            const d = document.createElement('div');
+            d.textContent = String(text == null ? '' : text);
+            return d.innerHTML;
+        }
+
+        // ============================================
         // TOAST
         // ============================================
         function showToast(message, type) {
@@ -477,6 +548,6 @@
             if (reviewModal && reviewModal.classList.contains('active')) closeReviewModalHandler();
         });
 
-        console.log('Orders JS v4.0 initialized');
+        console.log('Orders JS v5.0 initialized');
     });
 })();

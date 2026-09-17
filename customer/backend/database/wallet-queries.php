@@ -12,7 +12,7 @@
  * financial_account.balance directly.
  *
  * @package FitPal
- * @version 1.1 — Adds deletePendingDeposit for QR cancellation.
+ * @version 1.2 — Default transaction page size reduced to 5.
  */
 
 declare(strict_types=1);
@@ -51,7 +51,7 @@ function getWalletAccount(PDO $db, int $customerId): array|false
  * @param int $offset
  * @return array<int, array<string, mixed>>
  */
-function getWalletTransactions(PDO $db, int $customerId, int $limit = 20, int $offset = 0): array
+function getWalletTransactions(PDO $db, int $customerId, int $limit = 5, int $offset = 0): array
 {
     $stmt = $db->prepare(
         "SELECT

@@ -9,8 +9,8 @@
  * from the orders table.
  *
  * @package FitPal
- * @version 3.0 — Payment pill contrast, correct payment icons,
- *                reorder action rebuilt from server-validated order data.
+ * @version 3.1 — Reorder button carries a label span for clean
+ *                loading-state rendering; no markup changes elsewhere.
  */
 
 declare(strict_types=1);
@@ -284,9 +284,9 @@ $hasOrders = !empty($orders);
                 $totalAmt   = (float)$order['total_amount'];
                 $orderDate  = $order['order_date'];
 
-                $canCancel = in_array($status, ['pending', 'preparing'], true);
-                $canTrack  = ($status === 'delivering');
-                $canReview = ($status === 'delivered');
+                $canCancel  = in_array($status, ['pending', 'preparing'], true);
+                $canTrack   = ($status === 'delivering');
+                $canReview  = ($status === 'delivered');
                 $canReorder = in_array($status, ['delivered', 'cancelled', 'refunded'], true);
 
                 $paymentMeta = getPaymentMethodMeta((string)$order['payment_method']);

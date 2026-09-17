@@ -1,10 +1,10 @@
 <?php
 /**
  * FitPal Customer Wallet Page
- * Version 1.1 — Uses add-line.svg / subtract-line.svg for credit/debit icons.
+ * Version 1.5 — Fixed pagination short-circuit for out-of-range pages.
  *
  * @package FitPal
- * @version 1.1
+ * @version 1.5
  */
 
 declare(strict_types=1);
@@ -18,45 +18,68 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     exit;
 }
 
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+
 require_once __DIR__ . '/../backend/database/customer-connect.php';
 require_once __DIR__ . '/../backend/database/wallet-queries.php';
 
 $customerId = (int)$_SESSION['customer_id'];
 
-$account = getWalletAccount($database_connection, $customerId);
-if (!$account) {
-    // Missing wallet row — should never happen for an active customer,
-    // but fail gracefully rather than crash.
-    $_SESSION['profile_error'] = 'Wallet account not found. Please contact support.';
-    header('Location: profile.php');
-    exit;
+// ============================================
+// ORIGIN RESOLUTION FOR THE BACK BUTTON
+//
+// Declared before any helper or query call so walletPageUrl()
+// can reference $walletBackMap without relying on PHP's function
+// hoisting to make the closure-over-scope work.
+// ============================================
+$walletBackMap = [
+    'checkout'  => 'checkout.php',
+    'orders'    => 'orders.php',
+    'menu'      => 'menu.php',
+    'profile'   => 'profile.php',
+    'dashboard' => 'dashboard.php',
+    'cart'      => 'cart.php',
+];
+
+$fromParam = isset($_GET['from']) ? strtolower(trim((string)$_GET['from'])) : '';
+
+$walletBackHref = '';
+
+if ($fromParam !== '' && isset($walletBackMap[$fromParam])) {
+    $walletBackHref = $walletBackMap[$fromParam];
+} else {
+    $referrer = $_SERVER['HTTP_REFERER'] ?? '';
+    if ($referrer !== '') {
+        $referrerFile = basename((string)parse_url($referrer, PHP_URL_PATH));
+        if ($referrerFile !== '') {
+            // Flipped lookup — O(1) instead of a foreach over the map.
+            $walletBackMapByFile = array_flip($walletBackMap);
+            if (isset($walletBackMapByFile[$referrerFile])) {
+                $walletBackHref = $referrerFile;
+            }
+        }
+    }
 }
 
-$balance      = (float)$account['balance'];
-$perPage      = 20;
-$page         = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
-$offset       = ($page - 1) * $perPage;
-$totalTxns    = countWalletTransactions($database_connection, $customerId);
-$totalPages   = max(1, (int)ceil($totalTxns / $perPage));
-$transactions = getWalletTransactions($database_connection, $customerId, $perPage, $offset);
+// ============================================
+// HELPERS
+// ============================================
 
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+function walletPageUrl(int $targetPage, string $fromParam, array $backMap): string
+{
+    $params = ['page' => $targetPage];
+    if ($fromParam !== '' && isset($backMap[$fromParam])) {
+        $params['from'] = $fromParam;
+    }
+    return 'wallet.php?' . http_build_query($params);
 }
-$csrfToken = $_SESSION['csrf_token'];
 
-require_once __DIR__ . '/../includes/header.php';
-
-/**
- * Format an amount as Philippine pesos.
- */
 function walletFmt(float|string|null $amount): string {
     return '₱' . number_format((float)($amount ?? 0), 2);
 }
 
-/**
- * Human-readable label for a transaction type.
- */
 function walletTypeLabel(string $type): string {
     return match ($type) {
         'deposit'    => 'Top Up',
@@ -67,42 +90,90 @@ function walletTypeLabel(string $type): string {
     };
 }
 
-/**
- * Whether a transaction increases (credit) or decreases (debit) the balance.
- * Deposits and refunds add to the wallet; payments and withdrawals subtract.
- */
 function walletIsCredit(string $type): bool {
     return in_array($type, ['deposit', 'refund'], true);
 }
 
-/**
- * Icon filename for a transaction direction.
- * Credit = money in → add-line.svg
- * Debit  = money out → subtract-line.svg
- */
 function walletDirectionIcon(string $type): string {
     return walletIsCredit($type) ? 'add-line.svg' : 'subtract-line.svg';
 }
 
-/**
- * Alt text for the direction icon.
- */
 function walletDirectionAlt(string $type): string {
     return walletIsCredit($type) ? 'Credit' : 'Debit';
 }
 
-/**
- * Format a transaction timestamp.
- */
 function walletDate(string $date): string {
     $ts = strtotime($date);
     return $ts !== false ? date('M d, Y • g:i A', $ts) : $date;
 }
+
+// ============================================
+// DATA
+// ============================================
+
+$account = getWalletAccount($database_connection, $customerId);
+if (!$account) {
+    $_SESSION['profile_error'] = 'Wallet account not found. Please contact support.';
+    header('Location: profile.php');
+    exit;
+}
+
+$balance = (float)$account['balance'];
+$perPage = 5;
+$page    = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+$offset  = ($page - 1) * $perPage;
+
+$transactions = getWalletTransactions($database_connection, $customerId, $perPage, $offset);
+$returnedRows = count($transactions);
+
+// ============================================
+// PAGINATION TOTALS
+//
+// Three cases:
+//
+//   1. Non-empty short page (1..4 rows)
+//      → this is the last page. $offset + $returnedRows is the
+//        exact total, no COUNT(*) needed.
+//
+//   2. Empty page on page 1
+//      → the wallet has no transactions. Total is 0, no count needed.
+//
+//   3. Everything else
+//      → a full page (there may be more) OR a requested page past
+//        the end. Either way we need the real count so the clamp
+//        below can send the user back to the last valid page.
+// ============================================
+if ($returnedRows > 0 && $returnedRows < $perPage) {
+    $totalTxns  = $offset + $returnedRows;
+    $totalPages = max(1, $page);
+} elseif ($returnedRows === 0 && $page === 1) {
+    $totalTxns  = 0;
+    $totalPages = 1;
+} else {
+    $totalTxns  = countWalletTransactions($database_connection, $customerId);
+    $totalPages = max(1, (int)ceil($totalTxns / $perPage));
+}
+
+// Clamp the page to the valid range so a crafted ?page=999 — or a
+// stale bookmark from when the wallet had more rows — lands on the
+// last real page instead of an empty list.
+if ($page > $totalPages) {
+    $page         = $totalPages;
+    $offset       = ($page - 1) * $perPage;
+    $transactions = getWalletTransactions($database_connection, $customerId, $perPage, $offset);
+}
+
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+$csrfToken = $_SESSION['csrf_token'];
+
+require_once __DIR__ . '/../includes/header.php';
 ?>
 
 <link rel="stylesheet" href="../assets/css/wallet.css">
 
-<div class="content wallet-page">
+<div class="content wallet-page" id="walletPage">
     <div class="container">
 
         <!-- ============================================ -->
@@ -110,7 +181,8 @@ function walletDate(string $date): string {
         <!-- ============================================ -->
         <div class="page-title-header">
             <div class="page-title-header-top">
-                <button type="button" id="walletBackBtn" class="back-btn" data-fallback-href="dashboard.php">
+                <button type="button" id="walletBackBtn" class="back-btn"
+                    data-fallback-href="<?php echo htmlspecialchars($walletBackHref, ENT_QUOTES, 'UTF-8'); ?>">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <line x1="19" y1="12" x2="5" y2="12"></line>
@@ -167,7 +239,7 @@ function walletDate(string $date): string {
         <!-- ============================================ -->
         <div class="wallet-transactions-card">
             <div class="card-header">
-                <h3>Transaction History</h3>
+                <h3>Recent Transactions</h3>
                 <?php if ($totalTxns > 0): ?>
                 <span class="txn-count"><?php echo number_format($totalTxns); ?> total</span>
                 <?php endif; ?>
@@ -235,26 +307,56 @@ function walletDate(string $date): string {
                 <ul class="pagination-list">
                     <?php if ($page > 1): ?>
                     <li>
-                        <a href="wallet.php?page=<?php echo $page - 1; ?>"
+                        <a href="<?php echo walletPageUrl($page - 1, $fromParam, $walletBackMap); ?>"
                             class="pagination-link pagination-prev">Previous</a>
                     </li>
                     <?php else: ?>
                     <li><span class="pagination-link pagination-prev disabled">Previous</span></li>
                     <?php endif; ?>
 
-                    <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                    <?php
+                    $maxVisible = 5;
+                    $startPage  = max(1, $page - (int)floor($maxVisible / 2));
+                    $endPage    = min($totalPages, $startPage + $maxVisible - 1);
+                    if ($endPage - $startPage + 1 < $maxVisible) {
+                        $startPage = max(1, $endPage - $maxVisible + 1);
+                    }
+                    ?>
+
+                    <?php if ($startPage > 1): ?>
+                    <li>
+                        <a href="<?php echo walletPageUrl(1, $fromParam, $walletBackMap); ?>"
+                            class="pagination-link">1</a>
+                    </li>
+                    <?php if ($startPage > 2): ?>
+                    <li class="pagination-ellipsis"><span>...</span></li>
+                    <?php endif; ?>
+                    <?php endif; ?>
+
+                    <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
                     <li>
                         <?php if ($i === $page): ?>
                         <span class="pagination-link active"><?php echo $i; ?></span>
                         <?php else: ?>
-                        <a href="wallet.php?page=<?php echo $i; ?>" class="pagination-link"><?php echo $i; ?></a>
+                        <a href="<?php echo walletPageUrl($i, $fromParam, $walletBackMap); ?>"
+                            class="pagination-link"><?php echo $i; ?></a>
                         <?php endif; ?>
                     </li>
                     <?php endfor; ?>
 
+                    <?php if ($endPage < $totalPages): ?>
+                    <?php if ($endPage < $totalPages - 1): ?>
+                    <li class="pagination-ellipsis"><span>...</span></li>
+                    <?php endif; ?>
+                    <li>
+                        <a href="<?php echo walletPageUrl($totalPages, $fromParam, $walletBackMap); ?>"
+                            class="pagination-link"><?php echo $totalPages; ?></a>
+                    </li>
+                    <?php endif; ?>
+
                     <?php if ($page < $totalPages): ?>
                     <li>
-                        <a href="wallet.php?page=<?php echo $page + 1; ?>"
+                        <a href="<?php echo walletPageUrl($page + 1, $fromParam, $walletBackMap); ?>"
                             class="pagination-link pagination-next">Next</a>
                     </li>
                     <?php else: ?>
