@@ -1,16 +1,21 @@
 /**
  * FitPal Customer Queue Panel JavaScript
  *
- * The queue panel is the UI for the session-based order queue.
- * The server (queue-handler.php) is the single source of truth;
- * this script never writes queue state to sessionStorage.
+ * The queue panel is the UI for the session-based order queue. The
+ * server (queue-handler.php) is the single source of truth; this
+ * script never writes queue state to sessionStorage.
  *
  * Customization details are NOT rendered in this panel — they are
  * carried silently on each line (via line_key + customizations) and
- * surfaced later on the cart / checkout / order pages.
+ * surfaced later on checkout and order pages.
+ *
+ * The Checkout button navigates directly to checkout.php. There is
+ * no cart-commit step; checkout.php reads $_SESSION['order_queue']
+ * itself, and place-order-handler.php is the only code that writes
+ * to the database.
  *
  * @package FitPal
- * @version 5.1 — Clean panel rendering; customizations deferred to checkout
+ * @version 6.0 — Cart system removed; Checkout navigates directly
  */
 (function () {
     'use strict';
@@ -466,25 +471,19 @@
             });
         }
 
+        // ------------------------------------------------------------
+        // CHECKOUT — navigate directly.
+        //
+        // checkout.php reads $_SESSION['order_queue'] itself. There is
+        // no cart-commit step. place-order-handler.php is the only code
+        // that writes the queue into the database (via orders +
+        // queue_item + customization_instance).
+        // ------------------------------------------------------------
         if (checkoutBtn) {
             checkoutBtn.addEventListener('click', function (e) {
                 e.preventDefault();
                 if (queue.length === 0) return;
-
-                checkoutBtn.disabled = true;
-                post({ action: 'commit' })
-                    .then(function (data) {
-                        if (data && data.status === 'success') {
-                            window.location.href = 'checkout.php';
-                        } else {
-                            checkoutBtn.disabled = false;
-                            showToast((data && data.message) || 'Could not proceed to checkout', 'error');
-                        }
-                    })
-                    .catch(function () {
-                        checkoutBtn.disabled = false;
-                        showToast('Network error. Please try again.', 'error');
-                    });
+                window.location.href = 'checkout.php';
             });
         }
 
@@ -526,7 +525,7 @@
             }
         });
 
-        console.log('Queue Panel v5.1 initialized');
+        console.log('Queue Panel v6.0 initialized');
     }
 
     if (document.readyState === 'loading') {

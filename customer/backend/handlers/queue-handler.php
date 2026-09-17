@@ -2,15 +2,27 @@
 /**
  * FitPal Customer Queue Handler
  *
- * Session-based order queue. The queue lives in
- * $_SESSION['order_queue']; this handler reads/writes it and uses
- * the DB only to enrich items or commit into the persistent cart.
+ * The session-based order queue is the ONLY staging system for
+ * customer orders. There is no persistent cart. The queue lives in
+ * $_SESSION['order_queue'] and is mirrored into the `orders` +
+ * `queue_item` + `customization_instance` tables at the moment of
+ * order placement by place-order-handler.php.
+ *
+ * Actions:
+ *   get    → return current queue
+ *   add    → enrich product via DB, merge or append to queue
+ *   update → change qty on a queue line (or remove when qty ≤ 0)
+ *   remove → delete a queue line
+ *   clear  → wipe the entire queue
+ *   sync   → re-enrich every line (used after edits)
+ *
+ * The queue is cleared only by:
+ *   - the `clear` action (user cancels the order from the panel)
+ *   - place-order-handler.php after a successful order creation
  *
  * @package FitPal
- * @version 3.1 — Commit no longer clears the session queue, so the
- *                menu page's queue panel survives a trip to checkout.
- *                The queue is cleared only by `clear` or by placing
- *                the order (place-order-handler.php).
+ * @version 4.0 — Removed `commit` action; cart system deleted;
+ *                queue is the sole staging surface.
  */
 
 declare(strict_types=1);
@@ -42,7 +54,6 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
 $customerId = (int)$_SESSION['customer_id'];
 
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
-require_once __DIR__ . '/../database/cart-queries.php';
 require_once __DIR__ . '/../database/queue-queries.php';
 
 $action = (string)($input['action'] ?? '');
@@ -433,73 +444,14 @@ try {
             queueRespond(['status' => 'success', 'queue' => $new, 'count' => count($new)], $isAjax);
         }
 
-        case 'commit': {
-            $queue = queueGet();
-            if (empty($queue)) {
-                queueRespond(['status' => 'error', 'message' => 'Your order is empty.'], $isAjax);
-            }
-
-            $database_connection->beginTransaction();
-
-            try {
-                // The session queue is the authoritative list of what the
-                // user wants to check out right now. Replace the cart
-                // wholesale so repeat commits are idempotent: the cart
-                // always mirrors the queue exactly as of the last commit.
-                clearCart($database_connection, $customerId);
-
-                foreach ($queue as $item) {
-                    $productId = (int)$item['product_id'];
-                    $qty       = (int)$item['quantity'];
-                    $unitPrice = (float)($item['price'] ?? 0);
-
-                    insertCartItem(
-                        $database_connection,
-                        $customerId,
-                        $productId,
-                        $qty,
-                        $unitPrice,
-                        is_string($item['customization_data'] ?? null)
-                            ? $item['customization_data']
-                            : (isset($item['customization_data'])
-                                ? json_encode($item['customization_data'])
-                                : null)
-                    );
-                }
-
-                $database_connection->commit();
-
-                // IMPORTANT: do NOT queuePut([]) here. The session queue
-                // stays populated so the menu page's queue panel remains
-                // visible if the user navigates back from checkout. The
-                // queue is cleared only by `clear` (Cancel Order) or by
-                // place-order-handler.php (successful order placement).
-
-                queueRespond([
-                    'status'  => 'success',
-                    'message' => 'Order ready for checkout',
-                    'queue'   => $queue,
-                    'count'   => count($queue),
-                ], $isAjax);
-
-            } catch (Throwable $e) {
-                if ($database_connection->inTransaction()) {
-                    $database_connection->rollBack();
-                }
-                throw $e;
-            }
-        }
-
         default:
             queueRespond(['status' => 'error', 'message' => 'Invalid action: ' . $action], $isAjax);
     }
 
 } catch (PDOException $e) {
-    if ($database_connection->inTransaction()) $database_connection->rollBack();
     error_log('Queue handler DB error: ' . $e->getMessage());
     queueRespond(['status' => 'error', 'message' => 'A system error occurred. Please try again.'], $isAjax);
 } catch (Throwable $e) {
-    if ($database_connection->inTransaction()) $database_connection->rollBack();
     error_log('Queue handler error: ' . $e->getMessage());
     queueRespond(['status' => 'error', 'message' => 'A system error occurred. Please try again.'], $isAjax);
 }

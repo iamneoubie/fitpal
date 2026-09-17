@@ -1,10 +1,10 @@
 <?php
 /**
  * FitPal Customer Wallet Page
- * Version 1.0 — Balance, transaction history, recharge flow.
+ * Version 1.1 — Uses add-line.svg / subtract-line.svg for credit/debit icons.
  *
  * @package FitPal
- * @version 1.0
+ * @version 1.1
  */
 
 declare(strict_types=1);
@@ -32,13 +32,13 @@ if (!$account) {
     exit;
 }
 
-$balance        = (float)$account['balance'];
-$perPage        = 20;
-$page           = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
-$offset         = ($page - 1) * $perPage;
-$totalTxns      = countWalletTransactions($database_connection, $customerId);
-$totalPages     = max(1, (int)ceil($totalTxns / $perPage));
-$transactions   = getWalletTransactions($database_connection, $customerId, $perPage, $offset);
+$balance      = (float)$account['balance'];
+$perPage      = 20;
+$page         = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+$offset       = ($page - 1) * $perPage;
+$totalTxns    = countWalletTransactions($database_connection, $customerId);
+$totalPages   = max(1, (int)ceil($totalTxns / $perPage));
+$transactions = getWalletTransactions($database_connection, $customerId, $perPage, $offset);
 
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
@@ -68,18 +68,27 @@ function walletTypeLabel(string $type): string {
 }
 
 /**
- * Determine the sign of a transaction amount for display.
- * Deposits and refunds are credits (+); payments and withdrawals are debits (−).
- */
-function walletAmountSign(string $type): string {
-    return in_array($type, ['deposit', 'refund'], true) ? '+' : '−';
-}
-
-/**
- * Whether a transaction increases or decreases the balance.
+ * Whether a transaction increases (credit) or decreases (debit) the balance.
+ * Deposits and refunds add to the wallet; payments and withdrawals subtract.
  */
 function walletIsCredit(string $type): bool {
     return in_array($type, ['deposit', 'refund'], true);
+}
+
+/**
+ * Icon filename for a transaction direction.
+ * Credit = money in → add-line.svg
+ * Debit  = money out → subtract-line.svg
+ */
+function walletDirectionIcon(string $type): string {
+    return walletIsCredit($type) ? 'add-line.svg' : 'subtract-line.svg';
+}
+
+/**
+ * Alt text for the direction icon.
+ */
+function walletDirectionAlt(string $type): string {
+    return walletIsCredit($type) ? 'Credit' : 'Debit';
 }
 
 /**
@@ -182,23 +191,16 @@ function walletDate(string $date): string {
                     $isCredit  = walletIsCredit($type);
                     $isPending = $status === 'pending';
                     $isFailed  = $status === 'failed';
+
+                    $iconFile = walletDirectionIcon($type);
+                    $iconAlt  = walletDirectionAlt($type);
                 ?>
                 <li
                     class="wallet-txn-item<?php echo $isPending ? ' is-pending' : ''; ?><?php echo $isFailed ? ' is-failed' : ''; ?>">
                     <div class="wallet-txn-icon <?php echo $isCredit ? 'credit' : 'debit'; ?>">
-                        <?php if ($isCredit): ?>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <line x1="12" y1="19" x2="12" y2="5"></line>
-                            <polyline points="5,12 12,5 19,12"></polyline>
-                        </svg>
-                        <?php else: ?>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <polyline points="19,12 12,19 5,12"></polyline>
-                        </svg>
-                        <?php endif; ?>
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/<?php echo htmlspecialchars($iconFile, ENT_QUOTES, 'UTF-8'); ?>"
+                            alt="<?php echo htmlspecialchars($iconAlt, ENT_QUOTES, 'UTF-8'); ?>"
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
 
                     <div class="wallet-txn-info">

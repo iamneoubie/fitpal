@@ -1,10 +1,9 @@
 /**
  * FitPal Checkout Page Styles
- * Version 3.9 — Actions anchored to the bottom of the payment card;
- *                adds totals-row-note for the branch-count hint.
+ * Version 4.1 — Payment icon alignment fix; verified flex nesting.
  *
  * @package FitPal
- * @version 3.9
+ * @version 4.1
  */
 
 /* ============================================
@@ -69,7 +68,7 @@
 }
 
 /* ============================================
-   CHECKOUT GRID - 2x2 desktop
+   CHECKOUT GRID
    ============================================ */
 
 .checkout-grid {
@@ -194,6 +193,7 @@
     width: 18px;
     height: 18px;
     opacity: 0.5;
+    display: block;
 }
 
 .address-display-info {
@@ -455,6 +455,11 @@
     pointer-events: none;
 }
 
+/* 
+ * FIX: align-items: center — the icon and the two-line text block
+ * now share a vertical mid-point. Previously flex-start anchored
+ * the icon to the top of the taller .payment-details block.
+ */
 .payment-option input[type="radio"] + label,
 .address-option input[type="radio"] + label {
     position: relative;
@@ -462,7 +467,7 @@
     cursor: pointer;
     user-select: none;
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     width: 100%;
     margin: 0;
 }
@@ -546,42 +551,62 @@
     background: #f6fcf5;
 }
 
+/* 
+ * FIX: inline-flex + centered children removes the inline-baseline
+ * gap that was nudging the icon upward inside the taller label.
+ */
 .payment-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     margin-right: 14px;
     flex-shrink: 0;
 }
 
-.payment-icon img {
-    width: 24px;
-    height: 24px;
+.payment-icon img,
+.payment-icon svg {
+    width: 32px;
+    height: 32px;
     display: block;
+    object-fit: contain;
     opacity: 0.6;
+    flex-shrink: 0;
 }
 
-.payment-option.selected .payment-icon img {
+.payment-option.selected .payment-icon img,
+.payment-option.selected .payment-icon svg {
     opacity: 1;
 }
 
+/* 
+ * FIX: min-width: 0 lets the text wrap without pushing the icon
+ * off-axis when the label is longer than the card width.
+ */
 .payment-details {
     display: flex;
     flex-direction: column;
     flex: 1;
+    min-width: 0;
 }
 
 .payment-label {
     font-weight: var(--font-weight-medium);
     color: var(--text);
     font-size: var(--font-size-sm);
+    min-width: 0;
+    word-break: break-word;
 }
 
 .payment-description {
     font-size: var(--font-size-xs);
     color: var(--gray-500);
     margin-top: 1px;
+    min-width: 0;
+    word-break: break-word;
 }
 
 /* ============================================
-   CHECKOUT ACTIONS — anchored to card bottom
+   CHECKOUT ACTIONS
    ============================================ */
 
 .checkout-actions {
@@ -661,7 +686,7 @@
 }
 
 /* ============================================
-   MODAL
+   MODAL (shared)
    ============================================ */
 
 .modal {
@@ -1060,6 +1085,95 @@
 }
 
 /* ============================================
+   CONFIRM ORDER MODAL
+   ============================================ */
+
+.confirm-modal-content {
+    max-width: 420px;
+    padding: 32px 24px 24px 24px;
+    text-align: center;
+}
+
+.confirm-modal-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 16px;
+    background: rgba(89, 193, 74, 0.1);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.confirm-modal-icon img {
+    width: 32px;
+    height: 32px;
+    display: block;
+    opacity: 0.85;
+}
+
+.confirm-modal-title {
+    margin: 0 0 8px 0;
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-bold);
+    color: var(--text);
+    line-height: 1.3;
+}
+
+.confirm-modal-text {
+    margin: 0 0 24px 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    line-height: 1.6;
+}
+
+.confirm-modal-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.confirm-modal-actions .modal-btn {
+    flex: 1;
+    padding: 12px 20px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all var(--transition-fast);
+    font-family: inherit;
+    min-height: 46px;
+}
+
+.confirm-modal-actions .modal-btn-cancel {
+    background: #1a1a1a;
+    color: #ffffff;
+    border-color: #1a1a1a;
+}
+
+.confirm-modal-actions .modal-btn-cancel:hover {
+    background: #000000;
+    border-color: #000000;
+}
+
+.confirm-modal-actions .modal-btn-confirm {
+    background: var(--primary);
+    color: #ffffff;
+    border-color: var(--primary);
+}
+
+.confirm-modal-actions .modal-btn-confirm:hover {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+}
+
+.confirm-modal-actions .modal-btn-confirm:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* ============================================
    RESPONSIVE - TABLET
    ============================================ */
 
@@ -1131,9 +1245,10 @@
         margin-right: 10px;
     }
 
-    .payment-icon img {
-        width: 20px;
-        height: 20px;
+    .payment-icon img,
+    .payment-icon svg {
+        width: 24px;
+        height: 24px;
     }
 
     .payment-label {
@@ -1329,9 +1444,10 @@
         margin-right: 8px;
     }
 
-    .payment-icon img {
-        width: 18px;
-        height: 18px;
+    .payment-icon img,
+    .payment-icon svg {
+        width: 24px;
+        height: 24px;
     }
 
     .payment-option input[type="radio"] + label,
@@ -1440,5 +1556,27 @@
 
     .wallet-modal-text {
         font-size: var(--font-size-xs);
+    }
+
+    .confirm-modal-content {
+        padding: 24px 18px 18px 18px;
+    }
+
+    .confirm-modal-icon {
+        width: 56px;
+        height: 56px;
+    }
+
+    .confirm-modal-icon img {
+        width: 28px;
+        height: 28px;
+    }
+
+    .confirm-modal-actions {
+        flex-direction: column-reverse;
+    }
+
+    .confirm-modal-actions .modal-btn {
+        width: 100%;
     }
 }

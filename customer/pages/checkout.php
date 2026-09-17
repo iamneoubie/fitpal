@@ -1,11 +1,21 @@
 <?php
 /**
  * FitPal Customer Checkout Page
- * Version 4.3 — Tiered delivery fee (base + per-branch surcharge),
- *                flat service fee, multi-branch carts supported.
+ *
+ * Reads the session order queue ($_SESSION['order_queue']) as the
+ * single source of truth for what the customer is buying. There is no
+ * persistent cart anywhere in this flow.
+ *
+ * On Place Order, the customer is shown a confirmation modal
+ * summarizing the delivery address and total. Only after confirming
+ * does the page submit checkoutForm to place-order-handler.php, which
+ * is the only code that writes the order to the database.
  *
  * @package FitPal
- * @version 4.3
+ * @version 6.2 — Empty-queue guard redirects silently. The menu page's
+ *                queue panel already communicates emptiness; a flash
+ *                caused spurious errors when the user navigated back
+ *                from a completed order.
  */
 
 declare(strict_types=1);
@@ -19,93 +29,118 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     exit;
 }
 
+// ---------------------------------------------------------------
+// Prevent the browser from caching this page.
+//
+// After a successful order, place-order-handler.php clears the
+// session queue and redirects to orders.php. If the browser later
+// restores checkout.php from cache via Back, checkout would
+// re-render against an empty queue. no-store forbids that restore.
+// ---------------------------------------------------------------
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+
 require_once __DIR__ . '/../backend/database/customer-connect.php';
-require_once __DIR__ . '/../backend/database/cart-queries.php';
 require_once __DIR__ . '/../backend/database/customer-queries.php';
 require_once __DIR__ . '/../backend/database/address-queries.php';
 require_once __DIR__ . '/../backend/database/fee-queries.php';
 
 $customerId = (int)$_SESSION['customer_id'];
 
-// ---- Re-sync: if the session queue has items, mirror them into the cart.
+// ---------------------------------------------------------------
+// Read the session queue. This is the only staging source.
+// ---------------------------------------------------------------
+$orderItems = [];
+
 if (!empty($_SESSION['order_queue']) && is_array($_SESSION['order_queue'])) {
-    try {
-        $database_connection->beginTransaction();
+    foreach ($_SESSION['order_queue'] as $qItem) {
+        if (!is_array($qItem)) {
+            continue;
+        }
 
-        clearCart($database_connection, $customerId);
+        $pid = (int)($qItem['product_id'] ?? 0);
+        $qty = (int)($qItem['quantity']   ?? 0);
 
-        foreach ($_SESSION['order_queue'] as $qItem) {
-            if (!is_array($qItem)) continue;
+        if ($pid <= 0 || $qty <= 0) {
+            continue;
+        }
 
-            $pid = (int)($qItem['product_id'] ?? 0);
-            $qty = (int)($qItem['quantity'] ?? 0);
-            if ($pid <= 0 || $qty <= 0) continue;
+        $customizations = [];
+        if (!empty($qItem['customization_data'])) {
+            $decoded = is_string($qItem['customization_data'])
+                ? json_decode($qItem['customization_data'], true)
+                : $qItem['customization_data'];
 
-            $unitPrice = (float)($qItem['price'] ?? 0);
+            if (is_array($decoded)) {
+                foreach ($decoded as $cust) {
+                    if (!is_array($cust)) continue;
+                    if (($cust['type'] ?? '') === 'notes') continue;
+                    if (empty($cust['ingredient_id']))     continue;
 
-            $custJson = null;
-            if (isset($qItem['customization_data'])) {
-                $custJson = is_string($qItem['customization_data'])
-                    ? $qItem['customization_data']
-                    : json_encode($qItem['customization_data']);
+                    $customizations[] = [
+                        'ingredient_name' => $cust['ingredient_name'] ?? $cust['name'] ?? '',
+                        'price_modifier'  => (float)($cust['price_modifier'] ?? 0),
+                        'quantity'        => (int)($cust['quantity'] ?? 1),
+                        'is_removed'      => ($cust['selected_option'] ?? '') === 'remove',
+                    ];
+                }
             }
-
-            insertCartItem(
-                $database_connection,
-                $customerId,
-                $pid,
-                $qty,
-                $unitPrice,
-                $custJson
-            );
         }
 
-        $database_connection->commit();
-
-    } catch (Throwable $e) {
-        if ($database_connection->inTransaction()) {
-            $database_connection->rollBack();
-        }
-        error_log('Checkout queue re-sync failed: ' . $e->getMessage());
+        $orderItems[] = [
+            'product_id'           => $pid,
+            'product_name'         => (string)($qItem['name'] ?? 'Product'),
+            'quantity'             => $qty,
+            'price'                => (float)($qItem['price'] ?? 0),
+            'stock'                => (int)($qItem['stock'] ?? 0),
+            'branch_name'          => (string)($qItem['branch_name'] ?? ''),
+            'restaurant_name'      => (string)($qItem['restaurant_name'] ?? ''),
+            'restaurant_branch_id' => (int)($qItem['restaurant_branch_id'] ?? 0),
+            'customizations'       => $customizations,
+        ];
     }
 }
 
-$cartItems = getCustomerCart($database_connection, $customerId);
-
-if (empty($cartItems)) {
-    $_SESSION['checkout_error'] = 'Your cart is empty. Please add items before checkout.';
+// ---------------------------------------------------------------
+// Empty-queue guard.
+//
+// Three situations can reach here with an empty queue:
+//
+//   1. The user landed on checkout.php directly (bookmark, address
+//      bar, or a stale tab) with nothing queued.
+//
+//   2. The user clicked Checkout with an empty queue.
+//
+//   3. The browser re-requested checkout after a successful order.
+//      place-order-handler already cleared the queue and redirected
+//      to orders.php; the user then pressed Back.
+//
+// All three are handled the same way: silent redirect to menu.php.
+// The menu page's queue panel already shows "Your queue is empty.
+// Start adding items!" so a flash would be redundant — and worse,
+// cases 1 and 3 would produce a confusing error immediately after a
+// successful purchase.
+// ---------------------------------------------------------------
+if (empty($orderItems)) {
     header('Location: menu.php');
     exit;
 }
 
 // ---------------------------------------------------------------
-// Cart aggregation + fee calculation
-//
-// Delivery fee:
-//   Base 50.00 for the first branch.
-//   +30.00 for each additional distinct branch.
-//
-// Service fee:
-//   Flat 5.00 per order.
-//
-// Examples:
-//   1 product                        -> 50.00 + 5.00
-//   2 products, same branch          -> 50.00 + 5.00
-//   2 products, different branches   -> 80.00 + 5.00
-//   3 products, 2 same + 1 other     -> 80.00 + 5.00
-//   3 products, all different        -> 110.00 + 5.00
+// Aggregate subtotal + distinct branches for the fee schedule.
 // ---------------------------------------------------------------
 $subtotal       = 0.0;
 $branchIds      = [];
 $branchName     = '';
 $restaurantName = '';
 
-foreach ($cartItems as $item) {
-    $subtotal += (float)$item['price'] * (int)$item['quantity'];
+foreach ($orderItems as $item) {
+    $subtotal += $item['price'] * $item['quantity'];
 
-    $itemBranchId = (int)$item['restaurant_branch_id'];
-    if (!in_array($itemBranchId, $branchIds, true)) {
-        $branchIds[] = $itemBranchId;
+    $bid = $item['restaurant_branch_id'];
+    if ($bid > 0 && !in_array($bid, $branchIds, true)) {
+        $branchIds[] = $bid;
     }
 
     if ($branchName === '') {
@@ -217,10 +252,10 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
         </div>
         <?php endif; ?>
 
-        <?php if (isset($_SESSION['cart_success'])): ?>
-        <div class="alert alert-success" role="alert">
-            <?php echo htmlspecialchars($_SESSION['cart_success'], ENT_QUOTES, 'UTF-8'); ?>
-            <?php unset($_SESSION['cart_success']); ?>
+        <?php if (isset($_SESSION['queue_error'])): ?>
+        <div class="alert alert-danger" role="alert">
+            <?php echo htmlspecialchars($_SESSION['queue_error'], ENT_QUOTES, 'UTF-8'); ?>
+            <?php unset($_SESSION['queue_error']); ?>
         </div>
         <?php endif; ?>
 
@@ -236,18 +271,21 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
                     <div class="card-body">
                         <div class="detail-row">
                             <span class="detail-label">Name</span>
-                            <span
-                                class="detail-value"><?php echo htmlspecialchars($userName ?: 'Customer', ENT_QUOTES, 'UTF-8'); ?></span>
+                            <span class="detail-value">
+                                <?php echo htmlspecialchars($userName ?: 'Customer', ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
                         </div>
                         <div class="detail-row">
                             <span class="detail-label">Email</span>
-                            <span
-                                class="detail-value"><?php echo htmlspecialchars($userEmail, ENT_QUOTES, 'UTF-8'); ?></span>
+                            <span class="detail-value">
+                                <?php echo htmlspecialchars($userEmail, ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
                         </div>
                         <div class="detail-row">
                             <span class="detail-label">Contact</span>
-                            <span
-                                class="detail-value"><?php echo htmlspecialchars($userContact, ENT_QUOTES, 'UTF-8'); ?></span>
+                            <span class="detail-value">
+                                <?php echo htmlspecialchars($userContact, ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -310,11 +348,11 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
                 <div class="card">
                     <div class="card-header">
                         <p class="heading-5">Order Summary</p>
-                        <span class="badge"><?php echo count($cartItems); ?></span>
+                        <span class="badge"><?php echo count($orderItems); ?></span>
                     </div>
                     <div class="card-body">
                         <div class="order-items">
-                            <?php foreach ($cartItems as $item): ?>
+                            <?php foreach ($orderItems as $item): ?>
                             <div class="order-item">
                                 <div class="order-item-image">
                                     <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg"
@@ -326,22 +364,30 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
                                         <?php echo htmlspecialchars($item['product_name'], ENT_QUOTES, 'UTF-8'); ?>
                                     </p>
                                     <p class="order-item-restaurant">
-                                        <?php echo htmlspecialchars($item['restaurant_name'] ?? $restaurantName, ENT_QUOTES, 'UTF-8'); ?>
+                                        <?php echo htmlspecialchars($item['restaurant_name'] ?: $restaurantName, ENT_QUOTES, 'UTF-8'); ?>
+                                        <?php if ($item['branch_name'] !== ''): ?>
+                                        <span class="order-item-branch">
+                                            • <?php echo htmlspecialchars($item['branch_name'], ENT_QUOTES, 'UTF-8'); ?>
+                                        </span>
+                                        <?php endif; ?>
                                     </p>
                                     <p class="order-item-meta">Qty: <?php echo (int)$item['quantity']; ?></p>
+
                                     <?php if (!empty($item['customizations'])): ?>
                                     <ul class="order-item-customizations">
                                         <?php foreach ($item['customizations'] as $cust): ?>
-                                        <li><?php echo htmlspecialchars($cust['ingredient_name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>
-                                            <?php if (($cust['price_modifier'] ?? 0) != 0): ?>
-                                            (+₱<?php echo number_format((float)$cust['price_modifier'], 2); ?>)
+                                        <li>
+                                            <?php echo htmlspecialchars($cust['ingredient_name'], ENT_QUOTES, 'UTF-8'); ?>
+                                            <?php if (!$cust['is_removed'] && $cust['price_modifier'] != 0): ?>
+                                            (<?php echo $cust['price_modifier'] > 0 ? '+' : '−'; ?>₱<?php echo number_format(abs($cust['price_modifier']), 2); ?>)
                                             <?php endif; ?>
                                         </li>
                                         <?php endforeach; ?>
                                     </ul>
                                     <?php endif; ?>
+
                                     <p class="order-item-price">
-                                        ₱<?php echo number_format((float)$item['price'] * (int)$item['quantity'], 2); ?>
+                                        ₱<?php echo number_format($item['price'] * $item['quantity'], 2); ?>
                                     </p>
                                 </div>
                             </div>
@@ -393,8 +439,7 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
                                 <input type="radio" name="payment_method" value="COD" id="payment_cod" checked>
                                 <label for="payment_cod">
                                     <span class="payment-icon">
-                                        <img src="<?php echo $assetBase; ?>assets/images/icons/cart-shopping.svg"
-                                            alt="COD">
+                                        <img src="<?php echo $assetBase; ?>assets/images/icons/coin-line.svg" alt="COD">
                                     </span>
                                     <span class="payment-details">
                                         <span class="payment-label">Cash on Delivery</span>
@@ -406,7 +451,7 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
                                 <input type="radio" name="payment_method" value="Wallet" id="payment_wallet">
                                 <label for="payment_wallet">
                                     <span class="payment-icon">
-                                        <img src="<?php echo $assetBase; ?>assets/images/icons/profile.svg"
+                                        <img src="<?php echo $assetBase; ?>assets/images/icons/wallet-fill.svg"
                                             alt="Wallet">
                                     </span>
                                     <span class="payment-details">
@@ -421,7 +466,8 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
                                 <input type="radio" name="payment_method" value="Online" id="payment_online">
                                 <label for="payment_online">
                                     <span class="payment-icon">
-                                        <img src="<?php echo $assetBase; ?>assets/images/icons/mail.svg" alt="Online">
+                                        <img src="<?php echo $assetBase; ?>assets/images/icons/qr-code-line.svg"
+                                            alt="Online">
                                     </span>
                                     <span class="payment-details">
                                         <span class="payment-label">Online Payment</span>
@@ -592,16 +638,33 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
     </div>
 </div>
 
+<!-- ============================================ -->
+<!-- PLACE ORDER CONFIRMATION MODAL -->
+<!-- ============================================ -->
+<div id="confirmOrderModal" class="modal" style="display:none;">
+    <div class="modal-overlay"></div>
+    <div class="modal-content confirm-modal-content">
+        <div class="confirm-modal-icon">
+            <img src="<?php echo $assetBase; ?>assets/images/icons/question-fill.svg" alt="Confirm">
+        </div>
+
+        <p class="heading-5 confirm-modal-title">Place this order?</p>
+        <p class="confirm-modal-text">
+            Your order will be sent to the restaurant and cannot be changed once accepted.
+        </p>
+
+        <div class="confirm-modal-actions">
+            <button type="button" class="modal-btn modal-btn-cancel" id="confirmCancelBtn">Go Back</button>
+            <button type="button" class="modal-btn modal-btn-confirm" id="confirmPlaceBtn">Confirm</button>
+        </div>
+    </div>
+</div>
+
 <!-- Hidden form for submitting order -->
 <form id="checkoutForm" method="POST" action="../backend/handlers/place-order-handler.php" style="display:none;">
     <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
     <input type="hidden" name="address_id" id="hiddenAddressId" value="<?php echo $selectedAddrId; ?>">
     <input type="hidden" name="payment_method" id="hiddenPaymentMethod" value="COD">
-    <input type="hidden" name="subtotal" value="<?php echo $subtotal; ?>">
-    <input type="hidden" name="delivery_fee" value="<?php echo $deliveryFee; ?>">
-    <input type="hidden" name="service_fee" value="<?php echo $serviceFee; ?>">
-    <input type="hidden" name="vat_amount" value="<?php echo $vatAmount; ?>">
-    <input type="hidden" name="total" value="<?php echo $total; ?>">
 </form>
 
 <script>
@@ -614,7 +677,8 @@ window.FITPAL_CHECKOUT = {
     vatRate: <?php echo json_encode((float)$vatRate); ?>,
     walletBalance: <?php echo json_encode((float)$walletBalance); ?>,
     hasAddress: <?php echo $hasAddress ? 'true' : 'false'; ?>,
-    csrfToken: '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>'
+    csrfToken: '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>',
+    initialPaymentMethod: 'COD'
 };
 </script>
 <script src="../assets/ui/js/checkout.js" defer></script>

@@ -990,3 +990,36 @@
         width: 100%;
     }
 }
+
+.wallet-txn-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-full);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.wallet-txn-icon img {
+    width: 20px;
+    height: 20px;
+    display: block;
+    object-fit: contain;
+    /* SVGs are stroke-based; filter maps them to the parent color. */
+    filter: brightness(0) saturate(100%);
+}
+
+.wallet-txn-icon.credit img {
+    /* Tint the icon to match --primary-dark */
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.wallet-txn-icon.debit img {
+    /* Tint the icon to match --danger */
+    filter: brightness(0) saturate(100%)
+            invert(40%) sepia(90%) saturate(600%)
+            hue-rotate(330deg) brightness(90%) contrast(85%);
+}

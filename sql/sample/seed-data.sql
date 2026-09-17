@@ -1,6 +1,6 @@
 -- =====================================================
 -- FitPal Seed Data
--- Version 5.0
+-- Version 5.1
 --
 -- ALIGNED WITH: fitpal_food_delivery schema v5
 --   - customer_address is a CHILD of customer
@@ -14,7 +14,10 @@
 --   2. All FK variables are captured immediately after
 --      their parent INSERT via LAST_INSERT_ID(), never
 --      derived by MAX() - offset arithmetic.
---   3. Passwords are hashed with SHA2(..., 256).
+--   3. Passwords are stored as PLAINTEXT for the demo. The
+--      sign-in handler's dev bypass accepts plaintext against
+--      the stored column value, so login works out of the box.
+--      DO NOT use this approach in production.
 --   4. dietary_information.calories for customizable
 --      products is DERIVED at the end (Section 9).
 --   5. Every choice group has exactly one is_required = 1
@@ -31,7 +34,7 @@ START TRANSACTION;
 -- 1 customer account
 INSERT INTO
     financial_account (balance, account_type)
-VALUES (100.00, 'customer');
+VALUES (1000.00, 'customer');
 
 SET @customer_financial_id = LAST_INSERT_ID();
 
@@ -94,7 +97,7 @@ VALUES (
         'admin@fitpal.com',
         '09123456789',
         'admin',
-        SHA2('admin123', 256),
+        'admin123',
         1
     );
 
@@ -129,7 +132,7 @@ VALUES (
         'user@example.com',
         '09123456789',
         'user',
-        SHA2('user123', 256),
+        'user123',
         1
     );
 
@@ -263,7 +266,7 @@ VALUES (
         'owner@greenbowl.ph',
         '09171111111',
         'greenbowl_owner',
-        SHA2('owner123', 256),
+        'owner123',
         'owner',
         1
     );
@@ -296,7 +299,7 @@ VALUES (
         'manager@greenbowl.ph',
         '09181111111',
         'greenbowl_manager',
-        SHA2('manager123', 256),
+        'manager123',
         'manager',
         1
     );
@@ -329,7 +332,7 @@ VALUES (
         'staff@greenbowl.ph',
         '09182222222',
         'greenbowl_staff',
-        SHA2('staff123', 256),
+        'staff123',
         'staff',
         1
     );
@@ -408,7 +411,7 @@ VALUES (
         'owner@ketokitchen.ph',
         '09172222222',
         'keto_owner',
-        SHA2('owner123', 256),
+        'owner123',
         'owner',
         1
     );
@@ -440,7 +443,7 @@ VALUES (
         'manager@ketokitchen.ph',
         '09183333333',
         'keto_manager',
-        SHA2('manager123', 256),
+        'manager123',
         'manager',
         1
     );
@@ -472,7 +475,7 @@ VALUES (
         'staff@ketokitchen.ph',
         '09184444444',
         'keto_staff',
-        SHA2('staff123', 256),
+        'staff123',
         'staff',
         1
     );
@@ -551,7 +554,7 @@ VALUES (
         'owner@asianfusionfit.ph',
         '09173333333',
         'aff_owner',
-        SHA2('owner123', 256),
+        'owner123',
         'owner',
         1
     );
@@ -583,7 +586,7 @@ VALUES (
         'manager@asianfusionfit.ph',
         '09185555555',
         'aff_manager',
-        SHA2('manager123', 256),
+        'manager123',
         'manager',
         1
     );
@@ -615,7 +618,7 @@ VALUES (
         'staff@asianfusionfit.ph',
         '09186666666',
         'aff_staff',
-        SHA2('staff123', 256),
+        'staff123',
         'staff',
         1
     );
@@ -647,7 +650,7 @@ VALUES (
         'rider1@fitpal.com',
         '09187777777',
         'rider_carlos',
-        SHA2('rider123', 256),
+        'rider123',
         1
     );
 
@@ -728,7 +731,7 @@ VALUES (
         'rider2@fitpal.com',
         '09188888888',
         'rider_miguel',
-        SHA2('rider123', 256),
+        'rider123',
         1
     );
 
@@ -809,7 +812,7 @@ VALUES (
         'rider3@fitpal.com',
         '09189999999',
         'rider_andrei',
-        SHA2('rider123', 256),
+        'rider123',
         1
     );
 
