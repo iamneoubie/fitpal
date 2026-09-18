@@ -1,10 +1,10 @@
 <?php
 /**
  * FitPal Customer Profile Page
- * Version 3.1 — Adds back navigation with a whitelisted return slug.
+ * Version 3.2 — Back button uses shared arrow icon.
  *
  * @package FitPal
- * @version 3.1
+ * @version 3.2
  */
 
 declare(strict_types=1);
@@ -20,11 +20,6 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
 
 // ---------------------------------------------------------------
 // Return destination tracking
-//
-// Pages that link here (e.g. checkout) append ?from=<slug>. We record
-// the slug in the session so the back button can return the customer
-// where they came from — even after the form-reload cycle wipes the
-// query string. Whitelisted; unknown values fall back to the default.
 // ---------------------------------------------------------------
 const PROFILE_RETURN_DESTINATIONS = [
     'checkout'  => 'checkout.php',
@@ -87,6 +82,8 @@ $balance      = (float)($profileData['balance'] ?? 0);
             <div class="page-title-header-top">
                 <button type="button" id="profileBackBtn" class="back-btn"
                     data-fallback-href="<?php echo $returnHref !== '' ? htmlspecialchars($returnHref, ENT_QUOTES, 'UTF-8') : ''; ?>">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt="Back"
+                        class="back-btn-icon" width="20" height="20">
                     <span>Back<?php echo $returnLabel !== '' ? ' to ' . htmlspecialchars($returnLabel, ENT_QUOTES, 'UTF-8') : ''; ?></span>
                 </button>
                 <h1>My Profile</h1>

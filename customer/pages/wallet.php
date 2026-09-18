@@ -1,10 +1,10 @@
 <?php
 /**
  * FitPal Customer Wallet Page
- * Version 1.5 — Fixed pagination short-circuit for out-of-range pages.
+ * Version 1.6 — Uses shared icon for back button; header layout fix.
  *
  * @package FitPal
- * @version 1.5
+ * @version 1.6
  */
 
 declare(strict_types=1);
@@ -29,10 +29,6 @@ $customerId = (int)$_SESSION['customer_id'];
 
 // ============================================
 // ORIGIN RESOLUTION FOR THE BACK BUTTON
-//
-// Declared before any helper or query call so walletPageUrl()
-// can reference $walletBackMap without relying on PHP's function
-// hoisting to make the closure-over-scope work.
 // ============================================
 $walletBackMap = [
     'checkout'  => 'checkout.php',
@@ -54,7 +50,6 @@ if ($fromParam !== '' && isset($walletBackMap[$fromParam])) {
     if ($referrer !== '') {
         $referrerFile = basename((string)parse_url($referrer, PHP_URL_PATH));
         if ($referrerFile !== '') {
-            // Flipped lookup — O(1) instead of a foreach over the map.
             $walletBackMapByFile = array_flip($walletBackMap);
             if (isset($walletBackMapByFile[$referrerFile])) {
                 $walletBackHref = $referrerFile;
@@ -128,20 +123,6 @@ $returnedRows = count($transactions);
 
 // ============================================
 // PAGINATION TOTALS
-//
-// Three cases:
-//
-//   1. Non-empty short page (1..4 rows)
-//      → this is the last page. $offset + $returnedRows is the
-//        exact total, no COUNT(*) needed.
-//
-//   2. Empty page on page 1
-//      → the wallet has no transactions. Total is 0, no count needed.
-//
-//   3. Everything else
-//      → a full page (there may be more) OR a requested page past
-//        the end. Either way we need the real count so the clamp
-//        below can send the user back to the last valid page.
 // ============================================
 if ($returnedRows > 0 && $returnedRows < $perPage) {
     $totalTxns  = $offset + $returnedRows;
@@ -154,9 +135,6 @@ if ($returnedRows > 0 && $returnedRows < $perPage) {
     $totalPages = max(1, (int)ceil($totalTxns / $perPage));
 }
 
-// Clamp the page to the valid range so a crafted ?page=999 — or a
-// stale bookmark from when the wallet had more rows — lands on the
-// last real page instead of an empty list.
 if ($page > $totalPages) {
     $page         = $totalPages;
     $offset       = ($page - 1) * $perPage;
@@ -183,11 +161,8 @@ require_once __DIR__ . '/../includes/header.php';
             <div class="page-title-header-top">
                 <button type="button" id="walletBackBtn" class="back-btn"
                     data-fallback-href="<?php echo htmlspecialchars($walletBackHref, ENT_QUOTES, 'UTF-8'); ?>">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <line x1="19" y1="12" x2="5" y2="12"></line>
-                        <polyline points="12,19 5,12 12,5"></polyline>
-                    </svg>
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt="Back"
+                        class="back-btn-icon" width="20" height="20">
                     <span>Back</span>
                 </button>
                 <h1>My Wallet</h1>
@@ -224,11 +199,8 @@ require_once __DIR__ . '/../includes/header.php';
             </div>
             <div class="wallet-balance-right">
                 <button type="button" id="rechargeBtn" class="btn btn-primary btn-lg">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/add-line.svg" alt="" class="btn-icon"
+                        width="18" height="18">
                     Recharge Wallet
                 </button>
             </div>

@@ -12,10 +12,7 @@
  * is the only code that writes the order to the database.
  *
  * @package FitPal
- * @version 6.2 — Empty-queue guard redirects silently. The menu page's
- *                queue panel already communicates emptiness; a flash
- *                caused spurious errors when the user navigated back
- *                from a completed order.
+ * @version 6.3 — Add-address button uses shared icon (no inline SVG).
  */
 
 declare(strict_types=1);
@@ -31,11 +28,6 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
 
 // ---------------------------------------------------------------
 // Prevent the browser from caching this page.
-//
-// After a successful order, place-order-handler.php clears the
-// session queue and redirects to orders.php. If the browser later
-// restores checkout.php from cache via Back, checkout would
-// re-render against an empty queue. no-store forbids that restore.
 // ---------------------------------------------------------------
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
@@ -49,7 +41,7 @@ require_once __DIR__ . '/../backend/database/fee-queries.php';
 $customerId = (int)$_SESSION['customer_id'];
 
 // ---------------------------------------------------------------
-// Read the session queue. This is the only staging source.
+// Read the session queue.
 // ---------------------------------------------------------------
 $orderItems = [];
 
@@ -104,23 +96,6 @@ if (!empty($_SESSION['order_queue']) && is_array($_SESSION['order_queue'])) {
 
 // ---------------------------------------------------------------
 // Empty-queue guard.
-//
-// Three situations can reach here with an empty queue:
-//
-//   1. The user landed on checkout.php directly (bookmark, address
-//      bar, or a stale tab) with nothing queued.
-//
-//   2. The user clicked Checkout with an empty queue.
-//
-//   3. The browser re-requested checkout after a successful order.
-//      place-order-handler already cleared the queue and redirected
-//      to orders.php; the user then pressed Back.
-//
-// All three are handled the same way: silent redirect to menu.php.
-// The menu page's queue panel already shows "Your queue is empty.
-// Start adding items!" so a flash would be redundant — and worse,
-// cases 1 and 3 would produce a confusing error immediately after a
-// successful purchase.
 // ---------------------------------------------------------------
 if (empty($orderItems)) {
     header('Location: menu.php');
@@ -541,11 +516,7 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
         <div class="modal-footer">
             <button type="button" class="btn btn-secondary" id="cancelAddressModal">Cancel</button>
             <a href="profile.php?from=checkout#add-address" class="btn btn-primary" id="addAddressModalBtn">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="12" y1="5" x2="12" y2="19" />
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-                Add Address
+                <span>Add Address</span>
             </a>
         </div>
     </div>

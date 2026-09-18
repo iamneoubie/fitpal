@@ -1,10 +1,10 @@
 <?php
 /**
  * FitPal Product Detail Page
- * Version 9.0 — All SQL moved to product-queries.php
+ * Version 9.2 — Quantity stepper uses shared add/subtract icons.
  *
  * @package FitPal
- * @version 9.0
+ * @version 9.2
  */
 
 declare(strict_types=1);
@@ -134,6 +134,8 @@ $formattedPrice = '₱' . number_format($basePrice, 2);
             <div class="back-nav">
                 <a href="menu.php<?php echo isset($_GET['restaurant_id']) ? '?restaurant_id=' . (int)$_GET['restaurant_id'] : ''; ?>"
                     class="back-btn">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt="Back"
+                        class="back-btn-icon" width="20" height="20">
                     <span>Back to Menu</span>
                 </a>
             </div>
@@ -219,19 +221,14 @@ $formattedPrice = '₱' . number_format($basePrice, 2);
                                 <div class="action-col action-col-qty">
                                     <div class="quantity-control">
                                         <button type="button" class="qty-btn qty-minus" aria-label="Decrease quantity">
-                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2">
-                                                <line x1="5" y1="12" x2="19" y2="12" />
-                                            </svg>
+                                            <img src="<?php echo $assetBase; ?>assets/images/icons/subtract-line.svg"
+                                                alt="" class="qty-btn-icon" width="18" height="18">
                                         </button>
                                         <input type="number" name="quantity" id="productQuantity" value="1" min="1"
                                             max="<?php echo (int)$product['stock']; ?>" class="qty-input">
                                         <button type="button" class="qty-btn qty-plus" aria-label="Increase quantity">
-                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2">
-                                                <line x1="12" y1="5" x2="12" y2="19" />
-                                                <line x1="5" y1="12" x2="19" y2="12" />
-                                            </svg>
+                                            <img src="<?php echo $assetBase; ?>assets/images/icons/add-line.svg" alt=""
+                                                class="qty-btn-icon" width="18" height="18">
                                         </button>
                                     </div>
                                 </div>
@@ -313,6 +310,8 @@ $formattedPrice = '₱' . number_format($basePrice, 2);
         <div class="container">
             <div class="back-nav">
                 <button type="button" class="back-btn" id="backToMainBtn">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt="Back"
+                        class="back-btn-icon" width="20" height="20">
                     <span>Back to Product</span>
                 </button>
                 <span class="customize-step-title">Customize Your Order</span>
@@ -454,7 +453,7 @@ $formattedPrice = '₱' . number_format($basePrice, 2);
                                 </div>
                                 <div class="modifier-controls">
                                     <button type="button" class="modifier-btn modifier-minus"
-                                        <?php echo $startQty <= $minQty ? 'disabled' : ''; ?>>−</button>
+                                        <?php echo $startQty <= $minQty ? 'disabled' : ''; ?>>&minus;</button>
                                     <span class="modifier-quantity"><?php echo $startQty; ?></span>
                                     <button type="button" class="modifier-btn modifier-plus"
                                         <?php echo $startQty >= $maxQty ? 'disabled' : ''; ?>>+</button>
@@ -510,7 +509,12 @@ $formattedPrice = '₱' . number_format($basePrice, 2);
                         </div>
                     </div>
                     <div class="customization-buttons">
-                        <button type="button" class="btn btn-outline" id="cancelCustomizeBtn">Cancel</button>
+                        <button type="button" class="btn btn-outline" id="cancelCustomizeBtn">
+                            <span>Cancel</span>
+                        </button>
+                        <button type="button" class="btn btn-dark" id="customizeAddToCartBtn">
+                            <span>Add to Cart</span>
+                        </button>
                         <button type="button" class="btn btn-primary" id="applyCustomizeBtn" data-queue-action="queue">
                             <span>Apply and Add to Order</span>
                         </button>

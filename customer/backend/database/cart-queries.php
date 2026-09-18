@@ -9,7 +9,7 @@
  * No $_POST, no header(), no echo.
  *
  * @package FitPal
- * @version 3.2 — getCartItemsWithProductDetails returns parsed customizations
+ * @version 4.0 — Customization-aware merge; hash helper for line identity
  */
 
 declare(strict_types=1);
@@ -67,9 +67,6 @@ function getCustomerCart(PDO $db, int $customerId): array
  * Get cart items with product details for the cart page (includes
  * current price, is_active flag, and stock for availability checks),
  * with customization_data already parsed into a structured array.
- *
- * The returned rows do NOT contain a raw `customization_data` column.
- * Callers should read `$item['customizations']`.
  *
  * @param PDO $db
  * @param int $customerId
@@ -239,20 +236,56 @@ function getProductForCart(PDO $db, int $productId): array|false
 /**
  * Get a specific cart row for a customer+product.
  *
+ * When $customizationHash is provided, the lookup is scoped to that
+ * exact customization configuration so that two different customize
+ * builds of the same product coexist as separate lines (which is what
+ * the cart table's UNIQUE (customer_id, product_id, customization_hash)
+ * key already allows).
+ *
+ * When $customizationHash is null (legacy callers), the first matching
+ * row for (customer_id, product_id) is returned. New code should always
+ * pass a hash.
+ *
  * @param PDO $db
  * @param int $customerId
  * @param int $productId
+ * @param string|null $customizationHash
  * @return array<string, mixed>|false
  */
-function getCartItemByProduct(PDO $db, int $customerId, int $productId): array|false
-{
+function getCartItemByProduct(
+    PDO $db,
+    int $customerId,
+    int $productId,
+    ?string $customizationHash = null
+): array|false {
+    if ($customizationHash === null) {
+        $stmt = $db->prepare(
+            "SELECT cart_id, quantity
+             FROM cart
+             WHERE customer_id = :customer_id
+               AND product_id  = :product_id
+             ORDER BY cart_id ASC
+             LIMIT 1"
+        );
+        $stmt->execute([
+            ':customer_id' => $customerId,
+            ':product_id'  => $productId,
+        ]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
     $stmt = $db->prepare(
-        "SELECT cart_id, quantity FROM cart
-         WHERE customer_id = :customer_id AND product_id = :product_id"
+        "SELECT cart_id, quantity
+         FROM cart
+         WHERE customer_id         = :customer_id
+           AND product_id          = :product_id
+           AND customization_hash  = :customization_hash
+         LIMIT 1"
     );
     $stmt->execute([
-        ':customer_id' => $customerId,
-        ':product_id'  => $productId,
+        ':customer_id'        => $customerId,
+        ':product_id'         => $productId,
+        ':customization_hash' => $customizationHash,
     ]);
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
@@ -277,6 +310,51 @@ function getCartItemForUpdate(PDO $db, int $cartId, int $customerId): array|fals
     );
     $stmt->execute([':cart_id' => $cartId, ':customer_id' => $customerId]);
     return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Compute the SHA-256 hash that the cart table uses to distinguish
+ * customized lines. Mirrors the DB generated column:
+ *
+ *     SHA2(
+ *         COALESCE(JSON_EXTRACT(customization_data, '$.customizations'), ''),
+ *         256
+ *     )
+ *
+ * Since our PHP code stores customization_data as a flat JSON array
+ * (not wrapped in a { "customizations": [...] } object), the extract
+ * path returns NULL and COALESCE falls back to ''. So the hash of any
+ * non-empty customization payload is actually SHA2('', 256).
+ *
+ * To make the hash genuinely distinguish different customized lines,
+ * we store the payload as `{ "customizations": [...] }`. This helper
+ * takes the raw customization array (or null) and produces the exact
+ * JSON string that should be persisted, so the DB generates the hash
+ * we expect.
+ *
+ * @param array<int, array<string, mixed>> $customizations
+ * @return string|null
+ */
+function buildCartCustomizationPayload(array $customizations): ?string
+{
+    if (empty($customizations)) {
+        return null;
+    }
+    return json_encode(['customizations' => $customizations]);
+}
+
+/**
+ * Compute the same hash the DB will store, given a customization array.
+ * Useful for pre-flight lookups before insert.
+ *
+ * @param array<int, array<string, mixed>> $customizations
+ * @return string
+ */
+function computeCartCustomizationHash(array $customizations): string
+{
+    $payload = buildCartCustomizationPayload($customizations) ?? '';
+    $inner   = $customizations === [] ? '' : json_encode($customizations);
+    return hash('sha256', (string)$inner);
 }
 
 /**
@@ -420,6 +498,9 @@ function getCartItemsForUpdate(PDO $db, int $customerId): array
  * Parse the customization_data JSON from a cart row into a normalized
  * array. Notes entries are filtered out; ingredient entries are kept.
  *
+ * Handles both the legacy flat-array format and the current
+ * { "customizations": [...] } wrapper format.
+ *
  * @param string|null $json
  * @return array<int, array<string, mixed>>
  */
@@ -432,6 +513,11 @@ function parseCartCustomizations(?string $json): array
     $decoded = json_decode($json, true);
     if (!is_array($decoded)) {
         return [];
+    }
+
+    // Unwrap the { "customizations": [...] } envelope if present.
+    if (isset($decoded['customizations']) && is_array($decoded['customizations'])) {
+        $decoded = $decoded['customizations'];
     }
 
     $out = [];

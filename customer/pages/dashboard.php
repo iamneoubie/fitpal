@@ -6,7 +6,7 @@
  * profile snapshot. All SQL lives in dashboard-queries.php.
  *
  * @package FitPal
- * @version 3.0 — Balanced grid, adaptive chart scale, 3 recent orders.
+ * @version 3.1 — Header button and stat-card arrows use shared icons.
  */
 
 declare(strict_types=1);
@@ -120,7 +120,6 @@ $step     = $scale['step'];
 // Bar heights as percentages of the ceiling
 $barHeights = [];
 foreach ($weeklySeries as $d) {
-    // Empty days render a tiny visible nub (4px) instead of nothing.
     $pct = $ceiling > 0 ? ($d['amount'] / $ceiling) * 100 : 0;
     $barHeights[$d['date']] = $d['amount'] > 0
         ? max(4, min(100, $pct))
@@ -149,7 +148,9 @@ $weekShareOfMonth = ($spend['monthly_spend'] ?? 0) > 0
             </div>
             <div class="dashboard-actions">
                 <a href="menu.php" class="btn btn-primary">
-                    <span class="btn-icon" aria-hidden="true">+</span> Browse Menu
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/add-line.svg" alt="" class="btn-icon"
+                        width="18" height="18">
+                    <span>Browse Menu</span>
                 </a>
             </div>
         </header>
@@ -173,9 +174,8 @@ $weekShareOfMonth = ($spend['monthly_spend'] ?? 0) > 0
                     <?php endif; ?>
                 </div>
                 <span class="stat-arrow" aria-hidden="true">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="9 18 15 12 9 6"></polyline>
-                    </svg>
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-right-s-line.svg" alt=""
+                        class="stat-arrow-img" width="18" height="18">
                 </span>
             </a>
 
@@ -189,9 +189,8 @@ $weekShareOfMonth = ($spend['monthly_spend'] ?? 0) > 0
                     <p class="stat-label">Wallet Balance</p>
                 </div>
                 <span class="stat-arrow" aria-hidden="true">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="9 18 15 12 9 6"></polyline>
-                    </svg>
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-right-s-line.svg" alt=""
+                        class="stat-arrow-img" width="18" height="18">
                 </span>
             </a>
 
@@ -211,9 +210,8 @@ $weekShareOfMonth = ($spend['monthly_spend'] ?? 0) > 0
                     <?php endif; ?>
                 </div>
                 <span class="stat-arrow" aria-hidden="true">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="9 18 15 12 9 6"></polyline>
-                    </svg>
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-right-s-line.svg" alt=""
+                        class="stat-arrow-img" width="18" height="18">
                 </span>
             </a>
 
@@ -229,16 +227,14 @@ $weekShareOfMonth = ($spend['monthly_spend'] ?? 0) > 0
                     <p class="stat-label">Fitness Goal</p>
                 </div>
                 <span class="stat-arrow" aria-hidden="true">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="9 18 15 12 9 6"></polyline>
-                    </svg>
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-right-s-line.svg" alt=""
+                        class="stat-arrow-img" width="18" height="18">
                 </span>
             </a>
         </section>
 
         <!-- ============================================
              TWO-COLUMN ROW
-             Analytics stretches; sidebar stretches with it.
              ============================================ -->
         <div class="dashboard-row dashboard-row-primary">
 

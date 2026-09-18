@@ -1,9 +1,9 @@
 /**
  * FitPal Checkout Page Styles
- * Version 4.1 — Payment icon alignment fix; verified flex nesting.
+ * Version 4.2 — Add-address button uses shared icon (no inline SVG).
  *
  * @package FitPal
- * @version 4.1
+ * @version 4.2
  */
 
 /* ============================================
@@ -455,11 +455,6 @@
     pointer-events: none;
 }
 
-/* 
- * FIX: align-items: center — the icon and the two-line text block
- * now share a vertical mid-point. Previously flex-start anchored
- * the icon to the top of the taller .payment-details block.
- */
 .payment-option input[type="radio"] + label,
 .address-option input[type="radio"] + label {
     position: relative;
@@ -551,10 +546,6 @@
     background: #f6fcf5;
 }
 
-/* 
- * FIX: inline-flex + centered children removes the inline-baseline
- * gap that was nudging the icon upward inside the taller label.
- */
 .payment-icon {
     display: inline-flex;
     align-items: center;
@@ -578,10 +569,6 @@
     opacity: 1;
 }
 
-/* 
- * FIX: min-width: 0 lets the text wrap without pushing the icon
- * off-axis when the label is longer than the card width.
- */
 .payment-details {
     display: flex;
     flex-direction: column;
@@ -893,8 +880,14 @@
     transition: all var(--transition-fast);
 }
 
-.modal-footer .btn svg {
+/* Shared icon inside modal footer buttons — sizes and tints
+   the <img> to match the previous inline SVG. */
+.modal-footer .btn .btn-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
     flex-shrink: 0;
+    filter: brightness(0) invert(1);
 }
 
 .modal-footer .btn-secondary {

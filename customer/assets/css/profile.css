@@ -1,9 +1,10 @@
 /**
  * FitPal Customer Profile Page Styles
- * Version 2.7 — Back button unified with product-detail back button
+ * Version 2.8 — Back button uses shared arrow icon;
+ *               header row anchors back button left, title right.
  *
  * @package FitPal
- * @version 2.7
+ * @version 2.8
  */
 
 /* ============================================
@@ -34,6 +35,7 @@
 
 /* ============================================
    PAGE HEADER - with back button
+   Back button anchored left, title anchored right.
    ============================================ */
 
 .page-title-header {
@@ -43,6 +45,7 @@
 .page-title-header-top {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 16px;
     flex-wrap: wrap;
 }
@@ -52,9 +55,10 @@
     font-weight: 700;
     color: var(--text);
     margin: 0;
+    text-align: right;
 }
 
-/* Back button — matches product-detail .back-btn */
+/* Back button — matches wallet & product-detail back button */
 .page-title-header .back-btn {
     display: inline-flex;
     align-items: center;
@@ -72,6 +76,7 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     cursor: pointer;
     white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .page-title-header .back-btn:active {
@@ -79,11 +84,13 @@
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.page-title-header .back-btn svg {
+.page-title-header .back-btn-icon {
     width: 20px;
     height: 20px;
-    stroke: #ffffff;
+    display: block;
     flex-shrink: 0;
+    /* Tint the shared SVG to white */
+    filter: brightness(0) invert(1);
 }
 
 /* ============================================
@@ -1004,8 +1011,6 @@ select.form-control:not(:disabled) {
    ============================================ */
 
 @media (max-width: 768px) {
-    /* Container padding stays 16px to match header */
-
     .page-title-header-top {
         gap: 12px;
     }
@@ -1244,13 +1249,17 @@ select.form-control:not(:disabled) {
 }
 
 /* ============================================
-   DESKTOP - Back button matches product-detail
-   (min-width: 768px in product-detail.css)
+   DESKTOP - Back button sizing
    ============================================ */
 
 @media (min-width: 768px) {
     .page-title-header .back-btn {
         padding: 12px 20px;
         font-size: var(--font-size-base);
+    }
+
+    .page-title-header .back-btn-icon {
+        width: 22px;
+        height: 22px;
     }
 }

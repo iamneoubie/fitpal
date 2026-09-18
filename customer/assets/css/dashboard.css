@@ -1,7 +1,6 @@
 /**
  * FitPal Customer Dashboard Styles
- * Version 3.0 — Balanced two-column row, adaptive chart scale,
- *               gridline-backed bar chart, compact recent orders.
+ * Version 3.1 — Header button and stat-card arrows use shared icons.
  *
  * Layout map:
  *   .dashboard-page
@@ -67,10 +66,14 @@
     font-size: var(--font-size-sm);
 }
 
+/* Shared icon inside the "Browse Menu" button — sized and
+   tinted white so it renders on the primary green background. */
 .dashboard-actions .btn-icon {
-    font-size: 18px;
-    line-height: 1;
-    margin-right: 4px;
+    width: 18px;
+    height: 18px;
+    display: block;
+    flex-shrink: 0;
+    filter: brightness(0) invert(1);
 }
 
 /* ============================================
@@ -178,18 +181,34 @@
     font-weight: var(--font-weight-semibold);
 }
 
+/* Stat card trailing arrow — shared icon, tinted via filter. */
 .stat-arrow {
     flex-shrink: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    color: var(--gray-300);
-    transition: color 0.15s ease, transform 0.15s ease;
+    transition: transform 0.15s ease;
+}
+
+.stat-arrow-img {
+    width: 18px;
+    height: 18px;
+    display: block;
+    flex-shrink: 0;
+    /* Neutral gray tint for the resting state */
+    filter: brightness(0) saturate(100%) invert(75%) sepia(0%) saturate(0%) brightness(95%) contrast(90%);
+    transition: filter 0.15s ease;
 }
 
 .stat-card:hover .stat-arrow {
-    color: var(--primary);
     transform: translateX(2px);
+}
+
+.stat-card:hover .stat-arrow-img {
+    /* Tint to primary green on hover */
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
 }
 
 /* ============================================
@@ -451,7 +470,6 @@
 
 /* ============================================
    PROFILE SNAPSHOT
-   Stretches to match the analytics card height.
    ============================================ */
 
 .profile-snapshot-card .profile-snapshot {
@@ -694,7 +712,6 @@
     .dashboard-row-primary { grid-template-columns: 1fr; }
 
     .profile-snapshot-card .profile-snapshot {
-        /* Sidebar no longer needs to stretch when stacked */
         flex: initial;
     }
 
@@ -763,7 +780,7 @@
     .dashboard-card { padding: 16px; }
 
     .weekly-chart { height: 170px; }
-    .chart-y-axis { display: none; } /* reclaim horizontal space on phones */
+    .chart-y-axis { display: none; }
     .weekly-chart { grid-template-columns: 1fr; }
     .chart-label { font-size: 9px; }
     .chart-value { font-size: 9px; }

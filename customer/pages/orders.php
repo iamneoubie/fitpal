@@ -9,8 +9,7 @@
  * from the orders table.
  *
  * @package FitPal
- * @version 3.1 — Reorder button carries a label span for clean
- *                loading-state rendering; no markup changes elsewhere.
+ * @version 3.2 — Expand icon uses shared arrow-drop-down icon (no inline SVG).
  */
 
 declare(strict_types=1);
@@ -357,11 +356,8 @@ $hasOrders = !empty($orders);
                                     <p class="order-item-line-total"><?php echo formatOrderCurrency($lineTotal); ?></p>
                                     <?php if ($hasDetails): ?>
                                     <span class="order-item-expand-icon" aria-hidden="true">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                            stroke-linejoin="round">
-                                            <polyline points="6,9 12,15 18,9"></polyline>
-                                        </svg>
+                                        <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-drop-down-line.svg"
+                                            alt="" class="order-item-expand-icon-img" width="16" height="16">
                                     </span>
                                     <?php endif; ?>
                                 </div>

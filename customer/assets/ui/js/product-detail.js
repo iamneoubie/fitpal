@@ -1,14 +1,18 @@
 /**
  * FitPal Product Detail
- * Version 9.2
+ * Version 9.3 — Add-to-cart from customize step.
  *
  * Routing:
- *   "Add to Cart"   → AJAX POST → cart-handler.php   (action=add) → stays on page
- *   "Add to Order"  → AJAX POST → queue-handler.php  (action=add) → redirect to menu.php
- *   "Apply & Add"   → AJAX POST → queue-handler.php  (action=add) → redirect to menu.php
+ *   Main view:
+ *     "Add to Cart"   → AJAX POST → cart-handler.php   (action=add) → stays on page
+ *     "Add to Order"  → AJAX POST → queue-handler.php  (action=add) → redirect to menu.php
+ *
+ *   Customize view:
+ *     "Add to Cart"       → AJAX POST → cart-handler.php   (action=add) → stays on page
+ *     "Apply and Add"     → AJAX POST → queue-handler.php  (action=add) → redirect to menu.php
  *
  * @package FitPal
- * @version 9.2
+ * @version 9.3
  */
 (function () {
     'use strict';
@@ -24,6 +28,7 @@
         const backToMainBtn          = document.getElementById('backToMainBtn');
         const cancelCustomizeBtn     = document.getElementById('cancelCustomizeBtn');
         const applyCustomizeBtn      = document.getElementById('applyCustomizeBtn');
+        const customizeAddToCartBtn  = document.getElementById('customizeAddToCartBtn');
         const addToOrderBtn          = document.getElementById('addToOrderBtn');
         const addToCartBtn           = document.getElementById('addToCartBtn');
         const quantityInput          = document.getElementById('productQuantity');
@@ -432,7 +437,7 @@
         // HANDLERS
         // ------------------------------------------------------
 
-        // ---- Add to Cart ----
+        // ---- Add to Cart (main view) ----
         if (addToCartBtn) {
             addToCartBtn.addEventListener('click', async e => {
                 e.preventDefault();
@@ -455,7 +460,32 @@
             });
         }
 
-        // ---- Add to Order ----
+        // ---- Add to Cart (customize view) ----
+        if (customizeAddToCartBtn) {
+            customizeAddToCartBtn.addEventListener('click', async e => {
+                e.preventDefault();
+                prepareSubmission();
+                setButtonLoading(customizeAddToCartBtn, 'Adding...');
+
+                try {
+                    const data = await postForm(CART_URL, form, { action: 'add' });
+                    if (data && data.status === 'success') {
+                        showToast(data.message || 'Added to cart', 'success');
+                        // Stay on customize step so the customer can also
+                        // add to order if they want. Do NOT navigate away.
+                    } else {
+                        showToast((data && data.message) || 'Could not add to cart', 'error');
+                    }
+                } catch (err) {
+                    console.warn('Add to cart failed', err);
+                    showToast('Network error. Please try again.', 'error');
+                } finally {
+                    restoreButton(customizeAddToCartBtn);
+                }
+            });
+        }
+
+        // ---- Add to Order (main view) ----
         if (addToOrderBtn) {
             addToOrderBtn.addEventListener('click', async e => {
                 e.preventDefault();
@@ -479,7 +509,7 @@
             });
         }
 
-        // ---- Apply Customize ----
+        // ---- Apply Customize (add to order from customize view) ----
         if (applyCustomizeBtn) {
             applyCustomizeBtn.addEventListener('click', async e => {
                 e.preventDefault();
@@ -563,6 +593,6 @@
         updateMainTotals();
         updateCustomizeTotals();
 
-        console.log('Product Detail JS v9.2 initialized');
+        console.log('Product Detail JS v9.3 initialized');
     });
 })();

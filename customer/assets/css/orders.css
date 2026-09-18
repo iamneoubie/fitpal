@@ -1,9 +1,9 @@
 /**
  * FitPal Customer Orders Page Styles
- * Version 3.2 — Fixed min-widths on badges, pills, and footer buttons.
+ * Version 3.3 — Expand icon uses shared arrow-drop-down icon.
  *
  * @package FitPal
- * @version 3.2
+ * @version 3.3
  */
 
 /* ============================================
@@ -283,8 +283,6 @@
 
 /* ============================================
    STATUS BADGE
-   Fixed min-width so every status renders at the
-   same visual width, regardless of label length.
    ============================================ */
 
 .badge {
@@ -444,19 +442,38 @@
     white-space: nowrap;
 }
 
+/* ============================================
+   EXPAND ICON (shared arrow-drop-down icon)
+   ============================================ */
+
 .order-item-expand-icon {
     display: flex;
     align-items: center;
     justify-content: center;
     width: 24px;
     height: 24px;
-    color: var(--gray-400);
-    transition: transform 0.25s ease, color 0.15s ease;
+    transition: transform 0.25s ease;
 }
 
+/* Tint the shared SVG to match the collapsed gray state */
+.order-item-expand-icon-img {
+    width: 64px;
+    height: 64px;
+    display: block;
+    flex-shrink: 0;
+    filter: brightness(0) saturate(100%) invert(60%) sepia(0%) saturate(0%) brightness(90%) contrast(90%);
+    transition: filter 0.15s ease;
+}
+
+/* Expanded: rotate the wrapper and tint the icon green */
 .order-item-row.expanded .order-item-expand-icon {
     transform: rotate(180deg);
-    color: var(--primary);
+}
+
+.order-item-row.expanded .order-item-expand-icon-img {
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
 }
 
 /* ============================================
@@ -630,8 +647,6 @@
 
 /* ============================================
    PAYMENT PILL
-   Fixed min-width so every payment method
-   renders at the same visual width.
    ============================================ */
 
 .payment-pill {
@@ -714,8 +729,6 @@
 
 /* ============================================
    FOOTER ACTION BUTTONS
-   Fixed min-width matching the payment pill so
-   the footer reads as one aligned rail.
    ============================================ */
 
 .order-footer-actions .btn,
@@ -1337,7 +1350,8 @@
     .modal-overlay,
     .modal-content,
     .star,
-    .order-item-expand-icon {
+    .order-item-expand-icon,
+    .order-item-expand-icon-img {
         transition: none !important;
     }
 }

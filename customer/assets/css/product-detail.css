@@ -1,9 +1,9 @@
 /**
  * FitPal Product Detail Page Styles
- * Version 5.5 — Customize step full-width, aligned with header
+ * Version 5.7 — Quantity stepper uses shared add/subtract icons.
  *
  * @package FitPal
- * @version 5.5
+ * @version 5.7
  */
 
 /* ============================================
@@ -129,6 +129,7 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     cursor: pointer;
     white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .back-btn:active {
@@ -136,11 +137,13 @@
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.back-btn svg {
+.back-btn-icon {
     width: 20px;
     height: 20px;
-    stroke: #ffffff;
+    display: block;
     flex-shrink: 0;
+    /* Tint the shared SVG to white */
+    filter: brightness(0) invert(1);
 }
 
 .customize-step-title {
@@ -520,11 +523,14 @@
     background: var(--gray-300);
 }
 
-.qty-btn svg {
+/* Shared add/subtract icon sizing + dark tint */
+.qty-btn-icon {
     width: 18px;
     height: 18px;
-    stroke-width: 2;
+    display: block;
     flex-shrink: 0;
+    filter: brightness(0) saturate(100%) invert(8%) sepia(8%) saturate(1000%) hue-rotate(50deg) brightness(95%) contrast(95%);
+    opacity: 0.75;
 }
 
 .qty-input {
@@ -657,6 +663,18 @@
 }
 
 .btn-primary:active {
+    transform: scale(0.97);
+}
+
+/* Dark button — used for "Add to Cart" in customize step */
+.btn-dark {
+    background: #1a1a1a;
+    color: #ffffff;
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.btn-dark:active {
     transform: scale(0.97);
 }
 
@@ -973,14 +991,18 @@
     color: var(--text);
     padding: 0;
     flex-shrink: 0;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
 }
 
 .modifier-btn:active {
     transform: scale(0.92);
 }
 
-.modifier-btn svg {
-    stroke-width: 2;
+.modifier-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 
 .modifier-quantity {
@@ -1128,12 +1150,26 @@
     justify-content: center;
     padding: 12px 20px;
     font-size: var(--font-size-base);
+    border-radius: var(--radius-base);
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 46px;
+    cursor: pointer;
+    border: none;
+    text-decoration: none;
 }
 
 .customization-buttons .btn-outline {
     background-color: #1a1a1a;
     color: #ffffff;
-    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.customization-buttons .btn-dark {
+    background-color: #1a1a1a;
+    color: #ffffff;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
@@ -1254,8 +1290,6 @@
         padding: 24px 0 20px 0;
     }
 
-    /* Container padding stays 16px to match header */
-
     .product-info-section {
         padding: 24px;
     }
@@ -1271,6 +1305,16 @@
     .back-btn {
         padding: 12px 20px;
         font-size: var(--font-size-base);
+    }
+
+    .back-btn-icon {
+        width: 22px;
+        height: 22px;
+    }
+
+    .qty-btn-icon {
+        width: 20px;
+        height: 20px;
     }
 
     .related-grid {
@@ -1304,8 +1348,6 @@
     .product-detail-page {
         padding: 32px 0 20px 0;
     }
-
-    /* Container padding stays 16px to match header */
 
     .product-detail-card {
         display: grid;
@@ -1352,13 +1394,9 @@
         grid-template-columns: repeat(4, 1fr);
         gap: 20px;
     }
-
-    /* Customize card fills the full container — no max-width cap */
 }
 
 @media (min-width: 1400px) {
-    /* Container padding stays 16px to match header */
-
     .product-info-section {
         padding: 40px;
     }
