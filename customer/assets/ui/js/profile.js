@@ -1,21 +1,19 @@
 /**
  * FitPal Customer Profile JavaScript
- * Version 3.1
+ * Version 3.2 — Scroll lock applied before the modal is shown and
+ *                released after it is hidden, mirroring the cart,
+ *                orders, and wallet pages.
  *
  * - Tabs, profile edit mode
  * - Multi-step address modal (add / edit)
  * - Delete confirmation
  * - Deep-link hash is consumed once on load and stripped from the URL
- *   so reloads do not re-trigger the modal
  * - Back navigation wired to a whitelisted origin slug, with a
  *   history.back() fallback when no origin was recorded
- * - Field-level input filters ported from sign-up.js:
- *     names        -> letters, spaces, hyphens, apostrophes (auto-capitalized)
- *     barangay/city/province/region -> same rule
- *     postal code  -> digits only
+ * - Field-level input filters ported from sign-up.js
  *
  * @package FitPal
- * @version 3.1
+ * @version 3.2
  */
 
 (function() {
@@ -29,14 +27,12 @@
         var tabs         = document.querySelectorAll('.profile-tab');
         var tabContents  = document.querySelectorAll('.profile-tab-content');
 
-        // Profile edit
         var editProfileBtn = document.getElementById('editProfileBtn');
         var cancelEditBtn  = document.getElementById('cancelEditBtn');
         var profileActions = document.getElementById('profileActions');
         var profileForm    = document.getElementById('profileForm');
         var formInputs     = profileForm ? profileForm.querySelectorAll('input, select') : [];
 
-        // Address modal
         var addAddressBtn       = document.getElementById('addAddressBtn');
         var addressModal        = document.getElementById('addressModal');
         var closeAddressModal   = document.getElementById('closeAddressModal');
@@ -45,7 +41,6 @@
         var addressId           = document.getElementById('addressId');
         var saveAddressBtn      = document.getElementById('saveAddressBtn');
 
-        // Modal steps
         var modalStep1 = document.getElementById('modalStep1');
         var modalStep2 = document.getElementById('modalStep2');
         var modalStep3 = document.getElementById('modalStep3');
@@ -56,7 +51,6 @@
         var nextStepBtns  = document.querySelectorAll('.btn-next-step');
         var prevStepBtns  = document.querySelectorAll('.btn-prev-step');
 
-        // Delete modal
         var deleteAddressModal = document.getElementById('deleteAddressModal');
         var cancelDeleteModal  = document.getElementById('cancelDeleteModal');
         var confirmDeleteModal = document.getElementById('confirmDeleteModal');
@@ -64,7 +58,6 @@
         var editAddressBtns   = document.querySelectorAll('.edit-address');
         var deleteAddressBtns = document.querySelectorAll('.delete-address');
 
-        // Inputs subject to filtering
         var textFieldsForNames = [
             document.getElementById('block'),
             document.getElementById('barangay'),
@@ -83,11 +76,18 @@
         var totalModalSteps  = 3;
 
         // ============================================
+        // BODY SCROLL LOCK
+        // ============================================
+        function lockBodyScroll() {
+            document.body.style.overflow = 'hidden';
+        }
+
+        function unlockBodyScroll() {
+            document.body.style.overflow = '';
+        }
+
+        // ============================================
         // BACK NAVIGATION
-        //
-        // The button carries a data-fallback-href that points to the
-        // whitelisted origin page (e.g. checkout.php). If present, use it.
-        // Otherwise fall back to browser history, then to menu.php.
         // ============================================
         var profileBackBtn = document.getElementById('profileBackBtn');
         if (profileBackBtn) {
@@ -140,7 +140,7 @@
             editProfileBtn.addEventListener('click', function() {
                 isEditing = true;
                 this.style.display = 'none';
-                if (profileActions) profileActions.style.display = 'flex';
+                if (profileActions) profileActions.classList.remove('is-hidden');
                 formInputs.forEach(function(input) {
                     input.disabled = false;
                 });
@@ -151,7 +151,7 @@
             cancelEditBtn.addEventListener('click', function() {
                 isEditing = false;
                 if (editProfileBtn) editProfileBtn.style.display = 'inline-flex';
-                if (profileActions) profileActions.style.display = 'none';
+                if (profileActions) profileActions.classList.add('is-hidden');
                 formInputs.forEach(function(input) {
                     input.disabled = true;
                 });
@@ -357,6 +357,11 @@
 
         // ============================================
         // ADDRESS MODAL OPEN/CLOSE
+        //
+        // Lock scroll FIRST, while the modal is hidden, so the page
+        // reflows to fill the space the scrollbar was using before
+        // anything is visible. On close, unlock only after the modal
+        // is fully hidden so the reverse reflow is not visible either.
         // ============================================
         function openAddressModal(title, addressData) {
             addressData = addressData || null;
@@ -389,8 +394,9 @@
                 }
             }
 
+            lockBodyScroll();
+
             if (addressModal) addressModal.classList.add('active');
-            document.body.style.overflow = 'hidden';
 
             setTimeout(updateAddressPreview, 100);
         }
@@ -402,7 +408,13 @@
 
         function closeAddressModalHandler() {
             if (addressModal) addressModal.classList.remove('active');
-            document.body.style.overflow = '';
+
+            setTimeout(function() {
+                if (!addressModal || !addressModal.classList.contains('active')) {
+                    if (addressModal) addressModal.style.display = '';
+                    unlockBodyScroll();
+                }
+            }, 0);
 
             if (addressForm) addressForm.reset();
             setFieldValue('country', 'Philippines');
@@ -439,7 +451,6 @@
             }
         });
 
-        // Real-time preview updates
         document.querySelectorAll('#addressForm .form-control').forEach(function(input) {
             input.addEventListener('input', function() {
                 if (currentModalStep === 3) updateAddressPreview();
@@ -464,13 +475,21 @@
         // ============================================
         function openDeleteModal(addressIdValue) {
             deleteAddressId = addressIdValue;
+
+            lockBodyScroll();
+
             if (deleteAddressModal) deleteAddressModal.classList.add('active');
-            document.body.style.overflow = 'hidden';
         }
 
         function closeDeleteModal() {
             if (deleteAddressModal) deleteAddressModal.classList.remove('active');
-            document.body.style.overflow = '';
+
+            setTimeout(function() {
+                if (!deleteAddressModal || !deleteAddressModal.classList.contains('active')) {
+                    unlockBodyScroll();
+                }
+            }, 0);
+
             deleteAddressId = null;
         }
 
@@ -693,7 +712,5 @@
                 }, 250);
             }
         })();
-
-        console.log('Profile JS v3.1 initialized');
     });
 })();

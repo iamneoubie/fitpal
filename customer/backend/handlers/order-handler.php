@@ -14,11 +14,18 @@
  *   get_order_details → return an order as JSON
  *   reorder           → rebuild the session order queue from a past
  *                       order, validating each product against the
- *                       current database state. Appends to the
- *                       existing queue rather than replacing it.
+ *                       current database state.
+ *
+ * This handler contains NO SQL. All data access goes through
+ * customer/backend/database/order-queries.php.
+ *
+ * This file is NOT safe to require from a page — it runs a full
+ * request dispatch at load time. Pure helpers that pages need
+ * (e.g. buildReorderLine) live in order-queries.php.
  *
  * @package FitPal
- * @version 4.0 — Adds server-validated reorder action.
+ * @version 5.0 — Raw SQL moved to order-queries.php; buildReorderLine
+ *                relocated; Throwable caught.
  */
 
 declare(strict_types=1);
@@ -47,7 +54,7 @@ if (empty($csrfToken) || !hash_equals($_SESSION['csrf_token'] ?? '', $csrfToken)
     exit;
 }
 
-$action = $_POST['action'] ?? '';
+$action = (string)($_POST['action'] ?? '');
 
 try {
     switch ($action) {
@@ -67,10 +74,22 @@ try {
             echo json_encode(['status' => 'error', 'message' => 'Invalid action']);
     }
 } catch (PDOException $e) {
+    if ($database_connection->inTransaction()) {
+        $database_connection->rollBack();
+    }
     error_log('Order handler DB error: ' . $e->getMessage());
     echo json_encode(['status' => 'error', 'message' => 'Database error occurred']);
 } catch (RuntimeException $e) {
+    if ($database_connection->inTransaction()) {
+        $database_connection->rollBack();
+    }
     echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+} catch (Throwable $e) {
+    if ($database_connection->inTransaction()) {
+        $database_connection->rollBack();
+    }
+    error_log('Order handler error: ' . $e->getMessage());
+    echo json_encode(['status' => 'error', 'message' => 'An unexpected error occurred']);
 }
 
 // =====================================================
@@ -96,18 +115,7 @@ function handleCancelOrder(PDO $db, int $customerId): void
         return;
     }
 
-    $stmt = $db->prepare(
-        "SELECT order_id, order_status, payment_method
-           FROM orders
-          WHERE order_id = :order_id
-            AND customer_id = :customer_id"
-    );
-    $stmt->execute([
-        ':order_id'    => $orderId,
-        ':customer_id' => $customerId,
-    ]);
-    $order = $stmt->fetch(PDO::FETCH_ASSOC);
-
+    $order = getOrderOwnership($db, $orderId, $customerId);
     if (!$order) {
         echo json_encode(['status' => 'error', 'message' => 'Order not found']);
         return;
@@ -122,45 +130,19 @@ function handleCancelOrder(PDO $db, int $customerId): void
         return;
     }
 
-    $paymentMethod  = (string)$order['payment_method'];
+    $paymentMethod  = $order['payment_method'];
     $requiresRefund = in_array($paymentMethod, ['Wallet', 'Online'], true);
 
     $finalStatus = $requiresRefund ? 'refunded' : 'cancelled';
 
-    $db->beginTransaction();
+    $cancelled = cancelOrderAsCustomer($db, $orderId, $customerId, $finalStatus);
 
-    try {
-        $updateStmt = $db->prepare(
-            "UPDATE orders
-                SET order_status = :new_status,
-                    cancelled_by = 'customer',
-                    updated_at   = NOW()
-              WHERE order_id = :order_id
-                AND customer_id = :customer_id
-                AND order_status IN ('pending', 'preparing')"
-        );
-        $updateStmt->execute([
-            ':new_status'  => $finalStatus,
-            ':order_id'    => $orderId,
-            ':customer_id' => $customerId,
+    if (!$cancelled) {
+        echo json_encode([
+            'status'  => 'error',
+            'message' => 'Could not cancel order. It may have already been processed.',
         ]);
-
-        if ($updateStmt->rowCount() === 0) {
-            $db->rollBack();
-            echo json_encode([
-                'status'  => 'error',
-                'message' => 'Could not cancel order. It may have already been processed.',
-            ]);
-            return;
-        }
-
-        $db->commit();
-
-    } catch (Throwable $e) {
-        if ($db->inTransaction()) {
-            $db->rollBack();
-        }
-        throw $e;
+        return;
     }
 
     $refunded = false;
@@ -209,16 +191,7 @@ function handleGetOrderDetails(PDO $db, int $customerId): void
         return;
     }
 
-    $stmt = $db->prepare(
-        "SELECT order_id FROM orders
-          WHERE order_id = :order_id AND customer_id = :customer_id"
-    );
-    $stmt->execute([
-        ':order_id'    => $orderId,
-        ':customer_id' => $customerId,
-    ]);
-
-    if (!$stmt->fetch()) {
+    if (!getOrderOwnership($db, $orderId, $customerId)) {
         echo json_encode(['status' => 'error', 'message' => 'Order not found']);
         return;
     }
@@ -330,7 +303,7 @@ function handleReorder(PDO $db, int $customerId): void
         $enriched['line_key']       = $lineKey;
 
         // Merge with an existing line that has the same signature,
-        // or append. This mirrors queue-handler.php's add action.
+        // or append.
         $merged = false;
         foreach ($queue as &$row) {
             $rowKey = $row['line_key']
@@ -408,177 +381,4 @@ function handleReorder(PDO $db, int $customerId): void
         'queue'    => $_SESSION['order_queue'],
         'redirect' => 'menu.php',
     ]);
-}
-
-/**
- * Build a single enriched queue line for reorder, or push a reason
- * into $skipped and return null.
- *
- * This deliberately re-implements the pricing/validation logic from
- * queue-handler.php's queueEnrich() rather than including that file
- * (which is a script, not a library). The rules must stay in sync:
- *
- *   - product exists, is_active, stock > 0
- *   - branch and restaurant are active
- *   - customizations are matched against current product_composition
- *   - quantities are clamped to max_quantity
- *   - removed ingredients are skipped
- *   - unit price = base_price + Σ(modifier × qty)
- */
-function buildReorderLine(
-    PDO $db,
-    array $item,
-    array &$skipped,
-    string $name
-): ?array {
-    $productId = (int)($item['product_id'] ?? 0);
-    $quantity  = (int)($item['quantity'] ?? 0);
-
-    if ($productId <= 0 || $quantity <= 0) {
-        $skipped[] = ['name' => $name, 'reason' => 'Invalid product'];
-        return null;
-    }
-
-    // Availability probe. Kept separate from the enrichment query so
-    // the skip reason can be precise: "no longer on the menu" reads
-    // differently from "out of stock" or "restaurant is closed".
-    $checkStmt = $db->prepare(
-        "SELECT
-            p.is_active,
-            p.stock,
-            rb.is_active AS branch_active,
-            r.is_active  AS restaurant_active
-         FROM product p
-         JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
-         JOIN restaurant r         ON rb.restaurant_id       = r.restaurant_id
-         WHERE p.product_id = :product_id
-         LIMIT 1"
-    );
-    $checkStmt->execute([':product_id' => $productId]);
-    $check = $checkStmt->fetch(PDO::FETCH_ASSOC);
-
-    if (!$check) {
-        $skipped[] = ['name' => $name, 'reason' => 'No longer on the menu'];
-        return null;
-    }
-    if (!(int)$check['is_active']) {
-        $skipped[] = ['name' => $name, 'reason' => 'No longer available'];
-        return null;
-    }
-    if (!(int)$check['branch_active'] || !(int)$check['restaurant_active']) {
-        $skipped[] = ['name' => $name, 'reason' => 'Restaurant is closed'];
-        return null;
-    }
-    if ((int)$check['stock'] <= 0) {
-        $skipped[] = ['name' => $name, 'reason' => 'Out of stock'];
-        return null;
-    }
-
-    // Full product row for pricing + presentation.
-    $prodStmt = $db->prepare(
-        "SELECT
-            p.product_id, p.name, p.price, p.base_price, p.stock,
-            p.is_customizable, p.restaurant_branch_id,
-            rb.branch_name,
-            r.business_name AS restaurant_name,
-            COALESCE(di.images, '') AS product_image
-         FROM product p
-         JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
-         JOIN restaurant r         ON rb.restaurant_id       = r.restaurant_id
-         LEFT JOIN dietary_information di ON p.dietary_information_id = di.dietary_information_id
-         WHERE p.product_id = :product_id
-           AND p.is_active = 1
-           AND rb.is_active = 1
-           AND r.is_active = 1
-         LIMIT 1"
-    );
-    $prodStmt->execute([':product_id' => $productId]);
-    $p = $prodStmt->fetch(PDO::FETCH_ASSOC);
-
-    if (!$p) {
-        $skipped[] = ['name' => $name, 'reason' => 'No longer on the menu'];
-        return null;
-    }
-
-    $maxStock = (int)$p['stock'];
-    if ($quantity > $maxStock) {
-        $quantity = $maxStock;
-    }
-
-    // Decode customizations.
-    $customizations = [];
-    if (!empty($item['customization_data'])) {
-        $decoded = is_string($item['customization_data'])
-            ? json_decode($item['customization_data'], true)
-            : $item['customization_data'];
-        if (is_array($decoded)) {
-            $customizations = $decoded;
-        }
-    }
-
-    // Current composition rules.
-    $rules = [];
-    $ruleStmt = $db->prepare(
-        "SELECT ingredient_id, price_modifier, min_quantity, max_quantity,
-                is_required, is_default, default_quantity
-           FROM product_composition
-          WHERE product_id = :product_id"
-    );
-    $ruleStmt->execute([':product_id' => $productId]);
-    while ($r = $ruleStmt->fetch(PDO::FETCH_ASSOC)) {
-        $rules[(int)$r['ingredient_id']] = $r;
-    }
-
-    $basePrice = (float)($p['base_price'] ?? 0);
-    if ($basePrice <= 0) {
-        $basePrice = (float)$p['price'];
-    }
-
-    $unitPrice = $basePrice;
-
-    foreach ($customizations as $cust) {
-        if (!is_array($cust)) continue;
-        if (($cust['type'] ?? '') === 'notes') continue;
-
-        $ingredientId = (int)($cust['ingredient_id'] ?? 0);
-        if ($ingredientId <= 0) continue;
-
-        // Ingredient was dropped from the composition since the
-        // original order. Skip it — do not add its modifier.
-        if (!isset($rules[$ingredientId])) continue;
-
-        $option = (string)($cust['selected_option'] ?? 'selected');
-        if ($option === 'remove') continue;
-
-        $requestedQty = (int)($cust['quantity'] ?? 0);
-        if ($requestedQty <= 0) continue;
-
-        $rule     = $rules[$ingredientId];
-        $modifier = (float)$rule['price_modifier'];
-        $maxQty   = (int)$rule['max_quantity'];
-        if ($maxQty > 0 && $requestedQty > $maxQty) {
-            $requestedQty = $maxQty;
-        }
-
-        $unitPrice += $modifier * $requestedQty;
-    }
-
-    if ($unitPrice < 0) {
-        $unitPrice = 0.0;
-    }
-
-    return [
-        'product_id'           => (int)$p['product_id'],
-        'name'                 => (string)$p['name'],
-        'price'                => round($unitPrice, 2),
-        'base_price'           => $basePrice,
-        'quantity'             => $quantity,
-        'image'                => (string)$p['product_image'],
-        'stock'                => $maxStock,
-        'restaurant_name'      => (string)$p['restaurant_name'],
-        'branch_name'          => (string)$p['branch_name'],
-        'restaurant_branch_id' => (int)$p['restaurant_branch_id'],
-        'is_customizable'      => (bool)$p['is_customizable'],
-        'customization_data'   => $item['customization_data'] ?? null,
-    ];
 }

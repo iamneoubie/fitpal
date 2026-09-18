@@ -2,18 +2,25 @@
 /**
  * FitPal Address Database Queries
  *
- * Pure data-access layer for customer_address. No $_POST, no header(),
- * no echo.
+ * Customer-domain data-access layer for customer_address. No $_POST,
+ * no header(), no echo.
+ *
+ * This file also owns the two presentation helpers that operate on a
+ * customer_address row (formatAddress, getAddressLabel). They live here
+ * — not in shared/includes/view-helpers.php — because they know the
+ * shape of a customer-specific table. The shared view-helpers file is
+ * reserved for truly role-agnostic helpers (formatPrice, truncateText,
+ * parseTagList).
+ *
+ * Only customer pages that deal with addresses should require this file
+ * (checkout.php, profile.php). Menu and other browse-only pages do not.
  *
  * The "default address" concept is tracked entirely inside
  * customer_address.is_default. There is no customer.customer_address_id
  * column in the current schema.
  *
- * Only customer pages that deal with addresses should require this file
- * (checkout.php, profile.php). Menu and other browse-only pages do not.
- *
  * @package FitPal
- * @version 2.1 — Scoped ownership checks, boolean returns from mutators
+ * @version 2.2 — Adds formatAddress() and getAddressLabel().
  */
 
 declare(strict_types=1);
@@ -297,4 +304,42 @@ function getCustomerDefaultAddressId(PDO $db, int $customerId): int
     );
     $stmt->execute([':customer_id' => $customerId]);
     return (int)($stmt->fetchColumn() ?: 0);
+}
+
+/* -------------------------------------------------------------------
+ * PRESENTATION HELPERS
+ *
+ * These two format a customer_address row for display. They are pure
+ * (no DB access, no session, no output) but they belong to the customer
+ * domain, so they live here rather than in shared/view-helpers.php.
+ * ------------------------------------------------------------------- */
+
+/**
+ * Format a customer_address row into a single display string.
+ *
+ * @param array<string, mixed> $addr
+ * @return string
+ */
+function formatAddress(array $addr): string
+{
+    $parts = [];
+    if (!empty($addr['block']))       $parts[] = $addr['block'];
+    if (!empty($addr['barangay']))    $parts[] = $addr['barangay'];
+    if (!empty($addr['city']))        $parts[] = $addr['city'];
+    if (!empty($addr['province']))    $parts[] = $addr['province'];
+    if (!empty($addr['region']))      $parts[] = $addr['region'];
+    if (!empty($addr['postal_code'])) $parts[] = $addr['postal_code'];
+    if (!empty($addr['country']))     $parts[] = $addr['country'];
+    return implode(', ', $parts);
+}
+
+/**
+ * Return the display label for a customer_address row.
+ *
+ * @param array<string, mixed> $addr
+ * @return string
+ */
+function getAddressLabel(array $addr): string
+{
+    return !empty($addr['label']) ? (string)$addr['label'] : 'Address';
 }

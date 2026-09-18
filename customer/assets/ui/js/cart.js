@@ -1,6 +1,9 @@
 /**
  * FitPal Customer Cart Page JavaScript
- * Version 1.8
+ * Version 1.9 — Scroll lock applied before the modal is shown, and
+ *                released after it is hidden. This prevents the page
+ *                from visibly reflowing when the body scrollbar
+ *                disappears and reappears around the modal fade.
  *
  * Handles:
  *  - Quantity stepper (+ / −) with min/max clamping
@@ -13,7 +16,7 @@
  *    session queue, then redirects to menu.php.
  *
  * @package FitPal
- * @version 1.8 — Customization panel is now collapsible via aria-controls
+ * @version 1.9
  */
 
 (function () {
@@ -299,6 +302,16 @@
 
         // ============================================
         // REMOVE MODAL
+        //
+        // Ordering matters. Lock scroll FIRST, while the modal is still
+        // off-screen — the page reflows to fill the space the scrollbar
+        // was using, but nobody sees it because the modal isn't visible
+        // yet. Then show the modal on an already-stable page.
+        //
+        // On close, hide the modal first, and release the scroll lock
+        // only AFTER the fade-out completes. Releasing it earlier would
+        // reflow the page behind the fading modal, which the user would
+        // see as a jump.
         // ============================================
 
         function openRemoveModal(cartId, productName, itemEl) {
@@ -309,21 +322,29 @@
 
             if (removeModalName) removeModalName.textContent = productName;
 
+            // 1. Lock scroll while the modal is hidden.
+            document.body.style.overflow = 'hidden';
+
+            // 2. Show the modal on the now-stable page.
             removeModal.style.display = 'flex';
             void removeModal.offsetWidth;
             removeModal.classList.add('active');
-            document.body.style.overflow = 'hidden';
         }
 
         function closeRemoveModal() {
             if (!removeModal) return;
+
+            // 1. Start the fade-out. Page stays locked.
             removeModal.classList.remove('active');
-            document.body.style.overflow = '';
+
+            // 2. After the fade completes, hide and release the lock.
             setTimeout(function () {
                 if (!removeModal.classList.contains('active')) {
                     removeModal.style.display = 'none';
+                    document.body.style.overflow = '';
                 }
             }, 200);
+
             pendingRemoveCartId = null;
             pendingRemoveEl     = null;
         }

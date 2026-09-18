@@ -1,10 +1,12 @@
 /**
  * FitPal Customer Orders Page JavaScript
- * Version 5.0 — Reorder handles partial success and renders
- *                per-item skip reasons; no more silent drops.
+ * Version 5.3 — Scroll lock applied before the modal is shown, and
+ *                released after it is hidden. This prevents the page
+ *                from reflowing visibly when the body scrollbar
+ *                disappears and reappears around the modal fade.
  *
  * @package FitPal
- * @version 5.0
+ * @version 5.3
  */
 
 (function () {
@@ -48,6 +50,17 @@
         // STATE
         // ============================================
         let pendingCancelOrderId = null;
+
+        // ============================================
+        // BODY SCROLL LOCK
+        // ============================================
+        function lockBodyScroll() {
+            document.body.style.overflow = 'hidden';
+        }
+
+        function unlockBodyScroll() {
+            document.body.style.overflow = '';
+        }
 
         // ============================================
         // FILTER TABS
@@ -117,6 +130,11 @@
 
         // ============================================
         // CANCEL ORDER
+        //
+        // Ordering matters. Lock scroll BEFORE the modal is shown, so
+        // the page reflows while the modal is still off-screen. On
+        // close, hide the modal first and unlock only after the
+        // fade-out completes, so the reverse reflow is not visible.
         // ============================================
         function openCancelModal(orderId, orderStatus) {
             pendingCancelOrderId = orderId;
@@ -127,19 +145,22 @@
                     : 'Are you sure you want to cancel this order? This action cannot be undone.';
             }
 
+            // 1. Lock while the modal is hidden.
+            lockBodyScroll();
+
+            // 2. Show the modal on the now-stable page.
             cancelOrderModal.style.display = 'flex';
             void cancelOrderModal.offsetWidth;
             cancelOrderModal.classList.add('active');
-            document.body.style.overflow = 'hidden';
         }
 
         function closeCancelModal() {
             cancelOrderModal.classList.remove('active');
-            document.body.style.overflow = '';
 
             setTimeout(function () {
                 if (!cancelOrderModal.classList.contains('active')) {
                     cancelOrderModal.style.display = 'none';
+                    unlockBodyScroll();
                 }
             }, 250);
 
@@ -261,13 +282,9 @@
             })
             .then(function (r) { return r.json(); })
             .then(function (data) {
-                // ---- Success / partial: report + redirect ----
                 if (data && (data.status === 'success' || data.status === 'partial')) {
                     showReorderToast(data);
 
-                    // Give the toast a beat to be read before leaving
-                    // the page. Partial results especially need this —
-                    // the user has to see WHICH items were skipped.
                     const delay = (data.status === 'partial') ? 1600 : 700;
                     const redirect = data.redirect || 'menu.php';
 
@@ -278,7 +295,6 @@
                     return;
                 }
 
-                // ---- Full failure: keep the user here ----
                 showReorderToast(data || {
                     status: 'error',
                     message: 'Could not re-order.'
@@ -306,6 +322,8 @@
 
         // ============================================
         // REVIEW MODAL
+        //
+        // Same ordering rule as the cancel modal. See above.
         // ============================================
         function openReviewModal(orderId, productId, productName) {
             reviewOrderId.value   = orderId;
@@ -317,19 +335,22 @@
 
             resetReviewForm();
 
+            // 1. Lock while the modal is hidden.
+            lockBodyScroll();
+
+            // 2. Show the modal on the now-stable page.
             reviewModal.style.display = 'flex';
             void reviewModal.offsetWidth;
             reviewModal.classList.add('active');
-            document.body.style.overflow = 'hidden';
         }
 
         function closeReviewModalHandler() {
             reviewModal.classList.remove('active');
-            document.body.style.overflow = '';
 
             setTimeout(function () {
                 if (!reviewModal.classList.contains('active')) {
                     reviewModal.style.display = 'none';
+                    unlockBodyScroll();
                 }
             }, 250);
         }
@@ -441,11 +462,7 @@
         }
 
         // ============================================
-        // REORDER TOAST (richer than showToast)
-        //
-        // Renders the handler's message plus a bullet list of any
-        // skipped items with their reasons. Auto-dismiss is longer
-        // for partials because there's more to read.
+        // REORDER TOAST
         // ============================================
         function showReorderToast(data) {
             let toast = document.getElementById('reorderToast');
@@ -548,6 +565,5 @@
             if (reviewModal && reviewModal.classList.contains('active')) closeReviewModalHandler();
         });
 
-        console.log('Orders JS v5.0 initialized');
     });
 })();

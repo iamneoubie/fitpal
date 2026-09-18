@@ -1,10 +1,27 @@
 <?php
 /**
  * FitPal Customer Profile Page
- * Version 3.2 — Back button uses shared arrow icon.
+ *
+ * Shows personal information and delivery addresses, with a
+ * multi-step address modal for add/edit.
+ *
+ * ---------------------------------------------------------------------
+ * SCOPE RULES APPLIED
+ * ---------------------------------------------------------------------
+ *  - No SQL. getCustomerProfile() and getCustomerAddresses() come from
+ *    the query layer.
+ *  - No inline CSS. profile.css is loaded via the customer header's
+ *    $pageCssMap.
+ *  - No inline style attributes. The hide/show flags for the action
+ *    row and modals are managed by classes defined in profile.css.
+ *  - formatAddress() and getAddressLabel() come from
+ *    customer/backend/database/address-queries.php. They are NOT
+ *    declared here.
+ *  - formatCurrency() comes from customer-queries.php.
+ * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 3.2
+ * @version 4.0
  */
 
 declare(strict_types=1);
@@ -53,28 +70,10 @@ if (empty($_SESSION['csrf_token'])) {
 }
 $csrfToken = $_SESSION['csrf_token'];
 
-function formatAddress(array $addr): string {
-    $parts = [];
-    if (!empty($addr['block']))       $parts[] = $addr['block'];
-    if (!empty($addr['barangay']))    $parts[] = $addr['barangay'];
-    if (!empty($addr['city']))        $parts[] = $addr['city'];
-    if (!empty($addr['province']))    $parts[] = $addr['province'];
-    if (!empty($addr['region']))      $parts[] = $addr['region'];
-    if (!empty($addr['postal_code'])) $parts[] = $addr['postal_code'];
-    if (!empty($addr['country']))     $parts[] = $addr['country'];
-    return implode(', ', $parts);
-}
-
-function formatCurrency(float|string|null $amount): string {
-    return '₱' . number_format((float)($amount ?? 0), 2);
-}
-
 $hasAddresses = !empty($addresses);
 $fullName     = trim(($profileData['first_name'] ?? '') . ' ' . ($profileData['last_name'] ?? ''));
 $balance      = (float)($profileData['balance'] ?? 0);
 ?>
-
-<link rel="stylesheet" href="../assets/css/profile.css">
 
 <div class="content profile-page">
     <div class="container">
@@ -109,7 +108,7 @@ $balance      = (float)($profileData['balance'] ?? 0);
             <div class="profile-header-left">
                 <div class="profile-avatar">
                     <div class="profile-avatar-placeholder">
-                        <span><?php echo strtoupper(substr($fullName, 0, 1) ?: 'U'); ?></span>
+                        <span><?php echo htmlspecialchars(strtoupper(substr($fullName, 0, 1) ?: 'U'), ENT_QUOTES, 'UTF-8'); ?></span>
                     </div>
                 </div>
                 <div class="profile-name-role">
@@ -145,7 +144,8 @@ $balance      = (float)($profileData['balance'] ?? 0);
                 </div>
                 <div class="card-body">
                     <form id="profileForm" method="POST" action="../backend/handlers/profile-handler.php">
-                        <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
+                        <input type="hidden" name="csrf_token"
+                            value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                         <input type="hidden" name="action" value="update_profile">
 
                         <div class="form-group">
@@ -206,7 +206,7 @@ $balance      = (float)($profileData['balance'] ?? 0);
                             </select>
                         </div>
 
-                        <div class="profile-actions" id="profileActions" style="display: none;">
+                        <div class="profile-actions is-hidden" id="profileActions">
                             <button type="submit" class="btn btn-primary">Save Changes</button>
                             <button type="button" id="cancelEditBtn" class="btn btn-cancel">Cancel</button>
                         </div>
@@ -221,7 +221,7 @@ $balance      = (float)($profileData['balance'] ?? 0);
                 <div class="card-header">
                     <h3>Delivery Addresses</h3>
                     <button type="button" id="addAddressBtn" class="btn btn-primary btn-sm">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/add-circle-empty.svg" alt="Add"
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/add-circle-empty.svg" alt=""
                             class="btn-icon">
                         Add Address
                     </button>
@@ -236,8 +236,9 @@ $balance      = (float)($profileData['balance'] ?? 0);
                                 <span class="badge badge-primary">Default</span>
                                 <?php endif; ?>
                                 <?php if (!empty($addr['label'])): ?>
-                                <span
-                                    class="address-label"><?php echo htmlspecialchars($addr['label'], ENT_QUOTES, 'UTF-8'); ?></span>
+                                <span class="address-label">
+                                    <?php echo htmlspecialchars($addr['label'], ENT_QUOTES, 'UTF-8'); ?>
+                                </span>
                                 <?php endif; ?>
                             </div>
                             <div class="address-item-actions">
@@ -276,7 +277,7 @@ $balance      = (float)($profileData['balance'] ?? 0);
 </div>
 
 <!-- Address Modal (Multi-Step) -->
-<div id="addressModal" class="modal" style="display: none;">
+<div id="addressModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
             <h3 id="addressModalTitle">Add New Address</h3>
@@ -302,7 +303,8 @@ $balance      = (float)($profileData['balance'] ?? 0);
         </div>
 
         <form id="addressForm" method="POST" action="../backend/handlers/address-handler.php">
-            <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
+            <input type="hidden" name="csrf_token"
+                value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
             <input type="hidden" name="action" value="add_address">
             <input type="hidden" name="address_id" id="addressId" value="">
 
@@ -383,7 +385,7 @@ $balance      = (float)($profileData['balance'] ?? 0);
 </div>
 
 <!-- Delete Address Modal -->
-<div id="deleteAddressModal" class="modal" style="display: none;">
+<div id="deleteAddressModal" class="modal">
     <div class="modal-content">
         <div class="modal-icon">
             <img src="<?php echo $assetBase; ?>assets/images/icons/trash.svg" alt="Warning">

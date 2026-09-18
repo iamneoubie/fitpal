@@ -5,8 +5,19 @@
  * Order summary, weekly spend analytics, recent orders, and a compact
  * profile snapshot. All SQL lives in dashboard-queries.php.
  *
+ * ---------------------------------------------------------------------
+ * SCOPE RULES APPLIED
+ * ---------------------------------------------------------------------
+ *  - No SQL in this file.
+ *  - No inline CSS. dashboard.css is loaded via the customer header's
+ *    $pageCssMap.
+ *  - formatCurrency() comes from customer-queries.php. It is NOT
+ *    declared here.
+ * ---------------------------------------------------------------------
+ *
  * @package FitPal
- * @version 3.1 — Header button and stat-card arrows use shared icons.
+ * @version 4.0 — Local formatCurrency() removed; uses the query-layer
+ *                version.
  */
 
 declare(strict_types=1);
@@ -21,6 +32,7 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
 }
 
 require_once __DIR__ . '/../includes/header.php';
+require_once __DIR__ . '/../backend/database/customer-queries.php';
 require_once __DIR__ . '/../backend/database/dashboard-queries.php';
 
 $customerId = (int)$_SESSION['customer_id'];
@@ -51,14 +63,11 @@ try {
 }
 
 // ---------------------------------------------------------------------
-// VIEW HELPERS
+// VIEW HELPERS (page-local; no DB access)
 // ---------------------------------------------------------------------
 
-function formatCurrency(float|string|null $amount): string {
-    return '₱' . number_format((float)($amount ?? 0), 2);
-}
-
-function getStatusBadgeClass(string $status): string {
+function getStatusBadgeClass(string $status): string
+{
     return match ($status) {
         'pending'    => 'badge-warning',
         'preparing'  => 'badge-info',
@@ -70,7 +79,8 @@ function getStatusBadgeClass(string $status): string {
     };
 }
 
-function getStatusLabel(string $status): string {
+function getStatusLabel(string $status): string
+{
     return match ($status) {
         'pending'    => 'Pending',
         'preparing'  => 'Preparing',
@@ -82,12 +92,14 @@ function getStatusLabel(string $status): string {
     };
 }
 
-function formatOrderDate(string $date): string {
+function formatOrderDate(string $date): string
+{
     $ts = strtotime($date);
     return $ts !== false ? date('M d, g:i A', $ts) : $date;
 }
 
-function parseCsvTags(?string $raw): array {
+function parseCsvTags(?string $raw): array
+{
     if ($raw === null || trim($raw) === '') return [];
     return array_values(array_filter(
         array_map('trim', explode(',', $raw)),
@@ -131,7 +143,6 @@ $weekShareOfMonth = ($spend['monthly_spend'] ?? 0) > 0
     ? (int)round(($spend['weekly_spend'] / $spend['monthly_spend']) * 100)
     : 0;
 ?>
-<link rel="stylesheet" href="../assets/css/dashboard.css">
 
 <div class="content dashboard-page">
     <div class="container">
@@ -156,7 +167,7 @@ $weekShareOfMonth = ($spend['monthly_spend'] ?? 0) > 0
         </header>
 
         <!-- ============================================
-             STAT CARDS  (all clickable)
+             STAT CARDS
              ============================================ -->
         <section class="stats-grid" aria-label="Account summary">
             <a href="orders.php" class="stat-card">
@@ -317,7 +328,7 @@ $weekShareOfMonth = ($spend['monthly_spend'] ?? 0) > 0
                 </div>
             </section>
 
-            <!-- PROFILE SNAPSHOT (stretches to match analytics height) -->
+            <!-- PROFILE SNAPSHOT -->
             <aside class="dashboard-card profile-snapshot-card" aria-labelledby="profile-snapshot-title">
                 <div class="card-header">
                     <h2 class="heading-5" id="profile-snapshot-title">Your Profile</h2>
@@ -375,7 +386,7 @@ $weekShareOfMonth = ($spend['monthly_spend'] ?? 0) > 0
         </div>
 
         <!-- ============================================
-             RECENT ORDERS  (own row, 3 items, no gap)
+             RECENT ORDERS
              ============================================ -->
         <section class="dashboard-card orders-card" aria-labelledby="recent-orders-title">
             <div class="card-header">

@@ -2,45 +2,50 @@
 /**
  * FitPal Order Database Queries
  *
- * Pure data-access layer for orders, queue_item, and
- * customization_instance. All multi-step operations are wrapped
- * in transactions with row locks.
+ * Feature file for orders, queue_item, and customization_instance.
+ * It owns every query against those tables, plus the pure helpers
+ * that operate on rows from them.
  *
- * Totals policy: `orders` no longer stores subtotal, delivery_charge,
- * total_amount, or special_instructions. Those values are computed on
- * read from queue_item plus the fee schedule (see getOrderTotals()).
+ * Why pure helpers live here and not in order-handler.php:
+ *
+ *   Pages that render order data (orders.php, order-receipt.php)
+ *   need to call functions like buildReorderLine(). They cannot
+ *   include order-handler.php, because that file runs a full
+ *   request dispatch at load time — the switch, the CSRF check,
+ *   the echo/exit path. Including it from a page would hijack the
+ *   request.
+ *
+ *   This file only declares functions. It is safe to require from
+ *   anywhere.
+ *
+ * Totals policy: `orders` does not store subtotal, delivery_charge,
+ * total_amount, or special_instructions. Those values are computed
+ * on read from queue_item plus the fee schedule (see getOrderTotals()).
  *
  * Payment policy:
  *   COD    — records a `payment` transaction with status 'pending'.
- *            No wallet movement at placement. Money exchanges hands
- *            on delivery.
  *   Wallet — requires sufficient balance. Records a `completed`
- *            payment transaction. The after_transaction_insert trigger
- *            deducts from financial_account.balance automatically.
+ *            payment transaction. The after_transaction_insert
+ *            trigger deducts from financial_account.balance.
  *   Online — records a `completed` payment transaction. No wallet
- *            movement (this is a simulation).
+ *            movement (simulation).
  *
- * Refund policy (see refundOrderToWallet):
- *   COD    — marks any pending payment transaction as 'failed'.
- *            No refund transaction.
- *   Wallet — records a `completed` refund transaction. The trigger
- *            credits the wallet automatically.
- *   Online — records a `completed` refund transaction for bookkeeping.
- *            No wallet movement.
- *   Legacy — orders placed before payment recording existed have no
- *            payment transaction. Cancelling one is a clean no-op.
- *
- * Order creation reads directly from the session order queue — there
- * is no persistent cart.
+ * Refund policy: see refundOrderToWallet().
  *
  * @package FitPal
- * @version 6.2 — Adds getReorderableItems() for the reorder flow.
+ * @version 7.0 — Raw SQL from order-handler.php moved here; reorder
+ *                line builder co-located because this file is safe
+ *                to require from pages.
  */
 
 declare(strict_types=1);
 
 require_once __DIR__ . '/branch-queries.php';
 require_once __DIR__ . '/fee-queries.php';
+
+/* ---------------------------------------------------------------
+ * CREATION
+ * --------------------------------------------------------------- */
 
 /**
  * Create an order from a session order queue, atomically, and record
@@ -179,12 +184,7 @@ function createOrderFromQueue(
             }
         }
 
-        // -----------------------------------------------------------
-        // Compute the order total.
-        //
-        // Mirrors the fee schedule in fee-queries.php so we can charge
-        // the wallet before inserting anything.
-        // -----------------------------------------------------------
+        // ---- Compute the order total ----
         $subtotal = 0.0;
         foreach ($cartItems as $item) {
             $subtotal += $item['price'] * $item['quantity'];
@@ -197,9 +197,7 @@ function createOrderFromQueue(
             2
         );
 
-        // -----------------------------------------------------------
-        // Resolve and lock the customer's financial account.
-        // -----------------------------------------------------------
+        // ---- Resolve and lock the customer's financial account ----
         $accountStmt = $db->prepare(
             "SELECT fa.financial_account_id, fa.balance
                FROM customer_profile cp
@@ -219,7 +217,6 @@ function createOrderFromQueue(
         $financialAccountId = (int)$account['financial_account_id'];
         $currentBalance     = (float)$account['balance'];
 
-        // ---- Wallet balance check ----
         if ($paymentMethod === 'Wallet' && $currentBalance < $orderTotal) {
             throw new RuntimeException(
                 'Insufficient wallet balance. ' .
@@ -296,13 +293,7 @@ function createOrderFromQueue(
             }
         }
 
-        // -----------------------------------------------------------
-        // Record the payment transaction.
-        //
-        // The after_transaction_insert trigger adjusts the wallet
-        // balance for completed transactions. COD stays 'pending'
-        // because no money has actually moved yet.
-        // -----------------------------------------------------------
+        // ---- Record the payment transaction ----
         $transactionStatus = ($paymentMethod === 'COD') ? 'pending' : 'completed';
 
         $description = match ($paymentMethod) {
@@ -338,40 +329,108 @@ function createOrderFromQueue(
     }
 }
 
+/* ---------------------------------------------------------------
+ * CANCELLATION
+ * --------------------------------------------------------------- */
+
+/**
+ * Fetch the fields needed to decide whether a customer can cancel
+ * an order, scoped to the owner.
+ *
+ * Returns false if the order does not belong to $customerId.
+ *
+ * @param PDO $db
+ * @param int $orderId
+ * @param int $customerId
+ * @return array{order_id:int, order_status:string, payment_method:string}|false
+ */
+function getOrderOwnership(PDO $db, int $orderId, int $customerId): array|false
+{
+    $stmt = $db->prepare(
+        "SELECT order_id, order_status, payment_method
+           FROM orders
+          WHERE order_id = :order_id
+            AND customer_id = :customer_id
+          LIMIT 1"
+    );
+    $stmt->execute([
+        ':order_id'    => $orderId,
+        ':customer_id' => $customerId,
+    ]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        return false;
+    }
+    return [
+        'order_id'       => (int)$row['order_id'],
+        'order_status'   => (string)$row['order_status'],
+        'payment_method' => (string)$row['payment_method'],
+    ];
+}
+
+/**
+ * Move a customer's order to its final cancelled/refunded state.
+ *
+ * The guard clause in the UPDATE ensures the transition only happens
+ * from a cancellable state ('pending' or 'preparing'). If a concurrent
+ * request already moved the order forward, rowCount() is 0 and this
+ * returns false — the caller should treat that as "already processed"
+ * rather than retrying.
+ *
+ * @param PDO $db
+ * @param int $orderId
+ * @param int $customerId
+ * @param string $finalStatus  'cancelled' or 'refunded'
+ * @return bool True if the row was updated.
+ */
+function cancelOrderAsCustomer(
+    PDO $db,
+    int $orderId,
+    int $customerId,
+    string $finalStatus
+): bool {
+    $stmt = $db->prepare(
+        "UPDATE orders
+            SET order_status = :new_status,
+                cancelled_by = 'customer',
+                updated_at   = NOW()
+          WHERE order_id = :order_id
+            AND customer_id = :customer_id
+            AND order_status IN ('pending', 'preparing')"
+    );
+    $stmt->execute([
+        ':new_status'  => $finalStatus,
+        ':order_id'    => $orderId,
+        ':customer_id' => $customerId,
+    ]);
+    return $stmt->rowCount() > 0;
+}
+
 /**
  * Refund a cancelled order to the customer's wallet, when applicable.
  *
  * Behaviour by original payment method:
  *
  *   COD    — no refund transaction. Any pending `payment` transaction
- *            is marked 'failed' so the ledger reflects the cancel.
- *
- *   Wallet — inserts a `completed` refund transaction. The
- *            after_transaction_insert trigger credits the customer's
- *            financial_account.balance automatically.
- *
+ *            is marked 'failed'.
+ *   Wallet — inserts a `completed` refund transaction. The trigger
+ *            credits the wallet automatically.
  *   Online — inserts a `completed` refund transaction for bookkeeping.
- *            No wallet movement.
+ *   Legacy — orders with no payment transaction cancel as a clean no-op.
  *
  * Idempotent: if a completed refund already exists for this order,
  * returns false and does nothing.
  *
- * Legacy orders (placed before payment recording existed) have no
- * payment transaction. Cancelling one is a clean no-op — nothing is
- * refunded because nothing was ever charged.
- *
  * @param PDO $db
  * @param int $orderId
- * @return bool True if a refund was issued or COD cleanup ran;
- *              false if there was nothing to refund.
- * @throws RuntimeException On invalid state (e.g. account missing).
+ * @return bool True if a refund was issued or COD cleanup ran.
+ * @throws RuntimeException On invalid state.
  */
 function refundOrderToWallet(PDO $db, int $orderId): bool
 {
     $db->beginTransaction();
 
     try {
-        // ---- Lock the order ----
         $orderStmt = $db->prepare(
             "SELECT order_id, customer_id, order_status, payment_method
                FROM orders
@@ -388,7 +447,6 @@ function refundOrderToWallet(PDO $db, int $orderId): bool
 
         $paymentMethod = (string)$order['payment_method'];
 
-        // ---- Idempotency: bail if already refunded ----
         $existingStmt = $db->prepare(
             "SELECT 1 FROM transaction
               WHERE order_id = :order_id
@@ -402,7 +460,6 @@ function refundOrderToWallet(PDO $db, int $orderId): bool
             return false;
         }
 
-        // ---- Resolve the customer's financial account ----
         $accountStmt = $db->prepare(
             "SELECT fa.financial_account_id
                FROM customer_profile cp
@@ -420,7 +477,6 @@ function refundOrderToWallet(PDO $db, int $orderId): bool
             throw new RuntimeException('Customer financial account not found.');
         }
 
-        // ---- Look up the original payment amount ----
         $amountStmt = $db->prepare(
             "SELECT COALESCE(SUM(amount), 0) FROM transaction
               WHERE order_id = :order_id
@@ -430,9 +486,6 @@ function refundOrderToWallet(PDO $db, int $orderId): bool
         $amountStmt->execute([':order_id' => $orderId]);
         $paidAmount = (float)$amountStmt->fetchColumn();
 
-        // -----------------------------------------------------------
-        // COD: no money moved. Mark the pending payment as failed.
-        // -----------------------------------------------------------
         if ($paymentMethod === 'COD') {
             $failStmt = $db->prepare(
                 "UPDATE transaction
@@ -447,28 +500,11 @@ function refundOrderToWallet(PDO $db, int $orderId): bool
             return true;
         }
 
-        // -----------------------------------------------------------
-        // Wallet / Online with no recorded payment.
-        //
-        // Legacy orders placed before payment handling existed have
-        // no `payment` transaction. There's nothing to refund — the
-        // customer never paid — so this is a clean no-op. The order
-        // has already moved to 'refunded' by the caller; that status
-        // accurately reflects that no charge stands against it.
-        // -----------------------------------------------------------
         if ($paidAmount <= 0) {
             $db->commit();
             return false;
         }
 
-        // -----------------------------------------------------------
-        // Wallet / Online: record a completed refund.
-        //
-        // For Wallet, the trigger credits the balance. For Online,
-        // the trigger also credits — the customer never paid through
-        // FitPal, but refunding to their wallet is the natural
-        // simulation of "money returned."
-        // -----------------------------------------------------------
         $refundStmt = $db->prepare(
             "INSERT INTO transaction
                 (financial_account_id, order_id, amount, transaction_type,
@@ -494,6 +530,10 @@ function refundOrderToWallet(PDO $db, int $orderId): bool
         throw $e;
     }
 }
+
+/* ---------------------------------------------------------------
+ * READS
+ * --------------------------------------------------------------- */
 
 /**
  * Get an order with its items and customizations.
@@ -863,15 +903,18 @@ function canReviewProduct(PDO $db, int $orderId, int $productId, int $customerId
     return !$stmt->fetch();
 }
 
+/* ---------------------------------------------------------------
+ * REORDER
+ * --------------------------------------------------------------- */
+
 /**
  * Fetch the items from a past order, shaped for re-adding to the
  * session queue. Only returns lines that belong to the given
  * customer.
  *
  * Returns one row per queue_item with its original customizations
- * attached. Does NOT validate availability — that's the handler's
- * job (buildReorderLine in order-handler.php), so the handler can
- * report per-line reasons.
+ * attached. Does NOT validate availability — buildReorderLine()
+ * handles that, so the handler can report per-line reasons.
  *
  * @param PDO $db
  * @param int $orderId
@@ -945,4 +988,186 @@ function getReorderableItems(PDO $db, int $orderId, int $customerId): array
     unset($item);
 
     return $items;
+}
+
+/**
+ * Build a single enriched queue line for reorder, or push a reason
+ * into $skipped and return null.
+ *
+ * Re-implements the pricing/validation logic from queue-handler.php's
+ * queueEnrich() rather than including that file (which is a script,
+ * not a library). The rules must stay in sync:
+ *
+ *   - product exists, is_active, stock > 0
+ *   - branch and restaurant are active
+ *   - customizations are matched against current product_composition
+ *   - quantities are clamped to max_quantity
+ *   - removed ingredients are skipped
+ *   - unit price = base_price + Σ(modifier × qty)
+ *
+ * Lives here rather than in order-handler.php because pages that
+ * render order data cannot require the handler (it runs at load time).
+ *
+ * @param PDO                  $db
+ * @param array<string, mixed> $item
+ * @param array<int, array{name:string, reason:string}> $skipped  Mutated in place.
+ * @param string               $name  Product name for skip messages.
+ * @return array<string, mixed>|null
+ */
+function buildReorderLine(
+    PDO $db,
+    array $item,
+    array &$skipped,
+    string $name
+): ?array {
+    $productId = (int)($item['product_id'] ?? 0);
+    $quantity  = (int)($item['quantity'] ?? 0);
+
+    if ($productId <= 0 || $quantity <= 0) {
+        $skipped[] = ['name' => $name, 'reason' => 'Invalid product'];
+        return null;
+    }
+
+    // Availability probe. Kept separate from the enrichment query so
+    // the skip reason can be precise: "no longer on the menu" reads
+    // differently from "out of stock" or "restaurant is closed".
+    $checkStmt = $db->prepare(
+        "SELECT
+            p.is_active,
+            p.stock,
+            rb.is_active AS branch_active,
+            r.is_active  AS restaurant_active
+         FROM product p
+         JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
+         JOIN restaurant r         ON rb.restaurant_id       = r.restaurant_id
+         WHERE p.product_id = :product_id
+         LIMIT 1"
+    );
+    $checkStmt->execute([':product_id' => $productId]);
+    $check = $checkStmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$check) {
+        $skipped[] = ['name' => $name, 'reason' => 'No longer on the menu'];
+        return null;
+    }
+    if (!(int)$check['is_active']) {
+        $skipped[] = ['name' => $name, 'reason' => 'No longer available'];
+        return null;
+    }
+    if (!(int)$check['branch_active'] || !(int)$check['restaurant_active']) {
+        $skipped[] = ['name' => $name, 'reason' => 'Restaurant is closed'];
+        return null;
+    }
+    if ((int)$check['stock'] <= 0) {
+        $skipped[] = ['name' => $name, 'reason' => 'Out of stock'];
+        return null;
+    }
+
+    // Full product row for pricing + presentation.
+    $prodStmt = $db->prepare(
+        "SELECT
+            p.product_id, p.name, p.price, p.base_price, p.stock,
+            p.is_customizable, p.restaurant_branch_id,
+            rb.branch_name,
+            r.business_name AS restaurant_name,
+            COALESCE(di.images, '') AS product_image
+         FROM product p
+         JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
+         JOIN restaurant r         ON rb.restaurant_id       = r.restaurant_id
+         LEFT JOIN dietary_information di ON p.dietary_information_id = di.dietary_information_id
+         WHERE p.product_id = :product_id
+           AND p.is_active = 1
+           AND rb.is_active = 1
+           AND r.is_active = 1
+         LIMIT 1"
+    );
+    $prodStmt->execute([':product_id' => $productId]);
+    $p = $prodStmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$p) {
+        $skipped[] = ['name' => $name, 'reason' => 'No longer on the menu'];
+        return null;
+    }
+
+    $maxStock = (int)$p['stock'];
+    if ($quantity > $maxStock) {
+        $quantity = $maxStock;
+    }
+
+    // Decode customizations.
+    $customizations = [];
+    if (!empty($item['customization_data'])) {
+        $decoded = is_string($item['customization_data'])
+            ? json_decode($item['customization_data'], true)
+            : $item['customization_data'];
+        if (is_array($decoded)) {
+            $customizations = $decoded;
+        }
+    }
+
+    // Current composition rules.
+    $rules = [];
+    $ruleStmt = $db->prepare(
+        "SELECT ingredient_id, price_modifier, min_quantity, max_quantity,
+                is_required, is_default, default_quantity
+           FROM product_composition
+          WHERE product_id = :product_id"
+    );
+    $ruleStmt->execute([':product_id' => $productId]);
+    while ($r = $ruleStmt->fetch(PDO::FETCH_ASSOC)) {
+        $rules[(int)$r['ingredient_id']] = $r;
+    }
+
+    $basePrice = (float)($p['base_price'] ?? 0);
+    if ($basePrice <= 0) {
+        $basePrice = (float)$p['price'];
+    }
+
+    $unitPrice = $basePrice;
+
+    foreach ($customizations as $cust) {
+        if (!is_array($cust)) continue;
+        if (($cust['type'] ?? '') === 'notes') continue;
+
+        $ingredientId = (int)($cust['ingredient_id'] ?? 0);
+        if ($ingredientId <= 0) continue;
+
+        // Ingredient was dropped from the composition since the
+        // original order. Skip it — do not add its modifier.
+        if (!isset($rules[$ingredientId])) continue;
+
+        $option = (string)($cust['selected_option'] ?? 'selected');
+        if ($option === 'remove') continue;
+
+        $requestedQty = (int)($cust['quantity'] ?? 0);
+        if ($requestedQty <= 0) continue;
+
+        $rule     = $rules[$ingredientId];
+        $modifier = (float)$rule['price_modifier'];
+        $maxQty   = (int)$rule['max_quantity'];
+        if ($maxQty > 0 && $requestedQty > $maxQty) {
+            $requestedQty = $maxQty;
+        }
+
+        $unitPrice += $modifier * $requestedQty;
+    }
+
+    if ($unitPrice < 0) {
+        $unitPrice = 0.0;
+    }
+
+    return [
+        'product_id'           => (int)$p['product_id'],
+        'name'                 => (string)$p['name'],
+        'price'                => round($unitPrice, 2),
+        'base_price'           => $basePrice,
+        'quantity'             => $quantity,
+        'image'                => (string)$p['product_image'],
+        'stock'                => $maxStock,
+        'restaurant_name'      => (string)$p['restaurant_name'],
+        'branch_name'          => (string)$p['branch_name'],
+        'restaurant_branch_id' => (int)$p['restaurant_branch_id'],
+        'is_customizable'      => (bool)$p['is_customizable'],
+        'customization_data'   => $item['customization_data'] ?? null,
+    ];
 }

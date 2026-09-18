@@ -1,10 +1,24 @@
 <?php
 /**
  * FitPal Customer Wallet Page
- * Version 1.6 — Uses shared icon for back button; header layout fix.
+ *
+ * Shows the customer's balance, transaction history, and the
+ * recharge flow (amount entry → QR simulation → success).
+ *
+ * ---------------------------------------------------------------------
+ * SCOPE RULES APPLIED
+ * ---------------------------------------------------------------------
+ *  - No SQL. getWalletAccount(), getWalletTransactions(), and
+ *    countWalletTransactions() come from wallet-queries.php.
+ *  - No inline CSS. wallet.css is loaded via the customer header's
+ *    $pageCssMap.
+ *  - formatCurrency() comes from customer-queries.php. It is NOT
+ *    declared here.
+ * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 1.6
+ * @version 3.0 — Local walletFmt() removed; uses formatCurrency() from
+ *                customer-queries.php.
  */
 
 declare(strict_types=1);
@@ -23,6 +37,7 @@ header('Pragma: no-cache');
 header('Expires: 0');
 
 require_once __DIR__ . '/../backend/database/customer-connect.php';
+require_once __DIR__ . '/../backend/database/customer-queries.php';
 require_once __DIR__ . '/../backend/database/wallet-queries.php';
 
 $customerId = (int)$_SESSION['customer_id'];
@@ -59,7 +74,7 @@ if ($fromParam !== '' && isset($walletBackMap[$fromParam])) {
 }
 
 // ============================================
-// HELPERS
+// HELPERS (page-local; no DB access)
 // ============================================
 
 function walletPageUrl(int $targetPage, string $fromParam, array $backMap): string
@@ -71,11 +86,8 @@ function walletPageUrl(int $targetPage, string $fromParam, array $backMap): stri
     return 'wallet.php?' . http_build_query($params);
 }
 
-function walletFmt(float|string|null $amount): string {
-    return '₱' . number_format((float)($amount ?? 0), 2);
-}
-
-function walletTypeLabel(string $type): string {
+function walletTypeLabel(string $type): string
+{
     return match ($type) {
         'deposit'    => 'Top Up',
         'payment'    => 'Payment',
@@ -85,19 +97,23 @@ function walletTypeLabel(string $type): string {
     };
 }
 
-function walletIsCredit(string $type): bool {
+function walletIsCredit(string $type): bool
+{
     return in_array($type, ['deposit', 'refund'], true);
 }
 
-function walletDirectionIcon(string $type): string {
+function walletDirectionIcon(string $type): string
+{
     return walletIsCredit($type) ? 'add-line.svg' : 'subtract-line.svg';
 }
 
-function walletDirectionAlt(string $type): string {
+function walletDirectionAlt(string $type): string
+{
     return walletIsCredit($type) ? 'Credit' : 'Debit';
 }
 
-function walletDate(string $date): string {
+function walletDate(string $date): string
+{
     $ts = strtotime($date);
     return $ts !== false ? date('M d, Y • g:i A', $ts) : $date;
 }
@@ -149,8 +165,6 @@ $csrfToken = $_SESSION['csrf_token'];
 require_once __DIR__ . '/../includes/header.php';
 ?>
 
-<link rel="stylesheet" href="../assets/css/wallet.css">
-
 <div class="content wallet-page" id="walletPage">
     <div class="container">
 
@@ -193,7 +207,7 @@ require_once __DIR__ . '/../includes/header.php';
             <div class="wallet-balance-left">
                 <span class="wallet-balance-label">Available Balance</span>
                 <span class="wallet-balance-amount" id="walletBalanceAmount">
-                    <?php echo walletFmt($balance); ?>
+                    <?php echo formatCurrency($balance); ?>
                 </span>
                 <span class="wallet-balance-note">Use your wallet to pay for orders instantly</span>
             </div>
@@ -262,7 +276,7 @@ require_once __DIR__ . '/../includes/header.php';
 
                     <div class="wallet-txn-amount-col">
                         <span class="wallet-txn-amount <?php echo $isCredit ? 'credit' : 'debit'; ?>">
-                            <?php echo ($isCredit ? '+' : '−') . walletFmt($amount); ?>
+                            <?php echo ($isCredit ? '+' : '−') . formatCurrency($amount); ?>
                         </span>
                         <?php if ($status !== 'completed'): ?>
                         <span class="wallet-txn-status <?php echo $isPending ? 'pending' : 'failed'; ?>">
@@ -345,7 +359,7 @@ require_once __DIR__ . '/../includes/header.php';
 <!-- ============================================ -->
 <!-- RECHARGE MODAL - Step 1: amount entry       -->
 <!-- ============================================ -->
-<div id="rechargeAmountModal" class="modal" style="display:none;">
+<div id="rechargeAmountModal" class="modal">
     <div class="modal-overlay"></div>
     <div class="modal-content wallet-modal-content">
         <div class="modal-header">
@@ -384,7 +398,7 @@ require_once __DIR__ . '/../includes/header.php';
 <!-- ============================================ -->
 <!-- RECHARGE MODAL - Step 2: QR payment         -->
 <!-- ============================================ -->
-<div id="rechargeQrModal" class="modal" style="display:none;">
+<div id="rechargeQrModal" class="modal">
     <div class="modal-overlay"></div>
     <div class="modal-content wallet-modal-content qr-modal-content">
         <div class="modal-header">
@@ -422,7 +436,7 @@ require_once __DIR__ . '/../includes/header.php';
 <!-- ============================================ -->
 <!-- SUCCESS MODAL                                -->
 <!-- ============================================ -->
-<div id="rechargeSuccessModal" class="modal" style="display:none;">
+<div id="rechargeSuccessModal" class="modal">
     <div class="modal-overlay"></div>
     <div class="modal-content wallet-modal-content">
         <div class="modal-header">

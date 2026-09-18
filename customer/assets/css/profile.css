@@ -1,11 +1,20 @@
 /**
  * FitPal Customer Profile Page Styles
- * Version 2.8 — Back button uses shared arrow icon;
- *               header row anchors back button left, title right.
+ * Version 2.9 — Reserves the viewport scrollbar gutter, removes the
+ *                backdrop-filter blur from the modal overlay, and
+ *                anchors the modal content with a fixed-pixel width.
+ *                This mirrors the treatment already applied to cart,
+ *                orders, and wallet so no modal shifts when the body
+ *                scrollbar is hidden.
  *
  * @package FitPal
- * @version 2.8
+ * @version 2.9
  */
+
+/* Reserve the scrollbar gutter permanently. */
+html {
+    scrollbar-gutter: stable;
+}
 
 /* ============================================
    CONTENT WRAPPER
@@ -35,7 +44,6 @@
 
 /* ============================================
    PAGE HEADER - with back button
-   Back button anchored left, title anchored right.
    ============================================ */
 
 .page-title-header {
@@ -58,7 +66,6 @@
     text-align: right;
 }
 
-/* Back button — matches wallet & product-detail back button */
 .page-title-header .back-btn {
     display: inline-flex;
     align-items: center;
@@ -89,7 +96,6 @@
     height: 20px;
     display: block;
     flex-shrink: 0;
-    /* Tint the shared SVG to white */
     filter: brightness(0) invert(1);
 }
 
@@ -408,6 +414,10 @@ select.form-control:not(:disabled) {
     justify-content: center;
 }
 
+.profile-actions.is-hidden {
+    display: none;
+}
+
 /* ============================================
    ADDRESS ITEMS
    ============================================ */
@@ -471,7 +481,6 @@ select.form-control:not(:disabled) {
     font-size: var(--font-size-xs);
 }
 
-/* Edit button - Black background, white SVG */
 .address-item-actions .btn-outline {
     background: var(--black);
     color: var(--white);
@@ -482,7 +491,6 @@ select.form-control:not(:disabled) {
     filter: brightness(0) invert(1);
 }
 
-/* Delete button - Red background, white SVG */
 .address-item-actions .btn-danger {
     background: var(--danger);
     color: var(--white);
@@ -615,7 +623,6 @@ select.form-control:not(:disabled) {
     border-color: var(--gray-300);
 }
 
-/* Cancel button - black background, white text */
 .btn-cancel {
     background: var(--black);
     color: var(--white);
@@ -627,23 +634,17 @@ select.form-control:not(:disabled) {
 }
 
 /* ============================================
-   MODAL - Multi-step (matches sign-up)
+   MODAL - Multi-step
    ============================================ */
 
 .modal {
     display: none;
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(5, 10, 4, 0.5);
+    inset: 0;
+    background: rgba(5, 10, 4, 0.6);
     z-index: var(--z-modal-backdrop);
     align-items: center;
     justify-content: center;
-    padding: 16px;
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
 }
 
 .modal.active {
@@ -653,8 +654,8 @@ select.form-control:not(:disabled) {
 .modal-content {
     background: var(--white);
     border-radius: var(--radius-lg);
-    max-width: 480px;
-    width: 100%;
+    width: 480px;
+    max-width: calc(100vw - 32px);
     max-height: 90vh;
     overflow-y: auto;
     box-shadow: var(--shadow-xl);
@@ -691,7 +692,7 @@ select.form-control:not(:disabled) {
     }
 }
 
-/* Modal Progress - Matches sign-up */
+/* Modal Progress */
 .modal-progress {
     display: flex;
     align-items: center;
@@ -775,7 +776,6 @@ select.form-control:not(:disabled) {
     display: block;
 }
 
-/* Modal Step Actions */
 .modal-step .step-actions {
     display: flex;
     gap: 12px;
@@ -887,7 +887,7 @@ select.form-control:not(:disabled) {
 }
 
 /* ============================================
-   DELETE MODAL - Centered content
+   DELETE MODAL
    ============================================ */
 
 #deleteAddressModal .modal-content {
@@ -925,10 +925,6 @@ select.form-control:not(:disabled) {
     line-height: 1.6;
     padding: 0 20px;
 }
-
-/* ============================================
-   MODAL FOOTER - Delete modal
-   ============================================ */
 
 #deleteAddressModal .modal-footer {
     display: flex;
@@ -1057,7 +1053,7 @@ select.form-control:not(:disabled) {
     }
 
     .modal-content {
-        margin: 12px;
+        max-width: calc(100vw - 24px);
         max-height: 95vh;
     }
 
@@ -1103,7 +1099,6 @@ select.form-control:not(:disabled) {
         font-size: 10px;
     }
 
-    /* Delete modal mobile */
     #deleteAddressModal .modal-footer {
         flex-direction: column;
         align-items: stretch;
@@ -1218,7 +1213,6 @@ select.form-control:not(:disabled) {
         font-size: 9px;
     }
 
-    /* Delete modal small mobile */
     #deleteAddressModal .modal-footer {
         padding: 10px 14px 16px 14px;
     }
@@ -1247,10 +1241,6 @@ select.form-control:not(:disabled) {
         padding: 20px 0 10px 0;
     }
 }
-
-/* ============================================
-   DESKTOP - Back button sizing
-   ============================================ */
 
 @media (min-width: 768px) {
     .page-title-header .back-btn {

@@ -1,6 +1,9 @@
 /**
  * FitPal Customer Wallet JavaScript
- * Version 2.2
+ * Version 2.3 — Scroll lock applied before the modal is shown, and
+ *                released after it is hidden. Prevents the page from
+ *                reflowing visibly when the body scrollbar disappears
+ *                and reappears around the modal fade.
  *
  * Handles:
  *   - Recharge amount modal (validation, quick amounts)
@@ -26,7 +29,7 @@
  * finds a different number — the display just updates in place.
  *
  * @package FitPal
- * @version 2.2
+ * @version 2.3
  */
 
 (function() {
@@ -102,21 +105,29 @@
             });
         }
 
+        // Lock scroll FIRST, while the modal is still hidden, so the
+        // page reflows to fill the space the scrollbar was using
+        // before anything is visible. Then show the modal on a page
+        // that is already stable.
         function openModal(modal) {
             if (!modal) return;
+            document.body.style.overflow = 'hidden';
             modal.style.display = 'flex';
             void modal.offsetWidth;
             modal.classList.add('active');
-            document.body.style.overflow = 'hidden';
         }
 
+        // Hide the modal first, and release the scroll lock only
+        // after the fade-out completes. Releasing it earlier would
+        // reflow the page behind the fading modal, which the user
+        // would see as a jump.
         function closeModal(modal) {
             if (!modal) return;
             modal.classList.remove('active');
-            document.body.style.overflow = '';
             setTimeout(function() {
                 if (!modal.classList.contains('active')) {
                     modal.style.display = 'none';
+                    document.body.style.overflow = '';
                 }
             }, 250);
         }
@@ -573,6 +584,5 @@
             else if (isAmountModalOpen) closeAmountModalHandler();
         });
 
-        console.log('Wallet v2.2 initialized');
     });
 })();

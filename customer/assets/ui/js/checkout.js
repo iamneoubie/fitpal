@@ -8,8 +8,20 @@
  *   - Back-forward-cache restore forces a reload so the server
  *     re-renders against the current session's checkout address
  *
+ * ---------------------------------------------------------------------
+ * SCOPE RULES APPLIED
+ * ---------------------------------------------------------------------
+ *  - Configuration is read from data-* attributes on #checkoutPage,
+ *    not from an inline <script> block.
+ *  - No .innerHTML writes for user-supplied strings. Labels and
+ *    addresses are written via .textContent.
+ *  - Click and change handling on the address list are not duplicated;
+ *    a single delegated handler covers both.
+ *  - Console noise reduced to actionable warnings.
+ * ---------------------------------------------------------------------
+ *
  * @package FitPal
- * @version 6.1 — Compact confirm modal; unused DOM refs removed.
+ * @version 7.0
  */
 
 (function () {
@@ -18,29 +30,30 @@
     document.addEventListener('DOMContentLoaded', function () {
 
         // ============================================
-        // CONFIG
+        // CONFIG (from data-* attributes)
         // ============================================
-        var CFG = window.FITPAL_CHECKOUT || {};
-        var ORDER_TOTAL    = parseFloat(CFG.total)         || 0;
-        var WALLET_BALANCE = parseFloat(CFG.walletBalance) || 0;
-        var HAS_ADDRESS    = CFG.hasAddress === true;
-        var CSRF_TOKEN     = CFG.csrfToken || '';
+        var page = document.getElementById('checkoutPage');
+        if (!page) return;
+
+        var ORDER_TOTAL    = parseFloat(page.dataset.total)         || 0;
+        var WALLET_BALANCE = parseFloat(page.dataset.walletBalance) || 0;
+        var HAS_ADDRESS    = page.dataset.hasAddress === '1';
+        var CSRF_TOKEN     = page.dataset.csrfToken || '';
 
         // ============================================
         // DOM REFERENCES
         // ============================================
-        var addressModal          = document.getElementById('addressModal');
-        var addressList           = document.getElementById('addressList');
-        var changeAddressBtn      = document.getElementById('changeAddressBtn');
-        var closeAddressModal     = document.getElementById('closeAddressModal');
-        var cancelAddressModal    = document.getElementById('cancelAddressModal');
-        var addAddressModalBtn    = document.getElementById('addAddressModalBtn');
-        var placeOrderBtn         = document.getElementById('placeOrderBtn');
-        var checkoutForm          = document.getElementById('checkoutForm');
-        var hiddenAddressId       = document.getElementById('hiddenAddressId');
-        var selectedAddressId     = document.getElementById('selectedAddressId');
-        var selectedAddressText   = document.getElementById('selectedAddressText');
-        var hiddenPaymentMethod   = document.getElementById('hiddenPaymentMethod');
+        var addressModal        = document.getElementById('addressModal');
+        var addressList         = document.getElementById('addressList');
+        var changeAddressBtn    = document.getElementById('changeAddressBtn');
+        var closeAddressModal   = document.getElementById('closeAddressModal');
+        var cancelAddressModal  = document.getElementById('cancelAddressModal');
+        var addAddressModalBtn  = document.getElementById('addAddressModalBtn');
+        var placeOrderBtn       = document.getElementById('placeOrderBtn');
+        var checkoutForm        = document.getElementById('checkoutForm');
+        var hiddenAddressId     = document.getElementById('hiddenAddressId');
+        var selectedAddressId   = document.getElementById('selectedAddressId');
+        var hiddenPaymentMethod = document.getElementById('hiddenPaymentMethod');
 
         // QR modal
         var qrModal          = document.getElementById('qrPaymentModal');
@@ -52,7 +65,6 @@
         var walletModal           = document.getElementById('walletInsufficientModal');
         var closeWalletModal      = document.getElementById('closeWalletModal');
         var cancelWalletModal     = document.getElementById('cancelWalletModal');
-        var proceedWalletRecharge = document.getElementById('proceedWalletRecharge');
 
         // Confirm modal
         var confirmOrderModal = document.getElementById('confirmOrderModal');
@@ -92,6 +104,10 @@
 
         // ============================================
         // ADDRESS DISPLAY
+        //
+        // Writes user-supplied text via .textContent only. The "Default"
+        // badge is added as a child element rather than via innerHTML+=
+        // so nothing user-controlled ever passes through an HTML parser.
         // ============================================
         function updateAddressDisplay(addressId) {
             if (!addressId) return;
@@ -101,26 +117,30 @@
             );
             if (!selectedOption) return;
 
-            var label     = selectedOption.querySelector('.address-option-label');
-            var text      = selectedOption.querySelector('.address-option-text');
+            var labelEl   = selectedOption.querySelector('.address-option-label');
+            var textEl    = selectedOption.querySelector('.address-option-text');
             var isDefault = selectedOption.querySelector('.badge-default') !== null;
 
             var displayLabel = document.querySelector('.address-display-label');
             var displayText  = document.querySelector('.address-display-text');
 
             if (displayLabel) {
-                displayLabel.innerHTML = (label ? label.textContent : 'Address');
+                displayLabel.textContent = labelEl ? labelEl.textContent : 'Address';
                 if (isDefault) {
-                    displayLabel.innerHTML += ' <span class="badge badge-default">Default</span>';
+                    var badge = document.createElement('span');
+                    badge.className = 'badge badge-default';
+                    badge.textContent = 'Default';
+                    displayLabel.appendChild(document.createTextNode(' '));
+                    displayLabel.appendChild(badge);
                 }
             }
-            if (displayText && text) {
-                displayText.textContent = text.textContent;
+
+            if (displayText && textEl) {
+                displayText.textContent = textEl.textContent;
             }
 
-            if (selectedAddressId)   selectedAddressId.value   = addressId;
-            if (hiddenAddressId)     hiddenAddressId.value     = addressId;
-            if (selectedAddressText) selectedAddressText.value = text ? text.textContent : '';
+            if (selectedAddressId) selectedAddressId.value = addressId;
+            if (hiddenAddressId)   hiddenAddressId.value   = addressId;
 
             currentAddressId = addressId;
         }
@@ -163,7 +183,7 @@
                 var opt = options[i];
                 opt.classList.remove('selected');
                 var radio = opt.querySelector('input[type="radio"]');
-                if (radio && radio.value == currentAddressId) {
+                if (radio && radio.value === String(currentAddressId)) {
                     opt.classList.add('selected');
                     radio.checked = true;
                 }
@@ -179,6 +199,8 @@
             isModalOpen = false;
         }
 
+        // Single delegated handler. Clicking the option or the radio
+        // both resolve to the same code path — no double-handling.
         if (addressList) {
             addressList.addEventListener('click', function (e) {
                 var option = e.target.closest('.address-option');
@@ -198,22 +220,6 @@
                 updateAddressDisplay(radio.value);
                 persistCheckoutAddress(radio.value);
                 closeAddressModalHandler();
-            });
-
-            addressList.addEventListener('change', function (e) {
-                if (e.target && e.target.type === 'radio' && e.target.name === 'modal_address') {
-                    var option = e.target.closest('.address-option');
-                    if (option) {
-                        var allOptions = document.querySelectorAll('.address-option');
-                        for (var i = 0; i < allOptions.length; i++) {
-                            allOptions[i].classList.remove('selected');
-                        }
-                        option.classList.add('selected');
-                        updateAddressDisplay(e.target.value);
-                        persistCheckoutAddress(e.target.value);
-                        closeAddressModalHandler();
-                    }
-                }
             });
         }
 
@@ -250,7 +256,7 @@
             addAddressModalBtn.addEventListener('click', function (e) {
                 e.preventDefault();
                 closeAddressModalHandler();
-                window.location.href = 'profile.php#add-address';
+                window.location.href = 'profile.php?from=checkout#add-address';
             });
         }
 
@@ -331,18 +337,14 @@
                 }
             });
         }
-        if (proceedWalletRecharge) {
-            proceedWalletRecharge.addEventListener('click', function () {
-                closeWalletModalHandler();
-            });
-        }
+
+        // NOTE: The "Recharge Wallet" anchor navigates to wallet.php.
+        // We intentionally do NOT bind a click handler that closes the
+        // modal — navigation would happen anyway, and the previous
+        // handler was dead code.
 
         // ============================================
         // CONFIRM ORDER MODAL
-        //
-        // Minimal confirmation step. Opens after the Place Order button
-        // (or after a QR confirmation). Submits the hidden checkoutForm
-        // only when the user clicks Confirm.
         // ============================================
         function openConfirmModal() {
             if (!confirmOrderModal || isConfirmOpen) return;
@@ -405,6 +407,8 @@
                     var method = radio.value;
 
                     if (method === 'Wallet' && WALLET_BALANCE < ORDER_TOTAL) {
+                        // Leave the previous selection intact so a modal
+                        // cancel does not silently change the method.
                         openWalletModal();
                         return;
                     }
@@ -438,7 +442,7 @@
                 e.preventDefault();
 
                 if (!HAS_ADDRESS) {
-                    window.location.href = 'profile.php#add-address';
+                    window.location.href = 'profile.php?from=checkout#add-address';
                     return;
                 }
 
@@ -490,7 +494,5 @@
         if (currentAddressId) {
             updateAddressDisplay(currentAddressId);
         }
-
-        console.log('Checkout v6.1 initialized');
     });
 })();

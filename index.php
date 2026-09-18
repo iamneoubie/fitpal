@@ -10,7 +10,7 @@
  * This page is intentionally decoupled from every role directory
  * (customer/, restaurant/, rider/, admin/). It only depends on:
  *
- *   - shared/includes/header.php        (session, nav, auth state)
+ *   - shared/includes/header.php        (session, nav, auth state, asset base)
  *   - shared/includes/footer.php        (footer markup)
  *   - shared/includes/view-helpers.php  (presentation helpers)
  *   - shared/backend/database/database-connect.php
@@ -19,43 +19,30 @@
  * It contains NO SQL of its own. Every database call goes through
  * landing-queries.php, which lives under shared/ for the same reason.
  *
- * Rationale:
- *   - The landing page is role-agnostic. It must keep working even if
- *     the customer role is refactored, renamed, or removed.
- *   - It must not reach into customer/backend/database/* because those
- *     files assume a logged-in customer context and carry customer-only
- *     concerns (dietary profiles, carts, session queue, etc.).
- *   - Shared query files are the only sanctioned cross-role include.
+ * The asset base path ($assetBase) is provided by header.php. This page
+ * does NOT compute its own path — one source of truth, no drift.
+ *
+ * Page-specific CSS (landing.css) is loaded by header.php via its
+ * $pageCssMap. This page does NOT emit <link> tags for its own styles.
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 3.1 — Fixed broken add-to-cart form action; uses shared helpers.
+ * @version 3.2 — Removed inline CSS link and duplicated asset-base helper.
  */
 
 declare(strict_types=1);
 
 require_once __DIR__ . '/shared/includes/header.php';
 
-/**
- * Compute the asset base path relative to the current script.
- *
- * @return string
- */
-function getLandingAssetBase(): string
-{
-    $scriptPath = $_SERVER['SCRIPT_NAME'] ?? '';
-    $dirPath    = dirname($scriptPath);
-    $segments   = array_filter(explode('/', $dirPath));
-    $depth      = count($segments);
-
-    if ($depth <= 0) {
-        return './shared/';
-    }
-
-    return str_repeat('../', $depth) . 'shared/';
+// ---------------------------------------------------------------------
+// CSRF TOKEN
+// ---------------------------------------------------------------------
+// The header starts the session but does not guarantee a token. The
+// landing page renders a cart form for logged-in customers, so we make
+// sure a token exists before rendering.
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
-
-$assetBase = getLandingAssetBase();
 
 // ---------------------------------------------------------------------
 // DATA
@@ -76,10 +63,6 @@ try {
 
 $hasProducts = !empty($featuredProducts);
 ?>
-<!-- ============================================
-     LANDING PAGE CONTENT
-     ============================================ -->
-<link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/landing.css">
 
 <div class="content">
 
@@ -99,7 +82,7 @@ $hasProducts = !empty($featuredProducts);
                 </p>
                 <div class="hero-actions">
                     <?php if ($isLoggedIn): ?>
-                    <a href="<?php echo $assetBase; ?>../<?php echo $userRole; ?>/pages/dashboard.php"
+                    <a href="<?php echo $assetBase; ?>../<?php echo htmlspecialchars($userRole, ENT_QUOTES, 'UTF-8'); ?>/pages/dashboard.php"
                         class="btn btn-primary btn-lg">
                         Go to Dashboard
                     </a>
@@ -372,24 +355,24 @@ $hasProducts = !empty($featuredProducts);
                         <?php if ($isLoggedIn && $productStock > 0): ?>
                         <form method="POST"
                             action="<?php echo $assetBase; ?>../customer/backend/handlers/cart-handler.php"
-                            class="add-to-cart-form" style="width: 100%;">
+                            class="add-to-cart-form">
                             <input type="hidden" name="action" value="add">
                             <input type="hidden" name="csrf_token"
-                                value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
+                                value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
                             <input type="hidden" name="product_id" value="<?php echo $productId; ?>">
                             <input type="hidden" name="total_price" value="0">
                             <div class="action-row">
                                 <div class="quantity-control">
                                     <button type="button" class="qty-btn qty-minus"
-                                        aria-label="Decrease quantity">−</button>
+                                        aria-label="Decrease quantity">&minus;</button>
                                     <input type="number" name="quantity" value="1" min="1"
                                         max="<?php echo $productStock; ?>" class="qty-input">
                                     <button type="button" class="qty-btn qty-plus"
                                         aria-label="Increase quantity">+</button>
                                 </div>
-                                <button type="submit" class="btn btn-primary btn-sm add-btn" aria-label="Add to order">
-                                    <img src="<?php echo $assetBase; ?>assets/images/icons/add-circle-empty.svg"
-                                        alt="Add to order" class="btn-icon" width="18" height="18">
+                                <button type="submit" class="btn btn-primary btn-sm add-btn" aria-label="Add to cart">
+                                    <img src="<?php echo $assetBase; ?>assets/images/icons/add-circle-empty.svg" alt=""
+                                        class="btn-icon" width="18" height="18">
                                 </button>
                             </div>
                         </form>
@@ -431,7 +414,7 @@ $hasProducts = !empty($featuredProducts);
                 <p class="cta-description">Explore restaurants and filter by your dietary preferences.</p>
                 <div class="cta-buttons">
                     <?php if ($isLoggedIn): ?>
-                    <a href="<?php echo $assetBase; ?>../<?php echo $userRole; ?>/pages/dashboard.php"
+                    <a href="<?php echo $assetBase; ?>../<?php echo htmlspecialchars($userRole, ENT_QUOTES, 'UTF-8'); ?>/pages/dashboard.php"
                         class="btn btn-primary btn-lg">
                         Go to Dashboard
                     </a>

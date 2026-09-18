@@ -20,9 +20,16 @@
  *   - the `clear` action (user cancels the order from the panel)
  *   - place-order-handler.php after a successful order creation
  *
+ * This handler contains NO SQL. All data access goes through
+ * customer/backend/database/queue-queries.php.
+ *
+ * This file is NOT safe to require from a page — it runs a full
+ * request dispatch at load time. Pure helpers that pages need
+ * (queueEnrich, getProductForQueue) live in queue-queries.php.
+ *
  * @package FitPal
- * @version 4.0 — Removed `commit` action; cart system deleted;
- *                queue is the sole staging surface.
+ * @version 5.0 — queueEnrich moved to queue-queries.php; handler is
+ *                now SQL-free.
  */
 
 declare(strict_types=1);
@@ -79,7 +86,7 @@ if ($requiresCsrf) {
 }
 
 // ---------------------------------------------------------------
-// Session queue helpers
+// Session queue helpers (request-layer concerns — stay here)
 // ---------------------------------------------------------------
 
 function queueGet(): array
@@ -132,107 +139,11 @@ function queueLineKey(int $productId, ?string $customizationJson): string
 }
 
 /**
- * Enrich a queued item with live product data from the database.
+ * Terminate the request with a response payload.
  *
- * Effective price is computed as:
- *     product.base_price
- *   + Σ(composition.price_modifier × requested_quantity)
- * for every composition row where the client indicated the ingredient
- * is present. The client sends {ingredient_id, quantity, selected_option}
- * and we ignore its price_modifier entirely — the server is the single
- * source of truth for money.
+ * AJAX callers get JSON. Non-AJAX callers get a session flash plus a
+ * redirect back to the menu.
  */
-function queueEnrich(PDO $db, array $item): ?array
-{
-    $productId = (int)($item['product_id'] ?? 0);
-    $quantity  = (int)($item['quantity'] ?? 0);
-    if ($productId <= 0 || $quantity <= 0) {
-        return null;
-    }
-
-    $p = getProductForQueue($db, $productId);
-    if (!$p) {
-        return null;
-    }
-
-    $maxStock = (int)$p['stock'];
-    if ($quantity > $maxStock) $quantity = $maxStock;
-    if ($quantity <= 0) return null;
-
-    $customizations = [];
-    if (!empty($item['customization_data'])) {
-        $decoded = is_string($item['customization_data'])
-            ? json_decode($item['customization_data'], true)
-            : $item['customization_data'];
-        if (is_array($decoded)) {
-            $customizations = $decoded;
-        }
-    }
-
-    $rules = [];
-    $ruleStmt = $db->prepare(
-        "SELECT ingredient_id, price_modifier, min_quantity, max_quantity,
-                is_required, is_default, default_quantity
-           FROM product_composition
-          WHERE product_id = :product_id"
-    );
-    $ruleStmt->execute([':product_id' => $productId]);
-    while ($r = $ruleStmt->fetch(PDO::FETCH_ASSOC)) {
-        $rules[(int)$r['ingredient_id']] = $r;
-    }
-
-    $basePrice = (float)($p['base_price'] ?? 0);
-    if ($basePrice <= 0) {
-        $basePrice = (float)$p['price'];
-    }
-
-    $unitPrice     = $basePrice;
-    $caloriesDelta = 0;
-
-    foreach ($customizations as $cust) {
-        if (!is_array($cust)) continue;
-        if (($cust['type'] ?? '') === 'notes') continue;
-
-        $ingredientId = (int)($cust['ingredient_id'] ?? 0);
-        if ($ingredientId <= 0) continue;
-        if (!isset($rules[$ingredientId])) continue;
-
-        $option = (string)($cust['selected_option'] ?? 'selected');
-        if ($option === 'remove') continue;
-
-        $requestedQty = (int)($cust['quantity'] ?? 0);
-        if ($requestedQty <= 0) continue;
-
-        $rule     = $rules[$ingredientId];
-        $modifier = (float)$rule['price_modifier'];
-        $maxQty   = (int)$rule['max_quantity'];
-        if ($maxQty > 0 && $requestedQty > $maxQty) {
-            $requestedQty = $maxQty;
-        }
-
-        $unitPrice += $modifier * $requestedQty;
-    }
-
-    if ($unitPrice < 0) {
-        $unitPrice = 0.0;
-    }
-
-    return [
-        'product_id'           => (int)$p['product_id'],
-        'name'                 => (string)$p['name'],
-        'price'                => round($unitPrice, 2),
-        'base_price'           => $basePrice,
-        'quantity'             => $quantity,
-        'image'                => (string)$p['product_image'],
-        'stock'                => $maxStock,
-        'restaurant_name'      => (string)$p['restaurant_name'],
-        'branch_name'          => (string)$p['branch_name'],
-        'restaurant_branch_id' => (int)$p['restaurant_branch_id'],
-        'is_customizable'      => (bool)$p['is_customizable'],
-        'customization_data'   => $item['customization_data'] ?? null,
-    ];
-}
-
 function queueRespond(array $payload, bool $isAjax, string $redirect = '../../pages/menu.php'): never
 {
     if ($isAjax) {

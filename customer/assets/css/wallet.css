@@ -1,11 +1,20 @@
 /**
  * FitPal Customer Wallet Styles
- * Version 1.1 — Header layout fixed: back button left, title right.
- *               Back button icon now uses shared SVG via <img>.
+ * Version 1.2 — Reserves the viewport scrollbar gutter on <html> and
+ *                anchors the modal content via inset + fixed-pixel
+ *                width, so hiding the body scrollbar does not shift
+ *                either the page or the modal.
  *
  * @package FitPal
- * @version 1.1
+ * @version 1.2
  */
+
+/* Reserve the scrollbar gutter permanently. When the body scrollbar
+   is hidden by a modal scroll lock, this keeps the viewport's usable
+   width unchanged, so nothing reflows. */
+html {
+    scrollbar-gutter: stable;
+}
 
 /* ============================================
    CONTENT WRAPPER
@@ -485,15 +494,11 @@
 
 .modal {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    inset: 0;
     z-index: var(--z-modal);
     display: none;
     align-items: center;
     justify-content: center;
-    padding: 20px;
     opacity: 0;
     transition: opacity 0.25s ease;
 }
@@ -505,11 +510,8 @@
 
 .modal-overlay {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(5, 10, 4, 0.5);
+    inset: 0;
+    background: rgba(5, 10, 4, 0.6);
     z-index: 0;
     cursor: pointer;
 }
@@ -518,8 +520,8 @@
     position: relative;
     background: var(--white);
     border-radius: var(--radius-lg);
-    max-width: 480px;
-    width: 100%;
+    width: 480px;
+    max-width: calc(100vw - 40px);
     max-height: 90vh;
     overflow: hidden;
     box-shadow: var(--shadow-xl);
@@ -537,11 +539,13 @@
 }
 
 .wallet-modal-content {
-    max-width: 420px;
+    width: 420px;
+    max-width: calc(100vw - 40px);
 }
 
 .qr-modal-content {
-    max-width: 400px;
+    width: 400px;
+    max-width: calc(100vw - 40px);
 }
 
 .modal-header {

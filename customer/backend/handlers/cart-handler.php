@@ -13,8 +13,15 @@
  *   push_to_queue   → copy SELECTED cart rows into the session
  *                     order_queue, then tell the client to go to menu.php
  *
+ * This handler contains NO SQL. All data access goes through
+ * customer/backend/database/cart-queries.php.
+ *
+ * This file is NOT safe to require from a page — it runs a full
+ * request dispatch at load time. Display helpers that pages need
+ * (e.g. getCartCustomizationBreakdown) live in cart-queries.php.
+ *
  * @package FitPal
- * @version 5.2 — push_to_queue accepts a cart_ids[] selection
+ * @version 6.1
  */
 
 declare(strict_types=1);
@@ -28,6 +35,9 @@ $isAjax = (
     strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest'
 );
 
+/**
+ * Terminate the request with an error response.
+ */
 function cartFail(string $message, bool $isAjax, string $redirect = '../../pages/menu.php'): never
 {
     if ($isAjax) {
@@ -40,6 +50,11 @@ function cartFail(string $message, bool $isAjax, string $redirect = '../../pages
     exit;
 }
 
+/**
+ * Terminate the request with a success response.
+ *
+ * @param array<string, mixed> $payload
+ */
 function cartSuccess(array $payload, bool $isAjax, string $redirect = '../../pages/menu.php'): never
 {
     if ($isAjax) {
@@ -113,7 +128,69 @@ try {
     }
     error_log('Cart handler database error: ' . $e->getMessage());
     cartFail('A system error occurred. Please try again.', $isAjax);
+} catch (Throwable $e) {
+    if ($database_connection->inTransaction()) {
+        $database_connection->rollBack();
+    }
+    error_log('Cart handler error: ' . $e->getMessage());
+    cartFail('A system error occurred. Please try again.', $isAjax);
 }
+
+/* -----------------------------------------------------------------
+ * PURE HELPERS (business logic, no DB access)
+ * ----------------------------------------------------------------- */
+
+/**
+ * Compute the effective unit price for a cart line.
+ *
+ * Base price plus the sum of every selected ingredient's modifier
+ * multiplied by its requested quantity. Quantities are clamped to the
+ * ingredient's max_quantity from product_composition. Removed and
+ * unknown ingredients contribute nothing.
+ *
+ * @param float $basePrice
+ * @param array<int, array<string, mixed>> $customizations
+ * @param array<int, array{ingredient_id:int, price_modifier:float, min_quantity:int, max_quantity:int}> $rules
+ * @return float
+ */
+function computeServerUnitPrice(
+    float $basePrice,
+    array $customizations,
+    array $rules
+): float {
+    $unitPrice = $basePrice;
+
+    foreach ($customizations as $cust) {
+        if (!is_array($cust)) continue;
+        if (($cust['type'] ?? '') === 'notes') continue;
+
+        $ingredientId = (int)($cust['ingredient_id'] ?? 0);
+        if ($ingredientId <= 0)             continue;
+        if (!isset($rules[$ingredientId]))  continue;
+
+        $option = (string)($cust['selected_option'] ?? 'selected');
+        if ($option === 'remove') continue;
+
+        $requestedQty = (int)($cust['quantity'] ?? 0);
+        if ($requestedQty <= 0) continue;
+
+        $rule     = $rules[$ingredientId];
+        $modifier = (float)$rule['price_modifier'];
+        $maxQty   = (int)$rule['max_quantity'];
+
+        if ($maxQty > 0 && $requestedQty > $maxQty) {
+            $requestedQty = $maxQty;
+        }
+
+        $unitPrice += $modifier * $requestedQty;
+    }
+
+    return max(0.0, $unitPrice);
+}
+
+/* -----------------------------------------------------------------
+ * ACTION HANDLERS
+ * ----------------------------------------------------------------- */
 
 function handleAdd(PDO $db, int $customerId, bool $isAjax): void
 {
@@ -139,6 +216,7 @@ function handleAdd(PDO $db, int $customerId, bool $isAjax): void
 
     $db->beginTransaction();
 
+    // Lock the product row. Everything below reads from this snapshot.
     $product = getProductForCart($db, $productId);
     if (!$product) {
         throw new RuntimeException('Product not found.');
@@ -147,52 +225,16 @@ function handleAdd(PDO $db, int $customerId, bool $isAjax): void
         throw new RuntimeException('Product is not available.');
     }
 
-    $rules = [];
-    $ruleStmt = $db->prepare(
-        "SELECT ingredient_id, price_modifier, min_quantity, max_quantity
-           FROM product_composition
-          WHERE product_id = :product_id"
-    );
-    $ruleStmt->execute([':product_id' => $productId]);
-    while ($r = $ruleStmt->fetch(PDO::FETCH_ASSOC)) {
-        $rules[(int)$r['ingredient_id']] = $r;
-    }
+    $rules = getProductCompositionRules($db, $productId);
 
     $basePrice = (float)($product['base_price'] ?? 0);
     if ($basePrice <= 0) {
         $basePrice = (float)$product['price'];
     }
 
-    $serverUnitPrice = $basePrice;
+    $serverUnitPrice = computeServerUnitPrice($basePrice, $customizations, $rules);
 
-    foreach ($customizations as $cust) {
-        if (!is_array($cust)) continue;
-        if (($cust['type'] ?? '') === 'notes') continue;
-
-        $ingredientId = (int)($cust['ingredient_id'] ?? 0);
-        if ($ingredientId <= 0) continue;
-        if (!isset($rules[$ingredientId])) continue;
-
-        $option = (string)($cust['selected_option'] ?? 'selected');
-        if ($option === 'remove') continue;
-
-        $requestedQty = (int)($cust['quantity'] ?? 0);
-        if ($requestedQty <= 0) continue;
-
-        $rule     = $rules[$ingredientId];
-        $modifier = (float)$rule['price_modifier'];
-        $maxQty   = (int)$rule['max_quantity'];
-        if ($maxQty > 0 && $requestedQty > $maxQty) {
-            $requestedQty = $maxQty;
-        }
-
-        $serverUnitPrice += $modifier * $requestedQty;
-    }
-
-    if ($serverUnitPrice < 0) {
-        $serverUnitPrice = 0.0;
-    }
-
+    // Log client/server total mismatch. The server price is authoritative.
     if ($clientTotal > 0) {
         $expectedTotal = $serverUnitPrice * $quantity;
         if (abs($expectedTotal - $clientTotal) > 0.01) {
@@ -208,8 +250,7 @@ function handleAdd(PDO $db, int $customerId, bool $isAjax): void
     $customizationPayload = buildCartCustomizationPayload($customizations);
     $customizationHash    = computeCartCustomizationHash($customizations);
 
-    $existing = getCartItemByProduct($db, $customerId, $productId, $customizationHash);
-
+    $existing    = getCartItemByProduct($db, $customerId, $productId, $customizationHash);
     $existingQty = $existing ? (int)$existing['quantity'] : 0;
     $newQuantity = $existingQty + $quantity;
 
@@ -329,33 +370,7 @@ function handlePushToQueue(PDO $db, int $customerId, bool $isAjax): void
         throw new RuntimeException('Select at least one item to add to your order.');
     }
 
-    // Load only the selected rows (avoids loading the entire cart).
-    $placeholders = implode(',', array_fill(0, count($selectedIds), '?'));
-    $stmt = $db->prepare(
-        "SELECT
-            c.cart_id,
-            c.quantity,
-            c.price,
-            c.customization_data,
-            p.product_id,
-            p.name,
-            p.stock,
-            p.is_active,
-            p.base_price,
-            rb.branch_name,
-            r.business_name,
-            COALESCE(di.images, '') AS product_image
-         FROM cart c
-         JOIN product p ON c.product_id = p.product_id
-         JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
-         JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
-         LEFT JOIN dietary_information di ON p.dietary_information_id = di.dietary_information_id
-         WHERE c.customer_id = ?
-           AND c.cart_id IN ($placeholders)"
-    );
-    $stmt->execute(array_merge([$customerId], $selectedIds));
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
+    $rows = getCartRowsForQueue($db, $customerId, $selectedIds);
     if (empty($rows)) {
         throw new RuntimeException('No matching cart items were found.');
     }
@@ -364,6 +379,7 @@ function handlePushToQueue(PDO $db, int $customerId, bool $isAjax): void
         $_SESSION['order_queue'] = [];
     }
 
+    // Index existing queue lines by product_id for O(1) merge lookup.
     $indexByProduct = [];
     foreach ($_SESSION['order_queue'] as $i => $line) {
         $pid = (int)($line['product_id'] ?? 0);

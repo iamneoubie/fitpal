@@ -2,14 +2,24 @@
 /**
  * FitPal Customer and Profile Database Queries
  *
- * Pure data-access layer for customer, customer_profile, and
- * financial_account. No $_POST, no header(), no echo.
+ * Feature file for customer, customer_profile, and financial_account.
+ * It owns every query against those tables, plus the pure display
+ * helpers that operate on rows from them.
+ *
+ * Why formatCurrency() lives here and not in a page:
+ *
+ *   Pages that render customer money (profile.php, dashboard.php,
+ *   wallet.php) need a single implementation of the peso format.
+ *   They cannot include each other, and they cannot include a
+ *   handler (handlers run at include time). This file only declares
+ *   functions, so it is safe to require from anywhere.
  *
  * NOTE: All address functions live in address-queries.php.
  *       Do not declare any *Address* function in this file.
  *
  * @package FitPal
- * @version 3.0 — removed all address functions (moved to address-queries.php)
+ * @version 3.1 — Adds formatCurrency() so profile, dashboard, and
+ *                wallet share one peso formatter.
  */
 
 declare(strict_types=1);
@@ -193,4 +203,29 @@ function contactExists(PDO $db, string $contact): bool
     $stmt = $db->prepare("SELECT 1 FROM customer WHERE contact_number = ?");
     $stmt->execute([$contact]);
     return $stmt->fetch() !== false;
+}
+
+/* ---------------------------------------------------------------
+ * PRESENTATION HELPERS (pure — no DB access)
+ *
+ * These operate on values returned by the queries above, or on
+ * plain numbers passed in by a page. They live here because this
+ * is the only customer file that is safe to require from a page.
+ * --------------------------------------------------------------- */
+
+/**
+ * Format a monetary amount as Philippine pesos.
+ *
+ * The one peso formatter for the customer role. profile.php,
+ * dashboard.php, and wallet.php all render customer money and all
+ * call this. Handlers cannot host it (they run at include time),
+ * and pages cannot share a local declaration, so the query file
+ * is the correct home.
+ *
+ * @param int|float|string|null $amount
+ * @return string
+ */
+function formatCurrency(int|float|string|null $amount): string
+{
+    return '₱' . number_format((float)($amount ?? 0), 2);
 }

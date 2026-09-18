@@ -11,8 +11,23 @@
  * does the page submit checkoutForm to place-order-handler.php, which
  * is the only code that writes the order to the database.
  *
+ * ---------------------------------------------------------------------
+ * SCOPE RULES APPLIED
+ * ---------------------------------------------------------------------
+ *  - No SQL in this file. Wallet balance comes from getCustomerProfile().
+ *  - No inline CSS. checkout.css is loaded via the header's $pageCssMap.
+ *  - No inline style attributes. Utility classes live in checkout.css.
+ *  - Page data for JS is passed via data-* attributes on #checkoutPage,
+ *    not via an inline <script> block.
+ *  - Address formatting helpers (formatAddress, getAddressLabel) live in
+ *    customer/backend/database/address-queries.php. They are NOT in
+ *    shared/, because they know about customer_address specifically.
+ *  - This page does NOT require shared/includes/view-helpers.php. It has
+ *    no need for formatPrice / truncateText / parseTagList.
+ * ---------------------------------------------------------------------
+ *
  * @package FitPal
- * @version 6.3 — Add-address button uses shared icon (no inline SVG).
+ * @version 7.1 — Address helpers now live in address-queries.php.
  */
 
 declare(strict_types=1);
@@ -26,16 +41,14 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     exit;
 }
 
-// ---------------------------------------------------------------
 // Prevent the browser from caching this page.
-// ---------------------------------------------------------------
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
 require_once __DIR__ . '/../backend/database/customer-connect.php';
 require_once __DIR__ . '/../backend/database/customer-queries.php';
-require_once __DIR__ . '/../backend/database/address-queries.php';
+require_once __DIR__ . '/../backend/database/address-queries.php';   // formatAddress + getAddressLabel live here
 require_once __DIR__ . '/../backend/database/fee-queries.php';
 
 $customerId = (int)$_SESSION['customer_id'];
@@ -105,10 +118,8 @@ if (empty($orderItems)) {
 // ---------------------------------------------------------------
 // Aggregate subtotal + distinct branches for the fee schedule.
 // ---------------------------------------------------------------
-$subtotal       = 0.0;
-$branchIds      = [];
-$branchName     = '';
-$restaurantName = '';
+$subtotal  = 0.0;
+$branchIds = [];
 
 foreach ($orderItems as $item) {
     $subtotal += $item['price'] * $item['quantity'];
@@ -116,11 +127,6 @@ foreach ($orderItems as $item) {
     $bid = $item['restaurant_branch_id'];
     if ($bid > 0 && !in_array($bid, $branchIds, true)) {
         $branchIds[] = $bid;
-    }
-
-    if ($branchName === '') {
-        $branchName     = $item['branch_name'];
-        $restaurantName = $item['restaurant_name'];
     }
 }
 
@@ -133,57 +139,21 @@ $extraBranches = $fees['extra_branches'];
 $branchCount   = $fees['branch_count'];
 $total         = $subtotal + $deliveryFee + $serviceFee + $vatAmount;
 
-// ---- Addresses ----
-$addresses        = getCustomerAddresses($database_connection, $customerId);
-$defaultAddressId = getCustomerDefaultAddressId($database_connection, $customerId);
-$hasAddress       = !empty($addresses);
+// ---------------------------------------------------------------
+// Customer + address data.
+// ---------------------------------------------------------------
+$addresses  = getCustomerAddresses($database_connection, $customerId);
+$hasAddress = !empty($addresses);
 
-// ---- User details ----
 $userDetails = getCustomerContactInfo($database_connection, $customerId) ?: [];
 
-// ---- Wallet balance ----
-$walletBalance = 0.0;
-try {
-    $walletStmt = $database_connection->prepare(
-        "SELECT fa.balance
-           FROM customer_profile cp
-           JOIN financial_account fa ON cp.financial_account_id = fa.financial_account_id
-          WHERE cp.customer_id = :customer_id
-          LIMIT 1"
-    );
-    $walletStmt->execute([':customer_id' => $customerId]);
-    $walletRow = $walletStmt->fetch(PDO::FETCH_ASSOC);
-    if ($walletRow) {
-        $walletBalance = (float)$walletRow['balance'];
-    }
-} catch (PDOException $e) {
-    error_log('Checkout wallet balance error: ' . $e->getMessage());
-}
+// Wallet balance comes from the customer profile query — no SQL here.
+$profileRow    = getCustomerProfile($database_connection, $customerId) ?: [];
+$walletBalance = (float)($profileRow['balance'] ?? 0);
 
-// ---- CSRF ----
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-$csrfToken = $_SESSION['csrf_token'];
-
-require_once __DIR__ . '/../includes/header.php';
-
-function formatAddress(array $addr): string {
-    $parts = [];
-    if (!empty($addr['block']))       $parts[] = $addr['block'];
-    if (!empty($addr['barangay']))    $parts[] = $addr['barangay'];
-    if (!empty($addr['city']))        $parts[] = $addr['city'];
-    if (!empty($addr['province']))    $parts[] = $addr['province'];
-    if (!empty($addr['region']))      $parts[] = $addr['region'];
-    if (!empty($addr['postal_code'])) $parts[] = $addr['postal_code'];
-    if (!empty($addr['country']))     $parts[] = $addr['country'];
-    return implode(', ', $parts);
-}
-
-function getAddressLabel(array $addr): string {
-    return !empty($addr['label']) ? $addr['label'] : 'Address';
-}
-
+// ---------------------------------------------------------------
+// Pick the address to display.
+// ---------------------------------------------------------------
 $selectedAddr = null;
 
 if ($hasAddress) {
@@ -212,11 +182,30 @@ $selectedAddressText = $selectedAddr ? formatAddress($selectedAddr) : '';
 $userName    = trim(($userDetails['first_name'] ?? '') . ' ' . ($userDetails['last_name'] ?? ''));
 $userEmail   = $userDetails['email'] ?? 'Not provided';
 $userContact = $userDetails['contact_number'] ?? 'Not provided';
+
+// ---------------------------------------------------------------
+// CSRF
+// ---------------------------------------------------------------
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+$csrfToken = $_SESSION['csrf_token'];
+
+require_once __DIR__ . '/../includes/header.php';
 ?>
 
-<link rel="stylesheet" href="../assets/css/checkout.css">
+<div class="content checkout-page" id="checkoutPage"
+    data-total="<?php echo htmlspecialchars((string)$total, ENT_QUOTES, 'UTF-8'); ?>"
+    data-subtotal="<?php echo htmlspecialchars((string)$subtotal, ENT_QUOTES, 'UTF-8'); ?>"
+    data-delivery-fee="<?php echo htmlspecialchars((string)$deliveryFee, ENT_QUOTES, 'UTF-8'); ?>"
+    data-service-fee="<?php echo htmlspecialchars((string)$serviceFee, ENT_QUOTES, 'UTF-8'); ?>"
+    data-vat-amount="<?php echo htmlspecialchars((string)$vatAmount, ENT_QUOTES, 'UTF-8'); ?>"
+    data-vat-rate="<?php echo htmlspecialchars((string)$vatRate, ENT_QUOTES, 'UTF-8'); ?>"
+    data-wallet-balance="<?php echo htmlspecialchars((string)$walletBalance, ENT_QUOTES, 'UTF-8'); ?>"
+    data-has-address="<?php echo $hasAddress ? '1' : '0'; ?>"
+    data-csrf-token="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>"
+    data-initial-payment-method="COD">
 
-<div class="content checkout-page">
     <div class="container">
         <p class="heading-2 checkout-title">Checkout</p>
 
@@ -293,8 +282,6 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
                             </button>
                         </div>
                         <input type="hidden" id="selectedAddressId" value="<?php echo $selectedAddrId; ?>">
-                        <input type="hidden" id="selectedAddressText"
-                            value="<?php echo htmlspecialchars($selectedAddressText, ENT_QUOTES, 'UTF-8'); ?>">
                         <?php else: ?>
                         <div class="address-empty-state">
                             <div class="address-empty-icon">
@@ -310,7 +297,6 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
                             </a>
                         </div>
                         <input type="hidden" id="selectedAddressId" value="0">
-                        <input type="hidden" id="selectedAddressText" value="">
                         <?php endif; ?>
                     </div>
                 </div>
@@ -339,7 +325,7 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
                                         <?php echo htmlspecialchars($item['product_name'], ENT_QUOTES, 'UTF-8'); ?>
                                     </p>
                                     <p class="order-item-restaurant">
-                                        <?php echo htmlspecialchars($item['restaurant_name'] ?: $restaurantName, ENT_QUOTES, 'UTF-8'); ?>
+                                        <?php echo htmlspecialchars($item['restaurant_name'], ENT_QUOTES, 'UTF-8'); ?>
                                         <?php if ($item['branch_name'] !== ''): ?>
                                         <span class="order-item-branch">
                                             • <?php echo htmlspecialchars($item['branch_name'], ENT_QUOTES, 'UTF-8'); ?>
@@ -455,8 +441,7 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
 
                     <div class="checkout-actions">
                         <a href="menu.php" class="btn btn-secondary">Back to Menu</a>
-                        <button type="button" id="placeOrderBtn" class="btn btn-primary"
-                            data-has-address="<?php echo $hasAddress ? '1' : '0'; ?>">
+                        <button type="button" id="placeOrderBtn" class="btn btn-primary">
                             <?php echo $hasAddress ? 'Place Order' : 'Add Address to Continue'; ?>
                         </button>
                     </div>
@@ -471,7 +456,7 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
 <!-- ADDRESS MODAL -->
 <!-- ============================================ -->
 <?php if ($hasAddress): ?>
-<div id="addressModal" class="modal" style="display:none;">
+<div id="addressModal" class="modal">
     <div class="modal-overlay"></div>
     <div class="modal-content">
         <div class="modal-header">
@@ -487,7 +472,7 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
             <div class="address-list" id="addressList">
                 <?php foreach ($addresses as $addr):
                     $isDefault = (int)($addr['is_default'] ?? 0) === 1;
-                    $addrId = (int)$addr['customer_address_id'];
+                    $addrId    = (int)$addr['customer_address_id'];
                 ?>
                 <div class="address-option <?php echo $isDefault ? 'selected' : ''; ?>"
                     data-address-id="<?php echo $addrId; ?>">
@@ -526,7 +511,7 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
 <!-- ============================================ -->
 <!-- ONLINE PAYMENT QR MODAL -->
 <!-- ============================================ -->
-<div id="qrPaymentModal" class="modal" style="display:none;">
+<div id="qrPaymentModal" class="modal">
     <div class="modal-overlay"></div>
     <div class="modal-content qr-modal-content">
         <div class="modal-header">
@@ -564,7 +549,7 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
 <!-- ============================================ -->
 <!-- WALLET INSUFFICIENT MODAL -->
 <!-- ============================================ -->
-<div id="walletInsufficientModal" class="modal" style="display:none;">
+<div id="walletInsufficientModal" class="modal">
     <div class="modal-overlay"></div>
     <div class="modal-content wallet-modal-content">
         <div class="modal-header">
@@ -612,7 +597,7 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
 <!-- ============================================ -->
 <!-- PLACE ORDER CONFIRMATION MODAL -->
 <!-- ============================================ -->
-<div id="confirmOrderModal" class="modal" style="display:none;">
+<div id="confirmOrderModal" class="modal">
     <div class="modal-overlay"></div>
     <div class="modal-content confirm-modal-content">
         <div class="confirm-modal-icon">
@@ -632,25 +617,11 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
 </div>
 
 <!-- Hidden form for submitting order -->
-<form id="checkoutForm" method="POST" action="../backend/handlers/place-order-handler.php" style="display:none;">
-    <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
+<form id="checkoutForm" class="checkout-form-hidden" method="POST" action="../backend/handlers/place-order-handler.php">
+    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
     <input type="hidden" name="address_id" id="hiddenAddressId" value="<?php echo $selectedAddrId; ?>">
     <input type="hidden" name="payment_method" id="hiddenPaymentMethod" value="COD">
 </form>
 
-<script>
-window.FITPAL_CHECKOUT = {
-    total: <?php echo json_encode((float)$total); ?>,
-    subtotal: <?php echo json_encode((float)$subtotal); ?>,
-    deliveryFee: <?php echo json_encode((float)$deliveryFee); ?>,
-    serviceFee: <?php echo json_encode((float)$serviceFee); ?>,
-    vatAmount: <?php echo json_encode((float)$vatAmount); ?>,
-    vatRate: <?php echo json_encode((float)$vatRate); ?>,
-    walletBalance: <?php echo json_encode((float)$walletBalance); ?>,
-    hasAddress: <?php echo $hasAddress ? 'true' : 'false'; ?>,
-    csrfToken: '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>',
-    initialPaymentMethod: 'COD'
-};
-</script>
 <script src="../assets/ui/js/checkout.js" defer></script>
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>

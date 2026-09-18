@@ -1,10 +1,18 @@
 /**
  * FitPal Customer Orders Page Styles
- * Version 3.3 — Expand icon uses shared arrow-drop-down icon.
+ * Version 3.5 — Reserves the viewport scrollbar gutter on <html>.
  *
  * @package FitPal
- * @version 3.3
+ * @version 3.5
  */
+
+/* Reserve the scrollbar gutter permanently. If the shift is caused by
+   the viewport width changing when a scrollbar appears/disappears,
+   this line eliminates it. If the shift persists, the cause is
+   something else. */
+html {
+    scrollbar-gutter: stable;
+}
 
 /* ============================================
    CONTENT WRAPPER
@@ -443,7 +451,7 @@
 }
 
 /* ============================================
-   EXPAND ICON (shared arrow-drop-down icon)
+   EXPAND ICON
    ============================================ */
 
 .order-item-expand-icon {
@@ -455,7 +463,6 @@
     transition: transform 0.25s ease;
 }
 
-/* Tint the shared SVG to match the collapsed gray state */
 .order-item-expand-icon-img {
     width: 64px;
     height: 64px;
@@ -465,7 +472,6 @@
     transition: filter 0.15s ease;
 }
 
-/* Expanded: rotate the wrapper and tint the icon green */
 .order-item-row.expanded .order-item-expand-icon {
     transform: rotate(180deg);
 }
@@ -796,14 +802,13 @@
 .modal {
     position: fixed;
     top: 0;
+    right: 0;
+    bottom: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
     z-index: var(--z-modal);
     display: none;
     align-items: center;
     justify-content: center;
-    padding: 20px;
     opacity: 0;
     transition: opacity 0.25s ease;
 }
@@ -816,10 +821,10 @@
 .modal-overlay {
     position: absolute;
     top: 0;
+    right: 0;
+    bottom: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(5, 10, 4, 0.5);
+    background: rgba(5, 10, 4, 0.6);
     z-index: 0;
     cursor: pointer;
     opacity: 0;
@@ -835,7 +840,7 @@
     background: var(--white);
     border-radius: var(--radius-lg);
     max-width: 480px;
-    width: 100%;
+    width: calc(100% - 40px);
     max-height: 90vh;
     overflow: hidden;
     box-shadow: var(--shadow-xl);
@@ -1314,7 +1319,7 @@
     }
 
     .modal-content {
-        margin: 10px;
+        width: calc(100% - 20px);
         max-height: 95vh;
     }
 
