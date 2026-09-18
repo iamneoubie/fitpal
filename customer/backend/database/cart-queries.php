@@ -9,17 +9,13 @@
  * No $_POST, no header(), no echo.
  *
  * @package FitPal
- * @version 4.0 — Customization-aware merge; hash helper for line identity
+ * @version 5.1 — Customization enrichment uses ingredient.name
  */
 
 declare(strict_types=1);
 
 /**
  * Get customer's cart items with customizations parsed from JSON.
- *
- * @param PDO $db
- * @param int $customerId
- * @return array<int, array<string, mixed>>
  */
 function getCustomerCart(PDO $db, int $customerId): array
 {
@@ -54,23 +50,13 @@ function getCustomerCart(PDO $db, int $customerId): array
     $stmt->execute([':customer_id' => $customerId]);
     $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    foreach ($items as &$item) {
-        $item['customizations'] = parseCartCustomizations($item['customization_data'] ?? null);
-        unset($item['customization_data']);
-    }
-    unset($item);
+    enrichCartItemsWithCustomizations($db, $items);
 
     return $items;
 }
 
 /**
- * Get cart items with product details for the cart page (includes
- * current price, is_active flag, and stock for availability checks),
- * with customization_data already parsed into a structured array.
- *
- * @param PDO $db
- * @param int $customerId
- * @return array<int, array<string, mixed>>
+ * Get cart items with product details for the cart page (non-paginated).
  */
 function getCartItemsWithProductDetails(PDO $db, int $customerId): array
 {
@@ -106,22 +92,252 @@ function getCartItemsWithProductDetails(PDO $db, int $customerId): array
     $stmt->execute([':customer_id' => $customerId]);
     $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    foreach ($items as &$item) {
-        $item['customizations'] = parseCartCustomizations($item['customization_data'] ?? null);
-        unset($item['customization_data']);
-    }
-    unset($item);
+    enrichCartItemsWithCustomizations($db, $items);
 
     return $items;
 }
 
 /**
- * Get cart items grouped by branch with customizations parsed.
- *
- * @param PDO $db
- * @param int $customerId
- * @return array<int, array<string, mixed>>
+ * Get one page of cart rows + total/total pages.
  */
+function getCartItemsWithProductDetailsPaginated(
+    PDO $db,
+    int $customerId,
+    int $page = 1,
+    int $perPage = 5
+): array {
+    if ($page    < 1) $page    = 1;
+    if ($perPage < 1) $perPage = 5;
+
+    $countStmt = $db->prepare(
+        "SELECT COUNT(*) FROM cart WHERE customer_id = :customer_id"
+    );
+    $countStmt->execute([':customer_id' => $customerId]);
+    $total = (int)$countStmt->fetchColumn();
+
+    $totalPages = $total > 0 ? (int)ceil($total / $perPage) : 1;
+    if ($page > $totalPages) $page = $totalPages;
+
+    $offset = ($page - 1) * $perPage;
+
+    $stmt = $db->prepare(
+        "SELECT
+            c.cart_id,
+            c.quantity,
+            c.price,
+            c.customization_data,
+            p.product_id,
+            p.name,
+            p.price       AS current_price,
+            p.stock,
+            p.is_active,
+            p.is_customizable,
+            p.base_price,
+            rb.restaurant_branch_id,
+            rb.branch_name,
+            r.restaurant_id,
+            r.business_name,
+            COALESCE(di.images, '') AS product_image
+         FROM cart c
+         JOIN product p ON c.product_id = p.product_id
+         JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
+         JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
+         LEFT JOIN dietary_information di ON p.dietary_information_id = di.dietary_information_id
+         WHERE c.customer_id = :customer_id
+         ORDER BY
+            p.is_active DESC,
+            p.stock > 0 DESC,
+            c.added_at DESC
+         LIMIT :limit OFFSET :offset"
+    );
+    $stmt->bindValue(':customer_id', $customerId, PDO::PARAM_INT);
+    $stmt->bindValue(':limit',       $perPage,    PDO::PARAM_INT);
+    $stmt->bindValue(':offset',      $offset,     PDO::PARAM_INT);
+    $stmt->execute();
+    $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    enrichCartItemsWithCustomizations($db, $items);
+
+    return [
+        'items'      => $items,
+        'total'      => $total,
+        'totalPages' => $totalPages,
+        'page'       => $page,
+        'perPage'    => $perPage,
+    ];
+}
+
+/**
+ * Enrich an array of cart rows with their parsed customizations.
+ * Modifies $items in place.
+ *
+ * Loads all ingredient metadata in one query so we don't N+1.
+ */
+function enrichCartItemsWithCustomizations(PDO $db, array &$items): void
+{
+    if (empty($items)) return;
+
+    // Parse all customization payloads first
+    $allIngredientIds = [];
+    foreach ($items as &$item) {
+        $raw = parseCartCustomizations($item['customization_data'] ?? null);
+        foreach ($raw as $c) {
+            $iid = (int)($c['ingredient_id'] ?? 0);
+            if ($iid > 0) $allIngredientIds[$iid] = true;
+        }
+        $item['_raw_customizations'] = $raw;
+    }
+    unset($item);
+
+    // Batch-load ingredient metadata once. NOTE: column is `name`.
+    $ingredientMeta = [];
+    if (!empty($allIngredientIds)) {
+        $ids = array_keys($allIngredientIds);
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = $db->prepare(
+            "SELECT ingredient_id, name
+               FROM ingredient
+              WHERE ingredient_id IN ($placeholders)"
+        );
+        $stmt->execute($ids);
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $ingredientMeta[(int)$row['ingredient_id']] = $row['name'];
+        }
+    }
+
+    // Resolve per-item names + modifiers using product_composition
+    foreach ($items as &$item) {
+        $productId = (int)($item['product_id'] ?? 0);
+        $raw       = $item['_raw_customizations'];
+        $resolved  = [];
+
+        if ($productId > 0 && !empty($raw)) {
+            $ruleStmt = $db->prepare(
+                "SELECT ingredient_id, price_modifier, max_quantity
+                   FROM product_composition
+                  WHERE product_id = :product_id"
+            );
+            $ruleStmt->execute([':product_id' => $productId]);
+            $rules = [];
+            while ($r = $ruleStmt->fetch(PDO::FETCH_ASSOC)) {
+                $rules[(int)$r['ingredient_id']] = $r;
+            }
+
+            foreach ($raw as $c) {
+                $iid = (int)($c['ingredient_id'] ?? 0);
+                if ($iid <= 0) continue;
+
+                $name   = $ingredientMeta[$iid] ?? ('Ingredient #' . $iid);
+                $option = (string)($c['selected_option'] ?? 'selected');
+                $qty    = (int)($c['quantity'] ?? 1);
+                if ($qty < 1) $qty = 1;
+
+                $modifier = isset($rules[$iid])
+                    ? (float)$rules[$iid]['price_modifier']
+                    : 0.0;
+
+                if ($option === 'remove') {
+                    $modifier = 0.0;
+                }
+
+                $resolved[] = [
+                    'ingredient_id'   => $iid,
+                    'ingredient_name' => $name,
+                    'selected_option' => $option,
+                    'quantity'        => $qty,
+                    'price_modifier'  => $modifier,
+                ];
+            }
+        }
+
+        $item['customizations'] = $resolved;
+        unset($item['_raw_customizations']);
+        unset($item['customization_data']);
+    }
+    unset($item);
+}
+
+/**
+ * Build a display-ready breakdown of a cart line's customization data.
+ */
+function getCartCustomizationBreakdown(array $item): array
+{
+    $basePrice = (float)($item['base_price'] ?? 0);
+    if ($basePrice <= 0) {
+        $basePrice = (float)($item['price'] ?? 0);
+    }
+
+    $quantity = (int)($item['quantity'] ?? 1);
+    $customs  = $item['customizations'] ?? [];
+
+    $modifications = [];
+    $modifierTotal = 0.0;
+
+    foreach ($customs as $c) {
+        if (!is_array($c)) continue;
+        if (($c['type'] ?? '') === 'notes') continue;
+
+        $name   = (string)($c['ingredient_name'] ?? $c['name'] ?? '');
+        $option = (string)($c['selected_option'] ?? 'selected');
+        $mod    = (float)($c['price_modifier'] ?? $c['price'] ?? 0);
+        $qty    = (int)($c['quantity'] ?? 1);
+
+        if ($name === '') continue;
+
+        if ($option === 'remove') {
+            $modifications[] = [
+                'name'     => $name,
+                'price'    => 0.0,
+                'kind'     => 'remove',
+                'quantity' => 1,
+            ];
+            continue;
+        }
+
+        if ($qty < 1) $qty = 1;
+        $lineMod = $mod * $qty;
+        $modifierTotal += $lineMod;
+
+        $modifications[] = [
+            'name'     => $name,
+            'price'    => $lineMod,
+            'kind'     => $lineMod < 0 ? 'remove' : 'add',
+            'quantity' => $qty,
+        ];
+    }
+
+    $unitPrice = $basePrice + $modifierTotal;
+    if ($unitPrice < 0) $unitPrice = 0.0;
+
+    return [
+        'base_price'     => $basePrice,
+        'modifications'  => $modifications,
+        'modifier_total' => $modifierTotal,
+        'unit_price'     => $unitPrice,
+        'line_total'     => $unitPrice * $quantity,
+    ];
+}
+
+/* ---------------------------------------------------------------
+ * Everything below is unchanged from the previous version.
+ * --------------------------------------------------------------- */
+
+function getCartTotals(PDO $db, int $customerId): array
+{
+    $stmt = $db->prepare(
+        "SELECT COALESCE(SUM(quantity), 0) AS unit_count,
+                COUNT(*)                   AS row_count
+           FROM cart
+          WHERE customer_id = :customer_id"
+    );
+    $stmt->execute([':customer_id' => $customerId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: ['unit_count' => 0, 'row_count' => 0];
+    return [
+        'unitCount' => (int)$row['unit_count'],
+        'rowCount'  => (int)$row['row_count'],
+    ];
+}
+
 function getCartGroupedByBranch(PDO $db, int $customerId): array
 {
     $stmt = $db->prepare(
@@ -179,13 +395,6 @@ function getCartGroupedByBranch(PDO $db, int $customerId): array
     return $grouped;
 }
 
-/**
- * Get all distinct branch IDs represented in a customer's cart.
- *
- * @param PDO $db
- * @param int $customerId
- * @return array<int, int>
- */
 function getCartBranchIds(PDO $db, int $customerId): array
 {
     $stmt = $db->prepare(
@@ -198,13 +407,6 @@ function getCartBranchIds(PDO $db, int $customerId): array
     return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
 }
 
-/**
- * Get the total quantity of items in a customer's cart.
- *
- * @param PDO $db
- * @param int $customerId
- * @return int
- */
 function getCartCount(PDO $db, int $customerId): int
 {
     $stmt = $db->prepare(
@@ -214,13 +416,6 @@ function getCartCount(PDO $db, int $customerId): int
     return (int)$stmt->fetchColumn();
 }
 
-/**
- * Lock and load a product row for cart insertion.
- *
- * @param PDO $db
- * @param int $productId
- * @return array<string, mixed>|false
- */
 function getProductForCart(PDO $db, int $productId): array|false
 {
     $stmt = $db->prepare(
@@ -233,25 +428,6 @@ function getProductForCart(PDO $db, int $productId): array|false
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
-/**
- * Get a specific cart row for a customer+product.
- *
- * When $customizationHash is provided, the lookup is scoped to that
- * exact customization configuration so that two different customize
- * builds of the same product coexist as separate lines (which is what
- * the cart table's UNIQUE (customer_id, product_id, customization_hash)
- * key already allows).
- *
- * When $customizationHash is null (legacy callers), the first matching
- * row for (customer_id, product_id) is returned. New code should always
- * pass a hash.
- *
- * @param PDO $db
- * @param int $customerId
- * @param int $productId
- * @param string|null $customizationHash
- * @return array<string, mixed>|false
- */
 function getCartItemByProduct(
     PDO $db,
     int $customerId,
@@ -290,15 +466,6 @@ function getCartItemByProduct(
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
-/**
- * Get a specific cart row by cart_id scoped to a customer, joined
- * with its product stock (used by update_quantity).
- *
- * @param PDO $db
- * @param int $cartId
- * @param int $customerId
- * @return array<string, mixed>|false
- */
 function getCartItemForUpdate(PDO $db, int $cartId, int $customerId): array|false
 {
     $stmt = $db->prepare(
@@ -312,62 +479,18 @@ function getCartItemForUpdate(PDO $db, int $cartId, int $customerId): array|fals
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
-/**
- * Compute the SHA-256 hash that the cart table uses to distinguish
- * customized lines. Mirrors the DB generated column:
- *
- *     SHA2(
- *         COALESCE(JSON_EXTRACT(customization_data, '$.customizations'), ''),
- *         256
- *     )
- *
- * Since our PHP code stores customization_data as a flat JSON array
- * (not wrapped in a { "customizations": [...] } object), the extract
- * path returns NULL and COALESCE falls back to ''. So the hash of any
- * non-empty customization payload is actually SHA2('', 256).
- *
- * To make the hash genuinely distinguish different customized lines,
- * we store the payload as `{ "customizations": [...] }`. This helper
- * takes the raw customization array (or null) and produces the exact
- * JSON string that should be persisted, so the DB generates the hash
- * we expect.
- *
- * @param array<int, array<string, mixed>> $customizations
- * @return string|null
- */
 function buildCartCustomizationPayload(array $customizations): ?string
 {
-    if (empty($customizations)) {
-        return null;
-    }
+    if (empty($customizations)) return null;
     return json_encode(['customizations' => $customizations]);
 }
 
-/**
- * Compute the same hash the DB will store, given a customization array.
- * Useful for pre-flight lookups before insert.
- *
- * @param array<int, array<string, mixed>> $customizations
- * @return string
- */
 function computeCartCustomizationHash(array $customizations): string
 {
-    $payload = buildCartCustomizationPayload($customizations) ?? '';
-    $inner   = $customizations === [] ? '' : json_encode($customizations);
+    $inner = $customizations === [] ? '' : json_encode($customizations);
     return hash('sha256', (string)$inner);
 }
 
-/**
- * Insert a new cart row.
- *
- * @param PDO $db
- * @param int $customerId
- * @param int $productId
- * @param int $quantity
- * @param float $price
- * @param string|null $customizationData
- * @return int New cart_id
- */
 function insertCartItem(
     PDO $db,
     int $customerId,
@@ -392,16 +515,6 @@ function insertCartItem(
     return (int)$db->lastInsertId();
 }
 
-/**
- * Update an existing cart row's quantity, price, and customizations.
- *
- * @param PDO $db
- * @param int $cartId
- * @param int $quantity
- * @param float $price
- * @param string|null $customizationData
- * @return void
- */
 function updateCartItem(
     PDO $db,
     int $cartId,
@@ -424,15 +537,6 @@ function updateCartItem(
     ]);
 }
 
-/**
- * Update only the quantity of a cart row (scoped to customer).
- *
- * @param PDO $db
- * @param int $cartId
- * @param int $customerId
- * @param int $quantity
- * @return void
- */
 function updateCartItemQuantity(PDO $db, int $cartId, int $customerId, int $quantity): void
 {
     $stmt = $db->prepare(
@@ -446,14 +550,6 @@ function updateCartItemQuantity(PDO $db, int $cartId, int $customerId, int $quan
     ]);
 }
 
-/**
- * Delete a single cart row (scoped to customer).
- *
- * @param PDO $db
- * @param int $cartId
- * @param int $customerId
- * @return void
- */
 function deleteCartItem(PDO $db, int $cartId, int $customerId): void
 {
     $stmt = $db->prepare(
@@ -462,26 +558,12 @@ function deleteCartItem(PDO $db, int $cartId, int $customerId): void
     $stmt->execute([':cart_id' => $cartId, ':customer_id' => $customerId]);
 }
 
-/**
- * Delete all cart rows for a customer.
- *
- * @param PDO $db
- * @param int $customerId
- * @return void
- */
 function clearCart(PDO $db, int $customerId): void
 {
     $stmt = $db->prepare("DELETE FROM cart WHERE customer_id = :customer_id");
     $stmt->execute([':customer_id' => $customerId]);
 }
 
-/**
- * Lock and return all cart rows for a customer (used by queue commit).
- *
- * @param PDO $db
- * @param int $customerId
- * @return array<int, array<string, mixed>>
- */
 function getCartItemsForUpdate(PDO $db, int $customerId): array
 {
     $stmt = $db->prepare(
@@ -494,43 +576,22 @@ function getCartItemsForUpdate(PDO $db, int $customerId): array
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-/**
- * Parse the customization_data JSON from a cart row into a normalized
- * array. Notes entries are filtered out; ingredient entries are kept.
- *
- * Handles both the legacy flat-array format and the current
- * { "customizations": [...] } wrapper format.
- *
- * @param string|null $json
- * @return array<int, array<string, mixed>>
- */
 function parseCartCustomizations(?string $json): array
 {
-    if (empty($json)) {
-        return [];
-    }
+    if (empty($json)) return [];
 
     $decoded = json_decode($json, true);
-    if (!is_array($decoded)) {
-        return [];
-    }
+    if (!is_array($decoded)) return [];
 
-    // Unwrap the { "customizations": [...] } envelope if present.
     if (isset($decoded['customizations']) && is_array($decoded['customizations'])) {
         $decoded = $decoded['customizations'];
     }
 
     $out = [];
     foreach ($decoded as $cust) {
-        if (!is_array($cust)) {
-            continue;
-        }
-        if (isset($cust['type']) && $cust['type'] === 'notes') {
-            continue;
-        }
-        if (empty($cust['ingredient_id'])) {
-            continue;
-        }
+        if (!is_array($cust)) continue;
+        if (isset($cust['type']) && $cust['type'] === 'notes') continue;
+        if (empty($cust['ingredient_id'])) continue;
         $out[] = $cust;
     }
     return $out;

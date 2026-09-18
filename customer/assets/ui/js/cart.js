@@ -1,36 +1,41 @@
 /**
  * FitPal Customer Cart Page JavaScript
- * Version 1.0
+ * Version 1.8
  *
  * Handles:
  *  - Quantity stepper (+ / −) with min/max clamping
  *  - Quantity input changes (debounced sync with server)
  *  - Remove-item confirmation modal
- *  - Live subtotal recalculation
- *  - Empty-state transition when the last item is removed
+ *  - Selected subtotal (only checked rows count)
+ *  - Per-row selection checkboxes + "select all on this page"
+ *  - Collapsible customization panel (toggle via aria-controls)
+ *  - "Add to Order" — pushes only the SELECTED cart rows to the
+ *    session queue, then redirects to menu.php.
  *
  * @package FitPal
- * @version 1.0 */
+ * @version 1.8 — Customization panel is now collapsible via aria-controls
+ */
 
 (function () {
     'use strict';
 
     document.addEventListener('DOMContentLoaded', function () {
 
-        // ============================================
-        // DOM REFERENCES
-        // ============================================
-        const cartContainer = document.querySelector('.cart-container');
-        const cartSubtotalEl = document.getElementById('cartSubtotal');
+        const cartSubtotalEl     = document.getElementById('cartSubtotal');
         const cartItemsContainer = document.getElementById('cartItems');
 
-        const removeModal       = document.getElementById('cartRemoveModal');
-        const removeModalName   = document.getElementById('cartModalItemName');
-        const removeModalCancel = document.getElementById('cartModalCancel');
-        const removeModalConfirm= document.getElementById('cartModalConfirm');
+        const removeModal        = document.getElementById('cartRemoveModal');
+        const removeModalName    = document.getElementById('cartModalItemName');
+        const removeModalCancel  = document.getElementById('cartModalCancel');
+        const removeModalConfirm = document.getElementById('cartModalConfirm');
+
+        const pushToQueueForm    = document.getElementById('cartPushToQueueForm');
+        const addToOrderBtn      = document.getElementById('cartAddToOrderBtn');
+        const selectedIdsBox     = document.getElementById('cartSelectedIds');
+        const selectAllPage      = document.getElementById('cartSelectAllPage');
+        const selectionCountEl   = document.getElementById('cartSelectionCount');
 
         const csrfToken = window.FITPAL_CSRF_TOKEN || '';
-        const assetBase = window.FITPAL_ASSET_BASE || '../../shared/';
 
         let pendingRemoveCartId = null;
         let pendingRemoveEl     = null;
@@ -39,18 +44,27 @@
         // HELPERS
         // ============================================
 
-        /**
-         * Format a number as Philippine peso.
-         */
         function formatPeso(amount) {
             const n = Number(amount) || 0;
             return '₱' + n.toFixed(2);
         }
 
-        /**
-         * Recompute the subtotal from all available cart items on the page
-         * and update the summary element.
-         */
+        function getItemCheckboxes() {
+            if (!cartItemsContainer) return [];
+            return Array.prototype.slice.call(
+                cartItemsContainer.querySelectorAll('.cart-item-checkbox:not(:disabled)')
+            );
+        }
+
+        function getRowQty(itemEl) {
+            const qtyInput = itemEl.querySelector('.qty-input');
+            return parseInt(qtyInput ? qtyInput.value : '0', 10) || 0;
+        }
+
+        function getRowPrice(itemEl) {
+            return parseFloat(itemEl.dataset.price) || 0;
+        }
+
         function recalculateSubtotal() {
             if (!cartItemsContainer) return;
 
@@ -58,10 +72,11 @@
             let total = 0;
 
             items.forEach(function (item) {
-                const price    = parseFloat(item.dataset.price) || 0;
-                const qtyInput = item.querySelector('.qty-input');
-                const qty      = parseInt(qtyInput ? qtyInput.value : '0', 10) || 0;
-                total += price * qty;
+                const checkbox = item.querySelector('.cart-item-checkbox');
+                const isChecked = checkbox ? checkbox.checked : false;
+                if (!isChecked) return;
+
+                total += getRowPrice(item) * getRowQty(item);
             });
 
             if (cartSubtotalEl) {
@@ -69,15 +84,11 @@
             }
         }
 
-        /**
-         * Update the subtotal display for one row.
-         */
         function updateRowSubtotal(itemEl) {
             if (!itemEl) return;
 
-            const price    = parseFloat(itemEl.dataset.price) || 0;
-            const qtyInput = itemEl.querySelector('.qty-input');
-            const qty      = parseInt(qtyInput ? qtyInput.value : '0', 10) || 0;
+            const price = getRowPrice(itemEl);
+            const qty   = getRowQty(itemEl);
 
             const rowTotalEl = itemEl.querySelector('.cart-item-subtotal-amount');
             if (rowTotalEl) {
@@ -85,25 +96,23 @@
             }
         }
 
-        /**
-         * Show the empty state when the last item is removed.
-         * Reloads the page instead — simpler and guarantees a fresh state.
-         */
-        function refreshPage() {
-            window.location.reload();
+        function parseJsonOrThrow(res) {
+            return res.text().then(function (text) {
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    console.error('[cart.js] Expected JSON but got:',
+                        '\n  status:', res.status,
+                        '\n  body  :', text.slice(0, 500));
+                    throw new Error('Server returned non-JSON response (status ' + res.status + ')');
+                }
+            });
         }
 
         // ============================================
         // SERVER SYNC
         // ============================================
 
-        /**
-         * Persist a quantity change to the server.
-         *
-         * @param {number} cartId
-         * @param {number} quantity
-         * @returns {Promise<boolean>}
-         */
         function syncQuantity(cartId, quantity) {
             const body = new URLSearchParams({
                 action: 'update_quantity',
@@ -118,7 +127,7 @@
                 body: body.toString(),
                 credentials: 'same-origin'
             })
-            .then(function (res) { return res.json(); })
+            .then(parseJsonOrThrow)
             .then(function (data) {
                 if (!data || data.status !== 'success') {
                     throw new Error((data && data.message) || 'Failed to update quantity');
@@ -127,12 +136,6 @@
             });
         }
 
-        /**
-         * Persist a removal to the server.
-         *
-         * @param {number} cartId
-         * @returns {Promise<boolean>}
-         */
         function syncRemove(cartId) {
             const body = new URLSearchParams({
                 action: 'remove_item',
@@ -146,7 +149,7 @@
                 body: body.toString(),
                 credentials: 'same-origin'
             })
-            .then(function (res) { return res.json(); })
+            .then(parseJsonOrThrow)
             .then(function (data) {
                 if (!data || data.status !== 'success') {
                     throw new Error((data && data.message) || 'Failed to remove item');
@@ -156,7 +159,51 @@
         }
 
         // ============================================
-        // QUANTITY CONTROLS (event delegation)
+        // SELECTION
+        // ============================================
+
+        function updateSelectionSummary() {
+            const boxes   = getItemCheckboxes();
+            const checked = boxes.filter(function (b) { return b.checked; });
+
+            if (selectionCountEl) {
+                selectionCountEl.textContent = String(checked.length);
+            }
+
+            if (selectAllPage) {
+                selectAllPage.checked = boxes.length > 0 && checked.length === boxes.length;
+                selectAllPage.indeterminate = checked.length > 0 && checked.length < boxes.length;
+            }
+
+            if (addToOrderBtn) {
+                addToOrderBtn.disabled = checked.length === 0;
+            }
+        }
+
+        function refreshSelectionAndSubtotal() {
+            updateSelectionSummary();
+            recalculateSubtotal();
+        }
+
+        if (selectAllPage) {
+            selectAllPage.addEventListener('change', function () {
+                getItemCheckboxes().forEach(function (b) {
+                    b.checked = selectAllPage.checked;
+                });
+                refreshSelectionAndSubtotal();
+            });
+        }
+
+        if (cartItemsContainer) {
+            cartItemsContainer.addEventListener('change', function (e) {
+                if (e.target.classList && e.target.classList.contains('cart-item-checkbox')) {
+                    refreshSelectionAndSubtotal();
+                }
+            });
+        }
+
+        // ============================================
+        // QUANTITY + REMOVE + CUSTOMS TOGGLE (delegated)
         // ============================================
         if (cartItemsContainer) {
 
@@ -177,27 +224,19 @@
                     const stock    = parseInt(itemEl.dataset.stock, 10) || 999;
                     let qty        = parseInt(qtyInput.value, 10) || 1;
 
-                    if (minusBtn) {
-                        qty -= 1;
-                        if (qty < 1) qty = 1;
-                    } else {
-                        qty += 1;
-                        if (qty > stock) qty = stock;
-                    }
+                    if (minusBtn) { qty -= 1; if (qty < 1) qty = 1; }
+                    else          { qty += 1; if (qty > stock) qty = stock; }
 
                     qtyInput.value = qty;
                     updateRowSubtotal(itemEl);
                     recalculateSubtotal();
 
-                    // Persist (fire and forget — UI already updated)
                     syncQuantity(cartId, qty).catch(function (err) {
                         console.error('Quantity sync failed:', err);
-                        // Roll back the UI on failure
                         window.location.reload();
                     });
                 }
 
-                // Remove button
                 const removeBtn = e.target.closest('.cart-item-remove');
                 if (removeBtn) {
                     e.preventDefault();
@@ -209,9 +248,24 @@
 
                     openRemoveModal(cartId, name, removeBtn.closest('.cart-item'));
                 }
+
+                const customsToggle = e.target.closest('.cart-customs-toggle');
+                if (customsToggle) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const panelId = customsToggle.getAttribute('aria-controls');
+                    if (!panelId) return;
+
+                    const wrapper = document.getElementById(panelId);
+                    if (!wrapper) return;
+
+                    const expanded = customsToggle.getAttribute('aria-expanded') === 'true';
+                    customsToggle.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+                    wrapper.hidden = expanded;
+                }
             });
 
-            // Quantity input changes
             cartItemsContainer.addEventListener('change', function (e) {
                 const input = e.target.closest('.qty-input');
                 if (!input) return;
@@ -238,11 +292,8 @@
                 }
             });
 
-            // Prevent wheel-scroll from changing quantity accidentally
             cartItemsContainer.addEventListener('wheel', function (e) {
-                if (e.target.closest('.qty-input')) {
-                    e.target.blur();
-                }
+                if (e.target.closest('.qty-input')) e.target.blur();
             }, { passive: true });
         }
 
@@ -251,21 +302,14 @@
         // ============================================
 
         function openRemoveModal(cartId, productName, itemEl) {
-            if (!removeModal) {
-                // No modal in DOM — remove directly
-                performRemove(cartId, itemEl);
-                return;
-            }
+            if (!removeModal) { performRemove(cartId, itemEl); return; }
 
             pendingRemoveCartId = cartId;
             pendingRemoveEl     = itemEl || null;
 
-            if (removeModalName) {
-                removeModalName.textContent = productName;
-            }
+            if (removeModalName) removeModalName.textContent = productName;
 
             removeModal.style.display = 'flex';
-            // Force reflow so the transition can play
             void removeModal.offsetWidth;
             removeModal.classList.add('active');
             document.body.style.overflow = 'hidden';
@@ -273,46 +317,27 @@
 
         function closeRemoveModal() {
             if (!removeModal) return;
-
             removeModal.classList.remove('active');
             document.body.style.overflow = '';
-
             setTimeout(function () {
                 if (!removeModal.classList.contains('active')) {
                     removeModal.style.display = 'none';
                 }
             }, 200);
-
             pendingRemoveCartId = null;
             pendingRemoveEl     = null;
         }
 
         function performRemove(cartId, itemEl) {
             if (cartId <= 0) return;
-
             syncRemove(cartId)
                 .then(function () {
-                    // Count remaining available items
                     const remaining = cartItemsContainer
                         ? cartItemsContainer.querySelectorAll('.cart-item').length
                         : 0;
-
-                    if (itemEl) {
-                        itemEl.remove();
-                    }
-
-                    // If we just removed the last available item, reload so the
-                    // page flips into the empty state cleanly.
-                    if (remaining <= 1) {
-                        window.location.reload();
-                        return;
-                    }
-
-                    recalculateSubtotal();
-
-                    // If the summary checkout button should be disabled because
-                    // there are no more items, the reload above handles it.
-                    // Otherwise nothing else to do.
+                    if (itemEl) itemEl.remove();
+                    if (remaining <= 1) { window.location.reload(); return; }
+                    refreshSelectionAndSubtotal();
                 })
                 .catch(function (err) {
                     console.error('Remove failed:', err);
@@ -322,8 +347,7 @@
 
         if (removeModalCancel) {
             removeModalCancel.addEventListener('click', function (e) {
-                e.preventDefault();
-                closeRemoveModal();
+                e.preventDefault(); closeRemoveModal();
             });
         }
 
@@ -332,15 +356,9 @@
                 e.preventDefault();
                 const cartId = pendingRemoveCartId;
                 const itemEl = pendingRemoveEl;
-
-                if (cartId == null) {
-                    closeRemoveModal();
-                    return;
-                }
-
+                if (cartId == null) { closeRemoveModal(); return; }
                 removeModalConfirm.disabled = true;
                 removeModalConfirm.textContent = 'Removing…';
-
                 performRemove(cartId, itemEl);
                 closeRemoveModal();
             });
@@ -354,7 +372,6 @@
             });
         }
 
-        // Escape key closes the modal
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape' && removeModal && removeModal.classList.contains('active')) {
                 closeRemoveModal();
@@ -362,8 +379,86 @@
         });
 
         // ============================================
+        // ADD TO ORDER — push SELECTED cart rows
+        // ============================================
+        if (pushToQueueForm && addToOrderBtn) {
+            pushToQueueForm.addEventListener('submit', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const selected = getItemCheckboxes()
+                    .filter(function (b) { return b.checked; })
+                    .map(function (b) { return b.value; });
+
+                if (selected.length === 0) {
+                    window.alert('Select at least one item to add to your order.');
+                    return;
+                }
+
+                if (selectedIdsBox) {
+                    selectedIdsBox.innerHTML = '';
+                    selected.forEach(function (id) {
+                        const input = document.createElement('input');
+                        input.type  = 'hidden';
+                        input.name  = 'cart_ids[]';
+                        input.value = id;
+                        selectedIdsBox.appendChild(input);
+                    });
+                }
+
+                const originalLabel = addToOrderBtn.textContent;
+                addToOrderBtn.disabled = true;
+                addToOrderBtn.textContent = 'Adding…';
+
+                const body = new URLSearchParams(new FormData(pushToQueueForm));
+
+                const formAction =
+                    pushToQueueForm.getAttribute('action') ||
+                    '../backend/handlers/cart-handler.php';
+
+                fetch(formAction, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: body.toString(),
+                    credentials: 'same-origin'
+                })
+                .then(function (res) {
+                    return res.text().then(function (text) {
+                        console.log('[cart.js] push_to_queue raw response:', res.status, text.slice(0, 500));
+                        if (!res.ok) {
+                            throw new Error('HTTP ' + res.status + ' — ' + text.slice(0, 200));
+                        }
+                        try { return JSON.parse(text); }
+                        catch (err) {
+                            throw new Error('Non-JSON response (status ' + res.status + '): ' + text.slice(0, 200));
+                        }
+                    });
+                })
+                .then(function (data) {
+                    if (data && data.status === 'success') {
+                        window.location.href = (data.redirect || 'menu.php');
+                    } else {
+                        addToOrderBtn.disabled = false;
+                        addToOrderBtn.textContent = originalLabel;
+                        console.error('[cart.js] push_to_queue error response:', data);
+                        window.alert((data && data.message) || 'Could not add items to your order.');
+                    }
+                })
+                .catch(function (err) {
+                    console.error('[cart.js] push_to_queue failed:', err);
+                    addToOrderBtn.disabled = false;
+                    addToOrderBtn.textContent = originalLabel;
+                    window.alert('Could not reach the server. Check the console for the exact response.');
+                });
+            });
+        }
+
+        // ============================================
         // INIT
         // ============================================
-        recalculateSubtotal();
+        refreshSelectionAndSubtotal();
     });
 })();

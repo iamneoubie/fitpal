@@ -4,13 +4,14 @@
  *
  * Displays restaurants and their menu items with dietary filtering and pagination.
  *
- * The queue panel is the sole "order staging" surface on this page. It reads
- * and writes the session-based order_queue (NOT the database cart). The cart
- * is a separate, persistent concept managed on product-detail.php via the
- * "Add to Cart" button.
+ * The queue panel is the session order_queue staging surface. The
+ * Add to Cart button routes to cart-handler.php (persistent cart).
+ * Both are parallel staging surfaces with distinct purposes:
+ *   - Queue (session)  → checkout immediately
+ *   - Cart (persistent) → save for later
  *
  * @package FitPal
- * @version 9.0 — Add button now type="button" with delegated click handler in menu.js
+ * @version 9.3 — Removed order tracker; filter bar fixed under header.
  */
 
 declare(strict_types=1);
@@ -22,7 +23,6 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../includes/header.php';
 
 require_once __DIR__ . '/../backend/database/product-queries.php';
-require_once __DIR__ . '/../backend/database/order-queries.php';
 require_once __DIR__ . '/../backend/database/customer-queries.php';
 
 // ============================================
@@ -130,37 +130,8 @@ if (empty($_SESSION['csrf_token'])) {
 $csrfToken = $_SESSION['csrf_token'];
 
 // ============================================
-// ACTIVE ORDER
-// ============================================
-$activeOrder = null;
-if ($isLoggedIn) {
-    $activeOrder = getActiveOrder($database_connection, (int)$_SESSION['customer_id']);
-}
-
-// ============================================
 // HELPERS
 // ============================================
-
-function getTrackerStepIndex(string $status): int {
-    return match ($status) {
-        'pending'          => 1,
-        'confirmed'        => 2,
-        'preparing'        => 2,
-        'out_for_delivery' => 3,
-        'delivered'        => 4,
-        default            => 1,
-    };
-}
-
-function getTrackerStatusLabel(string $status): string {
-    return match ($status) {
-        'pending'          => 'Order Placed',
-        'confirmed'        => 'Confirmed',
-        'preparing'        => 'Preparing',
-        'out_for_delivery' => 'Out for Delivery',
-        default            => ucfirst(str_replace('_', ' ', $status)),
-    };
-}
 
 function buildQueryString(array $params = []): string {
     $base = [];
@@ -205,7 +176,7 @@ function hasActiveFilters(): bool {
 <link rel="stylesheet" href="../assets/css/menu-product.css">
 <link rel="stylesheet" href="../assets/css/queue-panel.css">
 
-<div class="content menu-page<?php echo $activeOrder ? ' has-order-tracker' : ''; ?>">
+<div class="content menu-page">
     <div class="container">
 
         <!-- Queue flash messages (set by queue-handler.php on non-AJAX add) -->
@@ -223,7 +194,21 @@ function hasActiveFilters(): bool {
         </div>
         <?php endif; ?>
 
-        <!-- Sticky Filter Bar -->
+        <?php if (isset($_SESSION['cart_success'])): ?>
+        <div class="alert alert-success" role="alert">
+            <?php echo htmlspecialchars($_SESSION['cart_success'], ENT_QUOTES, 'UTF-8'); ?>
+            <?php unset($_SESSION['cart_success']); ?>
+        </div>
+        <?php endif; ?>
+
+        <?php if (isset($_SESSION['cart_error'])): ?>
+        <div class="alert alert-danger" role="alert">
+            <?php echo htmlspecialchars($_SESSION['cart_error'], ENT_QUOTES, 'UTF-8'); ?>
+            <?php unset($_SESSION['cart_error']); ?>
+        </div>
+        <?php endif; ?>
+
+        <!-- Fixed Filter Bar -->
         <div class="menu-filters" id="menuFilters">
             <form method="GET" action="" class="filter-form" id="filterForm">
                 <div class="filter-top-row">
@@ -385,6 +370,9 @@ function hasActiveFilters(): bool {
             </form>
         </div>
 
+        <!-- Spacer: pushes content below the fixed filter bar -->
+        <div class="filter-spacer" aria-hidden="true"></div>
+
         <!-- Restaurant List -->
         <section class="restaurant-list" aria-label="Restaurants and menu items">
             <?php if (empty($restaurants)): ?>
@@ -407,13 +395,10 @@ function hasActiveFilters(): bool {
                     <?php endif; ?>
                 </p>
                 <?php if (hasActiveFilters()): ?>
-                <a href="menu.php?filter_applied=1" class="btn btn-outline btn-sm" style="margin-top: 12px;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="18" y1="6" x2="6" y2="18" />
-                        <line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
-                    Clear Filters
+                <a href="menu.php?filter_applied=1" class="btn btn-outline btn-sm clear-filters-btn">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/cancel.svg" alt="" class="btn-icon"
+                        width="16" height="16">
+                    <span>Clear Filters</span>
                 </a>
                 <?php endif; ?>
             </div>
@@ -510,23 +495,34 @@ function hasActiveFilters(): bool {
                             <!-- Product Actions -->
                             <div class="product-actions">
                                 <?php if ($isLoggedIn && $product['stock'] > 0): ?>
-                                <div class="add-to-cart-form" style="width: 100%;"
-                                    data-product-id="<?php echo (int)$product['id']; ?>">
-                                    <div class="action-row">
-                                        <div class="quantity-control">
-                                            <button type="button" class="qty-btn qty-minus"
-                                                aria-label="Decrease quantity">−</button>
-                                            <input type="number" name="quantity" value="1" min="1"
-                                                max="<?php echo $product['stock']; ?>" class="qty-input">
-                                            <button type="button" class="qty-btn qty-plus"
-                                                aria-label="Increase quantity">+</button>
-                                        </div>
-                                        <button type="button" class="btn btn-primary btn-sm add-btn"
-                                            aria-label="Add to order">
-                                            <img src="<?php echo $assetBase; ?>assets/images/icons/add-circle-empty.svg"
-                                                alt="Add to order" class="btn-icon" width="18" height="18">
+                                <div class="action-row" data-product-id="<?php echo (int)$product['id']; ?>"
+                                    data-cart-url="../backend/handlers/cart-handler.php"
+                                    data-queue-url="../backend/handlers/queue-handler.php">
+
+                                    <div class="quantity-control">
+                                        <button type="button" class="qty-btn qty-minus" aria-label="Decrease quantity">
+                                            <img src="<?php echo $assetBase; ?>assets/images/icons/subtract-line.svg"
+                                                alt="" class="qty-btn-icon" width="14" height="14">
+                                        </button>
+                                        <input type="number" name="quantity" value="1" min="1"
+                                            max="<?php echo $product['stock']; ?>" class="qty-input">
+                                        <button type="button" class="qty-btn qty-plus" aria-label="Increase quantity">
+                                            <img src="<?php echo $assetBase; ?>assets/images/icons/add-line.svg" alt=""
+                                                class="qty-btn-icon" width="14" height="14">
                                         </button>
                                     </div>
+
+                                    <button type="button" class="add-btn add-to-cart-btn" data-action="cart"
+                                        aria-label="Add to cart" title="Add to Cart">
+                                        <img src="<?php echo $assetBase; ?>assets/images/icons/cart-shopping.svg"
+                                            alt="Add to cart" class="btn-icon" width="16" height="16">
+                                    </button>
+
+                                    <button type="button" class="add-btn add-to-order-btn" data-action="queue"
+                                        aria-label="Add to order" title="Add to Order">
+                                        <img src="<?php echo $assetBase; ?>assets/images/icons/add-line.svg"
+                                            alt="Add to order" class="btn-icon" width="16" height="16">
+                                    </button>
                                 </div>
                                 <?php elseif (!$isLoggedIn): ?>
                                 <a href="sign-in.php" class="btn btn-outline btn-sm">Login to Order</a>
@@ -618,42 +614,6 @@ function hasActiveFilters(): bool {
         </section>
     </div>
 
-    <!-- Fixed Order Tracker -->
-    <?php if ($activeOrder): ?>
-    <?php
-        $trackerStep        = getTrackerStepIndex($activeOrder['order_status']);
-        $trackerStatusLabel = getTrackerStatusLabel($activeOrder['order_status']);
-        $trackerStatusClass = 'tracker-status-' . $activeOrder['order_status'];
-    ?>
-    <div class="order-tracker" id="orderTracker" role="status" aria-live="polite">
-        <div class="tracker-container">
-            <div class="tracker-info">
-                <span class="tracker-order-id">Order #<?php echo (int)$activeOrder['order_id']; ?></span>
-                <span class="tracker-status <?php echo htmlspecialchars($trackerStatusClass, ENT_QUOTES, 'UTF-8'); ?>">
-                    <?php echo htmlspecialchars($trackerStatusLabel, ENT_QUOTES, 'UTF-8'); ?>
-                </span>
-                <span class="tracker-restaurant">
-                    <?php echo htmlspecialchars($activeOrder['restaurant_name'] . ' — ' . $activeOrder['branch_name'], ENT_QUOTES, 'UTF-8'); ?>
-                </span>
-            </div>
-            <div class="tracker-progress" aria-hidden="true">
-                <?php for ($i = 1; $i <= 4; $i++): ?>
-                <span class="progress-step
-                        <?php echo $i < $trackerStep ? 'completed' : ''; ?>
-                        <?php echo $i === $trackerStep ? 'current' : ''; ?>"></span>
-                <?php if ($i < 4): ?>
-                <span class="progress-line <?php echo $i < $trackerStep ? 'completed' : ''; ?>"></span>
-                <?php endif; ?>
-                <?php endfor; ?>
-            </div>
-            <div class="tracker-action">
-                <a href="order-details.php?id=<?php echo (int)$activeOrder['order_id']; ?>"
-                    class="btn btn-primary btn-sm">Track Order</a>
-            </div>
-        </div>
-    </div>
-    <?php endif; ?>
-
     <!-- Queue Panel -->
     <div class="queue-panel-wrapper empty" id="queuePanelWrapper" data-queue-empty="true" aria-hidden="true">
         <div class="queue-panel" id="queuePanel">
@@ -669,10 +629,8 @@ function hasActiveFilters(): bool {
                     </div>
                     <button type="button" class="queue-panel-toggle" id="queuePanelToggle" aria-expanded="false"
                         aria-label="Toggle order panel">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="6,9 12,15 18,9"></polyline>
-                        </svg>
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-drop-down-line.svg" alt=""
+                            class="queue-panel-toggle-icon" width="20" height="20">
                     </button>
                 </div>
 
@@ -695,13 +653,7 @@ function hasActiveFilters(): bool {
                         <div class="queue-footer-actions">
                             <button type="button" class="queue-btn-cancel" id="queueCancelBtn">Cancel Order</button>
                             <a href="checkout.php" class="queue-btn-checkout" id="queueCheckoutBtn" disabled>
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2">
-                                    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
-                                    <line x1="3" y1="6" x2="21" y2="6" />
-                                    <path d="M16 10a4 4 0 0 1-8 0" />
-                                </svg>
-                                Checkout
+                                <span>Checkout</span>
                             </a>
                         </div>
                     </div>
@@ -754,4 +706,4 @@ window.FITPAL_CSRF_TOKEN = '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 
 <script src="../assets/ui/js/menu.js" defer></script>
 <script src="../assets/ui/js/queue-panel.js" defer></script>
 
-<?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>
+<?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>s

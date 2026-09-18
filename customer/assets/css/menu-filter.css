@@ -1,31 +1,53 @@
 /**
  * FitPal Menu Page - Filter Bar Styles
- * Version 8.0
+ * Version 8.2
  *
  * Fixes:
  *  - Dropdown panels anchor precisely to their trigger button
  *  - Dietary dropdown grows to fit its content (no scrollbar on desktop)
  *  - Checkmarks and radio dots render as solid white on their fill colour
+ *  - Filter bar is position: fixed under the header (no scroll drift)
+ *  - Fixed bar's inner content aligns with the header container width
  */
 
 /* ============================================
-   STICKY FILTER BAR
+   FIXED FILTER BAR
+   Full-width fixed bar. Inner .filter-form is
+   constrained to match the header container so
+   the search/controls line up with the header.
    ============================================ */
 
 .menu-filters {
-    position: sticky;
-    top: 70px;
+    position: fixed;
+    top: 70px;              /* match header height */
+    left: 0;
+    right: 0;
     z-index: 100;
     background: var(--background);
     padding: 10px 0;
-    margin-bottom: 16px;
+    margin-bottom: 0;
     border-bottom: 1px solid var(--gray-200);
 }
+
+/* Spacer so page content starts below the fixed bar */
+.filter-spacer {
+    height: 74px;           /* filter bar height + gap; tune if needed */
+}
+
+/* ============================================
+   INNER CONTAINER
+   Mirrors the page header's max-width and
+   horizontal padding so the bar lines up.
+   ============================================ */
 
 .filter-form {
     display: flex;
     flex-direction: column;
     width: 100%;
+    max-width: 1200px;      /* match header container max-width */
+    margin: 0 auto;
+    padding: 0 20px;        /* match header container side padding */
+    box-sizing: border-box;
 }
 
 /* ============================================
@@ -558,6 +580,8 @@
    ============================================ */
 
 @media (max-width: 1024px) and (min-width: 769px) {
+    .filter-form { padding: 0 16px; }
+
     .filter-top-row { gap: 8px; }
 
     .search-wrapper input { height: 40px; font-size: 13px; }
@@ -590,6 +614,8 @@
    ============================================ */
 
 @media (max-width: 820px) and (min-width: 481px) {
+    .filter-form { padding: 0 16px; }
+
     .filter-top-row { gap: 8px; }
 
     .search-wrapper input { height: 38px; font-size: 13px; padding: 0 12px; }
@@ -627,6 +653,10 @@
 
 @media (max-width: 480px) {
     .menu-filters { top: 56px; padding: 8px 0; }
+    .filter-spacer { height: 58px; }
+
+    .filter-form { padding: 0 12px; }   /* match mobile header padding */
+
     .filter-top-row { gap: 6px; }
 
     .filter-search-group { gap: 4px; }
@@ -710,6 +740,8 @@
    ============================================ */
 
 @media (max-width: 360px) {
+    .filter-form { padding: 0 10px; }
+
     .filter-controls-group { gap: 4px; }
 
     .filter-dropdown-toggle { padding: 0 6px; gap: 3px; }

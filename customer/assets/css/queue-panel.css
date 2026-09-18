@@ -1,13 +1,13 @@
 /**
  * FitPal Customer Queue Panel Styles
- * Version 3.3 - Fixed panel visibility and smooth transitions
- * 
+ * Version 3.5 — Remove button enlarged; 32px cancel icon at every breakpoint.
+ *
  * @package FitPal
- * @version 3.3
+ * @version 3.5
  */
 
 /* ============================================
-   QUEUE PANEL - Fixed positioning with smooth transitions
+   QUEUE PANEL WRAPPER
    ============================================ */
 
 .queue-panel-wrapper {
@@ -18,20 +18,16 @@
     z-index: 200;
     display: block;
     pointer-events: none;
-    /* Start hidden - slid down */
     transform: translateY(100%);
     transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-    /* Ensure the panel doesn't create scroll issues */
     overflow: visible;
 }
 
-/* When items exist - slide up */
 .queue-panel-wrapper.has-items {
     transform: translateY(0);
     pointer-events: auto;
 }
 
-/* When empty - slide down (explicit state) */
 .queue-panel-wrapper.empty {
     transform: translateY(100%);
     pointer-events: none;
@@ -46,7 +42,6 @@
     pointer-events: none;
 }
 
-/* Inner panel container - matches menu page container width */
 .queue-panel-inner {
     background: var(--white);
     border-top: 2px solid var(--primary);
@@ -60,18 +55,16 @@
     overflow: hidden;
 }
 
-/* Closed state - only header visible */
 .queue-panel.closed .queue-panel-inner {
     transform: translateY(calc(100% - 56px));
 }
 
-/* Open state - full panel visible */
 .queue-panel.open .queue-panel-inner {
     transform: translateY(0);
 }
 
 /* ============================================
-   PANEL HEADER - Clean, minimal, aligned
+   PANEL HEADER
    ============================================ */
 
 .queue-panel-header {
@@ -136,8 +129,27 @@
     transform: rotate(180deg);
 }
 
+.queue-panel-toggle-icon {
+    width: 20px;
+    height: 20px;
+    display: block;
+    flex-shrink: 0;
+    opacity: 0.6;
+    filter: brightness(0) saturate(100%)
+            invert(60%) sepia(0%) saturate(0%)
+            brightness(95%) contrast(90%);
+    transition: filter 0.15s ease, opacity 0.15s ease;
+}
+
+.queue-panel-toggle:hover .queue-panel-toggle-icon {
+    opacity: 1;
+    filter: brightness(0) saturate(100%)
+            invert(30%) sepia(0%) saturate(0%)
+            brightness(90%) contrast(95%);
+}
+
 /* ============================================
-   PANEL BODY - Scrollable content
+   PANEL BODY
    ============================================ */
 
 .queue-panel-body {
@@ -147,10 +159,6 @@
     overflow: hidden;
     background: var(--gray-50);
 }
-
-/* ============================================
-   QUEUE ITEMS CONTAINER
-   ============================================ */
 
 .queue-items-container {
     flex: 1;
@@ -173,7 +181,7 @@
 }
 
 /* ============================================
-   QUEUE ITEM - Clean, aligned design
+   QUEUE ITEM
    ============================================ */
 
 .queue-item {
@@ -243,6 +251,10 @@
     flex-shrink: 0;
 }
 
+/* ============================================
+   QUANTITY STEPPER
+   ============================================ */
+
 .queue-item-qty {
     display: flex;
     align-items: center;
@@ -291,18 +303,51 @@
     outline: none;
 }
 
+/* ============================================
+   REMOVE BUTTON — 40px button, 32px icon
+   ============================================ */
+
 .queue-item-remove {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 30px;
-    height: 30px;
+    width: 40px;
+    height: 40px;
+    padding: 0;
     border: none;
     background: transparent;
     color: var(--gray-400);
     cursor: pointer;
     border-radius: var(--radius-sm);
-    transition: all var(--transition-fast);
+    transition: background var(--transition-fast);
+    flex-shrink: 0;
+    /* Slight negative margin so the larger hit area
+       doesn't visually push the qty stepper */
+    margin: 0 -4px;
+}
+
+.queue-item-remove:active {
+    background: var(--gray-200);
+}
+
+.queue-item-remove-icon {
+    width: 24px;
+    height: 24px;
+    display: block;
+    flex-shrink: 0;
+    opacity: 0.7;
+    filter: brightness(0) saturate(100%)
+            invert(60%) sepia(0%) saturate(0%)
+            brightness(95%) contrast(90%);
+    transition: filter 0.15s ease, opacity 0.15s ease;
+    pointer-events: none;
+}
+
+.queue-item-remove:hover .queue-item-remove-icon {
+    opacity: 1;
+    filter: brightness(0) saturate(100%)
+            invert(30%) sepia(90%) saturate(600%)
+            hue-rotate(330deg) brightness(90%) contrast(85%);
 }
 
 .queue-item-total {
@@ -314,7 +359,7 @@
 }
 
 /* ============================================
-   EMPTY STATE - Hidden when no items
+   EMPTY STATE
    ============================================ */
 
 .queue-empty-state {
@@ -342,7 +387,7 @@
 }
 
 /* ============================================
-   QUEUE FOOTER - Clean, aligned
+   QUEUE FOOTER
    ============================================ */
 
 .queue-footer {
@@ -384,19 +429,42 @@
     display: flex;
     gap: 10px;
     align-items: center;
+    flex-wrap: nowrap;
 }
 
-/* Cancel Order Button */
-.queue-btn-cancel {
-    padding: 8px 18px;
+/* ============================================
+   FOOTER BUTTONS — 50/50 at every breakpoint
+   ============================================ */
+
+.queue-btn-cancel,
+.queue-btn-checkout {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 44px;
+    padding: 0 16px;
     font-size: var(--font-size-sm);
     font-weight: 600;
     border-radius: var(--radius-base);
-    border: 1px solid var(--gray-300);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    text-decoration: none;
+    white-space: nowrap;
+    box-sizing: border-box;
+    transition: all var(--transition-fast);
+}
+
+.queue-btn-cancel {
+    border: 1px solid var(--black);
     background: var(--black);
     color: var(--white);
-    cursor: pointer;
-    transition: all var(--transition-fast);
+}
+
+.queue-btn-cancel:hover {
+    background: #000000;
+    border-color: #000000;
 }
 
 .queue-btn-cancel:disabled {
@@ -404,36 +472,31 @@
     cursor: not-allowed;
 }
 
-/* Checkout Button */
 .queue-btn-checkout {
-    padding: 8px 22px;
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    border-radius: var(--radius-base);
     background: var(--primary);
     color: var(--white);
     border: none;
-    cursor: pointer;
-    transition: all var(--transition-fast);
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
 }
 
-.queue-btn-checkout:active {
-    transform: translateY(0);
+.queue-btn-checkout:hover {
+    background: var(--primary-dark);
 }
 
 .queue-btn-checkout:disabled {
     opacity: 0.5;
     cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
+}
+
+.queue-btn-checkout-icon {
+    width: 18px;
+    height: 18px;
+    display: block;
+    flex-shrink: 0;
+    filter: brightness(0) invert(1);
 }
 
 /* ============================================
-   QUEUE MODALS - Updated to match sign-up modal style
+   QUEUE MODALS
    ============================================ */
 
 .queue-modal {
@@ -491,12 +554,10 @@
     }
 }
 
-/* Modal Header - Hidden for icon-only style */
 .queue-modal-header {
     display: none;
 }
 
-/* Modal Icon - Same as sign-up success modal */
 .queue-modal-icon {
     margin: 0 auto 20px;
     width: 72px;
@@ -513,7 +574,6 @@
     height: 36px;
 }
 
-/* Modal Body - Centered text */
 .queue-modal-body {
     margin-bottom: 28px;
 }
@@ -542,7 +602,6 @@
     margin-top: 4px;
 }
 
-/* Modal Footer - 50/50 button layout */
 .queue-modal-footer {
     display: flex;
     gap: 12px;
@@ -570,14 +629,12 @@
     min-width: 0;
 }
 
-/* Cancel Button - Black background, white text (matching sign-up back button) */
 .queue-modal-btn-cancel {
     background: var(--black);
     color: var(--white);
     border-color: var(--black);
 }
 
-/* Confirm Button - Danger color (for destructive actions) */
 .queue-modal-btn-confirm {
     background: var(--danger);
     color: var(--white);
@@ -585,44 +642,238 @@
 }
 
 /* ============================================
-   MODAL RESPONSIVE
+   RESPONSIVE — TABLET (≤ 768px)
+   ============================================ */
+
+@media (max-width: 768px) {
+    .queue-items-container {
+        padding: 8px 12px;
+        max-height: 50vh;
+    }
+
+    .queue-item {
+        gap: 12px;
+        padding: 10px 12px;
+    }
+
+    .queue-item-image {
+        width: 44px;
+        height: 44px;
+    }
+
+    .queue-footer {
+        padding: 12px 16px;
+        gap: 12px;
+    }
+
+    .queue-footer-grand-total {
+        font-size: var(--font-size-lg);
+    }
+}
+
+/* ============================================
+   RESPONSIVE — MOBILE (≤ 480px)
+   Footer actions 50/50. Queue item splits into two rows.
+   Remove icon stays 32px; the button shrinks slightly.
    ============================================ */
 
 @media (max-width: 480px) {
+    .queue-panel {
+        padding: 0 12px;
+    }
+
+    .queue-panel-inner {
+        border-radius: var(--radius-base) var(--radius-base) 0 0;
+    }
+
+    .queue-panel-header {
+        padding: 10px 14px;
+        min-height: 52px;
+    }
+
+    .queue-panel-title {
+        gap: 8px;
+        font-size: var(--font-size-sm);
+    }
+
+    .queue-item-count {
+        min-width: 22px;
+        height: 22px;
+        padding: 0 7px;
+        font-size: 11px;
+    }
+
+    .queue-panel-summary {
+        font-size: var(--font-size-xs);
+    }
+
+    .queue-items-container {
+        padding: 8px 10px;
+        max-height: 42vh;
+    }
+
+    /* ---- Queue item: grid layout ---- */
+    .queue-item {
+        display: grid;
+        grid-template-columns: 48px 1fr;
+        grid-template-areas:
+            "image info"
+            "actions actions";
+        gap: 10px;
+        padding: 10px;
+        align-items: start;
+    }
+
+    .queue-item-image {
+        grid-area: image;
+        width: 48px;
+        height: 48px;
+    }
+
+    .queue-item-info {
+        grid-area: info;
+        align-self: center;
+    }
+
+    .queue-item-name {
+        font-size: var(--font-size-sm);
+        line-height: 1.3;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .queue-item-meta {
+        flex-wrap: wrap;
+        row-gap: 2px;
+    }
+
+    /* Actions row: qty left, remove + total right */
+    .queue-item-actions {
+        grid-area: actions;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding-top: 6px;
+        border-top: 1px dashed var(--gray-100);
+        width: 100%;
+    }
+
+    /* Bump the qty stepper height to 36px so it visually
+       matches the 40px remove button */
+    .queue-item-qty .qty-btn {
+        width: 34px;
+        height: 36px;
+        font-size: 16px;
+    }
+
+    .queue-item-qty .qty-input {
+        width: 38px;
+        height: 36px;
+        font-size: var(--font-size-base);
+    }
+
+    /* Remove button: 40px button, 32px icon */
+    .queue-item-remove {
+        width: 40px;
+        height: 40px;
+    }
+
+    .queue-item-remove-icon {
+        width: 32px;
+        height: 32px;
+    }
+
+    .queue-item-total {
+        font-size: var(--font-size-base);
+        min-width: 0;
+        text-align: right;
+        margin-left: auto;
+    }
+
+    /* ---- Footer ---- */
+    .queue-footer {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding: 12px 14px;
+    }
+
+    .queue-footer-total {
+        flex-wrap: wrap;
+        row-gap: 2px;
+        justify-content: flex-start;
+        align-items: baseline;
+        gap: 8px;
+    }
+
+    .queue-footer-grand-total {
+        font-size: var(--font-size-lg);
+    }
+
+    /* Strict 50/50 split */
+    .queue-footer-actions {
+        display: flex;
+        flex-direction: row;
+        gap: 8px;
+        width: 100%;
+        flex-wrap: nowrap;
+        align-items: stretch;
+    }
+
+    .queue-btn-cancel,
+    .queue-btn-checkout {
+        flex: 1 1 0;
+        min-width: 0;
+        width: auto;
+        height: 46px;
+        padding: 0 10px;
+        font-size: var(--font-size-sm);
+        gap: 6px;
+    }
+
+    .queue-btn-checkout-icon {
+        width: 16px;
+        height: 16px;
+    }
+
+    /* Modal tweaks */
     .queue-modal {
         padding: 12px;
     }
-    
+
     .queue-modal-content {
         padding: 24px 16px 20px;
         border-radius: var(--radius-lg);
     }
-    
+
     .queue-modal-icon {
         width: 52px;
         height: 52px;
         margin-bottom: 16px;
     }
-    
+
     .queue-modal-icon img {
         width: 26px;
         height: 26px;
     }
-    
+
     .queue-modal-body .queue-modal-title-text {
         font-size: var(--font-size-lg);
     }
-    
+
     .queue-modal-body p {
         font-size: var(--font-size-sm);
     }
-    
+
     .queue-modal-footer {
         flex-direction: column;
         gap: 8px;
         align-items: stretch;
     }
-    
+
     .queue-modal-btn-cancel,
     .queue-modal-btn-confirm {
         width: 100%;
@@ -631,5 +882,88 @@
         height: 44px;
         font-size: var(--font-size-sm);
         min-width: unset;
+    }
+}
+
+/* ============================================
+   RESPONSIVE — VERY SMALL MOBILE (≤ 360px)
+   Icon stays 32px; the button and stepper shrink slightly.
+   ============================================ */
+
+@media (max-width: 360px) {
+    .queue-panel-header {
+        padding: 10px 12px;
+        min-height: 48px;
+    }
+
+    .queue-panel-summary {
+        display: none;
+    }
+
+    .queue-item {
+        grid-template-columns: 40px 1fr;
+        gap: 8px;
+        padding: 8px;
+    }
+
+    .queue-item-image {
+        width: 40px;
+        height: 40px;
+    }
+
+    .queue-item-name {
+        font-size: var(--font-size-xs);
+    }
+
+    .queue-item-meta {
+        font-size: 10px;
+    }
+
+    /* Stepper shrinks slightly, still comfortable next to a 32px icon */
+    .queue-item-qty .qty-btn {
+        width: 30px;
+        height: 32px;
+        font-size: 14px;
+    }
+
+    .queue-item-qty .qty-input {
+        width: 32px;
+        height: 32px;
+        font-size: var(--font-size-sm);
+    }
+
+    /* Remove button: still 36px wide, icon still 32px */
+    .queue-item-remove {
+        width: 36px;
+        height: 36px;
+    }
+
+    .queue-item-remove-icon {
+        width: 28px;
+        height: 28px;
+    }
+
+    .queue-item-total {
+        font-size: var(--font-size-sm);
+    }
+
+    .queue-footer {
+        padding: 10px 12px;
+    }
+
+    .queue-footer-grand-total {
+        font-size: var(--font-size-base);
+    }
+
+    .queue-btn-cancel,
+    .queue-btn-checkout {
+        height: 42px;
+        padding: 0 8px;
+        font-size: var(--font-size-xs);
+    }
+
+    .queue-btn-checkout-icon {
+        width: 14px;
+        height: 14px;
     }
 }

@@ -2,20 +2,10 @@
  * FitPal Customer Queue Panel JavaScript
  *
  * The queue panel is the UI for the session-based order queue. The
- * server (queue-handler.php) is the single source of truth; this
- * script never writes queue state to sessionStorage.
- *
- * Customization details are NOT rendered in this panel — they are
- * carried silently on each line (via line_key + customizations) and
- * surfaced later on checkout and order pages.
- *
- * The Checkout button navigates directly to checkout.php. There is
- * no cart-commit step; checkout.php reads $_SESSION['order_queue']
- * itself, and place-order-handler.php is the only code that writes
- * to the database.
+ * server (queue-handler.php) is the single source of truth.
  *
  * @package FitPal
- * @version 6.0 — Cart system removed; Checkout navigates directly
+ * @version 6.1 — Remove button uses shared cancel icon (no inline SVG).
  */
 (function () {
     'use strict';
@@ -102,10 +92,6 @@
         }, 300);
     }
 
-    /**
-     * Resolve a stable key for a queue row. Prefers the server-supplied
-     * line_key; falls back to product_id when absent (legacy rows).
-     */
     function rowKey(item) {
         if (item && typeof item.line_key === 'string' && item.line_key !== '') {
             return item.line_key;
@@ -154,18 +140,11 @@
         updateVisibility(totalItems);
     }
 
-    /**
-     * Clean, single-line rendering for the queue panel.
-     *
-     * Deliberately does NOT print customization details — the panel is
-     * a staging surface, and customization information travels with
-     * the line (line_key + customizations) to be shown at checkout.
-     * Only the effective unit price reflects the modifiers.
-     */
     function renderItem(item, index) {
         var itemTotal = (item.price || 0) * (item.quantity || 0);
-        var fallback  = (window.FITPAL_ASSET_BASE || '../../shared/')
-                        + 'assets/images/icons/restaurant.svg';
+        var assetBase = window.FITPAL_ASSET_BASE || '../../shared/';
+        var fallback  = assetBase + 'assets/images/icons/restaurant.svg';
+        var cancelIcon= assetBase + 'assets/images/icons/remove-circle-line.svg';
         var img       = (item.image && item.image.trim() !== '') ? item.image : fallback;
         var key       = rowKey(item);
 
@@ -194,9 +173,8 @@
             +       '<button type="button" class="qty-btn qty-plus" data-index="' + index + '" aria-label="Increase">+</button>'
             +     '</div>'
             +     '<button type="button" class="queue-item-remove" data-index="' + index + '" aria-label="Remove">'
-            +       '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
-            +         '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>'
-            +       '</svg>'
+            +       '<img src="' + cancelIcon + '" alt="" class="queue-item-remove-icon" width="32" height="32"'
+            +            ' onerror="this.style.display=\'none\'">'
             +     '</button>'
             +     '<span class="queue-item-total">₱' + itemTotal.toFixed(2) + '</span>'
             +   '</div>'
@@ -471,14 +449,6 @@
             });
         }
 
-        // ------------------------------------------------------------
-        // CHECKOUT — navigate directly.
-        //
-        // checkout.php reads $_SESSION['order_queue'] itself. There is
-        // no cart-commit step. place-order-handler.php is the only code
-        // that writes the queue into the database (via orders +
-        // queue_item + customization_instance).
-        // ------------------------------------------------------------
         if (checkoutBtn) {
             checkoutBtn.addEventListener('click', function (e) {
                 e.preventDefault();
@@ -525,7 +495,7 @@
             }
         });
 
-        console.log('Queue Panel v6.0 initialized');
+        console.log('Queue Panel v6.1 initialized');
     }
 
     if (document.readyState === 'loading') {

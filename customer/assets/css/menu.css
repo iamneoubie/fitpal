@@ -1,24 +1,9 @@
 /**
  * FitPal Menu Page Styles
- * Version 3.1
- *
- * Scope:
- *   - Page wrapper (.content, .menu-page, .container)
- *   - Alerts
- *   - Results info
- *   - Empty state
- *   - Restaurant list / card / header / branch
- *   - Pagination
- *   - Utility (number input spinners)
- *
- * NOT in scope (lives in menu-product.css):
- *   - .product-grid, .product-card and children
- *   - .product-image, .product-info, .product-meta
- *   - .product-tags, .product-allergens
- *   - .product-actions, .quantity-control, .add-btn
+ * Version 3.3 — Removed order-tracker padding (component deleted).
  *
  * @package FitPal
- * @version 3.1 — Container padding unified with header (16px at all breakpoints)
+ * @version 3.3
  */
 
 /* ============================================
@@ -45,10 +30,6 @@
     padding: 0 16px;
     width: 100%;
     box-sizing: border-box;
-}
-
-.menu-page.has-order-tracker {
-    padding-bottom: 160px;
 }
 
 /* ============================================
@@ -188,10 +169,12 @@
     transform: translateY(0);
 }
 
-.empty-state .btn-outline svg {
+.empty-state .btn-outline .btn-icon {
     width: 16px;
     height: 16px;
+    display: block;
     flex-shrink: 0;
+    opacity: 0.75;
 }
 
 /* ============================================
@@ -330,12 +313,6 @@
         padding: 24px 0 100px 0;
     }
 
-    /* Container padding stays 16px to match header */
-
-    .menu-page.has-order-tracker {
-        padding-bottom: 160px;
-    }
-
     .empty-state {
         padding: 80px 40px;
         min-height: 500px;
@@ -360,8 +337,6 @@
 }
 
 @media (min-width: 1024px) {
-    /* Container padding stays 16px to match header */
-
     .empty-state {
         padding: 100px 60px;
         min-height: 600px;
@@ -373,12 +348,8 @@
     }
 }
 
-@media (min-width: 1400px) {
-    /* Container padding stays 16px to match header */
-}
-
 /* ============================================
-   PAGINATION - Mobile
+   PAGINATION — Mobile
    ============================================ */
 
 @media (max-width: 480px) {
@@ -418,7 +389,7 @@
 }
 
 /* ============================================
-   UTILITY - Hide number input spinners
+   UTILITY — Hide number input spinners
    ============================================ */
 
 input[type=number]::-webkit-inner-spin-button,

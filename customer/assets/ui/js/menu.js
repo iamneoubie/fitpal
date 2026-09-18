@@ -1,26 +1,24 @@
 /**
  * FitPal Menu Page
- * Version 8.0
+ * Version 9.1
  *
  * Handles:
- *   - Sticky filter bar + scroll shadow
+ *   - Fixed filter bar + scroll shadow
  *   - Dropdown toggles (dietary / allergen / restaurant)
  *   - Quantity controls on product cards
- *   - Add-to-queue via delegated CLICK on .add-btn
+ *   - Add to Cart  (persistent) → cart-handler.php
+ *   - Add to Order (session)    → window.addToQueue() from queue-panel.js
  *   - Price input auto-submit
  *   - Search debounce + Enter submit
- *   - Active order tracker auto-hide on mobile
  *
- * Notes:
- *   - The add button is type="button", so there is no native form
- *     submit to intercept. This file binds a delegated `click`
- *     listener on document that catches every .add-btn and calls
- *     window.addToQueue() — which is provided by queue-panel.js.
- *   - window.addToQueue talks to queue-handler.php. This file
- *     NEVER talks to the queue endpoint directly.
+ * Add-to-Cart vs Add-to-Order:
+ *   Each product card exposes TWO buttons:
+ *     .add-to-cart-btn  → persistent cart (survives sessions)
+ *     .add-to-order-btn → session queue (checkout immediately)
+ *   Both read the same quantity input within the same .action-row.
  *
  * @package FitPal
- * @version 8.0
+ * @version 9.1 — Removed order tracker; filter bar is fixed in CSS.
  */
 
 (function () {
@@ -32,24 +30,13 @@
         // DOM REFERENCES
         // ============================================
         const menuFilters = document.getElementById('menuFilters');
-        const header      = document.querySelector('.header');
         const searchInput = document.getElementById('menuSearch');
         const filterForm  = document.getElementById('filterForm');
+        const csrfToken   = window.FITPAL_CSRF_TOKEN || '';
 
         // ============================================
-        // STICKY FILTER OFFSET
-        // ============================================
-        function updateStickyOffset() {
-            if (menuFilters && header) {
-                menuFilters.style.top = header.offsetHeight + 'px';
-            }
-        }
-
-        updateStickyOffset();
-        window.addEventListener('resize', updateStickyOffset);
-
-        // ============================================
-        // STICKY FILTER SCROLL SHADOW
+        // FILTER BAR SCROLL SHADOW
+        // (bar is fixed in CSS; this just toggles the shadow class)
         // ============================================
         let scrollTicking = false;
 
@@ -173,68 +160,170 @@
         });
 
         // ============================================
-        // ADD-TO-QUEUE — delegated click on .add-btn
-        //
-        // The button is type="button", so this is the ONLY
-        // place that reacts to it. We read everything from
-        // the enclosing .product-card's data-* attributes.
+        // SHARED HELPERS FOR BOTH ACTIONS
         // ============================================
-        document.addEventListener('click', function (e) {
-            const btn = e.target.closest('.add-btn');
-            if (!btn) return;
-            if (btn.disabled) return;
 
-            const form = btn.closest('.add-to-cart-form');
-            if (!form) return;
+        /**
+         * Read and clamp the quantity from an .action-row.
+         */
+        function readQuantity(row, stock) {
+            const input = row.querySelector('.qty-input');
+            let quantity = parseInt(input ? input.value : '1', 10) || 1;
+            if (quantity < 1)     quantity = 1;
+            if (quantity > stock) quantity = stock;
+            return quantity;
+        }
 
-            const productCard = form.closest('.product-card');
-            if (!productCard) {
-                console.error('[menu.js] .add-btn clicked outside a .product-card. Ignoring.');
+        /**
+         * Flash visual feedback on a button and re-enable it after a short delay.
+         */
+        function flashButton(btn, duration) {
+            duration = duration || 1500;
+            btn.classList.add('added');
+            btn.disabled = true;
+            setTimeout(function () {
+                btn.classList.remove('added');
+                btn.disabled = false;
+            }, duration);
+        }
+
+        /**
+         * Resolve the product-card that owns the given action-row.
+         */
+        function findProductCard(row) {
+            return row ? row.closest('.product-card') : null;
+        }
+
+        /**
+         * Read all product data-* attributes from a product card.
+         */
+        function readProductData(card) {
+            return {
+                productId:      parseInt(card.dataset.productId, 10) || 0,
+                productName:    card.dataset.productName || 'Product',
+                productPrice:   parseFloat(card.dataset.productPrice) || 0,
+                productImage:   card.dataset.productImage || '',
+                stock:          parseInt(card.dataset.productStock, 10) || 999,
+                restaurantName: card.dataset.restaurantName || '',
+                branchName:     card.dataset.branchName || ''
+            };
+        }
+
+        // ============================================
+        // ADD-TO-CART — POSTs to cart-handler.php
+        // ============================================
+        function addToCart(row, btn) {
+            const card = findProductCard(row);
+            if (!card) return;
+
+            const data = readProductData(card);
+            const quantity = readQuantity(row, data.stock);
+
+            if (data.productId <= 0) {
+                showMenuToast('Could not add to cart: missing product.', 'error');
                 return;
             }
 
-            e.preventDefault();
-            e.stopPropagation();
+            const formData = new FormData();
+            formData.append('action', 'add');
+            formData.append('csrf_token', csrfToken);
+            formData.append('product_id', String(data.productId));
+            formData.append('quantity', String(quantity));
 
-            const quantityInput = form.querySelector('input[name="quantity"]');
-            const stock         = parseInt(productCard.dataset.productStock, 10) || 999;
-            let quantity        = parseInt(quantityInput ? quantityInput.value : '1', 10) || 1;
+            flashButton(btn);
 
-            if (quantity < 1)     quantity = 1;
-            if (quantity > stock) quantity = stock;
+            const cartUrl = row.dataset.cartUrl || '../backend/handlers/cart-handler.php';
+
+            fetch(cartUrl, {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+                body: formData
+            })
+            .then(function (r) {
+                return r.text().then(function (text) {
+                    try { return JSON.parse(text); }
+                    catch (e) {
+                        console.error('[menu.js] Cart non-JSON response:', r.status, text.slice(0, 200));
+                        return { status: 'error', message: 'Server returned ' + r.status };
+                    }
+                });
+            })
+            .then(function (response) {
+                if (response && response.status === 'success') {
+                    showMenuToast(data.productName + ' added to cart', 'success');
+                } else {
+                    showMenuToast((response && response.message) || 'Could not add to cart', 'error');
+                }
+            })
+            .catch(function () {
+                showMenuToast('Network error. Please try again.', 'error');
+            });
+        }
+
+        // ============================================
+        // ADD-TO-ORDER — delegates to queue-panel.js
+        // ============================================
+        function addToOrder(row, btn) {
+            const card = findProductCard(row);
+            if (!card) return;
+
+            const data = readProductData(card);
+            const quantity = readQuantity(row, data.stock);
 
             if (typeof window.addToQueue !== 'function') {
                 console.error(
                     '[menu.js] window.addToQueue is undefined. ' +
                     'queue-panel.js failed to initialize or was not loaded.'
                 );
-                window.alert('The order panel could not be loaded. Please refresh the page.');
+                showMenuToast('The order panel could not be loaded. Please refresh.', 'error');
                 return;
             }
 
             window.addToQueue(
-                parseInt(productCard.dataset.productId, 10),
-                productCard.dataset.productName || 'Product',
-                parseFloat(productCard.dataset.productPrice) || 0,
+                data.productId,
+                data.productName,
+                data.productPrice,
                 quantity,
-                productCard.dataset.productImage || '',
-                stock,
-                productCard.dataset.restaurantName || '',
-                productCard.dataset.branchName || ''
+                data.productImage,
+                data.stock,
+                data.restaurantName,
+                data.branchName
             );
 
-            // Visual feedback
-            btn.classList.add('added');
-            btn.disabled = true;
-            setTimeout(function () {
-                btn.classList.remove('added');
-                btn.disabled = false;
-            }, 1500);
+            flashButton(btn);
+        }
+
+        // ============================================
+        // DELEGATED CLICK — routes to the right action
+        // ============================================
+        document.addEventListener('click', function (e) {
+            const cartBtn = e.target.closest('.add-to-cart-btn');
+            if (cartBtn && !cartBtn.disabled) {
+                const row = cartBtn.closest('.action-row');
+                if (row) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    addToCart(row, cartBtn);
+                }
+                return;
+            }
+
+            const orderBtn = e.target.closest('.add-to-order-btn');
+            if (orderBtn && !orderBtn.disabled) {
+                const row = orderBtn.closest('.action-row');
+                if (row) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    addToOrder(row, orderBtn);
+                }
+                return;
+            }
         }, true);
 
         // ============================================
-        // ENTER KEY in quantity input triggers add
-        // (since the button is type="button", Enter doesn't submit)
+        // ENTER KEY in quantity input triggers Add to Order
+        // (the primary action — queue for immediate checkout)
         // ============================================
         document.addEventListener('keydown', function (e) {
             if (e.key !== 'Enter') return;
@@ -242,15 +331,53 @@
             const input = e.target;
             if (!input.classList || !input.classList.contains('qty-input')) return;
 
-            const form = input.closest('.add-to-cart-form');
-            if (!form) return;
+            const row = input.closest('.action-row');
+            if (!row) return;
 
             e.preventDefault();
             e.stopPropagation();
 
-            const btn = form.querySelector('.add-btn');
+            const btn = row.querySelector('.add-to-order-btn');
             if (btn) btn.click();
         }, true);
+
+        // ============================================
+        // MENU TOAST (small, local to menu.js)
+        // ============================================
+        function showMenuToast(message, type) {
+            let toast = document.getElementById('menuToast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'menuToast';
+                toast.style.cssText = [
+                    'position:fixed', 'top:80px', 'right:20px',
+                    'padding:12px 20px', 'border-radius:8px',
+                    'font-size:14px', 'font-weight:500', 'z-index:9999',
+                    'transform:translateX(120%)',
+                    'transition:transform .3s cubic-bezier(.4,0,.2,1)',
+                    'max-width:360px', 'box-shadow:0 4px 16px rgba(0,0,0,.15)'
+                ].join(';');
+                document.body.appendChild(toast);
+            }
+
+            var palette = {
+                success: ['#d1fae5', '#065f46'],
+                error:   ['#fee2e2', '#991b1b'],
+                info:    ['#dbeafe', '#1e40af']
+            };
+            var colors = palette[type] || palette.info;
+            toast.style.background = colors[0];
+            toast.style.color      = colors[1];
+            toast.textContent      = message;
+
+            void toast.offsetWidth;
+            toast.style.transform = 'translateX(0)';
+
+            clearTimeout(toast._timer);
+            toast._timer = setTimeout(function () {
+                toast.style.transform = 'translateX(120%)';
+            }, 2600);
+        }
 
         // ============================================
         // FILTER AUTO-SUBMIT — price inputs
@@ -335,7 +462,7 @@
             if (restaurantList) {
                 const offset = restaurantList.getBoundingClientRect().top
                              + window.pageYOffset
-                             - 120;
+                             - 140;   // header (70) + filter bar (~64) + small gap
 
                 setTimeout(function () {
                     window.scrollTo({ top: offset, behavior: 'smooth' });
@@ -343,45 +470,6 @@
             }
         }
 
-        // ============================================
-        // ORDER TRACKER — auto-hide on mobile
-        // ============================================
-        (function setupOrderTracker() {
-            const orderTracker = document.getElementById('orderTracker');
-            if (!orderTracker) return;
-
-            if (window.innerWidth > 768) return;
-
-            let dismissed = false;
-            let hideTimer = null;
-
-            function hideTracker() {
-                orderTracker.style.transition = 'transform 0.4s ease, opacity 0.4s ease';
-                orderTracker.style.transform  = 'translateY(100%)';
-                orderTracker.style.opacity    = '0';
-                dismissed = true;
-            }
-
-            function showTracker() {
-                orderTracker.style.transform = 'translateY(0)';
-                orderTracker.style.opacity   = '1';
-                dismissed = false;
-                clearTimeout(hideTimer);
-                hideTimer = setTimeout(hideTracker, 8000);
-            }
-
-            hideTimer = setTimeout(hideTracker, 8000);
-
-            let lastScrollY = window.pageYOffset;
-            window.addEventListener('scroll', function () {
-                const currentY = window.pageYOffset;
-                if (currentY < lastScrollY && dismissed) {
-                    showTracker();
-                }
-                lastScrollY = currentY;
-            }, { passive: true });
-        })();
-
-        console.log('Menu JS v8.0 initialized');
+        console.log('Menu JS v9.1 initialized');
     });
 })();
