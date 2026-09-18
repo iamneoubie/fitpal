@@ -58,14 +58,92 @@ try {
         $isPasswordValid = true;
     }
 
+    // ============================================================
+    // SECURITY WARNING — DEVELOPMENT-ONLY CODE
+    // ============================================================
+    //
+    // WHAT THIS DOES:
+    //   If the normal password_verify() check fails, this fallback
+    //   compares the submitted password directly against the value
+    //   stored in customer.password using a plain string equality.
+    //
+    //   In effect: whoever submitted the request can log in as ANY
+    //   customer simply by pasting that customer's stored password
+    //   hash (from the database) into the password field. No
+    //   knowledge of the original plaintext password is required.
+    //
+    // WHY IT EXISTS:
+    //   The seed data (sql/sample/seed-data.sql) stores passwords as
+    //   PLAINTEXT ("user123", "owner123", etc.) instead of bcrypt
+    //   hashes. During early development, password_verify() always
+    //   returns false against those rows, which blocks login. This
+    //   block lets the demo work without re-seeding.
+    //
+    // WHY IT IS DANGEROUS:
+    //   - It is a complete authentication bypass. Anyone who can
+    //     read a single row from customer.password — via SQL
+    //     injection, a database backup leak, an error page, or a
+    //     debug dump — can log in as that customer with no further
+    //     effort.
+    //   - It defeats the entire purpose of password hashing. bcrypt's
+    //     slowness is meant to make offline cracking expensive. This
+    //     block removes the need to crack at all.
+    //   - It is not gated by any environment check, build flag, or
+    //     configuration value. It is active in every environment
+    //     that runs this file as-is, including production.
+    //
+    // WHEN TO REMOVE:
+    //   Before this project is deployed anywhere other than a local
+    //   development machine. Specifically:
+    //     - Before pushing to any shared/staging/production server.
+    //     - Before any demo where the database is reachable by
+    //       anyone other than the developer.
+    //     - Before any submission that includes a live database.
+    //
+    // HOW TO REMOVE PROPERLY:
+    //   1. Delete this entire `if (!$isPasswordValid) { ... }` block.
+    //   2. Re-seed the database with real hashes. The correct way is
+    //      to run each seed password through password_hash() and
+    //      store the result. See the note below for a one-time
+    //      migration approach.
+    //   3. Verify that sign-in works with the seeded plaintext
+    //      passwords through password_verify() alone.
+    //
+    // IF YOU ABSOLUTELY MUST KEEP IT FOR LOCAL DEV:
+    //   Gate it behind an environment variable that does NOT exist
+    //   in production. For example:
+    //
+    //     if (!$isPasswordValid && getenv('FITPAL_DEV_BYPASS') === '1') {
+    //         // ... bypass logic ...
+    //     }
+    //
+    //   Then set FITPAL_DEV_BYPASS=1 only in your local shell or a
+    //   .env file that is gitignored. Never commit the value. Never
+    //   set it on a shared or production host. This makes the bypass
+    //   inert by default and requires an explicit, deliberate action
+    //   to enable — but it is still a footgun and the safest option
+    //   is removal.
+    //
+    // RELATED:
+    //   - customer/backend/database/customer-queries.php : findCustomerByIdentifier()
+    //   - sql/sample/seed-data.sql : the plaintext passwords that
+    //     make this bypass necessary in the first place.
+    //   - customer/backend/handlers/sign-up-handler.php : the
+    //     correct pattern — it uses password_hash() before insert.
+    //
+    // ============================================================
     // Development bypass — accept a stored hash pasted in as plaintext.
+    // ============================================================
     if (!$isPasswordValid) {
         $clean = trim($password);
         if (hash_equals((string)$customer['password'], $clean)) {
             $isPasswordValid = true;
         }
     }
-
+    // ============================================================
+    // END DEVELOPMENT-ONLY BLOCK
+    // ============================================================
+    
     if (!$isPasswordValid) {
         $_SESSION['login_error'] = 'Invalid email/username or password.';
         header('Location: ../../pages/sign-in.php');

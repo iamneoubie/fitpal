@@ -1,5 +1,6 @@
 /**
  * FitPal Contact Page Styles
+ * Version 1.1 — Textarea is non-resizable per global.css convention.
  */
 
 /* ============================================
@@ -215,9 +216,14 @@
     margin-top: 4px;
 }
 
+/* --------------------------------------------------------------
+   TEXTAREA — NON-RESIZABLE
+   Global convention: all textareas use resize: none.
+   Height is controlled by the rows attribute on the element.
+   -------------------------------------------------------------- */
 .contact-form textarea.form-control {
-    resize: vertical;
-    min-height: 120px;
+    resize: none;
+    min-height: 140px;
 }
 
 .contact-form .btn-submit {
@@ -380,10 +386,26 @@
     color: #4a5568;
 }
 
-.faq-toggle-icon svg {
+/* --------------------------------------------------------------
+   FAQ TOGGLE ICON
+   The markup now uses an <img> element (shared add-line.svg),
+   not an inline <svg>. Selectors cover both so the rotation
+   and tinting work regardless of which the page renders.
+   -------------------------------------------------------------- */
+.faq-toggle-icon svg,
+.faq-toggle-icon-img {
     width: 18px;
     height: 18px;
-    transition: transform 0.3s ease;
+    display: block;
+    transition: transform 0.3s ease, filter 0.25s ease;
+}
+
+/* Closed state: tint the shared icon to match the dark gray
+   text color (#4a5568) used by the previous inline SVG. */
+.faq-toggle-icon-img {
+    filter: brightness(0) saturate(100%)
+            invert(28%) sepia(8%) saturate(1200%)
+            hue-rotate(190deg) brightness(95%) contrast(85%);
 }
 
 .faq-item.open .faq-toggle-icon {
@@ -391,8 +413,14 @@
     color: #ffffff;
 }
 
-.faq-item.open .faq-toggle-icon svg {
+.faq-item.open .faq-toggle-icon svg,
+.faq-item.open .faq-toggle-icon-img {
     transform: rotate(45deg);
+}
+
+/* Open state: white icon on the green circle. */
+.faq-item.open .faq-toggle-icon-img {
+    filter: brightness(0) invert(1);
 }
 
 .faq-answer {

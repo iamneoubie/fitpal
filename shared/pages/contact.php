@@ -5,7 +5,7 @@
  * This is the public contact page that provides contact information and a form.
  * 
  * @package FitPal
- * @version 1.2
+ * @version 1.3 - Replaced inline SVG in FAQ toggle with shared add-line.svg.
  */
 
 declare(strict_types=1);
@@ -158,7 +158,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
                 <div class="contact-info-card">
                     <div class="contact-info-icon">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/phone-fill.svg" alt="Phone"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/contact-us-empty.svg'">
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg'">
                     </div>
                     <p class="heading-6">Phone Number</p>
                     <p>
@@ -228,7 +228,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
                         <div class="form-row">
                             <div class="form-group">
                                 <label for="full_name" class="form-label">
-                                    Full Name <span class="text-danger">*</span>
+                                    Full Name <span class="text-danger"></span>
                                 </label>
                                 <input type="text" id="full_name" name="full_name"
                                     value="<?php echo htmlspecialchars($fullName, ENT_QUOTES, 'UTF-8'); ?>"
@@ -242,7 +242,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
 
                             <div class="form-group">
                                 <label for="email" class="form-label">
-                                    Email Address <span class="text-danger">*</span>
+                                    Email Address <span class="text-danger"></span>
                                 </label>
                                 <input type="email" id="email" name="email"
                                     value="<?php echo htmlspecialchars($email, ENT_QUOTES, 'UTF-8'); ?>"
@@ -257,7 +257,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
 
                         <div class="form-group">
                             <label for="subject" class="form-label">
-                                Subject <span class="text-danger">*</span>
+                                Subject <span class="text-danger"></span>
                             </label>
                             <input type="text" id="subject" name="subject"
                                 value="<?php echo htmlspecialchars($subject, ENT_QUOTES, 'UTF-8'); ?>"
@@ -271,7 +271,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
 
                         <div class="form-group">
                             <label for="message" class="form-label">
-                                Message <span class="text-danger">*</span>
+                                Message <span class="text-danger"></span>
                             </label>
                             <textarea id="message" name="message" rows="6"
                                 class="form-control <?php echo isset($formErrors['message']) ? 'error' : ''; ?>"
@@ -303,12 +303,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
                 <?php foreach ($faqItems as $index => $faq): ?>
                 <div class="faq-item">
                     <button class="faq-question-btn" type="button" aria-expanded="false">
-                        <span class="faq-question-text"><?php echo htmlspecialchars($faq['question'], ENT_QUOTES, 'UTF-8'); ?></span>
+                        <span
+                            class="faq-question-text"><?php echo htmlspecialchars($faq['question'], ENT_QUOTES, 'UTF-8'); ?></span>
                         <span class="faq-toggle-icon" aria-hidden="true">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <line x1="12" y1="5" x2="12" y2="19"></line>
-                                <line x1="5" y1="12" x2="19" y2="12"></line>
-                            </svg>
+                            <img src="<?php echo $assetBase; ?>assets/images/icons/add-line.svg" alt=""
+                                class="faq-toggle-icon-img" width="18" height="18">
                         </span>
                     </button>
                     <div class="faq-answer">

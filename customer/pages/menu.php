@@ -706,4 +706,4 @@ window.FITPAL_CSRF_TOKEN = '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 
 <script src="../assets/ui/js/menu.js" defer></script>
 <script src="../assets/ui/js/queue-panel.js" defer></script>
 
-<?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>s
+<?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>
