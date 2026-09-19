@@ -1,0 +1,292 @@
+/**
+ * FitPal Rider Dashboard Styles
+ *
+ * Minimal dashboard layout for the rider role. Uses the shared
+ * global CSS variables.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+/* ============================================
+   CONTENT WRAPPER
+   ============================================ */
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+}
+
+.rider-dashboard-page {
+    background: var(--gray-50);
+    padding: 24px 0 32px 0;
+    flex: 1;
+}
+
+.rider-dashboard-page .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 16px;
+    width: 100%;
+}
+
+/* ============================================
+   HEADER
+   ============================================ */
+
+.rider-dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.rider-dashboard-header .heading-2 {
+    margin: 0 0 4px 0;
+    font-size: var(--font-size-3xl);
+    line-height: 1.2;
+}
+
+.rider-dashboard-header .heading-2 span {
+    color: var(--primary);
+}
+
+.rider-dashboard-header .text-muted {
+    color: var(--gray-500);
+    margin: 0;
+    font-size: var(--font-size-sm);
+}
+
+.rider-dashboard-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+/* ============================================
+   STAT CARDS
+   ============================================ */
+
+.rider-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.rider-stat-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    padding: 18px 20px;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--gray-100);
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+a.rider-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.rider-stat-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: var(--radius-base);
+    background: rgba(89, 193, 74, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.rider-stat-icon img {
+    width: 22px;
+    height: 22px;
+    display: block;
+    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.rider-stat-info {
+    min-width: 0;
+}
+
+.rider-stat-number {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--text);
+    margin: 0;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rider-stat-label {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    margin: 2px 0 0 0;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: var(--font-weight-medium);
+}
+
+/* ============================================
+   CARD BLOCKS
+   ============================================ */
+
+.rider-card {
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--gray-100);
+    margin-bottom: 16px;
+    overflow: hidden;
+}
+
+.rider-card-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--gray-100);
+    background: var(--gray-50);
+}
+
+.rider-card-header .heading-5 {
+    margin: 0;
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+}
+
+.rider-card-body {
+    padding: 18px 20px;
+}
+
+.rider-card-warning {
+    border-color: #ffe8a1;
+    background: #fffdf5;
+}
+
+.rider-warning-title {
+    margin: 0 0 4px 0;
+    font-weight: var(--font-weight-semibold);
+    color: #856404;
+}
+
+.rider-availability-line {
+    margin: 0 0 4px 0;
+    font-size: var(--font-size-base);
+}
+
+.rider-availability-line strong {
+    font-weight: var(--font-weight-bold);
+}
+
+.rider-available {
+    color: var(--primary-dark);
+}
+
+.rider-unavailable {
+    color: var(--danger);
+}
+
+.rider-availability-hint {
+    margin: 0;
+    font-size: var(--font-size-sm);
+}
+
+/* ============================================
+   BADGES
+   ============================================ */
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 12px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    line-height: 1;
+    white-space: nowrap;
+    min-height: 24px;
+}
+
+.badge-success {
+    background: #d4edda;
+    color: #155724;
+}
+
+.badge-warning {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.badge-danger {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.badge-secondary {
+    background: var(--gray-200);
+    color: var(--gray-600);
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 992px) {
+    .rider-stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 480px) {
+    .rider-dashboard-page {
+        padding: 16px 0 24px 0;
+    }
+
+    .rider-dashboard-header .heading-2 {
+        font-size: var(--font-size-2xl);
+    }
+
+    .rider-stats-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+
+    .rider-stat-card {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 14px;
+        gap: 10px;
+    }
+
+    .rider-stat-number {
+        font-size: var(--font-size-base);
+    }
+
+    .rider-stat-label {
+        font-size: 10px;
+    }
+
+    .rider-stat-icon {
+        width: 40px;
+        height: 40px;
+    }
+
+    .rider-stat-icon img {
+        width: 18px;
+        height: 18px;
+    }
+}

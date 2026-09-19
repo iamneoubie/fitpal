@@ -1,0 +1,346 @@
+/**
+ * FitPal Rider Sign-In Styles
+ *
+ * Foodpanda-style auth card rendered inside the standard FitPal
+ * page shell. All icons come from shared/assets/images/icons/.
+ * The country selector is a real <select> hidden behind the styled
+ * shell so it remains fully accessible and keyboard-navigable.
+ *
+ * @package FitPal
+ * @version 4.0 — Country selector is now a real <select>.
+ */
+
+/* ============================================
+   CONTENT WRAPPER
+   ============================================ */
+
+.rider-auth-content-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+    background: linear-gradient(135deg, var(--gray-50) 0%, var(--white) 100%);
+}
+
+.rider-auth-page {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+/* ============================================
+   AUTH CARD
+   ============================================ */
+
+.rider-auth-card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--white);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--gray-200);
+    display: flex;
+    flex-direction: column;
+}
+
+/* ============================================
+   ILLUSTRATION
+   ============================================ */
+
+.rider-illustration {
+    width: 100%;
+    line-height: 0;
+    background: var(--gray-50);
+}
+
+.rider-illustration img {
+    width: 100%;
+    height: auto;
+    display: block;
+    object-fit: cover;
+}
+
+/* ============================================
+   CONTENT AREA
+   ============================================ */
+
+.rider-auth-content {
+    padding: 28px 24px 20px 24px;
+}
+
+.rider-auth-title {
+    margin: 0 0 24px 0;
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    line-height: 1.3;
+    color: var(--text);
+}
+
+.rider-auth-title span {
+    color: var(--primary);
+}
+
+/* ============================================
+   COUNTRY SELECTOR (real <select>)
+   ============================================ */
+
+.rider-country-selector {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 56px;
+    padding: 0 16px;
+    margin-bottom: 16px;
+    border: 1.5px solid var(--gray-300);
+    border-radius: var(--radius-base);
+    background: var(--white);
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.rider-country-selector:focus-within {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(89, 193, 74, 0.15);
+}
+
+/* Leading location icon — tinted to the primary green */
+.rider-country-icon {
+    width: 20px;
+    height: 20px;
+    display: block;
+    flex-shrink: 0;
+    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+/* The actual <select>. Transparent so the shell shows through. */
+.rider-country-select {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    border: none;
+    background: transparent;
+    font-size: var(--font-size-base);
+    font-family: inherit;
+    font-weight: var(--font-weight-medium);
+    color: var(--text);
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    outline: none;
+}
+
+.rider-country-select option {
+    color: var(--text);
+    background: var(--white);
+}
+
+/* Trailing chevron — neutral gray */
+.rider-chevron-icon {
+    width: 18px;
+    height: 18px;
+    display: block;
+    flex-shrink: 0;
+    opacity: 0.55;
+    pointer-events: none;
+    filter: brightness(0) saturate(100%) invert(60%) sepia(0%) saturate(0%) brightness(95%) contrast(90%);
+}
+
+/* ============================================
+   FORM FIELDS
+   ============================================ */
+
+.rider-form-group {
+    margin-bottom: 16px;
+}
+
+.rider-form-control {
+    width: 100%;
+    height: 56px;
+    padding: 0 16px;
+    border: 1.5px solid var(--gray-300);
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-base);
+    font-family: inherit;
+    color: var(--text);
+    background: var(--white);
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.rider-form-control::placeholder {
+    color: var(--gray-400);
+}
+
+.rider-form-control:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(89, 193, 74, 0.15);
+}
+
+.rider-form-control.is-error {
+    border-color: var(--danger);
+}
+
+/* ============================================
+   BUTTONS
+   ============================================ */
+
+.rider-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 56px;
+    padding: 0 20px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-bold);
+    font-family: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    border: none;
+    box-sizing: border-box;
+    transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.rider-btn:active {
+    transform: scale(0.98);
+}
+
+.rider-btn-dark {
+    background: var(--text);
+    color: var(--white);
+    margin-bottom: 12px;
+}
+
+.rider-btn-dark:hover {
+    background: var(--black);
+}
+
+.rider-btn-light {
+    background: var(--gray-100);
+    color: var(--text);
+}
+
+.rider-btn-light:hover {
+    background: var(--gray-200);
+}
+
+/* ============================================
+   ALERTS
+   ============================================ */
+
+.rider-alert {
+    padding: 12px 16px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+    margin-bottom: 16px;
+    border: 1px solid transparent;
+}
+
+.rider-alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+.rider-alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+
+/* ============================================
+   VERSION FOOTER
+   ============================================ */
+
+.rider-version {
+    text-align: center;
+    padding: 0 24px 24px 24px;
+    font-size: var(--font-size-xs);
+    color: var(--gray-400);
+}
+
+/* ============================================
+   UTILITIES
+   ============================================ */
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 768px) {
+    .rider-auth-page {
+        padding: 20px 12px;
+    }
+
+    .rider-auth-card {
+        border-radius: var(--radius-lg);
+    }
+
+    .rider-auth-content {
+        padding: 22px 18px 16px 18px;
+    }
+
+    .rider-auth-title {
+        font-size: var(--font-size-xl);
+        margin-bottom: 20px;
+    }
+
+    .rider-country-selector,
+    .rider-form-control,
+    .rider-btn {
+        height: 50px;
+        font-size: var(--font-size-sm);
+    }
+
+    .rider-country-icon {
+        width: 18px;
+        height: 18px;
+    }
+
+    .rider-chevron-icon {
+        width: 16px;
+        height: 16px;
+    }
+}
+
+@media (max-width: 400px) {
+    .rider-auth-page {
+        padding: 12px 8px;
+    }
+
+    .rider-auth-content {
+        padding: 18px 14px 12px 14px;
+    }
+
+    .rider-country-selector,
+    .rider-form-control,
+    .rider-btn {
+        height: 46px;
+    }
+}
