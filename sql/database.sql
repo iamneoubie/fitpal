@@ -193,9 +193,9 @@ CREATE TABLE delivery_rider_profile (
     verification_status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (
         verification_status IN (
             'pending',
-            'verified',
             'denied',
-            'suspended'
+            'suspended',
+            'verified'
         )
     ),
     verified_by_admin_id INT NULL,
@@ -249,9 +249,9 @@ CREATE TABLE restaurant (
     verification_status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (
         verification_status IN (
             'pending',
-            'verified',
             'denied',
-            'suspended'
+            'suspended',
+            'verified'
         )
     ),
     verified_by_admin_id INT NULL,
