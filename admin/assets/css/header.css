@@ -1,5 +1,9 @@
 /**
+<<<<<<< Updated upstream:admin/assets/css/header.css
  * FitPal Admin Header Styles
+=======
+ * FitPal Rider Header Styles
+>>>>>>> Stashed changes:rider/assets/css/header.css
  *
  * Admin-specific header overrides. Uses global CSS variables from
  * global.css. Excludes the .nav-badge rule — admins do not have a
@@ -13,13 +17,21 @@
    ADMIN HEADER OVERRIDES
    ============================================ */
 
+<<<<<<< Updated upstream:admin/assets/css/header.css
 .admin-header {
+=======
+.rider-header {
+>>>>>>> Stashed changes:rider/assets/css/header.css
     height: 70px;
     min-height: 70px;
     max-height: 70px;
 }
 
+<<<<<<< Updated upstream:admin/assets/css/header.css
 .admin-header .header-container {
+=======
+.rider-header .header-container {
+>>>>>>> Stashed changes:rider/assets/css/header.css
     max-width: 1200px;
     margin: 0 auto;
     height: 100%;
@@ -421,7 +433,11 @@
 }
 
 @media (max-width: 768px) {
+<<<<<<< Updated upstream:admin/assets/css/header.css
     .admin-header {
+=======
+    .rider-header {
+>>>>>>> Stashed changes:rider/assets/css/header.css
         height: 60px;
         min-height: 60px;
         max-height: 60px;

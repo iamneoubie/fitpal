@@ -6,11 +6,21 @@
  * status. Mirrors customer/includes/header.php so the two roles stay
  * consistent in behavior and asset resolution.
  *
+<<<<<<< Updated upstream:admin/includes/header.php
  * Admin users have a distinct nav surface: Dashboard, Users,
  * Restaurants, Riders, and Profile.
  *
  * @package FitPal
  * @version 1.0
+=======
+ * Rider users do NOT have a cart, so there is no cart badge here.
+ * The nav reflects rider-only surfaces: Dashboard, Deliveries,
+ * Earnings, and Profile.
+ *
+ * @package FitPal
+ * @version 1.1 — Adds currentPage detection for deliveries/earnings;
+ *                aligns with customer header structure.
+>>>>>>> Stashed changes:rider/includes/header.php
  */
 
 declare(strict_types=1);
