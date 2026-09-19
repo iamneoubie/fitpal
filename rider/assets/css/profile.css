@@ -1,0 +1,403 @@
+/**
+ * FitPal Rider Profile Page Styles
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+/* ============================================
+   CONTENT WRAPPER
+   ============================================ */
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+}
+
+.rider-profile-page {
+    background: var(--gray-50);
+    padding: 24px 0 40px 0;
+    flex: 1;
+}
+
+.rider-profile-page .container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 16px;
+    width: 100%;
+}
+
+/* ============================================
+   PAGE HEADER
+   ============================================ */
+
+.rider-page-header {
+    margin-bottom: 24px;
+}
+
+.rider-page-header .heading-2 {
+    margin: 0 0 4px 0;
+    font-size: var(--font-size-3xl);
+    line-height: 1.2;
+}
+
+.rider-page-header .heading-2 span {
+    color: var(--primary);
+}
+
+.rider-page-header .text-muted {
+    color: var(--gray-500);
+    margin: 0;
+    font-size: var(--font-size-sm);
+}
+
+/* ============================================
+   PROFILE HERO
+   ============================================ */
+
+.rider-profile-hero {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-sm);
+    flex-wrap: wrap;
+}
+
+.rider-profile-avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.rider-profile-avatar {
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    background: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+}
+
+.rider-profile-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.rider-profile-avatar-initial {
+    color: var(--white);
+    font-size: 36px;
+    font-weight: 700;
+    text-transform: uppercase;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+.rider-profile-avatar-edit {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--white);
+    border: 2px solid var(--gray-200);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    padding: 0;
+}
+
+.rider-profile-avatar-edit:hover {
+    background: var(--gray-50);
+    border-color: var(--primary);
+    transform: scale(1.05);
+}
+
+.rider-profile-avatar-edit img {
+    width: 14px;
+    height: 14px;
+    display: block;
+    opacity: 0.7;
+}
+
+.rider-profile-hero-info {
+    flex: 1;
+    min-width: 200px;
+}
+
+.rider-profile-name {
+    margin: 0 0 4px 0;
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--text);
+    line-height: 1.2;
+}
+
+.rider-profile-username {
+    margin: 0 0 10px 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+}
+
+.rider-profile-badges {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.rider-profile-joined {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+}
+
+.rider-profile-hero-stats {
+    display: flex;
+    gap: 24px;
+    flex-shrink: 0;
+}
+
+.rider-profile-hero-stat {
+    text-align: center;
+}
+
+.rider-profile-hero-stat-value {
+    display: block;
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--text);
+    line-height: 1.1;
+}
+
+.rider-profile-hero-stat-label {
+    display: block;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: var(--font-weight-semibold);
+    margin-top: 2px;
+}
+
+/* ============================================
+   FORM GRID
+   ============================================ */
+
+.rider-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+}
+
+.rider-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.rider-form-label {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    color: var(--gray-600);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.rider-form-control {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-family: inherit;
+    background: var(--white);
+    color: var(--text);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.rider-form-control:disabled {
+    background: var(--gray-50);
+    color: var(--gray-600);
+    cursor: not-allowed;
+}
+
+.rider-form-control:not(:disabled):focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
+}
+
+.rider-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--gray-100);
+}
+
+/* ============================================
+   VEHICLE / ADDRESS DISPLAY
+   ============================================ */
+
+.rider-vehicle-display,
+.rider-address-display {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.rider-vehicle-icon,
+.rider-address-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-base);
+    background: rgba(89, 193, 74, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.rider-vehicle-icon img,
+.rider-address-icon img {
+    width: 22px;
+    height: 22px;
+    display: block;
+    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.rider-vehicle-info,
+.rider-address-info {
+    min-width: 0;
+}
+
+.rider-vehicle-name,
+.rider-address-label {
+    margin: 0 0 2px 0;
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+}
+
+.rider-vehicle-plate,
+.rider-address-text {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.rider-vehicle-note {
+    margin: 16px 0 0 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    padding: 10px 14px;
+    background: var(--gray-50);
+    border-radius: var(--radius-base);
+    border-left: 3px solid var(--gray-300);
+}
+
+/* ============================================
+   LOGOUT
+   ============================================ */
+
+.rider-logout-wrap {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 24px;
+}
+
+.rider-logout-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.rider-logout-btn .btn-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 768px) {
+    .rider-profile-page {
+        padding: 16px 0 32px 0;
+    }
+
+    .rider-page-header .heading-2 {
+        font-size: var(--font-size-2xl);
+    }
+
+    .rider-profile-hero {
+        flex-direction: column;
+        text-align: center;
+        padding: 20px;
+    }
+
+    .rider-profile-hero-info {
+        text-align: center;
+    }
+
+    .rider-profile-badges {
+        justify-content: center;
+    }
+
+    .rider-profile-hero-stats {
+        gap: 32px;
+    }
+
+    .rider-form-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 480px) {
+    .rider-profile-avatar {
+        width: 72px;
+        height: 72px;
+    }
+
+    .rider-profile-avatar-initial {
+        font-size: 28px;
+    }
+
+    .rider-profile-hero-stat-value {
+        font-size: var(--font-size-xl);
+    }
+
+    .rider-profile-name {
+        font-size: var(--font-size-xl);
+    }
+
+    .rider-form-actions {
+        flex-direction: column-reverse;
+    }
+
+    .rider-form-actions .btn {
+        width: 100%;
+    }
+}

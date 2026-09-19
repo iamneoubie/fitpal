@@ -1,11 +1,18 @@
 /**
  * FitPal Rider Dashboard Styles
  *
- * Minimal dashboard layout for the rider role. Uses the shared
- * global CSS variables.
+ * Comprehensive dashboard layout with:
+ *   - Stat cards grid
+ *   - Weekly earnings chart
+ *   - Performance metrics
+ *   - Recent deliveries list
+ *   - Availability toggle
+ *   - Verification warning
+ *
+ * Uses shared global CSS variables.
  *
  * @package FitPal
- * @version 1.0
+ * @version 2.0 — Full analytics dashboard
  */
 
 /* ============================================
@@ -23,7 +30,7 @@
 
 .rider-dashboard-page {
     background: var(--gray-50);
-    padding: 24px 0 32px 0;
+    padding: 24px 0 40px 0;
     flex: 1;
 }
 
@@ -47,17 +54,22 @@
     gap: 16px;
 }
 
-.rider-dashboard-header .heading-2 {
+.rider-dashboard-greeting {
+    flex: 1;
+    min-width: 0;
+}
+
+.rider-dashboard-greeting .heading-2 {
     margin: 0 0 4px 0;
     font-size: var(--font-size-3xl);
     line-height: 1.2;
 }
 
-.rider-dashboard-header .heading-2 span {
+.rider-dashboard-greeting .heading-2 span {
     color: var(--primary);
 }
 
-.rider-dashboard-header .text-muted {
+.rider-dashboard-greeting .text-muted {
     color: var(--gray-500);
     margin: 0;
     font-size: var(--font-size-sm);
@@ -68,6 +80,44 @@
     align-items: center;
     gap: 12px;
     flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.rider-dashboard-actions .btn-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+    filter: brightness(0) invert(1);
+}
+
+.rider-dashboard-actions .btn-outline .btn-icon {
+    filter: brightness(0) saturate(100%) invert(20%) sepia(8%) saturate(800%) hue-rotate(50deg) brightness(95%) contrast(95%);
+}
+
+/* ============================================
+   ALERTS
+   ============================================ */
+
+.alert {
+    padding: 12px 18px;
+    border-radius: var(--radius-base);
+    margin-bottom: 20px;
+    border: 1px solid transparent;
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+}
+
+.alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+
+.alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
 }
 
 /* ============================================
@@ -92,19 +142,25 @@
     border: 1px solid var(--gray-100);
     text-decoration: none;
     color: inherit;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    position: relative;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
 a.rider-stat-card:hover {
     transform: translateY(-2px);
     box-shadow: var(--shadow-md);
+    border-color: var(--gray-200);
+}
+
+a.rider-stat-card:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
 }
 
 .rider-stat-icon {
     width: 46px;
     height: 46px;
     border-radius: var(--radius-base);
-    background: rgba(89, 193, 74, 0.12);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -115,10 +171,43 @@ a.rider-stat-card:hover {
     width: 22px;
     height: 22px;
     display: block;
+}
+
+/* Icon background tints */
+.rider-stat-icon-wallet {
+    background: rgba(89, 193, 74, 0.12);
+}
+
+.rider-stat-icon-wallet img {
+    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.rider-stat-icon-deliveries {
+    background: rgba(23, 162, 184, 0.12);
+}
+
+.rider-stat-icon-deliveries img {
+    filter: brightness(0) saturate(100%) invert(52%) sepia(70%) saturate(600%) hue-rotate(160deg) brightness(92%) contrast(85%);
+}
+
+.rider-stat-icon-rating {
+    background: rgba(255, 193, 7, 0.14);
+}
+
+.rider-stat-icon-rating img {
+    filter: brightness(0) saturate(100%) invert(79%) sepia(90%) saturate(600%) hue-rotate(0deg) brightness(95%) contrast(85%);
+}
+
+.rider-stat-icon-today {
+    background: rgba(108, 216, 92, 0.14);
+}
+
+.rider-stat-icon-today img {
     filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
 }
 
 .rider-stat-info {
+    flex: 1;
     min-width: 0;
 }
 
@@ -128,9 +217,15 @@ a.rider-stat-card:hover {
     color: var(--text);
     margin: 0;
     line-height: 1.2;
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+}
+
+.rider-stat-number-small {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--gray-500);
 }
 
 .rider-stat-label {
@@ -140,6 +235,58 @@ a.rider-stat-card:hover {
     text-transform: uppercase;
     letter-spacing: 0.4px;
     font-weight: var(--font-weight-medium);
+}
+
+.rider-stat-hint {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    margin: 2px 0 0 0;
+}
+
+.rider-stat-hint-active {
+    color: var(--primary);
+    font-weight: var(--font-weight-semibold);
+}
+
+/* Stat card trailing arrow */
+.rider-stat-arrow {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease;
+}
+
+.rider-stat-arrow-img {
+    width: 18px;
+    height: 18px;
+    display: block;
+    flex-shrink: 0;
+    filter: brightness(0) saturate(100%) invert(75%) sepia(0%) saturate(0%) brightness(95%) contrast(90%);
+    transition: filter 0.15s ease;
+}
+
+a.rider-stat-card:hover .rider-stat-arrow {
+    transform: translateX(2px);
+}
+
+a.rider-stat-card:hover .rider-stat-arrow-img {
+    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+/* ============================================
+   TWO-COLUMN ROW
+   ============================================ */
+
+.rider-dashboard-row {
+    display: grid;
+    gap: 24px;
+    align-items: stretch;
+    margin-bottom: 24px;
+}
+
+.rider-dashboard-row-primary {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
 }
 
 /* ============================================
@@ -153,12 +300,22 @@ a.rider-stat-card:hover {
     border: 1px solid var(--gray-100);
     margin-bottom: 16px;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.rider-card:last-child {
+    margin-bottom: 0;
 }
 
 .rider-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     padding: 14px 20px;
     border-bottom: 1px solid var(--gray-100);
     background: var(--gray-50);
+    flex-shrink: 0;
 }
 
 .rider-card-header .heading-5 {
@@ -167,41 +324,548 @@ a.rider-stat-card:hover {
     font-weight: var(--font-weight-semibold);
 }
 
+.rider-card-link {
+    font-size: var(--font-size-sm);
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: var(--font-weight-medium);
+}
+
+.rider-card-link:hover {
+    text-decoration: underline;
+}
+
 .rider-card-body {
     padding: 18px 20px;
 }
+
+/* ============================================
+   WEEKLY EARNINGS CHART
+   ============================================ */
+
+.rider-chart-card {
+    min-height: 420px;
+}
+
+.rider-chart-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: 20px;
+}
+
+.rider-weekly-chart {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px;
+    height: 220px;
+    position: relative;
+    flex: 1;
+    min-height: 180px;
+}
+
+/* Y-axis labels */
+.rider-chart-y-axis {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding: 0 4px 22px 0;
+    font-size: 11px;
+    color: var(--gray-400);
+    font-weight: var(--font-weight-medium);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.rider-chart-y-label {
+    white-space: nowrap;
+}
+
+/* Plot area */
+.rider-chart-plot {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+/* Gridlines */
+.rider-chart-gridline {
+    position: absolute;
+    left: 0;
+    right: 0;
+    border-top: 1px dashed var(--gray-100);
+    height: 0;
+}
+
+.rider-chart-plot .rider-chart-gridline {
+    bottom: 22px;
+}
+
+.rider-chart-plot .rider-chart-gridline:nth-child(1) {
+    top: 0;
+    bottom: auto;
+}
+
+.rider-chart-plot .rider-chart-gridline:nth-child(2) {
+    top: 25%;
+}
+
+.rider-chart-plot .rider-chart-gridline:nth-child(3) {
+    top: 50%;
+}
+
+.rider-chart-plot .rider-chart-gridline:nth-child(4) {
+    top: 75%;
+}
+
+.rider-chart-plot .rider-chart-gridline:nth-child(5) {
+    top: auto;
+    bottom: 22px;
+}
+
+/* Column area */
+.rider-chart-columns {
+    flex: 1;
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    padding-bottom: 22px;
+    position: relative;
+    z-index: 1;
+    min-height: 0;
+}
+
+.rider-chart-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.rider-chart-bar-track {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    min-height: 0;
+    position: relative;
+}
+
+.rider-chart-bar {
+    width: 60%;
+    max-width: 42px;
+    min-height: 4px;
+    background: linear-gradient(180deg, var(--secondary) 0%, var(--primary) 100%);
+    border-radius: 6px 6px 3px 3px;
+    transition: filter 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+    cursor: pointer;
+    outline: none;
+}
+
+.rider-chart-bar.is-empty {
+    background: var(--gray-200);
+    min-height: 4px;
+}
+
+.rider-chart-bar.is-today {
+    background: linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
+    box-shadow: 0 2px 8px rgba(89, 193, 74, 0.25);
+}
+
+.rider-chart-bar:hover,
+.rider-chart-bar:focus-visible {
+    filter: brightness(1.06);
+    box-shadow: 0 4px 14px rgba(89, 193, 74, 0.22);
+}
+
+.rider-chart-label {
+    font-size: 11px;
+    font-weight: var(--font-weight-semibold);
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    line-height: 1;
+}
+
+.rider-chart-label.is-today {
+    color: var(--primary);
+}
+
+/* Tooltip */
+.rider-chart-tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--text);
+    color: var(--white);
+    font-size: 11px;
+    font-weight: var(--font-weight-medium);
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-md);
+    opacity: 0;
+    transform: translateY(-2px);
+    transition: opacity 0.12s ease, transform 0.12s ease;
+    white-space: nowrap;
+    z-index: 10;
+}
+
+.rider-chart-tooltip.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Chart summary strip */
+.rider-chart-summary {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    padding-top: 16px;
+    border-top: 1px solid var(--gray-100);
+    flex-shrink: 0;
+}
+
+.rider-chart-summary-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.rider-chart-summary-label {
+    font-size: 11px;
+    color: var(--gray-500);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.rider-chart-summary-value {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-bold);
+    color: var(--text);
+    line-height: 1.2;
+}
+
+.rider-chart-summary-hint {
+    font-size: 11px;
+    color: var(--gray-400);
+}
+
+/* ============================================
+   PERFORMANCE CARD
+   ============================================ */
+
+.rider-performance-card {
+    min-height: 420px;
+}
+
+.rider-performance-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    flex: 1;
+}
+
+.rider-performance-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.rider-performance-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+.rider-performance-label {
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    font-weight: var(--font-weight-medium);
+}
+
+.rider-performance-value {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-bold);
+    color: var(--text);
+}
+
+.rider-performance-bar {
+    height: 8px;
+    background: var(--gray-100);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+}
+
+.rider-performance-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary) 0%, var(--primary-dark) 100%);
+    border-radius: var(--radius-full);
+    transition: width 0.5s ease;
+}
+
+.rider-performance-bar-fill-success {
+    background: linear-gradient(90deg, var(--secondary) 0%, var(--primary) 100%);
+}
+
+.rider-performance-hint {
+    font-size: 11px;
+    color: var(--gray-400);
+    margin: 0;
+}
+
+/* Vehicle info */
+.rider-performance-vehicle {
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid var(--gray-100);
+}
+
+.rider-performance-vehicle-label {
+    font-size: 11px;
+    color: var(--gray-500);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.rider-performance-vehicle-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.rider-performance-vehicle-icon {
+    width: 36px;
+    height: 36px;
+    padding: 8px;
+    background: var(--gray-100);
+    border-radius: var(--radius-base);
+    flex-shrink: 0;
+    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.rider-performance-vehicle-name {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+}
+
+.rider-performance-vehicle-plate {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+}
+
+/* ============================================
+   RECENT DELIVERIES
+   ============================================ */
+
+.rider-deliveries-card {
+    margin-top: 0;
+}
+
+.rider-deliveries-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.rider-delivery-row {
+    display: grid;
+    grid-template-columns: 40px 1fr auto;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--gray-100);
+    transition: background 0.15s ease;
+}
+
+.rider-delivery-row:last-child {
+    border-bottom: none;
+}
+
+.rider-delivery-row:hover {
+    background: var(--gray-50);
+}
+
+.rider-delivery-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-full);
+    background: rgba(89, 193, 74, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.rider-delivery-icon img {
+    width: 20px;
+    height: 20px;
+    display: block;
+    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.rider-delivery-info {
+    min-width: 0;
+}
+
+.rider-delivery-order {
+    margin: 0 0 2px 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+}
+
+.rider-delivery-customer {
+    margin: 0 0 2px 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-600);
+}
+
+.rider-delivery-address {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-400);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.rider-delivery-meta {
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.rider-delivery-time {
+    margin: 0 0 2px 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+}
+
+.rider-delivery-earning {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-bold);
+    color: var(--primary);
+}
+
+/* ============================================
+   EMPTY STATE
+   ============================================ */
+
+.rider-empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.rider-empty-icon {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 14px;
+    background: var(--gray-100);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px;
+}
+
+.rider-empty-icon img {
+    width: 100%;
+    height: 100%;
+    max-width: 32px;
+    max-height: 32px;
+    object-fit: contain;
+    opacity: 0.4;
+}
+
+.rider-empty-title {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+    margin: 0 0 6px 0;
+}
+
+.rider-empty-text {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    margin: 0;
+    max-width: 300px;
+    line-height: 1.5;
+}
+
+/* ============================================
+   VERIFICATION WARNING
+   ============================================ */
 
 .rider-card-warning {
     border-color: #ffe8a1;
     background: #fffdf5;
 }
 
+.rider-warning-body {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.rider-warning-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-full);
+    background: rgba(255, 193, 7, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.rider-warning-icon img {
+    width: 22px;
+    height: 22px;
+    display: block;
+    filter: brightness(0) saturate(100%) invert(70%) sepia(90%) saturate(1000%) hue-rotate(0deg) brightness(95%) contrast(90%);
+}
+
+.rider-warning-content {
+    flex: 1;
+    min-width: 200px;
+}
+
 .rider-warning-title {
     margin: 0 0 4px 0;
     font-weight: var(--font-weight-semibold);
     color: #856404;
-}
-
-.rider-availability-line {
-    margin: 0 0 4px 0;
     font-size: var(--font-size-base);
 }
 
-.rider-availability-line strong {
-    font-weight: var(--font-weight-bold);
-}
-
-.rider-available {
-    color: var(--primary-dark);
-}
-
-.rider-unavailable {
-    color: var(--danger);
-}
-
-.rider-availability-hint {
+.rider-warning-text {
     margin: 0;
     font-size: var(--font-size-sm);
+    color: #856404;
+    line-height: 1.5;
+}
+
+.rider-warning-btn {
+    flex-shrink: 0;
+    align-self: center;
 }
 
 /* ============================================
@@ -249,17 +913,98 @@ a.rider-stat-card:hover {
     .rider-stats-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
-}
 
-@media (max-width: 480px) {
-    .rider-dashboard-page {
-        padding: 16px 0 24px 0;
+    .rider-dashboard-row-primary {
+        grid-template-columns: 1fr;
     }
 
-    .rider-dashboard-header .heading-2 {
+    .rider-chart-card,
+    .rider-performance-card {
+        min-height: auto;
+    }
+}
+
+@media (max-width: 768px) {
+    .rider-dashboard-page {
+        padding: 16px 0 32px 0;
+    }
+
+    .rider-dashboard-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .rider-dashboard-greeting .heading-2 {
         font-size: var(--font-size-2xl);
     }
 
+    .rider-dashboard-actions {
+        justify-content: flex-start;
+    }
+
+    .rider-weekly-chart {
+        height: 180px;
+    }
+
+    .rider-chart-y-axis {
+        font-size: 10px;
+    }
+
+    .rider-chart-label {
+        font-size: 10px;
+    }
+
+    .rider-chart-columns {
+        gap: 6px;
+    }
+
+    .rider-chart-summary {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .rider-chart-summary-item {
+        padding: 8px 0;
+        border-bottom: 1px dashed var(--gray-100);
+    }
+
+    .rider-chart-summary-item:last-child {
+        border-bottom: none;
+    }
+
+    .rider-delivery-row {
+        grid-template-columns: 36px 1fr;
+        grid-template-areas:
+            "icon info"
+            "icon meta";
+        row-gap: 4px;
+        padding: 12px 16px;
+    }
+
+    .rider-delivery-icon {
+        grid-area: icon;
+        width: 36px;
+        height: 36px;
+    }
+
+    .rider-delivery-info {
+        grid-area: info;
+    }
+
+    .rider-delivery-meta {
+        grid-area: meta;
+        text-align: left;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .rider-delivery-time {
+        margin: 0;
+    }
+}
+
+@media (max-width: 480px) {
     .rider-stats-grid {
         grid-template-columns: 1fr 1fr;
         gap: 10px;
@@ -288,5 +1033,52 @@ a.rider-stat-card:hover {
     .rider-stat-icon img {
         width: 18px;
         height: 18px;
+    }
+
+    .rider-stat-arrow {
+        display: none;
+    }
+
+    .rider-chart-body {
+        padding: 16px;
+    }
+
+    .rider-performance-body {
+        padding: 16px;
+    }
+
+    .rider-card-header {
+        padding: 12px 16px;
+    }
+
+    .rider-card-body {
+        padding: 14px 16px;
+    }
+
+    .rider-warning-body {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .rider-warning-btn {
+        align-self: flex-start;
+        margin-top: 8px;
+    }
+}
+
+/* ============================================
+   REDUCED MOTION
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+
+    .rider-stat-card,
+    .rider-stat-arrow,
+    .rider-stat-arrow-img,
+    .rider-chart-bar,
+    .rider-chart-tooltip,
+    .rider-performance-bar-fill,
+    .rider-delivery-row {
+        transition: none !important;
     }
 }
