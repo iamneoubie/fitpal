@@ -1,0 +1,645 @@
+/**
+ * FitPal Admin Dashboard Styles
+ * Version 2.1 — Container now matches the admin header exactly
+ *                (1200px max-width, var(--spacing-4) side padding).
+ *                The .content layout skeleton is no longer redeclared
+ *                here — admin/header.css owns it.
+ *
+ * Scope: everything hangs off .admin-dashboard-page so no shared rule
+ *        from global.css / header.css can override without a fight.
+ */
+
+/* ============================================================
+   PAGE SHELL
+   ============================================================ */
+
+.admin-dashboard-page {
+    flex: 1;
+    display: block;
+    width: 100%;
+    padding: 24px 0 40px 0;
+    min-height: calc(100vh - 70px);
+    background: var(--gray-50);
+    box-sizing: border-box;
+}
+
+.admin-dashboard-page .container {
+    display: block;
+    max-width: 1200px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 0 var(--spacing-4);
+    box-sizing: border-box;
+}
+
+/* ============================================================
+   PAGE HEADER
+   ============================================================ */
+
+.admin-dashboard-page .admin-dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin: 0 0 20px 0;
+    padding: 0 0 16px 0;
+    border-bottom: 2px solid var(--primary);
+}
+
+.admin-dashboard-page .admin-dashboard-header-text {
+    flex: 1 1 320px;
+    min-width: 0;
+}
+
+.admin-dashboard-page .admin-dashboard-title {
+    margin: 0 0 4px 0;
+    padding: 0;
+    font-size: 30px;
+    line-height: 1.15;
+    font-weight: 700;
+    color: var(--text);
+    font-family: inherit;
+}
+
+.admin-dashboard-page .admin-dashboard-title span {
+    color: var(--primary);
+}
+
+.admin-dashboard-page .admin-dashboard-subtitle {
+    margin: 0;
+    padding: 0;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--gray-500);
+}
+
+.admin-dashboard-page .admin-dashboard-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+/* Role / status badge in the header */
+.admin-dashboard-page .admin-dashboard-role-badge {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 6px 14px !important;
+    border-radius: 9999px !important;
+    background: #cce5ff !important;
+    color: #004085 !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+    white-space: nowrap !important;
+}
+
+/* ============================================================
+   STATS GRID
+   ============================================================ */
+
+.admin-dashboard-page .admin-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+    margin: 0 0 24px 0;
+}
+
+/* Stat tiles are <a> by default, but can also be plain <div> */
+
+.admin-dashboard-page .admin-stat-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 20px;
+    background: #ffffff;
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(5, 10, 4, 0.05);
+    text-decoration: none;
+    color: inherit;
+    min-width: 0;
+    box-sizing: border-box;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+a.admin-dashboard-page .admin-stat-card:hover,
+.admin-dashboard-page a.admin-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(5, 10, 4, 0.07);
+    border-color: var(--gray-300);
+}
+
+.admin-dashboard-page .admin-stat-icon {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 48px !important;
+    height: 48px !important;
+    min-width: 48px !important;
+    min-height: 48px !important;
+    max-width: 48px !important;
+    max-height: 48px !important;
+    padding: 0 !important;
+    border-radius: 10px !important;
+    background: rgba(89, 193, 74, 0.12) !important;
+    flex-shrink: 0 !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+}
+
+.admin-dashboard-page .admin-stat-icon img {
+    display: block !important;
+    width: 22px !important;
+    height: 22px !important;
+    min-width: 22px !important;
+    min-height: 22px !important;
+    max-width: 22px !important;
+    max-height: 22px !important;
+    object-fit: contain !important;
+    /* Tint to primary green */
+    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%) !important;
+    opacity: 1 !important;
+}
+
+.admin-dashboard-page .admin-stat-body {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.admin-dashboard-page .admin-stat-value {
+    display: block;
+    font-size: 20px;
+    line-height: 1.15;
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-dashboard-page .admin-stat-value.is-text {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+}
+
+.admin-dashboard-page .admin-stat-label {
+    display: block;
+    margin: 0;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.admin-dashboard-page .admin-stat-hint {
+    display: block;
+    margin: 2px 0 0 0;
+    font-size: 11px;
+    color: var(--gray-500);
+    line-height: 1.4;
+}
+
+.admin-dashboard-page .admin-stat-hint.is-positive {
+    color: var(--primary-dark);
+    font-weight: 600;
+}
+
+/* Trailing chevron on linked cards */
+.admin-dashboard-page .admin-stat-arrow {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px !important;
+    min-height: 18px !important;
+    max-width: 18px !important;
+    max-height: 18px !important;
+    flex-shrink: 0 !important;
+    opacity: 0.35 !important;
+    transition: transform 0.15s ease, opacity 0.15s ease !important;
+}
+
+.admin-dashboard-page .admin-stat-arrow img {
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    object-fit: contain !important;
+    filter: brightness(0) saturate(100%) invert(48%) sepia(0%) saturate(0%) brightness(60%) contrast(90%) !important;
+}
+
+.admin-dashboard-page a.admin-stat-card:hover .admin-stat-arrow {
+    transform: translateX(2px) !important;
+    opacity: 0.8 !important;
+}
+
+/* ============================================================
+   INFO CARDS (rows below the stats)
+   ============================================================ */
+
+.admin-dashboard-page .admin-card {
+    display: block;
+    background: #ffffff;
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(5, 10, 4, 0.05);
+    margin: 0 0 16px 0;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.admin-dashboard-page .admin-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.admin-dashboard-page .admin-card-title {
+    margin: 0;
+    padding: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.3;
+}
+
+.admin-dashboard-page .admin-card-body {
+    padding: 18px 20px;
+}
+
+/* ============================================================
+   ACCOUNT SUMMARY BLOCK
+   ============================================================ */
+
+.admin-dashboard-page .admin-account-line {
+    margin: 0 0 4px 0;
+    padding: 0;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--gray-700);
+}
+
+.admin-dashboard-page .admin-account-line strong {
+    color: var(--text);
+    font-weight: 700;
+}
+
+.admin-dashboard-page .admin-account-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    margin: 0;
+    padding: 0;
+    font-size: 13px;
+    color: var(--gray-500);
+    list-style: none;
+}
+
+.admin-dashboard-page .admin-account-meta li {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+}
+
+.admin-dashboard-page .admin-account-meta-label {
+    font-weight: 600;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+}
+
+/* ============================================================
+   QUICK LINKS GRID
+   ============================================================ */
+
+.admin-dashboard-page .admin-quick-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+}
+
+.admin-dashboard-page .admin-quick-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px;
+    background: #ffffff;
+    border: 1px solid var(--gray-200);
+    border-radius: 10px;
+    text-decoration: none;
+    color: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+    box-sizing: border-box;
+    min-width: 0;
+}
+
+.admin-dashboard-page .admin-quick-link:hover {
+    border-color: var(--primary);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(5, 10, 4, 0.07);
+}
+
+.admin-dashboard-page .admin-quick-link-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-dashboard-page .admin-quick-link-arrow {
+    display: block !important;
+    width: 16px !important;
+    height: 16px !important;
+    min-width: 16px !important;
+    max-width: 16px !important;
+    max-height: 16px !important;
+    flex-shrink: 0 !important;
+    opacity: 0.5 !important;
+    transition: transform 0.15s ease, opacity 0.15s ease !important;
+    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%) !important;
+}
+
+.admin-dashboard-page .admin-quick-link:hover .admin-quick-link-arrow {
+    transform: translateX(2px) !important;
+    opacity: 1 !important;
+}
+
+/* ============================================================
+   BADGES (scoped — global .badge may not fit dashboard)
+   ============================================================ */
+
+.admin-dashboard-page .badge {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 4px 12px !important;
+    border-radius: 9999px !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    line-height: 1.4 !important;
+    white-space: nowrap !important;
+    vertical-align: middle !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.4px !important;
+}
+
+.admin-dashboard-page .badge-primary   { background: #cce5ff !important; color: #004085 !important; }
+.admin-dashboard-page .badge-success   { background: #d4edda !important; color: #155724 !important; }
+.admin-dashboard-page .badge-warning   { background: #fff3cd !important; color: #856404 !important; }
+.admin-dashboard-page .badge-danger    { background: #f8d7da !important; color: #721c24 !important; }
+.admin-dashboard-page .badge-secondary { background: var(--gray-200) !important; color: var(--gray-600) !important; }
+
+/* ============================================================
+   RESPONSIVE — LARGE DESKTOP
+   ============================================================ */
+
+@media (min-width: 1440px) {
+    .admin-dashboard-page .admin-stats-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+/* ============================================================
+   RESPONSIVE — TABLET (768–1023)
+   ============================================================ */
+
+@media (max-width: 1023px) {
+    .admin-dashboard-page .container {
+        padding: 0 var(--spacing-4);
+    }
+
+    .admin-dashboard-page .admin-dashboard-title {
+        font-size: 24px;
+    }
+
+    .admin-dashboard-page .admin-stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .admin-dashboard-page .admin-stat-card {
+        padding: 14px 16px;
+        gap: 12px;
+    }
+
+    .admin-dashboard-page .admin-stat-icon {
+        width: 42px !important;
+        height: 42px !important;
+        min-width: 42px !important;
+        min-height: 42px !important;
+        max-width: 42px !important;
+        max-height: 42px !important;
+    }
+
+    .admin-dashboard-page .admin-stat-icon img {
+        width: 20px !important;
+        height: 20px !important;
+        min-width: 20px !important;
+        min-height: 20px !important;
+        max-width: 20px !important;
+        max-height: 20px !important;
+    }
+
+    .admin-dashboard-page .admin-stat-value {
+        font-size: 18px;
+    }
+
+    .admin-dashboard-page .admin-stat-value.is-text {
+        font-size: 15px;
+    }
+}
+
+/* ============================================================
+   RESPONSIVE — MOBILE (< 768)
+   ============================================================ */
+
+@media (max-width: 767px) {
+    .admin-dashboard-page {
+        padding: 16px 0 28px 0;
+    }
+
+    .admin-dashboard-page .container {
+        padding: 0 var(--spacing-3);
+    }
+
+    .admin-dashboard-page .admin-dashboard-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .admin-dashboard-page .admin-dashboard-title {
+        font-size: 22px;
+    }
+
+    .admin-dashboard-page .admin-dashboard-subtitle {
+        font-size: 13px;
+    }
+
+    .admin-dashboard-page .admin-dashboard-header-actions {
+        width: 100%;
+    }
+
+    .admin-dashboard-page .admin-dashboard-header-actions .btn {
+        flex: 1;
+        justify-content: center;
+    }
+
+    .admin-dashboard-page .admin-stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 18px;
+    }
+
+    .admin-dashboard-page .admin-stat-card {
+        padding: 12px 14px;
+        gap: 10px;
+    }
+
+    .admin-dashboard-page .admin-stat-icon {
+        width: 38px !important;
+        height: 38px !important;
+        min-width: 38px !important;
+        min-height: 38px !important;
+        max-width: 38px !important;
+        max-height: 38px !important;
+        border-radius: 8px !important;
+    }
+
+    .admin-dashboard-page .admin-stat-icon img {
+        width: 18px !important;
+        height: 18px !important;
+        min-width: 18px !important;
+        min-height: 18px !important;
+        max-width: 18px !important;
+        max-height: 18px !important;
+    }
+
+    .admin-dashboard-page .admin-stat-value {
+        font-size: 16px;
+    }
+
+    .admin-dashboard-page .admin-stat-value.is-text {
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .admin-dashboard-page .admin-stat-label {
+        font-size: 10px;
+    }
+
+    .admin-dashboard-page .admin-stat-hint {
+        font-size: 10px;
+    }
+
+    .admin-dashboard-page .admin-stat-arrow {
+        display: none !important;
+    }
+
+    .admin-dashboard-page .admin-card-header {
+        padding: 12px 16px;
+    }
+
+    .admin-dashboard-page .admin-card-title {
+        font-size: 15px;
+    }
+
+    .admin-dashboard-page .admin-card-body {
+        padding: 14px 16px;
+    }
+
+    .admin-dashboard-page .admin-quick-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .admin-dashboard-page .admin-quick-link {
+        padding: 12px 16px;
+        font-size: 13px;
+    }
+}
+
+/* ============================================================
+   RESPONSIVE — SMALL MOBILE (< 400)
+   ============================================================ */
+
+@media (max-width: 400px) {
+    .admin-dashboard-page .admin-dashboard-title {
+        font-size: 20px;
+    }
+
+    .admin-dashboard-page .admin-stats-grid {
+        gap: 8px;
+    }
+
+    .admin-dashboard-page .admin-stat-card {
+        padding: 10px 12px;
+        gap: 8px;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .admin-dashboard-page .admin-stat-icon {
+        width: 34px !important;
+        height: 34px !important;
+        min-width: 34px !important;
+        min-height: 34px !important;
+        max-width: 34px !important;
+        max-height: 34px !important;
+    }
+
+    .admin-dashboard-page .admin-stat-icon img {
+        width: 16px !important;
+        height: 16px !important;
+        min-width: 16px !important;
+        min-height: 16px !important;
+        max-width: 16px !important;
+        max-height: 16px !important;
+    }
+
+    .admin-dashboard-page .admin-stat-value {
+        font-size: 15px;
+    }
+
+    .admin-dashboard-page .admin-stat-value.is-text {
+        font-size: 12px;
+    }
+
+    .admin-dashboard-page .admin-stat-label {
+        font-size: 9px;
+        letter-spacing: 0.3px;
+    }
+}

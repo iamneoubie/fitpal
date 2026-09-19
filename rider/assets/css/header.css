@@ -1,4 +1,5 @@
 /**
+<<<<<<< Updated upstream:rider/assets/css/header.css
  * FitPal Rider Header Styles
  *
  * Rider-specific header overrides. Uses global CSS variables from
@@ -14,12 +15,154 @@
    ============================================ */
 
 .rider-header {
+=======
+ * FitPal Admin Header Styles + Base Layout Skeleton
+ *
+ * This file is loaded on EVERY admin page (via admin/includes/header.php).
+ * It contains:
+ *
+ *   1. The base layout skeleton (.main-content, .content) so no page
+ *      depends on dashboard.css / profile.css / sign-in.css for layout.
+ *      Previously, .content lived in each page's CSS file, so switching
+ *      between admin pages made the rule appear and disappear — which
+ *      caused the footer to jump up and the page to flicker.
+ *
+ *   2. The full .header / .admin-header block, self-contained. This
+ *      file replaces shared/assets/css/header.css for admin pages.
+ *      Loading both caused a size-pop because both define the same
+ *      selectors with subtly different box-model values.
+ *
+ *   3. Admin-specific header overrides (nav-link, buttons, mobile
+ *      menu, user circle).
+ *
+ * Excludes the .nav-badge rule — admins do not have a cart.
+ *
+ * @package FitPal
+ * @version 1.1 — Self-contained; layout skeleton included; no
+ *                dependency on shared/header.css.
+ */
+
+/* ============================================
+   BASE LAYOUT SKELETON
+   (loaded on every admin page)
+   ============================================ */
+
+.main-content {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    flex: 1;
+    min-height: calc(100vh - 70px);
+}
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+}
+
+/* ============================================
+   BASE HEADER (self-contained)
+   The admin header uses <header class="header admin-header">.
+   These rules are the source of truth for admin pages. They
+   intentionally mirror the values used by shared/header.css so
+   a shared asset (logo, brand image) matches, but they are NOT
+   dependent on shared/header.css being loaded.
+   ============================================ */
+
+.header {
+    background: var(--white);
+    border-bottom: 1px solid var(--gray-200);
+    position: sticky;
+    top: 0;
+    z-index: var(--z-sticky);
+>>>>>>> Stashed changes:admin/assets/css/header.css
     height: 70px;
     min-height: 70px;
     max-height: 70px;
+    transition: box-shadow 0.1s ease;
 }
 
+<<<<<<< Updated upstream:rider/assets/css/header.css
 .rider-header .header-container {
+=======
+.header.header-scrolled {
+    box-shadow: var(--shadow-md);
+}
+
+.header-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 var(--spacing-4);
+    height: 100%;
+}
+
+/* ---- Logo ---- */
+
+.header-logo {
+    flex-shrink: 0;
+}
+
+.logo-link {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    text-decoration: none;
+}
+
+.logo-image {
+    height: 40px;
+    width: auto;
+}
+
+.logo-text {
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.5px;
+}
+
+.logo-text span {
+    color: var(--primary);
+}
+
+/* ---- Desktop nav ---- */
+
+.header-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-4);
+}
+
+.nav-list {
+    display: flex;
+    align-items: center;
+    list-style: none;
+    gap: var(--spacing-2);
+    margin: 0;
+    padding: 0;
+}
+
+.nav-item {
+    position: relative;
+}
+
+/* ============================================
+   ADMIN HEADER — IDENTICAL DIMENSIONS
+   The .admin-header class is retained on the <header> element
+   so page CSS or JS can target it, but it does NOT redeclare
+   height/min-height/max-height. The base .header rules above
+   already establish those.
+   ============================================ */
+
+.admin-header .header-container {
+>>>>>>> Stashed changes:admin/assets/css/header.css
     max-width: 1200px;
     margin: 0 auto;
     height: 100%;
@@ -37,6 +180,7 @@
     transition: all var(--transition-fast);
     position: relative;
     font-size: var(--font-size-sm);
+    text-decoration: none;
 }
 
 .rider-header .nav-link:hover {
@@ -421,7 +565,11 @@
 }
 
 @media (max-width: 768px) {
+<<<<<<< Updated upstream:rider/assets/css/header.css
     .rider-header {
+=======
+    .header {
+>>>>>>> Stashed changes:admin/assets/css/header.css
         height: 60px;
         min-height: 60px;
         max-height: 60px;
@@ -445,6 +593,11 @@
     .mobile-overlay {
         top: 60px;
         height: calc(100vh - 60px);
+    }
+
+    .main-content,
+    .content {
+        min-height: calc(100vh - 60px);
     }
 }
 
