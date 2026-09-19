@@ -3,11 +3,15 @@
  *
  * Foodpanda-style auth card rendered inside the standard FitPal
  * page shell. All icons come from shared/assets/images/icons/.
- * The country selector is a real <select> hidden behind the styled
- * shell so it remains fully accessible and keyboard-navigable.
+ *
+ * Changes in this version:
+ *   - Illustration is now clipped and centered inside a fixed-height
+ *     band so it never overflows the card's top corners.
+ *   - Region indicator is static: Philippines only.
+ *   - Password field has a visibility toggle (eye icon).
  *
  * @package FitPal
- * @version 4.0 — Country selector is now a real <select>.
+ * @version 6.0 — Illustration fits the card; bleed-through removed.
  */
 
 /* ============================================
@@ -29,7 +33,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 32px 16px;
+    padding: 28px 16px;
     box-sizing: border-box;
     width: 100%;
 }
@@ -43,6 +47,11 @@
     max-width: 420px;
     background: var(--white);
     border-radius: var(--radius-xl);
+    /*
+     * overflow: hidden is what clips the illustration cleanly to the
+     * card's rounded top corners. Without it the image renders as a
+     * hard-edged rectangle that breaks the card's shape.
+     */
     overflow: hidden;
     box-shadow: var(--shadow-lg);
     border: 1px solid var(--gray-200);
@@ -51,20 +60,44 @@
 }
 
 /* ============================================
-   ILLUSTRATION
+   ILLUSTRATION — fitted band at the top of the card
    ============================================ */
 
 .rider-illustration {
+    position: relative;
     width: 100%;
-    line-height: 0;
+    height: 160px;
+    flex-shrink: 0;
     background: var(--gray-50);
+    overflow: hidden;
+    line-height: 0;
+    /*
+     * The card already declares overflow: hidden, but we repeat it
+     * here so the image is clipped even if the card rule is ever
+     * relaxed. Two independent clips, one purpose.
+     */
 }
 
 .rider-illustration img {
-    width: 100%;
-    height: auto;
     display: block;
-    object-fit: cover;
+    width: 100%;
+    height: 100%;
+    /*
+     * `contain` shows the entire illustration, scaled down to fit
+     * inside the band without cropping. If you prefer a "fill the
+     * band edge to edge" look, swap this for `cover`. Either way
+     * the band's fixed height and the card's overflow: hidden
+     * guarantee the image never spills past the card corners.
+     */
+    object-fit: contain;
+    object-position: center center;
+    /*
+     * Padding keeps the illustration from touching the band edges.
+     * Drop the vertical padding if you want the artwork to bleed to
+     * the top of the card.
+     */
+    padding: 16px 24px 0 24px;
+    box-sizing: border-box;
 }
 
 /* ============================================
@@ -72,11 +105,11 @@
    ============================================ */
 
 .rider-auth-content {
-    padding: 28px 24px 20px 24px;
+    padding: 20px 24px 20px 24px;
 }
 
 .rider-auth-title {
-    margin: 0 0 24px 0;
+    margin: 0 0 20px 0;
     font-size: var(--font-size-2xl);
     font-weight: var(--font-weight-bold);
     line-height: 1.3;
@@ -88,72 +121,48 @@
 }
 
 /* ============================================
-   COUNTRY SELECTOR (real <select>)
+   REGION INDICATOR (static, Philippines only)
    ============================================ */
 
 .rider-country-selector {
-    position: relative;
     display: flex;
     align-items: center;
     gap: 12px;
-    height: 56px;
+    height: 52px;
     padding: 0 16px;
     margin-bottom: 16px;
-    border: 1.5px solid var(--gray-300);
+    border: 1.5px solid var(--gray-200);
     border-radius: var(--radius-base);
-    background: var(--white);
+    background: var(--gray-50);
     box-sizing: border-box;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    cursor: default;
+    user-select: none;
 }
 
-.rider-country-selector:focus-within {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 4px rgba(89, 193, 74, 0.15);
-}
-
-/* Leading location icon — tinted to the primary green */
 .rider-country-icon {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     display: block;
     flex-shrink: 0;
     filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
 }
 
-/* The actual <select>. Transparent so the shell shows through. */
-.rider-country-select {
+.rider-country-name {
     flex: 1;
     min-width: 0;
-    height: 100%;
-    border: none;
-    background: transparent;
     font-size: var(--font-size-base);
-    font-family: inherit;
-    font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-semibold);
     color: var(--text);
-    padding: 0;
-    margin: 0;
-    cursor: pointer;
-    appearance: none;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    outline: none;
 }
 
-.rider-country-select option {
-    color: var(--text);
-    background: var(--white);
-}
-
-/* Trailing chevron — neutral gray */
 .rider-chevron-icon {
     width: 18px;
     height: 18px;
     display: block;
     flex-shrink: 0;
-    opacity: 0.55;
+    opacity: 0.85;
     pointer-events: none;
-    filter: brightness(0) saturate(100%) invert(60%) sepia(0%) saturate(0%) brightness(95%) contrast(90%);
+    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
 }
 
 /* ============================================
@@ -166,7 +175,7 @@
 
 .rider-form-control {
     width: 100%;
-    height: 56px;
+    height: 52px;
     padding: 0 16px;
     border: 1.5px solid var(--gray-300);
     border-radius: var(--radius-base);
@@ -193,6 +202,56 @@
 }
 
 /* ============================================
+   PASSWORD FIELD WITH TOGGLE
+   ============================================ */
+
+.rider-password-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.rider-password-wrapper .rider-form-control {
+    padding-right: 52px;
+}
+
+.rider-password-toggle {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-base);
+    background: transparent;
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.rider-password-toggle:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.rider-password-toggle:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    opacity: 1;
+}
+
+.rider-password-toggle img {
+    display: block;
+    width: 20px;
+    height: 20px;
+    pointer-events: none;
+}
+
+/* ============================================
    BUTTONS
    ============================================ */
 
@@ -201,7 +260,7 @@
     align-items: center;
     justify-content: center;
     width: 100%;
-    height: 56px;
+    height: 52px;
     padding: 0 20px;
     border-radius: var(--radius-full);
     font-size: var(--font-size-base);
@@ -268,7 +327,7 @@
 
 .rider-version {
     text-align: center;
-    padding: 0 24px 24px 24px;
+    padding: 0 24px 20px 24px;
     font-size: var(--font-size-xs);
     color: var(--gray-400);
 }
@@ -290,7 +349,7 @@
 }
 
 /* ============================================
-   RESPONSIVE
+   RESPONSIVE — TABLET
    ============================================ */
 
 @media (max-width: 768px) {
@@ -302,45 +361,76 @@
         border-radius: var(--radius-lg);
     }
 
+    .rider-illustration {
+        height: 140px;
+    }
+
+    .rider-illustration img {
+        padding: 12px 20px 0 20px;
+    }
+
     .rider-auth-content {
-        padding: 22px 18px 16px 18px;
+        padding: 18px 18px 16px 18px;
     }
 
     .rider-auth-title {
         font-size: var(--font-size-xl);
-        margin-bottom: 20px;
+        margin-bottom: 18px;
     }
 
     .rider-country-selector,
     .rider-form-control,
     .rider-btn {
-        height: 50px;
+        height: 48px;
         font-size: var(--font-size-sm);
     }
 
-    .rider-country-icon {
-        width: 18px;
-        height: 18px;
-    }
-
+    .rider-country-icon,
     .rider-chevron-icon {
         width: 16px;
         height: 16px;
     }
+
+    .rider-password-toggle {
+        width: 32px;
+        height: 32px;
+        right: 8px;
+    }
+
+    .rider-password-toggle img {
+        width: 18px;
+        height: 18px;
+    }
+
+    .rider-password-wrapper .rider-form-control {
+        padding-right: 46px;
+    }
 }
+
+/* ============================================
+   RESPONSIVE — SMALL MOBILE
+   ============================================ */
 
 @media (max-width: 400px) {
     .rider-auth-page {
         padding: 12px 8px;
     }
 
+    .rider-illustration {
+        height: 120px;
+    }
+
+    .rider-illustration img {
+        padding: 10px 16px 0 16px;
+    }
+
     .rider-auth-content {
-        padding: 18px 14px 12px 14px;
+        padding: 16px 14px 12px 14px;
     }
 
     .rider-country-selector,
     .rider-form-control,
     .rider-btn {
-        height: 46px;
+        height: 44px;
     }
 }

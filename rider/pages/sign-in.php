@@ -4,11 +4,20 @@
  *
  * Uses the shared rider header + footer. All icons and images come
  * from the shared assets folder so nothing loads from an external
- * host. The country selector lists Asian countries only.
+ * host.
+ *
+ * The country selector has been removed. FitPal's rider program
+ * currently operates in the Philippines only, so the page renders a
+ * static Philippines indicator with a flag icon instead of a
+ * dropdown. When FitPal expands to other regions, replace the
+ * static block with a <select> again and repopulate from a list.
+ *
+ * A password visibility toggle (eye icon) is now present on the
+ * password field, matching the customer sign-in page.
  *
  * @package FitPal
- * @version 4.0 — Asian-only country list; real <select> element;
- *                aligns flash-message keys with the customer role.
+ * @version 5.0 — Philippines-only; password toggle added; smaller
+ *                illustration.
  */
 
 declare(strict_types=1);
@@ -33,43 +42,6 @@ unset($_SESSION['login_error']);
 
 $successMessage = $_SESSION['registration_success'] ?? '';
 unset($_SESSION['registration_success']);
-
-// ===== COUNTRY LIST (Asia only) =====
-$asianCountries = [
-    'PH' => 'Philippines',
-    'SG' => 'Singapore',
-    'MY' => 'Malaysia',
-    'ID' => 'Indonesia',
-    'TH' => 'Thailand',
-    'VN' => 'Vietnam',
-    'JP' => 'Japan',
-    'KR' => 'South Korea',
-    'CN' => 'China',
-    'HK' => 'Hong Kong',
-    'TW' => 'Taiwan',
-    'IN' => 'India',
-    'BD' => 'Bangladesh',
-    'PK' => 'Pakistan',
-    'LK' => 'Sri Lanka',
-    'NP' => 'Nepal',
-    'MM' => 'Myanmar',
-    'KH' => 'Cambodia',
-    'LA' => 'Laos',
-    'BN' => 'Brunei',
-    'AE' => 'United Arab Emirates',
-    'SA' => 'Saudi Arabia',
-    'QA' => 'Qatar',
-    'KW' => 'Kuwait',
-    'BH' => 'Bahrain',
-    'OM' => 'Oman',
-    'TR' => 'Turkey',
-];
-
-// Remember the previously chosen country across failed submissions.
-$selectedCountry = $_POST['country'] ?? 'PH';
-if (!isset($asianCountries[$selectedCountry])) {
-    $selectedCountry = 'PH';
-}
 
 // ===== ILLUSTRATION PATH =====
 $riderIllustration = $assetBase . 'assets/images/rider-image/rider.png';
@@ -111,19 +83,12 @@ $heroFallback      = $assetBase . 'assets/images/showcase/hero-image.png';
                     <input type="hidden" name="csrf_token"
                         value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
 
-                    <!-- Country selector (Asian countries only) -->
-                    <div class="rider-country-selector">
+                    <!-- Region indicator: Philippines only -->
+                    <div class="rider-country-selector" role="note" aria-label="Operating region">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt=""
                             class="rider-country-icon" aria-hidden="true">
-                        <select id="country" name="country" class="rider-country-select" aria-label="Select country">
-                            <?php foreach ($asianCountries as $code => $name): ?>
-                            <option value="<?php echo htmlspecialchars($code, ENT_QUOTES, 'UTF-8'); ?>"
-                                <?php echo $code === $selectedCountry ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($name, ENT_QUOTES, 'UTF-8'); ?>
-                            </option>
-                            <?php endforeach; ?>
-                        </select>
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-drop-down-line.svg" alt=""
+                        <span class="rider-country-name">Philippines</span>
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/verified-fill.svg" alt=""
                             class="rider-chevron-icon" aria-hidden="true">
                     </div>
 
@@ -137,8 +102,15 @@ $heroFallback      = $assetBase . 'assets/images/showcase/hero-image.png';
 
                     <div class="rider-form-group">
                         <label for="password" class="sr-only">Password</label>
-                        <input type="password" id="password" name="password" class="rider-form-control"
-                            placeholder="Password" autocomplete="current-password" required>
+                        <div class="rider-password-wrapper">
+                            <input type="password" id="password" name="password" class="rider-form-control"
+                                placeholder="Password" autocomplete="current-password" required>
+                            <button type="button" class="rider-password-toggle" id="togglePassword" tabindex="-1"
+                                aria-label="Show password" aria-pressed="false">
+                                <img src="<?php echo $assetBase; ?>assets/images/icons/password-hide.svg" alt=""
+                                    id="passwordIcon">
+                            </button>
+                        </div>
                     </div>
 
                     <button type="submit" class="rider-btn rider-btn-dark">Sign in</button>

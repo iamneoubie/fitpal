@@ -1,12 +1,12 @@
 /**
  * FitPal Rider Sign-In JavaScript
  *
- * Client-side validation only. Server-side validation lives in
- * sign-in-handler.php.
+ * Client-side validation plus password visibility toggle. All real
+ * validation happens server-side in sign-in-handler.php.
  *
  * @package FitPal
- * @version 1.1 — Aligns with customer sign-in.js; adds password
- *                toggle hook (optional icon element).
+ * @version 2.0 — Adds password eye-icon toggle; preserves existing
+ *                field error clearing.
  */
 (function () {
     'use strict';
@@ -18,8 +18,32 @@
         const password = document.getElementById('password');
         const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
 
+        const toggleBtn = document.getElementById('togglePassword');
+        const toggleIcon = document.getElementById('passwordIcon');
+
         if (!form) return;
 
+        // ============================================
+        // PASSWORD VISIBILITY TOGGLE
+        // ============================================
+        if (toggleBtn && password && toggleIcon) {
+            toggleBtn.addEventListener('click', function () {
+                const isPassword = password.type === 'password';
+
+                password.type = isPassword ? 'text' : 'password';
+
+                const iconFile = isPassword ? 'password-unhide.svg' : 'password-hide.svg';
+                toggleIcon.src = '../../shared/assets/images/icons/' + iconFile;
+                toggleIcon.alt = isPassword ? 'Hide password' : 'Show password';
+
+                toggleBtn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+                toggleBtn.setAttribute('aria-pressed', isPassword ? 'true' : 'false');
+            });
+        }
+
+        // ============================================
+        // FORM VALIDATION
+        // ============================================
         form.addEventListener('submit', function (e) {
             let isValid = true;
 
