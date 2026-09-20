@@ -8,7 +8,6 @@
 # *.extension
 # folder/another_folder/*
 
-/logs/
 *env
 *txt
 /shared/uploads/*
