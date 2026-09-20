@@ -7,13 +7,12 @@
  *
  * Riders do NOT have a cart, so there is no .nav-badge rule here.
  *
+ * Includes the logout confirmation modal styles at the bottom,
+ * mirroring the restaurant header.
+ *
  * @package FitPal
- * @version 2.0 — Rebuilt from scratch to match the customer header
- *                layout. Removed leftover Git merge markers, the
- *                malformed nested docblock, and the duplicated
- *                .rider-header block that caused the stylesheet to
- *                parse incorrectly (and the profile page to lose
- *                its background).
+ * @version 3.0 — Adds logout confirmation modal styles, mobile user
+ *                greeting link variant.
  */
 
 /* ============================================
@@ -89,6 +88,7 @@
     border: 2px solid transparent;
     cursor: pointer;
     white-space: nowrap;
+    font-family: inherit;
 }
 
 .rider-header .btn-sm {
@@ -290,6 +290,10 @@
     text-decoration: none;
     text-align: center;
     width: 100%;
+    font-family: inherit;
+    border: none;
+    background: none;
+    cursor: pointer;
 }
 
 .mobile-nav-link:hover {
@@ -309,10 +313,15 @@
 }
 
 /* ============================================
-   MOBILE USER GREETING
+   MOBILE USER GREETING — link variant
    ============================================ */
 
 .mobile-user-greeting {
+    display: block;
+    padding: 0;
+}
+
+.mobile-user-greeting-link {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -321,6 +330,14 @@
     background: var(--gray-50);
     border-radius: var(--radius-base);
     width: 100%;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.15s ease;
+    box-sizing: border-box;
+}
+
+.mobile-user-greeting-link:hover {
+    background: var(--gray-100);
 }
 
 .mobile-user-avatar {
@@ -399,7 +416,7 @@
     flex-shrink: 0;
     border: 2px solid var(--primary);
     transition: all var(--transition-fast);
-    cursor: default;
+    text-decoration: none;
 }
 
 .user-profile-circle:hover {
@@ -485,5 +502,145 @@
     .mobile-nav-link {
         padding: var(--spacing-3) var(--spacing-3);
         font-size: var(--font-size-base);
+    }
+}
+
+/* ============================================
+   LOGOUT CONFIRMATION MODAL
+   ============================================ */
+
+.logout-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.logout-modal.active {
+    opacity: 1;
+}
+
+.logout-modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(5, 10, 4, 0.6);
+    cursor: pointer;
+}
+
+.logout-modal-content {
+    position: relative;
+    background: var(--white);
+    border-radius: var(--radius-xl);
+    padding: 32px 24px 24px;
+    max-width: 420px;
+    width: 100%;
+    text-align: center;
+    box-shadow: var(--shadow-xl);
+    transform: scale(0.95) translateY(-10px);
+    opacity: 0;
+    transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s ease;
+    box-sizing: border-box;
+}
+
+.logout-modal.active .logout-modal-content {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+}
+
+.logout-modal-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 16px;
+    background: rgba(220, 53, 69, 0.1);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.logout-modal-icon img {
+    width: 28px;
+    height: 28px;
+    display: block;
+    filter: brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(600%) hue-rotate(330deg) brightness(90%) contrast(85%);
+}
+
+.logout-modal-title {
+    margin: 0 0 8px 0;
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--text);
+}
+
+.logout-modal-text {
+    margin: 0 0 24px 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    line-height: 1.6;
+}
+
+.logout-modal-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.logout-btn-cancel,
+.logout-btn-confirm {
+    flex: 1;
+    padding: 12px 20px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    font-family: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid transparent;
+    min-height: 46px;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.logout-btn-cancel {
+    background: #1a1a1a;
+    color: #ffffff;
+    border-color: #1a1a1a;
+}
+
+.logout-btn-cancel:hover {
+    background: #000000;
+    border-color: #000000;
+}
+
+.logout-btn-confirm {
+    background: var(--danger);
+    color: #ffffff;
+    border-color: var(--danger);
+}
+
+.logout-btn-confirm:hover {
+    background: #b91c1c;
+    border-color: #b91c1c;
+}
+
+@media (max-width: 480px) {
+    .logout-modal-content {
+        padding: 24px 18px 18px;
+    }
+
+    .logout-modal-actions {
+        flex-direction: column-reverse;
+    }
+
+    .logout-btn-cancel,
+    .logout-btn-confirm {
+        width: 100%;
     }
 }

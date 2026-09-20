@@ -11,17 +11,16 @@
  *   - edit-in-place contact number
  *   - vehicle snapshot (read-only)
  *   - address snapshot (read-only, contact support to change)
- *   - logout row
+ *   - logout row (uses confirmation modal via header's logout.js)
  *
  * No inline SQL. All reads go through rider-queries.php.
  * $assetBase is defined by rider/includes/header.php, so the header
  * is required before any code that depends on it.
  *
  * @package FitPal
- * @version 3.0 — Full rebuild. Removed the broken vehicle card and
- *                malformed tab structure. Three tabs now: Personal,
- *                Vehicle, Address. Everything the page renders is
- *                a class defined in rider/assets/css/profile.css.
+ * @version 3.1 — Profile page logout now goes through the shared
+ *                confirmation modal. The button carries
+ *                data-logout-trigger so logout.js intercepts it.
  */
 
 declare(strict_types=1);
@@ -394,12 +393,12 @@ $plateLabel   = $plate !== '' ? $plate : 'No plate recorded';
              LOGOUT
              ============================================ -->
         <div class="logout-wrap">
-            <a href="../backend/handlers/sign-out-handler.php" class="btn btn-cancel logout-btn">
+            <button type="button" class="btn btn-cancel logout-btn" data-logout-trigger>
                 <img src="<?php echo $assetBase; ?>assets/images/icons/logoutsvg.svg" alt="" class="btn-icon" width="16"
                     height="16"
                     onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/cancel.svg'">
                 <span>Sign Out</span>
-            </a>
+            </button>
         </div>
 
     </div>
