@@ -2,11 +2,7 @@
 
 **Preset:** all_path
 
-<<<<<<< HEAD
-**Generated:** 2026-09-20 23:38:38
-=======
-**Generated:** 2026-09-20 23:25:43
->>>>>>> 9d3be68c2fc86cc0f8943984db853547104ce956
+**Generated:** 2026-09-21 00:12:40
 
 ---
 
@@ -18,11 +14,7 @@
 # Web Project Structure
 
 **Project:** fitpal
-<<<<<<< HEAD
-**Generated:** 2026-09-20 23:32:33
-=======
-**Generated:** 2026-09-20 23:23:11
->>>>>>> 9d3be68c2fc86cc0f8943984db853547104ce956
+**Generated:** 2026-09-21 00:11:29
 **Mode:** all
 
 ```
@@ -135,26 +127,29 @@ fitpal/
 │       └── wallet.php
 ├── logs/
 │   ├── content-fetcher-configuration/
-│   │   ├── all_path.py
-│   │   ├── rider.py
-│   │   ├── riders.py
-│   │   ├── technical_path.py
-│   │   └── tests_path.py
+│   │   └── all_path.py
 │   ├── instructions/
 │   │   ├── test-create-guide.md
 │   │   └── updating-fetcher-guide.md
 │   ├── output/
+│   │   ├── all_path_fetched_codebase.md
+│   │   └── project_structure.md
 │   ├── content-fetcher.py
 │   └── tree-mapper.py
 ├── restaurant/
 │   ├── assets/
 │   │   ├── css/
+│   │   │   ├── dashboard.css
 │   │   │   ├── header.css
+│   │   │   ├── profile.css
 │   │   │   ├── sign-in.css
 │   │   │   └── sign-up.css
 │   │   └── ui/
 │   │       └── js/
+│   │           ├── dashboard.js
 │   │           ├── header.js
+│   │           ├── logout.js
+│   │           ├── profile.js
 │   │           ├── sign-in.js
 │   │           └── sign-up.js
 │   ├── backend/
@@ -162,12 +157,15 @@ fitpal/
 │   │   │   ├── restaurant-connect.php
 │   │   │   └── restaurant-queries.php
 │   │   └── handlers/
+│   │       ├── profile-handler.php
 │   │       ├── sign-in-handler.php
 │   │       ├── sign-out-handler.php
 │   │       └── sign-up-handler.php
 │   ├── includes/
 │   │   └── header.php
 │   └── pages/
+│       ├── dashboard.php
+│       ├── profile.php
 │       ├── sign-in.php
 │       └── sign-up.php
 ├── rider/
@@ -250,6 +248,8 @@ fitpal/
 │   │   │   │   ├── bill-line.svg
 │   │   │   │   ├── building.svg
 │   │   │   │   ├── cancel.svg
+│   │   │   │   ├── car-fill.svg
+│   │   │   │   ├── car-line.svg
 │   │   │   │   ├── cart-arrow-downsvg.svg
 │   │   │   │   ├── cart-arrow-up.svg
 │   │   │   │   ├── cart-plus.svg
@@ -339,6 +339,8 @@ fitpal/
 │   │   │   │   ├── reset.svg
 │   │   │   │   ├── restaurant-fill.svg
 │   │   │   │   ├── restaurant.svg
+│   │   │   │   ├── riding-fill.svg
+│   │   │   │   ├── riding-line.svg
 │   │   │   │   ├── save-empty.svg
 │   │   │   │   ├── save-fill.svg
 │   │   │   │   ├── search-line.svg
@@ -347,6 +349,8 @@ fitpal/
 │   │   │   │   ├── subtract-fill.svg
 │   │   │   │   ├── subtract-line.svg
 │   │   │   │   ├── target-fill.svg
+│   │   │   │   ├── taxi-fill.svg
+│   │   │   │   ├── taxi-line.svg
 │   │   │   │   ├── time-fill.svg
 │   │   │   │   ├── time-update.svg
 │   │   │   │   ├── trash.svg
@@ -388,6 +392,7 @@ fitpal/
 │   │   ├── privacy-policy.php
 │   │   └── terms-conditions.php
 │   └── uploads/
+│       └── restaurant-permits/
 ├── sql/
 │   ├── sample/
 │   │   └── seed-data.sql
@@ -410,25 +415,16 @@ fitpal/
 | File Type | Count |
 |-----------|-------|
 | HTML Files | 0 |
-| PHP Files | 85 |
-| CSS Files | 39 |
-<<<<<<< HEAD
-| JavaScript Files | 31 |
-=======
-| JavaScript Files | 30 |
->>>>>>> 9d3be68c2fc86cc0f8943984db853547104ce956
+| PHP Files | 88 |
+| CSS Files | 41 |
+| JavaScript Files | 34 |
 | JSON Files | 0 |
-| Text/Markdown | 3 |
-| Image Files | 141 |
-| Other Files | 12 |
+| Text/Markdown | 5 |
+| Image Files | 147 |
+| Other Files | 8 |
 
-<<<<<<< HEAD
-**Total Directories:** 64
-**Total Files:** 310
-=======
-**Total Directories:** 63
-**Total Files:** 313
->>>>>>> 9d3be68c2fc86cc0f8943984db853547104ce956
+**Total Directories:** 65
+**Total Files:** 322
 
 ---
 
@@ -444,10 +440,21 @@ fitpal/
 
 ```sql
 -- =====================================================
--- DATABASE: fitpal_food_delivery v.1.0.1
+-- DATABASE: fitpal_food_delivery v.1.1.0
 -- Dietary Meal Ordering and Restaurant Nutrition Analytics System
 -- WITH FULL CUSTOMIZABLE MEAL SUPPORT
 -- ACID Compliant with Proper Constraints
+--
+-- v1.1.0 changes
+-- --------------
+--   + Table 12: restaurant_permit — permit/verification photos
+--     uploaded during restaurant registration. Integrated into
+--     the main DDL rather than added as a post-hoc CREATE TABLE,
+--     so the schema file remains the single source of truth.
+--   + original_name tightened to NOT NULL (handler always supplies it).
+--   + display_order CHECK (>= 0).
+--   + idx_order renamed to idx_restaurant_order (it indexes the
+--     composite (restaurant_id, display_order), not an order_id).
 --
 -- Totals policy: orders no longer store subtotal, delivery_charge,
 -- or total_amount. They are computed on read from queue_item
@@ -573,7 +580,7 @@ CREATE TABLE delivery_rider_address (
 ) COMMENT = 'Delivery rider addresses (one rider -> many addresses)';
 
 -- =====================================================
--- 5b. [NEW] DELIVERY_RIDER_EMERGENCY_CONTACT
+-- 5b. DELIVERY_RIDER_EMERGENCY_CONTACT
 -- No is_primary flag. The row with the lowest
 -- emergency_contact_id (earliest created) is treated as primary.
 -- relationship is a free-form string for scalability.
@@ -682,7 +689,7 @@ CREATE TABLE delivery_rider_profile (
 ) COMMENT = 'Delivery rider profile with verification and performance data';
 
 -- =====================================================
--- 8b. [NEW] DELIVERY_RIDER_DOCUMENT
+-- 8b. DELIVERY_RIDER_DOCUMENT
 -- Just the driver's license file path + issue/expiry dates.
 -- =====================================================
 CREATE TABLE delivery_rider_document (
@@ -776,7 +783,35 @@ CREATE TABLE restaurant_branch (
 ) COMMENT = 'Restaurant branches with financial accounts';
 
 -- =====================================================
--- 12. RESTAURANT_ACCOUNT
+-- 12. RESTAURANT_PERMIT
+-- Permit/verification photos uploaded during restaurant
+-- registration. One restaurant -> 1..5 permits. display_order
+-- preserves the order the applicant uploaded them in, so an
+-- admin review screen can render them in a stable sequence.
+--
+-- Lifecycle: rows are written inside the registration
+-- transaction (sign-up-handler.php) alongside the restaurant
+-- row itself, so a restaurant never exists without at least
+-- one permit. Deleting the restaurant cascades to its permits.
+--
+-- Review state lives on restaurant.verification_status, not
+-- here. Per-permit approval would be a different feature and
+-- is intentionally not modeled.
+-- =====================================================
+CREATE TABLE restaurant_permit (
+    permit_id INT AUTO_INCREMENT PRIMARY KEY,
+    restaurant_id INT NOT NULL,
+    file_path VARCHAR(255) NOT NULL,
+    original_name VARCHAR(255) NOT NULL,
+    display_order INT NOT NULL DEFAULT 0 CHECK (display_order >= 0),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (restaurant_id) REFERENCES restaurant (restaurant_id) ON DELETE CASCADE,
+    INDEX idx_restaurant (restaurant_id),
+    INDEX idx_restaurant_order (restaurant_id, display_order)
+) COMMENT = 'Permit/verification photos uploaded during restaurant registration';
+
+-- =====================================================
+-- 13. RESTAURANT_ACCOUNT
 -- =====================================================
 CREATE TABLE restaurant_account (
     restaurant_account_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -815,7 +850,7 @@ CREATE TABLE restaurant_account (
 ) COMMENT = 'All restaurant-side logins — owner, partner, manager, staff';
 
 -- =====================================================
--- 13. DIETARY_INFORMATION
+-- 14. DIETARY_INFORMATION
 -- =====================================================
 CREATE TABLE dietary_information (
     dietary_information_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -852,7 +887,7 @@ CREATE TABLE dietary_information (
 ) COMMENT = 'Nutritional and dietary information for products';
 
 -- =====================================================
--- 14. PRODUCT
+-- 15. PRODUCT
 -- =====================================================
 CREATE TABLE product (
     product_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -883,7 +918,7 @@ CREATE TABLE product (
 ) COMMENT = 'Product listings with nutritional information and customization support';
 
 -- =====================================================
--- 15. INGREDIENT
+-- 16. INGREDIENT
 -- =====================================================
 CREATE TABLE ingredient (
     ingredient_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -905,7 +940,7 @@ CREATE TABLE ingredient (
 ) COMMENT = 'Master list of all ingredients for product customization';
 
 -- =====================================================
--- 16. PRODUCT_COMPOSITION
+-- 17. PRODUCT_COMPOSITION
 -- =====================================================
 CREATE TABLE product_composition (
     composition_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -932,7 +967,7 @@ CREATE TABLE product_composition (
 ) COMMENT = 'Defines which ingredients can be customized for each product';
 
 -- =====================================================
--- 17. CART
+-- 18. CART
 -- =====================================================
 CREATE TABLE cart (
     cart_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -966,7 +1001,7 @@ CREATE TABLE cart (
 ) COMMENT = 'Shopping cart items with customization data';
 
 -- =====================================================
--- 18. ORDERS
+-- 19. ORDERS
 -- destination_address is a historical snapshot: it deliberately
 -- does NOT reference customer_address, so deleting a saved address
 -- never affects past orders. Price totals are computed from
@@ -1010,7 +1045,7 @@ CREATE TABLE orders (
 ) COMMENT = 'Order transactions';
 
 -- =====================================================
--- 19. QUEUE_ITEM
+-- 20. QUEUE_ITEM
 -- =====================================================
 CREATE TABLE queue_item (
     queue_item_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -1035,7 +1070,7 @@ CREATE TABLE queue_item (
 ) COMMENT = 'Kitchen queue items with customization support';
 
 -- =====================================================
--- 20. CUSTOMIZATION_INSTANCE
+-- 21. CUSTOMIZATION_INSTANCE
 -- =====================================================
 CREATE TABLE customization_instance (
     instance_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -1055,7 +1090,7 @@ CREATE TABLE customization_instance (
 ) COMMENT = 'Customer customizations for each order item';
 
 -- =====================================================
--- 21. TRANSACTION
+-- 22. TRANSACTION
 -- =====================================================
 CREATE TABLE transaction (
     transaction_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -1087,7 +1122,7 @@ CREATE TABLE transaction (
 ) COMMENT = 'Financial transaction history';
 
 -- =====================================================
--- 22. FEEDBACK
+-- 23. FEEDBACK
 -- =====================================================
 CREATE TABLE feedback (
     feedback_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -1107,7 +1142,7 @@ CREATE TABLE feedback (
 ) COMMENT = 'Product reviews and feedback';
 
 -- =====================================================
--- 23. NOTIFICATION
+-- 24. NOTIFICATION
 -- =====================================================
 CREATE TABLE notification (
     notification_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -1129,7 +1164,7 @@ CREATE TABLE notification (
 ) COMMENT = 'System notifications';
 
 -- =====================================================
--- 24. MESSAGE
+-- 25. MESSAGE
 -- =====================================================
 CREATE TABLE message (
     message_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -1678,7 +1713,7 @@ BEGIN
     ORDER BY ci.created_at ASC;
 END$$
 
--- [NEW] Fetch a rider's KYC summary for admin review screens.
+-- Fetch a rider's KYC summary for admin review screens.
 CREATE PROCEDURE sp_get_rider_kyc_summary(IN p_delivery_rider_id INT)
 BEGIN
     SELECT
@@ -1940,7 +1975,7 @@ WHERE
 GROUP BY
     p.product_id;
 
--- [NEW] Rider KYC overview for admin dashboards.
+-- Rider KYC overview for admin dashboards.
 CREATE OR REPLACE VIEW rider_kyc_overview AS
 SELECT
     dr.delivery_rider_id,
@@ -1990,9 +2025,9 @@ FROM
 ```sql
 -- =====================================================
 -- FitPal Seed Data
--- Version 5.3
+-- Version 5.4
 --
--- ALIGNED WITH: fitpal_food_delivery schema v5.2
+-- ALIGNED WITH: fitpal_food_delivery schema v5.3
 --   - customer_address is a CHILD of customer
 --   - delivery_rider_address is a CHILD of delivery_rider
 --   - product_composition has NO max_quantity_per_item
@@ -2000,6 +2035,31 @@ FROM
 --   - cart UNIQUE includes customization_hash
 --   - delivery_rider_emergency_contact (no is_primary; earliest id = primary)
 --   - delivery_rider_document (drivers_license path + issue_date + expiry_date)
+--   - restaurant_permit (file_path + original_name + display_order)
+--
+-- v5.4 changes
+-- ------------
+--   + Section 4.5: restaurant_permit rows for all three seeded
+--     restaurants. Three permits each, display_order 0..2, matching
+--     the 0-based index the registration handler produces.
+--   + Permit file_path values use the SAME prefix the handler
+--     writes ('shared/uploads/restaurant-permits/...') so admin
+--     review screens resolve seeded data identically to real data.
+--   + Permit original_name is never NULL (schema NOT NULL).
+--   + Verification queries V12–V14 added at the end.
+--
+-- PREREQUISITE
+-- ------------
+-- Four SVG placeholder files must exist on disk before this seed
+-- is meaningful for admin review screens:
+--
+--   shared/uploads/restaurant-permits/placeholder-dti.svg
+--   shared/uploads/restaurant-permits/placeholder-mayors-permit.svg
+--   shared/uploads/restaurant-permits/placeholder-sanitary.svg
+--   shared/uploads/restaurant-permits/placeholder-business.svg
+--
+-- The SQL below cannot create files. See the SVG definitions after
+-- the seed for their contents.
 --
 -- PRINCIPLES
 --   1. Every account gets at least one address row.
@@ -2020,6 +2080,10 @@ FROM
 --      'uploads/riders/documents/placeholder-license.svg'.
 --      The app overwrites this path when a rider uploads a real
 --      license.
+--   7. Every restaurant gets three permit rows pointing at
+--      shared SVG placeholders under shared/uploads/. The path
+--      prefix matches what sign-up-handler.php writes so seeded
+--      data and real data are indistinguishable to the read side.
 -- =====================================================
 
 USE fitpal_food_delivery;
@@ -2186,7 +2250,7 @@ VALUES (
 SET @customer_address_id = LAST_INSERT_ID();
 
 -- =====================================================
--- 4. RESTAURANTS, BRANCHES, ACCOUNTS, RIDERS
+-- 4. RESTAURANTS, BRANCHES, ACCOUNTS, RIDERS, PERMITS
 -- =====================================================
 
 -- -----------------------------------------------------
@@ -2335,6 +2399,34 @@ VALUES (
         1
     );
 
+-- Green Bowl Cafe permits (3 rows, display_order 0..2)
+-- Path prefix matches sign-up-handler.php's storePermitFile() output.
+INSERT INTO
+    restaurant_permit (
+        restaurant_id,
+        file_path,
+        original_name,
+        display_order
+    )
+VALUES (
+        @rest1_id,
+        'shared/uploads/restaurant-permits/placeholder-dti.svg',
+        'DTI-Certificate-of-Business-Name.svg',
+        0
+    ),
+    (
+        @rest1_id,
+        'shared/uploads/restaurant-permits/placeholder-mayors-permit.svg',
+        'Mayors-Permit-2026.svg',
+        1
+    ),
+    (
+        @rest1_id,
+        'shared/uploads/restaurant-permits/placeholder-sanitary.svg',
+        'Sanitary-Permit.svg',
+        2
+    );
+
 -- -----------------------------------------------------
 -- 4.2 Keto Kitchen — high-fat, low-carb
 -- -----------------------------------------------------
@@ -2478,6 +2570,33 @@ VALUES (
         1
     );
 
+-- Keto Kitchen permits (3 rows, display_order 0..2)
+INSERT INTO
+    restaurant_permit (
+        restaurant_id,
+        file_path,
+        original_name,
+        display_order
+    )
+VALUES (
+        @rest2_id,
+        'shared/uploads/restaurant-permits/placeholder-dti.svg',
+        'DTI-Registration-Keto-Kitchen.svg',
+        0
+    ),
+    (
+        @rest2_id,
+        'shared/uploads/restaurant-permits/placeholder-business.svg',
+        'Business-Permit-Makati.svg',
+        1
+    ),
+    (
+        @rest2_id,
+        'shared/uploads/restaurant-permits/placeholder-sanitary.svg',
+        'Sanitary-Permit-KK.svg',
+        2
+    );
+
 -- -----------------------------------------------------
 -- 4.3 Asian Fusion Fit — gluten-free Asian, halal-friendly
 -- -----------------------------------------------------
@@ -2619,6 +2738,33 @@ VALUES (
         'staff123',
         'staff',
         1
+    );
+
+-- Asian Fusion Fit permits (3 rows, display_order 0..2)
+INSERT INTO
+    restaurant_permit (
+        restaurant_id,
+        file_path,
+        original_name,
+        display_order
+    )
+VALUES (
+        @rest3_id,
+        'shared/uploads/restaurant-permits/placeholder-dti.svg',
+        'DTI-AFF-Registration.svg',
+        0
+    ),
+    (
+        @rest3_id,
+        'shared/uploads/restaurant-permits/placeholder-mayors-permit.svg',
+        'Mayors-Permit-Quezon-City.svg',
+        1
+    ),
+    (
+        @rest3_id,
+        'shared/uploads/restaurant-permits/placeholder-business.svg',
+        'Business-Permit-AFF.svg',
+        2
     );
 
 -- -----------------------------------------------------
@@ -6914,6 +7060,46 @@ FROM
     delivery_rider dr
     JOIN delivery_rider_profile drp ON drp.delivery_rider_id = dr.delivery_rider_id
 ORDER BY dr.delivery_rider_id;
+
+-- V12. Every restaurant has at least one permit row.
+SELECT r.restaurant_id, r.business_name, COUNT(rp.permit_id) AS permit_count
+FROM
+    restaurant r
+    LEFT JOIN restaurant_permit rp ON rp.restaurant_id = r.restaurant_id
+GROUP BY
+    r.restaurant_id,
+    r.business_name
+HAVING
+    permit_count = 0;
+
+-- V13. No permit row has a NULL or empty original_name.
+SELECT
+    permit_id,
+    restaurant_id,
+    file_path,
+    original_name
+FROM restaurant_permit
+WHERE
+    original_name IS NULL
+    OR original_name = '';
+
+-- V14. Permit display_order values within each restaurant are
+-- contiguous starting at 0 (catches seed off-by-one mistakes).
+SELECT
+    rp.restaurant_id,
+    COUNT(*) AS permit_count,
+    MIN(rp.display_order) AS min_order,
+    MAX(rp.display_order) AS max_order,
+    CASE
+        WHEN MIN(rp.display_order) <> 0 THEN 'not_zero_based'
+        WHEN MAX(rp.display_order) <> COUNT(*) - 1 THEN 'not_contiguous'
+        ELSE 'ok'
+    END AS order_state
+FROM restaurant_permit rp
+GROUP BY
+    rp.restaurant_id
+HAVING
+    order_state <> 'ok';
 ```
 
 ---
@@ -48234,6 +48420,623 @@ window.FITPAL_WALLET = {
 
 ---
 
+## File: `fitpal/restaurant/assets/css/dashboard.css`
+
+**Status:** `FOUND`
+
+```css
+/**
+ * FitPal Restaurant Dashboard Styles
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+html {
+    scrollbar-gutter: stable;
+}
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+}
+
+.restaurant-dashboard-page {
+    background: var(--gray-50);
+    padding: 24px 0 40px 0;
+    flex: 1;
+}
+
+.restaurant-dashboard-page .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 16px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Header */
+
+.restaurant-dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.restaurant-dashboard-greeting {
+    flex: 1;
+    min-width: 0;
+}
+
+.restaurant-dashboard-greeting .heading-2 {
+    margin: 0 0 4px 0;
+    font-size: var(--font-size-3xl);
+    line-height: 1.2;
+    color: var(--text);
+}
+
+.restaurant-dashboard-greeting .heading-2 span {
+    color: var(--primary);
+}
+
+.restaurant-dashboard-greeting .text-muted {
+    color: var(--gray-500);
+    margin: 0;
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+}
+
+.restaurant-dashboard-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+/* Alerts */
+
+.alert {
+    padding: 12px 18px;
+    border-radius: var(--radius-base);
+    margin-bottom: 20px;
+    border: 1px solid transparent;
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+}
+
+.alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+
+.alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+/* Stat cards */
+
+.restaurant-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+    align-items: stretch;
+}
+
+.restaurant-stat-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    padding: 18px 20px;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--gray-100);
+    min-height: 92px;
+    box-sizing: border-box;
+}
+
+.restaurant-stat-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.restaurant-stat-number {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--text);
+    margin: 0;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.restaurant-stat-label {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    margin: 2px 0 0 0;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: var(--font-weight-medium);
+}
+
+.restaurant-stat-hint {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    margin: 2px 0 0 0;
+}
+
+.restaurant-stat-hint-active {
+    color: var(--primary);
+    font-weight: var(--font-weight-semibold);
+}
+
+/* Cards */
+
+.restaurant-card {
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--gray-100);
+    margin-bottom: 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.restaurant-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--gray-100);
+    background: var(--gray-50);
+    flex-shrink: 0;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.restaurant-card-header .heading-5 {
+    margin: 0;
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+}
+
+/* Weekly chart */
+
+.restaurant-chart-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.restaurant-weekly-chart {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px;
+    height: 220px;
+    position: relative;
+}
+
+.restaurant-chart-y-axis {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding: 0 4px 22px 0;
+    font-size: 11px;
+    color: var(--gray-400);
+    font-weight: var(--font-weight-medium);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.restaurant-chart-y-label {
+    white-space: nowrap;
+}
+
+.restaurant-chart-plot {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.restaurant-chart-gridline {
+    position: absolute;
+    left: 0;
+    right: 0;
+    border-top: 1px dashed var(--gray-100);
+    height: 0;
+}
+
+.restaurant-chart-plot .restaurant-chart-gridline {
+    bottom: 22px;
+}
+
+.restaurant-chart-plot .restaurant-chart-gridline:first-child {
+    top: 0;
+    bottom: auto;
+}
+
+.restaurant-chart-plot .restaurant-chart-gridline:nth-child(2) {
+    top: 20%;
+}
+
+.restaurant-chart-plot .restaurant-chart-gridline:nth-child(3) {
+    top: 40%;
+}
+
+.restaurant-chart-plot .restaurant-chart-gridline:nth-child(4) {
+    top: 60%;
+}
+
+.restaurant-chart-plot .restaurant-chart-gridline:nth-child(5) {
+    top: 80%;
+}
+
+.restaurant-chart-plot .restaurant-chart-gridline:last-child {
+    top: auto;
+    bottom: 22px;
+}
+
+.restaurant-chart-columns {
+    flex: 1;
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    padding-bottom: 22px;
+    position: relative;
+    z-index: 1;
+    min-height: 0;
+}
+
+.restaurant-chart-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.restaurant-chart-bar-track {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    min-height: 0;
+}
+
+.restaurant-chart-bar {
+    width: 60%;
+    max-width: 42px;
+    min-height: 4px;
+    background: linear-gradient(180deg, var(--secondary) 0%, var(--primary) 100%);
+    border-radius: 6px 6px 3px 3px;
+    transition: filter 0.15s ease, box-shadow 0.15s ease;
+    outline: none;
+}
+
+.restaurant-chart-bar.is-empty {
+    background: var(--gray-200);
+}
+
+.restaurant-chart-bar.is-today {
+    background: linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
+    box-shadow: 0 2px 8px rgba(89, 193, 74, 0.25);
+}
+
+.restaurant-chart-bar:hover,
+.restaurant-chart-bar:focus-visible {
+    filter: brightness(1.06);
+    box-shadow: 0 4px 14px rgba(89, 193, 74, 0.22);
+}
+
+.restaurant-chart-label {
+    font-size: 11px;
+    font-weight: var(--font-weight-semibold);
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    line-height: 1;
+}
+
+.restaurant-chart-label.is-today {
+    color: var(--primary);
+}
+
+.restaurant-chart-summary {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    padding-top: 16px;
+    border-top: 1px solid var(--gray-100);
+}
+
+.restaurant-chart-summary-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.restaurant-chart-summary-label {
+    font-size: 11px;
+    color: var(--gray-500);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.restaurant-chart-summary-value {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-bold);
+    color: var(--text);
+    line-height: 1.2;
+}
+
+.restaurant-chart-summary-hint {
+    font-size: 11px;
+    color: var(--gray-400);
+}
+
+/* Branch list (owner) */
+
+.restaurant-branch-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.restaurant-branch-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--gray-100);
+}
+
+.restaurant-branch-row:last-child {
+    border-bottom: none;
+}
+
+.restaurant-branch-info {
+    min-width: 0;
+}
+
+.restaurant-branch-name {
+    margin: 0 0 2px 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+}
+
+.restaurant-branch-code {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 8px;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--gray-600);
+    background: var(--gray-100);
+    border-radius: 4px;
+    letter-spacing: 0.4px;
+}
+
+.restaurant-branch-meta {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+}
+
+.restaurant-branch-revenue {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-bold);
+    color: var(--primary);
+    white-space: nowrap;
+}
+
+/* Top products (branch) */
+
+.restaurant-product-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.restaurant-product-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--gray-100);
+}
+
+.restaurant-product-row:last-child {
+    border-bottom: none;
+}
+
+.restaurant-product-info {
+    min-width: 0;
+}
+
+.restaurant-product-name {
+    margin: 0 0 2px 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+}
+
+.restaurant-product-meta {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+}
+
+.restaurant-product-revenue {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-bold);
+    color: var(--primary);
+    white-space: nowrap;
+}
+
+/* Empty state */
+
+.restaurant-empty-state {
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.restaurant-empty-title {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+    margin: 0 0 6px 0;
+}
+
+.restaurant-empty-text {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    margin: 0;
+}
+
+/* Badges */
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.4;
+    white-space: nowrap;
+    min-height: 22px;
+}
+
+.badge-success {
+    background: #d4edda;
+    color: #155724;
+}
+
+.badge-warning {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.badge-danger {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.badge-info {
+    background: #d1ecf1;
+    color: #0c5460;
+}
+
+.badge-secondary {
+    background: var(--gray-200);
+    color: var(--gray-600);
+}
+
+/* Responsive */
+
+@media (max-width: 992px) {
+    .restaurant-stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .restaurant-weekly-chart {
+        height: 200px;
+    }
+}
+
+@media (max-width: 768px) {
+    .restaurant-dashboard-page {
+        padding: 16px 0 32px 0;
+    }
+
+    .restaurant-dashboard-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .restaurant-dashboard-greeting .heading-2 {
+        font-size: var(--font-size-2xl);
+    }
+
+    .restaurant-weekly-chart {
+        height: 180px;
+    }
+
+    .restaurant-chart-summary {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .restaurant-chart-summary-item {
+        padding: 8px 0;
+        border-bottom: 1px dashed var(--gray-100);
+    }
+
+    .restaurant-chart-summary-item:last-child {
+        border-bottom: none;
+    }
+
+    .restaurant-branch-row {
+        grid-template-columns: 1fr auto;
+        row-gap: 6px;
+    }
+
+    .restaurant-branch-row .badge {
+        grid-column: 1 / -1;
+        justify-self: start;
+    }
+}
+
+@media (max-width: 480px) {
+    .restaurant-stats-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+
+    .restaurant-stat-card {
+        padding: 14px;
+        min-height: 0;
+    }
+
+    .restaurant-stat-number {
+        font-size: var(--font-size-base);
+    }
+
+    .restaurant-stat-label {
+        font-size: 10px;
+    }
+}
+```
+
+---
+
 ## File: `fitpal/restaurant/assets/css/header.css`
 
 **Status:** `FOUND`
@@ -48242,9 +49045,17 @@ window.FITPAL_WALLET = {
 /**
  * FitPal Restaurant Header Styles
  *
+ * Includes the header layout, mobile nav, user circle, and the
+ * logout confirmation modal styles.
+ *
  * @package FitPal
- * @version 1.0
+ * @version 2.0 — Adds logout modal, greeting-link, and mobile logout
+ *                button styles.
  */
+
+/* ============================================
+   RESTAURANT HEADER OVERRIDES
+   ============================================ */
 
 .restaurant-header {
     height: 70px;
@@ -48257,6 +49068,8 @@ window.FITPAL_WALLET = {
     margin: 0 auto;
     height: 100%;
 }
+
+/* Navigation links */
 
 .restaurant-header .nav-link {
     font-weight: 500;
@@ -48291,6 +49104,8 @@ window.FITPAL_WALLET = {
     border-radius: var(--radius-full);
 }
 
+/* Buttons */
+
 .restaurant-header .btn {
     display: inline-flex;
     align-items: center;
@@ -48307,6 +49122,7 @@ window.FITPAL_WALLET = {
     border: 2px solid transparent;
     cursor: pointer;
     white-space: nowrap;
+    font-family: inherit;
 }
 
 .restaurant-header .btn-sm {
@@ -48352,6 +49168,49 @@ window.FITPAL_WALLET = {
     padding: var(--spacing-1) var(--spacing-3);
     min-height: 32px;
 }
+
+/* ============================================
+   USER PROFILE CIRCLE (Desktop)
+   ============================================ */
+
+.user-profile-circle {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 16px;
+    flex-shrink: 0;
+    border: 2px solid var(--primary);
+    transition: all var(--transition-fast);
+    text-decoration: none;
+}
+
+.user-profile-circle:hover {
+    border-color: var(--primary-dark);
+    transform: scale(1.05);
+}
+
+.user-profile-circle .user-initial {
+    color: var(--white);
+    font-weight: 700;
+    font-size: 16px;
+    text-transform: uppercase;
+}
+
+.user-profile-circle .profile-icon {
+    width: 20px;
+    height: 20px;
+    filter: brightness(0) saturate(100%) invert(100%);
+}
+
+/* ============================================
+   MENU TOGGLE (mobile)
+   ============================================ */
 
 .menu-toggle {
     display: none;
@@ -48401,6 +49260,10 @@ window.FITPAL_WALLET = {
 .menu-toggle.active .bar:nth-child(3) {
     transform: translateY(-7px) rotate(-45deg);
 }
+
+/* ============================================
+   MOBILE OVERLAY + NAV
+   ============================================ */
 
 .mobile-overlay {
     position: fixed;
@@ -48492,6 +49355,10 @@ window.FITPAL_WALLET = {
     text-decoration: none;
     text-align: center;
     width: 100%;
+    font-family: inherit;
+    border: none;
+    background: none;
+    cursor: pointer;
 }
 
 .mobile-nav-link:hover {
@@ -48510,7 +49377,14 @@ window.FITPAL_WALLET = {
     margin: var(--spacing-3) var(--spacing-2);
 }
 
+/* Greeting block (mobile) */
+
 .mobile-user-greeting {
+    display: block;
+    padding: 0;
+}
+
+.mobile-user-greeting-link {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -48519,6 +49393,13 @@ window.FITPAL_WALLET = {
     background: var(--gray-50);
     border-radius: var(--radius-base);
     width: 100%;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.15s ease;
+}
+
+.mobile-user-greeting-link:hover {
+    background: var(--gray-100);
 }
 
 .mobile-user-avatar {
@@ -48551,6 +49432,8 @@ window.FITPAL_WALLET = {
     color: var(--text);
 }
 
+/* Mobile special links */
+
 .mobile-nav-link.mobile-login {
     color: var(--primary);
     font-weight: 600;
@@ -48575,40 +49458,132 @@ window.FITPAL_WALLET = {
     color: var(--danger);
 }
 
-.user-profile-circle {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background: var(--primary);
-    color: var(--white);
+/* ============================================
+   LOGOUT CONFIRMATION MODAL
+   ============================================ */
+
+.logout-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 20px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.logout-modal.active {
+    opacity: 1;
+}
+
+.logout-modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(5, 10, 4, 0.6);
+    cursor: pointer;
+}
+
+.logout-modal-content {
+    position: relative;
+    background: var(--white);
+    border-radius: var(--radius-xl);
+    padding: 32px 24px 24px;
+    max-width: 420px;
+    width: 100%;
+    text-align: center;
+    box-shadow: var(--shadow-xl);
+    transform: scale(0.95) translateY(-10px);
+    opacity: 0;
+    transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s ease;
+}
+
+.logout-modal.active .logout-modal-content {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+}
+
+.logout-modal-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 16px;
+    background: rgba(220, 53, 69, 0.1);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.logout-modal-icon img {
+    width: 28px;
+    height: 28px;
+    display: block;
+    filter: brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(600%) hue-rotate(330deg) brightness(90%) contrast(85%);
+}
+
+.logout-modal-title {
+    margin: 0 0 8px 0;
+    font-size: var(--font-size-lg);
     font-weight: 700;
-    font-size: 16px;
-    flex-shrink: 0;
-    border: 2px solid var(--primary);
-    transition: all var(--transition-fast);
-    cursor: default;
+    color: var(--text);
 }
 
-.user-profile-circle:hover {
-    border-color: var(--primary-dark);
-    transform: scale(1.05);
+.logout-modal-text {
+    margin: 0 0 24px 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    line-height: 1.6;
 }
 
-.user-profile-circle .user-initial {
-    color: var(--white);
-    font-weight: 700;
-    font-size: 16px;
-    text-transform: uppercase;
+.logout-modal-actions {
+    display: flex;
+    gap: 12px;
 }
 
-.user-profile-circle .profile-icon {
-    width: 20px;
-    height: 20px;
-    filter: brightness(0) saturate(100%) invert(100%);
+.logout-btn-cancel,
+.logout-btn-confirm {
+    flex: 1;
+    padding: 12px 20px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    font-family: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid transparent;
+    min-height: 46px;
+    text-align: center;
 }
+
+.logout-btn-cancel {
+    background: #1a1a1a;
+    color: #ffffff;
+    border-color: #1a1a1a;
+}
+
+.logout-btn-cancel:hover {
+    background: #000000;
+    border-color: #000000;
+}
+
+.logout-btn-confirm {
+    background: var(--danger);
+    color: #ffffff;
+    border-color: var(--danger);
+}
+
+.logout-btn-confirm:hover {
+    background: #b91c1c;
+    border-color: #b91c1c;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
 
 @media (max-width: 992px) {
     .restaurant-header .header-nav {
@@ -48671,6 +49646,630 @@ window.FITPAL_WALLET = {
     .mobile-nav-link {
         padding: var(--spacing-3) var(--spacing-3);
         font-size: var(--font-size-base);
+    }
+}
+
+@media (max-width: 480px) {
+    .logout-modal-content {
+        padding: 24px 18px 18px;
+    }
+
+    .logout-modal-actions {
+        flex-direction: column-reverse;
+    }
+
+    .logout-btn-cancel,
+    .logout-btn-confirm {
+        width: 100%;
+    }
+}
+```
+
+---
+
+## File: `fitpal/restaurant/assets/css/profile.css`
+
+**Status:** `FOUND`
+
+```css
+/**
+ * FitPal Restaurant Profile Page Styles
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+html {
+    scrollbar-gutter: stable;
+}
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+    background: var(--gray-50);
+}
+
+.restaurant-profile-page {
+    padding: 24px 0 40px 0;
+    flex: 1;
+}
+
+.restaurant-profile-page .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 16px;
+    width: 100%;
+}
+
+.page-title-header {
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid var(--primary);
+}
+
+.page-title-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.page-title-header h1 {
+    margin: 0;
+    font-size: var(--font-size-2xl);
+    font-weight: 700;
+    color: var(--text);
+    text-align: right;
+}
+
+.back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    background: #1a1a1a;
+    color: #ffffff;
+    border: none;
+    border-radius: var(--radius-base);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    font-family: inherit;
+    text-decoration: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.back-btn-icon {
+    width: 20px;
+    height: 20px;
+    display: block;
+    filter: brightness(0) invert(1);
+}
+
+.alert {
+    padding: 12px 16px;
+    border-radius: var(--radius-base);
+    margin-bottom: 16px;
+    border: 1px solid transparent;
+    font-size: var(--font-size-sm);
+}
+
+.alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+
+.alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+.profile-header-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-sm);
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.profile-header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-width: 0;
+}
+
+.profile-avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: 700;
+    flex-shrink: 0;
+    text-transform: uppercase;
+}
+
+.profile-name-role {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.profile-full-name {
+    margin: 0;
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+.profile-role-badge {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+}
+
+.profile-meta-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 2px;
+}
+
+.profile-joined {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+}
+
+.profile-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    padding: 4px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-sm);
+    overflow-x: auto;
+}
+
+.profile-tab {
+    flex: 1;
+    min-width: 120px;
+    padding: 12px 20px;
+    border: none;
+    border-radius: var(--radius-base);
+    background: transparent;
+    color: var(--gray-600);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: center;
+    white-space: nowrap;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.profile-tab.active {
+    background: var(--primary);
+    color: var(--white);
+}
+
+.profile-tab-content {
+    display: none;
+}
+
+.profile-tab-content.active {
+    display: block;
+}
+
+.profile-card {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 24px;
+    overflow: hidden;
+}
+
+.profile-card .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.profile-card .card-header h3 {
+    margin: 0;
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--text);
+}
+
+.profile-card .card-body {
+    padding: 20px;
+}
+
+.profile-form .form-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.profile-form .form-group {
+    margin-bottom: 16px;
+    min-width: 0;
+}
+
+.profile-form .field-label {
+    display: block;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.profile-form .form-control {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-base);
+    font-family: inherit;
+    background: var(--white);
+    color: var(--text);
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.profile-form .form-control:disabled {
+    background: var(--gray-50);
+    color: var(--gray-600);
+    cursor: not-allowed;
+    border-color: var(--gray-200);
+}
+
+.profile-form .form-control:not(:disabled):focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
+}
+
+.profile-form textarea.form-control {
+    min-height: 100px;
+    resize: vertical;
+}
+
+.profile-form .form-error {
+    color: var(--danger);
+    font-size: var(--font-size-xs);
+    margin-top: 4px;
+    display: none;
+}
+
+.profile-form .form-hint {
+    color: var(--gray-500);
+    font-size: var(--font-size-xs);
+    margin-top: 4px;
+}
+
+.profile-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--gray-100);
+}
+
+.profile-actions .btn {
+    padding: 10px 20px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    border: 2px solid transparent;
+    min-width: 160px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.profile-actions .btn-primary {
+    background: var(--primary);
+    color: var(--white);
+    border-color: var(--primary);
+}
+
+.profile-actions .btn-primary:hover {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+}
+
+.profile-actions .btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.password-wrapper {
+    position: relative;
+}
+
+.password-wrapper .form-control {
+    padding-right: 44px;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.5;
+    border-radius: var(--radius-sm);
+}
+
+.password-toggle:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.password-toggle img {
+    width: 20px;
+    height: 20px;
+    display: block;
+}
+
+.info-grid {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    overflow: hidden;
+    margin-bottom: 16px;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 16px;
+    background: var(--white);
+    border-bottom: 1px solid var(--gray-100);
+}
+
+.info-row:last-child {
+    border-bottom: none;
+}
+
+.info-label {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.info-value {
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--text);
+    text-align: right;
+    word-break: break-word;
+}
+
+.info-note {
+    margin: 12px 0 0 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    line-height: 1.6;
+    padding: 10px 12px;
+    background: var(--gray-50);
+    border-left: 3px solid var(--primary);
+    border-radius: var(--radius-sm);
+}
+
+.address-item {
+    padding: 14px 16px;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    background: var(--white);
+}
+
+.address-item.default {
+    border-color: var(--primary);
+    background: var(--gray-50);
+}
+
+.address-text {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-700);
+    line-height: 1.6;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.badge-success {
+    background: #d4edda;
+    color: #155724;
+}
+
+.badge-warning {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.badge-danger {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.badge-secondary {
+    background: var(--gray-200);
+    color: var(--gray-600);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.empty-icon {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 10px;
+    background: var(--gray-100);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.empty-icon img {
+    width: 100%;
+    height: 100%;
+    max-width: 32px;
+    max-height: 32px;
+    object-fit: contain;
+    opacity: 0.5;
+}
+
+.empty-title {
+    margin: 0;
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--text);
+}
+
+.empty-text {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+}
+
+@media (max-width: 768px) {
+    .restaurant-profile-page {
+        padding: 16px 0 32px 0;
+    }
+
+    .page-title-header h1 {
+        font-size: var(--font-size-xl);
+    }
+
+    .profile-header-card {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 20px;
+    }
+
+    .profile-header-left {
+        justify-content: center;
+        text-align: center;
+        flex-direction: column;
+    }
+
+    .profile-name-role {
+        align-items: center;
+    }
+
+    .profile-meta-line {
+        justify-content: center;
+    }
+
+    .profile-tabs {
+        flex-wrap: nowrap;
+    }
+
+    .profile-form .form-row {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+
+    .profile-actions {
+        flex-direction: column-reverse;
+    }
+
+    .profile-actions .btn {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .restaurant-profile-page .container {
+        padding: 0 12px;
+    }
+
+    .page-title-header h1 {
+        font-size: var(--font-size-lg);
+    }
+
+    .profile-avatar {
+        width: 56px;
+        height: 56px;
+        font-size: 20px;
+    }
+
+    .profile-full-name {
+        font-size: var(--font-size-lg);
+    }
+
+    .profile-card .card-body {
+        padding: 14px;
+    }
+
+    .profile-card .card-header {
+        padding: 12px 16px;
     }
 }
 ```
@@ -50074,6 +51673,33 @@ window.FITPAL_WALLET = {
 
 ---
 
+## File: `fitpal/restaurant/assets/ui/js/dashboard.js`
+
+**Status:** `FOUND`
+
+```javascript
+/**
+ * FitPal Restaurant Dashboard JavaScript
+ *
+ * Minimal: no chart tooltip, no modals. Any chart hover state is
+ * handled with CSS only. This file is a placeholder for future
+ * dashboard interactions (filters, date range picker).
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+(function () {
+    'use strict';
+
+    document.addEventListener('DOMContentLoaded', function () {
+        // Reserved for future dashboard interactions.
+    });
+})();
+```
+
+---
+
 ## File: `fitpal/restaurant/assets/ui/js/header.js`
 
 **Status:** `FOUND`
@@ -50180,6 +51806,345 @@ window.FITPAL_WALLET = {
             }
         }
     })();
+})();
+```
+
+---
+
+## File: `fitpal/restaurant/assets/ui/js/logout.js`
+
+**Status:** `FOUND`
+
+```javascript
+/**
+ * FitPal Restaurant Logout Confirmation
+ *
+ * Intercepts clicks on [data-logout-trigger] elements and shows a
+ * Yes/No confirmation modal. The modal's confirm anchor navigates to
+ * sign-out-handler.php. Cancel closes the modal.
+ *
+ * The modal markup is rendered by includes/header.php on every
+ * authenticated page, so this script works everywhere.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+(function () {
+    'use strict';
+
+    document.addEventListener('DOMContentLoaded', function () {
+
+        var modal = document.getElementById('logoutModal');
+        if (!modal) return;
+
+        var confirmBtn = modal.querySelector('.logout-btn-confirm');
+        var cancelNodes = modal.querySelectorAll('[data-logout-cancel]');
+        var triggers = document.querySelectorAll('[data-logout-trigger]');
+
+        function openModal() {
+            document.body.style.overflow = 'hidden';
+            modal.style.display = 'flex';
+            void modal.offsetWidth;
+            modal.classList.add('active');
+            if (confirmBtn) setTimeout(function () { confirmBtn.focus(); }, 80);
+        }
+
+        function closeModal() {
+            modal.classList.remove('active');
+            setTimeout(function () {
+                if (!modal.classList.contains('active')) {
+                    modal.style.display = 'none';
+                    document.body.style.overflow = '';
+                }
+            }, 220);
+        }
+
+        triggers.forEach(function (trigger) {
+            trigger.addEventListener('click', function (e) {
+                e.preventDefault();
+                openModal();
+            });
+        });
+
+        cancelNodes.forEach(function (node) {
+            node.addEventListener('click', function (e) {
+                e.preventDefault();
+                closeModal();
+            });
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modal.classList.contains('active')) {
+                closeModal();
+            }
+        });
+    });
+})();
+```
+
+---
+
+## File: `fitpal/restaurant/assets/ui/js/profile.js`
+
+**Status:** `FOUND`
+
+```javascript
+/**
+ * FitPal Restaurant Profile JavaScript
+ *
+ * Handles tab switching, password toggles, form submissions, inline
+ * error rendering, and toast feedback.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+(function () {
+    'use strict';
+
+    document.addEventListener('DOMContentLoaded', function () {
+
+        var CFG = window.FITPAL_RESTAURANT_PROFILE || {};
+        var CSRF = CFG.csrfToken || '';
+        var ASSET = CFG.assetBase || '../../shared/';
+        var HANDLER = '../backend/handlers/profile-handler.php';
+
+        /* ============================================
+           TABS
+           ============================================ */
+        var tabs = document.querySelectorAll('.profile-tab');
+        var panels = document.querySelectorAll('.profile-tab-content');
+
+        tabs.forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                var target = this.getAttribute('data-tab');
+
+                tabs.forEach(function (t) {
+                    var active = t === tab;
+                    t.classList.toggle('active', active);
+                    t.setAttribute('aria-selected', active ? 'true' : 'false');
+                });
+
+                panels.forEach(function (p) {
+                    p.classList.toggle('active', p.id === 'tab-' + target);
+                });
+            });
+        });
+
+        /* ============================================
+           PASSWORD TOGGLES
+           ============================================ */
+        document.querySelectorAll('[data-toggle-pw]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var targetId = this.getAttribute('data-toggle-pw');
+                var input = document.getElementById(targetId);
+                var icon = this.querySelector('img');
+                if (!input) return;
+
+                var isPw = input.type === 'password';
+                input.type = isPw ? 'text' : 'password';
+
+                if (icon) {
+                    var file = isPw ? 'password-unhide.svg' : 'password-hide.svg';
+                    icon.src = ASSET + 'assets/images/icons/' + file;
+                }
+            });
+        });
+
+        /* ============================================
+           HELPERS
+           ============================================ */
+        function showError(id, message) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            el.textContent = message;
+            el.style.display = 'block';
+        }
+        function clearError(id) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            el.textContent = '';
+            el.style.display = 'none';
+        }
+        function clearAllErrors(form) {
+            form.querySelectorAll('.form-error').forEach(function (el) {
+                el.textContent = '';
+                el.style.display = 'none';
+            });
+        }
+
+        function showToast(message, type) {
+            var toast = document.getElementById('restaurantProfileToast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'restaurantProfileToast';
+                toast.style.cssText = [
+                    'position:fixed', 'top:80px', 'right:20px',
+                    'padding:12px 20px', 'border-radius:8px',
+                    'font-size:14px', 'font-weight:500', 'z-index:9999',
+                    'transform:translateX(120%)',
+                    'transition:transform .3s cubic-bezier(.4,0,.2,1)',
+                    'max-width:360px', 'box-shadow:0 4px 16px rgba(0,0,0,.15)'
+                ].join(';');
+                document.body.appendChild(toast);
+            }
+
+            var palette = {
+                success: ['#d1fae5', '#065f46'],
+                error: ['#fee2e2', '#991b1b'],
+                info: ['#dbeafe', '#1e40af']
+            };
+            var c = palette[type] || palette.info;
+            toast.style.background = c[0];
+            toast.style.color = c[1];
+            toast.textContent = message;
+
+            void toast.offsetWidth;
+            toast.style.transform = 'translateX(0)';
+
+            clearTimeout(toast._timer);
+            toast._timer = setTimeout(function () {
+                toast.style.transform = 'translateX(120%)';
+            }, 2800);
+        }
+
+        /* ============================================
+           GENERIC FORM WIRER
+           ============================================ */
+        function wireForm(formId, options) {
+            var form = document.getElementById(formId);
+            if (!form) return;
+
+            var btn = form.querySelector('button[type="submit"]');
+            var originalLabel = btn ? btn.textContent.trim() : 'Save';
+
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                clearAllErrors(form);
+
+                if (options.validate) {
+                    var err = options.validate(form);
+                    if (err) {
+                        showError(err.id, err.message);
+                        return;
+                    }
+                }
+
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = options.loadingLabel || 'Saving…';
+                }
+
+                fetch(HANDLER, {
+                    method: 'POST',
+                    body: new FormData(form),
+                    credentials: 'same-origin'
+                })
+                    .then(function (res) { return res.json(); })
+                    .then(function (data) {
+                        if (data && data.status === 'success') {
+                            showToast(data.message || 'Saved.', 'success');
+                            if (options.onSuccess) options.onSuccess(data);
+                        } else {
+                            var field = data && data.field;
+                            var map = options.errorMap || {};
+                            if (field && map[field]) {
+                                showError(map[field], data.message);
+                            } else {
+                                showToast((data && data.message) || 'Could not save.', 'error');
+                            }
+                        }
+                    })
+                    .catch(function () {
+                        showToast('Network error. Please try again.', 'error');
+                    })
+                    .finally(function () {
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.textContent = originalLabel;
+                        }
+                    });
+            });
+        }
+
+        /* ============================================
+           CONTACT FORM
+           ============================================ */
+        wireForm('contactForm', {
+            loadingLabel: 'Saving…',
+            errorMap: { contact_number: 'contactError' },
+            validate: function (form) {
+                var input = form.querySelector('#contact_number');
+                var val = input.value.trim();
+                if (val !== '' && !/^09\d{9}$/.test(val)) {
+                    return { id: 'contactError', message: 'Enter a valid PH mobile number (09XXXXXXXXX).' };
+                }
+                return null;
+            }
+        });
+
+        /* ============================================
+           BUSINESS FORM
+           ============================================ */
+        wireForm('businessForm', {
+            loadingLabel: 'Saving…',
+            errorMap: {
+                description: 'descriptionError',
+                cuisine_type: 'cuisineTypeError'
+            }
+        });
+
+        /* ============================================
+           BRANCH FORM
+           ============================================ */
+        wireForm('branchForm', {
+            loadingLabel: 'Saving…',
+            errorMap: {
+                block: 'blockError',
+                city: 'cityError',
+                postal_code: 'postalCodeError'
+            },
+            validate: function (form) {
+                var block = form.querySelector('#block');
+                var city = form.querySelector('#city');
+                if (!block.value.trim()) return { id: 'blockError', message: 'Block / Street is required.' };
+                if (!city.value.trim()) return { id: 'cityError', message: 'City is required.' };
+                return null;
+            }
+        });
+
+        /* ============================================
+           PASSWORD FORM
+           ============================================ */
+        wireForm('passwordForm', {
+            loadingLabel: 'Changing…',
+            errorMap: {
+                current_password: 'currentPasswordError',
+                new_password: 'newPasswordError',
+                confirm_password: 'confirmPasswordError'
+            },
+            validate: function (form) {
+                var cur = form.querySelector('#current_password').value;
+                var nw = form.querySelector('#new_password').value;
+                var cf = form.querySelector('#confirm_password').value;
+
+                if (cur === '') return { id: 'currentPasswordError', message: 'Current password is required.' };
+                if (nw.length < 8) return { id: 'newPasswordError', message: 'New password must be at least 8 characters.' };
+                if (nw.length > 20) return { id: 'newPasswordError', message: 'New password must be no more than 20 characters.' };
+                if (!/^[A-Za-z0-9]+$/.test(nw)) return { id: 'newPasswordError', message: 'Only letters and numbers.' };
+                if (!/[A-Za-z]/.test(nw) || !/[0-9]/.test(nw)) return { id: 'newPasswordError', message: 'Must contain letters and numbers.' };
+                if (nw !== cf) return { id: 'confirmPasswordError', message: 'Passwords do not match.' };
+                return null;
+            },
+            onSuccess: function () {
+                ['current_password', 'new_password', 'confirm_password'].forEach(function (id) {
+                    var el = document.getElementById(id);
+                    if (el) el.value = '';
+                });
+            }
+        });
+    });
 })();
 ```
 
@@ -51272,13 +53237,14 @@ require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 /**
  * FitPal Restaurant Database Queries
  *
- * Pure data-access layer for the restaurant, restaurant_account,
- * restaurant_branch, and restaurant_permit tables.
+ * Pure data-access layer for restaurant, restaurant_account,
+ * restaurant_branch, restaurant_permit, and read-only dashboard
+ * stats over orders / queue_item.
  *
  * No $_POST, no header(), no echo.
  *
  * @package FitPal
- * @version 1.1
+ * @version 3.0 — Adds profile mutation functions.
  */
 
 declare(strict_types=1);
@@ -51287,13 +53253,6 @@ declare(strict_types=1);
  * AUTHENTICATION
  * ============================================================= */
 
-/**
- * Find a restaurant account by email or username.
- *
- * @param PDO    $db
- * @param string $identifier Email or username
- * @return array<string, mixed>|false
- */
 function findRestaurantAccountByIdentifier(PDO $db, string $identifier): array|false
 {
     $stmt = $db->prepare(
@@ -51324,14 +53283,6 @@ function findRestaurantAccountByIdentifier(PDO $db, string $identifier): array|f
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
-/**
- * Find a restaurant account with owner/branch disambiguation.
- *
- * @param PDO    $db
- * @param string $identifier
- * @param string $roleScope 'owner' or 'branch'
- * @return array<string, mixed>|false
- */
 function findRestaurantAccountByScope(
     PDO $db,
     string $identifier,
@@ -51381,14 +53332,6 @@ function findRestaurantAccountByScope(
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
-/**
- * Find a branch account by identifier, scoped to a specific branch.
- *
- * @param PDO    $db
- * @param string $identifier
- * @param string $branchCode
- * @return array<string, mixed>|false
- */
 function findBranchAccountByIdentifierAndCode(
     PDO $db,
     string $identifier,
@@ -51429,13 +53372,6 @@ function findBranchAccountByIdentifierAndCode(
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
-/**
- * List all active branches that have at least one active branch-scoped
- * account. Used to populate the branch selector on the sign-in page.
- *
- * @param PDO $db
- * @return array<int, array<string, mixed>>
- */
 function getBranchesWithAccounts(PDO $db): array
 {
     $stmt = $db->query(
@@ -51457,13 +53393,6 @@ function getBranchesWithAccounts(PDO $db): array
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-/**
- * Get the full restaurant account profile.
- *
- * @param PDO $db
- * @param int $accountId
- * @return array<string, mixed>|false
- */
 function getRestaurantAccountProfile(PDO $db, int $accountId): array|false
 {
     $stmt = $db->prepare(
@@ -51476,6 +53405,7 @@ function getRestaurantAccountProfile(PDO $db, int $accountId): array|false
             ra.last_name,
             ra.email,
             ra.username,
+            ra.contact_number,
             ra.role,
             ra.is_active,
             ra.date_created,
@@ -51505,13 +53435,18 @@ function getRestaurantAccountProfile(PDO $db, int $accountId): array|false
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
-/**
- * Record a login timestamp.
- *
- * @param PDO $db
- * @param int $accountId
- * @return void
- */
+function getRestaurantAccountWithPassword(PDO $db, int $accountId): array|false
+{
+    $stmt = $db->prepare(
+        "SELECT restaurant_account_id, password, role
+         FROM restaurant_account
+         WHERE restaurant_account_id = :account_id
+         LIMIT 1"
+    );
+    $stmt->execute([':account_id' => $accountId]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
 function recordRestaurantLogin(PDO $db, int $accountId): void
 {
     $stmt = $db->prepare(
@@ -51566,13 +53501,6 @@ function restaurantBranchCodeExists(PDO $db, string $code): bool
  * CREATION
  * ============================================================= */
 
-/**
- * Create a new restaurant row with verification_status = 'pending'.
- *
- * @param PDO   $db
- * @param array $data
- * @return int New restaurant_id
- */
 function createRestaurant(PDO $db, array $data): int
 {
     $stmt = $db->prepare(
@@ -51592,12 +53520,6 @@ function createRestaurant(PDO $db, array $data): int
     return (int)$db->lastInsertId();
 }
 
-/**
- * Create a new financial account for a restaurant branch.
- *
- * @param PDO $db
- * @return int New financial_account_id
- */
 function createRestaurantFinancialAccount(PDO $db): int
 {
     $stmt = $db->prepare(
@@ -51608,15 +53530,6 @@ function createRestaurantFinancialAccount(PDO $db): int
     return (int)$db->lastInsertId();
 }
 
-/**
- * Create a restaurant branch.
- *
- * @param PDO   $db
- * @param int   $restaurantId
- * @param int   $financialAccountId
- * @param array $data
- * @return int New restaurant_branch_id
- */
 function createRestaurantBranch(
     PDO $db,
     int $restaurantId,
@@ -51648,14 +53561,6 @@ function createRestaurantBranch(
     return (int)$db->lastInsertId();
 }
 
-/**
- * Create a restaurant owner account (branch_id = NULL, role = 'owner').
- *
- * @param PDO   $db
- * @param int   $restaurantId
- * @param array $data
- * @return int New restaurant_account_id
- */
 function createRestaurantOwnerAccount(PDO $db, int $restaurantId, array $data): int
 {
     $stmt = $db->prepare(
@@ -51683,16 +53588,6 @@ function createRestaurantOwnerAccount(PDO $db, int $restaurantId, array $data): 
  * PERMIT HANDLING
  * ============================================================= */
 
-/**
- * Insert a permit photo row for a restaurant.
- *
- * @param PDO    $db
- * @param int    $restaurantId
- * @param string $filePath     Project-root-relative path
- * @param string $originalName Original filename
- * @param int    $order        Display order (0-based)
- * @return int New permit_id
- */
 function createRestaurantPermit(
     PDO $db,
     int $restaurantId,
@@ -51715,13 +53610,6 @@ function createRestaurantPermit(
     return (int)$db->lastInsertId();
 }
 
-/**
- * Fetch all permits for a restaurant, ordered by display_order.
- *
- * @param PDO $db
- * @param int $restaurantId
- * @return array<int, array<string, mixed>>
- */
 function getRestaurantPermits(PDO $db, int $restaurantId): array
 {
     $stmt = $db->prepare(
@@ -51738,13 +53626,6 @@ function getRestaurantPermits(PDO $db, int $restaurantId): array
  * GENERATION HELPERS
  * ============================================================= */
 
-/**
- * Generate a unique branch code from a business name.
- *
- * @param PDO    $db
- * @param string $businessName
- * @return string
- */
 function generateBranchCode(PDO $db, string $businessName): string
 {
     $clean = preg_replace('/[^A-Za-z0-9 ]/', '', $businessName) ?? '';
@@ -51769,6 +53650,682 @@ function generateBranchCode(PDO $db, string $businessName): string
     }
 
     return $base . bin2hex(random_bytes(2));
+}
+
+/* =============================================================
+ * PROFILE MUTATIONS
+ * ============================================================= */
+
+function updateRestaurantAccountContact(
+    PDO $db,
+    int $accountId,
+    string $contactNumber
+): bool {
+    $stmt = $db->prepare(
+        "UPDATE restaurant_account
+            SET contact_number = :contact_number
+          WHERE restaurant_account_id = :account_id"
+    );
+    $stmt->execute([
+        ':contact_number' => $contactNumber !== '' ? $contactNumber : null,
+        ':account_id'     => $accountId,
+    ]);
+    return true;
+}
+
+function updateRestaurantBusinessInfo(PDO $db, int $restaurantId, array $data): bool
+{
+    $stmt = $db->prepare(
+        "UPDATE restaurant
+            SET description  = :description,
+                cuisine_type = :cuisine_type,
+                dietary_tags = :dietary_tags
+          WHERE restaurant_id = :restaurant_id"
+    );
+    $stmt->execute([
+        ':description'   => $data['description']  !== '' ? $data['description']  : null,
+        ':cuisine_type'  => $data['cuisine_type'] !== '' ? $data['cuisine_type'] : null,
+        ':dietary_tags'  => $data['dietary_tags'] !== '' ? $data['dietary_tags'] : null,
+        ':restaurant_id' => $restaurantId,
+    ]);
+    return true;
+}
+
+function updateRestaurantBranchAddress(PDO $db, int $branchId, array $data): bool
+{
+    $stmt = $db->prepare(
+        "UPDATE restaurant_branch
+            SET block       = :block,
+                barangay    = :barangay,
+                city        = :city,
+                province    = :province,
+                region      = :region,
+                postal_code = :postal_code
+          WHERE restaurant_branch_id = :branch_id"
+    );
+    $stmt->execute([
+        ':block'       => $data['block']       !== '' ? $data['block']       : null,
+        ':barangay'    => $data['barangay']    !== '' ? $data['barangay']    : null,
+        ':city'        => $data['city'],
+        ':province'    => $data['province']    !== '' ? $data['province']    : null,
+        ':region'      => $data['region']      !== '' ? $data['region']      : null,
+        ':postal_code' => $data['postal_code'] !== '' ? $data['postal_code'] : null,
+        ':branch_id'   => $branchId,
+    ]);
+    return true;
+}
+
+function updateRestaurantAccountPassword(
+    PDO $db,
+    int $accountId,
+    string $newHashedPassword
+): bool {
+    $stmt = $db->prepare(
+        "UPDATE restaurant_account
+            SET password = :password
+          WHERE restaurant_account_id = :account_id"
+    );
+    $stmt->execute([
+        ':password'   => $newHashedPassword,
+        ':account_id' => $accountId,
+    ]);
+    return true;
+}
+
+/* =============================================================
+ * OWNER DASHBOARD
+ * ============================================================= */
+
+function getOwnerDashboardStats(PDO $db, int $restaurantId): array
+{
+    $stats = [
+        'branch_count'        => 0,
+        'product_count'       => 0,
+        'total_orders'        => 0,
+        'orders_today'        => 0,
+        'orders_this_week'    => 0,
+        'active_orders'       => 0,
+        'delivered_orders'    => 0,
+        'gross_revenue'       => 0.0,
+        'revenue_this_week'   => 0.0,
+        'revenue_today'       => 0.0,
+        'average_order_value' => 0.0,
+    ];
+
+    $row = $db->prepare(
+        "SELECT
+            (SELECT COUNT(*) FROM restaurant_branch WHERE restaurant_id = :rid) AS branch_count,
+            (SELECT COUNT(*) FROM product p
+                JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
+              WHERE rb.restaurant_id = :rid2 AND p.is_active = 1) AS product_count"
+    );
+    $row->execute([':rid' => $restaurantId, ':rid2' => $restaurantId]);
+    $counts = $row->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    $stats['branch_count']  = (int)($counts['branch_count'] ?? 0);
+    $stats['product_count'] = (int)($counts['product_count'] ?? 0);
+
+    $orderRow = $db->prepare(
+        "SELECT
+            COUNT(DISTINCT o.order_id) AS total_orders,
+            SUM(CASE WHEN DATE(o.order_date) = CURDATE() THEN 1 ELSE 0 END) AS orders_today,
+            SUM(CASE WHEN o.order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) THEN 1 ELSE 0 END) AS orders_this_week,
+            SUM(CASE WHEN o.order_status IN ('pending','preparing','delivering') THEN 1 ELSE 0 END) AS active_orders,
+            SUM(CASE WHEN o.order_status = 'delivered' THEN 1 ELSE 0 END) AS delivered_orders
+         FROM orders o
+         JOIN queue_item qi ON qi.order_id = o.order_id
+         JOIN restaurant_branch rb ON qi.branch_id = rb.restaurant_branch_id
+         WHERE rb.restaurant_id = :rid"
+    );
+    $orderRow->execute([':rid' => $restaurantId]);
+    $orders = $orderRow->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    $stats['total_orders']     = (int)($orders['total_orders'] ?? 0);
+    $stats['orders_today']     = (int)($orders['orders_today'] ?? 0);
+    $stats['orders_this_week'] = (int)($orders['orders_this_week'] ?? 0);
+    $stats['active_orders']    = (int)($orders['active_orders'] ?? 0);
+    $stats['delivered_orders'] = (int)($orders['delivered_orders'] ?? 0);
+
+    $revRow = $db->prepare(
+        "SELECT
+            COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0) AS gross_revenue,
+            COALESCE(SUM(CASE
+                WHEN o.order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+                THEN qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
+                ELSE 0 END), 0) AS revenue_this_week,
+            COALESCE(SUM(CASE
+                WHEN DATE(o.order_date) = CURDATE()
+                THEN qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
+                ELSE 0 END), 0) AS revenue_today
+         FROM orders o
+         JOIN queue_item qi ON qi.order_id = o.order_id
+         JOIN restaurant_branch rb ON qi.branch_id = rb.restaurant_branch_id
+         WHERE rb.restaurant_id = :rid
+           AND o.order_status NOT IN ('cancelled', 'refunded')"
+    );
+    $revRow->execute([':rid' => $restaurantId]);
+    $rev = $revRow->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    $stats['gross_revenue']     = (float)($rev['gross_revenue'] ?? 0);
+    $stats['revenue_this_week'] = (float)($rev['revenue_this_week'] ?? 0);
+    $stats['revenue_today']     = (float)($rev['revenue_today'] ?? 0);
+
+    if ($stats['delivered_orders'] > 0) {
+        $stats['average_order_value'] =
+            round($stats['gross_revenue'] / $stats['delivered_orders'], 2);
+    }
+
+    return $stats;
+}
+
+function getOwnerWeeklyRevenue(PDO $db, int $restaurantId, int $days = 7): array
+{
+    $stmt = $db->prepare(
+        "SELECT
+            DATE(o.order_date) AS day,
+            COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0) AS amount,
+            COUNT(DISTINCT o.order_id) AS orders
+         FROM orders o
+         JOIN queue_item qi ON qi.order_id = o.order_id
+         JOIN restaurant_branch rb ON qi.branch_id = rb.restaurant_branch_id
+         WHERE rb.restaurant_id = :rid
+           AND o.order_status NOT IN ('cancelled', 'refunded')
+           AND o.order_date >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
+         GROUP BY DATE(o.order_date)
+         ORDER BY day ASC"
+    );
+    $stmt->bindValue(':rid', $restaurantId, PDO::PARAM_INT);
+    $stmt->bindValue(':days', $days - 1, PDO::PARAM_INT);
+    $stmt->execute();
+
+    $byDay = [];
+    while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $byDay[$r['day']] = [
+            'amount' => (float)$r['amount'],
+            'orders' => (int)$r['orders'],
+        ];
+    }
+
+    $series = [];
+    for ($i = $days - 1; $i >= 0; $i--) {
+        $ts   = strtotime("-{$i} days");
+        $date = date('Y-m-d', $ts);
+        $series[] = [
+            'date'   => $date,
+            'label'  => date('l', $ts),
+            'short'  => date('D', $ts),
+            'amount' => $byDay[$date]['amount'] ?? 0.0,
+            'orders' => $byDay[$date]['orders'] ?? 0,
+        ];
+    }
+    return $series;
+}
+
+function getOwnerBranchOverview(PDO $db, int $restaurantId): array
+{
+    $stmt = $db->prepare(
+        "SELECT
+            rb.restaurant_branch_id,
+            rb.branch_name,
+            rb.branch_code,
+            rb.city,
+            rb.is_active,
+            (SELECT COUNT(*) FROM product p
+              WHERE p.restaurant_branch_id = rb.restaurant_branch_id
+                AND p.is_active = 1) AS product_count,
+            (SELECT COUNT(DISTINCT qi.order_id)
+               FROM queue_item qi
+               JOIN orders o ON o.order_id = qi.order_id
+              WHERE qi.branch_id = rb.restaurant_branch_id
+                AND o.order_status NOT IN ('cancelled','refunded')) AS order_count,
+            (SELECT COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0)
+               FROM queue_item qi
+               JOIN orders o ON o.order_id = qi.order_id
+              WHERE qi.branch_id = rb.restaurant_branch_id
+                AND o.order_status NOT IN ('cancelled','refunded')) AS revenue
+         FROM restaurant_branch rb
+         WHERE rb.restaurant_id = :rid
+         ORDER BY rb.is_active DESC, rb.branch_name ASC"
+    );
+    $stmt->execute([':rid' => $restaurantId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/* =============================================================
+ * BRANCH DASHBOARD
+ * ============================================================= */
+
+function getBranchDashboardStats(PDO $db, int $branchId): array
+{
+    $stats = [
+        'product_count'       => 0,
+        'total_orders'        => 0,
+        'orders_today'        => 0,
+        'orders_this_week'    => 0,
+        'active_orders'       => 0,
+        'delivered_orders'    => 0,
+        'gross_revenue'       => 0.0,
+        'revenue_this_week'   => 0.0,
+        'revenue_today'       => 0.0,
+        'average_order_value' => 0.0,
+    ];
+
+    $row = $db->prepare(
+        "SELECT COUNT(*) AS product_count
+         FROM product
+         WHERE restaurant_branch_id = :bid AND is_active = 1"
+    );
+    $row->execute([':bid' => $branchId]);
+    $stats['product_count'] = (int)($row->fetchColumn() ?: 0);
+
+    $orderRow = $db->prepare(
+        "SELECT
+            COUNT(DISTINCT o.order_id) AS total_orders,
+            SUM(CASE WHEN DATE(o.order_date) = CURDATE() THEN 1 ELSE 0 END) AS orders_today,
+            SUM(CASE WHEN o.order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) THEN 1 ELSE 0 END) AS orders_this_week,
+            SUM(CASE WHEN o.order_status IN ('pending','preparing','delivering') THEN 1 ELSE 0 END) AS active_orders,
+            SUM(CASE WHEN o.order_status = 'delivered' THEN 1 ELSE 0 END) AS delivered_orders
+         FROM orders o
+         JOIN queue_item qi ON qi.order_id = o.order_id
+         WHERE qi.branch_id = :bid"
+    );
+    $orderRow->execute([':bid' => $branchId]);
+    $orders = $orderRow->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    $stats['total_orders']     = (int)($orders['total_orders'] ?? 0);
+    $stats['orders_today']     = (int)($orders['orders_today'] ?? 0);
+    $stats['orders_this_week'] = (int)($orders['orders_this_week'] ?? 0);
+    $stats['active_orders']    = (int)($orders['active_orders'] ?? 0);
+    $stats['delivered_orders'] = (int)($orders['delivered_orders'] ?? 0);
+
+    $revRow = $db->prepare(
+        "SELECT
+            COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0) AS gross_revenue,
+            COALESCE(SUM(CASE
+                WHEN o.order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+                THEN qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
+                ELSE 0 END), 0) AS revenue_this_week,
+            COALESCE(SUM(CASE
+                WHEN DATE(o.order_date) = CURDATE()
+                THEN qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
+                ELSE 0 END), 0) AS revenue_today
+         FROM orders o
+         JOIN queue_item qi ON qi.order_id = o.order_id
+         WHERE qi.branch_id = :bid
+           AND o.order_status NOT IN ('cancelled','refunded')"
+    );
+    $revRow->execute([':bid' => $branchId]);
+    $rev = $revRow->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    $stats['gross_revenue']     = (float)($rev['gross_revenue'] ?? 0);
+    $stats['revenue_this_week'] = (float)($rev['revenue_this_week'] ?? 0);
+    $stats['revenue_today']     = (float)($rev['revenue_today'] ?? 0);
+
+    if ($stats['delivered_orders'] > 0) {
+        $stats['average_order_value'] =
+            round($stats['gross_revenue'] / $stats['delivered_orders'], 2);
+    }
+
+    return $stats;
+}
+
+function getBranchWeeklyRevenue(PDO $db, int $branchId, int $days = 7): array
+{
+    $stmt = $db->prepare(
+        "SELECT
+            DATE(o.order_date) AS day,
+            COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0) AS amount,
+            COUNT(DISTINCT o.order_id) AS orders
+         FROM orders o
+         JOIN queue_item qi ON qi.order_id = o.order_id
+         WHERE qi.branch_id = :bid
+           AND o.order_status NOT IN ('cancelled','refunded')
+           AND o.order_date >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
+         GROUP BY DATE(o.order_date)
+         ORDER BY day ASC"
+    );
+    $stmt->bindValue(':bid', $branchId, PDO::PARAM_INT);
+    $stmt->bindValue(':days', $days - 1, PDO::PARAM_INT);
+    $stmt->execute();
+
+    $byDay = [];
+    while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $byDay[$r['day']] = [
+            'amount' => (float)$r['amount'],
+            'orders' => (int)$r['orders'],
+        ];
+    }
+
+    $series = [];
+    for ($i = $days - 1; $i >= 0; $i--) {
+        $ts   = strtotime("-{$i} days");
+        $date = date('Y-m-d', $ts);
+        $series[] = [
+            'date'   => $date,
+            'label'  => date('l', $ts),
+            'short'  => date('D', $ts),
+            'amount' => $byDay[$date]['amount'] ?? 0.0,
+            'orders' => $byDay[$date]['orders'] ?? 0,
+        ];
+    }
+    return $series;
+}
+
+function getBranchTopProducts(PDO $db, int $branchId, int $limit = 5): array
+{
+    $stmt = $db->prepare(
+        "SELECT
+            p.product_id,
+            p.name AS product_name,
+            SUM(qi.queue_quantity) AS units_sold,
+            COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0) AS revenue
+         FROM queue_item qi
+         JOIN product p ON qi.product_id = p.product_id
+         JOIN orders o ON qi.order_id = o.order_id
+         WHERE qi.branch_id = :bid
+           AND o.order_status = 'delivered'
+         GROUP BY p.product_id
+         ORDER BY units_sold DESC
+         LIMIT :lim"
+    );
+    $stmt->bindValue(':bid', $branchId, PDO::PARAM_INT);
+    $stmt->bindValue(':lim', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/* =============================================================
+ * CHART SCALE
+ * ============================================================= */
+
+function getRestaurantChartScale(float $maxAmount): array
+{
+    if ($maxAmount <= 0) {
+        return [
+            'ceiling'   => 1000.0,
+            'step'      => 250.0,
+            'gridlines' => [0.0, 250.0, 500.0, 750.0, 1000.0],
+        ];
+    }
+
+    $magnitude  = 10 ** floor(log10($maxAmount));
+    $normalized = $maxAmount / $magnitude;
+
+    $stepMultiplier = match (true) {
+        $normalized <= 1.5 => 0.25,
+        $normalized <= 3.0 => 0.5,
+        $normalized <= 7.0 => 1.0,
+        default            => 2.0,
+    };
+
+    $step    = $magnitude * $stepMultiplier;
+    $ceiling = ceil($maxAmount / $step) * $step;
+
+    if ($ceiling < $maxAmount * 2) {
+        $ceiling += $step;
+    }
+
+    $gridlines = [];
+    for ($v = 0.0; $v <= $ceiling + 0.001; $v += $step) {
+        $gridlines[] = round($v, 2);
+    }
+
+    return [
+        'ceiling'   => round($ceiling, 2),
+        'step'      => round($step, 2),
+        'gridlines' => $gridlines,
+    ];
+}
+```
+
+---
+
+## File: `fitpal/restaurant/backend/handlers/profile-handler.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Restaurant Profile Handler
+ *
+ * Actions:
+ *   update_contact   — contact number (any account)
+ *   update_business  — restaurant-level info (owner only)
+ *   update_branch    — branch address (owner only)
+ *   change_password  — password change (any account)
+ *
+ * Responds with JSON.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+header('Content-Type: application/json');
+
+if (empty($_SESSION['restaurant_account_id'])) {
+    http_response_code(401);
+    echo json_encode(['status' => 'error', 'message' => 'Not authenticated']);
+    exit;
+}
+
+require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
+require_once __DIR__ . '/../database/restaurant-queries.php';
+
+if (
+    !isset($_POST['csrf_token']) ||
+    !hash_equals((string)($_SESSION['csrf_token'] ?? ''), (string)$_POST['csrf_token'])
+) {
+    echo json_encode(['status' => 'error', 'message' => 'Security validation failed']);
+    exit;
+}
+
+$accountId    = (int)$_SESSION['restaurant_account_id'];
+$restaurantId = (int)($_SESSION['restaurant_id'] ?? 0);
+$branchId     = !empty($_SESSION['restaurant_branch_id'])
+    ? (int)$_SESSION['restaurant_branch_id']
+    : 0;
+$scope        = (string)($_SESSION['restaurant_scope'] ?? 'owner');
+
+$action = (string)($_POST['action'] ?? '');
+
+try {
+    switch ($action) {
+
+        case 'update_contact': {
+            $contact = trim((string)($_POST['contact_number'] ?? ''));
+
+            if ($contact !== '' && !preg_match('/^09\d{9}$/', $contact)) {
+                echo json_encode([
+                    'status'  => 'error',
+                    'message' => 'Enter a valid PH mobile number (09XXXXXXXXX).',
+                    'field'   => 'contact_number',
+                ]);
+                exit;
+            }
+
+            updateRestaurantAccountContact($database_connection, $accountId, $contact);
+
+            $_SESSION['user_contact'] = $contact;
+
+            echo json_encode([
+                'status'  => 'success',
+                'message' => 'Contact number updated.',
+            ]);
+            exit;
+        }
+
+        case 'update_business': {
+            if ($scope !== 'owner') {
+                echo json_encode([
+                    'status'  => 'error',
+                    'message' => 'Only owners can edit business information.',
+                ]);
+                exit;
+            }
+
+            $description = trim((string)($_POST['description'] ?? ''));
+            $cuisine     = trim((string)($_POST['cuisine_type'] ?? ''));
+            $tags        = trim((string)($_POST['dietary_tags'] ?? ''));
+
+            if (strlen($description) > 2000) {
+                echo json_encode([
+                    'status'  => 'error',
+                    'message' => 'Description is too long (max 2000 characters).',
+                    'field'   => 'description',
+                ]);
+                exit;
+            }
+            if ($cuisine !== '' && strlen($cuisine) < 2) {
+                echo json_encode([
+                    'status'  => 'error',
+                    'message' => 'Cuisine type must be at least 2 characters.',
+                    'field'   => 'cuisine_type',
+                ]);
+                exit;
+            }
+
+            updateRestaurantBusinessInfo($database_connection, $restaurantId, [
+                'description'  => $description,
+                'cuisine_type' => $cuisine,
+                'dietary_tags' => $tags,
+            ]);
+
+            echo json_encode([
+                'status'  => 'success',
+                'message' => 'Business information updated.',
+            ]);
+            exit;
+        }
+
+        case 'update_branch': {
+            if ($scope !== 'owner') {
+                echo json_encode([
+                    'status'  => 'error',
+                    'message' => 'Only owners can edit branch address.',
+                ]);
+                exit;
+            }
+            if ($branchId <= 0) {
+                echo json_encode([
+                    'status'  => 'error',
+                    'message' => 'No branch selected.',
+                ]);
+                exit;
+            }
+
+            $block      = trim((string)($_POST['block'] ?? ''));
+            $barangay   = trim((string)($_POST['barangay'] ?? ''));
+            $city       = trim((string)($_POST['city'] ?? ''));
+            $province   = trim((string)($_POST['province'] ?? ''));
+            $region     = trim((string)($_POST['region'] ?? ''));
+            $postalCode = trim((string)($_POST['postal_code'] ?? ''));
+
+            if ($block === '') {
+                echo json_encode(['status' => 'error', 'message' => 'Block / Street is required.', 'field' => 'block']);
+                exit;
+            }
+            if ($city === '') {
+                echo json_encode(['status' => 'error', 'message' => 'City is required.', 'field' => 'city']);
+                exit;
+            }
+            if ($postalCode !== '' && !preg_match('/^[0-9]{3,10}$/', $postalCode)) {
+                echo json_encode(['status' => 'error', 'message' => 'Postal code must be numeric.', 'field' => 'postal_code']);
+                exit;
+            }
+
+            updateRestaurantBranchAddress($database_connection, $branchId, [
+                'block'       => $block,
+                'barangay'    => $barangay,
+                'city'        => $city,
+                'province'    => $province,
+                'region'      => $region,
+                'postal_code' => $postalCode,
+            ]);
+
+            echo json_encode([
+                'status'  => 'success',
+                'message' => 'Branch address updated.',
+            ]);
+            exit;
+        }
+
+        case 'change_password': {
+            $current = (string)($_POST['current_password'] ?? '');
+            $new     = (string)($_POST['new_password'] ?? '');
+            $confirm = (string)($_POST['confirm_password'] ?? '');
+
+            if ($current === '' || $new === '' || $confirm === '') {
+                echo json_encode(['status' => 'error', 'message' => 'All password fields are required.']);
+                exit;
+            }
+
+            if (strlen($new) < 8 || strlen($new) > 20) {
+                echo json_encode(['status' => 'error', 'message' => 'New password must be 8–20 characters.', 'field' => 'new_password']);
+                exit;
+            }
+            if (!preg_match('/^[A-Za-z0-9]+$/', $new)) {
+                echo json_encode(['status' => 'error', 'message' => 'Password can only contain letters and numbers.', 'field' => 'new_password']);
+                exit;
+            }
+            if (!preg_match('/[A-Za-z]/', $new) || !preg_match('/[0-9]/', $new)) {
+                echo json_encode(['status' => 'error', 'message' => 'Password must contain at least one letter and one number.', 'field' => 'new_password']);
+                exit;
+            }
+            if ($new !== $confirm) {
+                echo json_encode(['status' => 'error', 'message' => 'Passwords do not match.', 'field' => 'confirm_password']);
+                exit;
+            }
+
+            $row = getRestaurantAccountWithPassword($database_connection, $accountId);
+            if (!$row) {
+                echo json_encode(['status' => 'error', 'message' => 'Account not found.']);
+                exit;
+            }
+
+            $stored = (string)$row['password'];
+
+            $valid = password_verify($current, $stored);
+            if (!$valid && hash_equals($stored, $current)) {
+                // DEV-ONLY bypass for plaintext seeds. Remove before deploying.
+                $valid = true;
+            }
+
+            if (!$valid) {
+                echo json_encode(['status' => 'error', 'message' => 'Current password is incorrect.', 'field' => 'current_password']);
+                exit;
+            }
+
+            updateRestaurantAccountPassword(
+                $database_connection,
+                $accountId,
+                password_hash($new, PASSWORD_BCRYPT)
+            );
+
+            echo json_encode([
+                'status'  => 'success',
+                'message' => 'Password changed.',
+            ]);
+            exit;
+        }
+
+        default:
+            echo json_encode(['status' => 'error', 'message' => 'Invalid action.']);
+            exit;
+    }
+
+} catch (PDOException $e) {
+    error_log('Restaurant profile handler DB error: ' . $e->getMessage());
+    echo json_encode(['status' => 'error', 'message' => 'A system error occurred.']);
+} catch (Throwable $e) {
+    error_log('Restaurant profile handler error: ' . $e->getMessage());
+    echo json_encode(['status' => 'error', 'message' => 'An unexpected error occurred.']);
 }
 ```
 
@@ -51934,10 +54491,16 @@ try {
 /**
  * FitPal Restaurant Sign-Out Handler
  *
- * Clears only restaurant-specific session data.
+ * Clears every restaurant-scoped session key, expires the session
+ * cookie, regenerates the session ID, and redirects to the restaurant
+ * sign-in page with no-cache headers so the browser cannot resurrect
+ * a cached dashboard.
+ *
+ * Other role sessions in the same browser (customer, rider, admin)
+ * are preserved.
  *
  * @package FitPal
- * @version 1.0
+ * @version 1.2 — Explicit cookie expiry + no-cache headers.
  */
 
 declare(strict_types=1);
@@ -51946,23 +54509,85 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-unset(
-    $_SESSION['restaurant_account_id'],
-    $_SESSION['restaurant_id'],
-    $_SESSION['restaurant_branch_id'],
-    $_SESSION['restaurant_branch_code'],
-    $_SESSION['restaurant_branch_name'],
-    $_SESSION['restaurant_scope'],
-    $_SESSION['user_role'],
-    $_SESSION['user_name'],
-    $_SESSION['user_email'],
-    $_SESSION['restaurant_role'],
-    $_SESSION['business_name']
-);
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+
+/* --------------------------------------------------------------
+ * CLEAR ONLY RESTAURANT-SCOPED KEYS
+ * -------------------------------------------------------------- */
+
+$restaurantKeys = [
+    'restaurant_account_id',
+    'restaurant_id',
+    'restaurant_branch_id',
+    'restaurant_branch_code',
+    'restaurant_branch_name',
+    'restaurant_scope',
+    'restaurant_role',
+    'business_name',
+    'login_scope',
+    'login_error',
+    'registration_success',
+    'restaurant_registration_error',
+];
+
+foreach ($restaurantKeys as $key) {
+    unset($_SESSION[$key]);
+}
+
+/* --------------------------------------------------------------
+ * USER METADATA IS ONLY REMOVED IF NO OTHER ROLE OWNS IT
+ *
+ * If the same browser is also signed in as customer / rider / admin,
+ * the shared user_role / user_name / user_email keys may be in use by
+ * that other role. Only clear them when no other role session exists.
+ * -------------------------------------------------------------- */
+
+$otherRoleStillActive =
+    !empty($_SESSION['customer_id']) ||
+    !empty($_SESSION['delivery_rider_id']) ||
+    !empty($_SESSION['administrator_id']);
+
+if (!$otherRoleStillActive) {
+    unset(
+        $_SESSION['user_role'],
+        $_SESSION['user_name'],
+        $_SESSION['user_email']
+    );
+}
+
+/* --------------------------------------------------------------
+ * REGENERATE SESSION ID
+ * -------------------------------------------------------------- */
 
 session_regenerate_id(true);
 
-header('Location: ../../pages/sign-in.php');
+/* --------------------------------------------------------------
+ * EXPIRE THE SESSION COOKIE
+ * -------------------------------------------------------------- */
+
+if (ini_get('session.use_cookies')) {
+    $params = session_get_cookie_params();
+    setcookie(
+        session_name(),
+        '',
+        [
+            'expires'  => time() - 42000,
+            'path'     => $params['path'] ?: '/',
+            'domain'   => $params['domain'] ?: '',
+            'secure'   => (bool)$params['secure'],
+            'httponly' => (bool)$params['httponly'],
+            'samesite' => $params['samesite'] ?? 'Lax',
+        ]
+    );
+}
+
+/* --------------------------------------------------------------
+ * REDIRECT
+ * -------------------------------------------------------------- */
+
+header('Location: ../../pages/sign-in.php?logged_out=1');
 exit;
 ```
 
@@ -52349,8 +54974,25 @@ try {
 /**
  * FitPal Restaurant Header
  *
+ * Contract
+ * --------
+ * 1. The header NEVER writes to $_SESSION. Only the sign-in handler
+ *    and the sign-out handler may do that.
+ *
+ * 2. The header NEVER queries the DB to re-validate a session. If
+ *    $_SESSION['restaurant_account_id'] is missing, the user is
+ *    logged out — period.
+ *
+ * 3. $assetBase is computed here so pages never compute it twice.
+ *
+ * 4. The desktop avatar circle links to profile.php. The mobile
+ *    greeting block also links to profile.php. The logout button
+ *    (desktop and mobile) is a <button> carrying data-logout-trigger
+ *    so logout.js can intercept it and show the confirmation modal.
+ *
  * @package FitPal
- * @version 1.0
+ * @version 3.0 — Avatar + greeting link to profile. Logout uses the
+ *                confirmation modal. Modal markup lives in the header.
  */
 
 declare(strict_types=1);
@@ -52379,34 +55021,15 @@ function getRestaurantAssetBase(): string
 
 $assetBase = getRestaurantAssetBase();
 
-$isLoggedIn     = false;
-$accountName    = '';
+$isLoggedIn      = !empty($_SESSION['restaurant_account_id']);
+$accountName     = $isLoggedIn ? (string)($_SESSION['user_name']       ?? '') : '';
+$businessName    = $isLoggedIn ? (string)($_SESSION['business_name']   ?? '') : '';
+$restaurantRole  = $isLoggedIn ? (string)($_SESSION['restaurant_role'] ?? '') : '';
+$restaurantScope = $isLoggedIn ? (string)($_SESSION['restaurant_scope'] ?? 'owner') : '';
+
 $accountInitial = '';
-$restaurantRole = '';
-$businessName   = '';
-
-if (!empty($_SESSION['restaurant_account_id'])) {
-    $isLoggedIn = true;
-    try {
-        $stmt = $database_connection->prepare(
-            "SELECT ra.first_name, ra.last_name, ra.role, r.business_name
-             FROM restaurant_account ra
-             JOIN restaurant r ON ra.restaurant_id = r.restaurant_id
-             WHERE ra.restaurant_account_id = :id
-             LIMIT 1"
-        );
-        $stmt->execute([':id' => (int)$_SESSION['restaurant_account_id']]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if ($row) {
-            $accountName    = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
-            $accountInitial = strtoupper(substr((string)($row['first_name'] ?? 'R'), 0, 1));
-            $restaurantRole = (string)($row['role'] ?? 'owner');
-            $businessName   = (string)($row['business_name'] ?? '');
-        }
-    } catch (PDOException $e) {
-        // Silently fail
-    }
+if ($accountName !== '') {
+    $accountInitial = strtoupper(substr($accountName, 0, 1));
 }
 
 $currentPage = basename($_SERVER['PHP_SELF']);
@@ -52471,27 +55094,34 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
                 <ul class="nav-list">
                     <li class="nav-item">
                         <a href="dashboard.php"
-                            class="nav-link <?php echo ($currentPage === 'dashboard.php') ? 'active' : ''; ?>">Dashboard</a>
+                            class="nav-link <?php echo ($currentPage === 'dashboard.php') ? 'active' : ''; ?>">
+                            Dashboard
+                        </a>
                     </li>
                     <li class="nav-item">
                         <a href="profile.php"
-                            class="nav-link <?php echo ($currentPage === 'profile.php') ? 'active' : ''; ?>">Profile</a>
+                            class="nav-link <?php echo ($currentPage === 'profile.php') ? 'active' : ''; ?>">
+                            Profile
+                        </a>
                     </li>
                 </ul>
 
                 <div class="nav-actions">
-                    <div class="user-profile-circle"
-                        title="<?php echo htmlspecialchars($accountName !== '' ? $accountName : 'Account', ENT_QUOTES, 'UTF-8'); ?>">
+                    <a href="profile.php" class="user-profile-circle"
+                        title="<?php echo htmlspecialchars($accountName !== '' ? $accountName : 'Account', ENT_QUOTES, 'UTF-8'); ?>"
+                        aria-label="Go to profile">
                         <?php if ($accountInitial !== ''): ?>
-                        <span
-                            class="user-initial"><?php echo htmlspecialchars($accountInitial, ENT_QUOTES, 'UTF-8'); ?></span>
+                        <span class="user-initial">
+                            <?php echo htmlspecialchars($accountInitial, ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
                         <?php else: ?>
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="Profile"
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt=""
                             class="profile-icon">
                         <?php endif; ?>
-                    </div>
-                    <a href="../backend/handlers/sign-out-handler.php" data-signout
-                        class="btn btn-outline btn-sm logout-btn">Logout</a>
+                    </a>
+                    <button type="button" class="btn btn-outline btn-sm logout-btn" data-logout-trigger>
+                        Logout
+                    </button>
                 </div>
 
                 <?php else: ?>
@@ -52525,16 +55155,20 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
 
             <?php if ($isLoggedIn): ?>
             <li class="mobile-nav-item mobile-user-greeting">
-                <div class="mobile-user-avatar">
-                    <?php if ($accountInitial !== ''): ?>
-                    <span
-                        class="user-initial-large"><?php echo htmlspecialchars($accountInitial, ENT_QUOTES, 'UTF-8'); ?></span>
-                    <?php else: ?>
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="Profile">
-                    <?php endif; ?>
-                </div>
-                <span
-                    class="mobile-user-name"><?php echo htmlspecialchars($accountName !== '' ? $accountName : 'Account', ENT_QUOTES, 'UTF-8'); ?></span>
+                <a href="profile.php" class="mobile-user-greeting-link">
+                    <div class="mobile-user-avatar">
+                        <?php if ($accountInitial !== ''): ?>
+                        <span class="user-initial-large">
+                            <?php echo htmlspecialchars($accountInitial, ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                        <?php else: ?>
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="">
+                        <?php endif; ?>
+                    </div>
+                    <span class="mobile-user-name">
+                        <?php echo htmlspecialchars($accountName !== '' ? $accountName : 'Account', ENT_QUOTES, 'UTF-8'); ?>
+                    </span>
+                </a>
             </li>
             <li class="mobile-nav-divider"></li>
             <li class="mobile-nav-item">
@@ -52547,8 +55181,9 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
             </li>
             <li class="mobile-nav-divider"></li>
             <li class="mobile-nav-item">
-                <a href="../backend/handlers/sign-out-handler.php" data-signout
-                    class="mobile-nav-link mobile-logout">Logout</a>
+                <button type="button" class="mobile-nav-link mobile-logout" data-logout-trigger>
+                    Logout
+                </button>
             </li>
 
             <?php else: ?>
@@ -52569,9 +55204,913 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
         </ul>
     </nav>
 
+    <!-- ============================================
+         LOGOUT CONFIRMATION MODAL
+         ============================================ -->
+    <div class="logout-modal" id="logoutModal" style="display: none;" role="dialog" aria-modal="true"
+        aria-labelledby="logoutModalTitle">
+        <div class="logout-modal-overlay" data-logout-cancel></div>
+        <div class="logout-modal-content">
+            <div class="logout-modal-icon" aria-hidden="true">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/logoutsvg.svg" alt=""
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/information-fill.svg'">
+            </div>
+            <p class="logout-modal-title" id="logoutModalTitle">Sign out?</p>
+            <p class="logout-modal-text">You'll need to sign in again to access the restaurant dashboard.</p>
+            <div class="logout-modal-actions">
+                <button type="button" class="logout-btn-cancel" data-logout-cancel>Cancel</button>
+                <a href="../backend/handlers/sign-out-handler.php" class="logout-btn-confirm">
+                    Yes, sign out
+                </a>
+            </div>
+        </div>
+    </div>
+
     <main class="main-content" role="main">
 
         <script src="../assets/ui/js/header.js" defer></script>
+        <script src="../assets/ui/js/logout.js" defer></script>
+```
+
+---
+
+## File: `fitpal/restaurant/pages/dashboard.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Restaurant Dashboard
+ *
+ * Renders one of two dashboards based on the signed-in scope:
+ *   - Owner  : restaurant-wide stats + branch overview + weekly chart
+ *   - Branch : branch-scoped stats + top products + weekly chart
+ *
+ * Access control
+ * --------------
+ * The page is guarded by $_SESSION['restaurant_account_id']. If it is
+ * not set, the user is redirected to sign-in. This guard is what
+ * makes sign-out work: after sign-out, the key is gone and the
+ * dashboard becomes unreachable.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (empty($_SESSION['restaurant_account_id'])) {
+    header('Location: sign-in.php');
+    exit;
+}
+
+require_once __DIR__ . '/../includes/header.php';
+require_once __DIR__ . '/../backend/database/restaurant-queries.php';
+
+$restaurantId  = (int)($_SESSION['restaurant_id'] ?? 0);
+$branchId      = !empty($_SESSION['restaurant_branch_id'])
+    ? (int)$_SESSION['restaurant_branch_id']
+    : 0;
+$scope         = (string)($_SESSION['restaurant_scope'] ?? 'owner');
+$branchName    = (string)($_SESSION['restaurant_branch_name'] ?? '');
+$branchCode    = (string)($_SESSION['restaurant_branch_code'] ?? '');
+$accountName   = (string)($_SESSION['user_name'] ?? '');
+$firstName     = $accountName !== '' ? explode(' ', trim($accountName))[0] : 'Account';
+
+/* --------------------------------------------------------------
+ * LOAD DATA
+ * -------------------------------------------------------------- */
+
+$stats         = [];
+$weeklyRevenue = [];
+$chartScale    = ['ceiling' => 1000.0, 'step' => 250.0, 'gridlines' => []];
+$chartCeiling  = 1000.0;
+$barHeights    = [];
+$today         = date('Y-m-d');
+$branchOverview = [];
+$topProducts    = [];
+
+try {
+    if ($scope === 'branch' && $branchId > 0) {
+        $stats         = getBranchDashboardStats($database_connection, $branchId);
+        $weeklyRevenue = getBranchWeeklyRevenue($database_connection, $branchId, 7);
+        $topProducts   = getBranchTopProducts($database_connection, $branchId, 5);
+    } else {
+        $stats          = getOwnerDashboardStats($database_connection, $restaurantId);
+        $weeklyRevenue  = getOwnerWeeklyRevenue($database_connection, $restaurantId, 7);
+        $branchOverview = getOwnerBranchOverview($database_connection, $restaurantId);
+    }
+
+    $weeklyMax = 0.0;
+    foreach ($weeklyRevenue as $d) {
+        if ($d['amount'] > $weeklyMax) $weeklyMax = $d['amount'];
+    }
+    $chartScale   = getRestaurantChartScale($weeklyMax);
+    $chartCeiling = $chartScale['ceiling'];
+
+    foreach ($weeklyRevenue as $d) {
+        $pct = $chartCeiling > 0 ? ($d['amount'] / $chartCeiling) * 100 : 0;
+        $barHeights[$d['date']] = $d['amount'] > 0 ? max(4, min(100, $pct)) : 0;
+    }
+} catch (PDOException $e) {
+    error_log('Restaurant dashboard error: ' . $e->getMessage());
+}
+
+/* --------------------------------------------------------------
+ * HELPERS
+ * -------------------------------------------------------------- */
+
+function dashFormatCurrency(float|string|null $amount): string
+{
+    return '₱' . number_format((float)($amount ?? 0), 2);
+}
+?>
+
+<div class="content restaurant-dashboard-page">
+    <div class="container">
+
+        <header class="restaurant-dashboard-header">
+            <div class="restaurant-dashboard-greeting">
+                <h1 class="heading-2">
+                    Welcome back, <span><?php echo htmlspecialchars($firstName, ENT_QUOTES, 'UTF-8'); ?></span>
+                </h1>
+                <p class="text-muted">
+                    <?php if ($scope === 'branch'): ?>
+                    You are signed in to
+                    <strong><?php echo htmlspecialchars($branchName !== '' ? $branchName : 'Branch', ENT_QUOTES, 'UTF-8'); ?></strong>
+                    <?php if ($branchCode !== ''): ?>
+                    (<?php echo htmlspecialchars($branchCode, ENT_QUOTES, 'UTF-8'); ?>)
+                    <?php endif; ?>.
+                    <?php else: ?>
+                    Managing
+                    <strong><?php echo htmlspecialchars($businessName !== '' ? $businessName : 'your restaurant', ENT_QUOTES, 'UTF-8'); ?></strong>
+                    across <?php echo (int)($stats['branch_count'] ?? 0); ?>
+                    branch<?php echo ((int)($stats['branch_count'] ?? 0)) === 1 ? '' : 'es'; ?>.
+                    <?php endif; ?>
+                </p>
+            </div>
+            <div class="restaurant-dashboard-actions">
+                <span class="badge badge-<?php echo $scope === 'branch' ? 'info' : 'success'; ?>">
+                    <?php echo $scope === 'branch' ? 'Branch' : 'Owner'; ?>
+                </span>
+            </div>
+        </header>
+
+        <?php if (!empty($_SESSION['restaurant_success'])): ?>
+        <div class="alert alert-success" role="alert">
+            <?php echo htmlspecialchars($_SESSION['restaurant_success'], ENT_QUOTES, 'UTF-8'); ?>
+            <?php unset($_SESSION['restaurant_success']); ?>
+        </div>
+        <?php endif; ?>
+
+        <!-- STAT CARDS -->
+        <section class="restaurant-stats-grid" aria-label="Summary">
+
+            <?php if ($scope === 'branch'): ?>
+            <div class="restaurant-stat-card">
+                <div class="restaurant-stat-info">
+                    <p class="restaurant-stat-number">
+                        <?php echo number_format((int)($stats['total_orders'] ?? 0)); ?>
+                    </p>
+                    <p class="restaurant-stat-label">Orders (All Time)</p>
+                    <?php if ((int)($stats['orders_today'] ?? 0) > 0): ?>
+                    <p class="restaurant-stat-hint restaurant-stat-hint-active">
+                        +<?php echo (int)$stats['orders_today']; ?> today
+                    </p>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="restaurant-stat-card">
+                <div class="restaurant-stat-info">
+                    <p class="restaurant-stat-number">
+                        <?php echo number_format((int)($stats['active_orders'] ?? 0)); ?>
+                    </p>
+                    <p class="restaurant-stat-label">Active Orders</p>
+                </div>
+            </div>
+
+            <div class="restaurant-stat-card">
+                <div class="restaurant-stat-info">
+                    <p class="restaurant-stat-number">
+                        <?php echo dashFormatCurrency($stats['gross_revenue'] ?? 0); ?>
+                    </p>
+                    <p class="restaurant-stat-label">Gross Revenue</p>
+                    <p class="restaurant-stat-hint">
+                        Avg <?php echo dashFormatCurrency($stats['average_order_value'] ?? 0); ?> per order
+                    </p>
+                </div>
+            </div>
+
+            <div class="restaurant-stat-card">
+                <div class="restaurant-stat-info">
+                    <p class="restaurant-stat-number">
+                        <?php echo number_format((int)($stats['product_count'] ?? 0)); ?>
+                    </p>
+                    <p class="restaurant-stat-label">Active Products</p>
+                </div>
+            </div>
+
+            <?php else: ?>
+            <div class="restaurant-stat-card">
+                <div class="restaurant-stat-info">
+                    <p class="restaurant-stat-number">
+                        <?php echo number_format((int)($stats['branch_count'] ?? 0)); ?>
+                    </p>
+                    <p class="restaurant-stat-label">Branches</p>
+                </div>
+            </div>
+
+            <div class="restaurant-stat-card">
+                <div class="restaurant-stat-info">
+                    <p class="restaurant-stat-number">
+                        <?php echo number_format((int)($stats['product_count'] ?? 0)); ?>
+                    </p>
+                    <p class="restaurant-stat-label">Active Products</p>
+                </div>
+            </div>
+
+            <div class="restaurant-stat-card">
+                <div class="restaurant-stat-info">
+                    <p class="restaurant-stat-number">
+                        <?php echo number_format((int)($stats['total_orders'] ?? 0)); ?>
+                    </p>
+                    <p class="restaurant-stat-label">Total Orders</p>
+                    <?php if ((int)($stats['orders_today'] ?? 0) > 0): ?>
+                    <p class="restaurant-stat-hint restaurant-stat-hint-active">
+                        +<?php echo (int)$stats['orders_today']; ?> today
+                    </p>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="restaurant-stat-card">
+                <div class="restaurant-stat-info">
+                    <p class="restaurant-stat-number">
+                        <?php echo dashFormatCurrency($stats['gross_revenue'] ?? 0); ?>
+                    </p>
+                    <p class="restaurant-stat-label">Gross Revenue</p>
+                    <p class="restaurant-stat-hint">
+                        Avg <?php echo dashFormatCurrency($stats['average_order_value'] ?? 0); ?> per order
+                    </p>
+                </div>
+            </div>
+            <?php endif; ?>
+        </section>
+
+        <!-- WEEKLY CHART -->
+        <section class="restaurant-card" aria-labelledby="chart-title">
+            <div class="restaurant-card-header">
+                <h2 class="heading-5" id="chart-title">Revenue — Last 7 Days</h2>
+            </div>
+            <div class="restaurant-chart-body">
+                <div class="restaurant-weekly-chart" role="img"
+                    aria-label="Bar chart of revenue over the last seven days">
+
+                    <div class="restaurant-chart-y-axis" aria-hidden="true">
+                        <?php foreach (array_reverse($chartScale['gridlines']) as $grid): ?>
+                        <span class="restaurant-chart-y-label">
+                            ₱<?php echo number_format($grid, 0); ?>
+                        </span>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <div class="restaurant-chart-plot">
+                        <?php foreach ($chartScale['gridlines'] as $grid): ?>
+                        <div class="restaurant-chart-gridline" aria-hidden="true"></div>
+                        <?php endforeach; ?>
+
+                        <div class="restaurant-chart-columns">
+                            <?php foreach ($weeklyRevenue as $day):
+                                $pct      = $barHeights[$day['date']];
+                                $isToday  = ($day['date'] === $today);
+                                $hasValue = $day['amount'] > 0;
+                            ?>
+                            <div class="restaurant-chart-column"
+                                data-day="<?php echo htmlspecialchars($day['short'], ENT_QUOTES, 'UTF-8'); ?>"
+                                data-amount="<?php echo htmlspecialchars(dashFormatCurrency($day['amount']), ENT_QUOTES, 'UTF-8'); ?>">
+                                <div class="restaurant-chart-bar-track">
+                                    <div class="restaurant-chart-bar <?php echo $isToday ? 'is-today' : ''; ?> <?php echo $hasValue ? '' : 'is-empty'; ?>"
+                                        style="height: <?php echo $pct; ?>%" tabindex="0"
+                                        aria-label="<?php echo htmlspecialchars($day['label'] . ' ' . dashFormatCurrency($day['amount']), ENT_QUOTES, 'UTF-8'); ?>">
+                                    </div>
+                                </div>
+                                <span class="restaurant-chart-label <?php echo $isToday ? 'is-today' : ''; ?>">
+                                    <?php echo htmlspecialchars($day['short'], ENT_QUOTES, 'UTF-8'); ?>
+                                </span>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="restaurant-chart-summary">
+                    <div class="restaurant-chart-summary-item">
+                        <span class="restaurant-chart-summary-label">Today</span>
+                        <span class="restaurant-chart-summary-value">
+                            <?php echo dashFormatCurrency($stats['revenue_today'] ?? 0); ?>
+                        </span>
+                        <span class="restaurant-chart-summary-hint">
+                            <?php echo (int)($stats['orders_today'] ?? 0); ?> orders
+                        </span>
+                    </div>
+                    <div class="restaurant-chart-summary-item">
+                        <span class="restaurant-chart-summary-label">This Week</span>
+                        <span class="restaurant-chart-summary-value">
+                            <?php echo dashFormatCurrency($stats['revenue_this_week'] ?? 0); ?>
+                        </span>
+                        <span class="restaurant-chart-summary-hint">
+                            <?php echo (int)($stats['orders_this_week'] ?? 0); ?> orders
+                        </span>
+                    </div>
+                    <div class="restaurant-chart-summary-item">
+                        <span class="restaurant-chart-summary-label">All Time</span>
+                        <span class="restaurant-chart-summary-value">
+                            <?php echo dashFormatCurrency($stats['gross_revenue'] ?? 0); ?>
+                        </span>
+                        <span class="restaurant-chart-summary-hint">
+                            <?php echo (int)($stats['total_orders'] ?? 0); ?> orders
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- OWNER: BRANCH OVERVIEW -->
+        <?php if ($scope !== 'branch'): ?>
+        <section class="restaurant-card" aria-labelledby="branches-title">
+            <div class="restaurant-card-header">
+                <h2 class="heading-5" id="branches-title">Branches</h2>
+            </div>
+
+            <?php if (empty($branchOverview)): ?>
+            <div class="restaurant-empty-state">
+                <p class="restaurant-empty-title">No branches yet</p>
+                <p class="restaurant-empty-text">Add your first branch to start tracking sales.</p>
+            </div>
+            <?php else: ?>
+            <div class="restaurant-branch-list">
+                <?php foreach ($branchOverview as $b): ?>
+                <div class="restaurant-branch-row">
+                    <div class="restaurant-branch-info">
+                        <p class="restaurant-branch-name">
+                            <?php echo htmlspecialchars((string)$b['branch_name'], ENT_QUOTES, 'UTF-8'); ?>
+                            <span class="restaurant-branch-code">
+                                <?php echo htmlspecialchars((string)$b['branch_code'], ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                        </p>
+                        <p class="restaurant-branch-meta">
+                            <?php echo htmlspecialchars((string)($b['city'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
+                            &middot;
+                            <?php echo number_format((int)$b['product_count']); ?> products
+                            &middot;
+                            <?php echo number_format((int)$b['order_count']); ?> orders
+                        </p>
+                    </div>
+                    <div class="restaurant-branch-revenue">
+                        <?php echo dashFormatCurrency($b['revenue']); ?>
+                    </div>
+                    <span class="badge <?php echo (int)$b['is_active'] === 1 ? 'badge-success' : 'badge-secondary'; ?>">
+                        <?php echo (int)$b['is_active'] === 1 ? 'Active' : 'Inactive'; ?>
+                    </span>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+        </section>
+        <?php endif; ?>
+
+        <!-- BRANCH: TOP PRODUCTS -->
+        <?php if ($scope === 'branch'): ?>
+        <section class="restaurant-card" aria-labelledby="top-products-title">
+            <div class="restaurant-card-header">
+                <h2 class="heading-5" id="top-products-title">Top Products</h2>
+            </div>
+
+            <?php if (empty($topProducts)): ?>
+            <div class="restaurant-empty-state">
+                <p class="restaurant-empty-title">No sales yet</p>
+                <p class="restaurant-empty-text">Your best-selling items will appear here.</p>
+            </div>
+            <?php else: ?>
+            <div class="restaurant-product-list">
+                <?php foreach ($topProducts as $p): ?>
+                <div class="restaurant-product-row">
+                    <div class="restaurant-product-info">
+                        <p class="restaurant-product-name">
+                            <?php echo htmlspecialchars((string)$p['product_name'], ENT_QUOTES, 'UTF-8'); ?>
+                        </p>
+                        <p class="restaurant-product-meta">
+                            <?php echo number_format((int)$p['units_sold']); ?> sold
+                        </p>
+                    </div>
+                    <div class="restaurant-product-revenue">
+                        <?php echo dashFormatCurrency($p['revenue']); ?>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+        </section>
+        <?php endif; ?>
+
+    </div>
+</div>
+
+<script src="../assets/ui/js/dashboard.js" defer></script>
+<?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>
+```
+
+---
+
+## File: `fitpal/restaurant/pages/profile.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Restaurant Profile Page
+ *
+ * Layouts:
+ *   Owner        : Personal | Business | Branch
+ *   Branch/Staff : Personal | Branch
+ *
+ * Contact number is editable for everyone. Business info and branch
+ * address are editable only for owners. Names, email, username, and
+ * business name are read-only — changing them requires a support
+ * request.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (empty($_SESSION['restaurant_account_id'])) {
+    header('Location: sign-in.php');
+    exit;
+}
+
+require_once __DIR__ . '/../includes/header.php';
+require_once __DIR__ . '/../backend/database/restaurant-queries.php';
+
+$accountId = (int)$_SESSION['restaurant_account_id'];
+$profile = getRestaurantAccountProfile($database_connection, $accountId) ?: [];
+
+$accountName = trim(
+    ($profile['first_name'] ?? '') . ' ' .
+    (!empty($profile['middle_name']) ? $profile['middle_name'] . ' ' : '') .
+    ($profile['last_name'] ?? '')
+);
+$accountInitial = strtoupper(substr((string)($profile['first_name'] ?? 'R'), 0, 1));
+$role = (string)($profile['role'] ?? 'owner');
+
+$roleLabel = match ($role) {
+    'owner'   => 'Owner',
+    'partner' => 'Partner',
+    'manager' => 'Branch Manager',
+    'staff'   => 'Staff',
+    'cashier' => 'Cashier',
+    'kitchen' => 'Kitchen',
+    default   => ucfirst($role),
+};
+
+$isOwner = in_array($role, ['owner', 'partner'], true);
+
+$verification = (string)($profile['verification_status'] ?? 'pending');
+$verificationClass = match ($verification) {
+    'verified'  => 'badge-success',
+    'pending'   => 'badge-warning',
+    'denied'    => 'badge-danger',
+    'suspended' => 'badge-secondary',
+    default     => 'badge-secondary',
+};
+
+$verificationLabel = match ($verification) {
+    'verified'  => 'Verified',
+    'pending'   => 'Pending Verification',
+    'denied'    => 'Denied',
+    'suspended' => 'Suspended',
+    default     => ucfirst($verification),
+};
+
+$branchId  = !empty($profile['branch_id']) ? (int)$profile['branch_id'] : 0;
+$hasBranch = $branchId > 0 && !empty($profile['branch_name']);
+
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+$csrfToken = $_SESSION['csrf_token'];
+
+function formatRestaurantAddress(array $p): string
+{
+    $parts = array_filter([
+        $p['block']       ?? '',
+        $p['barangay']    ?? '',
+        $p['city']        ?? '',
+        $p['province']    ?? '',
+        $p['region']      ?? '',
+        $p['postal_code'] ?? '',
+        $p['country']     ?? '',
+    ]);
+    return implode(', ', $parts) ?: '—';
+}
+?>
+
+<div class="content restaurant-profile-page">
+    <div class="container">
+
+        <div class="page-title-header">
+            <div class="page-title-header-top">
+                <a href="dashboard.php" class="back-btn">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt="Back"
+                        class="back-btn-icon" width="20" height="20">
+                    <span>Back to Dashboard</span>
+                </a>
+                <h1>My Profile</h1>
+            </div>
+        </div>
+
+        <?php if (!empty($_SESSION['restaurant_success'])): ?>
+        <div class="alert alert-success" role="alert">
+            <?php echo htmlspecialchars($_SESSION['restaurant_success'], ENT_QUOTES, 'UTF-8'); ?>
+            <?php unset($_SESSION['restaurant_success']); ?>
+        </div>
+        <?php endif; ?>
+
+        <?php if (!empty($_SESSION['restaurant_error'])): ?>
+        <div class="alert alert-danger" role="alert">
+            <?php echo htmlspecialchars($_SESSION['restaurant_error'], ENT_QUOTES, 'UTF-8'); ?>
+            <?php unset($_SESSION['restaurant_error']); ?>
+        </div>
+        <?php endif; ?>
+
+        <div class="profile-header-card">
+            <div class="profile-header-left">
+                <div class="profile-avatar">
+                    <span class="profile-avatar-initial">
+                        <?php echo htmlspecialchars($accountInitial, ENT_QUOTES, 'UTF-8'); ?>
+                    </span>
+                </div>
+                <div class="profile-name-role">
+                    <p class="profile-full-name">
+                        <?php echo htmlspecialchars($accountName !== '' ? $accountName : 'Account', ENT_QUOTES, 'UTF-8'); ?>
+                    </p>
+                    <span
+                        class="profile-role-badge"><?php echo htmlspecialchars($roleLabel, ENT_QUOTES, 'UTF-8'); ?></span>
+                    <span class="profile-meta-line">
+                        <span class="badge <?php echo $verificationClass; ?>">
+                            <?php echo htmlspecialchars($verificationLabel, ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                        <span class="profile-joined">
+                            <?php echo htmlspecialchars((string)($profile['business_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="profile-tabs" role="tablist">
+            <button type="button" class="profile-tab active" data-tab="personal" role="tab" aria-selected="true">
+                Personal
+            </button>
+            <?php if ($isOwner): ?>
+            <button type="button" class="profile-tab" data-tab="business" role="tab" aria-selected="false">
+                Business
+            </button>
+            <?php endif; ?>
+            <button type="button" class="profile-tab" data-tab="branch" role="tab" aria-selected="false">
+                <?php echo $hasBranch ? 'Branch' : 'Address'; ?>
+            </button>
+        </div>
+
+        <!-- ============================================
+             TAB: PERSONAL
+             ============================================ -->
+        <div class="profile-tab-content active" id="tab-personal">
+            <div class="profile-card">
+                <div class="card-header">
+                    <h3>Personal Information</h3>
+                </div>
+                <div class="card-body">
+
+                    <form class="profile-form" id="contactForm">
+                        <input type="hidden" name="csrf_token"
+                            value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="update_contact">
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="field-label">First Name</label>
+                                <input type="text" class="form-control" disabled
+                                    value="<?php echo htmlspecialchars((string)($profile['first_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                            </div>
+                            <div class="form-group">
+                                <label class="field-label">Middle Name</label>
+                                <input type="text" class="form-control" disabled
+                                    value="<?php echo htmlspecialchars((string)($profile['middle_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                            </div>
+                            <div class="form-group">
+                                <label class="field-label">Last Name</label>
+                                <input type="text" class="form-control" disabled
+                                    value="<?php echo htmlspecialchars((string)($profile['last_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="field-label">Email</label>
+                                <input type="email" class="form-control" disabled
+                                    value="<?php echo htmlspecialchars((string)($profile['email'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                            </div>
+                            <div class="form-group">
+                                <label class="field-label">Username</label>
+                                <input type="text" class="form-control" disabled
+                                    value="<?php echo htmlspecialchars((string)($profile['username'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="field-label" for="contact_number">Contact Number</label>
+                                <input type="tel" id="contact_number" name="contact_number" class="form-control"
+                                    placeholder="09XXXXXXXXX" inputmode="numeric" maxlength="11"
+                                    value="<?php echo htmlspecialchars((string)($profile['contact_number'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                                <div class="form-error" id="contactError"></div>
+                            </div>
+                            <div class="form-group">
+                                <label class="field-label">Role</label>
+                                <input type="text" class="form-control" disabled
+                                    value="<?php echo htmlspecialchars($roleLabel, ENT_QUOTES, 'UTF-8'); ?>">
+                            </div>
+                        </div>
+
+                        <div class="profile-actions">
+                            <button type="submit" class="btn btn-primary">
+                                <span>Save Contact</span>
+                            </button>
+                        </div>
+                    </form>
+
+                    <p class="info-note">
+                        Names, email, and username cannot be changed from this page. Contact support for updates.
+                    </p>
+                </div>
+            </div>
+
+            <div class="profile-card">
+                <div class="card-header">
+                    <h3>Change Password</h3>
+                </div>
+                <div class="card-body">
+                    <form class="profile-form" id="passwordForm">
+                        <input type="hidden" name="csrf_token"
+                            value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="change_password">
+
+                        <div class="form-group">
+                            <label class="field-label" for="current_password">Current Password</label>
+                            <div class="password-wrapper">
+                                <input type="password" id="current_password" name="current_password"
+                                    class="form-control" autocomplete="current-password" required>
+                                <button type="button" class="password-toggle" data-toggle-pw="current_password"
+                                    tabindex="-1" aria-label="Toggle password visibility">
+                                    <img src="<?php echo $assetBase; ?>assets/images/icons/password-hide.svg" alt="">
+                                </button>
+                            </div>
+                            <div class="form-error" id="currentPasswordError"></div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="field-label" for="new_password">New Password</label>
+                                <div class="password-wrapper">
+                                    <input type="password" id="new_password" name="new_password" class="form-control"
+                                        autocomplete="new-password" maxlength="20" required>
+                                    <button type="button" class="password-toggle" data-toggle-pw="new_password"
+                                        tabindex="-1" aria-label="Toggle password visibility">
+                                        <img src="<?php echo $assetBase; ?>assets/images/icons/password-hide.svg"
+                                            alt="">
+                                    </button>
+                                </div>
+                                <div class="form-hint">8–20 characters, letters and numbers only</div>
+                                <div class="form-error" id="newPasswordError"></div>
+                            </div>
+                            <div class="form-group">
+                                <label class="field-label" for="confirm_password">Confirm New Password</label>
+                                <div class="password-wrapper">
+                                    <input type="password" id="confirm_password" name="confirm_password"
+                                        class="form-control" autocomplete="new-password" maxlength="20" required>
+                                    <button type="button" class="password-toggle" data-toggle-pw="confirm_password"
+                                        tabindex="-1" aria-label="Toggle password visibility">
+                                        <img src="<?php echo $assetBase; ?>assets/images/icons/password-hide.svg"
+                                            alt="">
+                                    </button>
+                                </div>
+                                <div class="form-error" id="confirmPasswordError"></div>
+                            </div>
+                        </div>
+
+                        <div class="profile-actions">
+                            <button type="submit" class="btn btn-primary">
+                                <span>Change Password</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================
+             TAB: BUSINESS (owner only)
+             ============================================ -->
+        <?php if ($isOwner): ?>
+        <div class="profile-tab-content" id="tab-business">
+            <div class="profile-card">
+                <div class="card-header">
+                    <h3>Business Information</h3>
+                </div>
+                <div class="card-body">
+                    <form class="profile-form" id="businessForm">
+                        <input type="hidden" name="csrf_token"
+                            value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="update_business">
+
+                        <div class="form-group">
+                            <label class="field-label">Business Name</label>
+                            <input type="text" class="form-control" disabled
+                                value="<?php echo htmlspecialchars((string)($profile['business_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                            <div class="form-hint">Contact support to change the business name.</div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="field-label" for="cuisine_type">Cuisine Type</label>
+                                <input type="text" id="cuisine_type" name="cuisine_type" class="form-control"
+                                    maxlength="50"
+                                    value="<?php echo htmlspecialchars((string)($profile['cuisine_type'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                                <div class="form-error" id="cuisineTypeError"></div>
+                            </div>
+                            <div class="form-group">
+                                <label class="field-label" for="dietary_tags">Dietary Tags</label>
+                                <input type="text" id="dietary_tags" name="dietary_tags" class="form-control"
+                                    maxlength="200" placeholder="vegan,gluten_free,halal"
+                                    value="<?php echo htmlspecialchars((string)($profile['dietary_tags'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                                <div class="form-hint">Comma-separated</div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="field-label" for="description">Description</label>
+                            <textarea id="description" name="description" class="form-control" maxlength="2000"
+                                rows="5"><?php echo htmlspecialchars((string)($profile['restaurant_description'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></textarea>
+                            <div class="form-error" id="descriptionError"></div>
+                        </div>
+
+                        <div class="profile-actions">
+                            <button type="submit" class="btn btn-primary">
+                                <span>Save Business Info</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <!-- ============================================
+             TAB: BRANCH / ADDRESS
+             ============================================ -->
+        <div class="profile-tab-content" id="tab-branch">
+            <div class="profile-card">
+                <div class="card-header">
+                    <h3><?php echo $hasBranch ? 'Branch Information' : 'Primary Address'; ?></h3>
+                </div>
+                <div class="card-body">
+                    <?php if ($hasBranch): ?>
+                    <div class="info-grid">
+                        <div class="info-row">
+                            <span class="info-label">Branch Name</span>
+                            <span class="info-value">
+                                <?php echo htmlspecialchars((string)$profile['branch_name'], ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Branch Code</span>
+                            <span class="info-value">
+                                <?php echo htmlspecialchars((string)$profile['branch_code'], ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                        </div>
+                    </div>
+
+                    <?php if ($isOwner): ?>
+                    <form class="profile-form" id="branchForm">
+                        <input type="hidden" name="csrf_token"
+                            value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="update_branch">
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="field-label" for="block">Block / Street / Unit</label>
+                                <input type="text" id="block" name="block" class="form-control"
+                                    value="<?php echo htmlspecialchars((string)($profile['block'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                                <div class="form-error" id="blockError"></div>
+                            </div>
+                            <div class="form-group">
+                                <label class="field-label" for="barangay">Barangay</label>
+                                <input type="text" id="barangay" name="barangay" class="form-control"
+                                    value="<?php echo htmlspecialchars((string)($profile['barangay'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="field-label" for="city">City</label>
+                                <input type="text" id="city" name="city" class="form-control"
+                                    value="<?php echo htmlspecialchars((string)($profile['city'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                                <div class="form-error" id="cityError"></div>
+                            </div>
+                            <div class="form-group">
+                                <label class="field-label" for="province">Province</label>
+                                <input type="text" id="province" name="province" class="form-control"
+                                    value="<?php echo htmlspecialchars((string)($profile['province'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="field-label" for="region">Region</label>
+                                <input type="text" id="region" name="region" class="form-control"
+                                    value="<?php echo htmlspecialchars((string)($profile['region'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                            </div>
+                            <div class="form-group">
+                                <label class="field-label" for="postal_code">Postal Code</label>
+                                <input type="text" id="postal_code" name="postal_code" class="form-control"
+                                    maxlength="10" inputmode="numeric"
+                                    value="<?php echo htmlspecialchars((string)($profile['postal_code'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                                <div class="form-error" id="postalCodeError"></div>
+                            </div>
+                        </div>
+
+                        <div class="profile-actions">
+                            <button type="submit" class="btn btn-primary">
+                                <span>Save Address</span>
+                            </button>
+                        </div>
+                    </form>
+                    <?php else: ?>
+                    <div class="address-item default">
+                        <p class="address-text">
+                            <?php echo htmlspecialchars(formatRestaurantAddress($profile), ENT_QUOTES, 'UTF-8'); ?>
+                        </p>
+                    </div>
+                    <p class="info-note">
+                        To change the branch address, contact your owner.
+                    </p>
+                    <?php endif; ?>
+
+                    <?php else: ?>
+                    <div class="empty-state">
+                        <div class="empty-icon">
+                            <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="No branch">
+                        </div>
+                        <p class="empty-title">No branch on file yet</p>
+                        <p class="empty-text">
+                            <?php if ($isOwner): ?>
+                            Add a branch to start managing its menu.
+                            <?php else: ?>
+                            Contact your owner to assign you to a branch.
+                            <?php endif; ?>
+                        </p>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+window.FITPAL_RESTAURANT_PROFILE = {
+    csrfToken: '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>',
+    assetBase: '<?php echo $assetBase; ?>',
+    scope: '<?php echo htmlspecialchars((string)($_SESSION['restaurant_scope'] ?? 'owner'), ENT_QUOTES, 'UTF-8'); ?>'
+};
+</script>
+<script src="../assets/ui/js/profile.js" defer></script>
+
+<?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>
 ```
 
 ---

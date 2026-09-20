@@ -4,8 +4,7 @@ filesToCheck = [
     "/sql/database.sql",
     "/sql/sample/seed-data.sql",
 
-   
-     # ===== Root =====
+    # ===== Root =====
     "/index.php",
 
     # ===== admin/assets/css =====
@@ -118,12 +117,17 @@ filesToCheck = [
     "/customer/pages/wallet.php",
 
     # ===== restaurant/assets/css =====
+    "/restaurant/assets/css/dashboard.css",
     "/restaurant/assets/css/header.css",
+    "/restaurant/assets/css/profile.css",
     "/restaurant/assets/css/sign-in.css",
     "/restaurant/assets/css/sign-up.css",
 
     # ===== restaurant/assets/ui/js =====
+    "/restaurant/assets/ui/js/dashboard.js",
     "/restaurant/assets/ui/js/header.js",
+    "/restaurant/assets/ui/js/logout.js",
+    "/restaurant/assets/ui/js/profile.js",
     "/restaurant/assets/ui/js/sign-in.js",
     "/restaurant/assets/ui/js/sign-up.js",
 
@@ -132,6 +136,7 @@ filesToCheck = [
     "/restaurant/backend/database/restaurant-queries.php",
 
     # ===== restaurant/backend/handlers =====
+    "/restaurant/backend/handlers/profile-handler.php",
     "/restaurant/backend/handlers/sign-in-handler.php",
     "/restaurant/backend/handlers/sign-out-handler.php",
     "/restaurant/backend/handlers/sign-up-handler.php",
@@ -140,6 +145,8 @@ filesToCheck = [
     "/restaurant/includes/header.php",
 
     # ===== restaurant/pages =====
+    "/restaurant/pages/dashboard.php",
+    "/restaurant/pages/profile.php",
     "/restaurant/pages/sign-in.php",
     "/restaurant/pages/sign-up.php",
 
