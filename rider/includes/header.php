@@ -3,17 +3,18 @@
  * FitPal Rider Header
  *
  * Rider-specific header with conditional navigation based on login
- * status. Mirrors customer/includes/header.php so the two roles stay
- * consistent in behavior, asset resolution, and CSS load order.
+ * status. Mirrors customer/includes/header.php and
+ * restaurant/includes/header.php so all roles stay consistent.
  *
  * Rider users do NOT have a cart, so there is no cart badge and no
  * cart-count query here. The nav reflects rider-only surfaces:
  * Dashboard, Deliveries, Earnings, and Profile.
  *
  * @package FitPal
- * @version 1.3 — Mirrors the customer header exactly in load order
- *                and asset resolution. Removed duplicate CSS load
- *                comments. Bumped version to match the CSS rebuild.
+ * @version 1.4 — Adds logout confirmation modal (mirrors the
+ *                restaurant header). Desktop avatar and mobile
+ *                greeting link to profile.php. Logout triggers use
+ *                data-logout-trigger so logout.js can intercept.
  */
 
 declare(strict_types=1);
@@ -163,8 +164,9 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
                 </ul>
 
                 <div class="nav-actions">
-                    <div class="user-profile-circle"
-                        title="<?php echo htmlspecialchars($riderName, ENT_QUOTES, 'UTF-8'); ?>">
+                    <a href="profile.php" class="user-profile-circle"
+                        title="<?php echo htmlspecialchars($riderName, ENT_QUOTES, 'UTF-8'); ?>"
+                        aria-label="Go to profile">
                         <?php if (!empty($riderInitial)): ?>
                         <span
                             class="user-initial"><?php echo htmlspecialchars($riderInitial, ENT_QUOTES, 'UTF-8'); ?></span>
@@ -172,9 +174,10 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
                         <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="Profile"
                             class="profile-icon">
                         <?php endif; ?>
-                    </div>
-                    <a href="../backend/handlers/sign-out-handler.php" data-signout
-                        class="btn btn-outline btn-sm logout-btn">Logout</a>
+                    </a>
+                    <button type="button" class="btn btn-outline btn-sm logout-btn" data-logout-trigger>
+                        Logout
+                    </button>
                 </div>
 
                 <?php else: ?>
@@ -208,15 +211,19 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
 
             <?php if ($isLoggedIn): ?>
             <li class="mobile-nav-item mobile-user-greeting">
-                <div class="mobile-user-avatar">
-                    <?php if (!empty($riderInitial)): ?>
-                    <span
-                        class="user-initial-large"><?php echo htmlspecialchars($riderInitial, ENT_QUOTES, 'UTF-8'); ?></span>
-                    <?php else: ?>
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="Profile">
-                    <?php endif; ?>
-                </div>
-                <span class="mobile-user-name"><?php echo htmlspecialchars($riderName, ENT_QUOTES, 'UTF-8'); ?></span>
+                <a href="profile.php" class="mobile-user-greeting-link">
+                    <div class="mobile-user-avatar">
+                        <?php if (!empty($riderInitial)): ?>
+                        <span
+                            class="user-initial-large"><?php echo htmlspecialchars($riderInitial, ENT_QUOTES, 'UTF-8'); ?></span>
+                        <?php else: ?>
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="Profile">
+                        <?php endif; ?>
+                    </div>
+                    <span class="mobile-user-name">
+                        <?php echo htmlspecialchars($riderName, ENT_QUOTES, 'UTF-8'); ?>
+                    </span>
+                </a>
             </li>
             <li class="mobile-nav-divider"></li>
             <li class="mobile-nav-item">
@@ -237,8 +244,9 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
             </li>
             <li class="mobile-nav-divider"></li>
             <li class="mobile-nav-item">
-                <a href="../backend/handlers/sign-out-handler.php" data-signout
-                    class="mobile-nav-link mobile-logout">Logout</a>
+                <button type="button" class="mobile-nav-link mobile-logout" data-logout-trigger>
+                    Logout
+                </button>
             </li>
 
             <?php else: ?>
@@ -259,6 +267,29 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
         </ul>
     </nav>
 
+    <!-- ============================================
+         LOGOUT CONFIRMATION MODAL
+         ============================================ -->
+    <div class="logout-modal" id="logoutModal" style="display: none;" role="dialog" aria-modal="true"
+        aria-labelledby="logoutModalTitle">
+        <div class="logout-modal-overlay" data-logout-cancel></div>
+        <div class="logout-modal-content">
+            <div class="logout-modal-icon" aria-hidden="true">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/logoutsvg.svg" alt=""
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/information-fill.svg'">
+            </div>
+            <p class="logout-modal-title" id="logoutModalTitle">Sign out?</p>
+            <p class="logout-modal-text">You'll need to sign in again to access the rider dashboard.</p>
+            <div class="logout-modal-actions">
+                <button type="button" class="logout-btn-cancel" data-logout-cancel>Cancel</button>
+                <a href="../backend/handlers/sign-out-handler.php" class="logout-btn-confirm">
+                    Yes, sign out
+                </a>
+            </div>
+        </div>
+    </div>
+
     <main class="main-content" role="main">
 
         <script src="../assets/ui/js/header.js" defer></script>
+        <script src="../assets/ui/js/logout.js" defer></script>

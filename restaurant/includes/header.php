@@ -5,16 +5,22 @@
  * Contract
  * --------
  * 1. The header NEVER writes to $_SESSION. Only the sign-in handler
- *    and the sign-out handler are allowed to do that.
+ *    and the sign-out handler may do that.
  *
  * 2. The header NEVER queries the DB to re-validate a session. If
  *    $_SESSION['restaurant_account_id'] is missing, the user is
- *    logged out — period. This is what makes sign-out work.
+ *    logged out — period.
  *
  * 3. $assetBase is computed here so pages never compute it twice.
  *
+ * 4. The desktop avatar circle links to profile.php. The mobile
+ *    greeting block also links to profile.php. The logout button
+ *    (desktop and mobile) is a <button> carrying data-logout-trigger
+ *    so logout.js can intercept it and show the confirmation modal.
+ *
  * @package FitPal
- * @version 2.0 — No re-authentication. No session writes.
+ * @version 3.0 — Avatar + greeting link to profile. Logout uses the
+ *                confirmation modal. Modal markup lives in the header.
  */
 
 declare(strict_types=1);
@@ -43,17 +49,10 @@ function getRestaurantAssetBase(): string
 
 $assetBase = getRestaurantAssetBase();
 
-/* --------------------------------------------------------------
- * READ-ONLY SESSION SNAPSHOT
- *
- * We read from $_SESSION only. If the keys are not there, the user
- * is treated as logged out. No DB call. No writes.
- * -------------------------------------------------------------- */
-
-$isLoggedIn     = !empty($_SESSION['restaurant_account_id']);
-$accountName    = $isLoggedIn ? (string)($_SESSION['user_name']    ?? '') : '';
-$businessName   = $isLoggedIn ? (string)($_SESSION['business_name'] ?? '') : '';
-$restaurantRole = $isLoggedIn ? (string)($_SESSION['restaurant_role'] ?? '') : '';
+$isLoggedIn      = !empty($_SESSION['restaurant_account_id']);
+$accountName     = $isLoggedIn ? (string)($_SESSION['user_name']       ?? '') : '';
+$businessName    = $isLoggedIn ? (string)($_SESSION['business_name']   ?? '') : '';
+$restaurantRole  = $isLoggedIn ? (string)($_SESSION['restaurant_role'] ?? '') : '';
 $restaurantScope = $isLoggedIn ? (string)($_SESSION['restaurant_scope'] ?? 'owner') : '';
 
 $accountInitial = '';
@@ -136,19 +135,21 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
                 </ul>
 
                 <div class="nav-actions">
-                    <div class="user-profile-circle"
-                        title="<?php echo htmlspecialchars($accountName !== '' ? $accountName : 'Account', ENT_QUOTES, 'UTF-8'); ?>">
+                    <a href="profile.php" class="user-profile-circle"
+                        title="<?php echo htmlspecialchars($accountName !== '' ? $accountName : 'Account', ENT_QUOTES, 'UTF-8'); ?>"
+                        aria-label="Go to profile">
                         <?php if ($accountInitial !== ''): ?>
                         <span class="user-initial">
                             <?php echo htmlspecialchars($accountInitial, ENT_QUOTES, 'UTF-8'); ?>
                         </span>
                         <?php else: ?>
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="Profile"
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt=""
                             class="profile-icon">
                         <?php endif; ?>
-                    </div>
-                    <a href="../backend/handlers/sign-out-handler.php" data-signout
-                        class="btn btn-outline btn-sm logout-btn">Logout</a>
+                    </a>
+                    <button type="button" class="btn btn-outline btn-sm logout-btn" data-logout-trigger>
+                        Logout
+                    </button>
                 </div>
 
                 <?php else: ?>
@@ -182,18 +183,20 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
 
             <?php if ($isLoggedIn): ?>
             <li class="mobile-nav-item mobile-user-greeting">
-                <div class="mobile-user-avatar">
-                    <?php if ($accountInitial !== ''): ?>
-                    <span class="user-initial-large">
-                        <?php echo htmlspecialchars($accountInitial, ENT_QUOTES, 'UTF-8'); ?>
+                <a href="profile.php" class="mobile-user-greeting-link">
+                    <div class="mobile-user-avatar">
+                        <?php if ($accountInitial !== ''): ?>
+                        <span class="user-initial-large">
+                            <?php echo htmlspecialchars($accountInitial, ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                        <?php else: ?>
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="">
+                        <?php endif; ?>
+                    </div>
+                    <span class="mobile-user-name">
+                        <?php echo htmlspecialchars($accountName !== '' ? $accountName : 'Account', ENT_QUOTES, 'UTF-8'); ?>
                     </span>
-                    <?php else: ?>
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="Profile">
-                    <?php endif; ?>
-                </div>
-                <span class="mobile-user-name">
-                    <?php echo htmlspecialchars($accountName !== '' ? $accountName : 'Account', ENT_QUOTES, 'UTF-8'); ?>
-                </span>
+                </a>
             </li>
             <li class="mobile-nav-divider"></li>
             <li class="mobile-nav-item">
@@ -206,8 +209,9 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
             </li>
             <li class="mobile-nav-divider"></li>
             <li class="mobile-nav-item">
-                <a href="../backend/handlers/sign-out-handler.php" data-signout
-                    class="mobile-nav-link mobile-logout">Logout</a>
+                <button type="button" class="mobile-nav-link mobile-logout" data-logout-trigger>
+                    Logout
+                </button>
             </li>
 
             <?php else: ?>
@@ -228,6 +232,29 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
         </ul>
     </nav>
 
+    <!-- ============================================
+         LOGOUT CONFIRMATION MODAL
+         ============================================ -->
+    <div class="logout-modal" id="logoutModal" style="display: none;" role="dialog" aria-modal="true"
+        aria-labelledby="logoutModalTitle">
+        <div class="logout-modal-overlay" data-logout-cancel></div>
+        <div class="logout-modal-content">
+            <div class="logout-modal-icon" aria-hidden="true">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/logoutsvg.svg" alt=""
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/information-fill.svg'">
+            </div>
+            <p class="logout-modal-title" id="logoutModalTitle">Sign out?</p>
+            <p class="logout-modal-text">You'll need to sign in again to access the restaurant dashboard.</p>
+            <div class="logout-modal-actions">
+                <button type="button" class="logout-btn-cancel" data-logout-cancel>Cancel</button>
+                <a href="../backend/handlers/sign-out-handler.php" class="logout-btn-confirm">
+                    Yes, sign out
+                </a>
+            </div>
+        </div>
+    </div>
+
     <main class="main-content" role="main">
 
         <script src="../assets/ui/js/header.js" defer></script>
+        <script src="../assets/ui/js/logout.js" defer></script>

@@ -1,11 +1,7 @@
 # Web Project Structure
 
 **Project:** fitpal
-<<<<<<< HEAD
-**Generated:** 2026-09-20 23:32:33
-=======
-**Generated:** 2026-09-20 23:23:11
->>>>>>> 9d3be68c2fc86cc0f8943984db853547104ce956
+**Generated:** 2026-09-21 00:11:29
 **Mode:** all
 
 ```
@@ -118,26 +114,29 @@ fitpal/
 │       └── wallet.php
 ├── logs/
 │   ├── content-fetcher-configuration/
-│   │   ├── all_path.py
-│   │   ├── rider.py
-│   │   ├── riders.py
-│   │   ├── technical_path.py
-│   │   └── tests_path.py
+│   │   └── all_path.py
 │   ├── instructions/
 │   │   ├── test-create-guide.md
 │   │   └── updating-fetcher-guide.md
 │   ├── output/
+│   │   ├── all_path_fetched_codebase.md
+│   │   └── project_structure.md
 │   ├── content-fetcher.py
 │   └── tree-mapper.py
 ├── restaurant/
 │   ├── assets/
 │   │   ├── css/
+│   │   │   ├── dashboard.css
 │   │   │   ├── header.css
+│   │   │   ├── profile.css
 │   │   │   ├── sign-in.css
 │   │   │   └── sign-up.css
 │   │   └── ui/
 │   │       └── js/
+│   │           ├── dashboard.js
 │   │           ├── header.js
+│   │           ├── logout.js
+│   │           ├── profile.js
 │   │           ├── sign-in.js
 │   │           └── sign-up.js
 │   ├── backend/
@@ -145,12 +144,15 @@ fitpal/
 │   │   │   ├── restaurant-connect.php
 │   │   │   └── restaurant-queries.php
 │   │   └── handlers/
+│   │       ├── profile-handler.php
 │   │       ├── sign-in-handler.php
 │   │       ├── sign-out-handler.php
 │   │       └── sign-up-handler.php
 │   ├── includes/
 │   │   └── header.php
 │   └── pages/
+│       ├── dashboard.php
+│       ├── profile.php
 │       ├── sign-in.php
 │       └── sign-up.php
 ├── rider/
@@ -233,6 +235,8 @@ fitpal/
 │   │   │   │   ├── bill-line.svg
 │   │   │   │   ├── building.svg
 │   │   │   │   ├── cancel.svg
+│   │   │   │   ├── car-fill.svg
+│   │   │   │   ├── car-line.svg
 │   │   │   │   ├── cart-arrow-downsvg.svg
 │   │   │   │   ├── cart-arrow-up.svg
 │   │   │   │   ├── cart-plus.svg
@@ -322,6 +326,8 @@ fitpal/
 │   │   │   │   ├── reset.svg
 │   │   │   │   ├── restaurant-fill.svg
 │   │   │   │   ├── restaurant.svg
+│   │   │   │   ├── riding-fill.svg
+│   │   │   │   ├── riding-line.svg
 │   │   │   │   ├── save-empty.svg
 │   │   │   │   ├── save-fill.svg
 │   │   │   │   ├── search-line.svg
@@ -330,6 +336,8 @@ fitpal/
 │   │   │   │   ├── subtract-fill.svg
 │   │   │   │   ├── subtract-line.svg
 │   │   │   │   ├── target-fill.svg
+│   │   │   │   ├── taxi-fill.svg
+│   │   │   │   ├── taxi-line.svg
 │   │   │   │   ├── time-fill.svg
 │   │   │   │   ├── time-update.svg
 │   │   │   │   ├── trash.svg
@@ -371,6 +379,7 @@ fitpal/
 │   │   ├── privacy-policy.php
 │   │   └── terms-conditions.php
 │   └── uploads/
+│       └── restaurant-permits/
 ├── sql/
 │   ├── sample/
 │   │   └── seed-data.sql
@@ -393,25 +402,16 @@ fitpal/
 | File Type | Count |
 |-----------|-------|
 | HTML Files | 0 |
-| PHP Files | 85 |
-| CSS Files | 39 |
-<<<<<<< HEAD
-| JavaScript Files | 31 |
-=======
-| JavaScript Files | 30 |
->>>>>>> 9d3be68c2fc86cc0f8943984db853547104ce956
+| PHP Files | 88 |
+| CSS Files | 41 |
+| JavaScript Files | 34 |
 | JSON Files | 0 |
-| Text/Markdown | 3 |
-| Image Files | 141 |
-| Other Files | 12 |
+| Text/Markdown | 5 |
+| Image Files | 147 |
+| Other Files | 8 |
 
-<<<<<<< HEAD
-**Total Directories:** 64
-**Total Files:** 310
-=======
-**Total Directories:** 63
-**Total Files:** 313
->>>>>>> 9d3be68c2fc86cc0f8943984db853547104ce956
+**Total Directories:** 65
+**Total Files:** 322
 
 ---
 
