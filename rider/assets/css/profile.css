@@ -1,4 +1,5 @@
 /**
+/*
  * FitPal Rider Profile Page Styles
  *
  * Mirrors the customer profile layout:
@@ -12,6 +13,7 @@
  * @package FitPal
  * @version 2.0 — Rebuilt to match the customer profile visual system.
  */
+ */
 
 /* ============================================
    CONTENT WRAPPER
@@ -24,9 +26,6 @@
     width: 100%;
     padding: 0;
     min-height: calc(100vh - 70px);
-    background: var(--gray-50);
-}
-
 .profile-page {
     padding: 20px 0 40px 0;
 }
@@ -38,84 +37,42 @@
     width: 100%;
     box-sizing: border-box;
 }
+    background: var(--gray-50);
+    padding: 24px 0 40px 0;
+    flex: 1;
+}
+
+.rider-profile-page .container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 16px;
+    width: 100%;
+}
+}
 
 /* ============================================
-   PAGE HEADER — back button + title
+   PAGE HEADER
    ============================================ */
 
-.page-title-header {
+.rider-page-header {
     margin-bottom: 24px;
 }
 
-.page-title-header-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    flex-wrap: wrap;
+.rider-page-header .heading-2 {
+    margin: 0 0 4px 0;
+    font-size: var(--font-size-3xl);
+    line-height: 1.2;
 }
 
-.page-title-header h1 {
-    font-size: var(--font-size-2xl);
-    font-weight: 700;
-    color: var(--text);
+.rider-page-header .heading-2 span {
+    color: var(--primary);
+}
+
+.rider-page-header .text-muted {
+    color: var(--gray-500);
     margin: 0;
-    text-align: right;
-}
-
-.page-title-header .back-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    color: #ffffff;
-    text-decoration: none;
-    font-size: var(--font-size-sm);
-    font-weight: 500;
-    font-family: inherit;
-    padding: 10px 18px;
-    border-radius: var(--radius-base);
-    background: #1a1a1a;
-    border: none;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    cursor: pointer;
-    white-space: nowrap;
-    flex-shrink: 0;
-}
-
-.page-title-header .back-btn:active {
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.page-title-header .back-btn-icon {
-    width: 20px;
-    height: 20px;
-    display: block;
-    flex-shrink: 0;
-    filter: brightness(0) invert(1);
-}
-
-/* ============================================
-   ALERTS
-   ============================================ */
-
-.alert {
-    padding: 12px 16px;
-    border-radius: var(--radius-base);
-    margin-bottom: 16px;
-    border: 1px solid transparent;
     font-size: var(--font-size-sm);
 }
-
-.alert-success {
-    color: #155724;
-    background-color: #d4edda;
-    border-color: #c3e6cb;
-}
-
-.alert-danger {
-    color: #721c24;
-    background-color: #f8d7da;
-    border-color: #f5c6cb;
 }
 
 /* ============================================
@@ -140,9 +97,6 @@
     display: flex;
     align-items: center;
     gap: 16px;
-    min-width: 0;
-}
-
 .profile-avatar {
     flex-shrink: 0;
 }
@@ -172,35 +126,6 @@
     text-transform: uppercase;
     line-height: 1;
 }
-
-.profile-avatar-edit {
-    position: absolute;
-    bottom: -4px;
-    right: -4px;
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    background: var(--white);
-    border: 2px solid var(--gray-200);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    cursor: pointer;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-    transition: border-color 0.15s ease, transform 0.1s ease;
-}
-
-.profile-avatar-edit:hover {
-    border-color: var(--primary);
-    transform: scale(1.05);
-}
-
-.profile-avatar-edit img {
-    width: 12px;
-    height: 12px;
-    display: block;
-    opacity: 0.7;
 }
 
 .profile-name-role {
@@ -226,142 +151,9 @@
     color: var(--gray-500);
 }
 
-.profile-meta-line {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-    margin-top: 4px;
-}
-
-.profile-joined {
-    font-size: var(--font-size-xs);
-    color: var(--gray-500);
-}
-
-.profile-header-right {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    flex-shrink: 0;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-}
-
-.profile-stat {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    min-width: 60px;
-}
-
-.profile-stat-value {
-    font-size: var(--font-size-xl);
-    font-weight: 700;
-    color: var(--text);
-    line-height: 1.1;
-}
-
-.profile-stat-label {
-    font-size: var(--font-size-xs);
-    color: var(--gray-500);
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-    font-weight: var(--font-weight-semibold);
-    margin-top: 2px;
-}
-
-.btn-edit {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 20px;
-    background: var(--gray-100);
-    color: var(--text);
-    border: 1px solid var(--gray-200);
-    border-radius: var(--radius-base);
-    font-size: var(--font-size-sm);
-    font-weight: 500;
-    cursor: pointer;
-    font-family: inherit;
-    white-space: nowrap;
-}
-
-.btn-edit:hover {
-    background: var(--gray-200);
-}
-
-.btn-edit .btn-icon {
-    width: 16px;
-    height: 16px;
-    display: block;
-}
-
-/* ============================================
-   TABS
-   ============================================ */
-
-.profile-tabs {
-    display: flex;
-    gap: 4px;
-    background: var(--white);
-    border: 1px solid var(--gray-200);
-    border-radius: var(--radius-lg);
-    padding: 4px;
-    margin-bottom: 24px;
-    box-shadow: var(--shadow-sm);
-}
-
-.profile-tab {
-    flex: 1;
-    padding: 12px 20px;
-    border: none;
-    border-radius: var(--radius-base);
-    background: transparent;
-    color: var(--gray-600);
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    cursor: pointer;
-    font-family: inherit;
-    text-align: center;
-    transition: background 0.15s ease, color 0.15s ease;
-}
-
-.profile-tab:hover:not(.active) {
-    background: var(--gray-50);
-}
-
-.profile-tab.active {
-    background: var(--primary);
-    color: var(--white);
-}
-
-/* ============================================
-   TAB CONTENT
-   ============================================ */
-
-.profile-tab-content {
-    display: none;
-    animation: riderProfileFadeIn 0.25s ease;
-}
-
-.profile-tab-content.active {
-    display: block;
-}
-
-@keyframes riderProfileFadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(8px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
 /* ============================================
    PROFILE CARDS
+   ============================================ */
    ============================================ */
 
 .profile-card {
@@ -375,12 +167,14 @@
 .profile-card .card-header {
     padding: 16px 20px;
     border-bottom: 1px solid var(--gray-200);
+.profile-card .card-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     background: var(--gray-50);
     gap: 12px;
     flex-wrap: wrap;
+}
 }
 
 .profile-card .card-header h3 {
@@ -390,6 +184,7 @@
     margin: 0;
 }
 
+.profile-card .card-body {
 .profile-card .card-body {
     padding: 20px;
 }
@@ -407,10 +202,6 @@
 .form-group {
     margin-bottom: 16px;
     min-width: 0;
-}
-
-.form-group:last-child {
-    margin-bottom: 0;
 }
 
 .field-label {
@@ -466,129 +257,14 @@
 .profile-actions.is-hidden {
     display: none;
 }
-
-/* ============================================
-   ADDRESS ITEM
-   ============================================ */
-
-.address-item {
-    padding: 12px 16px;
-    border: 1px solid var(--gray-200);
-    border-radius: var(--radius-base);
-    margin-bottom: 12px;
-    background: var(--white);
-}
-
-.address-item:last-child {
-    margin-bottom: 0;
-}
-
-.address-item.default {
-    border-color: var(--primary);
-    background: var(--gray-50);
-}
-
-.address-item-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 6px;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.address-item-label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.address-label {
-    font-size: var(--font-size-sm);
-    font-weight: 500;
-    color: var(--text);
-}
-
-.address-item-body p {
-    margin: 0;
-    font-size: var(--font-size-sm);
-    color: var(--gray-600);
-    line-height: 1.5;
-    word-break: break-word;
-}
-
-.address-note {
-    margin: 16px 0 0 0;
-    font-size: var(--font-size-xs);
-    color: var(--gray-500);
-    padding: 10px 14px;
-    background: var(--gray-50);
-    border-radius: var(--radius-base);
-    border-left: 3px solid var(--gray-300);
-}
-
-/* ============================================
-   VEHICLE INFORMATION
-   ============================================ */
-
-.vehicle-display {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-}
-
-.vehicle-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: var(--radius-base);
-    background: rgba(89, 193, 74, 0.12);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.vehicle-icon img {
-    width: 22px;
-    height: 22px;
-    display: block;
-    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
-}
-
-.vehicle-info {
-    min-width: 0;
-}
-
-.vehicle-name {
-    margin: 0 0 2px 0;
-    font-size: var(--font-size-base);
-    font-weight: 600;
-    color: var(--text);
-}
-
-.vehicle-plate {
-    margin: 0;
-    font-size: var(--font-size-sm);
-    color: var(--gray-600);
-    line-height: 1.4;
-    word-break: break-word;
-}
-
-.vehicle-note {
-    margin: 16px 0 0 0;
-    font-size: var(--font-size-xs);
-    color: var(--gray-500);
-    padding: 10px 14px;
-    background: var(--gray-50);
-    border-radius: var(--radius-base);
-    border-left: 3px solid var(--gray-300);
-}
-
 /* ============================================
    BADGES
    ============================================ */
 
+.badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 .badge {
     display: inline-flex;
     align-items: center;
@@ -605,176 +281,39 @@
 .badge-danger    { background: #f8d7da; color: #721c24; }
 .badge-secondary { background: var(--gray-200); color: var(--gray-600); }
 .badge-primary   { background: var(--primary); color: var(--white); }
-
 /* ============================================
-   EMPTY STATE
-   ============================================ */
-
-.empty-state {
-    text-align: center;
-    padding: 40px 20px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-}
-
-.empty-icon {
-    margin-bottom: 16px;
-}
-
-.empty-icon img {
-    width: 56px;
-    height: 56px;
-    opacity: 0.35;
-    display: block;
-}
-
-.empty-state .text-muted {
-    margin: 4px 0;
-}
-
-.empty-state .small {
-    font-size: var(--font-size-sm);
-}
-
-/* ============================================
-   BUTTONS
-   ============================================ */
-
-.btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 8px 16px;
-    border-radius: var(--radius-base);
-    font-size: var(--font-size-sm);
-    font-weight: 500;
-    cursor: pointer;
-    font-family: inherit;
-    border: 1px solid transparent;
-    text-decoration: none;
-    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-}
-
-.btn-primary {
-    background: var(--primary);
-    color: var(--white);
-    border-color: var(--primary);
-}
-
-.btn-primary:hover {
-    background: var(--primary-dark);
-    border-color: var(--primary-dark);
-}
-
-.btn-cancel {
-    background: var(--black);
-    color: var(--white);
-    border-color: var(--black);
-}
-
-.btn-cancel:hover {
-    background: #000000;
-    border-color: #000000;
-    opacity: 0.9;
-}
-
-.btn-cancel .btn-icon {
-    filter: brightness(0) invert(1);
-}
-
-.btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
-
-/* ============================================
-   LOGOUT
-   ============================================ */
-
-.logout-wrap {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 24px;
-}
-
-.logout-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.logout-btn .btn-icon {
-    width: 16px;
-    height: 16px;
-    display: block;
-    flex-shrink: 0;
-}
-
-/* ============================================
-   NOTIFICATION TOAST
-   ============================================ */
-
-.rider-toast {
-    position: fixed;
-    top: 80px;
-    right: 20px;
-    padding: 12px 18px;
-    border-radius: var(--radius-base);
-    background: var(--white);
-    box-shadow: var(--shadow-lg);
-    border-left: 4px solid var(--primary);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    z-index: 2000;
-    max-width: 340px;
-    animation: riderToastIn 0.3s ease;
-}
-
-.rider-toast.error {
-    border-left-color: var(--danger);
-}
-
-.rider-toast .rider-toast-icon img {
-    width: 18px;
-    height: 18px;
-}
-
-.rider-toast .rider-toast-message {
-    font-size: var(--font-size-sm);
-    color: var(--text);
-}
-
-@keyframes riderToastIn {
-    from {
-        transform: translateX(100%);
-        opacity: 0;
-    }
-    to {
-        transform: translateX(0);
-        opacity: 1;
-    }
-}
-
-@keyframes riderToastOut {
-    from { opacity: 1; }
-    to   { opacity: 0; }
-}
-
-/* ============================================
-   RESPONSIVE — TABLET
+   RESPONSIVE
    ============================================ */
 
 @media (max-width: 768px) {
-    .profile-page {
+.rider-profile-page {
         padding: 16px 0 32px 0;
     }
 
-    .page-title-header h1 {
-        font-size: var(--font-size-xl);
+    .rider-page-header .heading-2 {
+        font-size: var(--font-size-2xl);
+    }
+
+    .rider-profile-hero {
+        flex-direction: column;
+        text-align: center;
+        padding: 20px;
+    }
+
+    .rider-profile-hero-info {
+        text-align: center;
+    }
+
+    .rider-profile-badges {
+        justify-content: center;
+    }
+
+    .rider-profile-hero-stats {
+        gap: 32px;
+    }
+
+    .rider-form-grid {
+        grid-template-columns: 1fr;
     }
 
     .profile-header-card {
@@ -794,7 +333,7 @@
         text-align: center;
     }
 
-    .profile-full-name {
+.profile-full-name {
         white-space: normal;
     }
 
@@ -854,87 +393,33 @@
         width: 100%;
         justify-content: center;
     }
+    }
 }
-
-/* ============================================
-   RESPONSIVE — MOBILE
-   ============================================ */
 
 @media (max-width: 480px) {
-    .page-title-header-top {
-        gap: 10px;
+.rider-profile-avatar {
+        width: 72px;
+        height: 72px;
     }
 
-    .page-title-header h1 {
-        font-size: var(--font-size-lg);
+    .rider-profile-avatar-initial {
+        font-size: 28px;
     }
 
-    .profile-avatar-wrap,
-    .profile-avatar-wrap > img,
-    .profile-avatar-wrap > .profile-avatar-placeholder {
-        width: 56px;
-        height: 56px;
+    .rider-profile-hero-stat-value {
+        font-size: var(--font-size-xl);
     }
 
-    .profile-avatar-placeholder {
-        font-size: 20px;
+    .rider-profile-name {
+        font-size: var(--font-size-xl);
     }
 
-    .profile-full-name {
-        font-size: var(--font-size-lg);
+    .rider-form-actions {
+        flex-direction: column-reverse;
     }
 
-    .profile-header-card {
-        padding: 16px;
-    }
-
-    .profile-card .card-header {
-        padding: 12px 16px;
-    }
-
-    .profile-card .card-body {
-        padding: 14px;
-    }
-
-    .profile-tab {
-        padding: 8px 12px;
-        font-size: var(--font-size-xs);
-    }
-
-    .address-item {
-        padding: 10px 12px;
-    }
-
-    .empty-state {
-        padding: 24px 16px;
-    }
-
-    .empty-icon img {
-        width: 40px;
-        height: 40px;
-    }
-
-    .vehicle-icon {
-        width: 40px;
-        height: 40px;
-    }
-
-    .vehicle-icon img {
-        width: 18px;
-        height: 18px;
-    }
-}
-
-/* ============================================
-   REDUCED MOTION
-   ============================================ */
-
-@media (prefers-reduced-motion: reduce) {
-    .profile-tab-content,
-    .profile-avatar-edit,
-    .form-control,
-    .btn {
-        transition: none !important;
-        animation: none !important;
+    .rider-form-actions .btn {
+        width: 100%;
+>>>>>>> 677b4fcf15b4c92586299707a23a3b9955a24c1d
     }
 }

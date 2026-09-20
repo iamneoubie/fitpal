@@ -1,43 +1,137 @@
 /**
-/*
- * FitPal Rider Header Styles
+ * FitPal Admin Header Styles + Base Layout Skeleton
  *
- * Rider-specific header overrides. Uses global CSS variables from
- * shared/assets/css/global.css and extends the shared header layout.
+ * This file is loaded on EVERY admin page (via admin/includes/header.php).
+ * It contains:
+ *
+ *   1. The base layout skeleton (.main-content, .content) so no page
+ *      depends on dashboard.css / profile.css / sign-in.css for layout.
+ *
+ *   2. The full .header / .admin-header block, self-contained. This
+ *      file replaces shared/assets/css/header.css for admin pages.
+ *      Loading both caused a size-pop because both define the same
+ *      selectors with subtly different box-model values.
+ *
+ *   3. Admin-specific header overrides (nav-link, buttons, mobile
+ *      menu, user circle).
+ *
+ * Excludes the .nav-badge rule — admins do not have a cart.
  *
  * @package FitPal
  * @version 1.0
  */
- * FitPal Rider Header Styles
- *
- * Rider-specific header overrides. Uses global CSS variables from
- * global.css. Deliberately excludes the .nav-badge rule — riders
- * do not have a cart.
- *
- * @package FitPal
- * @version 1.1 — Retains parity with customer header.
- */
 
 /* ============================================
-   RIDER HEADER OVERRIDES
+   BASE LAYOUT SKELETON
+   (loaded on every admin page)
    ============================================ */
 
-.rider-header {
-.rider-header {
-    height: 70px;
-    min-height: 70px;
-    max-height: 70px;
+.main-content {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    flex: 1;
+    min-height: calc(100vh - 70px);
 }
 
-.rider-header .header-container {
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+}
+
+/* ============================================
+   BASE HEADER (self-contained)
+   The admin header uses <header class="header admin-header">.
+   ============================================ */
+
+.header {
+    background: var(--white);
+    border-bottom: 1px solid var(--gray-200);
+    position: sticky;
+    top: 0;
+    z-index: var(--z-sticky);
     height: 70px;
     min-height: 70px;
     max-height: 70px;
     transition: box-shadow 0.1s ease;
 }
 
-.rider-header .header-container {
->>>>>>> 677b4fcf15b4c92586299707a23a3b9955a24c1d
+.header.header-scrolled {
+    box-shadow: var(--shadow-md);
+}
+
+.header-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 var(--spacing-4);
+    height: 100%;
+}
+
+/* ---- Logo ---- */
+
+.header-logo {
+    flex-shrink: 0;
+}
+
+.logo-link {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    text-decoration: none;
+}
+
+.logo-image {
+    height: 40px;
+    width: auto;
+}
+
+.logo-text {
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.5px;
+}
+
+.logo-text span {
+    color: var(--primary);
+}
+
+/* ---- Desktop nav ---- */
+
+.header-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-4);
+}
+
+.nav-list {
+    display: flex;
+    align-items: center;
+    list-style: none;
+    gap: var(--spacing-2);
+    margin: 0;
+    padding: 0;
+}
+
+.nav-item {
+    position: relative;
+}
+
+/* ============================================
+   ADMIN HEADER — IDENTICAL DIMENSIONS
+   The .admin-header class is retained on the <header> element
+   so page CSS or JS can target it, but it does NOT redeclare
+   height/min-height/max-height.
+   ============================================ */
+
+.admin-header .header-container {
     max-width: 1200px;
     margin: 0 auto;
     height: 100%;
@@ -47,7 +141,7 @@
    NAVIGATION LINKS
    ============================================ */
 
-.rider-header .nav-link {
+.admin-header .nav-link {
     font-weight: 500;
     color: var(--gray-600);
     padding: var(--spacing-2) var(--spacing-3);
@@ -58,17 +152,17 @@
     text-decoration: none;
 }
 
-.rider-header .nav-link:hover {
+.admin-header .nav-link:hover {
     color: var(--primary);
     background-color: var(--gray-50);
 }
 
-.rider-header .nav-link.active {
+.admin-header .nav-link.active {
     color: var(--primary);
     background-color: rgba(89, 193, 74, 0.1);
 }
 
-.rider-header .nav-link.active::after {
+.admin-header .nav-link.active::after {
     content: '';
     position: absolute;
     bottom: -2px;
@@ -84,7 +178,7 @@
    BUTTONS — match shared header exactly
    ============================================ */
 
-.rider-header .btn {
+.admin-header .btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -102,33 +196,33 @@
     white-space: nowrap;
 }
 
-.rider-header .btn-sm {
+.admin-header .btn-sm {
     padding: var(--spacing-1) var(--spacing-3);
     font-size: var(--font-size-xs);
     min-height: 32px;
 }
 
-.rider-header .btn-primary {
+.admin-header .btn-primary {
     background-color: var(--primary);
     color: var(--white);
     border-color: var(--primary);
 }
 
-.rider-header .btn-primary:hover,
-.rider-header .btn-primary:focus {
+.admin-header .btn-primary:hover,
+.admin-header .btn-primary:focus {
     background-color: var(--primary-dark);
     border-color: var(--primary-dark);
     color: var(--white);
 }
 
-.rider-header .btn-outline {
+.admin-header .btn-outline {
     background-color: transparent;
     color: var(--text);
     border-color: var(--gray-300);
 }
 
-.rider-header .btn-outline:hover,
-.rider-header .btn-outline:focus {
+.admin-header .btn-outline:hover,
+.admin-header .btn-outline:focus {
     background-color: var(--gray-50);
     color: var(--text);
     border-color: var(--gray-400);
@@ -138,13 +232,13 @@
    NAV ACTIONS
    ============================================ */
 
-.rider-header .nav-actions {
+.admin-header .nav-actions {
     display: flex;
     align-items: center;
     gap: var(--spacing-3);
 }
 
-.rider-header .logout-btn {
+.admin-header .logout-btn {
     font-size: var(--font-size-xs);
     padding: var(--spacing-1) var(--spacing-3);
     min-height: 32px;
@@ -430,7 +524,7 @@
    ============================================ */
 
 @media (max-width: 992px) {
-    .rider-header .header-nav {
+    .admin-header .header-nav {
         display: none;
     }
 
@@ -440,18 +534,17 @@
 }
 
 @media (max-width: 768px) {
-    .rider-header {
->>>>>>> 677b4fcf15b4c92586299707a23a3b9955a24c1d
+    .header {
         height: 60px;
         min-height: 60px;
         max-height: 60px;
     }
 
-    .rider-header .logo-text {
+    .admin-header .logo-text {
         font-size: var(--font-size-base);
     }
 
-    .rider-header .logo-image {
+    .admin-header .logo-image {
         height: 32px;
     }
 
@@ -465,6 +558,11 @@
     .mobile-overlay {
         top: 60px;
         height: calc(100vh - 60px);
+    }
+
+    .main-content,
+    .content {
+        min-height: calc(100vh - 60px);
     }
 }
 
