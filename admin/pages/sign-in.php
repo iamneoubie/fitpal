@@ -3,7 +3,8 @@
  * FitPal Admin Sign-In Page
  *
  * @package FitPal
- * @version 2.0
+ * @version 3.0 — Removed the inline <script> block. The sign-in JS
+ *                lives entirely in admin/assets/ui/js/sign-in.js.
  */
 
 declare(strict_types=1);
@@ -85,53 +86,6 @@ $identifierValue = htmlspecialchars((string)($_POST['identifier'] ?? ''), ENT_QU
     </div>
 </div>
 
-<script>
-(function() {
-    'use strict';
-    var form = document.getElementById('signInForm');
-    var toggle = document.getElementById('togglePassword');
-    var password = document.getElementById('password');
-    var icon = document.getElementById('passwordIcon');
-    if (toggle && password && icon) {
-        toggle.addEventListener('click', function() {
-            var isPwd = password.type === 'password';
-            password.type = isPwd ? 'text' : 'password';
-            icon.src = isPwd ?
-                '../../shared/assets/images/icons/password-unhide.svg' :
-                '../../shared/assets/images/icons/password-hide.svg';
-        });
-    }
-    if (form) {
-        form.addEventListener('submit', function(e) {
-            var ident = document.getElementById('identifier');
-            var idErr = document.getElementById('identifierError');
-            var pwdErr = document.getElementById('passwordError');
-            [ident, password].forEach(function(el) {
-                if (el) el.classList.remove('error');
-            });
-            [idErr, pwdErr].forEach(function(el) {
-                if (el) {
-                    el.textContent = '';
-                    el.style.display = 'none';
-                }
-            });
-            var ok = true;
-            if (!ident.value.trim()) {
-                ident.classList.add('error');
-                idErr.textContent = 'Please enter your email or username.';
-                idErr.style.display = 'block';
-                ok = false;
-            }
-            if (!password.value) {
-                password.classList.add('error');
-                pwdErr.textContent = 'Please enter your password.';
-                pwdErr.style.display = 'block';
-                ok = false;
-            }
-            if (!ok) e.preventDefault();
-        });
-    }
-})();
-</script>
+<script src="../assets/ui/js/sign-in.js" defer></script>
 
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>

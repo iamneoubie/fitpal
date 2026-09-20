@@ -5,8 +5,12 @@
  * Paginated restaurant list with verification tabs, search, and a
  * detail modal that shows branches and account holders.
  *
+ * No inline CSS. Styles come from restaurants.css. Behavior comes
+ * from restaurants.js.
+ *
  * @package FitPal
- * @version 2.0
+ * @version 3.0 — Inline styles replaced with CSS classes. Loads
+ *                restaurants.js instead of dashboard.js.
  */
 
 declare(strict_types=1);
@@ -86,8 +90,8 @@ function buildRestaurantUrl(array $overrides = []): string
             </div>
             <div class="admin-page-header-actions">
                 <a href="dashboard.php" class="btn btn-outline btn-sm">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt="" class="btn-icon"
-                        width="16" height="16" style="filter: none;">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt=""
+                        class="btn-icon btn-icon-no-filter btn-icon-16" width="16" height="16">
                     <span>Dashboard</span>
                 </a>
             </div>
@@ -107,7 +111,6 @@ function buildRestaurantUrl(array $overrides = []): string
         </div>
         <?php endif; ?>
 
-        <!-- FILTER BAR -->
         <div class="admin-filter-bar">
             <form method="GET" action="" class="admin-search-form">
                 <input type="hidden" name="status"
@@ -116,8 +119,8 @@ function buildRestaurantUrl(array $overrides = []): string
                     placeholder="Search by business name or cuisine…"
                     value="<?php echo htmlspecialchars($search, ENT_QUOTES, 'UTF-8'); ?>">
                 <button type="submit" class="admin-search-btn">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt="" class="btn-icon"
-                        width="14" height="14">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt=""
+                        class="btn-icon btn-icon-14" width="14" height="14">
                     <span>Search</span>
                 </button>
             </form>
@@ -146,7 +149,6 @@ function buildRestaurantUrl(array $overrides = []): string
             </nav>
         </div>
 
-        <!-- TABLE -->
         <div class="admin-table-card">
             <?php if (empty($rows)): ?>
             <div class="admin-table-empty">
@@ -199,18 +201,17 @@ function buildRestaurantUrl(array $overrides = []): string
                     </div>
 
                     <div class="admin-cell-actions">
-                        <button type="button" class="btn btn-outline btn-sm"
-                            onclick="window.location.href='<?php echo htmlspecialchars(buildRestaurantUrl(['open' => $rid]), ENT_QUOTES, 'UTF-8'); ?>'">
+                        <a href="<?php echo htmlspecialchars(buildRestaurantUrl(['open' => $rid]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="btn btn-outline btn-sm">
                             <img src="<?php echo $assetBase; ?>assets/images/icons/pages-line.svg" alt=""
-                                class="btn-icon" width="14" height="14" style="filter:none;">
+                                class="btn-icon btn-icon-no-filter btn-icon-14" width="14" height="14">
                             <span>View Details</span>
-                        </button>
+                        </a>
                     </div>
                 </div>
                 <?php endforeach; ?>
             </div>
 
-            <!-- PAGINATION -->
             <?php if ($pagination['totalPages'] > 1): ?>
             <nav class="admin-pagination" aria-label="Restaurant pagination">
                 <span class="admin-pagination-info">
@@ -280,7 +281,6 @@ function buildRestaurantUrl(array $overrides = []): string
     </div>
 </div>
 
-<!-- RESTAURANT DETAILS MODAL -->
 <div class="admin-modal <?php echo $openRestaurant ? 'is-open' : ''; ?>" id="restaurantDetailsModal"
     aria-hidden="<?php echo $openRestaurant ? 'false' : 'true'; ?>" role="dialog">
     <div class="admin-modal-backdrop"
@@ -318,18 +318,18 @@ function buildRestaurantUrl(array $overrides = []): string
         <div class="admin-modal-tabs">
             <button type="button" class="admin-modal-tab active" data-tab-target="rest-panel-info">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt="" width="14" height="14"
-                    style="filter:none;">
+                    class="btn-icon-no-filter">
                 <span>Info</span>
             </button>
             <button type="button" class="admin-modal-tab" data-tab-target="rest-panel-branches">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="" width="14" height="14"
-                    style="filter:none;">
+                    class="btn-icon-no-filter">
                 <span>Branches</span>
                 <span class="tab-count"><?php echo count($openBranches); ?></span>
             </button>
             <button type="button" class="admin-modal-tab" data-tab-target="rest-panel-accounts">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/people-team.svg" alt="" width="14" height="14"
-                    style="filter:none;">
+                    class="btn-icon-no-filter">
                 <span>Accounts</span>
                 <span class="tab-count"><?php echo count($openAccounts); ?></span>
             </button>
@@ -337,7 +337,6 @@ function buildRestaurantUrl(array $overrides = []): string
 
         <div class="admin-modal-panel-body">
 
-            <!-- TAB: INFO -->
             <div class="admin-modal-tab-panel active" id="rest-panel-info">
                 <div class="admin-detail-grid">
                     <div class="admin-detail-item admin-detail-item-full">
@@ -415,7 +414,6 @@ function buildRestaurantUrl(array $overrides = []): string
                 </div>
             </div>
 
-            <!-- TAB: BRANCHES -->
             <div class="admin-modal-tab-panel" id="rest-panel-branches">
                 <?php if (empty($openBranches)): ?>
                 <div class="admin-doc-empty">
@@ -427,9 +425,9 @@ function buildRestaurantUrl(array $overrides = []): string
                 <div class="admin-address-card">
                     <div class="admin-address-label">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/building.svg" alt="" width="14"
-                            height="14" style="filter:none;">
+                            height="14" class="btn-icon-no-filter">
                         <span><?php echo htmlspecialchars((string)$b['branch_name'], ENT_QUOTES, 'UTF-8'); ?></span>
-                        <span class="admin-contact-badge" style="background: var(--gray-200); color: var(--gray-600);">
+                        <span class="admin-contact-badge branch-code-badge">
                             <?php echo htmlspecialchars((string)$b['branch_code'], ENT_QUOTES, 'UTF-8'); ?>
                         </span>
                         <span
@@ -451,7 +449,7 @@ function buildRestaurantUrl(array $overrides = []): string
                         echo htmlspecialchars(implode(', ', $parts) ?: '—', ENT_QUOTES, 'UTF-8');
                         ?>
                     </p>
-                    <div class="admin-cell-meta" style="margin-top:6px;">
+                    <div class="admin-cell-meta admin-cell-meta-spaced">
                         <span class="admin-cell-meta-item">
                             <?php echo number_format((int)($b['product_count'] ?? 0)); ?> products
                         </span>
@@ -464,7 +462,6 @@ function buildRestaurantUrl(array $overrides = []): string
                 <?php endif; ?>
             </div>
 
-            <!-- TAB: ACCOUNTS -->
             <div class="admin-modal-tab-panel" id="rest-panel-accounts">
                 <?php if (empty($openAccounts)): ?>
                 <div class="admin-doc-empty">
@@ -500,7 +497,7 @@ function buildRestaurantUrl(array $overrides = []): string
         </div>
 
         <div class="admin-modal-footer">
-            <form method="POST" action="../backend/handlers/admin-handler.php" style="display:inline;">
+            <form method="POST" action="../backend/handlers/admin-handler.php" class="form-inline">
                 <input type="hidden" name="csrf_token"
                     value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="action" value="set_restaurant_verification">
@@ -513,7 +510,7 @@ function buildRestaurantUrl(array $overrides = []): string
                 </button>
             </form>
 
-            <form method="POST" action="../backend/handlers/admin-handler.php" style="display:inline;">
+            <form method="POST" action="../backend/handlers/admin-handler.php" class="form-inline">
                 <input type="hidden" name="csrf_token"
                     value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="action" value="set_restaurant_verification">
@@ -526,7 +523,7 @@ function buildRestaurantUrl(array $overrides = []): string
                 </button>
             </form>
 
-            <form method="POST" action="../backend/handlers/admin-handler.php" style="display:inline;">
+            <form method="POST" action="../backend/handlers/admin-handler.php" class="form-inline">
                 <input type="hidden" name="csrf_token"
                     value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="action" value="toggle_restaurant">
@@ -546,5 +543,5 @@ function buildRestaurantUrl(array $overrides = []): string
     </div>
 </div>
 
-<script src="../assets/ui/js/dashboard.js" defer></script>
+<script src="../assets/ui/js/restaurants.js" defer></script>
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>

@@ -1,6 +1,5 @@
 /**
  * FitPal Admin Dashboard Styles
- * Version 5.0
  *
  * Layout map:
  *   .admin-dashboard-page
@@ -10,21 +9,61 @@
  *       .admin-dashboard-row   (chart + pending riders)
  *       .admin-card            (recent moderation activity)
  *
- * The recent-orders panel was removed — order operations belong to
- * the restaurant and rider dashboards. It was replaced by a
- * "Recent Moderation Activity" feed, which renders through
- * .admin-activity-* classes.
- *
- * Scrollbar policy: reserve the gutter on <html> so hiding the body
- * scrollbar during modals never reflows the page.
- *
  * @package FitPal
- * @version 5.0 — Removed .admin-order-* rules. Added .admin-activity-*
- *                rules for the recent-moderation-activity feed.
+ * @version 6.0 — Adds icon utility classes so pages stop using inline
+ *                filter styles. Everything else unchanged from v5.
  */
 
 html {
     scrollbar-gutter: stable;
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+.btn-icon-no-filter {
+    filter: none !important;
+}
+
+.btn-icon-white {
+    filter: brightness(0) invert(1) !important;
+}
+
+.icon-no-filter {
+    filter: none !important;
+}
+
+.icon-tint-white {
+    filter: brightness(0) invert(1) !important;
+}
+
+.icon-tint-primary {
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%) !important;
+}
+
+.icon-tint-warning {
+    filter: brightness(0) saturate(100%)
+            invert(79%) sepia(90%) saturate(600%)
+            hue-rotate(0deg) brightness(95%) contrast(85%) !important;
+}
+
+.icon-tint-info {
+    filter: brightness(0) saturate(100%)
+            invert(52%) sepia(70%) saturate(600%)
+            hue-rotate(160deg) brightness(92%) contrast(85%) !important;
+}
+
+.btn-icon-14 {
+    width: 14px;
+    height: 14px;
+}
+
+.btn-icon-16 {
+    width: 16px;
+    height: 16px;
 }
 
 /* ============================================
@@ -562,7 +601,7 @@ a.admin-stat-card:hover .admin-stat-arrow-img {
 }
 
 /* ============================================
-   PENDING RIDERS LIST (right column of row)
+   PENDING RIDERS LIST
    ============================================ */
 
 .admin-pending-list {
@@ -657,9 +696,6 @@ a.admin-stat-card:hover .admin-stat-arrow-img {
 
 /* ============================================
    RECENT MODERATION ACTIVITY
-   Replaces the old .admin-order-* panel. Each row is a compact
-   list item: icon on the left, name + meta in the middle, status
-   badge on the right.
    ============================================ */
 
 .admin-activity-list {

@@ -11,8 +11,13 @@
  * normal form submit and every page already renders flashes. AJAX is
  * unnecessary here.
  *
+ * This file contains NO SQL. Every read and write goes through
+ * admin-queries.php.
+ *
  * @package FitPal
- * @version 1.0
+ * @version 2.0 — Removed the inline SELECT in handleChangePassword();
+ *                it now calls getAdminPasswordHash() from the query
+ *                layer.
  */
 
 declare(strict_types=1);
@@ -150,9 +155,7 @@ function handleChangePassword(PDO $db, int $adminId): void
         throw new RuntimeException('New password and confirmation do not match.');
     }
 
-    $stmt = $db->prepare("SELECT password FROM administrator WHERE administrator_id = :id");
-    $stmt->execute([':id' => $adminId]);
-    $stored = (string)$stmt->fetchColumn();
+    $stored = getAdminPasswordHash($db, $adminId);
 
     $valid = password_verify($current, $stored);
     if (!$valid && hash_equals($stored, $current)) {

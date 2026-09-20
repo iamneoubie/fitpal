@@ -3,12 +3,16 @@
  * FitPal Admin — Riders List
  *
  * Paginated rider list with verification tabs. Row actions trigger
- * the confirm modal, not window.confirm(). The detail modal has two
- * tabs: Information and Documents. Documents uses its own 5-per-page
+ * the confirm modal. The detail modal has three tabs: Information,
+ * Documents, and Deliveries. Documents uses its own 5-per-page
  * pagination so profile picture and license photos are readable.
  *
+ * No inline CSS. Styles come from riders.css. Behavior comes from
+ * riders.js.
+ *
  * @package FitPal
- * @version 2.0
+ * @version 3.0 — Inline styles replaced with CSS classes. Loads
+ *                riders.js instead of dashboard.js.
  */
 
 declare(strict_types=1);
@@ -44,7 +48,6 @@ $data   = getRidersPaginated($database_connection, $page, $perPage, $search, $st
 $rows   = $data['rows'];
 $pagination = $data;
 
-// Detail modal loads
 $openRider = null;
 $openAddress = null;
 $openContacts = [];
@@ -66,9 +69,6 @@ if (empty($_SESSION['csrf_token'])) {
 }
 $csrfToken = $_SESSION['csrf_token'];
 
-/**
- * Build a query string preserving filters.
- */
 function buildRiderUrl(array $overrides = []): string
 {
     $params = [
@@ -87,10 +87,6 @@ function buildRiderUrl(array $overrides = []): string
     return '?' . http_build_query($params);
 }
 
-/**
- * A rider's media URL: strip the trailing 'shared/' from $assetBase
- * to get the project root, then append the DB-relative path.
- */
 function riderMediaUrl(string $assetBase, string $relPath): string
 {
     if ($relPath === '') return '';
@@ -109,8 +105,8 @@ function riderMediaUrl(string $assetBase, string $relPath): string
             </div>
             <div class="admin-page-header-actions">
                 <a href="dashboard.php" class="btn btn-outline btn-sm">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt="" class="btn-icon"
-                        width="16" height="16" style="filter: none;">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt=""
+                        class="btn-icon btn-icon-no-filter btn-icon-16" width="16" height="16">
                     <span>Dashboard</span>
                 </a>
             </div>
@@ -130,7 +126,6 @@ function riderMediaUrl(string $assetBase, string $relPath): string
         </div>
         <?php endif; ?>
 
-        <!-- FILTER BAR -->
         <div class="admin-filter-bar">
             <form method="GET" action="" class="admin-search-form">
                 <input type="hidden" name="status"
@@ -139,8 +134,8 @@ function riderMediaUrl(string $assetBase, string $relPath): string
                     placeholder="Search by name, email, or username…"
                     value="<?php echo htmlspecialchars($search, ENT_QUOTES, 'UTF-8'); ?>">
                 <button type="submit" class="admin-search-btn">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt="" class="btn-icon"
-                        width="14" height="14">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt=""
+                        class="btn-icon btn-icon-14" width="14" height="14">
                     <span>Search</span>
                 </button>
             </form>
@@ -169,7 +164,6 @@ function riderMediaUrl(string $assetBase, string $relPath): string
             </nav>
         </div>
 
-        <!-- TABLE -->
         <div class="admin-table-card">
             <?php if (empty($rows)): ?>
             <div class="admin-table-empty">
@@ -242,18 +236,17 @@ function riderMediaUrl(string $assetBase, string $relPath): string
                     </div>
 
                     <div class="admin-cell-actions">
-                        <button type="button" class="btn btn-outline btn-sm"
-                            onclick="window.location.href='<?php echo htmlspecialchars(buildRiderUrl(['open' => $rid, 'doc_page' => 1]), ENT_QUOTES, 'UTF-8'); ?>'">
+                        <a href="<?php echo htmlspecialchars(buildRiderUrl(['open' => $rid, 'doc_page' => 1]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="btn btn-outline btn-sm">
                             <img src="<?php echo $assetBase; ?>assets/images/icons/pages-line.svg" alt=""
-                                class="btn-icon" width="14" height="14" style="filter:none;">
+                                class="btn-icon btn-icon-no-filter btn-icon-14" width="14" height="14">
                             <span>View Details</span>
-                        </button>
+                        </a>
                     </div>
                 </div>
                 <?php endforeach; ?>
             </div>
 
-            <!-- PAGINATION -->
             <?php if ($pagination['totalPages'] > 1): ?>
             <nav class="admin-pagination" aria-label="Rider pagination">
                 <span class="admin-pagination-info">
@@ -323,9 +316,6 @@ function riderMediaUrl(string $assetBase, string $relPath): string
     </div>
 </div>
 
-<!-- ============================================
-     RIDER DETAILS MODAL
-     ============================================ -->
 <div class="admin-modal <?php echo $openRider ? 'is-open' : ''; ?>" id="riderDetailsModal"
     aria-hidden="<?php echo $openRider ? 'false' : 'true'; ?>" role="dialog">
     <div class="admin-modal-backdrop"
@@ -359,7 +349,6 @@ function riderMediaUrl(string $assetBase, string $relPath): string
         $openVerification = (string)($openRider['verification_status'] ?? 'pending');
         $openIsActive = (int)$openRider['is_active'] === 1;
 
-        // Documents tab pagination: 5 per page.
         $docsPerPage = 5;
         $totalDocs = count($openDocuments);
         $totalDocPages = max(1, (int)ceil($totalDocs / $docsPerPage));
@@ -371,18 +360,18 @@ function riderMediaUrl(string $assetBase, string $relPath): string
         <div class="admin-modal-tabs">
             <button type="button" class="admin-modal-tab active" data-tab-target="rider-panel-info">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/file-user-line.svg" alt="" width="14" height="14"
-                    style="filter:none;">
+                    class="btn-icon-no-filter">
                 <span>Information</span>
             </button>
             <button type="button" class="admin-modal-tab" data-tab-target="rider-panel-documents">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/file-image-line.svg" alt="" width="14"
-                    height="14" style="filter:none;">
+                    height="14" class="btn-icon-no-filter">
                 <span>Documents</span>
                 <span class="tab-count"><?php echo $totalDocs; ?></span>
             </button>
             <button type="button" class="admin-modal-tab" data-tab-target="rider-panel-deliveries">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt="" width="14" height="14"
-                    style="filter:none;">
+                    class="btn-icon-no-filter">
                 <span>Deliveries</span>
                 <span class="tab-count"><?php echo count($openDeliveries); ?></span>
             </button>
@@ -390,7 +379,6 @@ function riderMediaUrl(string $assetBase, string $relPath): string
 
         <div class="admin-modal-panel-body">
 
-            <!-- TAB: INFORMATION -->
             <div class="admin-modal-tab-panel active" id="rider-panel-info">
                 <div class="admin-detail-grid">
                     <div class="admin-detail-item">
@@ -484,7 +472,7 @@ function riderMediaUrl(string $assetBase, string $relPath): string
 
                 <h3 class="admin-section-heading">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="" width="14"
-                        height="14" style="filter:none;">
+                        height="14" class="btn-icon-no-filter">
                     Primary Address
                 </h3>
                 <?php if ($openAddress): ?>
@@ -499,7 +487,7 @@ function riderMediaUrl(string $assetBase, string $relPath): string
 
                 <h3 class="admin-section-heading">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg" alt="" width="14"
-                        height="14" style="filter:none;">
+                        height="14" class="btn-icon-no-filter">
                     Emergency Contacts
                     <span class="section-count"><?php echo count($openContacts); ?></span>
                 </h3>
@@ -516,7 +504,7 @@ function riderMediaUrl(string $assetBase, string $relPath): string
                         <?php if ($idx === 0): ?>
                         <span class="admin-contact-badge">Primary</span>
                         <?php endif; ?>
-                        <span class="admin-contact-badge" style="background: rgba(23,162,184,0.12); color: #0c5460;">
+                        <span class="admin-contact-badge relationship-badge-info">
                             <?php echo htmlspecialchars((string)($c['relationship'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
                         </span>
                     </div>
@@ -533,7 +521,6 @@ function riderMediaUrl(string $assetBase, string $relPath): string
                 <?php endif; ?>
             </div>
 
-            <!-- TAB: DOCUMENTS -->
             <div class="admin-modal-tab-panel" id="rider-panel-documents">
                 <?php if ($totalDocs === 0): ?>
                 <div class="admin-doc-empty">
@@ -615,7 +602,6 @@ function riderMediaUrl(string $assetBase, string $relPath): string
                 <?php endif; ?>
             </div>
 
-            <!-- TAB: DELIVERIES -->
             <div class="admin-modal-tab-panel" id="rider-panel-deliveries">
                 <?php if (empty($openDeliveries)): ?>
                 <div class="admin-doc-empty">
@@ -649,7 +635,7 @@ function riderMediaUrl(string $assetBase, string $relPath): string
         </div>
 
         <div class="admin-modal-footer">
-            <form method="POST" action="../backend/handlers/admin-handler.php" style="display:inline;">
+            <form method="POST" action="../backend/handlers/admin-handler.php" class="form-inline">
                 <input type="hidden" name="csrf_token"
                     value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="action" value="set_rider_verification">
@@ -662,7 +648,7 @@ function riderMediaUrl(string $assetBase, string $relPath): string
                 </button>
             </form>
 
-            <form method="POST" action="../backend/handlers/admin-handler.php" style="display:inline;">
+            <form method="POST" action="../backend/handlers/admin-handler.php" class="form-inline">
                 <input type="hidden" name="csrf_token"
                     value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="action" value="set_rider_verification">
@@ -675,7 +661,7 @@ function riderMediaUrl(string $assetBase, string $relPath): string
                 </button>
             </form>
 
-            <form method="POST" action="../backend/handlers/admin-handler.php" style="display:inline;">
+            <form method="POST" action="../backend/handlers/admin-handler.php" class="form-inline">
                 <input type="hidden" name="csrf_token"
                     value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="action" value="toggle_rider">
@@ -695,5 +681,5 @@ function riderMediaUrl(string $assetBase, string $relPath): string
     </div>
 </div>
 
-<script src="../assets/ui/js/dashboard.js" defer></script>
+<script src="../assets/ui/js/riders.js" defer></script>
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>

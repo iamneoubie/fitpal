@@ -8,7 +8,10 @@
  * behavior, asset resolution, and CSS load order.
  *
  * @package FitPal
- * @version 2.0
+ * @version 3.0 — $pageCssMap now points each list page at its own
+ *                stylesheet. admin-tables.css has been retired and
+ *                replaced by customers.css / restaurants.css /
+ *                riders.css.
  */
 
 declare(strict_types=1);
@@ -75,9 +78,9 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 $pageCssMap = [
     'sign-in.php'      => 'sign-in.css',
     'dashboard.php'    => 'dashboard.css',
-    'customers.php'    => 'admin-tables.css',
-    'riders.php'       => 'admin-tables.css',
-    'restaurants.php'  => 'admin-tables.css',
+    'customers.php'    => 'customers.css',
+    'riders.php'       => 'riders.css',
+    'restaurants.php'  => 'restaurants.css',
     'profile.php'      => 'profile.css',
 ];
 

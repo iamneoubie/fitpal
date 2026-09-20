@@ -4,20 +4,17 @@
  *
  * Overview of platform health and the moderation queue.
  *
- * Three concerns, in priority order:
- *   1. Platform counts (customers, restaurants, riders, revenue)
- *   2. Revenue trend (7-day chart)
- *   3. Moderation queue (pending riders + recently verified)
- *
- * There is deliberately NO "recent orders" panel here. Order-level
- * operations belong to the restaurant and rider dashboards. Admin
- * cares about who is on the platform and who just got approved.
- *
- * All SQL lives in admin-queries.php.
+ * All SQL lives in admin-queries.php. This page contains no SQL,
+ * no inline CSS, and no inline JS. The single style="" attribute on
+ * the chart bars is the same server-computed geometry the customer
+ * dashboard uses — a per-row value that cannot live in a static
+ * stylesheet.
  *
  * @package FitPal
- * @version 3.0 — Removed recent-orders panel. Added recently-verified
- *                activity feed.
+ * @version 4.1 — Removed every onerror fallback. Every referenced
+ *                SVG exists in shared/assets/images/icons/, so the
+ *                fallback chain was dead code and violated the
+ *                no-inline-JS rule.
  */
 
 declare(strict_types=1);
@@ -40,7 +37,6 @@ $firstName = (string)($adminProfile['first_name'] ?? 'Admin');
 
 $stats = getAdminDashboardStats($database_connection);
 
-// ----- Weekly revenue chart -----
 $weeklyRevenue = getAdminWeeklyRevenue($database_connection, 7);
 
 $weeklyMax = 0.0;
@@ -57,11 +53,9 @@ foreach ($weeklyRevenue as $d) {
     $barHeights[$d['date']] = $d['amount'] > 0 ? max(4, min(100, $pct)) : 0;
 }
 
-// ----- Pending riders (top 5) -----
 $pendingRidersData = getRidersPaginated($database_connection, 1, 5, '', 'pending');
 $pendingRiders = $pendingRidersData['rows'];
 
-// ----- Recently verified / denied (activity feed) -----
 $recentActivity = getRecentVerificationActivity($database_connection, 6);
 
 if (empty($_SESSION['csrf_token'])) {
@@ -83,20 +77,17 @@ $csrfToken = $_SESSION['csrf_token'];
             <div class="admin-dashboard-actions">
                 <a href="customers.php" class="btn btn-outline btn-sm">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/people-team.svg" alt="" class="btn-icon"
-                        width="16" height="16"
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg'">
+                        width="16" height="16">
                     <span>Customers</span>
                 </a>
                 <a href="riders.php" class="btn btn-outline btn-sm">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt="" class="btn-icon" width="16"
-                        height="16"
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/package.svg'">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/riding-fill.svg" alt="" class="btn-icon"
+                        width="16" height="16">
                     <span>Riders</span>
                 </a>
                 <a href="restaurants.php" class="btn btn-primary btn-sm">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt="" class="btn-icon"
-                        width="16" height="16"
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/community-general.svg'">
+                        width="16" height="16">
                     <span>Restaurants</span>
                 </a>
             </div>
@@ -116,13 +107,11 @@ $csrfToken = $_SESSION['csrf_token'];
         </div>
         <?php endif; ?>
 
-        <!-- STAT CARDS -->
         <section class="admin-stats-grid" aria-label="Platform statistics">
 
             <a href="customers.php" class="admin-stat-card">
                 <div class="admin-stat-icon admin-stat-icon-customers" aria-hidden="true">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/people-team.svg" alt=""
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg'">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/people-team.svg" alt="">
                 </div>
                 <div class="admin-stat-info">
                     <p class="admin-stat-number"><?php echo number_format($stats['total_customers']); ?></p>
@@ -139,8 +128,7 @@ $csrfToken = $_SESSION['csrf_token'];
 
             <a href="restaurants.php" class="admin-stat-card">
                 <div class="admin-stat-icon admin-stat-icon-restaurants" aria-hidden="true">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt=""
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/community-general.svg'">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt="">
                 </div>
                 <div class="admin-stat-info">
                     <p class="admin-stat-number"><?php echo number_format($stats['total_restaurants']); ?></p>
@@ -157,8 +145,7 @@ $csrfToken = $_SESSION['csrf_token'];
 
             <a href="riders.php" class="admin-stat-card">
                 <div class="admin-stat-icon admin-stat-icon-riders" aria-hidden="true">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt=""
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/package.svg'">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt="">
                 </div>
                 <div class="admin-stat-info">
                     <p class="admin-stat-number"><?php echo number_format($stats['total_riders']); ?></p>
@@ -176,8 +163,7 @@ $csrfToken = $_SESSION['csrf_token'];
 
             <div class="admin-stat-card">
                 <div class="admin-stat-icon admin-stat-icon-revenue" aria-hidden="true">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/coin-line.svg" alt=""
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/wallet-line.svg'">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/coin-line.svg" alt="">
                 </div>
                 <div class="admin-stat-info">
                     <p class="admin-stat-number"><?php echo formatAdminCurrency($stats['gross_revenue']); ?></p>
@@ -190,7 +176,6 @@ $csrfToken = $_SESSION['csrf_token'];
 
         </section>
 
-        <!-- CHART + PENDING RIDERS -->
         <div class="admin-dashboard-row admin-dashboard-row-primary">
 
             <section class="admin-card" aria-labelledby="admin-chart-title">
@@ -278,8 +263,7 @@ $csrfToken = $_SESSION['csrf_token'];
                 <?php if (empty($pendingRiders)): ?>
                 <div class="admin-empty-state">
                     <div class="admin-empty-icon" aria-hidden="true">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/verified-fill.svg" alt=""
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/check-circle-fill.svg'">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/verified-fill.svg" alt="">
                     </div>
                     <p class="admin-empty-title">All caught up</p>
                     <p class="admin-empty-text">No riders are awaiting verification.</p>
@@ -291,13 +275,12 @@ $csrfToken = $_SESSION['csrf_token'];
                         $riderName = adminName($r);
                         $initial = adminInitial($r);
                         $pic = (string)($r['profile_picture'] ?? '');
-                        $picUrl = $pic !== '' ? adminMediaUrl($assetBase, $pic) : '';
+                        $picUrl = $pic !== '' ? adminAssetUrl($assetBase, $pic) : '';
                     ?>
                     <a href="riders.php?status=pending&amp;open=<?php echo $riderId; ?>" class="admin-pending-row">
                         <div class="admin-pending-avatar">
                             <?php if ($picUrl !== ''): ?>
-                            <img src="<?php echo htmlspecialchars($picUrl, ENT_QUOTES, 'UTF-8'); ?>" alt=""
-                                onerror="this.onerror=null; this.style.display='none'; this.parentNode.textContent='<?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>';">
+                            <img src="<?php echo htmlspecialchars($picUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="">
                             <?php else: ?>
                             <?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>
                             <?php endif; ?>
@@ -319,7 +302,6 @@ $csrfToken = $_SESSION['csrf_token'];
 
         </div>
 
-        <!-- RECENT MODERATION ACTIVITY -->
         <section class="admin-card" aria-labelledby="admin-activity-title">
             <div class="admin-card-header">
                 <h2 class="heading-5" id="admin-activity-title">Recent Moderation Activity</h2>
@@ -328,8 +310,7 @@ $csrfToken = $_SESSION['csrf_token'];
             <?php if (empty($recentActivity)): ?>
             <div class="admin-empty-state">
                 <div class="admin-empty-icon" aria-hidden="true">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/time-update.svg" alt=""
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/update.svg'">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/time-update.svg" alt="">
                 </div>
                 <p class="admin-empty-title">No moderation activity yet</p>
                 <p class="admin-empty-text">Verification decisions will appear here.</p>
@@ -337,7 +318,7 @@ $csrfToken = $_SESSION['csrf_token'];
             <?php else: ?>
             <div class="admin-activity-list">
                 <?php foreach ($recentActivity as $a):
-                    $kind      = (string)$a['entity_type'];   // 'rider' or 'restaurant'
+                    $kind      = (string)$a['entity_type'];
                     $entityId  = (int)$a['entity_id'];
                     $entityName = (string)$a['entity_name'];
                     $status    = (string)$a['verification_status'];
@@ -358,8 +339,7 @@ $csrfToken = $_SESSION['csrf_token'];
                     <div
                         class="admin-activity-icon admin-activity-icon-<?php echo htmlspecialchars($kind, ENT_QUOTES, 'UTF-8'); ?>">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/<?php echo htmlspecialchars($iconFile, ENT_QUOTES, 'UTF-8'); ?>"
-                            alt="" width="18" height="18"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/information-fill.svg'">
+                            alt="" width="18" height="18">
                     </div>
                     <div class="admin-activity-body">
                         <p class="admin-activity-name">

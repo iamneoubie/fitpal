@@ -4,25 +4,25 @@
  *
  * Pure data-access layer for the admin role. Owns every query against
  * the customer, delivery_rider, restaurant, financial_account, orders,
- * and queue_item tables.
+ * and queue_item tables. Also owns the presentation helpers that
+ * operate on rows from those tables, matching the customer pattern
+ * where role-specific formatters live alongside the queries that
+ * produce their input.
  *
- * No $_POST, no header(), no echo. Safe to require from any page
- * because this file only declares functions.
+ * No $_POST, no header(), no echo.
  *
  * Pagination contract (every paginated read follows this):
  *   1. Count query with the same WHERE clause as the data query.
  *   2. Data query with LIMIT/OFFSET bound as integers.
  *   3. Return ['rows' => [...], 'total' => N, 'page' => P, 'perPage' => L, 'totalPages' => T].
  *
- * Default page size is 5 across every list, matching the admin UI's
- * "5 rows per tab" layout decision.
+ * Default page size is 5 across every list.
  *
  * @package FitPal
- * @version 2.1 — Adds adminMediaUrl() as a thin shim over
- *                adminAssetUrl() so existing call sites in
- *                dashboard.php and riders.php do not fatal during
- *                the rename. Both names are now valid; the shim is
- *                scheduled for removal once every page is updated.
+ * @version 3.0 — Adds getAdminPasswordHash() so the handler no longer
+ *                carries its own SQL. Removes the deprecated
+ *                adminMediaUrl() shim; adminAssetUrl() is the only
+ *                name now.
  */
 
 declare(strict_types=1);
@@ -31,14 +31,6 @@ declare(strict_types=1);
  * PAGINATION HELPER
  * ============================================================= */
 
-/**
- * Normalize a pagination envelope.
- *
- * @param int $total
- * @param int $perPage
- * @param int $page
- * @return array{total:int, perPage:int, page:int, totalPages:int}
- */
 function adminPaginationEnvelope(int $total, int $perPage, int $page): array
 {
     $perPage = max(1, $perPage);
@@ -83,6 +75,18 @@ function findAdminByIdentifier(PDO $db, string $identifier): array|false
     );
     $stmt->execute([':email' => $identifier, ':username' => $identifier]);
     return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+function getAdminPasswordHash(PDO $db, int $adminId): string
+{
+    $stmt = $db->prepare(
+        "SELECT password
+           FROM administrator
+          WHERE administrator_id = :admin_id
+          LIMIT 1"
+    );
+    $stmt->execute([':admin_id' => $adminId]);
+    return (string)$stmt->fetchColumn();
 }
 
 function getAdminProfile(PDO $db, int $adminId): array|false
@@ -161,15 +165,6 @@ function recordAdminLogin(PDO $db, int $adminId): void
  * DASHBOARD STATS
  * ============================================================= */
 
-/**
- * All dashboard counters in three queries:
- *   1. One aggregate for customer / rider / restaurant counts.
- *   2. One aggregate for order counts and per-status buckets.
- *   3. One aggregate for revenue (today / week / all-time).
- *
- * Previously this fired six scalar queries; the merged version is
- * three round-trips.
- */
 function getAdminDashboardStats(PDO $db): array
 {
     $stats = [
@@ -191,7 +186,6 @@ function getAdminDashboardStats(PDO $db): array
         'revenue_today'        => 0.0,
     ];
 
-    // ---- Entity counts (one query, three tables via scalar subqueries) ----
     $entityRow = $db->query(
         "SELECT
             (SELECT COUNT(*) FROM customer)                                   AS total_customers,
@@ -211,7 +205,6 @@ function getAdminDashboardStats(PDO $db): array
     $stats['verified_riders']      = (int)($entityRow['verified_riders'] ?? 0);
     $stats['pending_riders']       = (int)($entityRow['pending_riders'] ?? 0);
 
-    // ---- Order status counts ----
     $orderRow = $db->query(
         "SELECT
             COUNT(*) AS total_orders,
@@ -230,7 +223,6 @@ function getAdminDashboardStats(PDO $db): array
     $stats['delivered_orders'] = (int)($orderRow['delivered_orders'] ?? 0);
     $stats['cancelled_orders'] = (int)($orderRow['cancelled_orders'] ?? 0);
 
-    // ---- Revenue (excludes cancelled and refunded orders) ----
     $revRow = $db->query(
         "SELECT
             COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0) AS gross_revenue,
@@ -254,16 +246,6 @@ function getAdminDashboardStats(PDO $db): array
     return $stats;
 }
 
-/**
- * Pick a "nice" y-axis ceiling for the weekly revenue chart.
- *
- * The rule: never scale to the raw maximum — that makes a single
- * spike fill the entire chart. Snap up to a rounded step so the
- * tallest bar always reads at ~40–80% of the chart height.
- *
- * @param float $maxAmount
- * @return array{ceiling:float, step:float, gridlines:array<int,float>}
- */
 function getAdminChartScale(float $maxAmount): array
 {
     if ($maxAmount <= 0) {
@@ -303,14 +285,6 @@ function getAdminChartScale(float $maxAmount): array
     ];
 }
 
-/**
- * Seven-day revenue series, oldest to newest. Days with no orders
- * are included with amount = 0.
- *
- * @param PDO $db
- * @param int $days
- * @return array<int, array{date:string, label:string, short:string, amount:float, orders:int}>
- */
 function getAdminWeeklyRevenue(PDO $db, int $days = 7): array
 {
     $days = max(1, min(30, $days));
@@ -353,32 +327,6 @@ function getAdminWeeklyRevenue(PDO $db, int $days = 7): array
     return $series;
 }
 
-/**
- * Recent verification decisions across riders and restaurants,
- * merged into a single time-ordered feed.
- *
- * Returns one row per entity. The `entity_type` discriminator lets
- * the page render a unified "Recently Verified" list and build the
- * correct detail-modal link.
- *
- * MariaDB/MySQL does NOT allow LIMIT inside a UNION ALL branch. So
- * each source is wrapped in its own derived table with LIMIT, and
- * those derived tables are then unioned. The outer query applies the
- * final ORDER BY and LIMIT.
- *
- * Each side is pre-limited to $limit rows so one source cannot
- * starve the other out of the merged result.
- *
- * @param PDO $db
- * @param int $limit
- * @return array<int, array{
- *     entity_type: string,
- *     entity_id: int,
- *     entity_name: string,
- *     verification_status: string,
- *     verified_at: string
- * }>
- */
 function getRecentVerificationActivity(PDO $db, int $limit = 6): array
 {
     $limit = max(1, min(20, $limit));
@@ -433,7 +381,6 @@ function getRecentVerificationActivity(PDO $db, int $limit = 6): array
 
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Normalize the middle-name double space in rider names.
     foreach ($rows as &$row) {
         $row['entity_name'] = trim((string)preg_replace('/\s+/', ' ', (string)$row['entity_name']));
         $row['entity_id']   = (int)$row['entity_id'];
@@ -999,7 +946,9 @@ function setRestaurantActiveStatus(PDO $db, int $restaurantId, bool $isActive): 
 }
 
 /* =============================================================
- * PRESENTATION HELPERS (pure — no DB access)
+ * PRESENTATION HELPERS
+ * Operate on rows returned by the queries above. No DB access.
+ * Live here so admin pages and handlers share a single source.
  * ============================================================= */
 
 function formatAdminCurrency(int|float|string|null $amount): string
@@ -1025,10 +974,6 @@ function formatAdminDateShort(?string $date): string
     return $ts !== false ? date('M d, Y', $ts) : $date;
 }
 
-/**
- * Compose a full name from first / middle / last name parts.
- * Empty parts are skipped so we never emit double spaces.
- */
 function adminName(array $row): string
 {
     $parts = array_filter([
@@ -1040,10 +985,6 @@ function adminName(array $row): string
     return trim(implode(' ', $parts)) ?: '—';
 }
 
-/**
- * The first letter of the first name, uppercased. Falls back to 'A'
- * when the row has no first name.
- */
 function adminInitial(array $row): string
 {
     $first = trim((string)($row['first_name'] ?? ''));
@@ -1072,10 +1013,6 @@ function adminVerificationLabel(string $status): string
     };
 }
 
-/**
- * Order status → badge class. Used by the customer-detail modal's
- * recent-orders tab and the rider-detail modal's deliveries tab.
- */
 function adminOrderStatusBadgeClass(string $status): string
 {
     return match ($status) {
@@ -1158,9 +1095,6 @@ function parseAdminTagList(?string $raw): array
  * and $assetBase ends with 'shared/'. Stripping that suffix gives
  * the project root; concatenating the stored path gives the URL.
  *
- * This is the canonical name. adminMediaUrl() is a deprecated shim
- * that forwards here for backward compatibility.
- *
  * @param string $assetBase    Header-provided asset base ending in 'shared/'.
  * @param string $relativePath DB-stored path relative to the project root.
  * @return string
@@ -1177,19 +1111,4 @@ function adminAssetUrl(string $assetBase, string $relativePath): string
     }
 
     return $projectRoot . $relativePath;
-}
-
-/**
- * @deprecated Use adminAssetUrl() instead. Kept as a shim so older
- *             call sites in dashboard.php and riders.php do not fatal
- *             during the rename. Delete this once every call site has
- *             been updated to adminAssetUrl().
- *
- * @param string $assetBase
- * @param string $relativePath
- * @return string
- */
-function adminMediaUrl(string $assetBase, string $relativePath): string
-{
-    return adminAssetUrl($assetBase, $relativePath);
 }

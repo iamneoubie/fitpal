@@ -4,10 +4,14 @@
  *
  * Paginated list of customer accounts with search, status tabs, and
  * a per-customer detail modal. All mutations go through
- * admin-handler.php via normal form POSTs. No window.confirm().
+ * admin-handler.php via normal form POSTs.
+ *
+ * No inline CSS. No inline JS. Styles come from customers.css.
+ * Behavior comes from customers.js.
  *
  * @package FitPal
- * @version 2.0
+ * @version 3.0 — Inline styles replaced with CSS classes. Loads
+ *                customers.js instead of dashboard.js.
  */
 
 declare(strict_types=1);
@@ -42,7 +46,6 @@ $data   = getCustomersPaginated($database_connection, $page, $perPage, $search, 
 $rows   = $data['rows'];
 $pagination = $data;
 
-// If the URL asked us to open a specific customer, load it.
 $openCustomer = null;
 $openAddresses = [];
 $openOrders = [];
@@ -59,9 +62,6 @@ if (empty($_SESSION['csrf_token'])) {
 }
 $csrfToken = $_SESSION['csrf_token'];
 
-/**
- * Build a query string preserving current filters.
- */
 function buildCustomerUrl(array $overrides = []): string
 {
     $params = [
@@ -90,8 +90,8 @@ function buildCustomerUrl(array $overrides = []): string
             </div>
             <div class="admin-page-header-actions">
                 <a href="dashboard.php" class="btn btn-outline btn-sm">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt="" class="btn-icon"
-                        width="16" height="16" style="filter: none;">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt=""
+                        class="btn-icon btn-icon-no-filter" width="16" height="16">
                     <span>Dashboard</span>
                 </a>
             </div>
@@ -111,7 +111,6 @@ function buildCustomerUrl(array $overrides = []): string
         </div>
         <?php endif; ?>
 
-        <!-- FILTER BAR -->
         <div class="admin-filter-bar">
             <form method="GET" action="" class="admin-search-form">
                 <input type="hidden" name="status"
@@ -120,8 +119,8 @@ function buildCustomerUrl(array $overrides = []): string
                     placeholder="Search by name, email, username, or contact…"
                     value="<?php echo htmlspecialchars($search, ENT_QUOTES, 'UTF-8'); ?>">
                 <button type="submit" class="admin-search-btn">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt="" class="btn-icon"
-                        width="14" height="14">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt=""
+                        class="btn-icon btn-icon-14" width="14" height="14">
                     <span>Search</span>
                 </button>
             </form>
@@ -142,7 +141,6 @@ function buildCustomerUrl(array $overrides = []): string
             </nav>
         </div>
 
-        <!-- TABLE -->
         <div class="admin-table-card">
             <?php if (empty($rows)): ?>
             <div class="admin-table-empty">
@@ -208,18 +206,17 @@ function buildCustomerUrl(array $overrides = []): string
                     </div>
 
                     <div class="admin-cell-actions">
-                        <button type="button" class="btn btn-outline btn-sm"
-                            onclick="window.location.href='<?php echo htmlspecialchars(buildCustomerUrl(['open' => $cid]), ENT_QUOTES, 'UTF-8'); ?>'">
+                        <a href="<?php echo htmlspecialchars(buildCustomerUrl(['open' => $cid]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="btn btn-outline btn-sm">
                             <img src="<?php echo $assetBase; ?>assets/images/icons/pages-line.svg" alt=""
-                                class="btn-icon" width="14" height="14" style="filter:none;">
+                                class="btn-icon btn-icon-no-filter btn-icon-14" width="14" height="14">
                             <span>View Details</span>
-                        </button>
+                        </a>
                     </div>
                 </div>
                 <?php endforeach; ?>
             </div>
 
-            <!-- PAGINATION -->
             <?php if ($pagination['totalPages'] > 1): ?>
             <nav class="admin-pagination" aria-label="Customer pagination">
                 <span class="admin-pagination-info">
@@ -289,9 +286,6 @@ function buildCustomerUrl(array $overrides = []): string
     </div>
 </div>
 
-<!-- ============================================
-     CUSTOMER DETAILS MODAL
-     ============================================ -->
 <div class="admin-modal <?php echo $openCustomer ? 'is-open' : ''; ?>" id="customerDetailsModal"
     aria-hidden="<?php echo $openCustomer ? 'false' : 'true'; ?>" role="dialog">
     <div class="admin-modal-backdrop"
@@ -323,18 +317,18 @@ function buildCustomerUrl(array $overrides = []): string
         <div class="admin-modal-tabs">
             <button type="button" class="admin-modal-tab active" data-tab-target="cust-panel-info">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/file-user-line.svg" alt="" width="14" height="14"
-                    style="filter:none;">
+                    class="btn-icon-no-filter">
                 <span>Info</span>
             </button>
             <button type="button" class="admin-modal-tab" data-tab-target="cust-panel-addresses">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="" width="14" height="14"
-                    style="filter:none;">
+                    class="btn-icon-no-filter">
                 <span>Addresses</span>
                 <span class="tab-count"><?php echo count($openAddresses); ?></span>
             </button>
             <button type="button" class="admin-modal-tab" data-tab-target="cust-panel-orders">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/cart-shopping.svg" alt="" width="14" height="14"
-                    style="filter:none;">
+                    class="btn-icon-no-filter">
                 <span>Recent Orders</span>
                 <span class="tab-count"><?php echo count($openOrders); ?></span>
             </button>
@@ -342,7 +336,6 @@ function buildCustomerUrl(array $overrides = []): string
 
         <div class="admin-modal-panel-body">
 
-            <!-- TAB: INFO -->
             <div class="admin-modal-tab-panel active" id="cust-panel-info">
                 <div class="admin-detail-grid">
                     <div class="admin-detail-item">
@@ -461,7 +454,6 @@ function buildCustomerUrl(array $overrides = []): string
                 </div>
             </div>
 
-            <!-- TAB: ADDRESSES -->
             <div class="admin-modal-tab-panel" id="cust-panel-addresses">
                 <?php if (empty($openAddresses)): ?>
                 <div class="admin-doc-empty">
@@ -473,7 +465,7 @@ function buildCustomerUrl(array $overrides = []): string
                 <div class="admin-address-card">
                     <div class="admin-address-label">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="" width="14"
-                            height="14" style="filter:none;">
+                            height="14" class="btn-icon-no-filter">
                         <span><?php echo htmlspecialchars((string)($addr['label'] ?? 'Address'), ENT_QUOTES, 'UTF-8'); ?></span>
                         <?php if ((int)($addr['is_default'] ?? 0) === 1): ?>
                         <span class="admin-contact-badge">Default</span>
@@ -487,7 +479,6 @@ function buildCustomerUrl(array $overrides = []): string
                 <?php endif; ?>
             </div>
 
-            <!-- TAB: RECENT ORDERS -->
             <div class="admin-modal-tab-panel" id="cust-panel-orders">
                 <?php if (empty($openOrders)): ?>
                 <div class="admin-doc-empty">
@@ -519,7 +510,7 @@ function buildCustomerUrl(array $overrides = []): string
         </div>
 
         <div class="admin-modal-footer">
-            <form method="POST" action="../backend/handlers/admin-handler.php" style="display:inline;">
+            <form method="POST" action="../backend/handlers/admin-handler.php" class="form-inline">
                 <input type="hidden" name="csrf_token"
                     value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="action" value="toggle_customer">
@@ -539,5 +530,5 @@ function buildCustomerUrl(array $overrides = []): string
     </div>
 </div>
 
-<script src="../assets/ui/js/dashboard.js" defer></script>
+<script src="../assets/ui/js/customers.js" defer></script>
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>
