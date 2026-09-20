@@ -2,7 +2,11 @@
 
 **Preset:** all_path
 
+<<<<<<< HEAD
 **Generated:** 2026-09-20 23:38:38
+=======
+**Generated:** 2026-09-20 23:25:43
+>>>>>>> 9d3be68c2fc86cc0f8943984db853547104ce956
 
 ---
 
@@ -14,7 +18,11 @@
 # Web Project Structure
 
 **Project:** fitpal
+<<<<<<< HEAD
 **Generated:** 2026-09-20 23:32:33
+=======
+**Generated:** 2026-09-20 23:23:11
+>>>>>>> 9d3be68c2fc86cc0f8943984db853547104ce956
 **Mode:** all
 
 ```
@@ -404,14 +412,23 @@ fitpal/
 | HTML Files | 0 |
 | PHP Files | 85 |
 | CSS Files | 39 |
+<<<<<<< HEAD
 | JavaScript Files | 31 |
+=======
+| JavaScript Files | 30 |
+>>>>>>> 9d3be68c2fc86cc0f8943984db853547104ce956
 | JSON Files | 0 |
 | Text/Markdown | 3 |
 | Image Files | 141 |
 | Other Files | 12 |
 
+<<<<<<< HEAD
 **Total Directories:** 64
 **Total Files:** 310
+=======
+**Total Directories:** 63
+**Total Files:** 313
+>>>>>>> 9d3be68c2fc86cc0f8943984db853547104ce956
 
 ---
 

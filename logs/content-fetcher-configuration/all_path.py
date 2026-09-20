@@ -4,7 +4,8 @@ filesToCheck = [
     "/sql/database.sql",
     "/sql/sample/seed-data.sql",
 
-    # ===== Root =====
+   
+     # ===== Root =====
     "/index.php",
 
     # ===== admin/assets/css =====
