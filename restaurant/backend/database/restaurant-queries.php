@@ -2,23 +2,14 @@
 /**
  * FitPal Restaurant Database Queries
  *
- * Pure data-access layer for:
- *   - restaurant
- *   - restaurant_account
- *   - restaurant_branch
- *   - restaurant_permit
- *   - orders / queue_item (read-only for dashboard stats)
+ * Pure data-access layer for restaurant, restaurant_account,
+ * restaurant_branch, restaurant_permit, and read-only dashboard
+ * stats over orders / queue_item.
  *
  * No $_POST, no header(), no echo.
  *
- * Every function that a page or handler might need is defined here.
- * A page that calls getBranchesWithAccounts() must require this file
- * BEFORE the call. See sign-in.php for the correct include order.
- *
  * @package FitPal
- * @version 2.0 — Consolidated: auth + uniqueness + creation + permits
- *                + branch lookup + owner/branch dashboard stats +
- *                chart scale.
+ * @version 3.0 — Adds profile mutation functions.
  */
 
 declare(strict_types=1);
@@ -27,13 +18,6 @@ declare(strict_types=1);
  * AUTHENTICATION
  * ============================================================= */
 
-/**
- * Find a restaurant account by email or username.
- *
- * @param PDO    $db
- * @param string $identifier
- * @return array<string, mixed>|false
- */
 function findRestaurantAccountByIdentifier(PDO $db, string $identifier): array|false
 {
     $stmt = $db->prepare(
@@ -64,14 +48,6 @@ function findRestaurantAccountByIdentifier(PDO $db, string $identifier): array|f
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
-/**
- * Find a restaurant account scoped to owner or branch roles.
- *
- * @param PDO    $db
- * @param string $identifier
- * @param string $roleScope 'owner' or 'branch'
- * @return array<string, mixed>|false
- */
 function findRestaurantAccountByScope(
     PDO $db,
     string $identifier,
@@ -121,14 +97,6 @@ function findRestaurantAccountByScope(
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
-/**
- * Find a branch account by identifier AND branch code.
- *
- * @param PDO    $db
- * @param string $identifier
- * @param string $branchCode
- * @return array<string, mixed>|false
- */
 function findBranchAccountByIdentifierAndCode(
     PDO $db,
     string $identifier,
@@ -169,13 +137,6 @@ function findBranchAccountByIdentifierAndCode(
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
-/**
- * List every active branch that has at least one active branch-scoped
- * account. Populates the Branch tab's dropdown on sign-in.php.
- *
- * @param PDO $db
- * @return array<int, array<string, mixed>>
- */
 function getBranchesWithAccounts(PDO $db): array
 {
     $stmt = $db->query(
@@ -197,13 +158,6 @@ function getBranchesWithAccounts(PDO $db): array
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-/**
- * Full profile row for a restaurant account.
- *
- * @param PDO $db
- * @param int $accountId
- * @return array<string, mixed>|false
- */
 function getRestaurantAccountProfile(PDO $db, int $accountId): array|false
 {
     $stmt = $db->prepare(
@@ -216,6 +170,7 @@ function getRestaurantAccountProfile(PDO $db, int $accountId): array|false
             ra.last_name,
             ra.email,
             ra.username,
+            ra.contact_number,
             ra.role,
             ra.is_active,
             ra.date_created,
@@ -245,13 +200,18 @@ function getRestaurantAccountProfile(PDO $db, int $accountId): array|false
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
-/**
- * Record a login timestamp.
- *
- * @param PDO $db
- * @param int $accountId
- * @return void
- */
+function getRestaurantAccountWithPassword(PDO $db, int $accountId): array|false
+{
+    $stmt = $db->prepare(
+        "SELECT restaurant_account_id, password, role
+         FROM restaurant_account
+         WHERE restaurant_account_id = :account_id
+         LIMIT 1"
+    );
+    $stmt->execute([':account_id' => $accountId]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
 function recordRestaurantLogin(PDO $db, int $accountId): void
 {
     $stmt = $db->prepare(
@@ -306,13 +266,6 @@ function restaurantBranchCodeExists(PDO $db, string $code): bool
  * CREATION
  * ============================================================= */
 
-/**
- * Create a restaurant row with verification_status = 'pending'.
- *
- * @param PDO   $db
- * @param array $data
- * @return int
- */
 function createRestaurant(PDO $db, array $data): int
 {
     $stmt = $db->prepare(
@@ -332,12 +285,6 @@ function createRestaurant(PDO $db, array $data): int
     return (int)$db->lastInsertId();
 }
 
-/**
- * Create a financial account for a restaurant branch.
- *
- * @param PDO $db
- * @return int
- */
 function createRestaurantFinancialAccount(PDO $db): int
 {
     $stmt = $db->prepare(
@@ -348,15 +295,6 @@ function createRestaurantFinancialAccount(PDO $db): int
     return (int)$db->lastInsertId();
 }
 
-/**
- * Create a restaurant branch.
- *
- * @param PDO   $db
- * @param int   $restaurantId
- * @param int   $financialAccountId
- * @param array $data
- * @return int
- */
 function createRestaurantBranch(
     PDO $db,
     int $restaurantId,
@@ -388,14 +326,6 @@ function createRestaurantBranch(
     return (int)$db->lastInsertId();
 }
 
-/**
- * Create a restaurant owner account (role = 'owner', branch_id = NULL).
- *
- * @param PDO   $db
- * @param int   $restaurantId
- * @param array $data
- * @return int
- */
 function createRestaurantOwnerAccount(PDO $db, int $restaurantId, array $data): int
 {
     $stmt = $db->prepare(
@@ -423,16 +353,6 @@ function createRestaurantOwnerAccount(PDO $db, int $restaurantId, array $data): 
  * PERMIT HANDLING
  * ============================================================= */
 
-/**
- * Insert a permit photo row.
- *
- * @param PDO    $db
- * @param int    $restaurantId
- * @param string $filePath
- * @param string $originalName
- * @param int    $order
- * @return int
- */
 function createRestaurantPermit(
     PDO $db,
     int $restaurantId,
@@ -455,13 +375,6 @@ function createRestaurantPermit(
     return (int)$db->lastInsertId();
 }
 
-/**
- * Fetch all permits for a restaurant.
- *
- * @param PDO $db
- * @param int $restaurantId
- * @return array<int, array<string, mixed>>
- */
 function getRestaurantPermits(PDO $db, int $restaurantId): array
 {
     $stmt = $db->prepare(
@@ -478,13 +391,6 @@ function getRestaurantPermits(PDO $db, int $restaurantId): array
  * GENERATION HELPERS
  * ============================================================= */
 
-/**
- * Generate a unique branch code from a business name.
- *
- * @param PDO    $db
- * @param string $businessName
- * @return string
- */
 function generateBranchCode(PDO $db, string $businessName): string
 {
     $clean = preg_replace('/[^A-Za-z0-9 ]/', '', $businessName) ?? '';
@@ -512,16 +418,89 @@ function generateBranchCode(PDO $db, string $businessName): string
 }
 
 /* =============================================================
+ * PROFILE MUTATIONS
+ * ============================================================= */
+
+function updateRestaurantAccountContact(
+    PDO $db,
+    int $accountId,
+    string $contactNumber
+): bool {
+    $stmt = $db->prepare(
+        "UPDATE restaurant_account
+            SET contact_number = :contact_number
+          WHERE restaurant_account_id = :account_id"
+    );
+    $stmt->execute([
+        ':contact_number' => $contactNumber !== '' ? $contactNumber : null,
+        ':account_id'     => $accountId,
+    ]);
+    return true;
+}
+
+function updateRestaurantBusinessInfo(PDO $db, int $restaurantId, array $data): bool
+{
+    $stmt = $db->prepare(
+        "UPDATE restaurant
+            SET description  = :description,
+                cuisine_type = :cuisine_type,
+                dietary_tags = :dietary_tags
+          WHERE restaurant_id = :restaurant_id"
+    );
+    $stmt->execute([
+        ':description'   => $data['description']  !== '' ? $data['description']  : null,
+        ':cuisine_type'  => $data['cuisine_type'] !== '' ? $data['cuisine_type'] : null,
+        ':dietary_tags'  => $data['dietary_tags'] !== '' ? $data['dietary_tags'] : null,
+        ':restaurant_id' => $restaurantId,
+    ]);
+    return true;
+}
+
+function updateRestaurantBranchAddress(PDO $db, int $branchId, array $data): bool
+{
+    $stmt = $db->prepare(
+        "UPDATE restaurant_branch
+            SET block       = :block,
+                barangay    = :barangay,
+                city        = :city,
+                province    = :province,
+                region      = :region,
+                postal_code = :postal_code
+          WHERE restaurant_branch_id = :branch_id"
+    );
+    $stmt->execute([
+        ':block'       => $data['block']       !== '' ? $data['block']       : null,
+        ':barangay'    => $data['barangay']    !== '' ? $data['barangay']    : null,
+        ':city'        => $data['city'],
+        ':province'    => $data['province']    !== '' ? $data['province']    : null,
+        ':region'      => $data['region']      !== '' ? $data['region']      : null,
+        ':postal_code' => $data['postal_code'] !== '' ? $data['postal_code'] : null,
+        ':branch_id'   => $branchId,
+    ]);
+    return true;
+}
+
+function updateRestaurantAccountPassword(
+    PDO $db,
+    int $accountId,
+    string $newHashedPassword
+): bool {
+    $stmt = $db->prepare(
+        "UPDATE restaurant_account
+            SET password = :password
+          WHERE restaurant_account_id = :account_id"
+    );
+    $stmt->execute([
+        ':password'   => $newHashedPassword,
+        ':account_id' => $accountId,
+    ]);
+    return true;
+}
+
+/* =============================================================
  * OWNER DASHBOARD
  * ============================================================= */
 
-/**
- * Restaurant-wide stats for the owner dashboard.
- *
- * @param PDO $db
- * @param int $restaurantId
- * @return array<string, int|float>
- */
 function getOwnerDashboardStats(PDO $db, int $restaurantId): array
 {
     $stats = [
@@ -604,14 +583,6 @@ function getOwnerDashboardStats(PDO $db, int $restaurantId): array
     return $stats;
 }
 
-/**
- * Seven-day revenue series for the owner dashboard chart.
- *
- * @param PDO $db
- * @param int $restaurantId
- * @param int $days
- * @return array<int, array<string, mixed>>
- */
 function getOwnerWeeklyRevenue(PDO $db, int $restaurantId, int $days = 7): array
 {
     $stmt = $db->prepare(
@@ -655,13 +626,6 @@ function getOwnerWeeklyRevenue(PDO $db, int $restaurantId, int $days = 7): array
     return $series;
 }
 
-/**
- * Branches with mini-stats for the owner dashboard.
- *
- * @param PDO $db
- * @param int $restaurantId
- * @return array<int, array<string, mixed>>
- */
 function getOwnerBranchOverview(PDO $db, int $restaurantId): array
 {
     $stmt = $db->prepare(
@@ -696,13 +660,6 @@ function getOwnerBranchOverview(PDO $db, int $restaurantId): array
  * BRANCH DASHBOARD
  * ============================================================= */
 
-/**
- * Branch-scoped stats.
- *
- * @param PDO $db
- * @param int $branchId
- * @return array<string, int|float>
- */
 function getBranchDashboardStats(PDO $db, int $branchId): array
 {
     $stats = [
@@ -777,14 +734,6 @@ function getBranchDashboardStats(PDO $db, int $branchId): array
     return $stats;
 }
 
-/**
- * Seven-day revenue series for the branch dashboard chart.
- *
- * @param PDO $db
- * @param int $branchId
- * @param int $days
- * @return array<int, array<string, mixed>>
- */
 function getBranchWeeklyRevenue(PDO $db, int $branchId, int $days = 7): array
 {
     $stmt = $db->prepare(
@@ -827,14 +776,6 @@ function getBranchWeeklyRevenue(PDO $db, int $branchId, int $days = 7): array
     return $series;
 }
 
-/**
- * Top-selling products for a branch.
- *
- * @param PDO $db
- * @param int $branchId
- * @param int $limit
- * @return array<int, array<string, mixed>>
- */
 function getBranchTopProducts(PDO $db, int $branchId, int $limit = 5): array
 {
     $stmt = $db->prepare(
@@ -859,15 +800,9 @@ function getBranchTopProducts(PDO $db, int $branchId, int $limit = 5): array
 }
 
 /* =============================================================
- * CHART SCALE (shared)
+ * CHART SCALE
  * ============================================================= */
 
-/**
- * Pick a nice y-axis ceiling for a weekly bar chart.
- *
- * @param float $maxAmount
- * @return array{ceiling:float, step:float, gridlines:array<int, float>}
- */
 function getRestaurantChartScale(float $maxAmount): array
 {
     if ($maxAmount <= 0) {
