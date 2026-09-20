@@ -2,7 +2,7 @@
 
 **Preset:** all_path
 
-**Generated:** 2026-09-20 22:35:07
+**Generated:** 2026-09-20 23:38:38
 
 ---
 
@@ -14,7 +14,7 @@
 # Web Project Structure
 
 **Project:** fitpal
-**Generated:** 2026-09-20 22:33:58
+**Generated:** 2026-09-20 23:32:33
 **Mode:** all
 
 ```
@@ -32,6 +32,7 @@ fitpal/
 │   │       └── js/
 │   │           ├── dashboard.js
 │   │           ├── header.js
+│   │           ├── profile.js
 │   │           ├── restaurants.js
 │   │           ├── riders.js
 │   │           └── sign-in.js
@@ -135,13 +136,32 @@ fitpal/
 │   │   ├── test-create-guide.md
 │   │   └── updating-fetcher-guide.md
 │   ├── output/
-│   │   ├── all_path_fetched_codebase.md
-│   │   ├── project_structure.md
-│   │   ├── rider_fetched_codebase.md
-│   │   └── riders_fetched_codebase.md
 │   ├── content-fetcher.py
 │   └── tree-mapper.py
 ├── restaurant/
+│   ├── assets/
+│   │   ├── css/
+│   │   │   ├── header.css
+│   │   │   ├── sign-in.css
+│   │   │   └── sign-up.css
+│   │   └── ui/
+│   │       └── js/
+│   │           ├── header.js
+│   │           ├── sign-in.js
+│   │           └── sign-up.js
+│   ├── backend/
+│   │   ├── database/
+│   │   │   ├── restaurant-connect.php
+│   │   │   └── restaurant-queries.php
+│   │   └── handlers/
+│   │       ├── sign-in-handler.php
+│   │       ├── sign-out-handler.php
+│   │       └── sign-up-handler.php
+│   ├── includes/
+│   │   └── header.php
+│   └── pages/
+│       ├── sign-in.php
+│       └── sign-up.php
 ├── rider/
 │   ├── assets/
 │   │   ├── css/
@@ -354,11 +374,12 @@ fitpal/
 │   │   ├── footer.php
 │   │   ├── header.php
 │   │   └── view-helpers.php
-│   └── pages/
-│       ├── about.php
-│       ├── contact.php
-│       ├── privacy-policy.php
-│       └── terms-conditions.php
+│   ├── pages/
+│   │   ├── about.php
+│   │   ├── contact.php
+│   │   ├── privacy-policy.php
+│   │   └── terms-conditions.php
+│   └── uploads/
 ├── sql/
 │   ├── sample/
 │   │   └── seed-data.sql
@@ -381,16 +402,16 @@ fitpal/
 | File Type | Count |
 |-----------|-------|
 | HTML Files | 0 |
-| PHP Files | 77 |
-| CSS Files | 36 |
-| JavaScript Files | 27 |
+| PHP Files | 85 |
+| CSS Files | 39 |
+| JavaScript Files | 31 |
 | JSON Files | 0 |
-| Text/Markdown | 7 |
+| Text/Markdown | 3 |
 | Image Files | 141 |
 | Other Files | 12 |
 
-**Total Directories:** 54
-**Total Files:** 299
+**Total Directories:** 64
+**Total Files:** 310
 
 ---
 
@@ -9832,151 +9853,747 @@ a.admin-stat-card:hover .admin-stat-arrow-img {
 /**
  * FitPal Admin Profile Page Styles
  *
+ * Layout map:
+ *   .profile-page
+ *     .container
+ *       .page-title-header
+ *       .profile-header-card        (avatar + name + role + last login)
+ *       .profile-tabs               (Personal Information | Security)
+ *       .profile-tab-content
+ *         .profile-card
+ *           .profile-card-header / .profile-card-body
+ *           form rows + actions
+ *
+ * Container alignment: .profile-page .container matches
+ * .admin-list-page .container and .header-container exactly —
+ * max-width: 1200px, padding: 0 16px, margin: 0 auto. Cards stretch
+ * the full container width so their left edge lines up with the
+ * logo in the header. No inner max-width is applied to any card.
+ *
  * @package FitPal
- * @version 1.0
+ * @version 2.0 — Container aligned to 1200px / 16px padding to match
+ *                admin-tables.css and header.css. Removed the inner
+ *                760px reading-width constraint on cards.
  */
 
-.admin-profile-card {
+/* ============================================
+   SCROLLBAR HYGIENE
+   ============================================ */
+
+html {
+    scrollbar-gutter: stable;
+}
+
+/* ============================================
+   CONTENT WRAPPER
+   ============================================ */
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+}
+
+.profile-page {
+    background: var(--gray-50);
+    padding: 24px 0 48px 0;
+    flex: 1;
+}
+
+.profile-page .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 16px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* ============================================
+   PAGE TITLE HEADER
+   ============================================ */
+
+.page-title-header {
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--primary);
+}
+
+.page-title-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.page-title-header .heading-2 {
+    margin: 0 0 4px 0;
+    font-size: var(--font-size-3xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--text);
+    line-height: 1.2;
+}
+
+.page-title-header .heading-2 span {
+    color: var(--primary);
+}
+
+.page-title-header .text-muted {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    line-height: 1.5;
+}
+
+.page-title-header .back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    background: #1a1a1a;
+    color: #ffffff;
+    border: none;
+    border-radius: var(--radius-base);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    font-family: inherit;
+    text-decoration: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.page-title-header .back-btn:hover {
+    background: #000000;
+}
+
+.page-title-header .back-btn-icon {
+    width: 18px;
+    height: 18px;
+    display: block;
+    flex-shrink: 0;
+    filter: brightness(0) invert(1);
+}
+
+/* ============================================
+   ALERTS
+   ============================================ */
+
+.alert {
+    padding: 12px 18px;
+    border-radius: var(--radius-base);
+    margin-bottom: 20px;
+    border: 1px solid transparent;
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+}
+
+.alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+
+.alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+/* ============================================
+   PROFILE HEADER CARD
+   ============================================ */
+
+.profile-header-card {
+    display: flex;
+    align-items: center;
+    gap: 20px;
     background: var(--white);
     border: 1px solid var(--gray-200);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
-    padding: 24px;
-    max-width: 720px;
-    margin: 0 auto;
-}
-
-.profile-header-row {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding-bottom: 20px;
-    border-bottom: 1px solid var(--gray-100);
+    padding: 24px 28px;
     margin-bottom: 20px;
+    flex-wrap: wrap;
+    box-sizing: border-box;
 }
 
 .profile-avatar-large {
-    width: 64px;
-    height: 64px;
+    width: 72px;
+    height: 72px;
     border-radius: 50%;
     background: var(--primary);
     color: var(--white);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 26px;
+    font-size: 28px;
     font-weight: 700;
     flex-shrink: 0;
     text-transform: uppercase;
+    line-height: 1;
+    user-select: none;
 }
 
 .profile-header-info {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
     min-width: 0;
+    flex: 1;
 }
 
 .profile-name {
     margin: 0;
-    font-size: var(--font-size-xl);
+    font-size: var(--font-size-2xl);
     font-weight: var(--font-weight-bold);
     color: var(--text);
+    line-height: 1.2;
     word-break: break-word;
 }
 
+.profile-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
 .profile-role-badge {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
     padding: 3px 12px;
     border-radius: var(--radius-full);
-    background: rgba(89, 193, 74, 0.1);
+    background: rgba(89, 193, 74, 0.12);
     color: var(--primary-dark);
     font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    line-height: 1.4;
+}
+
+.profile-email {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    word-break: break-all;
+}
+
+.profile-last-login {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-400);
+}
+
+/* ============================================
+   TABS
+   ============================================ */
+
+.profile-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    padding: 4px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-sm);
+    box-sizing: border-box;
+}
+
+.profile-tab {
+    flex: 1;
+    padding: 12px 20px;
+    border: none;
+    border-radius: var(--radius-base);
+    background: transparent;
+    color: var(--gray-600);
+    font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
-    width: fit-content;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.15s ease, color 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
 }
 
-.profile-fields {
+.profile-tab:hover {
+    background: var(--gray-50);
+}
+
+.profile-tab.active {
+    background: var(--primary);
+    color: var(--white);
+}
+
+.profile-tab-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+    filter: brightness(0) saturate(100%)
+            invert(40%) sepia(8%) saturate(800%)
+            hue-rotate(50deg) brightness(95%) contrast(95%);
+    transition: filter 0.15s ease;
+}
+
+.profile-tab.active .profile-tab-icon {
+    filter: brightness(0) invert(1);
+}
+
+/* ============================================
+   TAB CONTENT
+   ============================================ */
+
+.profile-tab-content {
+    display: none;
+}
+
+.profile-tab-content.active {
+    display: block;
+    animation: profileFadeIn 0.2s ease;
+}
+
+@keyframes profileFadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================
+   PROFILE CARD
+   ============================================ */
+
+.profile-card {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.profile-card-header {
+    padding: 16px 22px;
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--gray-200);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.profile-card-header h2 {
+    margin: 0;
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+}
+
+.profile-card-header .heading-hint {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    font-weight: var(--font-weight-normal);
+}
+
+.profile-card-body {
+    padding: 22px;
+}
+
+/* ============================================
+   FORM ROWS
+   ============================================ */
+
+.form-row {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px 24px;
-    margin-bottom: 24px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    margin-bottom: 18px;
 }
 
-.profile-field {
+.form-row:last-of-type {
+    margin-bottom: 0;
+}
+
+.form-group {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
     min-width: 0;
 }
 
-.profile-field .field-label {
-    font-size: 10px;
+.form-group-full {
+    grid-column: 1 / -1;
+}
+
+.field-label {
+    font-size: var(--font-size-xs);
     font-weight: 700;
-    color: var(--gray-500);
+    color: var(--gray-600);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
-.profile-field .field-value {
-    font-size: var(--font-size-base);
+.field-optional {
+    font-weight: 400;
+    color: var(--gray-400);
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 11px;
+    margin-left: 4px;
+}
+
+.form-control {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px solid var(--gray-300);
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-family: inherit;
     color: var(--text);
-    word-break: break-word;
+    background: var(--white);
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.form-control::placeholder {
+    color: var(--gray-400);
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
+}
+
+.form-control:disabled {
+    background: var(--gray-50);
+    color: var(--gray-500);
+    cursor: not-allowed;
+    border-color: var(--gray-200);
+}
+
+.form-control.is-error {
+    border-color: var(--danger);
+    background: #fff8f8;
+}
+
+.form-control.is-error:focus {
+    box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.15);
+}
+
+.form-hint {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
     line-height: 1.4;
+    margin: 0;
 }
 
-.profile-field .field-value.muted {
-    color: var(--gray-600);
+.form-error {
+    font-size: var(--font-size-xs);
+    color: var(--danger);
+    line-height: 1.4;
+    margin: 0;
+    min-height: 0;
 }
 
-.profile-actions {
+.form-error:empty {
+    display: none;
+}
+
+/* ============================================
+   PASSWORD FIELD WITH TOGGLE
+   ============================================ */
+
+.password-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.password-wrapper .form-control {
+    padding-right: 46px;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-base);
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.password-toggle:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.password-toggle:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    opacity: 1;
+}
+
+.password-toggle img {
+    width: 18px;
+    height: 18px;
+    display: block;
+    pointer-events: none;
+}
+
+/* ============================================
+   PASSWORD STRENGTH LIST
+   ============================================ */
+
+.password-rules {
+    list-style: none;
+    padding: 0;
+    margin: 6px 0 0 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px 12px;
+}
+
+.password-rule {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    line-height: 1.4;
+    transition: color 0.15s ease;
+}
+
+.password-rule-icon {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--gray-300);
+    flex-shrink: 0;
+    position: relative;
+    transition: background 0.15s ease;
+}
+
+.password-rule.is-met {
+    color: var(--primary-dark);
+}
+
+.password-rule.is-met .password-rule-icon {
+    background: var(--primary);
+}
+
+.password-rule.is-met .password-rule-icon::after {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 1px;
+    width: 3px;
+    height: 6px;
+    border: solid var(--white);
+    border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg);
+}
+
+/* ============================================
+   FORM ACTIONS
+   ============================================ */
+
+.form-actions {
     display: flex;
     justify-content: flex-end;
-    padding-top: 20px;
+    gap: 10px;
+    margin-top: 22px;
+    padding-top: 18px;
     border-top: 1px solid var(--gray-100);
 }
 
-.profile-actions .btn {
-    display: inline-flex;
-    align-items: center;
+.form-actions .btn {
+    min-width: 160px;
     justify-content: center;
-    padding: 10px 24px;
-    border-radius: var(--radius-base);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    text-decoration: none;
-    background: var(--primary);
-    color: var(--white);
-    border: 2px solid var(--primary);
-    transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.profile-actions .btn:hover {
-    background: var(--primary-dark);
-    border-color: var(--primary-dark);
-}
+/* ============================================
+   RESPONSIVE — TABLET (≤ 768px)
+   ============================================ */
 
-@media (max-width: 640px) {
-    .admin-profile-card {
-        padding: 20px 16px;
+@media (max-width: 768px) {
+    .profile-page {
+        padding: 16px 0 32px 0;
     }
 
-    .profile-fields {
+    .page-title-header .heading-2 {
+        font-size: var(--font-size-2xl);
+    }
+
+    .page-title-header .back-btn {
+        padding: 8px 14px;
+        font-size: var(--font-size-xs);
+    }
+
+    .page-title-header .back-btn-icon {
+        width: 16px;
+        height: 16px;
+    }
+
+    .profile-header-card {
+        padding: 20px;
+        gap: 16px;
+    }
+
+    .profile-avatar-large {
+        width: 60px;
+        height: 60px;
+        font-size: 22px;
+    }
+
+    .profile-name {
+        font-size: var(--font-size-xl);
+    }
+
+    .profile-tabs {
+        flex-direction: row;
+    }
+
+    .profile-tab {
+        padding: 10px 12px;
+        font-size: var(--font-size-xs);
+    }
+
+    .profile-tab-icon {
+        width: 14px;
+        height: 14px;
+    }
+
+    .profile-card-header {
+        padding: 14px 18px;
+    }
+
+    .profile-card-header h2 {
+        font-size: var(--font-size-sm);
+    }
+
+    .profile-card-body {
+        padding: 18px;
+    }
+
+    .form-row {
         grid-template-columns: 1fr;
+        gap: 14px;
+        margin-bottom: 14px;
+    }
+
+    .form-actions {
+        flex-direction: column-reverse;
+        gap: 8px;
+        margin-top: 18px;
+        padding-top: 16px;
+    }
+
+    .form-actions .btn {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .password-rules {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ============================================
+   RESPONSIVE — MOBILE (≤ 480px)
+   ============================================ */
+
+@media (max-width: 480px) {
+    .profile-page .container {
+        padding: 0 12px;
+    }
+
+    .page-title-header .heading-2 {
+        font-size: var(--font-size-xl);
+    }
+
+    .profile-header-card {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 18px;
+        text-align: left;
     }
 
     .profile-avatar-large {
         width: 56px;
         height: 56px;
-        font-size: 22px;
+        font-size: 20px;
     }
 
-    .profile-actions {
-        justify-content: center;
+    .profile-name {
+        font-size: var(--font-size-lg);
     }
 
-    .profile-actions .btn {
-        width: 100%;
+    .profile-card-header {
+        padding: 12px 16px;
+    }
+
+    .profile-card-body {
+        padding: 16px 14px;
+    }
+
+    .form-control {
+        padding: 9px 12px;
+        font-size: var(--font-size-xs);
+    }
+
+    .field-label {
+        font-size: 10px;
+    }
+
+    .password-wrapper .form-control {
+        padding-right: 42px;
+    }
+
+    .password-toggle {
+        width: 30px;
+        height: 30px;
+        right: 7px;
+    }
+
+    .password-toggle img {
+        width: 16px;
+        height: 16px;
+    }
+}
+
+/* ============================================
+   REDUCED MOTION
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    .profile-tab,
+    .profile-tab-content,
+    .form-control,
+    .password-toggle,
+    .password-rule,
+    .password-rule-icon,
+    .page-title-header .back-btn {
+        transition: none !important;
+        animation: none !important;
     }
 }
 ```
@@ -10537,6 +11154,333 @@ a.admin-stat-card:hover .admin-stat-arrow-img {
             }
         }
     })();
+})();
+```
+
+---
+
+## File: `fitpal/admin/assets/ui/js/profile.js`
+
+**Status:** `FOUND`
+
+```javascript
+/**
+ * FitPal Admin Profile Page JavaScript
+ *
+ * Responsibilities:
+ *   - Tab switching between Personal Information and Security
+ *   - Password visibility toggles on all three password fields
+ *   - Phone-number input filter (digits only, capped at 11)
+ *   - Live password-rule feedback (length, alphanumeric, has letter,
+ *     has number)
+ *   - Confirm-password matching feedback
+ *   - Client-side validation on submit with inline error messages
+ *
+ * All real validation also runs server-side in admin-handler.php.
+ * This file is a UX layer only — it never trusts its own checks as
+ * authoritative.
+ *
+ * No external dependencies, no build step. ES5-compatible so it runs
+ * in the same class of browsers as the rest of the admin pages.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+(function () {
+    'use strict';
+
+    document.addEventListener('DOMContentLoaded', function () {
+
+        var CFG = window.FITPAL_ADMIN_PROFILE || {};
+        var ASSET_BASE = CFG.assetBase || '../../shared/';
+
+        /* ============================================
+         * TABS
+         * ============================================ */
+
+        var tabs = document.querySelectorAll('.profile-tab');
+        var tabContents = document.querySelectorAll('.profile-tab-content');
+
+        function switchTab(tabId) {
+            tabs.forEach(function (tab) {
+                var isActive = tab.dataset.tab === tabId;
+                tab.classList.toggle('active', isActive);
+                tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+            });
+            tabContents.forEach(function (content) {
+                content.classList.toggle('active', content.id === 'tab-' + tabId);
+            });
+        }
+
+        tabs.forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                switchTab(this.dataset.tab);
+            });
+        });
+
+        /* ============================================
+         * PASSWORD VISIBILITY TOGGLES
+         * ============================================ */
+
+        document.querySelectorAll('[data-toggle-password]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var targetId = btn.getAttribute('data-toggle-password');
+                var input = document.getElementById(targetId);
+                var icon = btn.querySelector('[data-password-icon]');
+                if (!input || !icon) return;
+
+                var isPassword = input.type === 'password';
+                input.type = isPassword ? 'text' : 'password';
+
+                var iconFile = isPassword ? 'password-unhide.svg' : 'password-hide.svg';
+                icon.src = ASSET_BASE + 'assets/images/icons/' + iconFile;
+                icon.alt = isPassword ? 'Hide password' : 'Show password';
+                btn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+                btn.setAttribute('aria-pressed', isPassword ? 'true' : 'false');
+            });
+        });
+
+        /* ============================================
+         * HELPERS
+         * ============================================ */
+
+        function showError(input, errorEl, message) {
+            if (input) input.classList.add('is-error');
+            if (errorEl) errorEl.textContent = message;
+        }
+
+        function clearError(input, errorEl) {
+            if (input) input.classList.remove('is-error');
+            if (errorEl) errorEl.textContent = '';
+        }
+
+        /* ============================================
+         * PERSONAL INFO FORM
+         * ============================================ */
+
+        var infoForm = document.getElementById('profileInfoForm');
+        var firstName = document.getElementById('first_name');
+        var lastName = document.getElementById('last_name');
+        var contactNumber = document.getElementById('contact_number');
+        var firstNameError = document.getElementById('firstNameError');
+        var lastNameError = document.getElementById('lastNameError');
+        var contactError = document.getElementById('contactError');
+
+        // Phone number: digits only, capped at 11.
+        if (contactNumber) {
+            contactNumber.addEventListener('input', function () {
+                var digits = this.value.replace(/\D/g, '');
+                if (digits.length > 11) digits = digits.slice(0, 11);
+                if (this.value !== digits) this.value = digits;
+                clearError(this, contactError);
+            });
+        }
+
+        // Name fields: clear errors on input.
+        [[firstName, firstNameError], [lastName, lastNameError]].forEach(function (pair) {
+            var input = pair[0];
+            var errorEl = pair[1];
+            if (!input) return;
+            input.addEventListener('input', function () {
+                clearError(this, errorEl);
+            });
+        });
+
+        if (infoForm) {
+            infoForm.addEventListener('submit', function (e) {
+                var ok = true;
+
+                clearError(firstName, firstNameError);
+                clearError(lastName, lastNameError);
+                clearError(contactNumber, contactError);
+
+                if (!firstName.value.trim() || firstName.value.trim().length < 2) {
+                    showError(firstName, firstNameError, 'First name must be at least 2 characters.');
+                    ok = false;
+                }
+
+                if (!lastName.value.trim() || lastName.value.trim().length < 2) {
+                    showError(lastName, lastNameError, 'Last name must be at least 2 characters.');
+                    ok = false;
+                }
+
+                if (contactNumber.value.trim() !== '') {
+                    if (!/^09\d{9}$/.test(contactNumber.value.trim())) {
+                        showError(contactNumber, contactError,
+                            'Enter a valid PH mobile number (11 digits, starting with 09).');
+                        ok = false;
+                    }
+                }
+
+                if (!ok) {
+                    e.preventDefault();
+                    var firstInvalid = infoForm.querySelector('.is-error');
+                    if (firstInvalid) firstInvalid.focus();
+                }
+            });
+        }
+
+        var resetInfoBtn = document.getElementById('resetInfoBtn');
+        if (resetInfoBtn && infoForm) {
+            resetInfoBtn.addEventListener('click', function () {
+                clearError(firstName, firstNameError);
+                clearError(lastName, lastNameError);
+                clearError(contactNumber, contactError);
+            });
+        }
+
+        /* ============================================
+         * PASSWORD FORM
+         * ============================================ */
+
+        var passwordForm = document.getElementById('passwordForm');
+        var currentPassword = document.getElementById('current_password');
+        var newPassword = document.getElementById('new_password');
+        var confirmPassword = document.getElementById('confirm_password');
+        var currentPasswordError = document.getElementById('currentPasswordError');
+        var newPasswordError = document.getElementById('newPasswordError');
+        var confirmPasswordError = document.getElementById('confirmPasswordError');
+        var passwordRulesList = document.getElementById('passwordRules');
+
+        /**
+         * Evaluate each password rule against the given string.
+         *
+         * @param {string} pw
+         * @returns {{length:boolean, alphanumeric:boolean, hasLetter:boolean, hasNumber:boolean}}
+         */
+        function evaluatePasswordRules(pw) {
+            return {
+                'length': pw.length >= 8 && pw.length <= 20,
+                'alphanumeric': /^[A-Za-z0-9]+$/.test(pw),
+                'has-letter': /[A-Za-z]/.test(pw),
+                'has-number': /[0-9]/.test(pw)
+            };
+        }
+
+        /**
+         * Paint the rules list: green check for met rules, grey dot
+         * for unmet rules.
+         */
+        function paintPasswordRules(pw) {
+            if (!passwordRulesList) return;
+            var results = evaluatePasswordRules(pw);
+            passwordRulesList.querySelectorAll('.password-rule').forEach(function (li) {
+                var rule = li.getAttribute('data-rule');
+                var isMet = results[rule] === true;
+                li.classList.toggle('is-met', isMet);
+            });
+        }
+
+        /**
+         * Return the first rule violation message for a password, or
+         * an empty string if the password is valid.
+         */
+        function firstPasswordViolation(pw) {
+            if (pw.length < 8) return 'Password must be at least 8 characters.';
+            if (pw.length > 20) return 'Password must be no more than 20 characters.';
+            if (!/^[A-Za-z0-9]+$/.test(pw)) return 'Password can only contain letters and numbers.';
+            if (!/[A-Za-z]/.test(pw)) return 'Password must contain at least one letter.';
+            if (!/[0-9]/.test(pw)) return 'Password must contain at least one number.';
+            return '';
+        }
+
+        if (newPassword) {
+            newPassword.addEventListener('input', function () {
+                paintPasswordRules(this.value);
+                clearError(this, newPasswordError);
+
+                if (confirmPassword && confirmPassword.value !== '') {
+                    if (confirmPassword.value === this.value) {
+                        clearError(confirmPassword, confirmPasswordError);
+                    } else {
+                        showError(confirmPassword, confirmPasswordError, 'Passwords do not match.');
+                    }
+                }
+            });
+
+            newPassword.addEventListener('blur', function () {
+                if (this.value === '') return;
+                var violation = firstPasswordViolation(this.value);
+                if (violation !== '') {
+                    showError(this, newPasswordError, violation);
+                }
+            });
+        }
+
+        if (confirmPassword) {
+            confirmPassword.addEventListener('input', function () {
+                clearError(this, confirmPasswordError);
+                if (this.value === '') return;
+                if (newPassword && this.value !== newPassword.value) {
+                    showError(this, confirmPasswordError, 'Passwords do not match.');
+                }
+            });
+        }
+
+        if (currentPassword) {
+            currentPassword.addEventListener('input', function () {
+                clearError(this, currentPasswordError);
+            });
+        }
+
+        if (passwordForm) {
+            passwordForm.addEventListener('submit', function (e) {
+                var ok = true;
+
+                clearError(currentPassword, currentPasswordError);
+                clearError(newPassword, newPasswordError);
+                clearError(confirmPassword, confirmPasswordError);
+
+                if (currentPassword.value === '') {
+                    showError(currentPassword, currentPasswordError, 'Please enter your current password.');
+                    ok = false;
+                }
+
+                var violation = firstPasswordViolation(newPassword.value);
+                if (newPassword.value === '') {
+                    showError(newPassword, newPasswordError, 'Please enter a new password.');
+                    ok = false;
+                } else if (violation !== '') {
+                    showError(newPassword, newPasswordError, violation);
+                    ok = false;
+                }
+
+                if (confirmPassword.value === '') {
+                    showError(confirmPassword, confirmPasswordError, 'Please confirm your new password.');
+                    ok = false;
+                } else if (newPassword.value !== '' && confirmPassword.value !== newPassword.value) {
+                    showError(confirmPassword, confirmPasswordError, 'Passwords do not match.');
+                    ok = false;
+                }
+
+                if (!ok) {
+                    e.preventDefault();
+                    var firstInvalid = passwordForm.querySelector('.is-error');
+                    if (firstInvalid) firstInvalid.focus();
+                }
+            });
+
+            passwordForm.addEventListener('reset', function () {
+                clearError(currentPassword, currentPasswordError);
+                clearError(newPassword, newPasswordError);
+                clearError(confirmPassword, confirmPasswordError);
+                paintPasswordRules('');
+            });
+        }
+
+        /* ============================================
+         * INITIAL PAINT
+         * ============================================ */
+
+        // If the browser restored a value into the password field on
+        // reload (e.g. via form-state restoration), repaint the rule
+        // list so the user sees current state instead of a stale one.
+        if (newPassword && newPassword.value !== '') {
+            paintPasswordRules(newPassword.value);
+        }
+
+    });
 })();
 ```
 
@@ -13909,8 +14853,21 @@ $csrfToken = $_SESSION['csrf_token'];
 /**
  * FitPal Admin Profile
  *
+ * Two-tab layout: Personal Information and Security.
+ *
+ *   Personal Information — edit first / middle / last name and contact
+ *   number. Email and role are shown but read-only because changing
+ *   them requires a support ticket.
+ *
+ *   Security — change password with live client-side rule feedback.
+ *
+ * Both tabs post to admin-handler.php. The handler validates and
+ * redirects back here with a flash message. All SQL lives in
+ * admin-queries.php. This page contains no SQL.
+ *
  * @package FitPal
- * @version 2.0
+ * @version 3.0 — Two-tab layout. Removed every inline style. Proper
+ *                profile.css classes. Added profile.js.
  */
 
 declare(strict_types=1);
@@ -13929,8 +14886,11 @@ require_once __DIR__ . '/../backend/database/admin-queries.php';
 
 $adminId = (int)$_SESSION['administrator_id'];
 $profile = getAdminProfile($database_connection, $adminId) ?: [];
+
 $fullName = adminName($profile);
 $initial  = adminInitial($profile);
+$roleLabel = adminRoleLabel((string)($profile['role'] ?? 'support'));
+$lastLogin = formatAdminDate((string)($profile['last_login'] ?? ''));
 
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
@@ -13938,23 +14898,29 @@ if (empty($_SESSION['csrf_token'])) {
 $csrfToken = $_SESSION['csrf_token'];
 ?>
 
-<div class="content admin-list-page">
+<div class="content profile-page">
     <div class="container">
 
-        <header class="admin-page-header">
-            <div class="admin-page-header-left">
-                <h1 class="heading-2">My <span>Profile</span></h1>
-                <p class="text-muted">Manage your administrator account.</p>
-            </div>
-            <div class="admin-page-header-actions">
-                <a href="dashboard.php" class="btn btn-outline btn-sm">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt="" class="btn-icon"
-                        width="16" height="16" style="filter: none;">
+        <!-- ============================================
+             PAGE TITLE HEADER
+             ============================================ -->
+        <div class="page-title-header">
+            <div class="page-title-header-top">
+                <div>
+                    <h1 class="heading-2">My <span>Profile</span></h1>
+                    <p class="text-muted">Manage your administrator account and security settings.</p>
+                </div>
+                <a href="dashboard.php" class="back-btn">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt=""
+                        class="back-btn-icon" width="18" height="18">
                     <span>Dashboard</span>
                 </a>
             </div>
-        </header>
+        </div>
 
+        <!-- ============================================
+             FLASH MESSAGES
+             ============================================ -->
         <?php if (!empty($_SESSION['admin_success'])): ?>
         <div class="alert alert-success" role="alert">
             <?php echo htmlspecialchars($_SESSION['admin_success'], ENT_QUOTES, 'UTF-8'); ?>
@@ -13969,117 +14935,234 @@ $csrfToken = $_SESSION['csrf_token'];
         </div>
         <?php endif; ?>
 
-        <!-- Profile summary -->
-        <div class="admin-table-card" style="padding: 24px; margin-bottom: 20px;">
-            <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
-                <div class="admin-cell-avatar" style="width:64px; height:64px; font-size:24px;">
-                    <?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>
-                </div>
-                <div style="flex:1; min-width:0;">
-                    <p class="admin-cell-title" style="font-size: var(--font-size-xl);">
-                        <?php echo htmlspecialchars($fullName, ENT_QUOTES, 'UTF-8'); ?>
-                    </p>
-                    <p class="admin-cell-subtitle">
-                        <?php echo htmlspecialchars(adminRoleLabel((string)($profile['role'] ?? 'support')), ENT_QUOTES, 'UTF-8'); ?>
-                        &middot;
+        <!-- ============================================
+             PROFILE HEADER CARD
+             ============================================ -->
+        <div class="profile-header-card">
+            <div class="profile-avatar-large" aria-hidden="true">
+                <?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>
+            </div>
+
+            <div class="profile-header-info">
+                <p class="profile-name">
+                    <?php echo htmlspecialchars($fullName, ENT_QUOTES, 'UTF-8'); ?>
+                </p>
+                <div class="profile-meta-row">
+                    <span class="profile-role-badge">
+                        <?php echo htmlspecialchars($roleLabel, ENT_QUOTES, 'UTF-8'); ?>
+                    </span>
+                    <span class="profile-email">
                         <?php echo htmlspecialchars((string)($profile['email'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
-                    </p>
-                    <p class="admin-cell-subtitle" style="margin-top:4px;">
-                        Last login:
-                        <?php echo htmlspecialchars(formatAdminDate((string)($profile['last_login'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>
-                    </p>
+                    </span>
+                </div>
+                <p class="profile-last-login">
+                    Last login: <?php echo htmlspecialchars($lastLogin, ENT_QUOTES, 'UTF-8'); ?>
+                </p>
+            </div>
+        </div>
+
+        <!-- ============================================
+             TABS
+             ============================================ -->
+        <div class="profile-tabs" role="tablist">
+            <button type="button" class="profile-tab active" data-tab="personal" role="tab" aria-selected="true">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/file-user-line.svg" alt=""
+                    class="profile-tab-icon" width="16" height="16">
+                <span>Personal Information</span>
+            </button>
+            <button type="button" class="profile-tab" data-tab="security" role="tab" aria-selected="false">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/password-hide.svg" alt=""
+                    class="profile-tab-icon" width="16" height="16">
+                <span>Security</span>
+            </button>
+        </div>
+
+        <!-- ============================================
+             TAB: PERSONAL INFORMATION
+             ============================================ -->
+        <div class="profile-tab-content active" id="tab-personal" role="tabpanel">
+            <div class="profile-card">
+                <div class="profile-card-header">
+                    <h2>Personal Information</h2>
+                    <span class="heading-hint">Email and role are locked — contact support to change them.</span>
+                </div>
+
+                <div class="profile-card-body">
+                    <form method="POST" action="../backend/handlers/admin-handler.php" id="profileInfoForm" novalidate>
+                        <input type="hidden" name="csrf_token"
+                            value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="update_profile">
+                        <input type="hidden" name="redirect_to" value="profile.php">
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="field-label" for="first_name">First Name</label>
+                                <input type="text" id="first_name" name="first_name" class="form-control"
+                                    value="<?php echo htmlspecialchars((string)($profile['first_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                                    autocomplete="given-name" required minlength="2">
+                                <p class="form-error" id="firstNameError" role="alert"></p>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="field-label" for="last_name">Last Name</label>
+                                <input type="text" id="last_name" name="last_name" class="form-control"
+                                    value="<?php echo htmlspecialchars((string)($profile['last_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                                    autocomplete="family-name" required minlength="2">
+                                <p class="form-error" id="lastNameError" role="alert"></p>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="field-label" for="middle_name">
+                                    Middle Name
+                                    <span class="field-optional">(optional)</span>
+                                </label>
+                                <input type="text" id="middle_name" name="middle_name" class="form-control"
+                                    value="<?php echo htmlspecialchars((string)($profile['middle_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                                    autocomplete="additional-name">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="field-label" for="contact_number">
+                                    Contact Number
+                                    <span class="field-optional">(optional)</span>
+                                </label>
+                                <input type="tel" id="contact_number" name="contact_number" class="form-control"
+                                    placeholder="09XXXXXXXXX"
+                                    value="<?php echo htmlspecialchars((string)($profile['contact_number'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                                    autocomplete="tel" inputmode="numeric" maxlength="11">
+                                <p class="form-error" id="contactError" role="alert"></p>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="field-label" for="email_readonly">Email</label>
+                                <input type="email" id="email_readonly" class="form-control"
+                                    value="<?php echo htmlspecialchars((string)($profile['email'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                                    disabled>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="field-label" for="role_readonly">Role</label>
+                                <input type="text" id="role_readonly" class="form-control"
+                                    value="<?php echo htmlspecialchars($roleLabel, ENT_QUOTES, 'UTF-8'); ?>" disabled>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="reset" class="btn btn-outline btn-sm" id="resetInfoBtn">Reset</button>
+                            <button type="submit" class="btn btn-primary btn-sm">Save Changes</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
 
-        <!-- Update profile -->
-        <div class="admin-table-card" style="padding: 24px; margin-bottom: 20px;">
-            <h3 class="admin-section-heading" style="margin-top:0;">Personal Information</h3>
-            <form method="POST" action="../backend/handlers/admin-handler.php">
-                <input type="hidden" name="csrf_token"
-                    value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
-                <input type="hidden" name="action" value="update_profile">
-                <input type="hidden" name="redirect_to" value="profile.php">
-
-                <div class="admin-detail-grid">
-                    <div class="admin-detail-item">
-                        <label class="admin-detail-label" for="first_name">First Name</label>
-                        <input type="text" id="first_name" name="first_name" class="admin-search-input"
-                            value="<?php echo htmlspecialchars((string)($profile['first_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
-                            required minlength="2">
-                    </div>
-                    <div class="admin-detail-item">
-                        <label class="admin-detail-label" for="middle_name">Middle Name</label>
-                        <input type="text" id="middle_name" name="middle_name" class="admin-search-input"
-                            value="<?php echo htmlspecialchars((string)($profile['middle_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
-                    </div>
-                    <div class="admin-detail-item">
-                        <label class="admin-detail-label" for="last_name">Last Name</label>
-                        <input type="text" id="last_name" name="last_name" class="admin-search-input"
-                            value="<?php echo htmlspecialchars((string)($profile['last_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
-                            required minlength="2">
-                    </div>
-                    <div class="admin-detail-item">
-                        <label class="admin-detail-label" for="contact_number">Contact Number</label>
-                        <input type="tel" id="contact_number" name="contact_number" class="admin-search-input"
-                            placeholder="09XXXXXXXXX"
-                            value="<?php echo htmlspecialchars((string)($profile['contact_number'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
-                    </div>
-                    <div class="admin-detail-item">
-                        <label class="admin-detail-label">Email (read-only)</label>
-                        <input type="email" class="admin-search-input"
-                            value="<?php echo htmlspecialchars((string)($profile['email'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
-                            disabled>
-                    </div>
-                    <div class="admin-detail-item">
-                        <label class="admin-detail-label">Role (read-only)</label>
-                        <input type="text" class="admin-search-input"
-                            value="<?php echo htmlspecialchars(adminRoleLabel((string)($profile['role'] ?? 'support')), ENT_QUOTES, 'UTF-8'); ?>"
-                            disabled>
-                    </div>
+        <!-- ============================================
+             TAB: SECURITY
+             ============================================ -->
+        <div class="profile-tab-content" id="tab-security" role="tabpanel">
+            <div class="profile-card">
+                <div class="profile-card-header">
+                    <h2>Change Password</h2>
+                    <span class="heading-hint">8–20 characters, letters and numbers only.</span>
                 </div>
 
-                <div style="margin-top: 16px; display: flex; justify-content: flex-end;">
-                    <button type="submit" class="btn btn-primary btn-sm">Save Changes</button>
-                </div>
-            </form>
-        </div>
+                <div class="profile-card-body">
+                    <form method="POST" action="../backend/handlers/admin-handler.php" id="passwordForm" novalidate>
+                        <input type="hidden" name="csrf_token"
+                            value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="change_password">
+                        <input type="hidden" name="redirect_to" value="profile.php">
 
-        <!-- Change password -->
-        <div class="admin-table-card" style="padding: 24px;">
-            <h3 class="admin-section-heading" style="margin-top:0;">Change Password</h3>
-            <form method="POST" action="../backend/handlers/admin-handler.php">
-                <input type="hidden" name="csrf_token"
-                    value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
-                <input type="hidden" name="action" value="change_password">
-                <input type="hidden" name="redirect_to" value="profile.php">
+                        <div class="form-row">
+                            <div class="form-group form-group-full">
+                                <label class="field-label" for="current_password">Current Password</label>
+                                <div class="password-wrapper">
+                                    <input type="password" id="current_password" name="current_password"
+                                        class="form-control" autocomplete="current-password" required>
+                                    <button type="button" class="password-toggle"
+                                        data-toggle-password="current_password" tabindex="-1"
+                                        aria-label="Show current password">
+                                        <img src="<?php echo $assetBase; ?>assets/images/icons/password-hide.svg" alt=""
+                                            data-password-icon="current_password">
+                                    </button>
+                                </div>
+                                <p class="form-error" id="currentPasswordError" role="alert"></p>
+                            </div>
+                        </div>
 
-                <div class="admin-detail-grid">
-                    <div class="admin-detail-item admin-detail-item-full">
-                        <label class="admin-detail-label" for="current_password">Current Password</label>
-                        <input type="password" id="current_password" name="current_password" class="admin-search-input"
-                            required autocomplete="current-password">
-                    </div>
-                    <div class="admin-detail-item">
-                        <label class="admin-detail-label" for="new_password">New Password</label>
-                        <input type="password" id="new_password" name="new_password" class="admin-search-input" required
-                            minlength="8" maxlength="20" autocomplete="new-password">
-                    </div>
-                    <div class="admin-detail-item">
-                        <label class="admin-detail-label" for="confirm_password">Confirm New Password</label>
-                        <input type="password" id="confirm_password" name="confirm_password" class="admin-search-input"
-                            required minlength="8" maxlength="20" autocomplete="new-password">
-                    </div>
-                </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="field-label" for="new_password">New Password</label>
+                                <div class="password-wrapper">
+                                    <input type="password" id="new_password" name="new_password" class="form-control"
+                                        autocomplete="new-password" required minlength="8" maxlength="20">
+                                    <button type="button" class="password-toggle" data-toggle-password="new_password"
+                                        tabindex="-1" aria-label="Show new password">
+                                        <img src="<?php echo $assetBase; ?>assets/images/icons/password-hide.svg" alt=""
+                                            data-password-icon="new_password">
+                                    </button>
+                                </div>
+                                <p class="form-error" id="newPasswordError" role="alert"></p>
+                            </div>
 
-                <div style="margin-top: 16px; display: flex; justify-content: flex-end;">
-                    <button type="submit" class="btn btn-primary btn-sm">Change Password</button>
+                            <div class="form-group">
+                                <label class="field-label" for="confirm_password">Confirm New Password</label>
+                                <div class="password-wrapper">
+                                    <input type="password" id="confirm_password" name="confirm_password"
+                                        class="form-control" autocomplete="new-password" required minlength="8"
+                                        maxlength="20">
+                                    <button type="button" class="password-toggle"
+                                        data-toggle-password="confirm_password" tabindex="-1"
+                                        aria-label="Show confirm password">
+                                        <img src="<?php echo $assetBase; ?>assets/images/icons/password-hide.svg" alt=""
+                                            data-password-icon="confirm_password">
+                                    </button>
+                                </div>
+                                <p class="form-error" id="confirmPasswordError" role="alert"></p>
+                            </div>
+                        </div>
+
+                        <ul class="password-rules" id="passwordRules" aria-live="polite">
+                            <li class="password-rule" data-rule="length">
+                                <span class="password-rule-icon" aria-hidden="true"></span>
+                                <span>8–20 characters</span>
+                            </li>
+                            <li class="password-rule" data-rule="alphanumeric">
+                                <span class="password-rule-icon" aria-hidden="true"></span>
+                                <span>Letters and numbers only</span>
+                            </li>
+                            <li class="password-rule" data-rule="has-letter">
+                                <span class="password-rule-icon" aria-hidden="true"></span>
+                                <span>Contains at least one letter</span>
+                            </li>
+                            <li class="password-rule" data-rule="has-number">
+                                <span class="password-rule-icon" aria-hidden="true"></span>
+                                <span>Contains at least one number</span>
+                            </li>
+                        </ul>
+
+                        <div class="form-actions">
+                            <button type="reset" class="btn btn-outline btn-sm">Clear</button>
+                            <button type="submit" class="btn btn-primary btn-sm">Change Password</button>
+                        </div>
+                    </form>
                 </div>
-            </form>
+            </div>
         </div>
 
     </div>
 </div>
+
+<script>
+window.FITPAL_ADMIN_PROFILE = {
+    assetBase: '<?php echo htmlspecialchars($assetBase, ENT_QUOTES, 'UTF-8'); ?>'
+};
+</script>
+<script src="../assets/ui/js/profile.js" defer></script>
 
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>
 ```
@@ -47134,6 +48217,4971 @@ window.FITPAL_WALLET = {
 
 ---
 
+## File: `fitpal/restaurant/assets/css/header.css`
+
+**Status:** `FOUND`
+
+```css
+/**
+ * FitPal Restaurant Header Styles
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+.restaurant-header {
+    height: 70px;
+    min-height: 70px;
+    max-height: 70px;
+}
+
+.restaurant-header .header-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    height: 100%;
+}
+
+.restaurant-header .nav-link {
+    font-weight: 500;
+    color: var(--gray-600);
+    padding: var(--spacing-2) var(--spacing-3);
+    border-radius: var(--radius-base);
+    transition: all var(--transition-fast);
+    position: relative;
+    font-size: var(--font-size-sm);
+    text-decoration: none;
+}
+
+.restaurant-header .nav-link:hover {
+    color: var(--primary);
+    background-color: var(--gray-50);
+}
+
+.restaurant-header .nav-link.active {
+    color: var(--primary);
+    background-color: rgba(89, 193, 74, 0.1);
+}
+
+.restaurant-header .nav-link.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 20px;
+    height: 3px;
+    background-color: var(--primary);
+    border-radius: var(--radius-full);
+}
+
+.restaurant-header .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-2) var(--spacing-4);
+    border-radius: var(--radius-base);
+    font-weight: var(--font-weight-medium);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
+    text-align: center;
+    text-decoration: none;
+    transition: all var(--transition-fast);
+    border: 2px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.restaurant-header .btn-sm {
+    padding: var(--spacing-1) var(--spacing-3);
+    font-size: var(--font-size-xs);
+    min-height: 32px;
+}
+
+.restaurant-header .btn-primary {
+    background-color: var(--primary);
+    color: var(--white);
+    border-color: var(--primary);
+}
+
+.restaurant-header .btn-primary:hover,
+.restaurant-header .btn-primary:focus {
+    background-color: var(--primary-dark);
+    border-color: var(--primary-dark);
+    color: var(--white);
+}
+
+.restaurant-header .btn-outline {
+    background-color: transparent;
+    color: var(--text);
+    border-color: var(--gray-300);
+}
+
+.restaurant-header .btn-outline:hover,
+.restaurant-header .btn-outline:focus {
+    background-color: var(--gray-50);
+    color: var(--text);
+    border-color: var(--gray-400);
+}
+
+.restaurant-header .nav-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+}
+
+.restaurant-header .logout-btn {
+    font-size: var(--font-size-xs);
+    padding: var(--spacing-1) var(--spacing-3);
+    min-height: 32px;
+}
+
+.menu-toggle {
+    display: none;
+    flex-direction: column;
+    gap: 5px;
+    padding: var(--spacing-2);
+    border-radius: var(--radius-base);
+    background: none;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    z-index: 1001;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.menu-toggle:hover {
+    background: var(--gray-50);
+}
+
+.menu-icon {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 24px;
+}
+
+.menu-icon .bar {
+    display: block;
+    height: 2px;
+    width: 100%;
+    background: var(--text);
+    border-radius: var(--radius-full);
+    transition: transform 0.15s ease, opacity 0.15s ease;
+    transform-origin: center;
+}
+
+.menu-toggle.active .bar:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+}
+
+.menu-toggle.active .bar:nth-child(2) {
+    opacity: 0;
+    transform: scaleX(0);
+}
+
+.menu-toggle.active .bar:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+}
+
+.mobile-overlay {
+    position: fixed;
+    top: 70px;
+    left: 0;
+    width: 100%;
+    height: calc(100vh - 70px);
+    background: rgba(0, 0, 0, 0.3);
+    z-index: var(--z-modal-backdrop);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    pointer-events: none;
+    transform: translateZ(0);
+}
+
+.mobile-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+    will-change: opacity;
+}
+
+.mobile-nav {
+    position: fixed;
+    top: 70px;
+    right: 0;
+    width: 320px;
+    max-width: 85%;
+    height: calc(100vh - 70px);
+    background: var(--white);
+    z-index: var(--z-modal);
+    padding: var(--spacing-6) var(--spacing-4);
+    overflow-y: auto;
+    transform: translateX(100%) translateZ(0);
+    transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    backface-visibility: hidden;
+    contain: layout;
+}
+
+.mobile-nav::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -30px;
+    width: 30px;
+    height: 100%;
+    box-shadow: -30px 0 30px rgba(0, 0, 0, 0.08);
+    pointer-events: none;
+    transform: translateX(0);
+}
+
+.mobile-nav.open {
+    transform: translateX(0) translateZ(0);
+    will-change: transform;
+}
+
+.mobile-nav::-webkit-scrollbar {
+    display: none;
+}
+
+.mobile-nav {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.mobile-nav-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.mobile-nav-item {
+    margin: 0;
+    padding: 0;
+}
+
+.mobile-nav-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-3) var(--spacing-4);
+    color: var(--gray-700);
+    font-weight: 500;
+    font-size: var(--font-size-base);
+    border-radius: var(--radius-base);
+    transition: background 0.1s ease, color 0.1s ease;
+    text-decoration: none;
+    text-align: center;
+    width: 100%;
+}
+
+.mobile-nav-link:hover {
+    background: var(--gray-50);
+    color: var(--primary);
+}
+
+.mobile-nav-link.active {
+    color: var(--primary);
+    background: rgba(89, 193, 74, 0.1);
+}
+
+.mobile-nav-divider {
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--gray-200) 20%, var(--gray-200) 80%, transparent);
+    margin: var(--spacing-3) var(--spacing-2);
+}
+
+.mobile-user-greeting {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-3);
+    padding: var(--spacing-3) var(--spacing-4);
+    background: var(--gray-50);
+    border-radius: var(--radius-base);
+    width: 100%;
+}
+
+.mobile-user-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.mobile-user-avatar .user-initial-large {
+    color: var(--white);
+    font-weight: 700;
+    font-size: 20px;
+    text-transform: uppercase;
+}
+
+.mobile-user-avatar img {
+    width: 24px;
+    height: 24px;
+    filter: brightness(0) saturate(100%) invert(100%);
+}
+
+.mobile-user-name {
+    font-weight: 600;
+    font-size: var(--font-size-base);
+    color: var(--text);
+}
+
+.mobile-nav-link.mobile-login {
+    color: var(--primary);
+    font-weight: 600;
+    background-color: rgba(89, 193, 74, 0.08);
+    margin-top: var(--spacing-1);
+}
+
+.mobile-nav-link.mobile-login:hover {
+    background-color: rgba(89, 193, 74, 0.16);
+    color: var(--primary-dark);
+}
+
+.mobile-nav-link.mobile-logout {
+    color: var(--danger);
+    font-weight: 600;
+    background-color: rgba(220, 53, 69, 0.08);
+    margin-top: var(--spacing-1);
+}
+
+.mobile-nav-link.mobile-logout:hover {
+    background-color: rgba(220, 53, 69, 0.16);
+    color: var(--danger);
+}
+
+.user-profile-circle {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 16px;
+    flex-shrink: 0;
+    border: 2px solid var(--primary);
+    transition: all var(--transition-fast);
+    cursor: default;
+}
+
+.user-profile-circle:hover {
+    border-color: var(--primary-dark);
+    transform: scale(1.05);
+}
+
+.user-profile-circle .user-initial {
+    color: var(--white);
+    font-weight: 700;
+    font-size: 16px;
+    text-transform: uppercase;
+}
+
+.user-profile-circle .profile-icon {
+    width: 20px;
+    height: 20px;
+    filter: brightness(0) saturate(100%) invert(100%);
+}
+
+@media (max-width: 992px) {
+    .restaurant-header .header-nav {
+        display: none;
+    }
+
+    .menu-toggle {
+        display: flex;
+    }
+}
+
+@media (max-width: 768px) {
+    .restaurant-header {
+        height: 60px;
+        min-height: 60px;
+        max-height: 60px;
+    }
+
+    .restaurant-header .logo-text {
+        font-size: var(--font-size-base);
+    }
+
+    .restaurant-header .logo-image {
+        height: 32px;
+    }
+
+    .mobile-nav {
+        top: 60px;
+        height: calc(100vh - 60px);
+        width: 280px;
+        padding: var(--spacing-4) var(--spacing-3);
+    }
+
+    .mobile-overlay {
+        top: 60px;
+        height: calc(100vh - 60px);
+    }
+}
+
+@media (max-width: 576px) {
+    .mobile-user-avatar {
+        width: 38px;
+        height: 38px;
+    }
+
+    .mobile-user-avatar .user-initial-large {
+        font-size: 17px;
+    }
+
+    .mobile-user-name {
+        font-size: var(--font-size-sm);
+    }
+
+    .mobile-nav {
+        width: 100%;
+        max-width: 100%;
+        padding: var(--spacing-4) var(--spacing-3);
+    }
+
+    .mobile-nav-link {
+        padding: var(--spacing-3) var(--spacing-3);
+        font-size: var(--font-size-base);
+    }
+}
+```
+
+---
+
+## File: `fitpal/restaurant/assets/css/sign-in.css`
+
+**Status:** `FOUND`
+
+```css
+/**
+ * FitPal Restaurant Sign-In Styles
+ *
+ * @package FitPal
+ * @version 1.1 — Adds Owner/Branch tabs and branch selector.
+ */
+
+/* ============================================
+   CONTENT WRAPPER
+   ============================================ */
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+}
+
+.sign-in-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 16px;
+    background: linear-gradient(135deg, var(--gray-50) 0%, var(--white) 100%);
+    flex: 1;
+    min-height: calc(100vh - 70px);
+}
+
+.sign-in-page .container {
+    max-width: 440px;
+    margin: 0 auto;
+    padding: 0;
+    width: 100%;
+}
+
+.sign-in-card {
+    background: var(--white);
+    border-radius: var(--radius-xl);
+    padding: 32px 24px;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--gray-200);
+    margin: 16px 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.sign-in-header {
+    text-align: center;
+    margin-bottom: 24px;
+}
+
+.sign-in-header .heading-2 {
+    margin: 0 0 6px 0;
+    color: var(--text);
+}
+
+.sign-in-header .heading-2 span {
+    color: var(--primary);
+}
+
+.sign-in-header .text-muted {
+    color: var(--gray-500);
+    font-size: var(--font-size-base);
+    margin: 0;
+}
+
+/* ============================================
+   SIGN-IN TABS
+   ============================================ */
+
+.sign-in-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    background: var(--gray-100);
+    border-radius: var(--radius-base);
+    padding: 4px;
+    margin-bottom: 24px;
+}
+
+.sign-in-tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--gray-600);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sign-in-tab:hover {
+    color: var(--text);
+}
+
+.sign-in-tab.active {
+    background: var(--white);
+    color: var(--primary);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.sign-in-tab-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+    opacity: 0.6;
+}
+
+.sign-in-tab.active .sign-in-tab-icon {
+    opacity: 1;
+    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+/* ============================================
+   TAB PANELS
+   ============================================ */
+
+.sign-in-panel {
+    display: none;
+}
+
+.sign-in-panel.active {
+    display: block;
+    animation: signInFadeIn 0.2s ease;
+}
+
+@keyframes signInFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================
+   FORM
+   ============================================ */
+
+.sign-in-form .form-group {
+    margin-bottom: 20px;
+}
+
+.sign-in-form .form-label {
+    display: block;
+    font-weight: var(--font-weight-semibold);
+    color: var(--gray-700);
+    margin-bottom: 6px;
+    font-size: var(--font-size-sm);
+}
+
+.sign-in-form .form-control {
+    width: 100%;
+    padding: 14px 16px;
+    border: 2px solid var(--gray-300);
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-base);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    background-color: var(--white);
+    height: 54px;
+    box-sizing: border-box;
+    color: var(--text);
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.sign-in-form .form-control:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(89, 193, 74, 0.15);
+}
+
+.sign-in-form .form-control.error {
+    border-color: var(--danger);
+}
+
+.sign-in-form .form-control.error:focus {
+    box-shadow: 0 0 0 4px rgba(220, 53, 69, 0.15);
+}
+
+.sign-in-form .form-control::placeholder {
+    color: var(--gray-400);
+    font-size: var(--font-size-sm);
+}
+
+.sign-in-form .form-error {
+    color: var(--danger);
+    font-size: var(--font-size-sm);
+    margin-top: 6px;
+    display: none;
+    font-weight: var(--font-weight-medium);
+}
+
+/* ============================================
+   PASSWORD TOGGLE
+   ============================================ */
+
+.password-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.password-wrapper .form-control {
+    padding-right: 56px;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.5;
+    transition: opacity var(--transition-fast);
+    border-radius: var(--radius-sm);
+}
+
+.password-toggle:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.password-toggle img {
+    width: 24px;
+    height: 24px;
+}
+
+.password-toggle:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* ============================================
+   BRANCH SELECTOR
+   ============================================ */
+
+.branch-selector {
+    position: relative;
+}
+
+.branch-selector select {
+    width: 100%;
+    height: 54px;
+    padding: 0 40px 0 16px;
+    border: 2px solid var(--gray-300);
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-base);
+    font-family: inherit;
+    color: var(--text);
+    background-color: var(--white);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23788278' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    box-sizing: border-box;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.branch-selector select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(89, 193, 74, 0.15);
+}
+
+.branch-selector select:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background-color: var(--gray-100);
+}
+
+/* ============================================
+   ALERTS
+   ============================================ */
+
+.alert {
+    padding: 14px 16px;
+    border-radius: var(--radius-base);
+    margin-bottom: 20px;
+    border: 2px solid transparent;
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+}
+
+.alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+.alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+
+/* ============================================
+   BUTTON
+   ============================================ */
+
+.sign-in-form .btn {
+    margin-top: 4px;
+    padding: 16px 20px;
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-bold);
+    height: 56px;
+    width: 100%;
+    border-radius: var(--radius-base);
+    letter-spacing: 0.3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.sign-in-form .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.sign-in-form .btn:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* ============================================
+   FOOTER
+   ============================================ */
+
+.sign-in-footer {
+    margin-top: 24px;
+    text-align: center;
+}
+
+.sign-in-footer .text-muted {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    margin: 10px 0 0 0;
+    line-height: 1.6;
+}
+
+.sign-in-footer .text-muted a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: var(--font-weight-semibold);
+}
+
+.sign-in-footer .text-muted a:hover {
+    color: var(--primary-dark);
+    text-decoration: underline;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 374px) {
+    .sign-in-card {
+        padding: 24px 16px;
+        border-radius: var(--radius-lg);
+    }
+
+    .sign-in-header .heading-2 {
+        font-size: var(--font-size-2xl);
+    }
+
+    .sign-in-form .form-control {
+        height: 48px;
+        padding: 12px 14px;
+        font-size: var(--font-size-sm);
+    }
+
+    .branch-selector select {
+        height: 48px;
+        font-size: var(--font-size-sm);
+    }
+
+    .sign-in-form .btn {
+        height: 48px;
+        font-size: var(--font-size-sm);
+        padding: 12px 16px;
+    }
+
+    .password-toggle img {
+        width: 20px;
+        height: 20px;
+    }
+
+    .password-wrapper .form-control {
+        padding-right: 48px;
+    }
+}
+
+@media (min-width: 768px) {
+    .sign-in-card {
+        padding: 40px 36px;
+    }
+
+    .sign-in-header .heading-2 {
+        font-size: var(--font-size-3xl);
+    }
+
+    .sign-in-form .form-control {
+        height: 52px;
+    }
+
+    .branch-selector select {
+        height: 52px;
+    }
+
+    .sign-in-form .btn {
+        height: 52px;
+    }
+}
+
+/* ============================================
+   SCREEN READER ONLY
+   ============================================ */
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+```
+
+---
+
+## File: `fitpal/restaurant/assets/css/sign-up.css`
+
+**Status:** `FOUND`
+
+```css
+/**
+ * FitPal Restaurant Sign-Up Styles
+ *
+ * @package FitPal
+ * @version 1.1 — Adds permit upload grid.
+ */
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+}
+
+.register-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 16px;
+    background: linear-gradient(135deg, var(--gray-50) 0%, var(--white) 100%);
+    flex: 1;
+    min-height: calc(100vh - 70px);
+}
+
+.register-page .container {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 20px 16px;
+    width: 100%;
+}
+
+.register-card {
+    max-width: 700px;
+    width: 100%;
+    background: var(--white);
+    border-radius: var(--radius-xl);
+    padding: 32px 24px;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--gray-200);
+    margin: 16px 0;
+}
+
+/* Progress — two steps */
+.register-progress {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 30px;
+    padding: 0 20px;
+}
+
+.progress-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+    min-width: 0;
+}
+
+.progress-step .step-number {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-full);
+    background: var(--gray-200);
+    color: var(--gray-500);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: var(--font-weight-bold);
+    font-size: var(--font-size-sm);
+    transition: all var(--transition-base);
+    flex-shrink: 0;
+}
+
+.progress-step.active .step-number {
+    background: var(--primary);
+    color: var(--white);
+    box-shadow: 0 0 0 4px rgba(89, 193, 74, 0.2);
+}
+
+.progress-step.completed .step-number {
+    background: var(--primary);
+    color: var(--white);
+}
+
+.progress-step .step-label {
+    font-size: var(--font-size-xs);
+    color: var(--gray-400);
+    text-align: center;
+    font-weight: var(--font-weight-medium);
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.progress-step.active .step-label,
+.progress-step.completed .step-label {
+    color: var(--primary);
+}
+
+.progress-line {
+    flex: 1;
+    max-width: 120px;
+    height: 2px;
+    background: var(--gray-200);
+    margin: 0 4px;
+    position: relative;
+    top: -12px;
+    transition: background var(--transition-base);
+}
+
+.progress-line.completed {
+    background: var(--primary);
+}
+
+.register-header {
+    text-align: center;
+    margin-bottom: 28px;
+}
+
+.register-header .heading-2 {
+    margin: 0 0 4px 0;
+    color: var(--text);
+}
+
+.register-header .heading-2 span {
+    color: var(--primary);
+}
+
+.register-header .text-muted {
+    color: var(--gray-500);
+    font-size: var(--font-size-base);
+    margin: 0;
+}
+
+.register-step {
+    animation: restaurantStepFade 0.3s ease;
+}
+
+@keyframes restaurantStepFade {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.step-description {
+    margin-bottom: 20px;
+    color: var(--gray-600);
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+    padding: 12px 16px;
+    background: var(--gray-50);
+    border-radius: var(--radius-base);
+    border-left: 3px solid var(--primary);
+}
+
+.step-description p {
+    margin: 0;
+}
+
+.section-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 24px 0 16px 0;
+    color: var(--gray-500);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+
+.section-divider::before,
+.section-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--gray-200);
+}
+
+.register-form .form-group {
+    margin-bottom: 16px;
+    flex: 1;
+    min-width: 0;
+}
+
+.register-form .form-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 0;
+}
+
+.register-form .form-label {
+    display: block;
+    font-weight: var(--font-weight-semibold);
+    color: var(--gray-700);
+    margin-bottom: 4px;
+    font-size: var(--font-size-sm);
+    line-height: 1.4;
+}
+
+.register-form .form-control {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid var(--gray-300);
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-base);
+    font-family: inherit;
+    color: var(--text);
+    background-color: var(--white);
+    height: 48px;
+    box-sizing: border-box;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.register-form .form-control:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(89, 193, 74, 0.15);
+}
+
+.register-form .form-control.error {
+    border-color: var(--danger);
+}
+
+.register-form .form-control.error:focus {
+    box-shadow: 0 0 0 4px rgba(220, 53, 69, 0.15);
+}
+
+.register-form .form-control::placeholder {
+    color: var(--gray-400);
+    font-size: var(--font-size-sm);
+}
+
+.register-form .form-error {
+    color: var(--danger);
+    font-size: var(--font-size-sm);
+    margin-top: 4px;
+    display: none;
+    font-weight: var(--font-weight-medium);
+}
+
+.register-form .form-hint {
+    color: var(--gray-500);
+    font-size: var(--font-size-xs);
+    margin-top: 4px;
+    line-height: 1.4;
+}
+
+.text-danger {
+    color: var(--danger);
+}
+
+.text-muted {
+    color: var(--gray-500);
+}
+
+.register-form textarea.form-control {
+    height: auto;
+    min-height: 100px;
+    padding: 12px 16px;
+    line-height: 1.6;
+}
+
+.password-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.password-wrapper .form-control {
+    padding-right: 48px;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.5;
+    transition: opacity var(--transition-fast);
+    border-radius: var(--radius-sm);
+}
+
+.password-toggle:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.password-toggle img {
+    width: 20px;
+    height: 20px;
+    display: block;
+}
+
+.step-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+    flex-wrap: wrap;
+}
+
+.step-actions .btn {
+    padding: 12px 24px;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    border-radius: var(--radius-base);
+    min-width: 120px;
+    min-height: 46px;
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color var(--transition-fast),
+        border-color var(--transition-fast),
+        color var(--transition-fast),
+        transform 0.1s ease,
+        box-shadow var(--transition-fast);
+}
+
+.step-actions .btn:active {
+    transform: scale(0.98);
+}
+
+.step-actions .btn-outline.btn-prev {
+    background-color: var(--black);
+    color: var(--white);
+    border: 2px solid var(--black);
+}
+
+.step-actions .btn-outline.btn-prev:hover,
+.step-actions .btn-outline.btn-prev:focus {
+    background-color: var(--black);
+    color: var(--white);
+    border-color: var(--black);
+    opacity: 0.85;
+}
+
+.step-actions .btn-primary.btn-next,
+.step-actions .btn-primary#registerBtn {
+    background-color: var(--primary);
+    color: var(--white);
+    border: 2px solid var(--primary);
+}
+
+.step-actions .btn-primary.btn-next:hover,
+.step-actions .btn-primary.btn-next:focus,
+.step-actions .btn-primary#registerBtn:hover,
+.step-actions .btn-primary#registerBtn:focus {
+    background-color: var(--primary-dark);
+    border-color: var(--primary-dark);
+    color: var(--white);
+}
+
+.step-actions .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.alert {
+    padding: 12px 16px;
+    border-radius: var(--radius-base);
+    margin-bottom: 20px;
+    border: 2px solid transparent;
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+}
+
+.alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+.alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+
+/* Terms */
+.terms-group {
+    margin: 24px 0 0 0;
+    padding: 14px 16px;
+    background: rgba(89, 193, 74, 0.05);
+    border-radius: var(--radius-base);
+    border: 1px solid rgba(5, 10, 4, 0.05);
+}
+
+.terms-group.error {
+    background: rgba(220, 53, 69, 0.06);
+    border-color: var(--danger);
+}
+
+.terms-group.error .terms-label {
+    color: var(--danger);
+}
+
+.terms-group.error .custom-checkbox {
+    border-color: var(--danger);
+}
+
+.checkbox-wrapper {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    position: relative;
+}
+
+.checkbox-wrapper input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+    z-index: 2;
+    margin: 0;
+    top: 0;
+    left: 0;
+}
+
+.checkbox-wrapper .custom-checkbox {
+    display: inline-block;
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--gray-300);
+    border-radius: var(--radius-sm);
+    background: var(--white);
+    position: relative;
+    flex-shrink: 0;
+    cursor: pointer;
+    margin-top: 1px;
+    transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.checkbox-wrapper input[type="checkbox"]:checked+.custom-checkbox {
+    background: var(--primary);
+    border-color: var(--primary);
+}
+
+.checkbox-wrapper input[type="checkbox"]:checked+.custom-checkbox::after {
+    content: '';
+    position: absolute;
+    left: 6px;
+    top: 2px;
+    width: 6px;
+    height: 11px;
+    border: solid var(--white);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+    border-radius: 1px;
+}
+
+.checkbox-wrapper input[type="checkbox"]:focus-visible+.custom-checkbox {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.terms-label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--gray-700);
+    line-height: 1.6;
+    cursor: pointer;
+    flex: 1;
+}
+
+.terms-label a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: var(--font-weight-bold);
+}
+
+.terms-label a:hover {
+    color: var(--primary-dark);
+    text-decoration: underline;
+}
+
+.register-footer {
+    margin-top: 24px;
+    text-align: center;
+    padding-top: 20px;
+    border-top: 1px solid var(--gray-200);
+}
+
+.register-footer .text-muted {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    margin: 0;
+    line-height: 1.6;
+}
+
+.register-footer .text-muted a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: var(--font-weight-semibold);
+}
+
+.register-footer .text-muted a:hover {
+    color: var(--primary-dark);
+    text-decoration: underline;
+}
+
+/* Notifier */
+.notifier {
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 10, 4, 0.5);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: var(--z-modal-backdrop);
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+    padding: 20px;
+}
+
+.notifier.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.notifier-content {
+    background: var(--white);
+    padding: 40px 32px 32px;
+    border-radius: var(--radius-xl);
+    max-width: 400px;
+    width: 100%;
+    text-align: center;
+    box-shadow: var(--shadow-xl);
+    animation: restaurantModalFadeIn 0.3s ease;
+}
+
+@keyframes restaurantModalFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.notifier-icon {
+    margin: 0 auto 20px;
+    width: 72px;
+    height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(89, 193, 74, 0.1);
+    border-radius: var(--radius-full);
+}
+
+.notifier-icon img {
+    width: 36px;
+    height: 36px;
+    display: block;
+}
+
+.notifier-content .heading-5 {
+    margin: 0 0 8px 0;
+}
+
+.notifier-content p {
+    font-size: var(--font-size-base);
+    color: var(--gray-600);
+    margin: 0 0 28px 0;
+    line-height: 1.6;
+}
+
+.notifier-content .btn {
+    min-width: 120px;
+    padding: 14px 32px;
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    border-radius: var(--radius-base);
+    min-height: 50px;
+    cursor: pointer;
+    background-color: var(--primary);
+    color: var(--white);
+    border: 2px solid var(--primary);
+    transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.notifier-content .btn:hover {
+    background-color: var(--primary-dark);
+    border-color: var(--primary-dark);
+}
+
+/* ============================================
+   PERMIT UPLOAD GRID
+   ============================================ */
+
+.permit-dropzone-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.permit-slot {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    border: 2px dashed var(--gray-300);
+    border-radius: var(--radius-base);
+    background: var(--gray-50);
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.permit-slot:hover,
+.permit-slot:focus-visible {
+    border-color: var(--primary);
+    background: rgba(89, 193, 74, 0.05);
+    outline: none;
+}
+
+.permit-slot.has-file {
+    border-style: solid;
+    border-color: var(--primary);
+    background: var(--white);
+}
+
+.permit-slot.is-dragover {
+    border-color: var(--primary);
+    background: rgba(89, 193, 74, 0.08);
+}
+
+.permit-slot-inner {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.permit-hint {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 8px;
+    text-align: center;
+}
+
+.permit-hint-icon {
+    width: 24px;
+    height: 24px;
+    display: block;
+    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+    opacity: 0.7;
+}
+
+.permit-hint-text {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--gray-500);
+    line-height: 1.2;
+}
+
+.permit-preview {
+    position: absolute;
+    inset: 0;
+}
+
+.permit-preview[hidden] {
+    display: none;
+}
+
+.permit-preview-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.permit-remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(5, 10, 4, 0.72);
+    color: #ffffff;
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background-color 0.15s ease, transform 0.1s ease;
+    z-index: 2;
+}
+
+.permit-remove:hover,
+.permit-remove:focus-visible {
+    background: var(--danger);
+    outline: none;
+}
+
+.permit-remove:active {
+    transform: scale(0.92);
+}
+
+/* Responsive */
+
+@media (max-width: 768px) {
+    .register-page {
+        padding: 16px 12px;
+    }
+
+    .register-card {
+        padding: 24px 16px;
+        border-radius: var(--radius-lg);
+    }
+
+    .register-header .heading-2 {
+        font-size: var(--font-size-2xl);
+    }
+
+    .register-form .form-row {
+        flex-direction: column;
+        gap: 0;
+    }
+
+    .register-form .form-group {
+        margin-bottom: 14px;
+    }
+
+    .step-actions {
+        flex-direction: column;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    .step-actions .btn {
+        width: 100%;
+        min-width: 100%;
+    }
+
+    .register-progress {
+        padding: 0 4px;
+        gap: 4px;
+    }
+
+    .progress-step .step-number {
+        width: 30px;
+        height: 30px;
+        font-size: var(--font-size-xs);
+    }
+
+    .progress-step .step-label {
+        font-size: 10px;
+    }
+
+    .progress-line {
+        top: -10px;
+        margin: 0 2px;
+    }
+
+    .permit-dropzone-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 480px) {
+    .register-page {
+        padding: 10px 8px;
+    }
+
+    .register-card {
+        padding: 16px 10px;
+        border-radius: var(--radius-lg);
+    }
+
+    .register-header .heading-2 {
+        font-size: var(--font-size-2xl);
+    }
+
+    .register-header .text-muted {
+        font-size: var(--font-size-sm);
+    }
+
+    .register-form .form-control {
+        height: 40px;
+        font-size: var(--font-size-sm);
+        padding: 8px 10px;
+    }
+
+    .register-form .form-label {
+        font-size: var(--font-size-xs);
+    }
+
+    .step-description {
+        font-size: var(--font-size-xs);
+        padding: 8px 10px;
+    }
+
+    .step-description p {
+        font-size: var(--font-size-xs);
+    }
+
+    .step-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+        margin-top: 16px;
+    }
+
+    .step-actions .btn {
+        width: 100%;
+        min-width: unset;
+        padding: 10px 12px;
+        font-size: var(--font-size-sm);
+        min-height: 38px;
+    }
+
+    .register-progress {
+        padding: 0;
+        gap: 0;
+        margin-bottom: 18px;
+    }
+
+    .progress-step .step-number {
+        width: 24px;
+        height: 24px;
+        font-size: 10px;
+    }
+
+    .progress-step .step-label {
+        font-size: 9px;
+    }
+
+    .progress-line {
+        top: -8px;
+        margin: 0 1px;
+        min-width: 4px;
+    }
+
+    .permit-dropzone-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 375px) {
+    .register-card {
+        padding: 12px 8px;
+    }
+
+    .register-header .heading-2 {
+        font-size: var(--font-size-xl);
+    }
+
+    .register-form .form-control {
+        height: 36px;
+        font-size: var(--font-size-xs);
+        padding: 6px 8px;
+    }
+
+    .register-form .form-label {
+        font-size: 11px;
+    }
+
+    .register-form .form-error,
+    .register-form .form-hint {
+        font-size: 10px;
+    }
+
+    .step-actions .btn {
+        padding: 8px 10px;
+        font-size: var(--font-size-xs);
+        min-height: 34px;
+    }
+
+    .progress-step .step-label {
+        font-size: 8px;
+    }
+
+    .progress-step .step-number {
+        width: 22px;
+        height: 22px;
+        font-size: 9px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .register-step,
+    .notifier,
+    .notifier-content,
+    .step-actions .btn,
+    .password-toggle,
+    .terms-group,
+    .custom-checkbox,
+    .permit-slot,
+    .permit-remove {
+        transition: none !important;
+        animation: none !important;
+    }
+}
+```
+
+---
+
+## File: `fitpal/restaurant/assets/ui/js/header.js`
+
+**Status:** `FOUND`
+
+```javascript
+/**
+ * FitPal Restaurant Header JavaScript
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+(function () {
+    'use strict';
+
+    var menuToggle = document.getElementById('menuToggle');
+    var mobileNav = document.getElementById('mobileNav');
+    var mobileOverlay = document.getElementById('mobileOverlay');
+    var header = document.querySelector('.restaurant-header');
+
+    var isMenuOpen = false;
+
+    function toggleMenu(e) {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        isMenuOpen = !isMenuOpen;
+
+        mobileNav.classList.toggle('open', isMenuOpen);
+        menuToggle.classList.toggle('active', isMenuOpen);
+        menuToggle.setAttribute('aria-expanded', String(isMenuOpen));
+        if (mobileOverlay) {
+            mobileOverlay.classList.toggle('active', isMenuOpen);
+        }
+    }
+
+    function handleScroll() {
+        if (header) {
+            header.classList.toggle('header-scrolled', window.pageYOffset > 10);
+        }
+    }
+
+    if (menuToggle && mobileNav) {
+        menuToggle.addEventListener('click', toggleMenu);
+
+        if (mobileOverlay) {
+            mobileOverlay.addEventListener('click', function () {
+                if (isMenuOpen) toggleMenu();
+            });
+        }
+
+        mobileNav.addEventListener('click', function (e) {
+            if (e.target.closest('a') && isMenuOpen) {
+                toggleMenu();
+            }
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && isMenuOpen) {
+                toggleMenu();
+                menuToggle.focus();
+            }
+        });
+
+        var resizeTimer;
+        window.addEventListener('resize', function () {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(function () {
+                if (window.innerWidth > 992 && isMenuOpen) {
+                    toggleMenu();
+                }
+            }, 100);
+        });
+    }
+
+    if (header) {
+        var ticking = false;
+        window.addEventListener('scroll', function () {
+            if (!ticking) {
+                requestAnimationFrame(function () {
+                    handleScroll();
+                    ticking = false;
+                });
+                ticking = true;
+            }
+        }, { passive: true });
+    }
+
+    (function highlightActive() {
+        var currentPage = window.location.pathname.split('/').pop() || 'index.php';
+        var links = document.querySelectorAll('.nav-link, .mobile-nav-link');
+        for (var i = 0; i < links.length; i++) {
+            var link = links[i];
+            var href = link.getAttribute('href');
+            if (!href) continue;
+            var hrefFile = href.split('/').pop() || '';
+            if (
+                hrefFile === currentPage ||
+                (currentPage === 'index.php' && hrefFile === '') ||
+                (currentPage === '' && hrefFile === 'index.php')
+            ) {
+                link.classList.add('active');
+            }
+        }
+    })();
+})();
+```
+
+---
+
+## File: `fitpal/restaurant/assets/ui/js/sign-in.js`
+
+**Status:** `FOUND`
+
+```javascript
+/**
+ * FitPal Restaurant Sign-In JavaScript
+ *
+ * Handles Owner/Branch tab switching, password toggles, and
+ * client-side validation. Real validation is server-side.
+ *
+ * @package FitPal
+ * @version 1.1
+ */
+
+(function () {
+    'use strict';
+
+    document.addEventListener('DOMContentLoaded', function () {
+
+        // ============================================
+        // TAB SWITCHING
+        // ============================================
+        var tabs = document.querySelectorAll('.sign-in-tab');
+        var panels = {
+            owner: document.getElementById('panel-owner'),
+            branch: document.getElementById('panel-branch')
+        };
+
+        tabs.forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                var target = this.getAttribute('data-tab');
+                if (!panels[target]) return;
+
+                tabs.forEach(function (t) {
+                    var isActive = t === tab;
+                    t.classList.toggle('active', isActive);
+                    t.setAttribute('aria-selected', isActive ? 'true' : 'false');
+                });
+
+                Object.keys(panels).forEach(function (key) {
+                    panels[key].classList.toggle('active', key === target);
+                });
+
+                var firstField = panels[target].querySelector('input:not([type="hidden"]), select');
+                if (firstField) setTimeout(function () { firstField.focus(); }, 60);
+            });
+        });
+
+        // ============================================
+        // PASSWORD TOGGLES
+        // ============================================
+        function wirePasswordToggle(toggleId, inputId, iconId) {
+            var btn = document.getElementById(toggleId);
+            var input = document.getElementById(inputId);
+            var icon = document.getElementById(iconId);
+            if (!btn || !input || !icon) return;
+
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                var isPassword = input.type === 'password';
+                input.type = isPassword ? 'text' : 'password';
+                var iconFile = isPassword ? 'password-unhide.svg' : 'password-hide.svg';
+                icon.src = '../../shared/assets/images/icons/' + iconFile;
+                icon.alt = isPassword ? 'Hide password' : 'Show password';
+                this.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+            });
+        }
+
+        wirePasswordToggle('ownerTogglePassword', 'owner_password', 'ownerPasswordIcon');
+        wirePasswordToggle('branchTogglePassword', 'branch_password', 'branchPasswordIcon');
+
+        // ============================================
+        // HELPERS
+        // ============================================
+        function showFieldError(input, errorEl, message) {
+            if (input) input.classList.add('error');
+            if (errorEl) { errorEl.textContent = message; errorEl.style.display = 'block'; }
+        }
+        function clearFieldError(input, errorEl) {
+            if (input) input.classList.remove('error');
+            if (errorEl) { errorEl.textContent = ''; errorEl.style.display = 'none'; }
+        }
+
+        // ============================================
+        // OWNER FORM
+        // ============================================
+        var ownerForm = document.getElementById('signInFormOwner');
+        var ownerIdentifier = document.getElementById('owner_identifier');
+        var ownerPassword = document.getElementById('owner_password');
+        var ownerBtn = document.getElementById('ownerSignInBtn');
+        var ownerIdError = document.getElementById('ownerIdentifierError');
+        var ownerPwError = document.getElementById('ownerPasswordError');
+
+        if (ownerForm) {
+            ownerForm.addEventListener('submit', function (e) {
+                var ok = true;
+                clearFieldError(ownerIdentifier, ownerIdError);
+                clearFieldError(ownerPassword, ownerPwError);
+
+                if (!ownerIdentifier.value.trim()) {
+                    showFieldError(ownerIdentifier, ownerIdError, 'Please enter your email or username.');
+                    ok = false;
+                }
+                if (!ownerPassword.value) {
+                    showFieldError(ownerPassword, ownerPwError, 'Please enter your password.');
+                    ok = false;
+                }
+                if (!ok) { e.preventDefault(); return; }
+
+                ownerBtn.disabled = true;
+                ownerBtn.textContent = 'Signing in...';
+            });
+
+            ownerIdentifier.addEventListener('input', function () {
+                if (this.value.trim()) clearFieldError(this, ownerIdError);
+            });
+            ownerPassword.addEventListener('input', function () {
+                if (this.value) clearFieldError(this, ownerPwError);
+            });
+        }
+
+        // ============================================
+        // BRANCH FORM
+        // ============================================
+        var branchForm = document.getElementById('signInFormBranch');
+        var branchCode = document.getElementById('branch_code');
+        var branchIdentifier = document.getElementById('branch_identifier');
+        var branchPassword = document.getElementById('branch_password');
+        var branchBtn = document.getElementById('branchSignInBtn');
+        var branchCodeError = document.getElementById('branchCodeError');
+        var branchIdError = document.getElementById('branchIdentifierError');
+        var branchPwError = document.getElementById('branchPasswordError');
+
+        if (branchForm) {
+            branchForm.addEventListener('submit', function (e) {
+                var ok = true;
+                clearFieldError(branchCode, branchCodeError);
+                clearFieldError(branchIdentifier, branchIdError);
+                clearFieldError(branchPassword, branchPwError);
+
+                if (!branchCode.value) {
+                    showFieldError(branchCode, branchCodeError, 'Please select a branch.');
+                    ok = false;
+                }
+                if (!branchIdentifier.value.trim()) {
+                    showFieldError(branchIdentifier, branchIdError, 'Please enter your email or username.');
+                    ok = false;
+                }
+                if (!branchPassword.value) {
+                    showFieldError(branchPassword, branchPwError, 'Please enter your password.');
+                    ok = false;
+                }
+                if (!ok) { e.preventDefault(); return; }
+
+                branchBtn.disabled = true;
+                branchBtn.textContent = 'Signing in...';
+            });
+
+            branchCode.addEventListener('change', function () {
+                if (this.value) clearFieldError(this, branchCodeError);
+            });
+            branchIdentifier.addEventListener('input', function () {
+                if (this.value.trim()) clearFieldError(this, branchIdError);
+            });
+            branchPassword.addEventListener('input', function () {
+                if (this.value) clearFieldError(this, branchPwError);
+            });
+        }
+    });
+})();
+```
+
+---
+
+## File: `fitpal/restaurant/assets/ui/js/sign-up.js`
+
+**Status:** `FOUND`
+
+```javascript
+/**
+ * FitPal Restaurant Registration JavaScript
+ *
+ * Two-step form with name/email filtering, password feedback,
+ * permit upload grid (1-5 photos), and fetch submission.
+ *
+ * @package FitPal
+ * @version 1.1 — Adds permit upload grid.
+ */
+
+(function () {
+    'use strict';
+
+    document.addEventListener('DOMContentLoaded', function () {
+
+        var form = document.getElementById('registerForm');
+        if (!form) return;
+
+        var steps = document.querySelectorAll('.register-step');
+        var progressSteps = document.querySelectorAll('.progress-step');
+        var progressLines = document.querySelectorAll('.progress-line');
+        var stepSubtitle = document.getElementById('stepSubtitle');
+        var currentStepInput = document.getElementById('currentStep');
+        var registerError = document.getElementById('registerError');
+        var errorMessage = document.getElementById('errorMessage');
+
+        var nextButtons = document.querySelectorAll('.btn-next');
+        var prevButtons = document.querySelectorAll('.btn-prev');
+
+        // Step 1 — Account holder
+        var firstName = document.getElementById('first_name');
+        var middleName = document.getElementById('middle_name');
+        var lastName = document.getElementById('last_name');
+        var email = document.getElementById('email');
+        var contactNumber = document.getElementById('contact_number');
+        var username = document.getElementById('username');
+        var password = document.getElementById('password');
+        var confirmPassword = document.getElementById('confirm_password');
+
+        // Step 2 — Business
+        var businessName = document.getElementById('business_name');
+        var cuisineType = document.getElementById('cuisine_type');
+        var branchName = document.getElementById('branch_name');
+        var block = document.getElementById('block');
+        var barangay = document.getElementById('barangay');
+        var city = document.getElementById('city');
+        var province = document.getElementById('province');
+        var region = document.getElementById('region');
+        var postalCode = document.getElementById('postal_code');
+
+        var termsCheckbox = document.getElementById('terms');
+        var termsGroup = document.getElementById('termsGroup');
+        var termsError = document.getElementById('termsError');
+        var registerBtn = document.getElementById('registerBtn');
+
+        // Errors
+        var firstNameError = document.getElementById('firstNameError');
+        var lastNameError = document.getElementById('lastNameError');
+        var emailError = document.getElementById('emailError');
+        var contactError = document.getElementById('contactError');
+        var usernameError = document.getElementById('usernameError');
+        var passwordError = document.getElementById('passwordError');
+        var confirmError = document.getElementById('confirmError');
+        var businessNameError = document.getElementById('businessNameError');
+        var cuisineTypeError = document.getElementById('cuisineTypeError');
+        var branchNameError = document.getElementById('branchNameError');
+        var blockError = document.getElementById('blockError');
+        var cityError = document.getElementById('cityError');
+        var postalError = document.getElementById('postalError');
+        var permitsError = document.getElementById('permitsError');
+
+        var stepTitles = [
+            'Step 1 of 2 — Account Holder',
+            'Step 2 of 2 — Business Details'
+        ];
+
+        var currentStep = 1;
+        var totalSteps = 2;
+        var isSubmitting = false;
+
+        var NAME_PATTERN = /^[A-Za-z\s\-']+$/;
+
+        /* ============================================
+           HELPERS
+           ============================================ */
+
+        function isValidPhilippineMobile(number) {
+            var cleaned = String(number).replace(/\s/g, '');
+            if (!/^09\d{9}$/.test(cleaned)) {
+                return { valid: false, message: 'Enter a valid PH mobile number (11 digits, starting with 09).' };
+            }
+            return { valid: true, message: '' };
+        }
+
+        function isValidPassword(pw) {
+            if (pw.length < 8) return { valid: false, message: 'Password must be at least 8 characters.' };
+            if (pw.length > 20) return { valid: false, message: 'Password must be no more than 20 characters.' };
+            if (!/^[A-Za-z0-9]+$/.test(pw)) {
+                return { valid: false, message: 'Password can only contain letters and numbers.' };
+            }
+            if (!/[0-9]/.test(pw)) return { valid: false, message: 'Password must contain at least one number.' };
+            if (!/[A-Za-z]/.test(pw)) return { valid: false, message: 'Password must contain at least one letter.' };
+            return { valid: true, message: '' };
+        }
+
+        function showFieldError(input, errorEl, message) {
+            if (input) input.classList.add('error');
+            if (errorEl) { errorEl.textContent = message; errorEl.style.display = 'block'; }
+        }
+
+        function clearFieldError(input, errorEl) {
+            if (input) input.classList.remove('error');
+            if (errorEl) { errorEl.textContent = ''; errorEl.style.display = 'none'; }
+        }
+
+        function showBanner(message) {
+            if (registerError && errorMessage) {
+                errorMessage.textContent = message;
+                registerError.style.display = 'block';
+            }
+        }
+
+        function hideBanner() {
+            if (registerError) registerError.style.display = 'none';
+        }
+
+        function clearStepErrors(step) {
+            var stepEl = document.getElementById('step' + step);
+            if (!stepEl) return;
+
+            stepEl.querySelectorAll('.form-error').forEach(function (el) {
+                el.textContent = '';
+                el.style.display = 'none';
+            });
+            stepEl.querySelectorAll('.form-control').forEach(function (el) {
+                el.classList.remove('error');
+            });
+
+            if (step === 2 && termsGroup) {
+                termsGroup.classList.remove('error');
+                if (termsError) {
+                    termsError.textContent = '';
+                    termsError.style.display = 'none';
+                }
+            }
+        }
+
+        function safeFocus(el) {
+            if (el && typeof el.focus === 'function') {
+                setTimeout(function () { el.focus(); }, 80);
+            }
+        }
+
+        /* ============================================
+           INPUT FILTERS
+           ============================================ */
+
+        function setupNameInput(input, errorEl) {
+            if (!input) return;
+            input.addEventListener('input', function () {
+                var start = this.selectionStart;
+                var filtered = this.value.replace(/[^A-Za-z\s\-']/g, '');
+                var capitalized = filtered.replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+
+                if (this.value !== capitalized) {
+                    this.value = capitalized;
+                    var newStart = Math.min(start, this.value.length);
+                    this.setSelectionRange(newStart, newStart);
+                }
+                if (errorEl) clearFieldError(this, errorEl);
+            });
+
+            input.addEventListener('blur', function () {
+                if (this.value.length > 0) {
+                    var capitalized = this.value.replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+                    if (this.value !== capitalized) this.value = capitalized;
+                }
+            });
+        }
+
+        function setupEmailInput(input) {
+            if (!input) return;
+            input.addEventListener('input', function () {
+                var start = this.selectionStart;
+                var lower = this.value.toLowerCase();
+                if (this.value !== lower) {
+                    this.value = lower;
+                    var newStart = Math.min(start, this.value.length);
+                    this.setSelectionRange(newStart, newStart);
+                }
+                clearFieldError(this, emailError);
+            });
+        }
+
+        function setupDigitsOnly(input, errorEl) {
+            if (!input) return;
+            input.addEventListener('input', function () {
+                this.value = this.value.replace(/[^0-9\s]/g, '');
+                if (errorEl) clearFieldError(this, errorEl);
+            });
+        }
+
+        function setupAlphanumUnderscore(input) {
+            if (!input) return;
+            input.addEventListener('input', function () {
+                this.value = this.value.replace(/[^A-Za-z0-9_]/g, '');
+                clearFieldError(this, usernameError);
+            });
+        }
+
+        function setupAlphanumOnly(input) {
+            if (!input) return;
+            input.addEventListener('input', function () {
+                this.value = this.value.replace(/[^A-Za-z0-9]/g, '');
+            });
+        }
+
+        function setupPostal(input) {
+            if (!input) return;
+            input.addEventListener('input', function () {
+                this.value = this.value.replace(/[^0-9]/g, '');
+                clearFieldError(this, postalError);
+            });
+        }
+
+        setupNameInput(firstName, firstNameError);
+        setupNameInput(middleName, null);
+        setupNameInput(lastName, lastNameError);
+
+        setupNameInput(businessName, businessNameError);
+        setupNameInput(branchName, branchNameError);
+
+        setupNameInput(block, blockError);
+        setupNameInput(barangay, null);
+        setupNameInput(city, cityError);
+        setupNameInput(province, null);
+        setupNameInput(region, null);
+
+        setupEmailInput(email);
+        setupDigitsOnly(contactNumber, contactError);
+        setupAlphanumUnderscore(username);
+        setupAlphanumOnly(password);
+        setupAlphanumOnly(confirmPassword);
+        setupPostal(postalCode);
+
+        /* ============================================
+           PASSWORD TOGGLES
+           ============================================ */
+
+        function setupPasswordToggle(toggleId, inputId, iconId) {
+            var btn = document.getElementById(toggleId);
+            var input = document.getElementById(inputId);
+            var icon = document.getElementById(iconId);
+            if (!btn || !input || !icon) return;
+
+            btn.addEventListener('click', function () {
+                var isPassword = input.type === 'password';
+                input.type = isPassword ? 'text' : 'password';
+                var iconFile = isPassword ? 'password-unhide.svg' : 'password-hide.svg';
+                icon.src = '../../shared/assets/images/icons/' + iconFile;
+                icon.alt = isPassword ? 'Hide password' : 'Show password';
+                this.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+            });
+        }
+
+        setupPasswordToggle('togglePassword', 'password', 'passwordIcon');
+        setupPasswordToggle('toggleConfirmPassword', 'confirm_password', 'confirmPasswordIcon');
+
+        /* ============================================
+           PERMIT UPLOAD GRID
+           ============================================ */
+
+        var MAX_PERMITS = 5;
+        var MAX_PERMIT_BYTES = 5 * 1024 * 1024;
+        var ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+        var permitSlots = document.querySelectorAll('.permit-slot');
+        var fileObjects = [];
+
+        function indexOfSlot(slot) {
+            for (var i = 0; i < fileObjects.length; i++) {
+                if (fileObjects[i].slot === slot) return i;
+            }
+            return -1;
+        }
+
+        function attachFile(slot, file) {
+            if (ALLOWED_TYPES.indexOf(file.type) === -1) {
+                if (permitsError) {
+                    permitsError.textContent = 'Use JPG, PNG, or WEBP.';
+                    permitsError.style.display = 'block';
+                }
+                return;
+            }
+            if (file.size > MAX_PERMIT_BYTES) {
+                if (permitsError) {
+                    permitsError.textContent = 'Each permit must be under 5 MB.';
+                    permitsError.style.display = 'block';
+                }
+                return;
+            }
+
+            var prev = indexOfSlot(slot);
+            if (prev >= 0) {
+                URL.revokeObjectURL(fileObjects[prev].url);
+                fileObjects.splice(prev, 1);
+            }
+
+            var url = URL.createObjectURL(file);
+            var input = slot.querySelector('.permit-input');
+
+            try {
+                var dt = new DataTransfer();
+                dt.items.add(file);
+                input.files = dt.files;
+            } catch (err) {
+                // Some browsers can't set input.files programmatically.
+            }
+
+            var preview = slot.querySelector('.permit-preview');
+            var previewImg = slot.querySelector('.permit-preview-img');
+            var hint = slot.querySelector('.permit-hint');
+
+            previewImg.src = url;
+            preview.hidden = false;
+            preview.style.display = 'block';
+            hint.hidden = true;
+            slot.classList.add('has-file');
+
+            fileObjects.push({ slot: slot, file: file, url: url });
+
+            if (permitsError) {
+                permitsError.textContent = '';
+                permitsError.style.display = 'none';
+            }
+        }
+
+        function clearSlot(slot) {
+            var idx = indexOfSlot(slot);
+            if (idx >= 0) {
+                URL.revokeObjectURL(fileObjects[idx].url);
+                fileObjects.splice(idx, 1);
+            }
+
+            var input = slot.querySelector('.permit-input');
+            var preview = slot.querySelector('.permit-preview');
+            var previewImg = slot.querySelector('.permit-preview-img');
+            var hint = slot.querySelector('.permit-hint');
+
+            input.value = '';
+            previewImg.removeAttribute('src');
+            preview.hidden = true;
+            preview.style.display = 'none';
+            hint.hidden = false;
+            slot.classList.remove('has-file');
+        }
+
+        permitSlots.forEach(function (slot) {
+            var input = slot.querySelector('.permit-input');
+            var removeBtn = slot.querySelector('.permit-remove');
+
+            slot.setAttribute('tabindex', '0');
+            slot.setAttribute('role', 'button');
+
+            slot.addEventListener('click', function (e) {
+                if (e.target.closest('.permit-remove')) return;
+                input.click();
+            });
+
+            slot.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    input.click();
+                }
+            });
+
+            input.addEventListener('change', function () {
+                if (this.files && this.files[0]) {
+                    attachFile(slot, this.files[0]);
+                }
+            });
+
+            ['dragenter', 'dragover'].forEach(function (evt) {
+                slot.addEventListener(evt, function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    slot.classList.add('is-dragover');
+                });
+            });
+
+            ['dragleave', 'drop'].forEach(function (evt) {
+                slot.addEventListener(evt, function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    slot.classList.remove('is-dragover');
+                });
+            });
+
+            slot.addEventListener('drop', function (e) {
+                var dt = e.dataTransfer;
+                if (!dt || !dt.files || !dt.files[0]) return;
+                attachFile(slot, dt.files[0]);
+            });
+
+            if (removeBtn) {
+                removeBtn.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    clearSlot(slot);
+                });
+            }
+        });
+
+        /* ============================================
+           STEP VALIDATION
+           ============================================ */
+
+        function validateStep1() {
+            var valid = true;
+            clearStepErrors(1);
+
+            var fnVal = firstName ? firstName.value.trim() : '';
+            if (fnVal.length < 2) {
+                showFieldError(firstName, firstNameError, 'First name must be at least 2 characters.');
+                valid = false;
+            } else if (!NAME_PATTERN.test(fnVal)) {
+                showFieldError(firstName, firstNameError, 'First name contains invalid characters.');
+                valid = false;
+            }
+
+            var lnVal = lastName ? lastName.value.trim() : '';
+            if (lnVal.length < 2) {
+                showFieldError(lastName, lastNameError, 'Last name must be at least 2 characters.');
+                valid = false;
+            } else if (!NAME_PATTERN.test(lnVal)) {
+                showFieldError(lastName, lastNameError, 'Last name contains invalid characters.');
+                valid = false;
+            }
+
+            var emailVal = email ? email.value.trim() : '';
+            if (!emailVal) {
+                showFieldError(email, emailError, 'Please enter your email address.');
+                valid = false;
+            } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) {
+                showFieldError(email, emailError, 'Please enter a valid email address.');
+                valid = false;
+            }
+
+            var contactVal = contactNumber ? contactNumber.value.trim() : '';
+            if (!contactVal) {
+                showFieldError(contactNumber, contactError, 'Please enter your contact number.');
+                valid = false;
+            } else {
+                var ph = isValidPhilippineMobile(contactVal);
+                if (!ph.valid) {
+                    showFieldError(contactNumber, contactError, ph.message);
+                    valid = false;
+                }
+            }
+
+            var unVal = username ? username.value.trim() : '';
+            if (!unVal) {
+                showFieldError(username, usernameError, 'Please choose a username.');
+                valid = false;
+            } else if (unVal.length < 3) {
+                showFieldError(username, usernameError, 'Username must be at least 3 characters.');
+                valid = false;
+            } else if (unVal.length > 20) {
+                showFieldError(username, usernameError, 'Username must be no more than 20 characters.');
+                valid = false;
+            } else if (!/^[A-Za-z0-9_]+$/.test(unVal)) {
+                showFieldError(username, usernameError, 'Only letters, numbers, and underscores.');
+                valid = false;
+            }
+
+            var pwVal = password ? password.value : '';
+            if (!pwVal) {
+                showFieldError(password, passwordError, 'Please create a password.');
+                valid = false;
+            } else {
+                var pwCheck = isValidPassword(pwVal);
+                if (!pwCheck.valid) {
+                    showFieldError(password, passwordError, pwCheck.message);
+                    valid = false;
+                }
+            }
+
+            var cpVal = confirmPassword ? confirmPassword.value : '';
+            if (!cpVal) {
+                showFieldError(confirmPassword, confirmError, 'Please confirm your password.');
+                valid = false;
+            } else if (pwVal !== cpVal) {
+                showFieldError(confirmPassword, confirmError, 'Passwords do not match.');
+                valid = false;
+            }
+
+            return valid;
+        }
+
+        function validateStep2() {
+            var valid = true;
+            clearStepErrors(2);
+
+            var bnVal = businessName ? businessName.value.trim() : '';
+            if (bnVal.length < 2) {
+                showFieldError(businessName, businessNameError, 'Business name is required.');
+                valid = false;
+            }
+
+            var ctVal = cuisineType ? cuisineType.value.trim() : '';
+            if (ctVal.length < 2) {
+                showFieldError(cuisineType, cuisineTypeError, 'Cuisine type is required.');
+                valid = false;
+            }
+
+            var brVal = branchName ? branchName.value.trim() : '';
+            if (brVal.length < 2) {
+                showFieldError(branchName, branchNameError, 'Branch name is required.');
+                valid = false;
+            }
+
+            var blockVal = block ? block.value.trim() : '';
+            if (!blockVal) {
+                showFieldError(block, blockError, 'Block / Street / Unit is required.');
+                valid = false;
+            }
+
+            var cityVal = city ? city.value.trim() : '';
+            if (!cityVal) {
+                showFieldError(city, cityError, 'City or municipality is required.');
+                valid = false;
+            }
+
+            if (fileObjects.length === 0) {
+                if (permitsError) {
+                    permitsError.textContent = 'Please upload at least one permit photo.';
+                    permitsError.style.display = 'block';
+                }
+                valid = false;
+            } else if (permitsError) {
+                permitsError.textContent = '';
+                permitsError.style.display = 'none';
+            }
+
+            if (!termsCheckbox || !termsCheckbox.checked) {
+                if (termsError) {
+                    termsError.textContent = 'You must agree to the Terms and Privacy Policy.';
+                    termsError.style.display = 'block';
+                }
+                if (termsGroup) termsGroup.classList.add('error');
+                valid = false;
+            }
+
+            return valid;
+        }
+
+        function validateStep(step) {
+            switch (step) {
+                case 1: return validateStep1();
+                case 2: return validateStep2();
+                default: return true;
+            }
+        }
+
+        /* ============================================
+           STEP NAVIGATION
+           ============================================ */
+
+        function goToStep(step) {
+            if (step > currentStep && !validateStep(currentStep)) {
+                return;
+            }
+
+            currentStep = step;
+            if (currentStepInput) currentStepInput.value = String(step);
+
+            steps.forEach(function (el, i) {
+                el.style.display = (i + 1 === step) ? 'block' : 'none';
+            });
+
+            progressSteps.forEach(function (el, i) {
+                var n = i + 1;
+                el.classList.toggle('active', n === step);
+                el.classList.toggle('completed', n < step);
+            });
+
+            progressLines.forEach(function (el, i) {
+                el.classList.toggle('completed', i + 1 < step);
+            });
+
+            if (stepSubtitle) {
+                stepSubtitle.textContent = stepTitles[step - 1] || ('Step ' + step + ' of ' + totalSteps);
+            }
+
+            hideBanner();
+
+            var stepEl = document.getElementById('step' + step);
+            if (stepEl) {
+                var firstInput = stepEl.querySelector(
+                    'input:not([type="hidden"]):not([type="file"]), select, textarea'
+                );
+                safeFocus(firstInput);
+            }
+        }
+
+        nextButtons.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var next = parseInt(this.getAttribute('data-next'), 10);
+                if (!isNaN(next) && next <= totalSteps) goToStep(next);
+            });
+        });
+
+        prevButtons.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var prev = parseInt(this.getAttribute('data-prev'), 10);
+                if (!isNaN(prev) && prev >= 1) goToStep(prev);
+            });
+        });
+
+        /* ============================================
+           REAL-TIME PASSWORD FEEDBACK
+           ============================================ */
+
+        if (password) {
+            password.addEventListener('input', function () {
+                var val = this.value;
+                if (val.length === 0) { clearFieldError(this, passwordError); return; }
+                var check = isValidPassword(val);
+                if (check.valid) {
+                    clearFieldError(this, passwordError);
+                } else {
+                    showFieldError(this, passwordError, check.message);
+                }
+
+                if (confirmPassword && confirmPassword.value) {
+                    if (confirmPassword.value === val) {
+                        clearFieldError(confirmPassword, confirmError);
+                    } else {
+                        showFieldError(confirmPassword, confirmError, 'Passwords do not match.');
+                    }
+                }
+            });
+        }
+
+        if (confirmPassword) {
+            confirmPassword.addEventListener('input', function () {
+                var val = this.value;
+                if (!val) { clearFieldError(this, confirmError); return; }
+                if (val === (password ? password.value : '')) {
+                    clearFieldError(this, confirmError);
+                } else {
+                    showFieldError(confirmPassword, confirmError, 'Passwords do not match.');
+                }
+            });
+        }
+
+        /* ============================================
+           BLUR VALIDATION
+           ============================================ */
+
+        if (contactNumber) {
+            contactNumber.addEventListener('blur', function () {
+                var val = this.value.trim();
+                if (!val) return;
+                var ph = isValidPhilippineMobile(val);
+                if (ph.valid) clearFieldError(this, contactError);
+                else showFieldError(this, contactError, ph.message);
+            });
+        }
+
+        if (email) {
+            email.addEventListener('blur', function () {
+                var val = this.value.trim();
+                if (!val) return;
+                if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+                    clearFieldError(this, emailError);
+                } else {
+                    showFieldError(this, emailError, 'Please enter a valid email address.');
+                }
+            });
+        }
+
+        if (username) {
+            username.addEventListener('blur', function () {
+                var val = this.value.trim();
+                if (!val) return;
+                if (val.length < 3) {
+                    showFieldError(this, usernameError, 'Username must be at least 3 characters.');
+                } else if (val.length > 20) {
+                    showFieldError(this, usernameError, 'Username must be no more than 20 characters.');
+                } else if (!/^[A-Za-z0-9_]+$/.test(val)) {
+                    showFieldError(this, usernameError, 'Only letters, numbers, and underscores.');
+                } else {
+                    clearFieldError(this, usernameError);
+                }
+            });
+        }
+
+        if (termsCheckbox) {
+            termsCheckbox.addEventListener('change', function () {
+                if (this.checked) {
+                    if (termsError) { termsError.textContent = ''; termsError.style.display = 'none'; }
+                    if (termsGroup) termsGroup.classList.remove('error');
+                }
+            });
+        }
+
+        /* ============================================
+           SERVER FIELD MAP
+           ============================================ */
+
+        var SERVER_FIELD_MAP = {
+            first_name: { input: firstName, errorEl: firstNameError, step: 1 },
+            last_name: { input: lastName, errorEl: lastNameError, step: 1 },
+            email: { input: email, errorEl: emailError, step: 1 },
+            contact_number: { input: contactNumber, errorEl: contactError, step: 1 },
+            username: { input: username, errorEl: usernameError, step: 1 },
+            password: { input: password, errorEl: passwordError, step: 1 },
+            confirm_password: { input: confirmPassword, errorEl: confirmError, step: 1 },
+
+            business_name: { input: businessName, errorEl: businessNameError, step: 2 },
+            cuisine_type: { input: cuisineType, errorEl: cuisineTypeError, step: 2 },
+            branch_name: { input: branchName, errorEl: branchNameError, step: 2 },
+            block: { input: block, errorEl: blockError, step: 2 },
+            city: { input: city, errorEl: cityError, step: 2 },
+            postal_code: { input: postalCode, errorEl: postalError, step: 2 },
+            permits: { input: null, errorEl: permitsError, step: 2 },
+            terms: { input: null, errorEl: null, step: 2 }
+        };
+
+        /* ============================================
+           FORM SUBMISSION
+           ============================================ */
+
+        if (form) {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                if (isSubmitting) return;
+
+                if (currentStep < totalSteps) {
+                    goToStep(currentStep + 1);
+                    return;
+                }
+
+                if (!validateStep1()) { goToStep(1); return; }
+                if (!validateStep2()) { goToStep(2); return; }
+
+                isSubmitting = true;
+                if (registerBtn) {
+                    registerBtn.disabled = true;
+                    registerBtn.textContent = 'Submitting…';
+                }
+
+                fetch(form.action, {
+                    method: 'POST',
+                    body: new FormData(form),
+                    credentials: 'same-origin'
+                })
+                    .then(function (res) {
+                        return res.json().catch(function () {
+                            throw new Error('Unexpected server response.');
+                        });
+                    })
+                    .then(function (data) {
+                        if (data && data.status === 'success') {
+                            showNotification(
+                                'Registration Submitted',
+                                data.message || 'Your restaurant application has been submitted. Please sign in.',
+                                function () {
+                                    window.location.href = data.redirect || 'sign-in.php';
+                                }
+                            );
+                            return;
+                        }
+
+                        isSubmitting = false;
+                        if (registerBtn) {
+                            registerBtn.disabled = false;
+                            registerBtn.textContent = 'Submit Application';
+                        }
+
+                        if (data && data.field === 'terms') {
+                            if (termsError) {
+                                termsError.textContent = data.message;
+                                termsError.style.display = 'block';
+                            }
+                            if (termsGroup) termsGroup.classList.add('error');
+                            goToStep(2);
+                            return;
+                        }
+
+                        var target = (data && data.field && SERVER_FIELD_MAP[data.field])
+                            ? SERVER_FIELD_MAP[data.field]
+                            : null;
+
+                        if (target && target.errorEl) {
+                            if (target.input) {
+                                showFieldError(target.input, target.errorEl, data.message);
+                            } else {
+                                target.errorEl.textContent = data.message;
+                                target.errorEl.style.display = 'block';
+                            }
+                            if (target.step < currentStep) {
+                                goToStep(target.step);
+                            }
+                            return;
+                        }
+
+                        showBanner((data && data.message) || 'Could not create your account. Please try again.');
+                    })
+                    .catch(function () {
+                        isSubmitting = false;
+                        if (registerBtn) {
+                            registerBtn.disabled = false;
+                            registerBtn.textContent = 'Submit Application';
+                        }
+                        showBanner('An unexpected error occurred. Please try again.');
+                    });
+            });
+        }
+
+        /* ============================================
+           NOTIFIER MODAL
+           ============================================ */
+
+        var notifierModal = document.getElementById('notifierModal');
+        var notifierTitle = document.getElementById('notifierTitle');
+        var notifierMessage = document.getElementById('notifierMessage');
+        var notifierCloseBtn = document.getElementById('notifierCloseBtn');
+
+        function showNotification(title, message, callback) {
+            if (notifierTitle) notifierTitle.textContent = title || 'Success';
+            if (notifierMessage) notifierMessage.textContent = message || '';
+            if (notifierModal) notifierModal.classList.remove('hidden');
+            if (notifierCloseBtn && callback) notifierCloseBtn._callback = callback;
+        }
+
+        function closeNotification() {
+            if (notifierModal) notifierModal.classList.add('hidden');
+            if (notifierCloseBtn && typeof notifierCloseBtn._callback === 'function') {
+                var cb = notifierCloseBtn._callback;
+                notifierCloseBtn._callback = null;
+                cb();
+            }
+        }
+
+        if (notifierCloseBtn) notifierCloseBtn.addEventListener('click', closeNotification);
+        if (notifierModal) {
+            notifierModal.addEventListener('click', function (e) {
+                if (e.target === this) closeNotification();
+            });
+        }
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && notifierModal && !notifierModal.classList.contains('hidden')) {
+                closeNotification();
+            }
+        });
+
+        /* ============================================
+           INIT
+           ============================================ */
+        goToStep(1);
+    });
+})();
+```
+
+---
+
+## File: `fitpal/restaurant/backend/database/restaurant-connect.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Restaurant Database Connection (role wrapper)
+ *
+ * Restaurant pages should require THIS file instead of reaching into
+ * shared/backend/database/database-connect.php directly.
+ *
+ * This does NOT open a second database connection - FitPal's
+ * architecture requires one shared PDO singleton. This file exists
+ * so the restaurant role has its own include point, consistent with
+ * the rest of restaurant/backend/database/.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+declare(strict_types=1);
+
+require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
+
+// $database_connection is now available - the same singleton every role uses.
+```
+
+---
+
+## File: `fitpal/restaurant/backend/database/restaurant-queries.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Restaurant Database Queries
+ *
+ * Pure data-access layer for the restaurant, restaurant_account,
+ * restaurant_branch, and restaurant_permit tables.
+ *
+ * No $_POST, no header(), no echo.
+ *
+ * @package FitPal
+ * @version 1.1
+ */
+
+declare(strict_types=1);
+
+/* =============================================================
+ * AUTHENTICATION
+ * ============================================================= */
+
+/**
+ * Find a restaurant account by email or username.
+ *
+ * @param PDO    $db
+ * @param string $identifier Email or username
+ * @return array<string, mixed>|false
+ */
+function findRestaurantAccountByIdentifier(PDO $db, string $identifier): array|false
+{
+    $stmt = $db->prepare(
+        "SELECT
+            ra.restaurant_account_id,
+            ra.restaurant_id,
+            ra.branch_id,
+            ra.first_name,
+            ra.middle_name,
+            ra.last_name,
+            ra.email,
+            ra.username,
+            ra.password,
+            ra.role,
+            ra.is_active,
+            r.business_name,
+            r.verification_status,
+            r.is_active AS restaurant_active
+         FROM restaurant_account ra
+         JOIN restaurant r ON ra.restaurant_id = r.restaurant_id
+         WHERE ra.email = :email OR ra.username = :username
+         LIMIT 1"
+    );
+    $stmt->execute([
+        ':email'    => $identifier,
+        ':username' => $identifier,
+    ]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Find a restaurant account with owner/branch disambiguation.
+ *
+ * @param PDO    $db
+ * @param string $identifier
+ * @param string $roleScope 'owner' or 'branch'
+ * @return array<string, mixed>|false
+ */
+function findRestaurantAccountByScope(
+    PDO $db,
+    string $identifier,
+    string $roleScope
+): array|false {
+    $ownerRoles  = ['owner', 'partner'];
+    $branchRoles = ['manager', 'staff', 'cashier', 'kitchen'];
+
+    if ($roleScope === 'owner') {
+        $roles = $ownerRoles;
+    } elseif ($roleScope === 'branch') {
+        $roles = $branchRoles;
+    } else {
+        return false;
+    }
+
+    $placeholders = implode(',', array_fill(0, count($roles), '?'));
+
+    $sql = "SELECT
+                ra.restaurant_account_id,
+                ra.restaurant_id,
+                ra.branch_id,
+                ra.first_name,
+                ra.middle_name,
+                ra.last_name,
+                ra.email,
+                ra.username,
+                ra.password,
+                ra.role,
+                ra.is_active,
+                r.business_name,
+                r.verification_status,
+                r.is_active AS restaurant_active,
+                rb.branch_name,
+                rb.branch_code,
+                rb.city AS branch_city
+            FROM restaurant_account ra
+            JOIN restaurant r ON ra.restaurant_id = r.restaurant_id
+            LEFT JOIN restaurant_branch rb ON ra.branch_id = rb.restaurant_branch_id
+            WHERE (ra.email = ? OR ra.username = ?)
+              AND ra.role IN ($placeholders)
+            LIMIT 1";
+
+    $params = array_merge([$identifier, $identifier], $roles);
+    $stmt = $db->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Find a branch account by identifier, scoped to a specific branch.
+ *
+ * @param PDO    $db
+ * @param string $identifier
+ * @param string $branchCode
+ * @return array<string, mixed>|false
+ */
+function findBranchAccountByIdentifierAndCode(
+    PDO $db,
+    string $identifier,
+    string $branchCode
+): array|false {
+    $stmt = $db->prepare(
+        "SELECT
+            ra.restaurant_account_id,
+            ra.restaurant_id,
+            ra.branch_id,
+            ra.first_name,
+            ra.middle_name,
+            ra.last_name,
+            ra.email,
+            ra.username,
+            ra.password,
+            ra.role,
+            ra.is_active,
+            r.business_name,
+            r.verification_status,
+            r.is_active AS restaurant_active,
+            rb.branch_name,
+            rb.branch_code,
+            rb.city AS branch_city
+         FROM restaurant_account ra
+         JOIN restaurant r ON ra.restaurant_id = r.restaurant_id
+         JOIN restaurant_branch rb ON ra.branch_id = rb.restaurant_branch_id
+         WHERE (ra.email = :email OR ra.username = :username)
+           AND rb.branch_code = :branch_code
+           AND ra.role IN ('manager','staff','cashier','kitchen')
+         LIMIT 1"
+    );
+    $stmt->execute([
+        ':email'       => $identifier,
+        ':username'    => $identifier,
+        ':branch_code' => $branchCode,
+    ]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+/**
+ * List all active branches that have at least one active branch-scoped
+ * account. Used to populate the branch selector on the sign-in page.
+ *
+ * @param PDO $db
+ * @return array<int, array<string, mixed>>
+ */
+function getBranchesWithAccounts(PDO $db): array
+{
+    $stmt = $db->query(
+        "SELECT DISTINCT
+            rb.restaurant_branch_id,
+            rb.branch_code,
+            rb.branch_name,
+            rb.city,
+            r.business_name
+         FROM restaurant_branch rb
+         JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
+         JOIN restaurant_account ra ON ra.branch_id = rb.restaurant_branch_id
+         WHERE rb.is_active = 1
+           AND r.is_active = 1
+           AND ra.is_active = 1
+           AND ra.role IN ('manager','staff','cashier','kitchen')
+         ORDER BY r.business_name ASC, rb.branch_name ASC"
+    );
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Get the full restaurant account profile.
+ *
+ * @param PDO $db
+ * @param int $accountId
+ * @return array<string, mixed>|false
+ */
+function getRestaurantAccountProfile(PDO $db, int $accountId): array|false
+{
+    $stmt = $db->prepare(
+        "SELECT
+            ra.restaurant_account_id,
+            ra.restaurant_id,
+            ra.branch_id,
+            ra.first_name,
+            ra.middle_name,
+            ra.last_name,
+            ra.email,
+            ra.username,
+            ra.role,
+            ra.is_active,
+            ra.date_created,
+            r.business_name,
+            r.cuisine_type,
+            r.description AS restaurant_description,
+            r.dietary_tags,
+            r.verification_status,
+            r.verified_at,
+            r.is_active AS restaurant_active,
+            rb.branch_name,
+            rb.branch_code,
+            rb.block,
+            rb.barangay,
+            rb.city,
+            rb.province,
+            rb.region,
+            rb.postal_code,
+            rb.country
+         FROM restaurant_account ra
+         JOIN restaurant r ON ra.restaurant_id = r.restaurant_id
+         LEFT JOIN restaurant_branch rb ON ra.branch_id = rb.restaurant_branch_id
+         WHERE ra.restaurant_account_id = :account_id
+         LIMIT 1"
+    );
+    $stmt->execute([':account_id' => $accountId]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Record a login timestamp.
+ *
+ * @param PDO $db
+ * @param int $accountId
+ * @return void
+ */
+function recordRestaurantLogin(PDO $db, int $accountId): void
+{
+    $stmt = $db->prepare(
+        "UPDATE restaurant r
+         JOIN restaurant_account ra ON r.restaurant_id = ra.restaurant_id
+            SET r.updated_at = NOW()
+          WHERE ra.restaurant_account_id = :account_id"
+    );
+    $stmt->execute([':account_id' => $accountId]);
+}
+
+/* =============================================================
+ * UNIQUENESS CHECKS
+ * ============================================================= */
+
+function restaurantEmailExists(PDO $db, string $email): bool
+{
+    $stmt = $db->prepare("SELECT 1 FROM restaurant_account WHERE email = ? LIMIT 1");
+    $stmt->execute([$email]);
+    return $stmt->fetch() !== false;
+}
+
+function restaurantUsernameExists(PDO $db, string $username): bool
+{
+    $stmt = $db->prepare("SELECT 1 FROM restaurant_account WHERE username = ? LIMIT 1");
+    $stmt->execute([$username]);
+    return $stmt->fetch() !== false;
+}
+
+function restaurantContactExists(PDO $db, string $contact): bool
+{
+    $stmt = $db->prepare("SELECT 1 FROM restaurant_account WHERE contact_number = ? LIMIT 1");
+    $stmt->execute([$contact]);
+    return $stmt->fetch() !== false;
+}
+
+function restaurantBusinessNameExists(PDO $db, string $name): bool
+{
+    $stmt = $db->prepare("SELECT 1 FROM restaurant WHERE business_name = ? LIMIT 1");
+    $stmt->execute([$name]);
+    return $stmt->fetch() !== false;
+}
+
+function restaurantBranchCodeExists(PDO $db, string $code): bool
+{
+    $stmt = $db->prepare("SELECT 1 FROM restaurant_branch WHERE branch_code = ? LIMIT 1");
+    $stmt->execute([$code]);
+    return $stmt->fetch() !== false;
+}
+
+/* =============================================================
+ * CREATION
+ * ============================================================= */
+
+/**
+ * Create a new restaurant row with verification_status = 'pending'.
+ *
+ * @param PDO   $db
+ * @param array $data
+ * @return int New restaurant_id
+ */
+function createRestaurant(PDO $db, array $data): int
+{
+    $stmt = $db->prepare(
+        "INSERT INTO restaurant
+            (business_name, description, cuisine_type, dietary_tags,
+             verification_status, is_active)
+         VALUES
+            (:business_name, :description, :cuisine_type, :dietary_tags,
+             'pending', 1)"
+    );
+    $stmt->execute([
+        ':business_name' => $data['business_name'],
+        ':description'   => $data['description']  !== '' ? $data['description']  : null,
+        ':cuisine_type'  => $data['cuisine_type'] !== '' ? $data['cuisine_type'] : null,
+        ':dietary_tags'  => $data['dietary_tags'] !== '' ? $data['dietary_tags'] : null,
+    ]);
+    return (int)$db->lastInsertId();
+}
+
+/**
+ * Create a new financial account for a restaurant branch.
+ *
+ * @param PDO $db
+ * @return int New financial_account_id
+ */
+function createRestaurantFinancialAccount(PDO $db): int
+{
+    $stmt = $db->prepare(
+        "INSERT INTO financial_account (balance, account_type)
+         VALUES (0.00, 'restaurant')"
+    );
+    $stmt->execute();
+    return (int)$db->lastInsertId();
+}
+
+/**
+ * Create a restaurant branch.
+ *
+ * @param PDO   $db
+ * @param int   $restaurantId
+ * @param int   $financialAccountId
+ * @param array $data
+ * @return int New restaurant_branch_id
+ */
+function createRestaurantBranch(
+    PDO $db,
+    int $restaurantId,
+    int $financialAccountId,
+    array $data
+): int {
+    $stmt = $db->prepare(
+        "INSERT INTO restaurant_branch
+            (restaurant_id, financial_account_id, branch_name, branch_code,
+             block, barangay, city, province, region, postal_code, country,
+             is_active)
+         VALUES
+            (:restaurant_id, :financial_account_id, :branch_name, :branch_code,
+             :block, :barangay, :city, :province, :region, :postal_code,
+             'Philippines', 1)"
+    );
+    $stmt->execute([
+        ':restaurant_id'        => $restaurantId,
+        ':financial_account_id' => $financialAccountId,
+        ':branch_name'          => $data['branch_name'],
+        ':branch_code'          => $data['branch_code'],
+        ':block'                => $data['block']       !== '' ? $data['block']       : null,
+        ':barangay'             => $data['barangay']    !== '' ? $data['barangay']    : null,
+        ':city'                 => $data['city'],
+        ':province'             => $data['province']    !== '' ? $data['province']    : null,
+        ':region'               => $data['region']      !== '' ? $data['region']      : null,
+        ':postal_code'          => $data['postal_code'] !== '' ? $data['postal_code'] : null,
+    ]);
+    return (int)$db->lastInsertId();
+}
+
+/**
+ * Create a restaurant owner account (branch_id = NULL, role = 'owner').
+ *
+ * @param PDO   $db
+ * @param int   $restaurantId
+ * @param array $data
+ * @return int New restaurant_account_id
+ */
+function createRestaurantOwnerAccount(PDO $db, int $restaurantId, array $data): int
+{
+    $stmt = $db->prepare(
+        "INSERT INTO restaurant_account
+            (restaurant_id, branch_id, first_name, middle_name, last_name,
+             email, contact_number, username, password, role, is_active)
+         VALUES
+            (:restaurant_id, NULL, :first_name, :middle_name, :last_name,
+             :email, :contact_number, :username, :password, 'owner', 1)"
+    );
+    $stmt->execute([
+        ':restaurant_id'  => $restaurantId,
+        ':first_name'     => $data['first_name'],
+        ':middle_name'    => $data['middle_name'] !== '' ? $data['middle_name'] : null,
+        ':last_name'      => $data['last_name'],
+        ':email'          => $data['email'],
+        ':contact_number' => $data['contact_number'],
+        ':username'       => $data['username'],
+        ':password'       => $data['password'],
+    ]);
+    return (int)$db->lastInsertId();
+}
+
+/* =============================================================
+ * PERMIT HANDLING
+ * ============================================================= */
+
+/**
+ * Insert a permit photo row for a restaurant.
+ *
+ * @param PDO    $db
+ * @param int    $restaurantId
+ * @param string $filePath     Project-root-relative path
+ * @param string $originalName Original filename
+ * @param int    $order        Display order (0-based)
+ * @return int New permit_id
+ */
+function createRestaurantPermit(
+    PDO $db,
+    int $restaurantId,
+    string $filePath,
+    string $originalName,
+    int $order
+): int {
+    $stmt = $db->prepare(
+        "INSERT INTO restaurant_permit
+            (restaurant_id, file_path, original_name, display_order)
+         VALUES
+            (:restaurant_id, :file_path, :original_name, :display_order)"
+    );
+    $stmt->execute([
+        ':restaurant_id' => $restaurantId,
+        ':file_path'     => $filePath,
+        ':original_name' => $originalName !== '' ? $originalName : null,
+        ':display_order' => $order,
+    ]);
+    return (int)$db->lastInsertId();
+}
+
+/**
+ * Fetch all permits for a restaurant, ordered by display_order.
+ *
+ * @param PDO $db
+ * @param int $restaurantId
+ * @return array<int, array<string, mixed>>
+ */
+function getRestaurantPermits(PDO $db, int $restaurantId): array
+{
+    $stmt = $db->prepare(
+        "SELECT permit_id, file_path, original_name, display_order, created_at
+         FROM restaurant_permit
+         WHERE restaurant_id = :restaurant_id
+         ORDER BY display_order ASC, permit_id ASC"
+    );
+    $stmt->execute([':restaurant_id' => $restaurantId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/* =============================================================
+ * GENERATION HELPERS
+ * ============================================================= */
+
+/**
+ * Generate a unique branch code from a business name.
+ *
+ * @param PDO    $db
+ * @param string $businessName
+ * @return string
+ */
+function generateBranchCode(PDO $db, string $businessName): string
+{
+    $clean = preg_replace('/[^A-Za-z0-9 ]/', '', $businessName) ?? '';
+    $words = preg_split('/\s+/', trim($clean)) ?: [];
+    $initials = '';
+    foreach ($words as $w) {
+        if ($w !== '' && strlen($initials) < 3) {
+            $initials .= strtoupper($w[0]);
+        }
+    }
+    if ($initials === '') {
+        $initials = 'RST';
+    }
+
+    $base = str_pad(substr($initials, 0, 3), 3, 'X');
+
+    for ($i = 1; $i <= 999; $i++) {
+        $candidate = $base . str_pad((string)$i, 3, '0', STR_PAD_LEFT);
+        if (!restaurantBranchCodeExists($db, $candidate)) {
+            return $candidate;
+        }
+    }
+
+    return $base . bin2hex(random_bytes(2));
+}
+```
+
+---
+
+## File: `fitpal/restaurant/backend/handlers/sign-in-handler.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Restaurant Sign-In Handler
+ *
+ * Supports two sign-in modes:
+ *   - Owner:  role IN ('owner', 'partner')
+ *   - Branch: role IN ('manager','staff','cashier','kitchen'),
+ *             scoped to a specific branch_code
+ *
+ * @package FitPal
+ * @version 1.1
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
+require_once __DIR__ . '/../database/restaurant-queries.php';
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    $_SESSION['login_error'] = 'Invalid request method.';
+    header('Location: ../../pages/sign-in.php');
+    exit;
+}
+
+if (
+    !isset($_POST['csrf_token'], $_SESSION['csrf_token']) ||
+    !hash_equals((string)$_SESSION['csrf_token'], (string)$_POST['csrf_token'])
+) {
+    $_SESSION['login_error'] = 'Security validation failed. Please try again.';
+    header('Location: ../../pages/sign-in.php');
+    exit;
+}
+
+$identifier = trim((string)($_POST['identifier'] ?? ''));
+$password   = (string)($_POST['password'] ?? '');
+$roleScope  = (string)($_POST['role_scope'] ?? 'owner');
+$branchCode = trim((string)($_POST['branch_code'] ?? ''));
+
+if ($identifier === '' || $password === '') {
+    $_SESSION['login_error'] = 'Please enter your email/username and password.';
+    header('Location: ../../pages/sign-in.php');
+    exit;
+}
+
+if (!in_array($roleScope, ['owner', 'branch'], true)) {
+    $roleScope = 'owner';
+}
+
+$_SESSION['login_scope'] = $roleScope;
+
+try {
+    if ($roleScope === 'branch') {
+        if ($branchCode === '') {
+            $_SESSION['login_error'] = 'Please select a branch.';
+            header('Location: ../../pages/sign-in.php');
+            exit;
+        }
+        $account = findBranchAccountByIdentifierAndCode(
+            $database_connection,
+            $identifier,
+            $branchCode
+        );
+    } else {
+        $account = findRestaurantAccountByScope(
+            $database_connection,
+            $identifier,
+            'owner'
+        );
+    }
+
+    if (!$account) {
+        $_SESSION['login_error'] = 'Invalid credentials or account does not have access to this scope.';
+        header('Location: ../../pages/sign-in.php');
+        exit;
+    }
+
+    if ((int)$account['is_active'] !== 1) {
+        $_SESSION['login_error'] = 'Your account has been deactivated. Please contact support.';
+        header('Location: ../../pages/sign-in.php');
+        exit;
+    }
+
+    if ((int)$account['restaurant_active'] !== 1) {
+        $_SESSION['login_error'] = 'Your restaurant account is inactive. Please contact support.';
+        header('Location: ../../pages/sign-in.php');
+        exit;
+    }
+
+    // -------- DEVELOPMENT-ONLY BYPASS --------
+    $passwordValid = password_verify($password, (string)$account['password']);
+    if (!$passwordValid && hash_equals((string)$account['password'], $password)) {
+        $passwordValid = true;
+    }
+    // -------- END DEVELOPMENT-ONLY BYPASS --------
+
+    if (!$passwordValid) {
+        $_SESSION['login_error'] = 'Invalid email/username or password.';
+        header('Location: ../../pages/sign-in.php');
+        exit;
+    }
+
+    session_regenerate_id(true);
+
+    $_SESSION['restaurant_account_id']  = (int)$account['restaurant_account_id'];
+    $_SESSION['restaurant_id']          = (int)$account['restaurant_id'];
+    $_SESSION['restaurant_branch_id']   = $account['branch_id'] !== null
+        ? (int)$account['branch_id']
+        : null;
+    $_SESSION['restaurant_branch_code'] = (string)($account['branch_code'] ?? '');
+    $_SESSION['restaurant_branch_name'] = (string)($account['branch_name'] ?? '');
+    $_SESSION['restaurant_scope']       = $roleScope;
+    $_SESSION['user_role']              = 'restaurant';
+    $_SESSION['user_name']              = trim(
+        ($account['first_name'] ?? '') . ' ' . ($account['last_name'] ?? '')
+    );
+    $_SESSION['user_email']             = (string)($account['email'] ?? '');
+    $_SESSION['restaurant_role']        = (string)($account['role'] ?? 'owner');
+    $_SESSION['business_name']          = (string)($account['business_name'] ?? '');
+    $_SESSION['created']                = time();
+
+    recordRestaurantLogin($database_connection, (int)$account['restaurant_account_id']);
+
+    unset($_SESSION['csrf_token']);
+
+    header('Location: ../../pages/dashboard.php');
+    exit;
+
+} catch (PDOException $e) {
+    error_log('Restaurant sign-in DB error: ' . $e->getMessage());
+    $_SESSION['login_error'] = 'An unexpected error occurred. Please try again.';
+    header('Location: ../../pages/sign-in.php');
+    exit;
+} catch (Throwable $e) {
+    error_log('Restaurant sign-in error: ' . $e->getMessage());
+    $_SESSION['login_error'] = 'An unexpected error occurred. Please try again.';
+    header('Location: ../../pages/sign-in.php');
+    exit;
+}
+```
+
+---
+
+## File: `fitpal/restaurant/backend/handlers/sign-out-handler.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Restaurant Sign-Out Handler
+ *
+ * Clears only restaurant-specific session data.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+unset(
+    $_SESSION['restaurant_account_id'],
+    $_SESSION['restaurant_id'],
+    $_SESSION['restaurant_branch_id'],
+    $_SESSION['restaurant_branch_code'],
+    $_SESSION['restaurant_branch_name'],
+    $_SESSION['restaurant_scope'],
+    $_SESSION['user_role'],
+    $_SESSION['user_name'],
+    $_SESSION['user_email'],
+    $_SESSION['restaurant_role'],
+    $_SESSION['business_name']
+);
+
+session_regenerate_id(true);
+
+header('Location: ../../pages/sign-in.php');
+exit;
+```
+
+---
+
+## File: `fitpal/restaurant/backend/handlers/sign-up-handler.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Restaurant Registration Handler
+ *
+ * Creates the following rows in a single DB transaction:
+ *   1. restaurant                   (verification_status = 'pending')
+ *   2. financial_account            (account_type = 'restaurant')
+ *   3. restaurant_branch
+ *   4. restaurant_account           (role = 'owner', branch_id = NULL)
+ *   5. restaurant_permit × 1..5     (permit photos)
+ *
+ * @package FitPal
+ * @version 1.1
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
+require_once __DIR__ . '/../database/restaurant-queries.php';
+
+header('Content-Type: application/json');
+
+const MAX_PERMITS         = 5;
+const MAX_PERMIT_BYTES    = 5 * 1024 * 1024;
+const ALLOWED_PERMIT_MIME = [
+    'image/jpeg' => 'jpg',
+    'image/png'  => 'png',
+    'image/webp' => 'webp',
+];
+
+function respondError(string $message, string $field = ''): void
+{
+    echo json_encode(['status' => 'error', 'message' => $message, 'field' => $field]);
+    exit;
+}
+
+function validatePermitFile(array $file): string
+{
+    if (!isset($file['error']) || is_array($file['error'])) {
+        throw new RuntimeException('Invalid file payload.');
+    }
+    if ($file['error'] === UPLOAD_ERR_NO_FILE) {
+        throw new RuntimeException('Empty slot.');
+    }
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        throw new RuntimeException('Upload failed (code ' . $file['error'] . ').');
+    }
+    if (($file['size'] ?? 0) <= 0) {
+        throw new RuntimeException('Uploaded file is empty.');
+    }
+    if ($file['size'] > MAX_PERMIT_BYTES) {
+        throw new RuntimeException(
+            'Each permit must be under ' . round(MAX_PERMIT_BYTES / 1048576, 1) . ' MB.'
+        );
+    }
+
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    if ($finfo === false) {
+        throw new RuntimeException('Could not inspect file.');
+    }
+    $mime = (string)finfo_file($finfo, $file['tmp_name']);
+    finfo_close($finfo);
+
+    if (!isset(ALLOWED_PERMIT_MIME[$mime])) {
+        throw new RuntimeException('Unsupported permit type. Use JPG, PNG, or WEBP.');
+    }
+    return ALLOWED_PERMIT_MIME[$mime];
+}
+
+function storePermitFile(array $file, string $projectRoot, string $ext, int $index): string
+{
+    $dir = $projectRoot . '/shared/uploads/restaurant-permits';
+    if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+        throw new RuntimeException('Could not create upload directory.');
+    }
+
+    $filename = 'permit_' . time() . '_' . $index . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+    $fullPath = $dir . '/' . $filename;
+
+    if (!move_uploaded_file($file['tmp_name'], $fullPath)) {
+        throw new RuntimeException('Could not save permit file.');
+    }
+
+    return 'shared/uploads/restaurant-permits/' . $filename;
+}
+
+/* -------------------------------------------------------------- */
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    respondError('Invalid request method.');
+}
+
+if (
+    !isset($_POST['csrf_token']) ||
+    !hash_equals((string)($_SESSION['csrf_token'] ?? ''), (string)$_POST['csrf_token'])
+) {
+    respondError('Security validation failed. Please refresh the page and try again.');
+}
+
+/* --------------------------------------------------------------
+ * COLLECT INPUT
+ * -------------------------------------------------------------- */
+
+$firstName       = trim((string)($_POST['first_name'] ?? ''));
+$middleName      = trim((string)($_POST['middle_name'] ?? ''));
+$lastName        = trim((string)($_POST['last_name'] ?? ''));
+$email           = trim((string)($_POST['email'] ?? ''));
+$contactNumber   = trim((string)($_POST['contact_number'] ?? ''));
+$username        = trim((string)($_POST['username'] ?? ''));
+$password        = (string)($_POST['password'] ?? '');
+$confirmPassword = (string)($_POST['confirm_password'] ?? '');
+
+$businessName        = trim((string)($_POST['business_name'] ?? ''));
+$cuisineType         = trim((string)($_POST['cuisine_type'] ?? ''));
+$businessDescription = trim((string)($_POST['business_description'] ?? ''));
+$dietaryTags         = trim((string)($_POST['dietary_tags'] ?? ''));
+
+$branchName = trim((string)($_POST['branch_name'] ?? ''));
+$block      = trim((string)($_POST['block'] ?? ''));
+$barangay   = trim((string)($_POST['barangay'] ?? ''));
+$city       = trim((string)($_POST['city'] ?? ''));
+$province   = trim((string)($_POST['province'] ?? ''));
+$region     = trim((string)($_POST['region'] ?? ''));
+$postalCode = trim((string)($_POST['postal_code'] ?? ''));
+
+$terms = $_POST['terms'] ?? '';
+
+/* --------------------------------------------------------------
+ * REQUIRED + FIELD VALIDATION
+ * -------------------------------------------------------------- */
+
+if (
+    $firstName === '' || $lastName === '' || $email === '' ||
+    $contactNumber === '' || $username === '' || $password === '' ||
+    $businessName === '' || $cuisineType === '' ||
+    $branchName === '' || $block === '' || $city === ''
+) {
+    respondError('Please fill in all required fields.');
+}
+
+$namePattern = "/^[A-Za-z\s\-']+$/u";
+if (strlen($firstName) < 2 || !preg_match($namePattern, $firstName)) {
+    respondError('First name contains invalid characters.', 'first_name');
+}
+if (strlen($lastName) < 2 || !preg_match($namePattern, $lastName)) {
+    respondError('Last name contains invalid characters.', 'last_name');
+}
+if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    respondError('Please enter a valid email address.', 'email');
+}
+
+$cleanedContact = preg_replace('/\s+/', '', $contactNumber);
+if (!preg_match('/^09\d{9}$/', (string)$cleanedContact)) {
+    respondError('Enter a valid PH mobile number (11 digits, starting with 09).', 'contact_number');
+}
+
+if (strlen($username) < 3 || strlen($username) > 20) {
+    respondError('Username must be 3–20 characters.', 'username');
+}
+if (!preg_match('/^[A-Za-z0-9_]+$/', $username)) {
+    respondError('Username can only contain letters, numbers, and underscores.', 'username');
+}
+
+if (strlen($password) < 8 || strlen($password) > 20) {
+    respondError('Password must be 8–20 characters.', 'password');
+}
+if (!preg_match('/^[A-Za-z0-9]+$/', $password)) {
+    respondError('Password can only contain letters and numbers.', 'password');
+}
+if (!preg_match('/[A-Za-z]/', $password) || !preg_match('/[0-9]/', $password)) {
+    respondError('Password must contain at least one letter and one number.', 'password');
+}
+if ($password !== $confirmPassword) {
+    respondError('Passwords do not match.', 'confirm_password');
+}
+
+if (strlen($businessName) < 2) {
+    respondError('Business name must be at least 2 characters.', 'business_name');
+}
+if (strlen($cuisineType) < 2) {
+    respondError('Cuisine type is required.', 'cuisine_type');
+}
+if (strlen($businessDescription) > 2000) {
+    respondError('Business description is too long.', 'business_description');
+}
+if (strlen($branchName) < 2) {
+    respondError('Branch name is required.', 'branch_name');
+}
+if ($block === '') {
+    respondError('Block / Street / Unit is required.', 'block');
+}
+if ($city === '') {
+    respondError('City or municipality is required.', 'city');
+}
+if ($postalCode !== '' && !preg_match('/^[0-9]{3,10}$/', $postalCode)) {
+    respondError('Postal code must be numeric.', 'postal_code');
+}
+if (empty($terms)) {
+    respondError('You must agree to the Terms and Conditions and Privacy Policy.', 'terms');
+}
+
+/* --------------------------------------------------------------
+ * PERMIT FILE VALIDATION
+ * -------------------------------------------------------------- */
+
+$permitFiles = [];
+
+if (isset($_FILES['permits']) && is_array($_FILES['permits']['name'])) {
+    $count = count($_FILES['permits']['name']);
+    if ($count > MAX_PERMITS) {
+        respondError('You can upload at most ' . MAX_PERMITS . ' permits.', 'permits');
+    }
+
+    for ($i = 0; $i < $count; $i++) {
+        $err = $_FILES['permits']['error'][$i] ?? UPLOAD_ERR_NO_FILE;
+        if ($err === UPLOAD_ERR_NO_FILE) {
+            continue;
+        }
+
+        $file = [
+            'name'     => (string)$_FILES['permits']['name'][$i],
+            'type'     => (string)$_FILES['permits']['type'][$i],
+            'tmp_name' => (string)$_FILES['permits']['tmp_name'][$i],
+            'error'    => $err,
+            'size'     => (int)($_FILES['permits']['size'][$i] ?? 0),
+        ];
+
+        try {
+            $ext = validatePermitFile($file);
+        } catch (RuntimeException $e) {
+            respondError('Permit ' . ($i + 1) . ': ' . $e->getMessage(), 'permits');
+        }
+
+        $permitFiles[] = ['file' => $file, 'ext' => $ext];
+    }
+}
+
+if (empty($permitFiles)) {
+    respondError('Please upload at least one permit photo.', 'permits');
+}
+
+/* --------------------------------------------------------------
+ * DATABASE TRANSACTION
+ * -------------------------------------------------------------- */
+
+$movedFiles = [];
+
+try {
+    if (restaurantEmailExists($database_connection, $email)) {
+        respondError('This email address is already registered.', 'email');
+    }
+    if (restaurantUsernameExists($database_connection, $username)) {
+        respondError('This username is already taken.', 'username');
+    }
+    if (restaurantContactExists($database_connection, (string)$cleanedContact)) {
+        respondError('This mobile number is already registered.', 'contact_number');
+    }
+    if (restaurantBusinessNameExists($database_connection, $businessName)) {
+        respondError('This business name is already registered.', 'business_name');
+    }
+
+    $projectRoot = realpath(__DIR__ . '/../../..');
+    if ($projectRoot === false) {
+        respondError('Server storage path unavailable.');
+    }
+
+    $database_connection->beginTransaction();
+
+    $restaurantId = createRestaurant($database_connection, [
+        'business_name' => $businessName,
+        'description'   => $businessDescription,
+        'cuisine_type'  => $cuisineType,
+        'dietary_tags'  => $dietaryTags,
+    ]);
+
+    $financialAccountId = createRestaurantFinancialAccount($database_connection);
+
+    $branchCode = generateBranchCode($database_connection, $businessName);
+    createRestaurantBranch(
+        $database_connection,
+        $restaurantId,
+        $financialAccountId,
+        [
+            'branch_name' => $branchName,
+            'branch_code' => $branchCode,
+            'block'       => $block,
+            'barangay'    => $barangay,
+            'city'        => $city,
+            'province'    => $province,
+            'region'      => $region,
+            'postal_code' => $postalCode,
+        ]
+    );
+
+    $hashed = password_hash($password, PASSWORD_BCRYPT);
+    createRestaurantOwnerAccount($database_connection, $restaurantId, [
+        'first_name'     => $firstName,
+        'middle_name'    => $middleName,
+        'last_name'      => $lastName,
+        'email'          => $email,
+        'contact_number' => (string)$cleanedContact,
+        'username'       => $username,
+        'password'       => $hashed,
+    ]);
+
+    foreach ($permitFiles as $index => $p) {
+        $path = storePermitFile($p['file'], $projectRoot, $p['ext'], $index);
+        $movedFiles[] = $projectRoot . '/' . $path;
+
+        createRestaurantPermit(
+            $database_connection,
+            $restaurantId,
+            $path,
+            (string)$p['file']['name'],
+            $index
+        );
+    }
+
+    $database_connection->commit();
+
+    $_SESSION['registration_success'] =
+        'Restaurant application submitted with ' . count($permitFiles) . ' permit(s). ' .
+        'Please sign in after verification.';
+
+    echo json_encode([
+        'status'   => 'success',
+        'message'  => 'Your restaurant has been registered. An admin will review your permits before activation.',
+        'redirect' => 'sign-in.php',
+    ]);
+    exit;
+
+} catch (PDOException $e) {
+    if ($database_connection->inTransaction()) {
+        $database_connection->rollBack();
+    }
+    foreach ($movedFiles as $p) {
+        if (is_file($p)) @unlink($p);
+    }
+    error_log('Restaurant registration DB error: ' . $e->getMessage());
+
+    $message = $e->getMessage();
+    if (stripos($message, 'Duplicate entry') !== false) {
+        if (stripos($message, 'email') !== false)          respondError('This email address is already registered.', 'email');
+        if (stripos($message, 'username') !== false)       respondError('This username is already taken.', 'username');
+        if (stripos($message, 'contact_number') !== false) respondError('This mobile number is already registered.', 'contact_number');
+        if (stripos($message, 'business_name') !== false)  respondError('This business name is already registered.', 'business_name');
+    }
+    respondError('An unexpected error occurred. Please try again later.');
+
+} catch (Throwable $e) {
+    if ($database_connection->inTransaction()) {
+        $database_connection->rollBack();
+    }
+    foreach ($movedFiles as $p) {
+        if (is_file($p)) @unlink($p);
+    }
+    error_log('Restaurant registration error: ' . $e->getMessage());
+    respondError('An unexpected error occurred. Please try again later.');
+}
+```
+
+---
+
+## File: `fitpal/restaurant/includes/header.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Restaurant Header
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (!isset($_SESSION['created'])) {
+    $_SESSION['created'] = time();
+} elseif (time() - $_SESSION['created'] > 1800) {
+    session_regenerate_id(true);
+    $_SESSION['created'] = time();
+}
+
+require_once __DIR__ . '/../backend/database/restaurant-connect.php';
+
+function getRestaurantAssetBase(): string
+{
+    $scriptPath = $_SERVER['SCRIPT_NAME'];
+    $dirPath    = dirname($scriptPath);
+    $segments   = array_filter(explode('/', $dirPath));
+    $depth      = count($segments);
+    return str_repeat('../', $depth) . 'shared/';
+}
+
+$assetBase = getRestaurantAssetBase();
+
+$isLoggedIn     = false;
+$accountName    = '';
+$accountInitial = '';
+$restaurantRole = '';
+$businessName   = '';
+
+if (!empty($_SESSION['restaurant_account_id'])) {
+    $isLoggedIn = true;
+    try {
+        $stmt = $database_connection->prepare(
+            "SELECT ra.first_name, ra.last_name, ra.role, r.business_name
+             FROM restaurant_account ra
+             JOIN restaurant r ON ra.restaurant_id = r.restaurant_id
+             WHERE ra.restaurant_account_id = :id
+             LIMIT 1"
+        );
+        $stmt->execute([':id' => (int)$_SESSION['restaurant_account_id']]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($row) {
+            $accountName    = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+            $accountInitial = strtoupper(substr((string)($row['first_name'] ?? 'R'), 0, 1));
+            $restaurantRole = (string)($row['role'] ?? 'owner');
+            $businessName   = (string)($row['business_name'] ?? '');
+        }
+    } catch (PDOException $e) {
+        // Silently fail
+    }
+}
+
+$currentPage = basename($_SERVER['PHP_SELF']);
+
+$pageCssMap = [
+    'sign-in.php'   => 'sign-in.css',
+    'sign-up.php'   => 'sign-up.css',
+    'dashboard.php' => 'dashboard.css',
+    'profile.php'   => 'profile.css',
+];
+
+$pageCssFile = $pageCssMap[$currentPage] ?? '';
+$pageCssPath = '';
+if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFile)) {
+    $pageCssPath = '../assets/css/' . $pageCssFile;
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="FitPal - Restaurant Portal">
+    <title>FitPal - Restaurant</title>
+
+    <link rel="icon" type="image/x-icon" href="<?php echo $assetBase; ?>assets/images/brand/Logo.ico">
+    <link rel="shortcut icon" href="<?php echo $assetBase; ?>assets/images/brand/Logo.ico">
+
+    <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/global.css">
+    <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/header.css">
+    <link rel="stylesheet" href="../assets/css/header.css">
+
+    <?php if ($pageCssPath !== ''): ?>
+    <link rel="stylesheet" href="<?php echo $pageCssPath; ?>">
+    <?php endif; ?>
+</head>
+
+<body>
+    <header class="header restaurant-header" role="banner">
+        <div class="header-container">
+            <div class="header-logo">
+                <a href="<?php echo $assetBase; ?>../index.php" class="logo-link" aria-label="FitPal Home">
+                    <img src="<?php echo $assetBase; ?>assets/images/brand/Logo.png" alt="FitPal Logo"
+                        class="logo-image">
+                    <span class="logo-text">Fit<span>Pal</span></span>
+                </a>
+            </div>
+
+            <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation menu" aria-expanded="false"
+                type="button">
+                <span class="menu-icon">
+                    <span class="bar"></span>
+                    <span class="bar"></span>
+                    <span class="bar"></span>
+                </span>
+            </button>
+
+            <nav class="header-nav" id="mainNav" role="navigation" aria-label="Restaurant navigation">
+
+                <?php if ($isLoggedIn): ?>
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <a href="dashboard.php"
+                            class="nav-link <?php echo ($currentPage === 'dashboard.php') ? 'active' : ''; ?>">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="profile.php"
+                            class="nav-link <?php echo ($currentPage === 'profile.php') ? 'active' : ''; ?>">Profile</a>
+                    </li>
+                </ul>
+
+                <div class="nav-actions">
+                    <div class="user-profile-circle"
+                        title="<?php echo htmlspecialchars($accountName !== '' ? $accountName : 'Account', ENT_QUOTES, 'UTF-8'); ?>">
+                        <?php if ($accountInitial !== ''): ?>
+                        <span
+                            class="user-initial"><?php echo htmlspecialchars($accountInitial, ENT_QUOTES, 'UTF-8'); ?></span>
+                        <?php else: ?>
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="Profile"
+                            class="profile-icon">
+                        <?php endif; ?>
+                    </div>
+                    <a href="../backend/handlers/sign-out-handler.php" data-signout
+                        class="btn btn-outline btn-sm logout-btn">Logout</a>
+                </div>
+
+                <?php else: ?>
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <a href="<?php echo $assetBase; ?>../index.php"
+                            class="nav-link <?php echo ($currentPage === 'index.php') ? 'active' : ''; ?>">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="<?php echo $assetBase; ?>pages/about.php"
+                            class="nav-link <?php echo ($currentPage === 'about.php') ? 'active' : ''; ?>">About</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="<?php echo $assetBase; ?>pages/contact.php"
+                            class="nav-link <?php echo ($currentPage === 'contact.php') ? 'active' : ''; ?>">Contact</a>
+                    </li>
+                </ul>
+
+                <div class="nav-actions">
+                    <a href="sign-in.php" class="btn btn-primary btn-sm">Login</a>
+                </div>
+                <?php endif; ?>
+            </nav>
+        </div>
+    </header>
+
+    <div class="mobile-overlay" id="mobileOverlay"></div>
+
+    <nav class="mobile-nav" id="mobileNav" role="navigation" aria-label="Mobile navigation">
+        <ul class="mobile-nav-list">
+
+            <?php if ($isLoggedIn): ?>
+            <li class="mobile-nav-item mobile-user-greeting">
+                <div class="mobile-user-avatar">
+                    <?php if ($accountInitial !== ''): ?>
+                    <span
+                        class="user-initial-large"><?php echo htmlspecialchars($accountInitial, ENT_QUOTES, 'UTF-8'); ?></span>
+                    <?php else: ?>
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="Profile">
+                    <?php endif; ?>
+                </div>
+                <span
+                    class="mobile-user-name"><?php echo htmlspecialchars($accountName !== '' ? $accountName : 'Account', ENT_QUOTES, 'UTF-8'); ?></span>
+            </li>
+            <li class="mobile-nav-divider"></li>
+            <li class="mobile-nav-item">
+                <a href="dashboard.php"
+                    class="mobile-nav-link <?php echo ($currentPage === 'dashboard.php') ? 'active' : ''; ?>">Dashboard</a>
+            </li>
+            <li class="mobile-nav-item">
+                <a href="profile.php"
+                    class="mobile-nav-link <?php echo ($currentPage === 'profile.php') ? 'active' : ''; ?>">Profile</a>
+            </li>
+            <li class="mobile-nav-divider"></li>
+            <li class="mobile-nav-item">
+                <a href="../backend/handlers/sign-out-handler.php" data-signout
+                    class="mobile-nav-link mobile-logout">Logout</a>
+            </li>
+
+            <?php else: ?>
+            <li class="mobile-nav-item">
+                <a href="<?php echo $assetBase; ?>../index.php" class="mobile-nav-link">Home</a>
+            </li>
+            <li class="mobile-nav-item">
+                <a href="<?php echo $assetBase; ?>pages/about.php" class="mobile-nav-link">About</a>
+            </li>
+            <li class="mobile-nav-item">
+                <a href="<?php echo $assetBase; ?>pages/contact.php" class="mobile-nav-link">Contact</a>
+            </li>
+            <li class="mobile-nav-divider"></li>
+            <li class="mobile-nav-item">
+                <a href="sign-in.php" class="mobile-nav-link mobile-login">Login</a>
+            </li>
+            <?php endif; ?>
+        </ul>
+    </nav>
+
+    <main class="main-content" role="main">
+
+        <script src="../assets/ui/js/header.js" defer></script>
+```
+
+---
+
+## File: `fitpal/restaurant/pages/sign-in.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Restaurant Sign-In Page
+ *
+ * Two tabs: Owner (restaurant-wide) and Branch (scoped to a branch).
+ *
+ * @package FitPal
+ * @version 1.1
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (!empty($_SESSION['restaurant_account_id'])) {
+    header('Location: dashboard.php');
+    exit;
+}
+
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+require_once __DIR__ . '/../includes/header.php';
+require_once __DIR__ . '/../backend/database/restaurant-queries.php';
+
+// $assetBase provided by header.php
+
+$errorMessage   = $_SESSION['login_error'] ?? '';
+$successMessage = $_SESSION['registration_success'] ?? '';
+unset($_SESSION['login_error'], $_SESSION['registration_success']);
+
+$branches = [];
+try {
+    $branches = getBranchesWithAccounts($database_connection);
+} catch (PDOException $e) {
+    error_log('Branch list error: ' . $e->getMessage());
+}
+
+$activeTab = $_SESSION['login_scope'] ?? 'owner';
+if (!in_array($activeTab, ['owner', 'branch'], true)) {
+    $activeTab = 'owner';
+}
+unset($_SESSION['login_scope']);
+?>
+
+<div class="content sign-in-page">
+    <div class="container">
+        <div class="sign-in-card">
+            <div class="sign-in-header">
+                <p class="heading-2">Restaurant <span>Sign In</span></p>
+                <p class="text-muted">Choose how you're signing in</p>
+            </div>
+
+            <?php if (!empty($successMessage)): ?>
+            <div class="alert alert-success" role="alert">
+                <?php echo htmlspecialchars($successMessage, ENT_QUOTES, 'UTF-8'); ?>
+            </div>
+            <?php endif; ?>
+
+            <?php if (!empty($errorMessage)): ?>
+            <div class="alert alert-danger" role="alert">
+                <?php echo htmlspecialchars($errorMessage, ENT_QUOTES, 'UTF-8'); ?>
+            </div>
+            <?php endif; ?>
+
+            <div class="sign-in-tabs" role="tablist">
+                <button type="button" class="sign-in-tab <?php echo $activeTab === 'owner' ? 'active' : ''; ?>"
+                    data-tab="owner" role="tab"
+                    aria-selected="<?php echo $activeTab === 'owner' ? 'true' : 'false'; ?>">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/building.svg" alt=""
+                        class="sign-in-tab-icon">
+                    <span>Owner</span>
+                </button>
+                <button type="button" class="sign-in-tab <?php echo $activeTab === 'branch' ? 'active' : ''; ?>"
+                    data-tab="branch" role="tab"
+                    aria-selected="<?php echo $activeTab === 'branch' ? 'true' : 'false'; ?>">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt=""
+                        class="sign-in-tab-icon">
+                    <span>Branch</span>
+                </button>
+            </div>
+
+            <!-- OWNER PANEL -->
+            <div class="sign-in-panel <?php echo $activeTab === 'owner' ? 'active' : ''; ?>" id="panel-owner"
+                role="tabpanel">
+                <form method="POST" action="../backend/handlers/sign-in-handler.php" class="sign-in-form"
+                    id="signInFormOwner" novalidate>
+
+                    <input type="hidden" name="csrf_token"
+                        value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
+                    <input type="hidden" name="role_scope" value="owner">
+
+                    <div class="form-group">
+                        <label for="owner_identifier" class="form-label">Email or Username</label>
+                        <input type="text" id="owner_identifier" name="identifier" class="form-control"
+                            placeholder="Enter your email or username" autocomplete="username" required>
+                        <div class="form-error" id="ownerIdentifierError"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="owner_password" class="form-label">Password</label>
+                        <div class="password-wrapper">
+                            <input type="password" id="owner_password" name="password" class="form-control"
+                                placeholder="Enter your password" autocomplete="current-password" required>
+                            <button type="button" class="password-toggle" id="ownerTogglePassword"
+                                aria-label="Toggle password visibility" tabindex="-1">
+                                <img src="<?php echo $assetBase; ?>assets/images/icons/password-hide.svg" alt=""
+                                    id="ownerPasswordIcon">
+                            </button>
+                        </div>
+                        <div class="form-error" id="ownerPasswordError"></div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-block" id="ownerSignInBtn">
+                        Sign In as Owner
+                    </button>
+                </form>
+            </div>
+
+            <!-- BRANCH PANEL -->
+            <div class="sign-in-panel <?php echo $activeTab === 'branch' ? 'active' : ''; ?>" id="panel-branch"
+                role="tabpanel">
+                <form method="POST" action="../backend/handlers/sign-in-handler.php" class="sign-in-form"
+                    id="signInFormBranch" novalidate>
+
+                    <input type="hidden" name="csrf_token"
+                        value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
+                    <input type="hidden" name="role_scope" value="branch">
+
+                    <?php if (empty($branches)): ?>
+                    <div class="alert alert-danger" role="alert">
+                        No branch accounts are available yet. Please contact your restaurant owner.
+                    </div>
+                    <?php endif; ?>
+
+                    <div class="form-group">
+                        <label for="branch_code" class="form-label">Select Branch</label>
+                        <div class="branch-selector">
+                            <select id="branch_code" name="branch_code" required
+                                <?php echo empty($branches) ? 'disabled' : ''; ?>>
+                                <option value="">— Choose a branch —</option>
+                                <?php foreach ($branches as $b): ?>
+                                <option
+                                    value="<?php echo htmlspecialchars((string)$b['branch_code'], ENT_QUOTES, 'UTF-8'); ?>">
+                                    <?php
+                                    echo htmlspecialchars(
+                                        (string)$b['business_name'] . ' — ' .
+                                        (string)$b['branch_name'] .
+                                        (!empty($b['city']) ? ' (' . $b['city'] . ')' : ''),
+                                        ENT_QUOTES,
+                                        'UTF-8'
+                                    );
+                                    ?>
+                                </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-error" id="branchCodeError"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="branch_identifier" class="form-label">Email or Username</label>
+                        <input type="text" id="branch_identifier" name="identifier" class="form-control"
+                            placeholder="Enter your email or username" autocomplete="username" required>
+                        <div class="form-error" id="branchIdentifierError"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="branch_password" class="form-label">Password</label>
+                        <div class="password-wrapper">
+                            <input type="password" id="branch_password" name="password" class="form-control"
+                                placeholder="Enter your password" autocomplete="current-password" required>
+                            <button type="button" class="password-toggle" id="branchTogglePassword"
+                                aria-label="Toggle password visibility" tabindex="-1">
+                                <img src="<?php echo $assetBase; ?>assets/images/icons/password-hide.svg" alt=""
+                                    id="branchPasswordIcon">
+                            </button>
+                        </div>
+                        <div class="form-error" id="branchPasswordError"></div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-block" id="branchSignInBtn"
+                        <?php echo empty($branches) ? 'disabled' : ''; ?>>
+                        Sign In to Branch
+                    </button>
+                </form>
+            </div>
+
+            <div class="sign-in-footer">
+                <p class="text-muted">
+                    Want to join FitPal? <a href="sign-up.php">Register your restaurant</a>
+                </p>
+                <p class="text-muted">
+                    Not a restaurant?
+                    <a href="<?php echo $assetBase; ?>../customer/pages/sign-in.php">Customer sign-in</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="../assets/ui/js/sign-in.js" defer></script>
+
+<?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>
+```
+
+---
+
+## File: `fitpal/restaurant/pages/sign-up.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Restaurant Registration Page
+ *
+ * Two-step registration:
+ *   Step 1 — Account Holder
+ *   Step 2 — Business Details + up to 5 permit photos + terms
+ *
+ * @package FitPal
+ * @version 1.1
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (!empty($_SESSION['restaurant_account_id'])) {
+    header('Location: dashboard.php');
+    exit;
+}
+
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+require_once __DIR__ . '/../includes/header.php';
+
+$errorMessage = $_SESSION['restaurant_registration_error'] ?? '';
+unset($_SESSION['restaurant_registration_error']);
+?>
+
+<div class="content register-page">
+    <div class="container">
+        <div class="register-card">
+
+            <div class="register-progress" role="progressbar" aria-valuenow="1" aria-valuemin="1" aria-valuemax="2"
+                aria-label="Registration progress">
+                <div class="progress-step active" data-step="1">
+                    <span class="step-number">1</span>
+                    <span class="step-label">Account</span>
+                </div>
+                <div class="progress-line" id="progressLine1"></div>
+                <div class="progress-step" data-step="2">
+                    <span class="step-number">2</span>
+                    <span class="step-label">Business</span>
+                </div>
+            </div>
+
+            <div class="register-header">
+                <p class="heading-2">Register Your <span>Restaurant</span></p>
+                <p class="text-muted" id="stepSubtitle">Step 1 of 2 — Account Holder</p>
+            </div>
+
+            <?php if (!empty($errorMessage)): ?>
+            <div class="alert alert-danger" role="alert">
+                <?php echo htmlspecialchars($errorMessage, ENT_QUOTES, 'UTF-8'); ?>
+            </div>
+            <?php endif; ?>
+
+            <div id="registerError" class="alert alert-danger" style="display: none;" role="alert">
+                <span id="errorMessage"></span>
+            </div>
+
+            <form method="POST" action="../backend/handlers/sign-up-handler.php" class="register-form" id="registerForm"
+                enctype="multipart/form-data" novalidate>
+
+                <input type="hidden" name="csrf_token"
+                    value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
+                <input type="hidden" name="current_step" id="currentStep" value="1">
+
+                <!-- STEP 1 — Account Holder -->
+                <div class="register-step" id="step1">
+
+                    <div class="step-description">
+                        <p>The primary account holder will have full owner-level access to the restaurant dashboard.</p>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="first_name" class="form-label">
+                                First Name <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" id="first_name" name="first_name" class="form-control"
+                                placeholder="Enter your first name" autocomplete="given-name" required>
+                            <div class="form-error" id="firstNameError"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="middle_name" class="form-label">
+                                Middle Name <span class="text-muted">(Optional)</span>
+                            </label>
+                            <input type="text" id="middle_name" name="middle_name" class="form-control"
+                                placeholder="Enter your middle name" autocomplete="additional-name">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="last_name" class="form-label">
+                                Last Name <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" id="last_name" name="last_name" class="form-control"
+                                placeholder="Enter your last name" autocomplete="family-name" required>
+                            <div class="form-error" id="lastNameError"></div>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="email" class="form-label">
+                                Email Address <span class="text-danger">*</span>
+                            </label>
+                            <input type="email" id="email" name="email" class="form-control"
+                                placeholder="Enter your email address" autocomplete="email" required>
+                            <div class="form-error" id="emailError"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="contact_number" class="form-label">
+                                Contact Number <span class="text-danger">*</span>
+                            </label>
+                            <input type="tel" id="contact_number" name="contact_number" class="form-control"
+                                placeholder="09XX XXX XXXX" autocomplete="tel" inputmode="numeric" maxlength="13"
+                                required>
+                            <div class="form-error" id="contactError"></div>
+                            <div class="form-hint">11 digits, starting with 09</div>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="username" class="form-label">
+                                Username <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" id="username" name="username" class="form-control"
+                                placeholder="Choose a username" autocomplete="username" maxlength="20" required>
+                            <div class="form-error" id="usernameError"></div>
+                            <div class="form-hint">3–20 characters; letters, numbers, underscore</div>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="password" class="form-label">
+                                Password <span class="text-danger">*</span>
+                            </label>
+                            <div class="password-wrapper">
+                                <input type="password" id="password" name="password" class="form-control"
+                                    placeholder="Create a password" autocomplete="new-password" maxlength="20" required>
+                                <button type="button" class="password-toggle" id="togglePassword" tabindex="-1"
+                                    aria-label="Toggle password visibility">
+                                    <img src="<?php echo $assetBase; ?>assets/images/icons/password-hide.svg"
+                                        alt="Hide password" id="passwordIcon">
+                                </button>
+                            </div>
+                            <div class="form-error" id="passwordError"></div>
+                            <div class="form-hint">8-20 characters (letters and numbers only)</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="confirm_password" class="form-label">
+                                Confirm Password <span class="text-danger">*</span>
+                            </label>
+                            <div class="password-wrapper">
+                                <input type="password" id="confirm_password" name="confirm_password"
+                                    class="form-control" placeholder="Confirm your password" autocomplete="new-password"
+                                    maxlength="20" required>
+                                <button type="button" class="password-toggle" id="toggleConfirmPassword" tabindex="-1"
+                                    aria-label="Toggle confirm password visibility">
+                                    <img src="<?php echo $assetBase; ?>assets/images/icons/password-hide.svg"
+                                        alt="Hide password" id="confirmPasswordIcon">
+                                </button>
+                            </div>
+                            <div class="form-error" id="confirmError"></div>
+                        </div>
+                    </div>
+
+                    <div class="step-actions">
+                        <button type="button" class="btn btn-primary btn-next" data-next="2">
+                            Next Step
+                        </button>
+                    </div>
+                </div>
+
+                <!-- STEP 2 — Business Details -->
+                <div class="register-step" id="step2" style="display: none;">
+
+                    <div class="step-description">
+                        <p>Tell us about your restaurant and its first branch. You can add more branches later.</p>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="business_name" class="form-label">
+                                Business Name <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" id="business_name" name="business_name" class="form-control"
+                                placeholder="e.g. Green Bowl Cafe" maxlength="100" required>
+                            <div class="form-error" id="businessNameError"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="cuisine_type" class="form-label">
+                                Cuisine Type <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" id="cuisine_type" name="cuisine_type" class="form-control"
+                                placeholder="e.g. Cafe, Asian Fusion, American" maxlength="50" required>
+                            <div class="form-error" id="cuisineTypeError"></div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="business_description" class="form-label">
+                            Business Description <span class="text-muted">(Optional)</span>
+                        </label>
+                        <textarea id="business_description" name="business_description" class="form-control"
+                            placeholder="Describe your restaurant, your specialty, and what makes it unique..."
+                            maxlength="2000"></textarea>
+                        <div class="form-hint">Max 2000 characters</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="dietary_tags" class="form-label">
+                            Dietary Tags <span class="text-muted">(Optional)</span>
+                        </label>
+                        <input type="text" id="dietary_tags" name="dietary_tags" class="form-control"
+                            placeholder="e.g. vegan,organic,gluten_free (comma-separated)" maxlength="200">
+                        <div class="form-hint">Comma-separated. Example: vegan, gluten_free, halal</div>
+                    </div>
+
+                    <div class="section-divider">
+                        <span>First Branch</span>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="branch_name" class="form-label">
+                                Branch Name <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" id="branch_name" name="branch_name" class="form-control"
+                                placeholder="e.g. Main Branch" maxlength="50" required>
+                            <div class="form-error" id="branchNameError"></div>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="block" class="form-label">
+                                Block / Street / Unit <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" id="block" name="block" class="form-control"
+                                placeholder="e.g. 12-A Sunrise St., Unit 5B" autocomplete="address-line1" required>
+                            <div class="form-error" id="blockError"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="barangay" class="form-label">
+                                Barangay <span class="text-muted">(Optional)</span>
+                            </label>
+                            <input type="text" id="barangay" name="barangay" class="form-control"
+                                placeholder="e.g. Barangay San Antonio" autocomplete="address-line2">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="city" class="form-label">
+                                City / Municipality <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" id="city" name="city" class="form-control" placeholder="e.g. Pasig"
+                                autocomplete="address-level2" required>
+                            <div class="form-error" id="cityError"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="province" class="form-label">
+                                Province <span class="text-muted">(Optional)</span>
+                            </label>
+                            <input type="text" id="province" name="province" class="form-control"
+                                placeholder="e.g. Metro Manila" autocomplete="address-level1">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="region" class="form-label">
+                                Region <span class="text-muted">(Optional)</span>
+                            </label>
+                            <input type="text" id="region" name="region" class="form-control" placeholder="e.g. NCR"
+                                autocomplete="address-level1">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="postal_code" class="form-label">
+                                Postal Code <span class="text-muted">(Optional)</span>
+                            </label>
+                            <input type="text" id="postal_code" name="postal_code" class="form-control"
+                                placeholder="e.g. 1605" autocomplete="postal-code" maxlength="10" inputmode="numeric">
+                            <div class="form-error" id="postalError"></div>
+                        </div>
+                    </div>
+
+                    <!-- PERMITS -->
+                    <div class="section-divider">
+                        <span>Permits &amp; Documents</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            Business Permits <span class="text-danger">*</span>
+                        </label>
+                        <p class="form-hint" style="margin-bottom: 10px;">
+                            Upload photos of your business permits, DTI/SEC registration,
+                            sanitary permits, or any document that verifies your restaurant
+                            is authorized to sell food. At least 1, up to 5 photos.
+                        </p>
+
+                        <div class="permit-dropzone-grid" id="permitGrid">
+                            <?php for ($i = 0; $i < 5; $i++): ?>
+                            <div class="permit-slot" data-index="<?php echo $i; ?>">
+                                <input type="file" name="permits[]" id="permit_<?php echo $i; ?>"
+                                    accept="image/jpeg,image/png,image/webp" class="permit-input" hidden>
+
+                                <div class="permit-slot-inner">
+                                    <div class="permit-hint">
+                                        <img src="<?php echo $assetBase; ?>assets/images/icons/image-upload-fill.svg"
+                                            alt="" class="permit-hint-icon"
+                                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/image-line.svg'">
+                                        <span class="permit-hint-text">Add photo</span>
+                                    </div>
+
+                                    <div class="permit-preview" hidden>
+                                        <img src="" alt="Permit preview" class="permit-preview-img">
+                                        <button type="button" class="permit-remove"
+                                            aria-label="Remove this permit">&times;</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <?php endfor; ?>
+                        </div>
+
+                        <div class="form-error" id="permitsError"></div>
+                    </div>
+
+                    <div class="form-group terms-group" id="termsGroup">
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="terms" name="terms" value="1" required>
+                            <span class="custom-checkbox" aria-hidden="true"></span>
+                            <label for="terms" class="terms-label">
+                                I confirm the information above is accurate and I agree to the
+                                <a href="<?php echo $assetBase; ?>pages/terms-conditions.php" target="_blank"
+                                    rel="noopener noreferrer">Terms and Conditions</a>
+                                and
+                                <a href="<?php echo $assetBase; ?>pages/privacy-policy.php" target="_blank"
+                                    rel="noopener noreferrer">Privacy Policy</a>.
+                            </label>
+                        </div>
+                        <div class="form-error" id="termsError"></div>
+                    </div>
+
+                    <div class="step-actions">
+                        <button type="button" class="btn btn-outline btn-prev" data-prev="1">
+                            Back
+                        </button>
+                        <button type="submit" class="btn btn-primary" id="registerBtn">
+                            Submit Application
+                        </button>
+                    </div>
+                </div>
+            </form>
+
+            <div class="register-footer">
+                <p class="text-muted">
+                    Already registered?
+                    <a href="sign-in.php">Sign in to your account</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Notification modal -->
+<div id="notifierModal" class="notifier hidden" role="dialog" aria-modal="true" aria-labelledby="notifierTitle"
+    aria-describedby="notifierMessage">
+    <div class="notifier-content">
+        <div class="notifier-icon" aria-hidden="true">
+            <img src="<?php echo $assetBase; ?>assets/images/icons/verified-fill.svg" alt=""
+                onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/mail.svg'">
+        </div>
+        <p class="heading-5" id="notifierTitle">Application Received</p>
+        <p id="notifierMessage"></p>
+        <button id="notifierCloseBtn" class="btn btn-primary" type="button">Continue to Sign In</button>
+    </div>
+</div>
+
+<script src="../assets/ui/js/sign-up.js" defer></script>
+
+<?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>
+```
+
+---
+
 ## File: `fitpal/rider/assets/css/admin-tables.css`
 
 **Status:** `FOUND`
@@ -69221,4765 +75269,6 @@ $termsSections = [
 // Include shared footer
 require_once __DIR__ . '/../includes/footer.php';
 ?>
-```
-
----
-
-## File: `fitpal/test/customer/cart-test.php`
-
-**Status:** `FOUND`
-
-```php
-<?php
-/**
- * FitPal Cart System Test
- *
- * Validates the cart pipeline end-to-end:
- *   menu product card → add-to-cart-handler.php → cart table
- *                    → get-queue-handler.php → queue panel UI
- *
- * Two tiers of tests:
- *   (A) STRUCTURAL — files, form actions, token checks.
- *   (B) LOGIC — DB invariants and PHP/JS contracts that catch the
- *       bug classes that actually surfaced during development:
- *         - form action not pointing at add-to-cart-handler.php
- *         - JS preventDefault() on .add-to-cart-form submit
- *         - queue-panel.js hijacking form submit via window.addToQueue
- *         - queue-panel.js reading from sessionStorage instead of the DB
- *         - handler trusting client total_price without server recompute
- *         - handler not using INSERT ... ON DUPLICATE KEY / row lock
- *         - get-queue-handler returning anything other than the cart table
- *
- * Sections with 0 tests render as NEUTRAL, not as a pass.
- *
- * @package FitPal
- * @version 1.0
- */
-
-declare(strict_types=1);
-
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-// ============================================
-// PATHS
-// ============================================
-$basePath     = realpath(__DIR__ . '/../..');
-$customerPath = $basePath . '/customer';
-$sharedPath   = $basePath . '/shared';
-
-// ============================================
-// TEST HARNESS
-// ============================================
-$sections = [];
-
-/**
- * Record a test result.
- *
- * @param string      $name
- * @param bool        $result
- * @param string      $message
- * @param string      $section
- * @param string      $tier     'logic' or 'structural'
- * @return bool
- */
-function testResult(string $name, bool $result, string $message = '', string $section = 'General', string $tier = 'logic'): bool
-{
-    global $sections;
-    if (!isset($sections[$section])) {
-        $sections[$section] = [];
-    }
-    $sections[$section][] = [
-        'name'    => $name,
-        'status'  => $result ? 'PASS' : 'FAIL',
-        'message' => $message,
-        'passed'  => $result,
-        'tier'    => $tier,
-    ];
-    return $result;
-}
-
-/**
- * Register a section that has no runnable tests.
- *
- * @param string $section
- * @param string $reason
- */
-function markSectionSkipped(string $section, string $reason): void
-{
-    global $sections;
-    if (!isset($sections[$section])) {
-        $sections[$section] = [];
-    }
-    $sections[$section][] = [
-        'name'    => 'Section skipped',
-        'status'  => 'SKIP',
-        'message' => $reason,
-        'passed'  => null,
-        'tier'    => 'structural',
-    ];
-}
-
-/**
- * Render one section with correct pass/fail/skip accounting.
- *
- * @param string $title
- * @param string $sectionName
- * @param bool   $defaultCollapsed
- */
-function renderSection(string $title, string $sectionName, bool $defaultCollapsed = true): void
-{
-    global $sections;
-
-    $tests = $sections[$sectionName] ?? [];
-    $total = 0; $passed = 0; $failed = 0; $skipped = 0;
-
-    foreach ($tests as $t) {
-        if ($t['passed'] === null) {
-            $skipped++;
-        } else {
-            $total++;
-            if ($t['passed']) {
-                $passed++;
-            } else {
-                $failed++;
-            }
-        }
-    }
-
-    if ($total === 0) {
-        $countClass = 'count-neutral';
-        $countText  = $skipped > 0 ? 'skipped' : '0';
-    } elseif ($failed === 0) {
-        $countClass = 'count-pass';
-        $countText  = "{$passed}/{$total}";
-    } elseif ($failed <= 2) {
-        $countClass = 'count-warning';
-        $countText  = "{$passed}/{$total}";
-    } else {
-        $countClass = 'count-fail';
-        $countText  = "{$passed}/{$total}";
-    }
-
-    // Sections with failures default to OPEN so reviewers cannot miss them.
-    if ($failed > 0) {
-        $defaultCollapsed = false;
-    }
-
-    $sectionId      = 'section-' . preg_replace('/[^a-zA-Z0-9]/', '-', $sectionName);
-    $contentId      = 'content-' . preg_replace('/[^a-zA-Z0-9]/', '-', $sectionName);
-    $collapsedClass = $defaultCollapsed ? 'section-collapsed' : '';
-
-    echo "<div class='test-section {$collapsedClass}' id='{$sectionId}'>";
-    echo "<div class='section-header' data-target='{$contentId}'>";
-    echo "<h2>" . htmlspecialchars($title) . " <span class='section-count {$countClass}'>({$countText})</span></h2>";
-    echo "<button class='section-toggle' aria-expanded='" . ($defaultCollapsed ? 'false' : 'true') . "' aria-controls='{$contentId}' type='button'>";
-    echo "<span class='toggle-icon'>" . ($defaultCollapsed ? '+' : '-') . "</span>";
-    echo "</button>";
-    echo "</div>";
-    echo "<div class='test-grid' id='{$contentId}' style='display: " . ($defaultCollapsed ? 'none' : 'grid') . ";'>";
-
-    if (empty($tests)) {
-        echo "<div class='test-item' style='border-left-color: #edf2f0;'>";
-        echo "<div class='test-name' style='color: #a0aec0;'>No tests in this section</div>";
-        echo "</div>";
-    } else {
-        foreach ($tests as $test) {
-            if ($test['passed'] === null) {
-                echo "<div class='test-item skip'>";
-                echo "<div class='test-name'>" . htmlspecialchars($test['name']) . "</div>";
-                echo "<div class='test-status skip'>SKIP</div>";
-                echo "<div class='test-message'>" . htmlspecialchars($test['message']) . "</div>";
-                echo "</div>";
-                continue;
-            }
-            $cls = $test['passed'] ? 'pass' : 'fail';
-            $txt = $test['passed'] ? 'PASS' : 'FAIL';
-            echo "<div class='test-item {$cls}'>";
-            echo "<div class='test-name'>" . htmlspecialchars($test['name']) . "</div>";
-            echo "<div class='test-status {$cls}'>{$txt}</div>";
-            echo "<div class='test-message'>" . htmlspecialchars($test['message']) . "</div>";
-            echo "</div>";
-        }
-    }
-
-    echo "</div>";
-    echo "</div>";
-}
-
-/**
- * Asset base relative to the current script location.
- *
- * @return string
- */
-function getAssetBase(): string
-{
-    $scriptPath = $_SERVER['SCRIPT_NAME'];
-    $dirPath    = dirname($scriptPath);
-    $segments   = array_filter(explode('/', $dirPath));
-    $depth      = count($segments);
-    if ($depth <= 0) {
-        return './shared/';
-    }
-    return str_repeat('../', $depth) . 'shared/';
-}
-
-$protocol  = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http';
-$host      = $_SERVER['HTTP_HOST'];
-$baseUrl   = $protocol . '://' . $host;
-$assetBase = getAssetBase();
-
-// ============================================
-// HEAD
-// ============================================
-echo <<<HTML
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FitPal Cart System Test</title>
-<link rel="stylesheet" href="{$assetBase}assets/css/global.css">
-<style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { width: 100%; overflow-x: hidden; }
-    body { background: #f4f6f9; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-    .test-container { max-width: 100%; padding: 0; margin: 0; }
-    .test-header { background: linear-gradient(135deg, #2d3748, #1a202c); color: white; padding: 30px; border-radius: 12px; margin-bottom: 30px; width: 100%; }
-    .test-header h1 { margin: 0; font-size: 28px; }
-    .test-header p { margin: 10px 0 0 0; opacity: 0.8; }
-    .test-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; width: 100%; }
-    .summary-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center; }
-    .summary-card .number { font-size: 32px; font-weight: 700; }
-    .summary-card .label { color: #718096; font-size: 14px; margin-top: 5px; }
-    .summary-card.total .number { color: #2d3748; }
-    .summary-card.passed .number { color: #48bb78; }
-    .summary-card.failed .number { color: #fc8181; }
-    .summary-card.rate .number { color: #4299e1; }
-    .test-grid { display: grid; gap: 10px; padding: 15px; width: 100%; }
-    .test-item { background: white; border-radius: 8px; padding: 12px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; width: 100%; }
-    .test-item.pass { border-left-color: #48bb78; }
-    .test-item.fail { border-left-color: #fc8181; }
-    .test-item.skip { border-left-color: #cbd5e0; opacity: 0.75; }
-    .test-item .test-name { font-weight: 600; font-size: 14px; flex: 1; min-width: 180px; }
-    .test-item .test-status { display: inline-block; padding: 2px 14px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; margin: 0 10px; }
-    .test-item .test-status.pass { background: #c6f6d5; color: #22543d; }
-    .test-item .test-status.fail { background: #fed7d7; color: #9b2c2c; }
-    .test-item .test-status.skip { background: #edf2f7; color: #718096; }
-    .test-item .test-message { color: #718096; font-size: 13px; min-width: 100px; text-align: right; }
-    .test-section { background: white; border-radius: 10px; margin-top: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; width: 100%; }
-    .section-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; cursor: pointer; background: #f7fafc; border-bottom: 1px solid #e2e8f0; user-select: none; width: 100%; }
-    .section-header:hover { background: #edf2f7; }
-    .section-header h2 { margin: 0; font-size: 18px; color: #2d3748; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .section-count { font-size: 14px; font-weight: 600; padding: 2px 12px; border-radius: 20px; }
-    .count-pass { background: #c6f6d5; color: #22543d; }
-    .count-warning { background: #fefcbf; color: #975a16; }
-    .count-fail { background: #fed7d7; color: #9b2c2c; }
-    .count-neutral { background: #edf2f7; color: #718096; }
-    .section-toggle { background: none; border: none; font-size: 20px; cursor: pointer; color: #718096; padding: 0 10px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 6px; flex-shrink: 0; }
-    .section-toggle:hover { background: #e2e8f0; }
-    .toggle-icon { display: inline-block; transition: transform 0.2s ease; }
-    .section-collapsed .toggle-icon { transform: rotate(0deg); }
-    .live-test { padding: 10px 0; width: 100%; }
-    .live-test iframe { width: 100%; height: 500px; border: 1px solid #e2e8f0; border-radius: 6px; margin-top: 10px; display: block; }
-    .btn-test { display: inline-block; padding: 8px 16px; background: #4299e1; color: white; border-radius: 6px; text-decoration: none; font-size: 13px; margin-top: 10px; }
-    .btn-test:hover { background: #3182ce; }
-    .btn-test-group { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
-    .btn-test.danger { background: #e53e3e; }
-    .btn-test.danger:hover { background: #c53030; }
-    .btn-test.success { background: #48bb78; }
-    .btn-test.success:hover { background: #38a169; }
-    .btn-test.warning { background: #ed8936; }
-    .btn-test.warning:hover { background: #dd6b20; }
-    .top-section { margin-bottom: 20px; width: 100%; }
-    .note-box { margin-top: 15px; padding: 15px; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; }
-    .note-box p { font-size: 13px; color: #78350f; margin: 5px 0 0 0; }
-    .note-box p:first-child { font-weight: 600; color: #92400e; margin-top: 0; }
-    .note-box ul { font-size: 13px; color: #78350f; margin: 5px 0 0 0; padding-left: 20px; }
-    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 10px 0; }
-    .data-table th { background: #edf2f7; padding: 8px 12px; text-align: left; font-weight: 600; }
-    .data-table td { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; }
-    .data-table tr:hover { background: #f7fafc; }
-    .status-ok { color: #48bb78; font-weight: 600; }
-    .status-fail { color: #fc8181; font-weight: 600; }
-    @media (max-width: 640px) {
-        body { padding: 10px; }
-        .test-header { padding: 20px; }
-        .test-header h1 { font-size: 22px; }
-        .test-summary { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-        .summary-card { padding: 15px; }
-        .summary-card .number { font-size: 24px; }
-        .section-header { padding: 12px 15px; flex-wrap: wrap; }
-        .section-header h2 { font-size: 16px; }
-        .section-count { font-size: 12px; padding: 2px 10px; }
-        .test-item { padding: 10px 15px; flex-direction: column; align-items: flex-start; gap: 5px; }
-        .test-item .test-name { font-size: 13px; min-width: auto; width: 100%; }
-        .test-item .test-status { margin: 0 10px 0 0; }
-        .test-item .test-message { text-align: left; width: 100%; min-width: auto; }
-        .test-grid { padding: 10px; }
-        .live-test iframe { height: 350px; }
-        .btn-test-group { gap: 8px; }
-        .btn-test { font-size: 12px; padding: 6px 12px; }
-        .data-table { font-size: 11px; }
-        .data-table th, .data-table td { padding: 4px 8px; }
-    }
-</style>
-</head>
-<body>
-<div class="test-container">
-HTML;
-
-// ============================================
-// HEADER
-// ============================================
-echo "<div class='test-header'>";
-echo "<h1>FitPal Cart System Test</h1>";
-echo "<p>Validates menu → add-to-cart → cart table → queue panel pipeline.</p>";
-echo "<p style='font-size:13px;opacity:0.6;margin-top:10px;'>Base Path: " . htmlspecialchars((string)$basePath) . " | Base URL: " . htmlspecialchars($baseUrl) . "</p>";
-echo "</div>";
-
-// ============================================
-// DB CONNECTION
-// ============================================
-$dbFile = $sharedPath . '/backend/database/database-connect.php';
-$db = null;
-
-if (file_exists($dbFile)) {
-    testResult('Database file exists', true, 'File found', 'Database', 'structural');
-    try {
-        $database_host     = 'localhost';
-        $database_port     = 3306;
-        $database_name     = 'fitpal_food_delivery';
-        $database_username = 'root';
-        $database_password = '';
-        $database_charset  = 'utf8mb4';
-
-        $dsn = sprintf(
-            'mysql:host=%s;port=%d;dbname=%s;charset=%s',
-            $database_host, $database_port, $database_name, $database_charset
-        );
-        $db = new PDO($dsn, $database_username, $database_password, [
-            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES   => false,
-        ]);
-        testResult('Database connection', true, 'PDO connection established', 'Database', 'structural');
-    } catch (PDOException $e) {
-        testResult('Database connection', false, 'PDO error: ' . $e->getMessage(), 'Database', 'structural');
-        $db = null;
-    }
-} else {
-    testResult('Database file exists', false, 'Missing: ' . $dbFile, 'Database', 'structural');
-}
-
-// ============================================
-// SECTION A — FILES
-// ============================================
-$criticalFiles = [
-    'menu.php'                    => $customerPath . '/pages/menu.php',
-    'checkout.php'                => $customerPath . '/pages/checkout.php',
-    'add-to-cart-handler.php'     => $customerPath . '/backend/handlers/add-to-cart-handler.php',
-    'get-queue-handler.php'       => $customerPath . '/backend/handlers/get-queue-handler.php',
-    'sync-queue-handler.php'      => $customerPath . '/backend/handlers/sync-queue-handler.php',
-    'place-order-handler.php'     => $customerPath . '/backend/handlers/place-order-handler.php',
-    'cart-queries.php'            => $customerPath . '/backend/database/cart-queries.php',
-    'menu.js'                     => $customerPath . '/assets/ui/js/menu.js',
-    'queue-panel.js'              => $customerPath . '/assets/ui/js/queue-panel.js',
-    'queue-panel.css'             => $customerPath . '/assets/css/queue-panel.css',
-    'menu-product.css'            => $customerPath . '/assets/css/menu-product.css',
-    'customer header.php'         => $customerPath . '/includes/header.php',
-    'shared footer.php'           => $sharedPath   . '/includes/footer.php',
-    'database-connect.php'        => $sharedPath   . '/backend/database/database-connect.php',
-];
-
-foreach ($criticalFiles as $label => $path) {
-    $ok = file_exists($path);
-    testResult($label, $ok, $ok ? 'Found' : 'Missing: ' . $path, 'Files', 'structural');
-}
-
-// ============================================
-// SECTION B — DB SCHEMA (cart)
-// ============================================
-if ($db !== null) {
-    // cart table
-    $stmt = $db->query("SHOW TABLES LIKE 'cart'");
-    $hasCart = $stmt->rowCount() > 0;
-    testResult('Table exists: cart', $hasCart, $hasCart ? 'Present' : 'Missing', 'Schema', 'structural');
-
-    if ($hasCart) {
-        // Required columns
-        $requiredCols = [
-            'cart_id', 'customer_id', 'product_id',
-            'quantity', 'price', 'added_at', 'customization_data',
-        ];
-        $stmt = $db->query("SHOW COLUMNS FROM cart");
-        $haveCols = array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'Field');
-        foreach ($requiredCols as $col) {
-            $ok = in_array($col, $haveCols, true);
-            testResult("cart.{$col}", $ok, $ok ? 'Present' : 'Missing', 'Schema', 'structural');
-        }
-
-        // Unique key on (customer_id, product_id) keeps the upsert path honest
-        $stmt = $db->query("SHOW INDEX FROM cart WHERE Key_name = 'unique_cart_item'");
-        $hasUnique = $stmt->rowCount() > 0;
-        testResult(
-            'Unique key: (customer_id, product_id)',
-            $hasUnique,
-            $hasUnique
-                ? 'Present — prevents duplicate rows for the same product'
-                : 'Missing — handler must implement upsert manually',
-            'Schema'
-        );
-
-        // FK: cart.customer_id → customer
-        $stmt = $db->query(
-            "SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE
-             WHERE TABLE_SCHEMA = DATABASE()
-               AND TABLE_NAME = 'cart'
-               AND COLUMN_NAME = 'customer_id'
-               AND REFERENCED_TABLE_NAME = 'customer'"
-        );
-        $hasFkCustomer = (int)$stmt->fetchColumn() > 0;
-        testResult('FK: cart.customer_id → customer', $hasFkCustomer, $hasFkCustomer ? 'Present' : 'Missing', 'Schema', 'structural');
-
-        // FK: cart.product_id → product
-        $stmt = $db->query(
-            "SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE
-             WHERE TABLE_SCHEMA = DATABASE()
-               AND TABLE_NAME = 'cart'
-               AND COLUMN_NAME = 'product_id'
-               AND REFERENCED_TABLE_NAME = 'product'"
-        );
-        $hasFkProduct = (int)$stmt->fetchColumn() > 0;
-        testResult('FK: cart.product_id → product', $hasFkProduct, $hasFkProduct ? 'Present' : 'Missing', 'Schema', 'structural');
-
-        // CHECK: quantity > 0
-        $stmt = $db->query(
-            "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
-             WHERE TABLE_SCHEMA = DATABASE()
-               AND TABLE_NAME = 'cart'
-               AND CONSTRAINT_TYPE = 'CHECK'"
-        );
-        $hasChecks = (int)$stmt->fetchColumn() > 0;
-        testResult('cart has CHECK constraints', $hasChecks, $hasChecks ? 'Present' : 'None found (optional)', 'Schema');
-    }
-}
-
-// ============================================
-// SECTION C — DB INVARIANTS (live cart data)
-// ============================================
-if ($db !== null) {
-    // C1. No orphan cart rows (customer_id no longer in customer)
-    $stmt = $db->query(
-        "SELECT COUNT(*) FROM cart c
-         LEFT JOIN customer cu ON c.customer_id = cu.customer_id
-         WHERE cu.customer_id IS NULL"
-    );
-    $orphanCustomers = (int)$stmt->fetchColumn();
-    testResult(
-        'No orphan cart.customer_id',
-        $orphanCustomers === 0,
-        $orphanCustomers === 0 ? 'Clean' : "{$orphanCustomers} orphan row(s)",
-        'DB Invariants'
-    );
-
-    // C2. No cart rows pointing at missing products
-    $stmt = $db->query(
-        "SELECT COUNT(*) FROM cart c
-         LEFT JOIN product p ON c.product_id = p.product_id
-         WHERE p.product_id IS NULL"
-    );
-    $orphanProducts = (int)$stmt->fetchColumn();
-    testResult(
-        'No orphan cart.product_id',
-        $orphanProducts === 0,
-        $orphanProducts === 0 ? 'Clean' : "{$orphanProducts} orphan row(s)",
-        'DB Invariants'
-    );
-
-    // C3. quantity must be > 0
-    $stmt = $db->query("SELECT COUNT(*) FROM cart WHERE quantity <= 0");
-    $badQty = (int)$stmt->fetchColumn();
-    testResult(
-        'All cart.quantity > 0',
-        $badQty === 0,
-        $badQty === 0 ? 'Clean' : "{$badQty} row(s) with quantity <= 0",
-        'DB Invariants'
-    );
-
-    // C4. price must be >= 0
-    $stmt = $db->query("SELECT COUNT(*) FROM cart WHERE price < 0");
-    $badPrice = (int)$stmt->fetchColumn();
-    testResult(
-        'All cart.price >= 0',
-        $badPrice === 0,
-        $badPrice === 0 ? 'Clean' : "{$badPrice} row(s) with negative price",
-        'DB Invariants'
-    );
-
-    // C5. customization_data must be NULL or valid JSON
-    $stmt = $db->query(
-        "SELECT COUNT(*) FROM cart
-         WHERE customization_data IS NOT NULL
-           AND JSON_VALID(customization_data) = 0"
-    );
-    $badJson = (int)$stmt->fetchColumn();
-    testResult(
-        'customization_data is NULL or valid JSON',
-        $badJson === 0,
-        $badJson === 0 ? 'Clean' : "{$badJson} row(s) with invalid JSON",
-        'DB Invariants'
-    );
-
-    // C6. No duplicate (customer_id, product_id) pairs
-    $stmt = $db->query(
-        "SELECT customer_id, product_id, COUNT(*) AS cnt
-         FROM cart
-         GROUP BY customer_id, product_id
-         HAVING cnt > 1
-         LIMIT 5"
-    );
-    $dupes = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    testResult(
-        'No duplicate (customer_id, product_id)',
-        empty($dupes),
-        empty($dupes)
-            ? 'Clean'
-            : count($dupes) . ' duplicate pair(s): '
-              . implode(', ', array_map(
-                    fn($r) => "cust={$r['customer_id']}/prod={$r['product_id']} x{$r['cnt']}",
-                    $dupes
-                )),
-        'DB Invariants'
-    );
-
-    // C7. cart price should not exceed product.base_price + sane modifier cap.
-    //     This is a soft invariant: if the client is allowed to set price,
-    //     it should still be bounded. Cap = base_price + 10x.
-    $stmt = $db->query(
-        "SELECT c.cart_id, c.price, p.base_price, p.price AS product_price, p.name
-         FROM cart c
-         JOIN product p ON c.product_id = p.product_id
-         WHERE p.base_price IS NOT NULL
-           AND c.price > GREATEST(p.base_price, p.price) * 10"
-    );
-    $suspicious = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    testResult(
-        'No cart price wildly exceeds product price',
-        empty($suspicious),
-        empty($suspicious)
-            ? 'Clean (no row > 10x base price)'
-            : count($suspicious) . ' suspicious row(s): '
-              . implode(', ', array_map(
-                    fn($r) => "cart={$r['cart_id']} {$r['name']} price={$r['price']} base={$r['base_price']}",
-                    array_slice($suspicious, 0, 3)
-                )),
-        'DB Invariants'
-    );
-}
-
-// ============================================
-// SECTION D — PHP CONTRACT (menu.php)
-// ============================================
-$menuPath = $customerPath . '/pages/menu.php';
-if (file_exists($menuPath)) {
-    $menu = file_get_contents($menuPath);
-
-    // Must include add-to-cart-handler.php as the form action
-    preg_match_all(
-        '/<form[^>]*class=["\'][^"\']*add-to-cart-form[^"\']*["\'][^>]*action=["\']([^"\']+)["\']/i',
-        $menu,
-        $actionFirst
-    );
-    preg_match_all(
-        '/<form[^>]*action=["\']([^"\']+)["\'][^>]*class=["\'][^"\']*add-to-cart-form[^"\']*["\']/i',
-        $menu,
-        $actionLast
-    );
-    $actions = array_merge($actionFirst[1] ?? [], $actionLast[1] ?? []);
-
-    $allPointToHandler = true;
-    $actionList = [];
-    foreach ($actions as $a) {
-        $actionList[] = $a;
-        if (strpos($a, 'add-to-cart-handler.php') === false) {
-            $allPointToHandler = false;
-        }
-    }
-
-    testResult(
-        'add-to-cart-form action → add-to-cart-handler.php',
-        $allPointToHandler && !empty($actions),
-        empty($actions)
-            ? 'No .add-to-cart-form found with an action attribute'
-            : 'Actions: ' . implode(', ', array_unique($actionList)),
-        'PHP Contract'
-    );
-
-    // Must render a hidden CSRF field inside the form
-    $hasFormCsrf = (bool)preg_match(
-        '/<form[^>]*add-to-cart-form[^>]*>.*?name=["\']csrf_token["\']/si',
-        $menu
-    );
-    testResult(
-        'Form contains csrf_token input',
-        $hasFormCsrf,
-        $hasFormCsrf ? 'Found' : 'Missing — handler will reject with security validation failed',
-        'PHP Contract'
-    );
-
-    // Must render a hidden product_id input
-    $hasProductId = (bool)preg_match(
-        '/<form[^>]*add-to-cart-form[^>]*>.*?name=["\']product_id["\']/si',
-        $menu
-    );
-    testResult(
-        'Form contains product_id input',
-        $hasProductId,
-        $hasProductId ? 'Found' : 'Missing — handler cannot identify product',
-        'PHP Contract'
-    );
-
-    // Must render a quantity input
-    $hasQuantity = (bool)preg_match(
-        '/<form[^>]*add-to-cart-form[^>]*>.*?name=["\']quantity["\']/si',
-        $menu
-    );
-    testResult(
-        'Form contains quantity input',
-        $hasQuantity,
-        $hasQuantity ? 'Found' : 'Missing',
-        'PHP Contract'
-    );
-
-    // Must render the queue panel container
-    $hasPanel = strpos($menu, 'queuePanelWrapper') !== false;
-    testResult(
-        'Renders queuePanelWrapper container',
-        $hasPanel,
-        $hasPanel ? 'Found' : 'Missing — panel has no mount point',
-        'PHP Contract'
-    );
-
-    // Must include queue-panel.js
-    $hasPanelJs = strpos($menu, 'queue-panel.js') !== false;
-    testResult(
-        'Includes queue-panel.js',
-        $hasPanelJs,
-        $hasPanelJs ? 'Found' : 'Missing',
-        'PHP Contract'
-    );
-
-    // Must NOT render a second <!DOCTYPE>
-    $doctypeCount = substr_count(strtolower($menu), '<!doctype');
-    testResult(
-        'No duplicate <!DOCTYPE>',
-        $doctypeCount === 0,
-        $doctypeCount === 0 ? 'Clean' : "Found {$doctypeCount} — page contract violation",
-        'PHP Contract',
-        'structural'
-    );
-}
-
-// ============================================
-// SECTION E — JS CONTRACT (menu.js)
-// ============================================
-$menuJsPath = $customerPath . '/assets/ui/js/menu.js';
-if (file_exists($menuJsPath)) {
-    $menuJs = file_get_contents($menuJsPath);
-
-    // Must NOT preventDefault on .add-to-cart-form submit
-    $hasPreventOnCartForm = preg_match(
-        '/add-to-cart-form[\s\S]{0,400}?preventDefault/',
-        $menuJs
-    ) === 1;
-
-    testResult(
-        'menu.js does NOT preventDefault on cart form submit',
-        !$hasPreventOnCartForm,
-        $hasPreventOnCartForm
-            ? 'Found preventDefault near add-to-cart-form — form POST will be blocked'
-            : 'Clean',
-        'JS Contract'
-    );
-
-    // Must NOT call window.addToQueue from a submit handler
-    $hasHijack = preg_match(
-        '/add-to-cart-form[\s\S]{0,600}?window\.addToQueue/',
-        $menuJs
-    ) === 1;
-    testResult(
-        'menu.js does NOT call window.addToQueue from submit',
-        !$hasHijack,
-        $hasHijack
-            ? 'Found window.addToQueue near add-to-cart-form — form is hijacked'
-            : 'Clean',
-        'JS Contract'
-    );
-
-    // Must still attach a submit listener for loading state (no preventDefault)
-    $hasSubmitListener = strpos($menuJs, "addEventListener('submit'") !== false
-                      || strpos($menuJs, 'addEventListener("submit"') !== false;
-    testResult(
-        'menu.js attaches a submit listener',
-        $hasSubmitListener,
-        $hasSubmitListener ? 'Found (loading state only)' : 'Missing',
-        'JS Contract'
-    );
-
-    // Quantity controls should be present
-    $hasQtyControls = strpos($menuJs, 'qty-plus') !== false
-                   && strpos($menuJs, 'qty-minus') !== false;
-    testResult(
-        'menu.js binds qty +/- buttons',
-        $hasQtyControls,
-        $hasQtyControls ? 'Found' : 'Missing',
-        'JS Contract'
-    );
-
-    // Uses strict mode
-    $hasStrict = strpos($menuJs, "'use strict'") !== false
-              || strpos($menuJs, '"use strict"') !== false;
-    testResult("'use strict'", $hasStrict, $hasStrict ? 'Found' : 'Missing', 'JS Contract', 'structural');
-}
-
-// ============================================
-// SECTION F — JS CONTRACT (queue-panel.js)
-// ============================================
-$panelJsPath = $customerPath . '/assets/ui/js/queue-panel.js';
-if (file_exists($panelJsPath)) {
-    $panelJs = file_get_contents($panelJsPath);
-
-    // Must NOT hijack .add-to-cart-form submissions
-    $hasSubmitHijack = preg_match(
-        '/document\.addEventListener\(\s*[\'"]submit[\'"][\s\S]{0,600}?add-to-cart-form/',
-        $panelJs
-    ) === 1;
-    testResult(
-        'queue-panel.js does NOT hijack add-to-cart submits',
-        !$hasSubmitHijack,
-        $hasSubmitHijack
-            ? 'Found document.submit handler intercepting .add-to-cart-form'
-            : 'Clean',
-        'JS Contract'
-    );
-
-    // Must NOT read/write sessionStorage as source of truth
-    $usesSessionStorage = strpos($panelJs, 'sessionStorage.getItem') !== false
-                       || strpos($panelJs, 'sessionStorage.setItem') !== false;
-    testResult(
-        'queue-panel.js does NOT use sessionStorage',
-        !$usesSessionStorage,
-        $usesSessionStorage
-            ? 'Found sessionStorage access — panel should read the DB instead'
-            : 'Clean',
-        'JS Contract'
-    );
-
-    // Must hit get-queue-handler.php to fetch cart state
-    $callsGetQueue = strpos($panelJs, 'get-queue-handler.php') !== false;
-    testResult(
-        'queue-panel.js calls get-queue-handler.php',
-        $callsGetQueue,
-        $callsGetQueue ? 'Found' : 'Missing — panel has no data source',
-        'JS Contract'
-    );
-
-    // Must hit sync-queue-handler.php for mutations
-    $callsSyncQueue = strpos($panelJs, 'sync-queue-handler.php') !== false;
-    testResult(
-        'queue-panel.js calls sync-queue-handler.php',
-        $callsSyncQueue,
-        $callsSyncQueue ? 'Found' : 'Missing — panel cannot persist removes/qty changes',
-        'JS Contract'
-    );
-
-    // Must define loadQueueFromServer
-    $hasLoader = strpos($panelJs, 'loadQueueFromServer') !== false;
-    testResult(
-        'queue-panel.js defines loadQueueFromServer',
-        $hasLoader,
-        $hasLoader ? 'Found' : 'Missing',
-        'JS Contract'
-    );
-
-    // Uses strict mode
-    $hasStrict = strpos($panelJs, "'use strict'") !== false
-              || strpos($panelJs, '"use strict"') !== false;
-    testResult("'use strict'", $hasStrict, $hasStrict ? 'Found' : 'Missing', 'JS Contract', 'structural');
-}
-
-// ============================================
-// SECTION G — HANDLER CONTRACT (add-to-cart-handler.php)
-// ============================================
-$addHandlerPath = $customerPath . '/backend/handlers/add-to-cart-handler.php';
-if (file_exists($addHandlerPath)) {
-    $h = file_get_contents($addHandlerPath);
-
-    // Auth
-    $hasAuth = strpos($h, "customer_id") !== false
-            && strpos($h, '$_SESSION') !== false;
-    testResult('Auth check present', $hasAuth, $hasAuth ? 'Found' : 'Missing', 'Handler Contract');
-
-    // CSRF
-    $hasCsrf = strpos($h, 'csrf_token') !== false;
-    testResult('CSRF check present', $hasCsrf, $hasCsrf ? 'Found' : 'Missing', 'Handler Contract');
-
-    // Transaction
-    $hasTx = strpos($h, 'beginTransaction') !== false;
-    testResult('Uses a transaction', $hasTx, $hasTx ? 'Found' : 'Missing', 'Handler Contract');
-
-    // Row lock on product
-    $locksProduct = preg_match(
-        '/FROM\s+product[\s\S]{0,200}?FOR\s+UPDATE/i',
-        $h
-    ) === 1;
-    testResult(
-        'Locks product row (FOR UPDATE)',
-        $locksProduct,
-        $locksProduct
-            ? 'Found'
-            : 'Missing — concurrent adds may oversell',
-        'Handler Contract'
-    );
-
-    // Reads existing cart row
-    $readsExisting = preg_match(
-        '/FROM\s+cart[\s\S]{0,200}?(WHERE|customer_id)/i',
-        $h
-    ) === 1;
-    testResult(
-        'Reads existing cart row',
-        $readsExisting,
-        $readsExisting
-            ? 'Found'
-            : 'Missing — handler may insert duplicate rows',
-        'Handler Contract'
-    );
-
-    // Either UPDATE for existing + INSERT for new, or INSERT ... ON DUPLICATE KEY
-    $hasUpdate = stripos($h, 'UPDATE cart') !== false;
-    $hasUpsert = stripos($h, 'ON DUPLICATE KEY UPDATE') !== false;
-    testResult(
-        'Has update-or-insert path',
-        $hasUpdate || $hasUpsert,
-        $hasUpdate
-            ? 'Found UPDATE cart'
-            : ($hasUpsert ? 'Found ON DUPLICATE KEY UPDATE' : 'Missing — cannot re-add'),
-        'Handler Contract'
-    );
-
-    // Must NOT blindly trust client total_price
-    $trustsClientTotal = preg_match(
-        '/\$_POST\s*\[\s*[\'"]total_price[\'"]\s*\]/',
-        $h
-    ) === 1;
-    testResult(
-        'Does not trust client total_price',
-        !$trustsClientTotal,
-        $trustsClientTotal
-            ? 'Found $_POST["total_price"] usage — client controls the price'
-            : 'Clean (server-side pricing)',
-        'Handler Contract'
-    );
-
-    // Uses base_price as the source of truth
-    $usesBasePrice = strpos($h, 'base_price') !== false;
-    testResult(
-        'Uses product.base_price for pricing',
-        $usesBasePrice,
-        $usesBasePrice
-            ? 'Found'
-            : 'Missing — pricing may drift from admin-set base',
-        'Handler Contract'
-    );
-
-    // Handles both success and error via session flash + redirect
-    $hasSuccessFlash = strpos($h, 'cart_success') !== false
-                    || strpos($h, 'queue_success') !== false;
-    $hasErrorFlash   = strpos($h, 'cart_error') !== false
-                    || strpos($h, 'queue_error') !== false;
-    testResult(
-        'Sets success flash',
-        $hasSuccessFlash,
-        $hasSuccessFlash ? 'Found' : 'Missing',
-        'Handler Contract'
-    );
-    testResult(
-        'Sets error flash',
-        $hasErrorFlash,
-        $hasErrorFlash ? 'Found' : 'Missing',
-        'Handler Contract'
-    );
-
-    // Redirects after handling (no silent exit)
-    $redirects = strpos($h, "header('Location:") !== false
-              || strpos($h, 'header("Location:') !== false;
-    testResult(
-        'Redirects after handling',
-        $redirects,
-        $redirects ? 'Found' : 'Missing',
-        'Handler Contract'
-    );
-}
-
-// ============================================
-// SECTION H — HANDLER CONTRACT (get-queue-handler.php)
-// ============================================
-$getHandlerPath = $customerPath . '/backend/handlers/get-queue-handler.php';
-if (file_exists($getHandlerPath)) {
-    $g = file_get_contents($getHandlerPath);
-
-    // Must read from the cart table
-    $readsCart = preg_match('/FROM\s+cart\b/i', $g) === 1;
-    testResult(
-        'Reads from cart table',
-        $readsCart,
-        $readsCart
-            ? 'Found'
-            : 'Missing — handler may read the wrong source',
-        'Handler Contract'
-    );
-
-    // Must scope by customer
-    $scopesByCustomer = stripos($g, 'customer_id') !== false;
-    testResult(
-        'Scopes by customer_id',
-        $scopesByCustomer,
-        $scopesByCustomer ? 'Found' : 'Missing — leaks other users carts',
-        'Handler Contract'
-    );
-
-    // Must return JSON
-    $returnsJson = stripos($g, 'application/json') !== false;
-    testResult(
-        'Returns JSON content-type',
-        $returnsJson,
-        $returnsJson ? 'Found' : 'Missing',
-        'Handler Contract'
-    );
-
-    // Must return a "queue" array in the JSON shape (the panel expects it)
-    $returnsQueue = strpos($g, "'queue'") !== false
-                 || strpos($g, '"queue"') !== false;
-    testResult(
-        'Response includes "queue" array',
-        $returnsQueue,
-        $returnsQueue ? 'Found' : 'Missing — panel reads data.queue',
-        'Handler Contract'
-    );
-}
-
-// ============================================
-// SECTION I — HANDLER CONTRACT (sync-queue-handler.php)
-// ============================================
-$syncHandlerPath = $customerPath . '/backend/handlers/sync-queue-handler.php';
-if (file_exists($syncHandlerPath)) {
-    $s = file_get_contents($syncHandlerPath);
-
-    // Must use a transaction
-    $hasTx = strpos($s, 'beginTransaction') !== false;
-    testResult(
-        'Uses a transaction',
-        $hasTx,
-        $hasTx ? 'Found' : 'Missing — partial syncs possible',
-        'Handler Contract'
-    );
-
-    // Must delete cart rows not present in the incoming queue
-    $hasDelete = stripos($s, 'DELETE FROM cart') !== false;
-    testResult(
-        'Deletes cart rows not in payload',
-        $hasDelete,
-        $hasDelete ? 'Found' : 'Missing — stale rows may linger',
-        'Handler Contract'
-    );
-
-    // Must NOT trust client-sent price without re-reading product
-    $trustsClientPrice = preg_match(
-        '/\$_POST[\s\S]{0,200}?price|json_decode[\s\S]{0,200}?\$item\[[\'"]price[\'"]\]/',
-        $s
-    ) === 1;
-    $reReadsProduct = preg_match(
-        '/FROM\s+product[\s\S]{0,200}?(base_price|price)/i',
-        $s
-    ) === 1;
-    testResult(
-        'Re-reads product price from DB',
-        $reReadsProduct,
-        $reReadsProduct
-            ? 'Found'
-            : 'Missing — syncing trusts client-supplied price',
-        'Handler Contract'
-    );
-    testResult(
-        'Does not blindly trust client price',
-        !$trustsClientPrice || $reReadsProduct,
-        $trustsClientPrice
-            ? ($reReadsProduct ? 'Client price present but overridden by DB' : 'Only client price trusted')
-            : 'Clean',
-        'Handler Contract'
-    );
-
-    // CSRF
-    $hasCsrf = strpos($s, 'csrf_token') !== false;
-    testResult('CSRF check present', $hasCsrf, $hasCsrf ? 'Found' : 'Missing', 'Handler Contract');
-}
-
-// ============================================
-// SECTION J — HANDLER CONTRACT (place-order-handler.php)
-// ============================================
-$placeHandlerPath = $customerPath . '/backend/handlers/place-order-handler.php';
-if (file_exists($placeHandlerPath)) {
-    $p = file_get_contents($placeHandlerPath);
-
-    // Must read cart via cart-queries (single source of truth)
-    $usesCartQueries = stripos($p, 'cart-queries') !== false
-                    || stripos($p, 'getCartGroupedByBranch') !== false;
-    testResult(
-        'Uses cart-queries helper',
-        $usesCartQueries,
-        $usesCartQueries ? 'Found' : 'Missing — duplicated cart read logic',
-        'Handler Contract'
-    );
-
-    // Must NOT insert into the GENERATED column total_amount
-    $insertsTotal = preg_match(
-        '/INSERT\s+INTO\s+orders[\s\S]{0,400}?total_amount/i',
-        $p
-    ) === 1;
-    testResult(
-        'Does not insert into GENERATED total_amount',
-        !$insertsTotal,
-        $insertsTotal
-            ? 'Found total_amount in INSERT — generated column will error'
-            : 'Clean',
-        'Handler Contract'
-    );
-
-    // Uses a transaction
-    $hasTx = strpos($p, 'beginTransaction') !== false;
-    testResult(
-        'Uses a transaction',
-        $hasTx,
-        $hasTx ? 'Found' : 'Missing — partial orders possible',
-        'Handler Contract'
-    );
-
-    // Locks product stock
-    $locksProduct = preg_match(
-        '/FROM\s+product[\s\S]{0,300}?FOR\s+UPDATE/i',
-        $p
-    ) === 1;
-    testResult(
-        'Locks product rows (FOR UPDATE)',
-        $locksProduct,
-        $locksProduct
-            ? 'Found'
-            : 'Missing — stock race conditions possible',
-        'Handler Contract'
-    );
-
-    // Decrements stock
-    $decrements = stripos($p, 'SET stock = stock -') !== false
-               || stripos($p, 'UPDATE product') !== false;
-    testResult(
-        'Decrements product stock',
-        $decrements,
-        $decrements ? 'Found' : 'Missing',
-        'Handler Contract'
-    );
-
-    // Clears cart after order
-    $clearsCart = stripos($p, 'DELETE FROM cart') !== false;
-    testResult(
-        'Clears cart after order',
-        $clearsCart,
-        $clearsCart ? 'Found' : 'Missing',
-        'Handler Contract'
-    );
-
-    // CSRF
-    $hasCsrf = strpos($p, 'csrf_token') !== false;
-    testResult('CSRF check present', $hasCsrf, $hasCsrf ? 'Found' : 'Missing', 'Handler Contract');
-}
-
-// ============================================
-// SECTION K — ROUND-TRIP SMOKE TEST (read-only)
-// Confirms the cart table responds to a normal SELECT scoped by customer.
-// We do not mutate anything here — only verify the query shape works.
-// ============================================
-if ($db !== null) {
-    try {
-        $stmt = $db->query(
-            "SELECT c.cart_id, c.product_id, c.quantity, c.price, c.customization_data,
-                    p.name AS product_name, p.base_price, p.stock
-             FROM cart c
-             JOIN product p ON c.product_id = p.product_id
-             ORDER BY c.added_at DESC
-             LIMIT 5"
-        );
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        testResult(
-            'Cart join query executes',
-            true,
-            count($rows) . ' row(s) returned',
-            'Round-Trip'
-        );
-
-        $allValidJson = true;
-        foreach ($rows as $r) {
-            if ($r['customization_data'] !== null
-                && json_decode((string)$r['customization_data'], true) === null
-                && json_last_error() !== JSON_ERROR_NONE) {
-                $allValidJson = false;
-                break;
-            }
-        }
-        testResult(
-            'Returned customization_data parses as JSON',
-            $allValidJson,
-            $allValidJson ? 'All rows valid' : 'At least one row is not valid JSON',
-            'Round-Trip'
-        );
-    } catch (PDOException $e) {
-        testResult(
-            'Cart join query executes',
-            false,
-            'PDO error: ' . $e->getMessage(),
-            'Round-Trip'
-        );
-    }
-
-    // Live cart summary
-    try {
-        $stmt = $db->query(
-            "SELECT
-                COUNT(*)                   AS total_rows,
-                COUNT(DISTINCT customer_id) AS distinct_customers,
-                COALESCE(SUM(quantity), 0) AS total_units,
-                COALESCE(SUM(quantity * price), 0) AS total_value
-             FROM cart"
-        );
-        $summary = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
-        testResult(
-            'Cart summary computes',
-            true,
-            sprintf(
-                'rows=%d customers=%d units=%d value=₱%.2f',
-                (int)($summary['total_rows'] ?? 0),
-                (int)($summary['distinct_customers'] ?? 0),
-                (int)($summary['total_units'] ?? 0),
-                (float)($summary['total_value'] ?? 0)
-            ),
-            'Round-Trip'
-        );
-    } catch (PDOException $e) {
-        testResult(
-            'Cart summary computes',
-            false,
-            'PDO error: ' . $e->getMessage(),
-            'Round-Trip'
-        );
-    }
-}
-
-// ============================================
-// TOTALS
-// ============================================
-$totalTests = 0; $totalPassed = 0; $totalFailed = 0; $totalSkipped = 0;
-
-foreach ($sections as $tests) {
-    foreach ($tests as $t) {
-        if ($t['passed'] === null) {
-            $totalSkipped++;
-            continue;
-        }
-        $totalTests++;
-        if ($t['passed']) {
-            $totalPassed++;
-        } else {
-            $totalFailed++;
-        }
-    }
-}
-$passRate = $totalTests > 0 ? round(($totalPassed / $totalTests) * 100) : 0;
-
-// ============================================
-// SUMMARY + LIVE SECTION
-// ============================================
-echo "<div class='top-section'>";
-echo "<div class='test-summary'>";
-echo "<div class='summary-card total'><div class='number'>{$totalTests}</div><div class='label'>Total Tests</div></div>";
-echo "<div class='summary-card passed'><div class='number'>{$totalPassed}</div><div class='label'>Passed</div></div>";
-echo "<div class='summary-card failed'><div class='number'>{$totalFailed}</div><div class='label'>Failed</div></div>";
-echo "<div class='summary-card rate'><div class='number'>{$passRate}%</div><div class='label'>Pass Rate</div></div>";
-echo "</div>";
-
-echo "<div class='test-section' id='section-live'>";
-echo "<div class='section-header' data-target='content-live'>";
-echo "<h2>Live Test <span class='section-count count-neutral'>(Live)</span></h2>";
-echo "<button class='section-toggle' aria-expanded='false' aria-controls='content-live' type='button'><span class='toggle-icon'>+</span></button>";
-echo "</div>";
-echo "<div class='test-grid' id='content-live' style='display: none;'>";
-echo "<div class='live-test'>";
-echo "<p><strong>Exercise the cart pipeline in order:</strong></p>";
-echo "<div class='btn-test-group'>";
-echo "<a href='" . htmlspecialchars($baseUrl) . "/customer/pages/sign-in.php' target='_blank' class='btn-test'>1. Sign In</a>";
-echo "<a href='" . htmlspecialchars($baseUrl) . "/customer/pages/menu.php' target='_blank' class='btn-test'>2. Menu</a>";
-echo "<a href='" . htmlspecialchars($baseUrl) . "/customer/backend/handlers/get-queue-handler.php' target='_blank' class='btn-test warning'>3. Inspect Cart JSON</a>";
-echo "<a href='" . htmlspecialchars($baseUrl) . "/customer/pages/checkout.php' target='_blank' class='btn-test success'>4. Checkout</a>";
-echo "</div>";
-
-echo "<div class='note-box'>";
-echo "<p>What to verify manually:</p>";
-echo "<ul>";
-echo "<li><strong>DB write:</strong> after clicking Add, run <code>SELECT * FROM cart;</code> and confirm a row exists for the logged-in customer_id</li>";
-echo "<li><strong>No double-post:</strong> only one POST should appear in the Network tab when you click Add once</li>";
-echo "<li><strong>No hijack:</strong> the Network tab must show a POST to <code>/customer/backend/handlers/add-to-cart-handler.php</code>, not a sessionStorage write</li>";
-echo "<li><strong>Re-add same product:</strong> quantity should increase on the existing row (not create a duplicate)</li>";
-echo "<li><strong>Panel sync:</strong> the queue panel should show the item on next page load — it reads the same cart table</li>";
-echo "<li><strong>Remove from panel:</strong> the row should disappear from <code>cart</code> after the panel's remove action posts to <code>sync-queue-handler.php</code></li>";
-echo "<li><strong>Checkout:</strong> placing an order should clear the cart and create a row in <code>orders</code> + <code>queue_item</code></li>";
-echo "</ul>";
-echo "</div>";
-
-echo "<p style='margin-top:15px;'><strong>Live cart JSON snapshot:</strong></p>";
-echo "<p style='font-size:13px;color:#718096;margin:5px 0;'>GET " . htmlspecialchars($baseUrl . '/customer/backend/handlers/get-queue-handler.php') . "</p>";
-echo "</div>";
-echo "</div>";
-echo "</div>";
-echo "</div>";
-
-// ============================================
-// RENDER SECTIONS
-// ============================================
-renderSection('Database Tests',        'Database',          true);
-renderSection('File Tests',            'Files',             true);
-renderSection('Schema Tests',          'Schema',            true);
-renderSection('DB Invariant Tests',    'DB Invariants',     false);
-renderSection('PHP Contract Tests',    'PHP Contract',      false);
-renderSection('JS Contract Tests',     'JS Contract',       false);
-renderSection('Handler Contract',      'Handler Contract',  false);
-renderSection('Round-Trip Tests',      'Round-Trip',        false);
-
-// ============================================
-// RAW DATA
-// ============================================
-echo "<div class='test-section' id='section-raw-data'>";
-echo "<div class='section-header' data-target='content-raw-data'>";
-echo "<h2>Raw Data <span class='section-count count-neutral'>(View Only)</span></h2>";
-echo "<button class='section-toggle' aria-expanded='false' aria-controls='content-raw-data' type='button'>";
-echo "<span class='toggle-icon'>+</span>";
-echo "</button>";
-echo "</div>";
-echo "<div class='test-grid' id='content-raw-data' style='display: none;'>";
-
-if ($db !== null) {
-    // Cart summary
-    try {
-        $stmt = $db->query(
-            "SELECT
-                COUNT(*)                             AS total_rows,
-                COUNT(DISTINCT customer_id)          AS distinct_customers,
-                COUNT(DISTINCT product_id)           AS distinct_products,
-                COALESCE(SUM(quantity), 0)           AS total_units,
-                COALESCE(SUM(quantity * price), 0)   AS total_value
-             FROM cart"
-        );
-        $summary = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
-
-        echo "<h3 style='margin: 10px 0 5px 0; font-size: 16px;'>Cart Summary</h3>";
-        echo "<table class='data-table'>";
-        echo "<tr><th>Metric</th><th>Value</th><th>Status</th></tr>";
-
-        $rows = [
-            'Total cart rows'        => [(int)($summary['total_rows'] ?? 0), 'ok'],
-            'Distinct customers'     => [(int)($summary['distinct_customers'] ?? 0), 'ok'],
-            'Distinct products'      => [(int)($summary['distinct_products'] ?? 0), 'ok'],
-            'Total units in carts'   => [(int)($summary['total_units'] ?? 0), 'ok'],
-            'Total cart value'       => ['₱' . number_format((float)($summary['total_value'] ?? 0), 2), 'ok'],
-        ];
-        foreach ($rows as $label => [$val, $status]) {
-            $statusClass = $status === 'ok' ? 'status-ok' : 'status-fail';
-            $statusText  = $status === 'ok' ? 'OK' : 'ISSUE';
-            echo "<tr>";
-            echo "<td>" . htmlspecialchars($label) . "</td>";
-            echo "<td>" . htmlspecialchars((string)$val) . "</td>";
-            echo "<td class='{$statusClass}'>" . $statusText . "</td>";
-            echo "</tr>";
-        }
-        echo "</table>";
-    } catch (PDOException $e) {
-        echo "<p style='color:#c53030;font-size:13px;'>Summary query failed: "
-            . htmlspecialchars($e->getMessage()) . "</p>";
-    }
-
-    // Recent cart rows
-    try {
-        $stmt = $db->query(
-            "SELECT c.cart_id, c.customer_id, c.product_id, c.quantity, c.price,
-                    c.added_at, p.name AS product_name, p.base_price
-             FROM cart c
-             JOIN product p ON c.product_id = p.product_id
-             ORDER BY c.added_at DESC
-             LIMIT 10"
-        );
-        $recent = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        echo "<h3 style='margin: 15px 0 5px 0; font-size: 16px;'>Most Recent Cart Rows</h3>";
-        if (empty($recent)) {
-            echo "<p style='color:#718096;font-size:13px;'>Cart is empty.</p>";
-        } else {
-            echo "<table class='data-table'>";
-            echo "<tr>";
-            echo "<th>cart_id</th><th>customer_id</th><th>product_id</th>";
-            echo "<th>product</th><th>qty</th><th>price</th><th>base_price</th><th>added_at</th>";
-            echo "</tr>";
-            foreach ($recent as $r) {
-                echo "<tr>";
-                echo "<td>" . htmlspecialchars((string)$r['cart_id']) . "</td>";
-                echo "<td>" . htmlspecialchars((string)$r['customer_id']) . "</td>";
-                echo "<td>" . htmlspecialchars((string)$r['product_id']) . "</td>";
-                echo "<td>" . htmlspecialchars((string)$r['product_name']) . "</td>";
-                echo "<td>" . htmlspecialchars((string)$r['quantity']) . "</td>";
-                echo "<td>₱" . htmlspecialchars(number_format((float)$r['price'], 2)) . "</td>";
-                echo "<td>₱" . htmlspecialchars(number_format((float)$r['base_price'], 2)) . "</td>";
-                echo "<td>" . htmlspecialchars((string)$r['added_at']) . "</td>";
-                echo "</tr>";
-            }
-            echo "</table>";
-        }
-    } catch (PDOException $e) {
-        echo "<p style='color:#c53030;font-size:13px;'>Recent rows query failed: "
-            . htmlspecialchars($e->getMessage()) . "</p>";
-    }
-} else {
-    echo "<p style='color:#c53030;font-size:13px;'>Database connection unavailable.</p>";
-}
-
-echo "</div>";
-echo "</div>";
-
-// ============================================
-// COLLAPSIBLE SECTIONS
-// ============================================
-echo <<<JS
-<script>
-(function() {
-    'use strict';
-    var sectionHeaders = document.querySelectorAll('.section-header');
-
-    sectionHeaders.forEach(function(header) {
-        var targetId  = header.getAttribute('data-target');
-        var content   = document.getElementById(targetId);
-        var toggleBtn = header.querySelector('.section-toggle');
-        var icon      = toggleBtn ? toggleBtn.querySelector('.toggle-icon') : null;
-        if (!content || !toggleBtn || !icon) return;
-
-        header.addEventListener('click', function(e) {
-            if (e.target.closest('.section-toggle')) return;
-            toggleSection(header, content, toggleBtn, icon);
-        });
-        toggleBtn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            toggleSection(header, content, toggleBtn, icon);
-        });
-        header.setAttribute('role', 'button');
-        header.setAttribute('tabindex', '0');
-        header.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                toggleSection(header, content, toggleBtn, icon);
-            }
-        });
-    });
-
-    function toggleSection(header, content, toggleBtn, icon) {
-        var collapsed = header.classList.contains('section-collapsed');
-        if (collapsed) {
-            header.classList.remove('section-collapsed');
-            toggleBtn.setAttribute('aria-expanded', 'true');
-            content.style.display = 'grid';
-            icon.textContent = '-';
-        } else {
-            header.classList.add('section-collapsed');
-            toggleBtn.setAttribute('aria-expanded', 'false');
-            content.style.display = 'none';
-            icon.textContent = '+';
-        }
-    }
-})();
-</script>
-JS;
-
-echo "</div></body></html>";
-```
-
----
-
-## File: `fitpal/test/customer/menu-test.php`
-
-**Status:** `FOUND`
-
-```php
-<?php
-/**
- * FitPal Menu Page Probe Test
- * Validates menu data directly from database
- *
- * @package FitPal
- * @version 2.4
- */
-
-declare(strict_types=1);
-
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-$basePath = realpath(__DIR__ . '/../..');
-$customerPath = $basePath . '/customer';
-$sharedPath = $basePath . '/shared';
-
-$passed = 0;
-$failed = 0;
-
-$sections = [];
-
-function testResult($name, $result, $message = '', $section = 'General') {
-    global $sections, $passed, $failed;
-    $status = $result ? 'PASS' : 'FAIL';
-    if ($result) $passed++; else $failed++;
-    
-    if (!isset($sections[$section])) {
-        $sections[$section] = [];
-    }
-    $sections[$section][] = [
-        'name' => $name,
-        'status' => $status,
-        'message' => $message,
-        'passed' => $result
-    ];
-    return $result;
-}
-
-function renderSection($title, $sectionName, $defaultCollapsed = true) {
-    global $sections;
-    
-    $totalTests = isset($sections[$sectionName]) ? count($sections[$sectionName]) : 0;
-    $passedTests = 0;
-    if (isset($sections[$sectionName])) {
-        foreach ($sections[$sectionName] as $test) {
-            if ($test['passed']) $passedTests++;
-        }
-    }
-    
-    $failedTests = $totalTests - $passedTests;
-    $allPassed = ($totalTests > 0 && $failedTests === 0);
-    $hasFailures = ($failedTests > 0);
-    
-    $sectionId = 'section-' . preg_replace('/[^a-zA-Z0-9]/', '-', $sectionName);
-    $contentId = 'content-' . preg_replace('/[^a-zA-Z0-9]/', '-', $sectionName);
-    
-    $collapsedClass = $defaultCollapsed ? 'section-collapsed' : '';
-    
-    echo "<div class='test-section {$collapsedClass}' id='{$sectionId}'>";
-    echo "<div class='section-header' data-target='{$contentId}'>";
-    
-    $countClass = 'count-neutral';
-    if ($allPassed) {
-        $countClass = 'count-pass';
-    } elseif ($hasFailures && $failedTests <= 2) {
-        $countClass = 'count-warning';
-    } elseif ($hasFailures && $failedTests > 2) {
-        $countClass = 'count-fail';
-    }
-    
-    echo "<h2>{$title} <span class='section-count {$countClass}'>({$passedTests}/{$totalTests})</span></h2>";
-    echo "<button class='section-toggle' aria-expanded='" . ($defaultCollapsed ? 'false' : 'true') . "' aria-controls='{$contentId}' type='button'>";
-    echo "<span class='toggle-icon'>" . ($defaultCollapsed ? '+' : '-') . "</span>";
-    echo "</button>";
-    echo "</div>";
-    echo "<div class='test-grid' id='{$contentId}' style='display: " . ($defaultCollapsed ? 'none' : 'grid') . ";'>";
-    
-    if (isset($sections[$sectionName]) && !empty($sections[$sectionName])) {
-        foreach ($sections[$sectionName] as $test) {
-            $statusClass = $test['passed'] ? 'pass' : 'fail';
-            $statusText = $test['passed'] ? 'PASS' : 'FAIL';
-            
-            echo "<div class='test-item {$statusClass}'>";
-            echo "<div class='test-name'>" . htmlspecialchars($test['name']) . "</div>";
-            echo "<div class='test-status {$statusClass}'>" . $statusText . "</div>";
-            echo "<div class='test-message'>" . htmlspecialchars($test['message']) . "</div>";
-            echo "</div>";
-        }
-    } else {
-        echo "<div class='test-item' style='border-left-color: #edf2f0;'>";
-        echo "<div class='test-name' style='color: #a0aec0;'>No tests in this section</div>";
-        echo "</div>";
-    }
-    
-    echo "</div>";
-    echo "</div>";
-}
-
-function renderLiveMenuSection($baseUrl, $defaultCollapsed = true) {
-    global $sections;
-    
-    $sectionName = 'Live Menu';
-    $totalTests = isset($sections[$sectionName]) ? count($sections[$sectionName]) : 0;
-    $passedTests = 0;
-    if (isset($sections[$sectionName])) {
-        foreach ($sections[$sectionName] as $test) {
-            if ($test['passed']) $passedTests++;
-        }
-    }
-    
-    $failedTests = $totalTests - $passedTests;
-    $allPassed = ($totalTests > 0 && $failedTests === 0);
-    $hasFailures = ($failedTests > 0);
-    
-    $collapsedClass = $defaultCollapsed ? 'section-collapsed' : '';
-    $contentId = 'content-live-menu';
-    
-    echo "<div class='test-section {$collapsedClass}' id='section-live-menu'>";
-    echo "<div class='section-header' data-target='{$contentId}'>";
-    
-    $countClass = 'count-neutral';
-    if ($allPassed) {
-        $countClass = 'count-pass';
-    } elseif ($hasFailures && $failedTests <= 2) {
-        $countClass = 'count-warning';
-    } elseif ($hasFailures && $failedTests > 2) {
-        $countClass = 'count-fail';
-    }
-    
-    echo "<h2>Live Menu Test <span class='section-count {$countClass}'>({$passedTests}/{$totalTests})</span></h2>";
-    echo "<button class='section-toggle' aria-expanded='" . ($defaultCollapsed ? 'false' : 'true') . "' aria-controls='{$contentId}' type='button'>";
-    echo "<span class='toggle-icon'>" . ($defaultCollapsed ? '+' : '-') . "</span>";
-    echo "</button>";
-    echo "</div>";
-    echo "<div class='test-grid' id='{$contentId}' style='display: " . ($defaultCollapsed ? 'none' : 'grid') . ";'>";
-    
-    if (isset($sections[$sectionName]) && !empty($sections[$sectionName])) {
-        foreach ($sections[$sectionName] as $test) {
-            $statusClass = $test['passed'] ? 'pass' : 'fail';
-            $statusText = $test['passed'] ? 'PASS' : 'FAIL';
-            
-            echo "<div class='test-item {$statusClass}'>";
-            echo "<div class='test-name'>" . htmlspecialchars($test['name']) . "</div>";
-            echo "<div class='test-status {$statusClass}'>" . $statusText . "</div>";
-            echo "<div class='test-message'>" . htmlspecialchars($test['message']) . "</div>";
-            echo "</div>";
-        }
-    }
-    
-    echo "<div class='live-test'>";
-    echo "<p><strong>View the menu page:</strong></p>";
-    echo "<p style='font-size:13px;color:#718096;margin:5px 0;'>URL: " . htmlspecialchars($baseUrl . '/customer/pages/menu.php') . "</p>";
-    echo "<iframe src='" . $baseUrl . "/customer/pages/menu.php'></iframe>";
-    echo "<div class='btn-test-group'>";
-    echo "<a href='" . $baseUrl . "/customer/pages/menu.php' target='_blank' class='btn-test'>Open Menu</a>";
-    echo "<a href='" . $baseUrl . "/customer/pages/sign-in.php' target='_blank' class='btn-test'>Sign In</a>";
-    echo "</div>";
-    echo "</div>";
-    
-    echo "</div>";
-    echo "</div>";
-}
-
-function getAssetBase() {
-    $scriptPath = $_SERVER['SCRIPT_NAME'];
-    $dirPath = dirname($scriptPath);
-    $segments = array_filter(explode('/', $dirPath));
-    $depth = count($segments);
-    if ($depth <= 0) return './shared/';
-    return str_repeat('../', $depth) . 'shared/';
-}
-
-$protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http';
-$host = $_SERVER['HTTP_HOST'];
-$baseUrl = $protocol . '://' . $host;
-
-$assetBase = getAssetBase();
-
-echo "<!DOCTYPE html>
-<html lang='en'>
-<head>
-    <meta charset='UTF-8'>
-    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-    <title>FitPal Menu Probe Test</title>
-    <link rel='stylesheet' href='{$assetBase}assets/css/global.css'>
-    <style>
-        /* ===== Exact same base styles as sign-in/sign-up tests ===== */
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { width: 100%; overflow-x: hidden; }
-        body { background: #f4f6f9; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-        .test-container { max-width: 100%; padding: 0; margin: 0; }
-        .test-header { background: linear-gradient(135deg, #2d3748, #1a202c); color: white; padding: 30px; border-radius: 12px; margin-bottom: 30px; width: 100%; }
-        .test-header h1 { margin: 0; font-size: 28px; }
-        .test-header p { margin: 10px 0 0 0; opacity: 0.8; }
-        .test-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; width: 100%; }
-        .summary-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center; }
-        .summary-card .number { font-size: 32px; font-weight: 700; }
-        .summary-card .label { color: #718096; font-size: 14px; margin-top: 5px; }
-        .summary-card.total .number { color: #2d3748; }
-        .summary-card.passed .number { color: #48bb78; }
-        .summary-card.failed .number { color: #fc8181; }
-        .summary-card.rate .number { color: #4299e1; }
-        .test-grid { display: grid; gap: 10px; padding: 15px; width: 100%; }
-        .test-item { background: white; border-radius: 8px; padding: 12px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; width: 100%; }
-        .test-item.pass { border-left-color: #48bb78; }
-        .test-item.fail { border-left-color: #fc8181; }
-        .test-item .test-name { font-weight: 600; font-size: 14px; flex: 1; min-width: 180px; }
-        .test-item .test-status { display: inline-block; padding: 2px 14px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; margin: 0 10px; }
-        .test-item .test-status.pass { background: #c6f6d5; color: #22543d; }
-        .test-item .test-status.fail { background: #fed7d7; color: #9b2c2c; }
-        .test-item .test-message { color: #718096; font-size: 13px; min-width: 100px; text-align: right; }
-        .test-section { background: white; border-radius: 10px; margin-top: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; width: 100%; }
-        .section-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; cursor: pointer; background: #f7fafc; border-bottom: 1px solid #e2e8f0; user-select: none; width: 100%; }
-        .section-header:hover { background: #edf2f7; }
-        .section-header h2 { margin: 0; font-size: 18px; color: #2d3748; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-        .section-count { font-size: 14px; font-weight: 600; padding: 2px 12px; border-radius: 20px; }
-        .count-pass { background: #c6f6d5; color: #22543d; }
-        .count-warning { background: #fefcbf; color: #975a16; }
-        .count-fail { background: #fed7d7; color: #9b2c2c; }
-        .count-neutral { background: #edf2f7; color: #718096; }
-        .section-toggle { background: none; border: none; font-size: 20px; cursor: pointer; color: #718096; padding: 0 10px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 6px; flex-shrink: 0; }
-        .section-toggle:hover { background: #e2e8f0; }
-        .toggle-icon { display: inline-block; transition: transform 0.2s ease; }
-        .section-collapsed .toggle-icon { transform: rotate(0deg); }
-        .live-test { padding: 10px 0; width: 100%; }
-        .live-test iframe { width: 100%; height: 500px; border: 1px solid #e2e8f0; border-radius: 6px; margin-top: 10px; display: block; }
-        .btn-test { display: inline-block; padding: 8px 16px; background: #4299e1; color: white; border-radius: 6px; text-decoration: none; font-size: 13px; margin-top: 10px; }
-        .btn-test:hover { background: #3182ce; }
-        .btn-test-group { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
-        .top-section { margin-bottom: 20px; width: 100%; }
-        
-        /* ===== Extra styles for the raw data table (kept from original) ===== */
-        .data-table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 10px 0; }
-        .data-table th { background: #edf2f7; padding: 8px 12px; text-align: left; font-weight: 600; }
-        .data-table td { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; }
-        .data-table tr:hover { background: #f7fafc; }
-        .status-ok { color: #48bb78; font-weight: 600; }
-        .status-fail { color: #fc8181; font-weight: 600; }
-        .db-error-box { background: #fff5f5; border: 1px solid #feb2b2; border-radius: 8px; padding: 15px; margin: 10px 0; color: #c53030; width: 100%; }
-        
-        /* ===== Responsive ===== */
-        @media (max-width: 640px) {
-            body { padding: 10px; }
-            .test-header { padding: 20px; }
-            .test-header h1 { font-size: 22px; }
-            .test-summary { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-            .summary-card { padding: 15px; }
-            .summary-card .number { font-size: 24px; }
-            .section-header { padding: 12px 15px; flex-wrap: wrap; }
-            .section-header h2 { font-size: 16px; }
-            .section-count { font-size: 12px; padding: 2px 10px; }
-            .test-item { padding: 10px 15px; flex-direction: column; align-items: flex-start; gap: 5px; }
-            .test-item .test-name { font-size: 13px; min-width: auto; width: 100%; }
-            .test-item .test-status { margin: 0 10px 0 0; }
-            .test-item .test-message { text-align: left; width: 100%; min-width: auto; }
-            .test-grid { padding: 10px; }
-            .live-test iframe { height: 350px; }
-            .btn-test-group { gap: 8px; }
-            .btn-test { font-size: 12px; padding: 6px 12px; }
-            .data-table { font-size: 11px; }
-            .data-table th, .data-table td { padding: 4px 8px; }
-        }
-        
-        @media (max-width: 400px) {
-            .test-summary { grid-template-columns: 1fr 1fr; gap: 8px; }
-            .summary-card { padding: 10px; }
-            .summary-card .number { font-size: 20px; }
-            .section-header h2 { font-size: 14px; }
-            .section-count { font-size: 11px; padding: 1px 8px; }
-            .test-item .test-name { font-size: 12px; }
-            .live-test iframe { height: 280px; }
-        }
-    </style>
-</head>
-<body>
-<div class='test-container'>";
-
-echo "
-<div class='test-header'>
-    <h1>FitPal Menu Probe Test</h1>
-    <p>Validates menu data directly from database</p>
-    <p style='font-size:13px;opacity:0.6;margin-top:10px;'>
-        Base Path: " . htmlspecialchars($basePath) . " | 
-        Base URL: " . htmlspecialchars($baseUrl) . "
-    </p>
-</div>";
-
-// ============================================
-// PROBE THE DATABASE DIRECTLY (no HTTP calls)
-// ============================================
-
-require_once $sharedPath . '/backend/database/database-connect.php';
-
-$dbData = [];
-
-if (isset($database_connection) && $database_connection instanceof PDO) {
-    try {
-        // 1. Count all products
-        $stmt = $database_connection->query("SELECT COUNT(*) as total FROM product");
-        $dbData['total_products'] = (int)$stmt->fetchColumn();
-        
-        // 2. Count active products
-        $stmt = $database_connection->query("SELECT COUNT(*) as total FROM product WHERE is_active = 1");
-        $dbData['active_products'] = (int)$stmt->fetchColumn();
-        
-        // 3. Count active branches
-        $stmt = $database_connection->query("SELECT COUNT(*) as total FROM restaurant_branch WHERE is_active = 1");
-        $dbData['active_branches'] = (int)$stmt->fetchColumn();
-        
-        // 4. Count active restaurants
-        $stmt = $database_connection->query("SELECT COUNT(*) as total FROM restaurant WHERE is_active = 1");
-        $dbData['active_restaurants'] = (int)$stmt->fetchColumn();
-        
-        // 5. Products with NULL branch
-        $stmt = $database_connection->query("SELECT COUNT(*) as total FROM product WHERE restaurant_branch_id IS NULL");
-        $dbData['null_branch_products'] = (int)$stmt->fetchColumn();
-        
-        // 6. Products that would appear in menu
-        $stmt = $database_connection->query(
-            "SELECT COUNT(*) as total 
-             FROM product p
-             JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
-             JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
-             WHERE p.is_active = 1 AND rb.is_active = 1 AND r.is_active = 1"
-        );
-        $dbData['fully_active_products'] = (int)$stmt->fetchColumn();
-        
-        // 7. Sample products
-        $stmt = $database_connection->query(
-            "SELECT p.product_id, p.name, p.is_active, p.restaurant_branch_id,
-                    rb.branch_name, rb.is_active as branch_active,
-                    r.business_name, r.is_active as restaurant_active
-             FROM product p
-             LEFT JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
-             LEFT JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
-             LIMIT 5"
-        );
-        $dbData['sample_products'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        testResult('Database Connected', true, 'Connection established', 'Database');
-        testResult('Active Products Exist', $dbData['active_products'] > 0, $dbData['active_products'] . ' active products', 'Database');
-        testResult('Active Branches Exist', $dbData['active_branches'] > 0, $dbData['active_branches'] . ' active branches', 'Database');
-        testResult('Active Restaurants Exist', $dbData['active_restaurants'] > 0, $dbData['active_restaurants'] . ' active restaurants', 'Database');
-        testResult('No NULL Branch Products', $dbData['null_branch_products'] === 0, $dbData['null_branch_products'] . ' products with NULL branch', 'Database');
-        testResult('Fully Active Products (menu-ready)', $dbData['fully_active_products'] > 0, $dbData['fully_active_products'] . ' products ready for menu', 'Database');
-        
-    } catch (PDOException $e) {
-        testResult('Database Query', false, 'Error: ' . $e->getMessage(), 'Database');
-        $dbData['error'] = $e->getMessage();
-    }
-} else {
-    testResult('Database Connection', false, 'Could not connect to database', 'Database');
-}
-
-// ============================================
-// CHECK FILES EXIST
-// ============================================
-
-$filesToCheck = [
-    'Menu Page' => $customerPath . '/pages/menu.php',
-    'Product Queries' => $customerPath . '/backend/database/product-queries.php',
-    'Menu CSS' => $customerPath . '/assets/css/menu.css',
-];
-
-foreach ($filesToCheck as $name => $path) {
-    $exists = file_exists($path);
-    testResult($name, $exists, $exists ? 'Found' : 'Missing', 'Files');
-}
-
-// ============================================
-// LIVE MENU TESTS - MOVED HERE BEFORE renderLiveMenuSection()
-// ============================================
-
-$menuPageExists = file_exists($customerPath . '/pages/menu.php');
-testResult('Menu Page Accessible', $menuPageExists, $menuPageExists ? 'Page found' : 'Page missing', 'Live Menu');
-
-$productQueriesExists = file_exists($customerPath . '/backend/database/product-queries.php');
-testResult('Product Queries Included', $productQueriesExists, $productQueriesExists ? 'File found' : 'File missing', 'Live Menu');
-
-$menuCssExists = file_exists($customerPath . '/assets/css/menu.css');
-testResult('Menu CSS Exists', $menuCssExists, $menuCssExists ? 'Stylesheet found' : 'Stylesheet missing', 'Live Menu');
-
-// ============================================
-// CALCULATE TOTALS
-// ============================================
-$totalTests = 0;
-$totalPassed = 0;
-$totalFailed = 0;
-
-foreach ($sections as $section) {
-    foreach ($section as $test) {
-        $totalTests++;
-        if ($test['passed']) $totalPassed++;
-        else $totalFailed++;
-    }
-}
-
-$passRate = $totalTests > 0 ? round(($totalPassed / $totalTests) * 100) : 0;
-
-// ============================================
-// TOP SECTION: SUMMARY + LIVE MENU (Stacked vertically)
-// ============================================
-echo "<div class='top-section'>";
-
-// Summary Cards
-echo "<div class='test-summary'>";
-echo "<div class='summary-card total'><div class='number'>{$totalTests}</div><div class='label'>Total Tests</div></div>";
-echo "<div class='summary-card passed'><div class='number'>{$totalPassed}</div><div class='label'>Passed</div></div>";
-echo "<div class='summary-card failed'><div class='number'>{$totalFailed}</div><div class='label'>Failed</div></div>";
-echo "<div class='summary-card rate'><div class='number'>{$passRate}%</div><div class='label'>Pass Rate</div></div>";
-echo "</div>";
-
-// Live Menu (with heading, pass count, and collapsible)
-renderLiveMenuSection($baseUrl, true);
-
-echo "</div>";
-
-// ============================================
-// RENDER ALL SECTIONS (Collapsed by default)
-// ============================================
-
-renderSection('Database Tests', 'Database', true);
-renderSection('File Tests', 'Files', true);
-
-// ============================================
-// RAW DATA DISPLAY
-// ============================================
-echo "<div class='test-section' id='section-raw-data'>";
-echo "<div class='section-header' data-target='content-raw-data'>";
-echo "<h2>Raw Data <span class='section-count count-neutral'>(View Only)</span></h2>";
-echo "<button class='section-toggle' aria-expanded='false' aria-controls='content-raw-data' type='button'>";
-echo "<span class='toggle-icon'>+</span>";
-echo "</button>";
-echo "</div>";
-echo "<div class='test-grid' id='content-raw-data' style='display: none;'>";
-
-if (!empty($dbData)) {
-    echo "<h3 style='margin: 10px 0 5px 0; font-size: 16px;'>Database Summary</h3>";
-    echo "<table class='data-table'>";
-    echo "<tr><th>Metric</th><th>Value</th><th>Status</th></tr>";
-    
-    $metrics = [
-        'Total Products' => $dbData['total_products'] ?? 'N/A',
-        'Active Products' => $dbData['active_products'] ?? 'N/A',
-        'Active Branches' => $dbData['active_branches'] ?? 'N/A',
-        'Active Restaurants' => $dbData['active_restaurants'] ?? 'N/A',
-        'Products with NULL Branch' => $dbData['null_branch_products'] ?? 'N/A',
-        'Fully Active Products (menu-ready)' => $dbData['fully_active_products'] ?? 'N/A',
-    ];
-    
-    foreach ($metrics as $label => $value) {
-        $statusClass = 'status-ok';
-        $statusText = 'OK';
-        
-        if (strpos($label, 'NULL') !== false && $value > 0) {
-            $statusClass = 'status-fail';
-            $statusText = 'ISSUE';
-        } elseif (strpos($label, 'Fully') !== false && $value == 0) {
-            $statusClass = 'status-fail';
-            $statusText = 'ISSUE';
-        } elseif ($label === 'Active Products' && $value == 0) {
-            $statusClass = 'status-fail';
-            $statusText = 'ISSUE';
-        } elseif ($label === 'Active Branches' && $value == 0) {
-            $statusClass = 'status-fail';
-            $statusText = 'ISSUE';
-        } elseif ($label === 'Active Restaurants' && $value == 0) {
-            $statusClass = 'status-fail';
-            $statusText = 'ISSUE';
-        }
-        
-        echo "<tr>";
-        echo "<td>" . htmlspecialchars($label) . "</td>";
-        echo "<td>" . htmlspecialchars((string)$value) . "</td>";
-        echo "<td class='{$statusClass}'>" . $statusText . "</td>";
-        echo "</tr>";
-    }
-    echo "</table>";
-    
-    if (!empty($dbData['sample_products'])) {
-        echo "<h3 style='margin: 15px 0 5px 0; font-size: 16px;'>Sample Products</h3>";
-        echo "<table class='data-table'>";
-        echo "<tr><th>ID</th><th>Name</th><th>Active</th><th>Branch</th><th>Branch Active</th><th>Restaurant</th><th>Restaurant Active</th></tr>";
-        foreach ($dbData['sample_products'] as $p) {
-            $pActive = $p['is_active'] ? 'Yes' : 'No';
-            $bActive = isset($p['branch_active']) ? ($p['branch_active'] ? 'Yes' : 'No') : 'N/A';
-            $rActive = isset($p['restaurant_active']) ? ($p['restaurant_active'] ? 'Yes' : 'No') : 'N/A';
-            echo "<tr>";
-            echo "<td>" . ($p['product_id'] ?? 'N/A') . "</td>";
-            echo "<td>" . htmlspecialchars($p['name'] ?? 'N/A') . "</td>";
-            echo "<td>" . $pActive . "</td>";
-            echo "<td>" . htmlspecialchars($p['branch_name'] ?? 'NULL') . "</td>";
-            echo "<td>" . $bActive . "</td>";
-            echo "<td>" . htmlspecialchars($p['business_name'] ?? 'NULL') . "</td>";
-            echo "<td>" . $rActive . "</td>";
-            echo "</tr>";
-        }
-        echo "</table>";
-    }
-}
-
-echo "</div>";
-echo "</div>";
-
-// ============================================
-// COLLAPSIBLE SECTIONS JAVASCRIPT (exactly as in sign-in test)
-// ============================================
-echo "
-<script>
-(function() {
-    'use strict';
-
-    var sectionHeaders = document.querySelectorAll('.section-header');
-
-    sectionHeaders.forEach(function(header) {
-        var targetId = header.getAttribute('data-target');
-        var content = document.getElementById(targetId);
-        var toggleBtn = header.querySelector('.section-toggle');
-        var icon = toggleBtn ? toggleBtn.querySelector('.toggle-icon') : null;
-
-        if (!content || !toggleBtn || !icon) return;
-
-        header.addEventListener('click', function(e) {
-            if (e.target.closest('.section-toggle')) return;
-            toggleSection(header, content, toggleBtn, icon);
-        });
-
-        toggleBtn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            toggleSection(header, content, toggleBtn, icon);
-        });
-
-        header.setAttribute('role', 'button');
-        header.setAttribute('tabindex', '0');
-        header.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                toggleSection(header, content, toggleBtn, icon);
-            }
-        });
-    });
-
-    function toggleSection(header, content, toggleBtn, icon) {
-        var isCollapsed = header.classList.contains('section-collapsed');
-
-        if (isCollapsed) {
-            header.classList.remove('section-collapsed');
-            toggleBtn.setAttribute('aria-expanded', 'true');
-            content.style.display = 'grid';
-            icon.textContent = '-';
-        } else {
-            header.classList.add('section-collapsed');
-            toggleBtn.setAttribute('aria-expanded', 'false');
-            content.style.display = 'none';
-            icon.textContent = '+';
-        }
-    }
-})();
-</script>
-";
-
-echo "
-</div>
-</body>
-</html>";
-```
-
----
-
-## File: `fitpal/test/customer/product-detail-test.php`
-
-**Status:** `FOUND`
-
-```php
-<?php
-/**
- * FitPal Product Detail Test
- *
- * Two tiers of tests:
- *   (A) STRUCTURAL — file presence, token checks. Cheap, but weak.
- *   (B) LOGIC — DB-driven invariants that catch the bug classes
- *       that motivated this test suite:
- *         - dietary_information.calories != sum of defaults
- *         - min_quantity > default_quantity (UI cannot render default)
- *         - multiple defaults in one choice group
- *         - PHP not emitting data-* attributes JS reads
- *         - JS reading different attribute names than PHP writes
- *
- * Sections with 0 tests render as NEUTRAL, not as a pass.
- *
- * @package FitPal
- * @version 2.0
- */
-
-declare(strict_types=1);
-
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-// ============================================
-// PATHS
-// ============================================
-$basePath     = realpath(__DIR__ . '/../..');
-$customerPath = $basePath . '/customer';
-$sharedPath   = $basePath . '/shared';
-
-// ============================================
-// TEST HARNESS
-// ============================================
-$sections = [];
-
-/**
- * Record a test result.
- *
- * @param string $name
- * @param bool   $result
- * @param string $message
- * @param string $section
- * @param string $tier    'logic' or 'structural'
- * @return bool
- */
-function testResult(string $name, bool $result, string $message = '', string $section = 'General', string $tier = 'logic'): bool
-{
-    global $sections;
-    if (!isset($sections[$section])) {
-        $sections[$section] = [];
-    }
-    $sections[$section][] = [
-        'name'    => $name,
-        'status'  => $result ? 'PASS' : 'FAIL',
-        'message' => $message,
-        'passed'  => $result,
-        'tier'    => $tier,
-    ];
-    return $result;
-}
-
-/**
- * Register a section that had no tests (so it renders neutral, not green).
- *
- * @param string $section
- * @param string $reason
- */
-function markSectionSkipped(string $section, string $reason): void
-{
-    global $sections;
-    if (!isset($sections[$section])) {
-        $sections[$section] = [];
-    }
-    // A single sentinel that is neither pass nor fail — renderSection
-    // treats status "SKIP" as neutral and counts it separately.
-    $sections[$section][] = [
-        'name'    => 'Section skipped',
-        'status'  => 'SKIP',
-        'message' => $reason,
-        'passed'  => null,
-        'tier'    => 'structural',
-    ];
-}
-
-/**
- * Render one section with correct pass/fail/skip accounting.
- *
- * @param string $title
- * @param string $sectionName
- * @param bool   $defaultCollapsed
- */
-function renderSection(string $title, string $sectionName, bool $defaultCollapsed = true): void
-{
-    global $sections;
-
-    $tests = $sections[$sectionName] ?? [];
-    $total = 0; $passed = 0; $failed = 0; $skipped = 0;
-
-    foreach ($tests as $t) {
-        if ($t['passed'] === null) {
-            $skipped++;
-        } else {
-            $total++;
-            if ($t['passed']) {
-                $passed++;
-            } else {
-                $failed++;
-            }
-        }
-    }
-
-    // A section with only skipped sentinels shows neutral.
-    if ($total === 0) {
-        $countClass = 'count-neutral';
-        $countText  = $skipped > 0 ? 'skipped' : '0';
-        $allPassed  = false;
-    } elseif ($failed === 0) {
-        $countClass = 'count-pass';
-        $countText  = "{$passed}/{$total}";
-        $allPassed  = true;
-    } elseif ($failed <= 2) {
-        $countClass = 'count-warning';
-        $countText  = "{$passed}/{$total}";
-        $allPassed  = false;
-    } else {
-        $countClass = 'count-fail';
-        $countText  = "{$passed}/{$total}";
-        $allPassed  = false;
-    }
-
-    // Sections with failures default to OPEN so reviewers cannot miss them.
-    if ($failed > 0) {
-        $defaultCollapsed = false;
-    }
-
-    $sectionId = 'section-' . preg_replace('/[^a-zA-Z0-9]/', '-', $sectionName);
-    $contentId = 'content-' . preg_replace('/[^a-zA-Z0-9]/', '-', $sectionName);
-    $collapsedClass = $defaultCollapsed ? 'section-collapsed' : '';
-
-    echo "<div class='test-section {$collapsedClass}' id='{$sectionId}'>";
-    echo "<div class='section-header' data-target='{$contentId}'>";
-    echo "<h2>" . htmlspecialchars($title) . " <span class='section-count {$countClass}'>({$countText})</span></h2>";
-    echo "<button class='section-toggle' aria-expanded='" . ($defaultCollapsed ? 'false' : 'true') . "' aria-controls='{$contentId}' type='button'>";
-    echo "<span class='toggle-icon'>" . ($defaultCollapsed ? '+' : '-') . "</span>";
-    echo "</button>";
-    echo "</div>";
-    echo "<div class='test-grid' id='{$contentId}' style='display: " . ($defaultCollapsed ? 'none' : 'grid') . ";'>";
-
-    if (empty($tests)) {
-        echo "<div class='test-item' style='border-left-color: #edf2f0;'>";
-        echo "<div class='test-name' style='color: #a0aec0;'>No tests in this section</div>";
-        echo "</div>";
-    } else {
-        foreach ($tests as $test) {
-            if ($test['passed'] === null) {
-                echo "<div class='test-item skip'>";
-                echo "<div class='test-name'>" . htmlspecialchars($test['name']) . "</div>";
-                echo "<div class='test-status skip'>SKIP</div>";
-                echo "<div class='test-message'>" . htmlspecialchars($test['message']) . "</div>";
-                echo "</div>";
-                continue;
-            }
-            $cls = $test['passed'] ? 'pass' : 'fail';
-            $txt = $test['passed'] ? 'PASS' : 'FAIL';
-            echo "<div class='test-item {$cls}'>";
-            echo "<div class='test-name'>" . htmlspecialchars($test['name']) . "</div>";
-            echo "<div class='test-status {$cls}'>{$txt}</div>";
-            echo "<div class='test-message'>" . htmlspecialchars($test['message']) . "</div>";
-            echo "</div>";
-        }
-    }
-
-    echo "</div>";
-    echo "</div>";
-}
-
-/**
- * Asset base relative to the current script location.
- *
- * @return string
- */
-function getAssetBase(): string
-{
-    $scriptPath = $_SERVER['SCRIPT_NAME'];
-    $dirPath    = dirname($scriptPath);
-    $segments   = array_filter(explode('/', $dirPath));
-    $depth      = count($segments);
-    if ($depth <= 0) {
-        return './shared/';
-    }
-    return str_repeat('../', $depth) . 'shared/';
-}
-
-$protocol  = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http';
-$host      = $_SERVER['HTTP_HOST'];
-$baseUrl   = $protocol . '://' . $host;
-$assetBase = getAssetBase();
-
-// ============================================
-// HEAD
-// ============================================
-echo <<<HTML
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FitPal Product Detail Test</title>
-<link rel="stylesheet" href="{$assetBase}assets/css/global.css">
-<style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { width: 100%; overflow-x: hidden; }
-    body { background: #f4f6f9; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-    .test-container { max-width: 100%; padding: 0; margin: 0; }
-    .test-header { background: linear-gradient(135deg, #2d3748, #1a202c); color: white; padding: 30px; border-radius: 12px; margin-bottom: 30px; width: 100%; }
-    .test-header h1 { margin: 0; font-size: 28px; }
-    .test-header p { margin: 10px 0 0 0; opacity: 0.8; }
-    .test-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; width: 100%; }
-    .summary-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center; }
-    .summary-card .number { font-size: 32px; font-weight: 700; }
-    .summary-card .label { color: #718096; font-size: 14px; margin-top: 5px; }
-    .summary-card.total .number { color: #2d3748; }
-    .summary-card.passed .number { color: #48bb78; }
-    .summary-card.failed .number { color: #fc8181; }
-    .summary-card.rate .number { color: #4299e1; }
-    .test-grid { display: grid; gap: 10px; padding: 15px; width: 100%; }
-    .test-item { background: white; border-radius: 8px; padding: 12px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; width: 100%; }
-    .test-item.pass { border-left-color: #48bb78; }
-    .test-item.fail { border-left-color: #fc8181; }
-    .test-item.skip { border-left-color: #cbd5e0; opacity: 0.75; }
-    .test-item .test-name { font-weight: 600; font-size: 14px; flex: 1; min-width: 180px; }
-    .test-item .test-status { display: inline-block; padding: 2px 14px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; margin: 0 10px; }
-    .test-item .test-status.pass { background: #c6f6d5; color: #22543d; }
-    .test-item .test-status.fail { background: #fed7d7; color: #9b2c2c; }
-    .test-item .test-status.skip { background: #edf2f7; color: #718096; }
-    .test-item .test-message { color: #718096; font-size: 13px; min-width: 100px; text-align: right; }
-    .test-section { background: white; border-radius: 10px; margin-top: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; width: 100%; }
-    .section-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; cursor: pointer; background: #f7fafc; border-bottom: 1px solid #e2e8f0; user-select: none; width: 100%; }
-    .section-header:hover { background: #edf2f7; }
-    .section-header h2 { margin: 0; font-size: 18px; color: #2d3748; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .section-count { font-size: 14px; font-weight: 600; padding: 2px 12px; border-radius: 20px; }
-    .count-pass { background: #c6f6d5; color: #22543d; }
-    .count-warning { background: #fefcbf; color: #975a16; }
-    .count-fail { background: #fed7d7; color: #9b2c2c; }
-    .count-neutral { background: #edf2f7; color: #718096; }
-    .section-toggle { background: none; border: none; font-size: 20px; cursor: pointer; color: #718096; padding: 0 10px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 6px; flex-shrink: 0; }
-    .section-toggle:hover { background: #e2e8f0; }
-    .toggle-icon { display: inline-block; transition: transform 0.2s ease; }
-    .live-test { padding: 10px 0; width: 100%; }
-    .btn-test { display: inline-block; padding: 8px 16px; background: #4299e1; color: white; border-radius: 6px; text-decoration: none; font-size: 13px; margin-top: 10px; }
-    .btn-test:hover { background: #3182ce; }
-    .btn-test-group { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
-    .btn-test.danger { background: #e53e3e; }
-    .btn-test.danger:hover { background: #c53030; }
-    .btn-test.success { background: #48bb78; }
-    .btn-test.success:hover { background: #38a169; }
-    .btn-test.warning { background: #ed8936; }
-    .btn-test.warning:hover { background: #dd6b20; }
-    .top-section { margin-bottom: 20px; width: 100%; }
-    .note-box { margin-top: 15px; padding: 15px; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; }
-    .note-box p { font-size: 13px; color: #78350f; margin: 5px 0 0 0; }
-    .note-box p:first-child { font-weight: 600; color: #92400e; margin-top: 0; }
-    .note-box ul { font-size: 13px; color: #78350f; margin: 5px 0 0 0; padding-left: 20px; }
-    @media (max-width: 640px) {
-        body { padding: 10px; }
-        .test-header { padding: 20px; }
-        .test-header h1 { font-size: 22px; }
-        .test-summary { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-        .summary-card { padding: 15px; }
-        .summary-card .number { font-size: 24px; }
-        .section-header { padding: 12px 15px; flex-wrap: wrap; }
-        .section-header h2 { font-size: 16px; }
-        .section-count { font-size: 12px; padding: 2px 10px; }
-        .test-item { padding: 10px 15px; flex-direction: column; align-items: flex-start; gap: 5px; }
-        .test-item .test-name { font-size: 13px; min-width: auto; width: 100%; }
-        .test-item .test-status { margin: 0 10px 0 0; }
-        .test-item .test-message { text-align: left; width: 100%; min-width: auto; }
-        .test-grid { padding: 10px; }
-    }
-</style>
-</head>
-<body>
-<div class="test-container">
-HTML;
-
-// ============================================
-// HEADER
-// ============================================
-echo "<div class='test-header'>";
-echo "<h1>FitPal Product Detail Test</h1>";
-echo "<p>Structural checks plus DB-driven invariants for the product-detail feature.</p>";
-echo "<p style='font-size:13px;opacity:0.6;margin-top:10px;'>Base Path: " . htmlspecialchars((string)$basePath) . " | Base URL: " . htmlspecialchars($baseUrl) . "</p>";
-echo "</div>";
-
-// ============================================
-// DB CONNECTION
-// ============================================
-$dbFile = $sharedPath . '/backend/database/database-connect.php';
-$db = null;
-
-if (file_exists($dbFile)) {
-    testResult('Database file exists', true, 'File found', 'Database', 'structural');
-    try {
-        $database_host = 'localhost';
-        $database_port = 3306;
-        $database_name = 'fitpal_food_delivery';
-        $database_username = 'root';
-        $database_password = '';
-        $database_charset = 'utf8mb4';
-
-        $dsn = sprintf(
-            'mysql:host=%s;port=%d;dbname=%s;charset=%s',
-            $database_host, $database_port, $database_name, $database_charset
-        );
-        $db = new PDO($dsn, $database_username, $database_password, [
-            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES   => false,
-        ]);
-        testResult('Database connection', true, 'PDO connection established', 'Database', 'structural');
-    } catch (PDOException $e) {
-        testResult('Database connection', false, 'PDO error: ' . $e->getMessage(), 'Database', 'structural');
-        $db = null;
-    }
-} else {
-    testResult('Database file exists', false, 'Missing: ' . $dbFile, 'Database', 'structural');
-}
-
-// ============================================
-// SECTION A — STRUCTURAL: files + includes
-// ============================================
-$criticalFiles = [
-    'product-detail.php'         => $customerPath . '/pages/product-detail.php',
-    'product-detail.css'         => $customerPath . '/assets/css/product-detail.css',
-    'product-detail.js'          => $customerPath . '/assets/ui/js/product-detail.js',
-    'cart-handler.php'           => $customerPath . '/backend/handlers/cart-handler.php',
-    'customer header.php'        => $customerPath . '/includes/header.php',
-    'shared footer.php'          => $sharedPath   . '/includes/footer.php',
-    'database-connect.php'       => $sharedPath   . '/backend/database/database-connect.php',
-];
-foreach ($criticalFiles as $label => $path) {
-    $ok = file_exists($path);
-    testResult($label, $ok, $ok ? 'Found' : 'Missing: ' . $path, 'Files', 'structural');
-}
-
-// ============================================
-// SECTION B — DB SCHEMA
-// ============================================
-if ($db !== null) {
-    // Required tables
-    foreach (['product', 'product_composition', 'ingredient', 'dietary_information'] as $tbl) {
-        $stmt = $db->query("SHOW TABLES LIKE " . $db->quote($tbl));
-        $exists = $stmt->rowCount() > 0;
-        testResult("Table exists: {$tbl}", $exists, $exists ? 'Present' : 'Missing', 'Schema', 'structural');
-    }
-
-    // Required columns on product_composition
-    $requiredCompCols = [
-        'composition_id', 'product_id', 'ingredient_id',
-        'is_default', 'default_quantity', 'max_quantity',
-        'price_modifier', 'display_order',
-        'is_required', 'min_quantity', 'max_quantity_per_item',
-    ];
-    $stmt = $db->query("SHOW COLUMNS FROM product_composition");
-    $haveCols = array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'Field');
-    foreach ($requiredCompCols as $col) {
-        $ok = in_array($col, $haveCols, true);
-        testResult("product_composition.{$col}", $ok, $ok ? 'Present' : 'Missing', 'Schema', 'structural');
-    }
-}
-
-// ============================================
-// SECTION C — PHP CONTRACT
-// Verify product-detail.php emits the data-* attributes JS reads.
-// ============================================
-$pdPath = $customerPath . '/pages/product-detail.php';
-if (file_exists($pdPath)) {
-    $pd = file_get_contents($pdPath);
-
-    // Must NOT still reference the removed $liveQty <= $minQty pattern
-    // that produced out-of-range modifier quantities.
-    $hasLiveQtyBug = strpos($pd, '$liveQty') !== false
-                  && strpos($pd, '$liveQty <= $minQty') !== false;
-    testResult(
-        'No legacy $liveQty clamp bug',
-        !$hasLiveQtyBug,
-        $hasLiveQtyBug
-            ? 'Found $liveQty <= $minQty — will emit out-of-range modifier start values'
-            : 'Clean',
-        'PHP Contract'
-    );
-
-    // Must emit data-default-quantity on modifier-option
-    $hasDefaultQtyAttr = strpos($pd, 'data-default-quantity') !== false;
-    testResult(
-        'Emits data-default-quantity',
-        $hasDefaultQtyAttr,
-        $hasDefaultQtyAttr ? 'Found' : 'Missing — JS delta math will be wrong',
-        'PHP Contract'
-    );
-
-    // Must emit data-is-default on radios/checkboxes
-    $hasIsDefault = strpos($pd, 'data-is-default') !== false;
-    testResult(
-        'Emits data-is-default',
-        $hasIsDefault,
-        $hasIsDefault ? 'Found' : 'Missing — JS cannot identify default input',
-        'PHP Contract'
-    );
-
-    // Must emit data-min-qty and data-max-qty on modifiers
-    $hasMinQty = strpos($pd, 'data-min-qty') !== false;
-    $hasMaxQty = strpos($pd, 'data-max-qty') !== false;
-    testResult('Emits data-min-qty', $hasMinQty, $hasMinQty ? 'Found' : 'Missing', 'PHP Contract');
-    testResult('Emits data-max-qty', $hasMaxQty, $hasMaxQty ? 'Found' : 'Missing', 'PHP Contract');
-
-    // Must emit data-base-price and data-base-calories on the root container
-    $hasBasePriceRoot = strpos($pd, 'data-base-price') !== false;
-    $hasBaseCalRoot   = strpos($pd, 'data-base-calories') !== false;
-    testResult('Root data-base-price', $hasBasePriceRoot, $hasBasePriceRoot ? 'Found' : 'Missing', 'PHP Contract');
-    testResult('Root data-base-calories', $hasBaseCalRoot, $hasBaseCalRoot ? 'Found' : 'Missing', 'PHP Contract');
-
-    // Must emit data-component-kind so JS can dispatch on kind
-    $hasComponentKind = strpos($pd, 'data-component-kind') !== false;
-    testResult('data-component-kind', $hasComponentKind, $hasComponentKind ? 'Found' : 'Missing', 'PHP Contract');
-
-    // Uses CSRF token
-    $hasCsrf = strpos($pd, 'csrf_token') !== false;
-    testResult('CSRF token present', $hasCsrf, $hasCsrf ? 'Found' : 'Missing', 'PHP Contract');
-
-    // No second <!DOCTYPE> in the page (page contract violation)
-    $doctypeCount = substr_count(strtolower($pd), '<!doctype');
-    testResult(
-        'No duplicate <!DOCTYPE>',
-        $doctypeCount === 0,
-        $doctypeCount === 0 ? 'Clean' : "Found {$doctypeCount} — page contract violation",
-        'PHP Contract'
-    );
-}
-
-// ============================================
-// SECTION D — JS CONTRACT
-// Verify product-detail.js reads the attributes PHP writes.
-// ============================================
-$pdJsPath = $customerPath . '/assets/ui/js/product-detail.js';
-if (file_exists($pdJsPath)) {
-    $js = file_get_contents($pdJsPath);
-
-    // Must read data-is-default
-    $readsIsDefault = strpos($js, 'data-is-default') !== false
-                   || strpos($js, 'isDefault') !== false;
-    testResult('JS reads data-is-default', $readsIsDefault, $readsIsDefault ? 'Found' : 'Missing', 'JS Contract');
-
-    // Must read data-default-quantity
-    $readsDefaultQty = strpos($js, 'dataset.defaultQuantity') !== false
-                    || strpos($js, 'data-default-quantity') !== false;
-    testResult('JS reads data-default-quantity', $readsDefaultQty, $readsDefaultQty ? 'Found' : 'Missing', 'JS Contract');
-
-    // Must define calculateTotals (not the old calculateTotalPrice)
-    $hasCalculateTotals = strpos($js, 'function calculateTotals') !== false
-                       || strpos($js, 'calculateTotals =') !== false;
-    testResult('JS defines calculateTotals', $hasCalculateTotals, $hasCalculateTotals ? 'Found' : 'Missing — old calculateTotalPrice?', 'JS Contract');
-
-    // Must compute a delta, not re-add the full default
-    $hasDelta = strpos($js, 'currentQty - defaultQty') !== false
-             || strpos($js, 'selectedPrice - defaultPrice') !== false
-             || strpos($js, 'sp - dp') !== false;
-    testResult('JS uses delta math', $hasDelta, $hasDelta ? 'Found' : 'Missing — will double-count defaults', 'JS Contract');
-
-    // Uses strict mode and const/let only
-    $hasStrict = strpos($js, "'use strict'") !== false;
-    testResult("'use strict'", $hasStrict, $hasStrict ? 'Found' : 'Missing', 'JS Contract');
-
-    $hasVar = preg_match('/\bvar\s+\w/', $js) === 1;
-    testResult('No var keyword', !$hasVar, $hasVar ? 'Found var declaration' : 'Clean', 'JS Contract');
-}
-
-// ============================================
-// SECTION E — DB INVARIANTS
-// These are the bugs that actually showed up in the UI.
-// ============================================
-if ($db !== null) {
-
-    // E1. Every product_composition row must have min <= default <= max_quantity
-    $stmt = $db->query(
-        "SELECT
-            pc.composition_id,
-            p.name AS product_name,
-            i.name AS ingredient_name,
-            pc.min_quantity,
-            pc.default_quantity,
-            pc.max_quantity,
-            pc.max_quantity_per_item,
-            pc.is_required
-         FROM product_composition pc
-         JOIN product p ON p.product_id = pc.product_id
-         JOIN ingredient i ON i.ingredient_id = pc.ingredient_id"
-    );
-    $badRangeRows = [];
-    $requiredNonDefaultRows = [];
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $min  = (int)$row['min_quantity'];
-        $def  = (int)$row['default_quantity'];
-        $max  = (int)$row['max_quantity'];
-        $maxPer = (int)$row['max_quantity_per_item'];
-        $req  = (bool)$row['is_required'];
-
-        // Range on the quantity stepper
-        if ($min > $def || $def > $max) {
-            $badRangeRows[] = sprintf(
-                '%s / %s: min=%d default=%d max=%d',
-                $row['product_name'], $row['ingredient_name'],
-                $min, $def, $max
-            );
-        }
-
-        // For required modifiers with min >= 1, default must equal min
-        if ($maxPer > 1 && $req && $min >= 1 && $def !== $min) {
-            $requiredNonDefaultRows[] = sprintf(
-                '%s / %s: required with min=%d but default=%d',
-                $row['product_name'], $row['ingredient_name'], $min, $def
-            );
-        }
-    }
-    testResult(
-        'min_quantity <= default_quantity <= max_quantity',
-        empty($badRangeRows),
-        empty($badRangeRows)
-            ? 'All ' . $stmt->rowCount() . ' rows satisfy the range'
-            : count($badRangeRows) . ' row(s) violate: ' . implode(' | ', array_slice($badRangeRows, 0, 3)),
-        'DB Invariants'
-    );
-    testResult(
-        'Required modifiers default to their minimum',
-        empty($requiredNonDefaultRows),
-        empty($requiredNonDefaultRows)
-            ? 'Consistent'
-            : implode(' | ', array_slice($requiredNonDefaultRows, 0, 3)),
-        'DB Invariants'
-    );
-
-    // E2. Every choice group (same product + display_order, max_quantity_per_item=1)
-    //     must have at most one is_default=1 row.
-    $stmt = $db->query(
-        "SELECT
-            pc.product_id,
-            pc.display_order,
-            p.name AS product_name,
-            SUM(CASE WHEN pc.is_default = 1 THEN 1 ELSE 0 END) AS default_count,
-            COUNT(*) AS group_size
-         FROM product_composition pc
-         JOIN product p ON p.product_id = pc.product_id
-         WHERE pc.max_quantity_per_item = 1
-         GROUP BY pc.product_id, pc.display_order, p.name
-         HAVING default_count > 1"
-    );
-    $multiDefaultGroups = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    testResult(
-        'At most one default per choice group',
-        empty($multiDefaultGroups),
-        empty($multiDefaultGroups)
-            ? 'All choice groups have <= 1 default'
-            : count($multiDefaultGroups) . ' group(s) with multiple defaults: '
-              . implode(', ', array_map(fn($r) => "{$r['product_name']}#{$r['display_order']} ({$r['default_count']})", array_slice($multiDefaultGroups, 0, 3))),
-        'DB Invariants'
-    );
-
-    // E3. For every customizable product:
-    //       dietary_information.calories == SUM(default ingredient calories)
-    //     This is the invariant that was broken for Vegetable Stir Fry.
-    $stmt = $db->query(
-        "SELECT
-            p.product_id,
-            p.name AS product_name,
-            di.calories AS stored_calories,
-            COALESCE((
-                SELECT SUM(i.calories * GREATEST(pc.default_quantity, pc.min_quantity))
-                FROM product_composition pc
-                JOIN ingredient i ON i.ingredient_id = pc.ingredient_id
-                WHERE pc.product_id = p.product_id AND pc.is_default = 1
-            ), 0) AS derived_calories
-         FROM product p
-         JOIN dietary_information di ON di.dietary_information_id = p.dietary_information_id
-         WHERE p.is_customizable = 1"
-    );
-    $calorieMismatches = [];
-    $calorieRows = 0;
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $calorieRows++;
-        $stored  = (int)$row['stored_calories'];
-        $derived = (int)$row['derived_calories'];
-        if ($stored !== $derived) {
-            $calorieMismatches[] = sprintf(
-                '%s: stored=%d derived=%d (diff %+d)',
-                $row['product_name'], $stored, $derived, $stored - $derived
-            );
-        }
-    }
-    testResult(
-        'dietary_information.calories == defaults sum',
-        empty($calorieMismatches),
-        empty($calorieMismatches)
-            ? "All {$calorieRows} customizable product(s) agree"
-            : count($calorieMismatches) . ' product(s) disagree: ' . implode(' | ', array_slice($calorieMismatches, 0, 3)),
-        'DB Invariants'
-    );
-
-    // E4. Every customizable product has at least one default ingredient.
-    $stmt = $db->query(
-        "SELECT p.product_id, p.name
-         FROM product p
-         WHERE p.is_customizable = 1
-           AND NOT EXISTS (
-               SELECT 1 FROM product_composition pc
-               WHERE pc.product_id = p.product_id AND pc.is_default = 1
-           )"
-    );
-    $noDefaultProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    testResult(
-        'Every customizable product has a default',
-        empty($noDefaultProducts),
-        empty($noDefaultProducts)
-            ? 'All customizable products have at least one default'
-            : count($noDefaultProducts) . ' product(s) missing defaults: '
-              . implode(', ', array_column(array_slice($noDefaultProducts, 0, 3), 'name')),
-        'DB Invariants'
-    );
-
-    // E5. base_price must be > 0 for every active product.
-    $stmt = $db->query(
-        "SELECT p.product_id, p.name, p.price, p.base_price
-         FROM product p
-         WHERE p.is_active = 1 AND (p.base_price IS NULL OR p.base_price <= 0)"
-    );
-    $badPrice = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    testResult(
-        'All active products have base_price > 0',
-        empty($badPrice),
-        empty($badPrice)
-            ? 'All active products priced'
-            : count($badPrice) . ' with base_price <= 0: '
-              . implode(', ', array_map(fn($r) => "{$r['name']}(price={$r['price']},base={$r['base_price']})", array_slice($badPrice, 0, 3))),
-        'DB Invariants'
-    );
-
-    // E6. No product with a "Spinach-style" trap:
-    //       is_required=0, min_quantity > 0, default_quantity < min_quantity
-    //     Already covered by E1's range check, but the specific combination
-    //     is worth calling out because it produced the UI symptom directly.
-    $stmt = $db->query(
-        "SELECT p.name AS product_name, i.name AS ingredient_name,
-                pc.min_quantity, pc.default_quantity
-         FROM product_composition pc
-         JOIN product p ON p.product_id = pc.product_id
-         JOIN ingredient i ON i.ingredient_id = pc.ingredient_id
-         WHERE pc.is_required = 0
-           AND pc.min_quantity > 0
-           AND pc.default_quantity < pc.min_quantity"
-    );
-    $spinachTraps = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    testResult(
-        'No optional modifier requires > default',
-        empty($spinachTraps),
-        empty($spinachTraps)
-            ? 'Consistent'
-            : count($spinachTraps) . ' trap(s): '
-              . implode(' | ', array_map(fn($r) => "{$r['product_name']}/{$r['ingredient_name']} min={$r['min_quantity']} def={$r['default_quantity']}", array_slice($spinachTraps, 0, 3))),
-        'DB Invariants'
-    );
-}
-
-// ============================================
-// SECTION F — PER-PRODUCT DEEP CHECK
-// Renders product-detail.php's source and asserts that each product's
-// defaults map to a numeric calorie value that will be the same in all
-// three places (card, main step, customize step).
-// ============================================
-if ($db !== null) {
-    $stmt = $db->query(
-        "SELECT p.product_id, p.name
-         FROM product p
-         WHERE p.is_active = 1 AND p.is_customizable = 1
-         ORDER BY p.product_id"
-    );
-    $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    foreach ($products as $prod) {
-        $pid = (int)$prod['product_id'];
-
-        // Query composition + ingredient the same way PHP does.
-        $cStmt = $db->prepare(
-            "SELECT
-                pc.ingredient_id, pc.is_default, pc.default_quantity,
-                pc.min_quantity, pc.max_quantity, pc.max_quantity_per_item,
-                pc.is_required, pc.display_order,
-                i.name AS ingredient_name, i.calories AS ingredient_calories
-             FROM product_composition pc
-             JOIN ingredient i ON i.ingredient_id = pc.ingredient_id
-             WHERE pc.product_id = :pid AND i.is_active = 1
-             ORDER BY pc.display_order, i.name"
-        );
-        $cStmt->execute([':pid' => $pid]);
-        $rows = $cStmt->fetchAll(PDO::FETCH_ASSOC);
-
-        if (empty($rows)) {
-            testResult(
-                "#{$pid} {$prod['name']}",
-                false,
-                'Customizable product has no active composition rows',
-                'Per-Product Check'
-            );
-            continue;
-        }
-
-        // Group by display_order, classify, and sum defaults — the
-        // same algorithm product-detail.php uses.
-        $byOrder = [];
-        foreach ($rows as $r) {
-            $byOrder[(int)$r['display_order']][] = $r;
-        }
-
-        $derivedCalories = 0;
-        $problems = [];
-
-        foreach ($byOrder as $order => $group) {
-            $count        = count($group);
-            $groupMaxPer  = 1;
-            $groupReq     = false;
-            $defaultCount = 0;
-
-            foreach ($group as $r) {
-                $groupMaxPer = max($groupMaxPer, (int)$r['max_quantity_per_item']);
-                $groupReq    = $groupReq || (bool)$r['is_required'];
-                $defaultCount += (int)$r['is_default'];
-            }
-
-            $firstMin = (int)$group[0]['min_quantity'];
-
-            if ($groupMaxPer === 1) {
-                if ($count === 1 && $groupReq && $firstMin === 1) {
-                    // static
-                    $qty = max((int)$group[0]['default_quantity'], (int)$group[0]['min_quantity'], 1);
-                    $derivedCalories += (int)$group[0]['ingredient_calories'] * $qty;
-                } else {
-                    // choice
-                    $chosen = null;
-                    foreach ($group as $r) {
-                        if ((int)$r['is_default'] === 1) { $chosen = $r; break; }
-                    }
-                    if ($chosen !== null) {
-                        $derivedCalories += (int)$chosen['ingredient_calories'];
-                    }
-                }
-            } elseif ($count === 1) {
-                // modifier
-                $qty = max((int)$group[0]['default_quantity'], (int)$group[0]['min_quantity']);
-                $derivedCalories += (int)$group[0]['ingredient_calories'] * $qty;
-            } else {
-                // multi
-                foreach ($group as $r) {
-                    if ((int)$r['is_default'] === 1) {
-                        $qty = max((int)$r['default_quantity'], (int)$r['min_quantity']);
-                        $derivedCalories += (int)$r['ingredient_calories'] * $qty;
-                    }
-                }
-            }
-
-            if ($groupMaxPer === 1 && $defaultCount > 1) {
-                $problems[] = "order={$order} has {$defaultCount} defaults";
-            }
-        }
-
-        $sStmt = $db->prepare(
-            "SELECT di.calories
-             FROM product p
-             JOIN dietary_information di ON di.dietary_information_id = p.dietary_information_id
-             WHERE p.product_id = :pid"
-        );
-        $sStmt->execute([':pid' => $pid]);
-        $stored = (int)($sStmt->fetchColumn() ?: 0);
-
-        $ok = ($stored === $derivedCalories) && empty($problems);
-        $msg = $ok
-            ? "stored={$stored} kcal matches defaults sum"
-            : "stored={$stored} vs derived={$derivedCalories}"
-              . (empty($problems) ? '' : ' | ' . implode('; ', $problems));
-
-        testResult("#{$pid} {$prod['name']}", $ok, $msg, 'Per-Product Check');
-    }
-}
-
-// ============================================
-// SECTION G — HANDLER CONTRACT
-// The add-to-cart handler must accept what product-detail.php submits.
-// ============================================
-$handlerPath = $customerPath . '/backend/handlers/cart-handler.php';
-if (file_exists($handlerPath)) {
-    $h = file_get_contents($handlerPath);
-
-    testResult(
-        'Handler calls session_start',
-        strpos($h, 'session_start') !== false,
-        'Presence check',
-        'Handler Contract'
-    );
-    testResult(
-        'Handler validates CSRF',
-        strpos($h, 'csrf_token') !== false,
-        'Presence check',
-        'Handler Contract'
-    );
-    testResult(
-        'Handler reads customizations payload',
-        strpos($h, 'customizations') !== false,
-        'Presence check',
-        'Handler Contract'
-    );
-    testResult(
-        'Handler stores customization_data JSON',
-        strpos($h, 'customization_data') !== false,
-        'Presence check',
-        'Handler Contract'
-    );
-
-    // Must not trust the client total_price without a fallback
-    $trustsClient = strpos($h, "\$_POST['total_price']") !== false
-                 && strpos($h, 'base_price') === false;
-    testResult(
-        'Handler does not blindly trust client price',
-        !$trustsClient,
-        $trustsClient
-            ? 'Only reads $_POST[\'total_price\'] without server-side base_price fallback'
-            : 'Server-side price logic present',
-        'Handler Contract'
-    );
-}
-
-// ============================================
-// SECTION H — LIVE LINKS (discovered from DB)
-// ============================================
-$liveProducts = [];
-if ($db !== null) {
-    $stmt = $db->query(
-        "SELECT p.product_id, p.name
-         FROM product p
-         WHERE p.is_active = 1
-         ORDER BY p.is_customizable DESC, p.product_id
-         LIMIT 5"
-    );
-    $liveProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
-}
-
-// ============================================
-// TOTALS
-// ============================================
-$totalTests = 0; $totalPassed = 0; $totalFailed = 0; $totalSkipped = 0;
-
-foreach ($sections as $tests) {
-    foreach ($tests as $t) {
-        if ($t['passed'] === null) {
-            $totalSkipped++;
-            continue;
-        }
-        $totalTests++;
-        if ($t['passed']) {
-            $totalPassed++;
-        } else {
-            $totalFailed++;
-        }
-    }
-}
-$passRate = $totalTests > 0 ? round(($totalPassed / $totalTests) * 100) : 0;
-
-// ============================================
-// SUMMARY + LIVE SECTION
-// ============================================
-echo "<div class='top-section'>";
-echo "<div class='test-summary'>";
-echo "<div class='summary-card total'><div class='number'>{$totalTests}</div><div class='label'>Total Tests</div></div>";
-echo "<div class='summary-card passed'><div class='number'>{$totalPassed}</div><div class='label'>Passed</div></div>";
-echo "<div class='summary-card failed'><div class='number'>{$totalFailed}</div><div class='label'>Failed</div></div>";
-echo "<div class='summary-card rate'><div class='number'>{$passRate}%</div><div class='label'>Pass Rate</div></div>";
-echo "</div>";
-
-echo "<div class='test-section' id='section-live'>";
-echo "<div class='section-header' data-target='content-live'>";
-echo "<h2>Live Test <span class='section-count count-neutral'>(Live)</span></h2>";
-echo "<button class='section-toggle' aria-expanded='false' aria-controls='content-live' type='button'><span class='toggle-icon'>+</span></button>";
-echo "</div>";
-echo "<div class='test-grid' id='content-live' style='display: none;'>";
-echo "<div class='live-test'>";
-echo "<p><strong>Open product detail for products discovered in the DB:</strong></p>";
-echo "<div class='btn-test-group'>";
-if (!empty($liveProducts)) {
-    foreach ($liveProducts as $lp) {
-        $pid  = (int)$lp['product_id'];
-        $name = htmlspecialchars($lp['name']);
-        echo "<a href='" . htmlspecialchars($baseUrl) . "/customer/pages/product-detail.php?id={$pid}' target='_blank' class='btn-test'>#{$pid} {$name}</a>";
-    }
-} else {
-    echo "<span style='color:#a0aec0;font-size:13px;'>No active products found in DB.</span>";
-}
-echo "</div>";
-echo "<div class='btn-test-group' style='margin-top:15px;'>";
-echo "<a href='" . htmlspecialchars($baseUrl) . "/customer/pages/menu.php' target='_blank' class='btn-test warning'>Menu</a>";
-echo "<a href='" . htmlspecialchars($baseUrl) . "/customer/pages/dashboard.php' target='_blank' class='btn-test success'>Dashboard</a>";
-echo "</div>";
-
-echo "<div class='note-box'>";
-echo "<p>What to verify manually on each product page:</p>";
-echo "<ul>";
-echo "<li>Main step: the kcal badge and total match the menu card</li>";
-echo "<li>Customize step opens with the total unchanged</li>";
-echo "<li>Every modifier stepper starts at a value between its min and max</li>";
-echo "<li>Every required modifier's minus button is disabled at its minimum</li>";
-echo "<li>Adding an optional ingredient raises both price and calories by the stated amount</li>";
-echo "<li>Picking a different base/protein produces a total consistent with the option's stated delta</li>";
-echo "</ul>";
-echo "</div>";
-
-echo "</div>";
-echo "</div>";
-echo "</div>";
-echo "</div>";
-
-// ============================================
-// RENDER SECTIONS
-// ============================================
-renderSection('Database Tests',      'Database',         true);
-renderSection('File Tests',          'Files',            true);
-renderSection('Schema Tests',        'Schema',           true);
-renderSection('PHP Contract Tests',  'PHP Contract',     false);
-renderSection('JS Contract Tests',   'JS Contract',      false);
-renderSection('DB Invariant Tests',  'DB Invariants',    false);
-renderSection('Per-Product Check',   'Per-Product Check', false);
-renderSection('Handler Contract',    'Handler Contract', true);
-
-// ============================================
-// COLLAPSIBLE SECTIONS
-// ============================================
-echo <<<JS
-<script>
-(function() {
-    'use strict';
-    var sectionHeaders = document.querySelectorAll('.section-header');
-
-    sectionHeaders.forEach(function(header) {
-        var targetId  = header.getAttribute('data-target');
-        var content   = document.getElementById(targetId);
-        var toggleBtn = header.querySelector('.section-toggle');
-        var icon      = toggleBtn ? toggleBtn.querySelector('.toggle-icon') : null;
-        if (!content || !toggleBtn || !icon) return;
-
-        header.addEventListener('click', function(e) {
-            if (e.target.closest('.section-toggle')) return;
-            toggleSection(header, content, toggleBtn, icon);
-        });
-        toggleBtn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            toggleSection(header, content, toggleBtn, icon);
-        });
-        header.setAttribute('role', 'button');
-        header.setAttribute('tabindex', '0');
-        header.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                toggleSection(header, content, toggleBtn, icon);
-            }
-        });
-    });
-
-    function toggleSection(header, content, toggleBtn, icon) {
-        var collapsed = header.classList.contains('section-collapsed');
-        if (collapsed) {
-            header.classList.remove('section-collapsed');
-            toggleBtn.setAttribute('aria-expanded', 'true');
-            content.style.display = 'grid';
-            icon.textContent = '-';
-        } else {
-            header.classList.add('section-collapsed');
-            toggleBtn.setAttribute('aria-expanded', 'false');
-            content.style.display = 'none';
-            icon.textContent = '+';
-        }
-    }
-})();
-</script>
-JS;
-
-echo "</div></body></html>";
-```
-
----
-
-## File: `fitpal/test/customer/sign-in-test.php`
-
-**Status:** `FOUND`
-
-```php
-<?php
-/**
- * FitPal Customer Sign-In System Test
- * Validates the customer sign-in flow
- *
- * @package FitPal
- * @version 2.8
- */
-
-declare(strict_types=1);
-
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-$basePath = realpath(__DIR__ . '/../..');
-$customerPath = $basePath . '/customer';
-$sharedPath = $basePath . '/shared';
-
-$passed = 0;
-$failed = 0;
-
-$sections = [];
-
-function testResult($name, $result, $message = '', $section = 'General') {
-    global $sections, $passed, $failed;
-    $status = $result ? 'PASS' : 'FAIL';
-    if ($result) $passed++; else $failed++;
-    
-    if (!isset($sections[$section])) {
-        $sections[$section] = [];
-    }
-    $sections[$section][] = [
-        'name' => $name,
-        'status' => $status,
-        'message' => $message,
-        'passed' => $result
-    ];
-    return $result;
-}
-
-function renderSection($title, $sectionName, $defaultCollapsed = true) {
-    global $sections;
-    
-    $totalTests = isset($sections[$sectionName]) ? count($sections[$sectionName]) : 0;
-    $passedTests = 0;
-    if (isset($sections[$sectionName])) {
-        foreach ($sections[$sectionName] as $test) {
-            if ($test['passed']) $passedTests++;
-        }
-    }
-    
-    $failedTests = $totalTests - $passedTests;
-    $allPassed = ($totalTests > 0 && $failedTests === 0);
-    $hasFailures = ($failedTests > 0);
-    
-    $sectionId = 'section-' . preg_replace('/[^a-zA-Z0-9]/', '-', $sectionName);
-    $contentId = 'content-' . preg_replace('/[^a-zA-Z0-9]/', '-', $sectionName);
-    
-    $collapsedClass = $defaultCollapsed ? 'section-collapsed' : '';
-    
-    echo "<div class='test-section {$collapsedClass}' id='{$sectionId}'>";
-    echo "<div class='section-header' data-target='{$contentId}'>";
-    
-    $countClass = 'count-neutral';
-    if ($allPassed) {
-        $countClass = 'count-pass';
-    } elseif ($hasFailures && $failedTests <= 2) {
-        $countClass = 'count-warning';
-    } elseif ($hasFailures && $failedTests > 2) {
-        $countClass = 'count-fail';
-    }
-    
-    echo "<h2>{$title} <span class='section-count {$countClass}'>({$passedTests}/{$totalTests})</span></h2>";
-    echo "<button class='section-toggle' aria-expanded='" . ($defaultCollapsed ? 'false' : 'true') . "' aria-controls='{$contentId}' type='button'>";
-    echo "<span class='toggle-icon'>" . ($defaultCollapsed ? '+' : '-') . "</span>";
-    echo "</button>";
-    echo "</div>";
-    echo "<div class='test-grid' id='{$contentId}' style='display: " . ($defaultCollapsed ? 'none' : 'grid') . ";'>";
-    
-    if (isset($sections[$sectionName]) && !empty($sections[$sectionName])) {
-        foreach ($sections[$sectionName] as $test) {
-            $statusClass = $test['passed'] ? 'pass' : 'fail';
-            $statusText = $test['passed'] ? 'PASS' : 'FAIL';
-            
-            echo "<div class='test-item {$statusClass}'>";
-            echo "<div class='test-name'>" . htmlspecialchars($test['name']) . "</div>";
-            echo "<div class='test-status {$statusClass}'>" . $statusText . "</div>";
-            echo "<div class='test-message'>" . htmlspecialchars($test['message']) . "</div>";
-            echo "</div>";
-        }
-    } else {
-        echo "<div class='test-item' style='border-left-color: #edf2f0;'>";
-        echo "<div class='test-name' style='color: #a0aec0;'>No tests in this section</div>";
-        echo "</div>";
-    }
-    
-    echo "</div>";
-    echo "</div>";
-}
-
-function renderLiveFormSection($baseUrl, $defaultCollapsed = true) {
-    global $sections;
-    
-    $sectionName = 'Live Form';
-    $totalTests = isset($sections[$sectionName]) ? count($sections[$sectionName]) : 0;
-    $passedTests = 0;
-    if (isset($sections[$sectionName])) {
-        foreach ($sections[$sectionName] as $test) {
-            if ($test['passed']) $passedTests++;
-        }
-    }
-    
-    $failedTests = $totalTests - $passedTests;
-    $allPassed = ($totalTests > 0 && $failedTests === 0);
-    $hasFailures = ($failedTests > 0);
-    
-    $collapsedClass = $defaultCollapsed ? 'section-collapsed' : '';
-    $contentId = 'content-live-form';
-    
-    echo "<div class='test-section {$collapsedClass}' id='section-live-form'>";
-    echo "<div class='section-header' data-target='{$contentId}'>";
-    
-    $countClass = 'count-neutral';
-    if ($allPassed) {
-        $countClass = 'count-pass';
-    } elseif ($hasFailures && $failedTests <= 2) {
-        $countClass = 'count-warning';
-    } elseif ($hasFailures && $failedTests > 2) {
-        $countClass = 'count-fail';
-    }
-    
-    echo "<h2>Live Form Test <span class='section-count {$countClass}'>({$passedTests}/{$totalTests})</span></h2>";
-    echo "<button class='section-toggle' aria-expanded='" . ($defaultCollapsed ? 'false' : 'true') . "' aria-controls='{$contentId}' type='button'>";
-    echo "<span class='toggle-icon'>" . ($defaultCollapsed ? '+' : '-') . "</span>";
-    echo "</button>";
-    echo "</div>";
-    echo "<div class='test-grid' id='{$contentId}' style='display: " . ($defaultCollapsed ? 'none' : 'grid') . ";'>";
-    
-    if (isset($sections[$sectionName]) && !empty($sections[$sectionName])) {
-        foreach ($sections[$sectionName] as $test) {
-            $statusClass = $test['passed'] ? 'pass' : 'fail';
-            $statusText = $test['passed'] ? 'PASS' : 'FAIL';
-            
-            echo "<div class='test-item {$statusClass}'>";
-            echo "<div class='test-name'>" . htmlspecialchars($test['name']) . "</div>";
-            echo "<div class='test-status {$statusClass}'>" . $statusText . "</div>";
-            echo "<div class='test-message'>" . htmlspecialchars($test['message']) . "</div>";
-            echo "</div>";
-        }
-    }
-    
-    echo "<div class='live-test'>";
-    echo "<p><strong>Test the sign-in form:</strong></p>";
-    echo "<p style='font-size:13px;color:#718096;margin:5px 0;'>URL: " . htmlspecialchars($baseUrl . '/customer/pages/sign-in.php') . "</p>";
-    echo "<p style='font-size:13px;color:#718096;margin:5px 0 10px 0;'>Test credentials: test@example.com / admin123</p>";
-    echo "<iframe src='" . $baseUrl . "/customer/pages/sign-in.php'></iframe>";
-    echo "<div class='btn-test-group'>";
-    echo "<a href='" . $baseUrl . "/customer/pages/sign-in.php' target='_blank' class='btn-test'>Open Sign-In</a>";
-    echo "<a href='" . $baseUrl . "/customer/pages/sign-up.php' target='_blank' class='btn-test'>Open Sign-Up</a>";
-    echo "<a href='" . $baseUrl . "/customer/pages/dashboard.php' target='_blank' class='btn-test'>Open Dashboard</a>";
-    echo "<a href='" . $baseUrl . "/customer/backend/handlers/sign-in-handler.php' target='_blank' class='btn-test'>Test Handler</a>";
-    echo "</div>";
-    echo "</div>";
-    
-    echo "</div>";
-    echo "</div>";
-}
-
-function getAssetBase() {
-    $scriptPath = $_SERVER['SCRIPT_NAME'];
-    $dirPath = dirname($scriptPath);
-    $segments = array_filter(explode('/', $dirPath));
-    $depth = count($segments);
-    if ($depth <= 0) return './shared/';
-    return str_repeat('../', $depth) . 'shared/';
-}
-
-$protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http';
-$host = $_SERVER['HTTP_HOST'];
-$baseUrl = $protocol . '://' . $host;
-
-$assetBase = getAssetBase();
-
-echo "<!DOCTYPE html>
-<html lang='en'>
-<head>
-    <meta charset='UTF-8'>
-    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-    <title>FitPal Sign-In System Test</title>
-    <link rel='stylesheet' href='{$assetBase}assets/css/global.css'>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { width: 100%; overflow-x: hidden; }
-        body { background: #f4f6f9; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-        .test-container { max-width: 100%; padding: 0; margin: 0; }
-        .test-header { background: linear-gradient(135deg, #2d3748, #1a202c); color: white; padding: 30px; border-radius: 12px; margin-bottom: 30px; width: 100%; }
-        .test-header h1 { margin: 0; font-size: 28px; }
-        .test-header p { margin: 10px 0 0 0; opacity: 0.8; }
-        .test-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; width: 100%; }
-        .summary-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center; }
-        .summary-card .number { font-size: 32px; font-weight: 700; }
-        .summary-card .label { color: #718096; font-size: 14px; margin-top: 5px; }
-        .summary-card.total .number { color: #2d3748; }
-        .summary-card.passed .number { color: #48bb78; }
-        .summary-card.failed .number { color: #fc8181; }
-        .summary-card.rate .number { color: #4299e1; }
-        .test-grid { display: grid; gap: 10px; padding: 15px; width: 100%; }
-        .test-item { background: white; border-radius: 8px; padding: 12px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; width: 100%; }
-        .test-item.pass { border-left-color: #48bb78; }
-        .test-item.fail { border-left-color: #fc8181; }
-        .test-item .test-name { font-weight: 600; font-size: 14px; flex: 1; min-width: 180px; }
-        .test-item .test-status { display: inline-block; padding: 2px 14px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; margin: 0 10px; }
-        .test-item .test-status.pass { background: #c6f6d5; color: #22543d; }
-        .test-item .test-status.fail { background: #fed7d7; color: #9b2c2c; }
-        .test-item .test-message { color: #718096; font-size: 13px; min-width: 100px; text-align: right; }
-        .test-section { background: white; border-radius: 10px; margin-top: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; width: 100%; }
-        .section-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; cursor: pointer; background: #f7fafc; border-bottom: 1px solid #e2e8f0; user-select: none; width: 100%; }
-        .section-header:hover { background: #edf2f7; }
-        .section-header h2 { margin: 0; font-size: 18px; color: #2d3748; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-        .section-count { font-size: 14px; font-weight: 600; padding: 2px 12px; border-radius: 20px; }
-        .count-pass { background: #c6f6d5; color: #22543d; }
-        .count-warning { background: #fefcbf; color: #975a16; }
-        .count-fail { background: #fed7d7; color: #9b2c2c; }
-        .count-neutral { background: #edf2f7; color: #718096; }
-        .section-toggle { background: none; border: none; font-size: 20px; cursor: pointer; color: #718096; padding: 0 10px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 6px; flex-shrink: 0; }
-        .section-toggle:hover { background: #e2e8f0; }
-        .toggle-icon { display: inline-block; transition: transform 0.2s ease; }
-        .section-collapsed .toggle-icon { transform: rotate(0deg); }
-        .live-test { padding: 10px 0; width: 100%; }
-        .live-test iframe { width: 100%; height: 500px; border: 1px solid #e2e8f0; border-radius: 6px; margin-top: 10px; display: block; }
-        .btn-test { display: inline-block; padding: 8px 16px; background: #4299e1; color: white; border-radius: 6px; text-decoration: none; font-size: 13px; margin-top: 10px; }
-        .btn-test:hover { background: #3182ce; }
-        .btn-test-group { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
-        .db-error-box { background: #fff5f5; border: 1px solid #feb2b2; border-radius: 8px; padding: 15px; margin: 10px 0; color: #c53030; width: 100%; }
-        .db-error-box code { background: #fed7d7; padding: 2px 6px; border-radius: 4px; }
-        .top-section { margin-bottom: 20px; width: 100%; }
-        
-        @media (max-width: 640px) {
-            body { padding: 10px; }
-            .test-header { padding: 20px; }
-            .test-header h1 { font-size: 22px; }
-            .test-summary { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-            .summary-card { padding: 15px; }
-            .summary-card .number { font-size: 24px; }
-            .section-header { padding: 12px 15px; flex-wrap: wrap; }
-            .section-header h2 { font-size: 16px; }
-            .section-count { font-size: 12px; padding: 2px 10px; }
-            .test-item { padding: 10px 15px; flex-direction: column; align-items: flex-start; gap: 5px; }
-            .test-item .test-name { font-size: 13px; min-width: auto; width: 100%; }
-            .test-item .test-status { margin: 0 10px 0 0; }
-            .test-item .test-message { text-align: left; width: 100%; min-width: auto; }
-            .test-grid { padding: 10px; }
-            .live-test iframe { height: 350px; }
-            .btn-test-group { gap: 8px; }
-            .btn-test { font-size: 12px; padding: 6px 12px; }
-        }
-        
-        @media (max-width: 400px) {
-            .test-summary { grid-template-columns: 1fr 1fr; gap: 8px; }
-            .summary-card { padding: 10px; }
-            .summary-card .number { font-size: 20px; }
-            .section-header h2 { font-size: 14px; }
-            .section-count { font-size: 11px; padding: 1px 8px; }
-            .test-item .test-name { font-size: 12px; }
-            .live-test iframe { height: 280px; }
-        }
-    </style>
-</head>
-<body>
-<div class='test-container'>";
-
-echo "
-<div class='test-header'>
-    <h1>FitPal Sign-In System Test</h1>
-    <p>Validates the customer sign-in flow</p>
-    <p style='font-size:13px;opacity:0.6;margin-top:10px;'>
-        Base Path: " . htmlspecialchars($basePath) . " | 
-        Base URL: " . htmlspecialchars($baseUrl) . "
-    </p>
-</div>";
-
-// ============================================
-// RUN ALL TESTS FIRST
-// ============================================
-
-// Database Tests
-$dbFile = $sharedPath . '/backend/database/database-connect.php';
-
-if (file_exists($dbFile)) {
-    testResult('Database File Exists', true, 'File found', 'Database');
-    
-    $content = file_get_contents($dbFile);
-    if (strpos($content, '$database_connection') !== false) {
-        testResult('Database File Parsed', true, 'Connection code found', 'Database');
-        
-        $database_host = 'localhost';
-        $database_port = 3306;
-        $database_name = 'fitpal_food_delivery';
-        $database_username = 'root';
-        $database_password = '';
-        $database_charset = 'utf8mb4';
-        
-        try {
-            $data_source_name = sprintf(
-                'mysql:host=%s;port=%d;dbname=%s;charset=%s',
-                $database_host,
-                $database_port,
-                $database_name,
-                $database_charset
-            );
-            
-            $test_connection = new PDO(
-                $data_source_name,
-                $database_username,
-                $database_password,
-                [
-                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                    PDO::ATTR_EMULATE_PREPARES => false,
-                ]
-            );
-            
-            testResult('Database Connection', true, 'PDO connection established', 'Database');
-            
-            $stmt = $test_connection->query("SELECT 1 as test");
-            $result = $stmt->fetch(PDO::FETCH_ASSOC);
-            testResult('Database Query', $result !== false, 'Query executed successfully', 'Database');
-            
-            $stmt = $test_connection->query("SHOW TABLES LIKE 'customer'");
-            $hasCustomerTable = $stmt->rowCount() > 0;
-            testResult('Customer Table', $hasCustomerTable, $hasCustomerTable ? 'Exists' : 'Missing', 'Database');
-            
-        } catch (PDOException $e) {
-            testResult('Database Connection', false, 'PDO Error: ' . $e->getMessage(), 'Database');
-        }
-    } else {
-        testResult('Database File Parsed', false, 'Connection code not found', 'Database');
-    }
-} else {
-    testResult('Database File Exists', false, 'File not found: ' . $dbFile, 'Database');
-}
-
-// Session Tests
-$sessionActive = session_status() === PHP_SESSION_ACTIVE;
-testResult('Session Active', $sessionActive, $sessionActive ? 'Active' : 'Inactive', 'Session');
-
-if ($sessionActive) {
-    testResult('Session ID', session_id() !== '', 'Session ID exists', 'Session');
-    
-    if (empty($_SESSION['csrf_token'])) {
-        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-    }
-    testResult('CSRF Token', !empty($_SESSION['csrf_token']), 'Token generated', 'Session');
-}
-
-// Core File Tests
-$criticalFiles = [
-    'Sign-In Page' => $customerPath . '/pages/sign-in.php',
-    'Sign-In Handler' => $customerPath . '/backend/handlers/sign-in-handler.php',
-    'Sign-In JS' => $customerPath . '/assets/ui/js/sign-in.js',
-    'Sign-In CSS' => $customerPath . '/assets/css/sign-in.css',
-    'Customer Header' => $customerPath . '/includes/header.php',
-    'Customer Dashboard' => $customerPath . '/pages/dashboard.php',
-    'Shared Header' => $sharedPath . '/includes/header.php',
-    'Shared Footer' => $sharedPath . '/includes/footer.php',
-    'Database Connect' => $sharedPath . '/backend/database/database-connect.php',
-];
-
-foreach ($criticalFiles as $name => $path) {
-    $exists = file_exists($path);
-    testResult($name, $exists, $exists ? 'Found' : 'Missing', 'Core Files');
-}
-
-// Live Form Tests
-$signInPageExists = file_exists($customerPath . '/pages/sign-in.php');
-testResult('Sign-In Page Accessible', $signInPageExists, $signInPageExists ? 'Page found' : 'Page missing', 'Live Form');
-
-$signUpPageExists = file_exists($customerPath . '/pages/sign-up.php');
-testResult('Sign-Up Page Accessible', $signUpPageExists, $signUpPageExists ? 'Page found' : 'Page missing', 'Live Form');
-
-$dashboardExists = file_exists($customerPath . '/pages/dashboard.php');
-testResult('Dashboard Page Accessible', $dashboardExists, $dashboardExists ? 'Page found' : 'Page missing', 'Live Form');
-
-$handlerExists = file_exists($customerPath . '/backend/handlers/sign-in-handler.php');
-testResult('Handler Accessible', $handlerExists, $handlerExists ? 'File found' : 'File missing', 'Live Form');
-
-// Sign-In Page Structure
-$signInPage = $customerPath . '/pages/sign-in.php';
-if (file_exists($signInPage)) {
-    $content = file_get_contents($signInPage);
-    testResult('Page Readable', true, 'File loaded', 'Page Structure');
-    
-    preg_match('/<form[^>]*id=["\']signInForm["\'][^>]*>/i', $content, $formMatches);
-    testResult('Form (signInForm)', !empty($formMatches), !empty($formMatches) ? 'Found' : 'Missing', 'Page Structure');
-    
-    preg_match('/<input[^>]*name=["\']csrf_token["\'][^>]*>/i', $content, $csrfMatches);
-    testResult('CSRF Token Field', !empty($csrfMatches), !empty($csrfMatches) ? 'Found' : 'Missing', 'Page Structure');
-    
-    $expectedFields = ['identifier', 'password'];
-    $foundFields = [];
-    preg_match_all('/<input[^>]*name=["\']([^"\']+)["\'][^>]*>/i', $content, $fieldMatches);
-    $foundFields = $fieldMatches[1] ?? [];
-    $allFound = true;
-    $missingFields = [];
-    foreach ($expectedFields as $field) {
-        if (!in_array($field, $foundFields)) {
-            $allFound = false;
-            $missingFields[] = $field;
-        }
-    }
-    testResult('Required Fields', $allFound, $allFound ? 'All present' : 'Missing: ' . implode(', ', $missingFields), 'Page Structure');
-    
-    preg_match('/<div[^>]*id=["\']identifierError["\'][^>]*>/i', $content, $identifierErrorMatches);
-    testResult('Identifier Error Container', !empty($identifierErrorMatches), !empty($identifierErrorMatches) ? 'Found' : 'Missing', 'Page Structure');
-    
-    preg_match('/<div[^>]*id=["\']passwordError["\'][^>]*>/i', $content, $passwordErrorMatches);
-    testResult('Password Error Container', !empty($passwordErrorMatches), !empty($passwordErrorMatches) ? 'Found' : 'Missing', 'Page Structure');
-    
-    preg_match('/<button[^>]*id=["\']togglePassword["\'][^>]*>/i', $content, $toggleMatches);
-    testResult('Password Toggle Button', !empty($toggleMatches), !empty($toggleMatches) ? 'Found' : 'Missing', 'Page Structure');
-    
-    preg_match('/<a[^>]*href=["\'][^"\']*sign-up\.php["\'][^>]*>/i', $content, $signUpLinkMatches);
-    testResult('Sign-Up Link', !empty($signUpLinkMatches), !empty($signUpLinkMatches) ? 'Found' : 'Missing', 'Page Structure');
-    
-    $hasSignInJS = strpos($content, 'sign-in.js') !== false;
-    testResult('sign-in.js Included', $hasSignInJS, $hasSignInJS ? 'Found' : 'Missing', 'Page Structure');
-    
-    preg_match('/<form[^>]*action=["\']([^"\']+)["\'][^>]*>/i', $content, $actionMatches);
-    if (!empty($actionMatches[1])) {
-        $formAction = $actionMatches[1];
-        $isCorrect = strpos($formAction, 'sign-in-handler.php') !== false;
-        testResult('Form Action', $isCorrect, $isCorrect ? 'Correct: ' . htmlspecialchars($formAction) : 'Check: ' . htmlspecialchars($formAction), 'Page Structure');
-    }
-} else {
-    testResult('Sign-In Page', false, 'File not found', 'Page Structure');
-}
-
-// Handler Checks
-$handlerPath = $customerPath . '/backend/handlers/sign-in-handler.php';
-if (file_exists($handlerPath)) {
-    $handlerContent = file_get_contents($handlerPath);
-    testResult('Handler Readable', true, 'File loaded', 'Handler');
-
-    $hasSessionStart = strpos($handlerContent, 'session_start') !== false;
-    testResult('session_start()', $hasSessionStart, $hasSessionStart ? 'Found' : 'Missing', 'Handler');
-
-    $hasDatabase = strpos($handlerContent, 'database-connect.php') !== false;
-    testResult('Database Include', $hasDatabase, $hasDatabase ? 'Found' : 'Missing', 'Handler');
-
-    $hasCsrfValidation = strpos($handlerContent, 'csrf_token') !== false;
-    testResult('CSRF Validation', $hasCsrfValidation, $hasCsrfValidation ? 'Found' : 'Missing', 'Handler');
-
-    $hasPasswordVerify = strpos($handlerContent, 'password_verify') !== false;
-    testResult('password_verify()', $hasPasswordVerify, $hasPasswordVerify ? 'Found' : 'Missing', 'Handler');
-
-    $hasSessionRegenerate = strpos($handlerContent, 'session_regenerate_id') !== false;
-    testResult('Session Regenerate', $hasSessionRegenerate, $hasSessionRegenerate ? 'Found' : 'Missing', 'Handler');
-
-    $hasSessionSet = strpos($handlerContent, 'customer_id') !== false
-        && strpos($handlerContent, '$_SESSION') !== false;
-    testResult('Session Variables Set', $hasSessionSet, $hasSessionSet ? 'Found' : 'Missing', 'Handler');
-
-    $redirectCorrect = strpos($handlerContent, '../../pages/dashboard.php') !== false;
-    testResult('Redirect to Dashboard', $redirectCorrect, $redirectCorrect ? 'Correct path' : 'Check redirect path', 'Handler');
-
-    $errorRedirectCorrect = strpos($handlerContent, '../../pages/sign-in.php') !== false;
-    testResult('Error Redirect to Sign-In', $errorRedirectCorrect, $errorRedirectCorrect ? 'Correct path' : 'Check error redirect path', 'Handler');
-
-    $hasActiveCheck = strpos($handlerContent, 'is_active') !== false;
-    testResult('Account Active Check', $hasActiveCheck, $hasActiveCheck ? 'Found' : 'Missing', 'Handler');
-
-    // Development bypass — handler accepts a stored hash pasted in as plaintext
-    $hasDevBypass = strpos($handlerContent, 'hash_equals') !== false
-        && strpos($handlerContent, 'isPasswordValid') !== false;
-    testResult('Development Bypass', $hasDevBypass, $hasDevBypass ? 'Found' : 'Missing', 'Handler');
-} else {
-    testResult('Handler', false, 'File not found', 'Handler');
-}
-
-// JavaScript Checks
-$jsPath = $customerPath . '/assets/ui/js/sign-in.js';
-if (file_exists($jsPath)) {
-    $jsContent = file_get_contents($jsPath);
-    testResult('sign-in.js Readable', true, 'File loaded', 'JavaScript');
-    
-    $hasDOMContent = strpos($jsContent, 'DOMContentLoaded') !== false;
-    testResult('DOMContentLoaded', $hasDOMContent, $hasDOMContent ? 'Found' : 'Missing', 'JavaScript');
-    
-    $hasFormRef = strpos($jsContent, 'signInForm') !== false;
-    testResult('Form Reference', $hasFormRef, $hasFormRef ? 'Found' : 'Missing', 'JavaScript');
-    
-    $hasPasswordToggle = strpos($jsContent, 'togglePassword') !== false;
-    testResult('Password Toggle', $hasPasswordToggle, $hasPasswordToggle ? 'Found' : 'Missing', 'JavaScript');
-    
-    $hasSubmit = strpos($jsContent, 'addEventListener') !== false && strpos($jsContent, 'submit') !== false;
-    testResult('Form Submit Handler', $hasSubmit, $hasSubmit ? 'Found' : 'Missing', 'JavaScript');
-    
-    $hasFieldErrors = strpos($jsContent, 'identifierError') !== false && strpos($jsContent, 'passwordError') !== false;
-    testResult('Field Error Handling', $hasFieldErrors, $hasFieldErrors ? 'Found' : 'Missing', 'JavaScript');
-    
-    $hasInputValidation = strpos($jsContent, 'input') !== false && strpos($jsContent, 'addEventListener') !== false;
-    testResult('Input Validation', $hasInputValidation, $hasInputValidation ? 'Found' : 'Missing', 'JavaScript');
-} else {
-    testResult('sign-in.js', false, 'File not found', 'JavaScript');
-}
-
-// CSS Checks
-$cssPath = $customerPath . '/assets/css/sign-in.css';
-if (file_exists($cssPath)) {
-    $cssContent = file_get_contents($cssPath);
-    testResult('sign-in.css Readable', true, 'File loaded', 'CSS');
-    
-    $hasFormStyles = strpos($cssContent, 'sign-in-form') !== false || strpos($cssContent, 'sign-in') !== false;
-    testResult('Form Styles', $hasFormStyles, $hasFormStyles ? 'Found' : 'Missing', 'CSS');
-    
-    $hasPasswordWrapper = strpos($cssContent, 'password-wrapper') !== false || strpos($cssContent, 'password-toggle') !== false;
-    testResult('Password Toggle Styles', $hasPasswordWrapper, $hasPasswordWrapper ? 'Found' : 'Missing', 'CSS');
-    
-    $hasErrorStyles = strpos($cssContent, '.error') !== false;
-    testResult('Error Styles', $hasErrorStyles, $hasErrorStyles ? 'Found' : 'Missing', 'CSS');
-    
-    $hasCardStyles = strpos($cssContent, 'sign-in-card') !== false || strpos($cssContent, 'card') !== false;
-    testResult('Card Styles', $hasCardStyles, $hasCardStyles ? 'Found' : 'Missing', 'CSS');
-    
-    $hasButtonStyles = strpos($cssContent, 'btn') !== false;
-    testResult('Button Styles', $hasButtonStyles, $hasButtonStyles ? 'Found' : 'Missing', 'CSS');
-    
-    $hasMediaQuery = strpos($cssContent, '@media') !== false;
-    testResult('Responsive (Media Queries)', $hasMediaQuery, $hasMediaQuery ? 'Found' : 'Missing', 'CSS');
-} else {
-    testResult('sign-in.css', false, 'File not found', 'CSS');
-}
-
-// ============================================
-// CALCULATE TOTALS
-// ============================================
-$totalTests = 0;
-$totalPassed = 0;
-$totalFailed = 0;
-
-foreach ($sections as $section) {
-    foreach ($section as $test) {
-        $totalTests++;
-        if ($test['passed']) $totalPassed++;
-        else $totalFailed++;
-    }
-}
-
-$passRate = $totalTests > 0 ? round(($totalPassed / $totalTests) * 100) : 0;
-
-// ============================================
-// TOP SECTION: SUMMARY + LIVE FORM (Stacked vertically)
-// ============================================
-echo "<div class='top-section'>";
-
-// Summary Cards
-echo "<div class='test-summary'>";
-echo "<div class='summary-card total'><div class='number'>{$totalTests}</div><div class='label'>Total Tests</div></div>";
-echo "<div class='summary-card passed'><div class='number'>{$totalPassed}</div><div class='label'>Passed</div></div>";
-echo "<div class='summary-card failed'><div class='number'>{$totalFailed}</div><div class='label'>Failed</div></div>";
-echo "<div class='summary-card rate'><div class='number'>{$passRate}%</div><div class='label'>Pass Rate</div></div>";
-echo "</div>";
-
-// Live Form (with heading, pass count, and collapsible)
-renderLiveFormSection($baseUrl, true);
-
-echo "</div>";
-
-// ============================================
-// RENDER ALL SECTIONS (Collapsed by default)
-// ============================================
-
-renderSection('Database Tests', 'Database', true);
-renderSection('Session Tests', 'Session', true);
-renderSection('Core File Tests', 'Core Files', true);
-renderSection('Sign-In Page Structure', 'Page Structure', true);
-renderSection('Handler Checks', 'Handler', true);
-renderSection('JavaScript Checks', 'JavaScript', true);
-renderSection('CSS Checks', 'CSS', true);
-
-// ============================================
-// COLLAPSIBLE SECTIONS JAVASCRIPT
-// ============================================
-echo "
-<script>
-(function() {
-    'use strict';
-
-    var sectionHeaders = document.querySelectorAll('.section-header');
-
-    sectionHeaders.forEach(function(header) {
-        var targetId = header.getAttribute('data-target');
-        var content = document.getElementById(targetId);
-        var toggleBtn = header.querySelector('.section-toggle');
-        var icon = toggleBtn ? toggleBtn.querySelector('.toggle-icon') : null;
-
-        if (!content || !toggleBtn || !icon) return;
-
-        header.addEventListener('click', function(e) {
-            if (e.target.closest('.section-toggle')) return;
-            toggleSection(header, content, toggleBtn, icon);
-        });
-
-        toggleBtn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            toggleSection(header, content, toggleBtn, icon);
-        });
-
-        header.setAttribute('role', 'button');
-        header.setAttribute('tabindex', '0');
-        header.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                toggleSection(header, content, toggleBtn, icon);
-            }
-        });
-    });
-
-    function toggleSection(header, content, toggleBtn, icon) {
-        var isCollapsed = header.classList.contains('section-collapsed');
-
-        if (isCollapsed) {
-            header.classList.remove('section-collapsed');
-            toggleBtn.setAttribute('aria-expanded', 'true');
-            content.style.display = 'grid';
-            icon.textContent = '-';
-        } else {
-            header.classList.add('section-collapsed');
-            toggleBtn.setAttribute('aria-expanded', 'false');
-            content.style.display = 'none';
-            icon.textContent = '+';
-        }
-    }
-})();
-</script>
-";
-
-echo "
-</div>
-</body>
-</html>";
-```
-
----
-
-## File: `fitpal/test/customer/sign-up-test.php`
-
-**Status:** `FOUND`
-
-```php
-<?php
-/**
- * FitPal Customer Sign-Up System Test
- *
- * Structural test of the customer multi-step registration flow.
- *
- * @package FitPal
- * @version 3.2
- */
-
-declare(strict_types=1);
-
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-$basePath     = realpath(__DIR__ . '/../..');
-$customerPath = $basePath . '/customer';
-$sharedPath   = $basePath . '/shared';
-
-$passed   = 0;
-$failed   = 0;
-$sections = [];
-
-function testResult(string $name, bool $result, string $message = '', string $section = 'General'): bool
-{
-    global $sections, $passed, $failed;
-    $status = $result ? 'PASS' : 'FAIL';
-    if ($result) $passed++; else $failed++;
-
-    if (!isset($sections[$section])) {
-        $sections[$section] = [];
-    }
-    $sections[$section][] = [
-        'name'    => $name,
-        'status'  => $status,
-        'message' => $message,
-        'passed'  => $result,
-    ];
-    return $result;
-}
-
-function stripPhpComments(string $source): string
-{
-    $source = preg_replace('#/\*.*?\*/#s', '', $source) ?? $source;
-    $source = preg_replace('#^\s*//.*$#m', '', $source) ?? $source;
-    return $source;
-}
-
-function stripJsComments(string $source): string
-{
-    $source = preg_replace('#/\*.*?\*/#s', '', $source) ?? $source;
-    $source = preg_replace('#^\s*//.*$#m', '', $source) ?? $source;
-    return $source;
-}
-
-function extractInputNames(string $html): array
-{
-    $names = [];
-    if (preg_match_all('/\bname=["\']([^"\']+)["\']/i', $html, $m)) {
-        $names = array_values(array_unique($m[1]));
-    }
-    return $names;
-}
-
-function fileDefinesFunction(string $source, string $fnName): bool
-{
-    $stripped = stripPhpComments($source);
-    return (bool)preg_match(
-        '/\bfunction\s+' . preg_quote($fnName, '/') . '\s*\(/',
-        $stripped
-    );
-}
-
-function fileCallsFunction(string $source, string $fnName): bool
-{
-    $stripped = stripPhpComments($source);
-    return (bool)preg_match(
-        '/\b' . preg_quote($fnName, '/') . '\s*\(/',
-        $stripped
-    );
-}
-
-function renderSection(string $title, string $sectionName, bool $defaultCollapsed = true): void
-{
-    global $sections;
-
-    $totalTests  = isset($sections[$sectionName]) ? count($sections[$sectionName]) : 0;
-    $passedTests = 0;
-    if (isset($sections[$sectionName])) {
-        foreach ($sections[$sectionName] as $test) {
-            if ($test['passed']) $passedTests++;
-        }
-    }
-
-    $failedTests = $totalTests - $passedTests;
-    $allPassed   = ($totalTests > 0 && $failedTests === 0);
-    $hasFailures = ($failedTests > 0);
-
-    $sectionId = 'section-' . preg_replace('/[^a-zA-Z0-9]/', '-', $sectionName);
-    $contentId = 'content-' . preg_replace('/[^a-zA-Z0-9]/', '-', $sectionName);
-
-    $collapsedClass = $defaultCollapsed ? 'section-collapsed' : '';
-
-    echo '<div class="test-section ' . $collapsedClass . '" id="' . $sectionId . '">';
-    echo '<div class="section-header" data-target="' . $contentId . '">';
-
-    $countClass = 'count-neutral';
-    if ($allPassed) {
-        $countClass = 'count-pass';
-    } elseif ($hasFailures && $failedTests <= 2) {
-        $countClass = 'count-warning';
-    } elseif ($hasFailures && $failedTests > 2) {
-        $countClass = 'count-fail';
-    }
-
-    echo '<h2>' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8')
-       . ' <span class="section-count ' . $countClass . '">('
-       . $passedTests . '/' . $totalTests
-       . ')</span></h2>';
-
-    echo '<button class="section-toggle" aria-expanded="'
-       . ($defaultCollapsed ? 'false' : 'true')
-       . '" aria-controls="' . $contentId . '" type="button">';
-    echo '<span class="toggle-icon">' . ($defaultCollapsed ? '+' : '-') . '</span>';
-    echo '</button>';
-    echo '</div>';
-    echo '<div class="test-grid" id="' . $contentId . '" style="display: '
-       . ($defaultCollapsed ? 'none' : 'grid') . ';">';
-
-    if (isset($sections[$sectionName]) && !empty($sections[$sectionName])) {
-        foreach ($sections[$sectionName] as $test) {
-            $statusClass = $test['passed'] ? 'pass' : 'fail';
-            $statusText  = $test['passed'] ? 'PASS' : 'FAIL';
-
-            echo '<div class="test-item ' . $statusClass . '">';
-            echo '<div class="test-name">' . htmlspecialchars($test['name'], ENT_QUOTES, 'UTF-8') . '</div>';
-            echo '<div class="test-status ' . $statusClass . '">' . $statusText . '</div>';
-            echo '<div class="test-message">' . htmlspecialchars($test['message'], ENT_QUOTES, 'UTF-8') . '</div>';
-            echo '</div>';
-        }
-    }
-
-    echo '</div>';
-    echo '</div>';
-}
-
-function renderLiveFormSection(string $baseUrl, bool $defaultCollapsed = true): void
-{
-    $contentId = 'content-live-form';
-
-    echo '<div class="test-section ' . ($defaultCollapsed ? 'section-collapsed' : '') . '" id="section-live-form">';
-    echo '<div class="section-header" data-target="' . $contentId . '">';
-    echo '<h2>Live Form <span class="section-count count-neutral">(0/0)</span></h2>';
-    echo '<button class="section-toggle" aria-expanded="'
-       . ($defaultCollapsed ? 'false' : 'true')
-       . '" aria-controls="' . $contentId . '" type="button">';
-    echo '<span class="toggle-icon">' . ($defaultCollapsed ? '+' : '-') . '</span>';
-    echo '</button>';
-    echo '</div>';
-    echo '<div class="test-grid" id="' . $contentId . '" style="display: '
-       . ($defaultCollapsed ? 'none' : 'grid') . ';">';
-
-    echo '<div class="live-test">';
-    echo '<p><strong>Test the sign-up form:</strong></p>';
-    echo '<p style="font-size:13px;color:#718096;margin:5px 0;">URL: '
-       . htmlspecialchars($baseUrl . '/customer/pages/sign-up.php', ENT_QUOTES, 'UTF-8')
-       . '</p>';
-    echo '<iframe src="' . htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8') . '/customer/pages/sign-up.php"></iframe>';
-    echo '<div class="btn-test-group">';
-    echo '<a href="' . htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8')
-       . '/customer/pages/sign-up.php" target="_blank" class="btn-test">Open Sign-Up</a>';
-    echo '<a href="' . htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8')
-       . '/customer/pages/sign-in.php" target="_blank" class="btn-test">Open Sign-In</a>';
-    echo '</div>';
-    echo '</div>';
-
-    echo '</div>';
-    echo '</div>';
-}
-
-function getAssetBase(): string
-{
-    $scriptPath = $_SERVER['SCRIPT_NAME'] ?? '';
-    $dirPath    = dirname($scriptPath);
-    $segments   = array_filter(explode('/', $dirPath));
-    $depth      = count($segments);
-    if ($depth <= 0) return './shared/';
-    return str_repeat('../', $depth) . 'shared/';
-}
-
-// ------------------------------------------------------------------
-// RUN THE TESTS
-// ------------------------------------------------------------------
-
-$protocol  = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$host      = $_SERVER['HTTP_HOST'] ?? 'localhost';
-$baseUrl   = $protocol . '://' . $host;
-$assetBase = getAssetBase();
-
-// ---------------------------------------------------------------
-// DATABASE
-// ---------------------------------------------------------------
-$dbFile = $sharedPath . '/backend/database/database-connect.php';
-
-if (file_exists($dbFile)) {
-    testResult('Database File Exists', true, 'File found', 'Database');
-
-    $content  = file_get_contents($dbFile);
-    $stripped = stripPhpComments($content);
-
-    testResult(
-        'Database Uses PDO',
-        (bool)preg_match('/new\s+PDO\s*\(/', $stripped),
-        preg_match('/new\s+PDO\s*\(/', $stripped) ? 'new PDO() found' : 'No PDO instantiation',
-        'Database'
-    );
-
-    testResult(
-        'Database Assigns $database_connection',
-        (bool)preg_match('/\$database_connection\s*=\s*new\s+PDO/', $stripped),
-        'Assignment found',
-        'Database'
-    );
-
-    try {
-        $dsn = 'mysql:host=localhost;port=3306;dbname=fitpal_food_delivery;charset=utf8mb4';
-        $test_connection = new PDO($dsn, 'root', '', [
-            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES   => false,
-        ]);
-        testResult('Live Database Connection', true, 'PDO connection established', 'Database');
-
-        $tables = ['customer', 'customer_profile', 'financial_account'];
-        foreach ($tables as $t) {
-            $stmt   = $test_connection->query('SHOW TABLES LIKE ' . $test_connection->quote($t));
-            $exists = $stmt->rowCount() > 0;
-            testResult("Table: {$t}", $exists, $exists ? 'Exists' : 'Missing', 'Database');
-        }
-    } catch (PDOException $e) {
-        testResult('Live Database Connection', false, 'PDO Error: ' . $e->getMessage(), 'Database');
-    }
-} else {
-    testResult('Database File Exists', false, 'File not found: ' . $dbFile, 'Database');
-}
-
-// ---------------------------------------------------------------
-// SESSION
-// ---------------------------------------------------------------
-$sessionActive = session_status() === PHP_SESSION_ACTIVE;
-testResult('Session Active', $sessionActive, $sessionActive ? 'Active' : 'Inactive', 'Session');
-
-if ($sessionActive) {
-    testResult('Session ID', session_id() !== '', 'Session ID exists', 'Session');
-
-    if (empty($_SESSION['csrf_token'])) {
-        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-    }
-    testResult(
-        'CSRF Token',
-        !empty($_SESSION['csrf_token']) && strlen($_SESSION['csrf_token']) === 64,
-        'Token is 64 hex characters',
-        'Session'
-    );
-}
-
-// ---------------------------------------------------------------
-// CORE FILES
-// ---------------------------------------------------------------
-$criticalFiles = [
-    'Sign-Up Page'      => $customerPath . '/pages/sign-up.php',
-    'Sign-Up Handler'   => $customerPath . '/backend/handlers/sign-up-handler.php',
-    'Sign-Up JS'        => $customerPath . '/assets/ui/js/sign-up.js',
-    'Sign-Up CSS'       => $customerPath . '/assets/css/sign-up.css',
-    'Customer Header'   => $customerPath . '/includes/header.php',
-    'Sign-In Handler'   => $customerPath . '/backend/handlers/sign-in-handler.php',
-    'Shared Header'     => $sharedPath . '/includes/header.php',
-    'Shared Footer'     => $sharedPath . '/includes/footer.php',
-    'Database Connect'  => $sharedPath . '/backend/database/database-connect.php',
-];
-
-foreach ($criticalFiles as $name => $path) {
-    $exists = file_exists($path);
-    testResult($name, $exists, $exists ? 'Found' : 'Missing', 'Core Files');
-}
-
-// ---------------------------------------------------------------
-// SIGN-UP PAGE STRUCTURE
-// ---------------------------------------------------------------
-$signUpPage = $customerPath . '/pages/sign-up.php';
-
-if (file_exists($signUpPage)) {
-    $pageContent = file_get_contents($signUpPage);
-
-    $formBlock = null;
-    if (preg_match(
-        '/<form[^>]*\bid=["\']registerForm["\'][^>]*>(.*?)<\/form>/is',
-        $pageContent,
-        $formMatch
-    )) {
-        $formBlock = $formMatch[1];
-    }
-
-    testResult(
-        'Form (registerForm) Present',
-        $formBlock !== null,
-        $formBlock !== null ? 'Form element found' : 'Form element missing',
-        'Page Structure'
-    );
-
-    if ($formBlock !== null) {
-        $hasCsrf = (bool)preg_match(
-            '/<input[^>]*\bname=["\']csrf_token["\'][^>]*>/i',
-            $formBlock
-        );
-        testResult(
-            'CSRF Token Field Inside Form',
-            $hasCsrf,
-            $hasCsrf ? 'Present inside form' : 'Missing from form',
-            'Page Structure'
-        );
-
-        $hasCorrectAction = (bool)preg_match(
-            '/action=["\'][^"\']*sign-up-handler\.php["\']/i',
-            $pageContent
-        );
-        testResult(
-            'Form Action → sign-up-handler.php',
-            $hasCorrectAction,
-            $hasCorrectAction ? 'Correct' : 'Wrong or missing action',
-            'Page Structure'
-        );
-
-        $expectedFields = [
-            'first_name', 'last_name', 'birthdate', 'gender',
-            'email', 'contact_number', 'username', 'password',
-            'confirm_password', 'terms',
-        ];
-
-        $presentNames = extractInputNames($formBlock);
-        $missing = [];
-        foreach ($expectedFields as $field) {
-            if (!in_array($field, $presentNames, true)) {
-                $missing[] = $field;
-            }
-        }
-        testResult(
-            'Required Fields Inside Form',
-            empty($missing),
-            empty($missing) ? 'All present' : 'Missing: ' . implode(', ', $missing),
-            'Page Structure'
-        );
-
-        preg_match_all(
-            '/class=["\'][^"\']*\bregister-step\b[^"\']*["\']/i',
-            $pageContent,
-            $stepMatches
-        );
-        $stepCount = count($stepMatches[0] ?? []);
-        testResult(
-            'Four Register Steps',
-            $stepCount === 4,
-            "Found {$stepCount} steps",
-            'Page Structure'
-        );
-
-        $stepIdsFound = [];
-        for ($i = 1; $i <= 4; $i++) {
-            if (preg_match('/\bid=["\']step' . $i . '["\']/i', $pageContent)) {
-                $stepIdsFound[] = $i;
-            }
-        }
-        testResult(
-            'Step IDs step1..step4',
-            count($stepIdsFound) === 4,
-            count($stepIdsFound) === 4
-                ? 'All present'
-                : 'Missing: ' . implode(',', array_diff([1, 2, 3, 4], $stepIdsFound)),
-            'Page Structure'
-        );
-    }
-
-    testResult(
-        'Dietary Options Container',
-        (bool)preg_match('/\bid=["\']dietaryOptions["\']/i', $pageContent),
-        preg_match('/\bid=["\']dietaryOptions["\']/i', $pageContent) ? 'Found' : 'Missing',
-        'Page Structure'
-    );
-
-    testResult(
-        'Allergy Options Container',
-        (bool)preg_match('/\bid=["\']allergyOptions["\']/i', $pageContent),
-        preg_match('/\bid=["\']allergyOptions["\']/i', $pageContent) ? 'Found' : 'Missing',
-        'Page Structure'
-    );
-
-    testResult(
-        'Fitness Goal Select',
-        (bool)preg_match('/<select[^>]*\bid=["\']fitness_goal["\']/i', $pageContent),
-        preg_match('/<select[^>]*\bid=["\']fitness_goal["\']/i', $pageContent) ? 'Found' : 'Missing',
-        'Page Structure'
-    );
-
-    testResult(
-        'Notifier Modal',
-        (bool)preg_match('/\bid=["\']notifierModal["\']/i', $pageContent),
-        preg_match('/\bid=["\']notifierModal["\']/i', $pageContent) ? 'Found' : 'Missing',
-        'Page Structure'
-    );
-
-    testResult(
-        'sign-up.js Loaded',
-        (bool)preg_match('/<script[^>]*src=["\'][^"\']*sign-up\.js["\']/i', $pageContent),
-        'Script tag present',
-        'Page Structure'
-    );
-
-
-} else {
-    testResult('Sign-Up Page', false, 'File not found', 'Page Structure');
-}
-
-// ---------------------------------------------------------------
-// SIGN-UP HANDLER
-// ---------------------------------------------------------------
-$handlerPath = $customerPath . '/backend/handlers/sign-up-handler.php';
-
-if (file_exists($handlerPath)) {
-    $handlerContent  = file_get_contents($handlerPath);
-    $handlerStripped = stripPhpComments($handlerContent);
-
-    testResult(
-        'session_start() Called',
-        (bool)preg_match('/\bsession_start\s*\(\s*\)/', $handlerStripped),
-        preg_match('/\bsession_start\s*\(\s*\)/', $handlerStripped) ? 'Found' : 'Missing',
-        'Handler'
-    );
-
-    testResult(
-        'Database Required',
-        (bool)preg_match('/require_once[^;]*database-connect\.php/', $handlerStripped),
-        'require_once database-connect.php found',
-        'Handler'
-    );
-
-    testResult(
-        'customer-queries.php Required',
-        (bool)preg_match('/require_once[^;]*customer-queries\.php/', $handlerStripped),
-        'Query layer required',
-        'Handler'
-    );
-
-    $requiredCalls = [
-        'emailExists'            => 'calls emailExists()',
-        'usernameExists'         => 'calls usernameExists()',
-        'contactExists'          => 'calls contactExists()',
-        'createFinancialAccount' => 'calls createFinancialAccount()',
-        'createCustomer'         => 'calls createCustomer()',
-        'createCustomerProfile'  => 'calls createCustomerProfile()',
-    ];
-
-    foreach ($requiredCalls as $fn => $desc) {
-        testResult(
-            "Handler Calls {$fn}()",
-            fileCallsFunction($handlerStripped, $fn),
-            $desc,
-            'Handler'
-        );
-    }
-
-    testResult(
-        'Defines respondError()',
-        fileDefinesFunction($handlerStripped, 'respondError'),
-        'respondError helper defined',
-        'Handler'
-    );
-
-    testResult(
-        'Uses beginTransaction',
-        (bool)preg_match('/->beginTransaction\s*\(/', $handlerStripped),
-        'Transaction started',
-        'Handler'
-    );
-
-    testResult(
-        'Uses commit',
-        (bool)preg_match('/->commit\s*\(/', $handlerStripped),
-        'Transaction committed',
-        'Handler'
-    );
-
-    testResult(
-        'Uses rollBack',
-        (bool)preg_match('/->rollBack\s*\(/', $handlerStripped),
-        'Rollback on error',
-        'Handler'
-    );
-
-    testResult(
-        'Uses password_hash',
-        (bool)preg_match('/\bpassword_hash\s*\(/', $handlerStripped),
-        'Password hashed',
-        'Handler'
-    );
-
-    testResult(
-        'Uses FILTER_VALIDATE_EMAIL',
-        (bool)preg_match('/FILTER_VALIDATE_EMAIL/', $handlerStripped),
-        'Email validated',
-        'Handler'
-    );
-
-    // Accept either a PHP header redirect or a JSON redirect key.
-    $hasHeaderRedirect = (bool)preg_match(
-        '/header\s*\(\s*[\'"]Location:\s*[^\'"]*sign-in\.php[\'"]\s*\)/',
-        $handlerStripped
-    );
-    $hasJsonRedirect = (bool)preg_match(
-        '/[\'"]redirect[\'"]\s*=>\s*[\'"]sign-in\.php[\'"]/',
-        $handlerStripped
-    );
-
-    testResult(
-        'Redirects to sign-in.php',
-        $hasHeaderRedirect || $hasJsonRedirect,
-        $hasHeaderRedirect
-            ? 'Location header present'
-            : ($hasJsonRedirect ? 'JSON redirect key present' : 'No redirect target found'),
-        'Handler'
-    );
-
-    testResult(
-        'Returns JSON Response',
-        (bool)preg_match('/header\s*\(\s*[\'"]Content-Type:\s*application\/json/i', $handlerStripped),
-        'JSON Content-Type set',
-        'Handler'
-    );
-} else {
-    testResult('Handler', false, 'File not found', 'Handler');
-}
-
-// ---------------------------------------------------------------
-// SIGN-UP JAVASCRIPT
-// ---------------------------------------------------------------
-$jsPath = $customerPath . '/assets/ui/js/sign-up.js';
-
-if (file_exists($jsPath)) {
-    $jsContent  = file_get_contents($jsPath);
-    $jsStripped = stripJsComments($jsContent);
-
-    testResult(
-        'DOMContentLoaded Bound',
-        (bool)preg_match('/addEventListener\s*\(\s*[\'"]DOMContentLoaded[\'"]/', $jsStripped),
-        'DOMContentLoaded listener registered',
-        'JavaScript'
-    );
-
-    $expectedFunctions = ['goToStep', 'validateStep', 'validateStep4', 'showFieldError', 'showNotification'];
-    foreach ($expectedFunctions as $fn) {
-        testResult(
-            "Defines {$fn}()",
-            (bool)preg_match('/function\s+' . preg_quote($fn, '/') . '\s*\(/', $jsStripped),
-            "function {$fn}() defined",
-            'JavaScript'
-        );
-    }
-
-    testResult(
-        'Password Toggle Bound',
-        (bool)preg_match('/togglePassword/', $jsStripped)
-        && (bool)preg_match('/addEventListener\s*\(\s*[\'"]click[\'"]/', $jsStripped),
-        'Click listener on toggle present',
-        'JavaScript'
-    );
-
-    testResult(
-        'Submit Listener Registered',
-        (bool)preg_match('/addEventListener\s*\(\s*[\'"]submit[\'"]/', $jsStripped),
-        'submit listener present',
-        'JavaScript'
-    );
-
-    testResult(
-        'Uses fetch()',
-        (bool)preg_match('/\bfetch\s*\(/', $jsStripped),
-        'fetch() call present',
-        'JavaScript'
-    );
-
-    testResult(
-        'Uses FormData',
-        (bool)preg_match('/new\s+FormData\s*\(/', $jsStripped),
-        'FormData instantiated',
-        'JavaScript'
-    );
-
-    testResult(
-        'Option Cards Setup',
-        (bool)preg_match('/option-card/', $jsStripped)
-        && (bool)preg_match('/dietaryOptions|allergyOptions/', $jsStripped),
-        'Option card containers wired',
-        'JavaScript'
-    );
-
-    testResult(
-        'Notifier Modal Reference',
-        (bool)preg_match('/notifierModal/', $jsStripped),
-        'Modal id referenced',
-        'JavaScript'
-    );
-
-    testResult(
-        'Fetch to form.action',
-        (bool)preg_match('/fetch\s*\(\s*form\.action/', $jsStripped),
-        'Submits to form.action',
-        'JavaScript'
-    );
-} else {
-    testResult('sign-up.js', false, 'File not found', 'JavaScript');
-}
-
-// ---------------------------------------------------------------
-// SIGN-UP CSS
-// ---------------------------------------------------------------
-$cssPath = $customerPath . '/assets/css/sign-up.css';
-
-if (file_exists($cssPath)) {
-    $cssContent = file_get_contents($cssPath);
-
-    $expectedSelectors = [
-        'register-step',
-        'register-progress',
-        'option-card',
-        'form-error',
-        '.error',
-        '@media',
-    ];
-
-    foreach ($expectedSelectors as $selector) {
-        testResult(
-            "Selector: {$selector}",
-            strpos($cssContent, $selector) !== false,
-            strpos($cssContent, $selector) !== false ? 'Found' : 'Missing',
-            'CSS'
-        );
-    }
-} else {
-    testResult('sign-up.css', false, 'File not found', 'CSS');
-}
-
-// ------------------------------------------------------------------
-// CALCULATE TOTALS
-// ------------------------------------------------------------------
-$totalTests  = 0;
-$totalPassed = 0;
-$totalFailed = 0;
-
-foreach ($sections as $section) {
-    foreach ($section as $test) {
-        $totalTests++;
-        if ($test['passed']) $totalPassed++;
-        else $totalFailed++;
-    }
-}
-
-$passRate = $totalTests > 0 ? round(($totalPassed / $totalTests) * 100) : 0;
-?>
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FitPal Sign-Up System Test</title>
-    <link rel="stylesheet" href="<?= htmlspecialchars($assetBase, ENT_QUOTES, 'UTF-8') ?>assets/css/global.css">
-    <style>
-    * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-    }
-
-    html,
-    body {
-        width: 100%;
-        overflow-x: hidden;
-    }
-
-    body {
-        background: #f4f6f9;
-        padding: 20px;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    }
-
-    .test-container {
-        max-width: 100%;
-        padding: 0;
-        margin: 0;
-    }
-
-    .test-header {
-        background: linear-gradient(135deg, #2d3748, #1a202c);
-        color: white;
-        padding: 30px;
-        border-radius: 12px;
-        margin-bottom: 30px;
-        width: 100%;
-    }
-
-    .test-header h1 {
-        margin: 0;
-        font-size: 28px;
-    }
-
-    .test-header p {
-        margin: 10px 0 0 0;
-        opacity: 0.8;
-    }
-
-    .test-summary {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 15px;
-        margin-bottom: 20px;
-        width: 100%;
-    }
-
-    .summary-card {
-        background: white;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        text-align: center;
-    }
-
-    .summary-card .number {
-        font-size: 32px;
-        font-weight: 700;
-    }
-
-    .summary-card .label {
-        color: #718096;
-        font-size: 14px;
-        margin-top: 5px;
-    }
-
-    .summary-card.total .number {
-        color: #2d3748;
-    }
-
-    .summary-card.passed .number {
-        color: #48bb78;
-    }
-
-    .summary-card.failed .number {
-        color: #fc8181;
-    }
-
-    .summary-card.rate .number {
-        color: #4299e1;
-    }
-
-    .test-grid {
-        display: grid;
-        gap: 10px;
-        padding: 15px;
-        width: 100%;
-    }
-
-    .test-item {
-        background: white;
-        border-radius: 8px;
-        padding: 12px 20px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-        border-left: 4px solid #e2e8f0;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        flex-wrap: wrap;
-        width: 100%;
-    }
-
-    .test-item.pass {
-        border-left-color: #48bb78;
-    }
-
-    .test-item.fail {
-        border-left-color: #fc8181;
-    }
-
-    .test-item .test-name {
-        font-weight: 600;
-        font-size: 14px;
-        flex: 1;
-        min-width: 180px;
-    }
-
-    .test-item .test-status {
-        display: inline-block;
-        padding: 2px 14px;
-        border-radius: 20px;
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.5px;
-        margin: 0 10px;
-    }
-
-    .test-item .test-status.pass {
-        background: #c6f6d5;
-        color: #22543d;
-    }
-
-    .test-item .test-status.fail {
-        background: #fed7d7;
-        color: #9b2c2c;
-    }
-
-    .test-item .test-message {
-        color: #718096;
-        font-size: 13px;
-        min-width: 100px;
-        text-align: right;
-    }
-
-    .test-section {
-        background: white;
-        border-radius: 10px;
-        margin-top: 15px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-        overflow: hidden;
-        width: 100%;
-    }
-
-    .section-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 15px 20px;
-        cursor: pointer;
-        background: #f7fafc;
-        border-bottom: 1px solid #e2e8f0;
-        user-select: none;
-        width: 100%;
-    }
-
-    .section-header:hover {
-        background: #edf2f7;
-    }
-
-    .section-header h2 {
-        margin: 0;
-        font-size: 18px;
-        color: #2d3748;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        flex-wrap: wrap;
-    }
-
-    .section-count {
-        font-size: 14px;
-        font-weight: 600;
-        padding: 2px 12px;
-        border-radius: 20px;
-    }
-
-    .count-pass {
-        background: #c6f6d5;
-        color: #22543d;
-    }
-
-    .count-warning {
-        background: #fefcbf;
-        color: #975a16;
-    }
-
-    .count-fail {
-        background: #fed7d7;
-        color: #9b2c2c;
-    }
-
-    .count-neutral {
-        background: #edf2f7;
-        color: #718096;
-    }
-
-    .section-toggle {
-        background: none;
-        border: none;
-        font-size: 20px;
-        cursor: pointer;
-        color: #718096;
-        padding: 0 10px;
-        width: 40px;
-        height: 40px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 6px;
-        flex-shrink: 0;
-    }
-
-    .section-toggle:hover {
-        background: #e2e8f0;
-    }
-
-    .toggle-icon {
-        display: inline-block;
-        transition: transform 0.2s ease;
-    }
-
-    .section-collapsed .toggle-icon {
-        transform: rotate(0deg);
-    }
-
-    .live-test {
-        padding: 10px 0;
-        width: 100%;
-    }
-
-    .live-test iframe {
-        width: 100%;
-        height: 500px;
-        border: 1px solid #e2e8f0;
-        border-radius: 6px;
-        margin-top: 10px;
-        display: block;
-    }
-
-    .btn-test {
-        display: inline-block;
-        padding: 8px 16px;
-        background: #4299e1;
-        color: white;
-        border-radius: 6px;
-        text-decoration: none;
-        font-size: 13px;
-        margin-top: 10px;
-    }
-
-    .btn-test:hover {
-        background: #3182ce;
-    }
-
-    .btn-test-group {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-        margin-top: 10px;
-    }
-
-    .top-section {
-        margin-bottom: 20px;
-        width: 100%;
-    }
-
-    @media (max-width: 640px) {
-        body {
-            padding: 10px;
-        }
-
-        .test-header {
-            padding: 20px;
-        }
-
-        .test-header h1 {
-            font-size: 22px;
-        }
-
-        .test-summary {
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
-        }
-
-        .summary-card {
-            padding: 15px;
-        }
-
-        .summary-card .number {
-            font-size: 24px;
-        }
-
-        .section-header {
-            padding: 12px 15px;
-            flex-wrap: wrap;
-        }
-
-        .section-header h2 {
-            font-size: 16px;
-        }
-
-        .section-count {
-            font-size: 12px;
-            padding: 2px 10px;
-        }
-
-        .test-item {
-            padding: 10px 15px;
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 5px;
-        }
-
-        .test-item .test-name {
-            font-size: 13px;
-            min-width: auto;
-            width: 100%;
-        }
-
-        .test-item .test-status {
-            margin: 0 10px 0 0;
-        }
-
-        .test-item .test-message {
-            text-align: left;
-            width: 100%;
-            min-width: auto;
-        }
-
-        .test-grid {
-            padding: 10px;
-        }
-
-        .live-test iframe {
-            height: 350px;
-        }
-    }
-    </style>
-</head>
-
-<body>
-    <div class="test-container">
-
-        <div class="test-header">
-            <h1>FitPal Sign-Up System Test</h1>
-            <p>Structural validation of the customer multi-step registration flow</p>
-            <p style="font-size:13px;opacity:0.6;margin-top:10px;">
-                Base Path: <?= htmlspecialchars($basePath, ENT_QUOTES, 'UTF-8') ?> |
-                Base URL: <?= htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8') ?>
-            </p>
-        </div>
-
-        <div class="top-section">
-            <div class="test-summary">
-                <div class="summary-card total">
-                    <div class="number"><?= $totalTests ?></div>
-                    <div class="label">Total Tests</div>
-                </div>
-                <div class="summary-card passed">
-                    <div class="number"><?= $totalPassed ?></div>
-                    <div class="label">Passed</div>
-                </div>
-                <div class="summary-card failed">
-                    <div class="number"><?= $totalFailed ?></div>
-                    <div class="label">Failed</div>
-                </div>
-                <div class="summary-card rate">
-                    <div class="number"><?= $passRate ?>%</div>
-                    <div class="label">Pass Rate</div>
-                </div>
-            </div>
-
-            <?php renderLiveFormSection($baseUrl, true); ?>
-        </div>
-
-        <?php
-    renderSection('Database Tests', 'Database', true);
-    renderSection('Session Tests', 'Session', true);
-    renderSection('Core File Tests', 'Core Files', true);
-    renderSection('Sign-Up Page Structure', 'Page Structure', true);
-    renderSection('Handler Checks', 'Handler', true);
-    renderSection('JavaScript Checks', 'JavaScript', true);
-    renderSection('CSS Checks', 'CSS', true);
-    ?>
-
-    </div>
-
-    <script>
-    (function() {
-        'use strict';
-        var sectionHeaders = document.querySelectorAll('.section-header');
-        sectionHeaders.forEach(function(header) {
-            var targetId = header.getAttribute('data-target');
-            var content = document.getElementById(targetId);
-            var toggleBtn = header.querySelector('.section-toggle');
-            var icon = toggleBtn ? toggleBtn.querySelector('.toggle-icon') : null;
-            if (!content || !toggleBtn || !icon) return;
-
-            function toggle() {
-                var isCollapsed = header.classList.contains('section-collapsed');
-                if (isCollapsed) {
-                    header.classList.remove('section-collapsed');
-                    toggleBtn.setAttribute('aria-expanded', 'true');
-                    content.style.display = 'grid';
-                    icon.textContent = '-';
-                } else {
-                    header.classList.add('section-collapsed');
-                    toggleBtn.setAttribute('aria-expanded', 'false');
-                    content.style.display = 'none';
-                    icon.textContent = '+';
-                }
-            }
-
-            header.addEventListener('click', function(e) {
-                if (e.target.closest('.section-toggle')) return;
-                toggle();
-            });
-            toggleBtn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                toggle();
-            });
-            header.setAttribute('role', 'button');
-            header.setAttribute('tabindex', '0');
-            header.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    toggle();
-                }
-            });
-        });
-    })();
-    </script>
-</body>
-
-</html>
 ```
 
 ---

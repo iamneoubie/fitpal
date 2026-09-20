@@ -17,6 +17,7 @@ filesToCheck = [
     # ===== admin/assets/ui/js =====
     "/admin/assets/ui/js/dashboard.js",
     "/admin/assets/ui/js/header.js",
+    "/admin/assets/ui/js/profile.js",
     "/admin/assets/ui/js/restaurants.js",
     "/admin/assets/ui/js/riders.js",
     "/admin/assets/ui/js/sign-in.js",
@@ -115,6 +116,32 @@ filesToCheck = [
     "/customer/pages/sign-up.php",
     "/customer/pages/wallet.php",
 
+    # ===== restaurant/assets/css =====
+    "/restaurant/assets/css/header.css",
+    "/restaurant/assets/css/sign-in.css",
+    "/restaurant/assets/css/sign-up.css",
+
+    # ===== restaurant/assets/ui/js =====
+    "/restaurant/assets/ui/js/header.js",
+    "/restaurant/assets/ui/js/sign-in.js",
+    "/restaurant/assets/ui/js/sign-up.js",
+
+    # ===== restaurant/backend/database =====
+    "/restaurant/backend/database/restaurant-connect.php",
+    "/restaurant/backend/database/restaurant-queries.php",
+
+    # ===== restaurant/backend/handlers =====
+    "/restaurant/backend/handlers/sign-in-handler.php",
+    "/restaurant/backend/handlers/sign-out-handler.php",
+    "/restaurant/backend/handlers/sign-up-handler.php",
+
+    # ===== restaurant/includes =====
+    "/restaurant/includes/header.php",
+
+    # ===== restaurant/pages =====
+    "/restaurant/pages/sign-in.php",
+    "/restaurant/pages/sign-up.php",
+
     # ===== rider/assets/css =====
     "/rider/assets/css/admin-tables.css",
     "/rider/assets/css/dashboard.css",
@@ -187,10 +214,10 @@ filesToCheck = [
     "/shared/pages/privacy-policy.php",
     "/shared/pages/terms-conditions.php",
 
-    # ===== test/customer =====
-    "/test/customer/cart-test.php",
-    "/test/customer/menu-test.php",
-    "/test/customer/product-detail-test.php",
-    "/test/customer/sign-in-test.php",
-    "/test/customer/sign-up-test.php",
+    # # ===== test/customer =====
+    # "/test/customer/cart-test.php",
+    # "/test/customer/menu-test.php",
+    # "/test/customer/product-detail-test.php",
+    # "/test/customer/sign-in-test.php",
+    # "/test/customer/sign-up-test.php",
 ]

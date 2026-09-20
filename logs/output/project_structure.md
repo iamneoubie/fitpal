@@ -1,7 +1,7 @@
 # Web Project Structure
 
 **Project:** fitpal
-**Generated:** 2026-09-20 22:33:58
+**Generated:** 2026-09-20 23:32:33
 **Mode:** all
 
 ```
@@ -19,6 +19,7 @@ fitpal/
 │   │       └── js/
 │   │           ├── dashboard.js
 │   │           ├── header.js
+│   │           ├── profile.js
 │   │           ├── restaurants.js
 │   │           ├── riders.js
 │   │           └── sign-in.js
@@ -122,13 +123,32 @@ fitpal/
 │   │   ├── test-create-guide.md
 │   │   └── updating-fetcher-guide.md
 │   ├── output/
-│   │   ├── all_path_fetched_codebase.md
-│   │   ├── project_structure.md
-│   │   ├── rider_fetched_codebase.md
-│   │   └── riders_fetched_codebase.md
 │   ├── content-fetcher.py
 │   └── tree-mapper.py
 ├── restaurant/
+│   ├── assets/
+│   │   ├── css/
+│   │   │   ├── header.css
+│   │   │   ├── sign-in.css
+│   │   │   └── sign-up.css
+│   │   └── ui/
+│   │       └── js/
+│   │           ├── header.js
+│   │           ├── sign-in.js
+│   │           └── sign-up.js
+│   ├── backend/
+│   │   ├── database/
+│   │   │   ├── restaurant-connect.php
+│   │   │   └── restaurant-queries.php
+│   │   └── handlers/
+│   │       ├── sign-in-handler.php
+│   │       ├── sign-out-handler.php
+│   │       └── sign-up-handler.php
+│   ├── includes/
+│   │   └── header.php
+│   └── pages/
+│       ├── sign-in.php
+│       └── sign-up.php
 ├── rider/
 │   ├── assets/
 │   │   ├── css/
@@ -341,11 +361,12 @@ fitpal/
 │   │   ├── footer.php
 │   │   ├── header.php
 │   │   └── view-helpers.php
-│   └── pages/
-│       ├── about.php
-│       ├── contact.php
-│       ├── privacy-policy.php
-│       └── terms-conditions.php
+│   ├── pages/
+│   │   ├── about.php
+│   │   ├── contact.php
+│   │   ├── privacy-policy.php
+│   │   └── terms-conditions.php
+│   └── uploads/
 ├── sql/
 │   ├── sample/
 │   │   └── seed-data.sql
@@ -368,16 +389,16 @@ fitpal/
 | File Type | Count |
 |-----------|-------|
 | HTML Files | 0 |
-| PHP Files | 77 |
-| CSS Files | 36 |
-| JavaScript Files | 27 |
+| PHP Files | 85 |
+| CSS Files | 39 |
+| JavaScript Files | 31 |
 | JSON Files | 0 |
-| Text/Markdown | 7 |
+| Text/Markdown | 3 |
 | Image Files | 141 |
 | Other Files | 12 |
 
-**Total Directories:** 54
-**Total Files:** 299
+**Total Directories:** 64
+**Total Files:** 310
 
 ---
 
