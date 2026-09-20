@@ -1,9 +1,18 @@
 /**
-<<<<<<< Updated upstream:rider/assets/css/profile.css
+/*
  * FitPal Rider Profile Page Styles
  *
+ * Mirrors the customer profile layout:
+ *   - page-title-header with back button + right-aligned title
+ *   - profile-header-card with avatar, name, role, stat, edit button
+ *   - profile-tabs strip
+ *   - profile-card with card-header + card-body
+ *   - address-item pattern
+ *   - edit-in-place form with underline style when disabled
+ *
  * @package FitPal
- * @version 1.0
+ * @version 2.0 — Rebuilt to match the customer profile visual system.
+ */
  */
 
 /* ============================================
@@ -17,51 +26,34 @@
     width: 100%;
     padding: 0;
     min-height: calc(100vh - 70px);
+.profile-page {
+    padding: 20px 0 40px 0;
 }
 
-.rider-profile-page {
-=======
- * FitPal Admin Profile Page Styles
- * Version 1.2 — Container now matches the admin header exactly
- *                (1200px max-width, var(--spacing-4) side padding).
- *                The .content layout skeleton is no longer redeclared
- *                here — admin/header.css owns it.
- *
- * @package FitPal
- */
-
-/* ============================================
-   PAGE WRAPPER
-   ============================================ */
-
-.admin-profile-page {
->>>>>>> Stashed changes:admin/assets/css/profile.css
+.profile-page .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 16px;
+    width: 100%;
+    box-sizing: border-box;
+}
     background: var(--gray-50);
     padding: 24px 0 40px 0;
     flex: 1;
 }
 
-<<<<<<< Updated upstream:rider/assets/css/profile.css
 .rider-profile-page .container {
     max-width: 900px;
     margin: 0 auto;
     padding: 0 16px;
     width: 100%;
-=======
-.admin-profile-page .container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 var(--spacing-4);
-    width: 100%;
-    box-sizing: border-box;
->>>>>>> Stashed changes:admin/assets/css/profile.css
+}
 }
 
 /* ============================================
    PAGE HEADER
    ============================================ */
 
-<<<<<<< Updated upstream:rider/assets/css/profile.css
 .rider-page-header {
     margin-bottom: 24px;
 }
@@ -81,313 +73,6 @@
     margin: 0;
     font-size: var(--font-size-sm);
 }
-
-/* ============================================
-   PROFILE HERO
-   ============================================ */
-
-.rider-profile-hero {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    background: var(--white);
-    border: 1px solid var(--gray-200);
-    border-radius: var(--radius-lg);
-    padding: 24px;
-    margin-bottom: 24px;
-    box-shadow: var(--shadow-sm);
-    flex-wrap: wrap;
-}
-
-.rider-profile-avatar-wrap {
-    position: relative;
-    flex-shrink: 0;
-}
-
-.rider-profile-avatar {
-    width: 88px;
-    height: 88px;
-    border-radius: 50%;
-    background: var(--primary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    position: relative;
-}
-
-.rider-profile-avatar img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-}
-
-.rider-profile-avatar-initial {
-    color: var(--white);
-    font-size: 36px;
-    font-weight: 700;
-    text-transform: uppercase;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-}
-
-.rider-profile-avatar-edit {
-    position: absolute;
-    bottom: -2px;
-    right: -2px;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: var(--white);
-    border: 2px solid var(--gray-200);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    padding: 0;
-}
-
-.rider-profile-avatar-edit:hover {
-    background: var(--gray-50);
-    border-color: var(--primary);
-    transform: scale(1.05);
-}
-
-.rider-profile-avatar-edit img {
-    width: 14px;
-    height: 14px;
-    display: block;
-    opacity: 0.7;
-}
-
-.rider-profile-hero-info {
-    flex: 1;
-    min-width: 200px;
-}
-
-.rider-profile-name {
-    margin: 0 0 4px 0;
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    color: var(--text);
-    line-height: 1.2;
-}
-
-.rider-profile-username {
-    margin: 0 0 10px 0;
-    font-size: var(--font-size-sm);
-    color: var(--gray-500);
-}
-
-.rider-profile-badges {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
-.rider-profile-joined {
-    font-size: var(--font-size-xs);
-    color: var(--gray-500);
-}
-
-.rider-profile-hero-stats {
-    display: flex;
-    gap: 24px;
-    flex-shrink: 0;
-}
-
-.rider-profile-hero-stat {
-    text-align: center;
-}
-
-.rider-profile-hero-stat-value {
-    display: block;
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    color: var(--text);
-    line-height: 1.1;
-}
-
-.rider-profile-hero-stat-label {
-    display: block;
-    font-size: var(--font-size-xs);
-    color: var(--gray-500);
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-    font-weight: var(--font-weight-semibold);
-    margin-top: 2px;
-}
-
-/* ============================================
-   FORM GRID
-   ============================================ */
-
-.rider-form-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 16px;
-}
-
-.rider-form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.rider-form-label {
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-semibold);
-    color: var(--gray-600);
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-}
-
-.rider-form-control {
-    width: 100%;
-    padding: 10px 14px;
-    border: 1px solid var(--gray-300);
-    border-radius: var(--radius-base);
-    font-size: var(--font-size-sm);
-    font-family: inherit;
-    background: var(--white);
-    color: var(--text);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.rider-form-control:disabled {
-    background: var(--gray-50);
-    color: var(--gray-600);
-    cursor: not-allowed;
-}
-
-.rider-form-control:not(:disabled):focus {
-    outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
-}
-
-.rider-form-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    margin-top: 20px;
-    padding-top: 16px;
-    border-top: 1px solid var(--gray-100);
-}
-
-/* ============================================
-   VEHICLE / ADDRESS DISPLAY
-   ============================================ */
-
-.rider-vehicle-display,
-.rider-address-display {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-}
-
-.rider-vehicle-icon,
-.rider-address-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: var(--radius-base);
-    background: rgba(89, 193, 74, 0.12);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.rider-vehicle-icon img,
-.rider-address-icon img {
-    width: 22px;
-    height: 22px;
-    display: block;
-    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
-}
-
-.rider-vehicle-info,
-.rider-address-info {
-    min-width: 0;
-}
-
-.rider-vehicle-name,
-.rider-address-label {
-    margin: 0 0 2px 0;
-    font-size: var(--font-size-base);
-    font-weight: var(--font-weight-semibold);
-    color: var(--text);
-}
-
-.rider-vehicle-plate,
-.rider-address-text {
-    margin: 0;
-    font-size: var(--font-size-sm);
-    color: var(--gray-600);
-    line-height: 1.4;
-    word-break: break-word;
-}
-
-.rider-vehicle-note {
-    margin: 16px 0 0 0;
-    font-size: var(--font-size-xs);
-    color: var(--gray-500);
-    padding: 10px 14px;
-    background: var(--gray-50);
-    border-radius: var(--radius-base);
-    border-left: 3px solid var(--gray-300);
-}
-
-/* ============================================
-   LOGOUT
-   ============================================ */
-
-.rider-logout-wrap {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 24px;
-}
-
-.rider-logout-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.rider-logout-btn .btn-icon {
-    width: 16px;
-    height: 16px;
-    display: block;
-    flex-shrink: 0;
-}
-
-=======
-.admin-page-header {
-    margin-bottom: 20px;
-    padding-bottom: 12px;
-    border-bottom: 2px solid var(--primary);
-}
-
-.admin-page-header .heading-2 {
-    margin: 0 0 4px 0;
-    font-size: var(--font-size-3xl);
-    font-weight: var(--font-weight-bold);
-    color: var(--text);
-}
-
-.admin-page-header .heading-2 span {
-    color: var(--primary);
-}
-
-.admin-page-header .text-muted {
-    margin: 0;
-    font-size: var(--font-size-sm);
-    color: var(--gray-500);
 }
 
 /* ============================================
@@ -402,7 +87,7 @@
     border: 1px solid var(--gray-200);
     border-radius: var(--radius-lg);
     padding: 20px 24px;
-    margin-bottom: 20px;
+    margin-bottom: 24px;
     flex-wrap: wrap;
     gap: 16px;
     box-shadow: var(--shadow-sm);
@@ -412,27 +97,42 @@
     display: flex;
     align-items: center;
     gap: 16px;
+.profile-avatar {
+    flex-shrink: 0;
 }
 
-.profile-avatar-placeholder {
-    width: 56px;
-    height: 56px;
+.profile-avatar-wrap {
+    position: relative;
+    width: 64px;
+    height: 64px;
+}
+
+.profile-avatar-wrap > img,
+.profile-avatar-wrap > .profile-avatar-placeholder {
+    width: 64px;
+    height: 64px;
     border-radius: 50%;
-    background: var(--primary);
-    color: var(--white);
+    object-fit: cover;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 22px;
+}
+
+.profile-avatar-placeholder {
+    background: var(--primary);
+    color: var(--white);
+    font-size: 24px;
     font-weight: 700;
     text-transform: uppercase;
-    flex-shrink: 0;
+    line-height: 1;
+}
 }
 
 .profile-name-role {
     display: flex;
     flex-direction: column;
     gap: 2px;
+    min-width: 0;
 }
 
 .profile-full-name {
@@ -441,6 +141,9 @@
     color: var(--text);
     margin: 0;
     line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .profile-role-badge {
@@ -449,7 +152,8 @@
 }
 
 /* ============================================
-   PROFILE CARD
+   PROFILE CARDS
+   ============================================ */
    ============================================ */
 
 .profile-card {
@@ -463,51 +167,96 @@
 .profile-card .card-header {
     padding: 16px 20px;
     border-bottom: 1px solid var(--gray-200);
+.profile-card .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     background: var(--gray-50);
+    gap: 12px;
+    flex-wrap: wrap;
+}
 }
 
 .profile-card .card-header h3 {
     font-size: var(--font-size-base);
-    font-weight: var(--font-weight-semibold);
+    font-weight: 600;
     color: var(--text);
     margin: 0;
 }
 
 .profile-card .card-body {
-    padding: 8px 20px;
+.profile-card .card-body {
+    padding: 20px;
 }
 
 /* ============================================
-   DETAIL ROWS
+   FORM
    ============================================ */
 
-.detail-row {
-    display: flex;
-    padding: 12px 0;
-    border-bottom: 1px solid var(--gray-100);
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
-    align-items: flex-start;
 }
 
-.detail-row:last-child {
-    border-bottom: none;
+.form-group {
+    margin-bottom: 16px;
+    min-width: 0;
 }
 
-.detail-label {
-    width: 130px;
-    font-weight: var(--font-weight-semibold);
+.field-label {
+    display: block;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
     color: var(--gray-500);
-    font-size: var(--font-size-sm);
-    flex-shrink: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
 }
 
-.detail-value {
-    flex: 1;
+.form-control {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-base);
+    background: var(--white);
     color: var(--text);
-    font-size: var(--font-size-sm);
-    word-break: break-word;
+    font-family: inherit;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
+.form-control:disabled {
+    background: var(--gray-50);
+    color: var(--gray-600);
+    cursor: not-allowed;
+    border-color: var(--gray-200);
+}
+
+.form-control:not(:disabled):focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
+}
+
+.profile-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--gray-200);
+    justify-content: flex-end;
+}
+
+.profile-actions .btn {
+    min-width: 150px;
+    justify-content: center;
+}
+
+.profile-actions.is-hidden {
+    display: none;
+}
 /* ============================================
    BADGES
    ============================================ */
@@ -516,24 +265,28 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 3px 10px;
+.badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 10px;
     border-radius: var(--radius-full);
     font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-semibold);
-    line-height: 1;
+    font-weight: 600;
+    line-height: 1.5;
 }
 
-.badge-success { background: #d4edda; color: #155724; }
+.badge-success   { background: #d4edda; color: #155724; }
+.badge-warning   { background: #fff3cd; color: #856404; }
+.badge-danger    { background: #f8d7da; color: #721c24; }
 .badge-secondary { background: var(--gray-200); color: var(--gray-600); }
-
->>>>>>> Stashed changes:admin/assets/css/profile.css
+.badge-primary   { background: var(--primary); color: var(--white); }
 /* ============================================
    RESPONSIVE
    ============================================ */
 
 @media (max-width: 768px) {
-<<<<<<< Updated upstream:rider/assets/css/profile.css
-    .rider-profile-page {
+.rider-profile-page {
         padding: 16px 0 32px 0;
     }
 
@@ -561,27 +314,18 @@
 
     .rider-form-grid {
         grid-template-columns: 1fr;
-=======
-    .admin-profile-page {
-        padding: 16px 0 24px 0;
-    }
-
-    .admin-profile-page .container {
-        padding: 0 var(--spacing-3);
-    }
-
-    .admin-page-header .heading-2 {
-        font-size: var(--font-size-2xl);
     }
 
     .profile-header-card {
         flex-direction: column;
         align-items: stretch;
-        padding: 16px 20px;
+        padding: 20px;
     }
 
     .profile-header-left {
         justify-content: center;
+        flex-direction: column;
+        text-align: center;
     }
 
     .profile-name-role {
@@ -589,26 +333,71 @@
         text-align: center;
     }
 
-    .detail-row {
+.profile-full-name {
+        white-space: normal;
+    }
+
+    .profile-meta-line {
+        justify-content: center;
+    }
+
+    .profile-header-right {
+        justify-content: center;
+        width: 100%;
+    }
+
+    .profile-header-right .btn-edit {
+        width: 100%;
+        justify-content: center;
+        padding: 10px;
+    }
+
+    .profile-tabs {
         flex-direction: column;
-        gap: 2px;
-        padding: 10px 0;
+        gap: 4px;
+        padding: 4px;
     }
 
-    .detail-label {
-        width: auto;
-        font-size: var(--font-size-xs);
+    .profile-tab {
+        padding: 10px 16px;
     }
 
-    .detail-value {
-        font-size: var(--font-size-sm);
->>>>>>> Stashed changes:admin/assets/css/profile.css
+    .profile-card .card-body {
+        padding: 16px;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+
+    .profile-actions {
+        flex-direction: column-reverse;
+    }
+
+    .profile-actions .btn {
+        width: 100%;
+    }
+
+    .address-item-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .logout-wrap {
+        justify-content: stretch;
+    }
+
+    .logout-btn {
+        width: 100%;
+        justify-content: center;
+    }
     }
 }
 
 @media (max-width: 480px) {
-<<<<<<< Updated upstream:rider/assets/css/profile.css
-    .rider-profile-avatar {
+.rider-profile-avatar {
         width: 72px;
         height: 72px;
     }
@@ -631,23 +420,6 @@
 
     .rider-form-actions .btn {
         width: 100%;
-=======
-    .admin-page-header .heading-2 {
-        font-size: var(--font-size-xl);
-    }
-
-    .profile-avatar-placeholder {
-        width: 48px;
-        height: 48px;
-        font-size: 18px;
-    }
-
-    .profile-full-name {
-        font-size: var(--font-size-lg);
-    }
-
-    .profile-card .card-body {
-        padding: 4px 14px;
->>>>>>> Stashed changes:admin/assets/css/profile.css
+>>>>>>> 677b4fcf15b4c92586299707a23a3b9955a24c1d
     }
 }

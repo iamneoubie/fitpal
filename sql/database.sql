@@ -1,5 +1,5 @@
 -- =====================================================
--- DATABASE: fitpal_food_delivery
+-- DATABASE: fitpal_food_delivery v.1.0.1
 -- Dietary Meal Ordering and Restaurant Nutrition Analytics System
 -- WITH FULL CUSTOMIZABLE MEAL SUPPORT
 -- ACID Compliant with Proper Constraints
@@ -128,6 +128,27 @@ CREATE TABLE delivery_rider_address (
 ) COMMENT = 'Delivery rider addresses (one rider -> many addresses)';
 
 -- =====================================================
+-- 5b. [NEW] DELIVERY_RIDER_EMERGENCY_CONTACT
+-- No is_primary flag. The row with the lowest
+-- emergency_contact_id (earliest created) is treated as primary.
+-- relationship is a free-form string for scalability.
+-- =====================================================
+CREATE TABLE delivery_rider_emergency_contact (
+    emergency_contact_id INT AUTO_INCREMENT PRIMARY KEY,
+    delivery_rider_id INT NOT NULL,
+    first_name VARCHAR(50) NOT NULL,
+    middle_name VARCHAR(50) NULL,
+    last_name VARCHAR(50) NOT NULL,
+    contact_number VARCHAR(15) NOT NULL,
+    relationship VARCHAR(50) NOT NULL,
+    address VARCHAR(250) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (delivery_rider_id) REFERENCES delivery_rider (delivery_rider_id) ON DELETE CASCADE,
+    INDEX idx_rider (delivery_rider_id)
+) COMMENT = 'Emergency contacts for delivery riders (earliest ID = primary)';
+
+-- =====================================================
 -- 6. ADMINISTRATOR (no dependencies)
 -- =====================================================
 CREATE TABLE administrator (
@@ -182,6 +203,7 @@ CREATE TABLE customer_profile (
 
 -- =====================================================
 -- 8. DELIVERY_RIDER_PROFILE
+-- profile_picture IS the formal picture. No extra KYC columns.
 -- =====================================================
 CREATE TABLE delivery_rider_profile (
     delivery_rider_profile_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -213,6 +235,23 @@ CREATE TABLE delivery_rider_profile (
     INDEX idx_verification_status (verification_status),
     INDEX idx_is_available (is_available)
 ) COMMENT = 'Delivery rider profile with verification and performance data';
+
+-- =====================================================
+-- 8b. [NEW] DELIVERY_RIDER_DOCUMENT
+-- Just the driver's license file path + issue/expiry dates.
+-- =====================================================
+CREATE TABLE delivery_rider_document (
+    document_id INT AUTO_INCREMENT PRIMARY KEY,
+    delivery_rider_id INT NOT NULL,
+    drivers_license VARCHAR(255) NOT NULL,
+    issue_date DATE NULL,
+    expiry_date DATE NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (delivery_rider_id) REFERENCES delivery_rider (delivery_rider_id) ON DELETE CASCADE,
+    INDEX idx_rider (delivery_rider_id),
+    INDEX idx_expiry (expiry_date)
+) COMMENT = 'Delivery rider driver''s license document';
 
 -- =====================================================
 -- 9. ADMINISTRATOR_PROFILE
@@ -892,8 +931,7 @@ BEGIN
            AND order_status IN ('preparing','delivering')
            AND order_id <> NEW.order_id;
 
-        IF active_orders > 2 THEN
-            SIGNAL SQLSTATE '45000'
+        IF active_orders > 2 THEN            SIGNAL SQLSTATE '45000'
             SET MESSAGE_TEXT = 'Rider already has too many active orders';
         END IF;
     END IF;
@@ -1195,6 +1233,35 @@ BEGIN
     ORDER BY ci.created_at ASC;
 END$$
 
+-- [NEW] Fetch a rider's KYC summary for admin review screens.
+CREATE PROCEDURE sp_get_rider_kyc_summary(IN p_delivery_rider_id INT)
+BEGIN
+    SELECT
+        dr.delivery_rider_id,
+        dr.first_name,
+        dr.middle_name,
+        dr.last_name,
+        dr.contact_number,
+        dr.email,
+        drp.profile_picture,
+        drp.vehicle_type,
+        drp.vehicle_plate,
+        drp.verification_status,
+        drp.verified_at,
+        drp.average_rating,
+        drp.total_deliveries,
+        drp.is_available,
+        drd.drivers_license,
+        drd.issue_date AS license_issue_date,
+        drd.expiry_date AS license_expiry_date,
+        (SELECT COUNT(*) FROM delivery_rider_emergency_contact ec
+          WHERE ec.delivery_rider_id = dr.delivery_rider_id) AS emergency_contact_count
+    FROM delivery_rider dr
+    JOIN delivery_rider_profile drp ON dr.delivery_rider_id = drp.delivery_rider_id
+    LEFT JOIN delivery_rider_document drd ON dr.delivery_rider_id = drd.delivery_rider_id
+    WHERE dr.delivery_rider_id = p_delivery_rider_id;
+END$$
+
 DELIMITER;
 
 -- =====================================================
@@ -1427,6 +1494,42 @@ WHERE
     ci.is_removed = 0
 GROUP BY
     p.product_id;
+
+-- [NEW] Rider KYC overview for admin dashboards.
+CREATE OR REPLACE VIEW rider_kyc_overview AS
+SELECT
+    dr.delivery_rider_id,
+    CONCAT(
+        dr.first_name,
+        ' ',
+        COALESCE(dr.middle_name, ''),
+        ' ',
+        dr.last_name
+    ) AS rider_name,
+    dr.email,
+    dr.contact_number,
+    drp.verification_status,
+    drp.profile_picture,
+    drd.drivers_license,
+    drd.issue_date,
+    drd.expiry_date,
+    CASE
+        WHEN drd.expiry_date IS NULL THEN 'missing'
+        WHEN drd.expiry_date < CURDATE() THEN 'expired'
+        WHEN drd.expiry_date < DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN 'expiring_soon'
+        ELSE 'valid'
+    END AS license_state,
+    (
+        SELECT COUNT(*)
+        FROM
+            delivery_rider_emergency_contact ec
+        WHERE
+            ec.delivery_rider_id = dr.delivery_rider_id
+    ) AS emergency_contact_count
+FROM
+    delivery_rider dr
+    LEFT JOIN delivery_rider_profile drp ON dr.delivery_rider_id = drp.delivery_rider_id
+    LEFT JOIN delivery_rider_document drd ON dr.delivery_rider_id = drd.delivery_rider_id;
 
 -- =====================================================
 -- END OF SCHEMA

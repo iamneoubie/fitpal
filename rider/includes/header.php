@@ -10,32 +10,10 @@
  * The nav reflects rider-only surfaces: Dashboard, Deliveries,
  * Earnings, and Profile.
  *
- * ---------------------------------------------------------------------
- * CSS LOADING NOTES (v1.1)
- * ---------------------------------------------------------------------
- * This file loads ONLY admin/assets/css/header.css — NOT
- * shared/assets/css/header.css. The shared file defines the public
- * site header (.header, .nav-list, .menu-toggle, etc.) but admin
- * pages have their own copy of those rules inside admin/header.css.
- * Loading both produced a size-pop when the second file arrived,
- * because both define the same selectors with subtly different
- * box-model values.
- *
- * The base layout skeleton (.main-content, .content) is also
- * declared in admin/header.css so it is present on EVERY admin page,
- * regardless of which page-specific CSS is loaded. Previously
- * .content lived in dashboard.css / profile.css / sign-in.css, so
- * switching pages made the rule appear and disappear — which is
- * what caused the footer to jump.
- * ---------------------------------------------------------------------
- *
  * @package FitPal
-<<<<<<< Updated upstream:rider/includes/header.php
  * @version 1.1 — Adds currentPage detection for deliveries/earnings;
  *                aligns with customer header structure.
-=======
- * @version 1.1 — Single header.css, layout skeleton moved to admin/header.css
->>>>>>> Stashed changes:admin/includes/header.php
+>>>>>>> 677b4fcf15b4c92586299707a23a3b9955a24c1d
  */
 
 declare(strict_types=1);
@@ -107,21 +85,24 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
 // ===== PAGE-SPECIFIC CSS PRELOADING =====
 $pageCssMap = [
-<<<<<<< Updated upstream:rider/includes/header.php
+$pageCssMap = [
     'sign-in.php'   => 'sign-in.css',
     'sign-up.php'   => 'sign-up.css',
     'dashboard.php' => 'dashboard.css',
     'deliveries.php'=> 'deliveries.css',
     'earnings.php'  => 'earnings.css',
     'profile.php'   => 'profile.css',
-=======
-    'sign-in.php'     => 'sign-in.css',
-    'dashboard.php'   => 'dashboard.css',
-    'users.php'       => 'admin-tables.css',
-    'restaurants.php' => 'admin-tables.css',
-    'riders.php'      => 'admin-tables.css',
-    'profile.php'     => 'profile.css',
->>>>>>> Stashed changes:admin/includes/header.php
+];
+    'sign-in.php'   => 'sign-in.css',
+    'sign-up.php'   => 'sign-up.css',
+    'dashboard.php' => 'dashboard.css',
+    'deliveries.php'=> 'deliveries.css',
+    'earnings.php'  => 'earnings.css',
+    'profile.php'   => 'profile.css',
+'deliveries.php'=> 'deliveries.css',
+    'earnings.php'  => 'earnings.css',
+    'profile.php'   => 'profile.css',
+>>>>>>> 677b4fcf15b4c92586299707a23a3b9955a24c1d
 ];
 
 $pageCssFile = $pageCssMap[$currentPage] ?? '';
@@ -142,18 +123,8 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
     <link rel="icon" type="image/x-icon" href="<?php echo $assetBase; ?>assets/images/brand/Logo.ico">
     <link rel="shortcut icon" href="<?php echo $assetBase; ?>assets/images/brand/Logo.ico">
 
-    <!--
-        Admin CSS load order:
-          1. shared/global.css    — CSS variables, resets, utility classes
-          2. admin/header.css     — admin header + base layout skeleton
-          3. page-specific CSS    — dashboard.css / admin-tables.css / etc.
-
-        shared/header.css is deliberately NOT loaded. Its selectors
-        duplicate what's already in admin/header.css, and loading both
-        caused a visible size-pop on first paint.
-    -->
-    <link rel="preload" href="../assets/css/header.css" as="style">
-    <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/global.css">
+<link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/global.css">
+    <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/header.css">
     <link rel="stylesheet" href="../assets/css/header.css">
 
     <?php if (!empty($pageCssPath)): ?>

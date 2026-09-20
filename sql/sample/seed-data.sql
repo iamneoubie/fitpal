@@ -1,13 +1,15 @@
 -- =====================================================
 -- FitPal Seed Data
--- Version 5.1
+-- Version 5.3
 --
--- ALIGNED WITH: fitpal_food_delivery schema v5
+-- ALIGNED WITH: fitpal_food_delivery schema v5.2
 --   - customer_address is a CHILD of customer
 --   - delivery_rider_address is a CHILD of delivery_rider
 --   - product_composition has NO max_quantity_per_item
 --   - feedback UNIQUE is (order_id, product_id)
 --   - cart UNIQUE includes customization_hash
+--   - delivery_rider_emergency_contact (no is_primary; earliest id = primary)
+--   - delivery_rider_document (drivers_license path + issue_date + expiry_date)
 --
 -- PRINCIPLES
 --   1. Every account gets at least one address row.
@@ -22,6 +24,12 @@
 --      products is DERIVED at the end (Section 9).
 --   5. Every choice group has exactly one is_required = 1
 --      row (the default), alternatives are is_required = 0.
+--   6. Every rider gets one emergency contact and one
+--      delivery_rider_document row. profile_picture stays NULL;
+--      drivers_license points to a shared SVG placeholder at
+--      'uploads/riders/documents/placeholder-license.svg'.
+--      The app overwrites this path when a rider uploads a real
+--      license.
 -- =====================================================
 
 USE fitpal_food_delivery;
@@ -625,7 +633,15 @@ VALUES (
 
 -- -----------------------------------------------------
 -- 4.4 Delivery riders (3) + profiles + addresses
+--     + emergency contacts + license documents
 -- -----------------------------------------------------
+-- NOTE on drivers_license path:
+--   Schema enforces NOT NULL. This seed uses a shared SVG
+--   placeholder at 'uploads/riders/documents/placeholder-license.svg'.
+--   The app overwrites this path when a rider uploads a real license.
+--
+-- NOTE on expiry_date:
+--   Set 10 years from today using DATE_ADD(CURDATE(), INTERVAL 10 YEAR).
 
 -- Rider 1: Motorcycle, verified, available
 INSERT INTO
@@ -660,6 +676,7 @@ INSERT INTO
     delivery_rider_profile (
         delivery_rider_id,
         financial_account_id,
+        profile_picture,
         vehicle_type,
         vehicle_plate,
         verification_status,
@@ -672,6 +689,7 @@ INSERT INTO
 VALUES (
         @rider1_id,
         @rider1_financial_id,
+        NULL,
         'motorcycle',
         'ABC1234',
         'verified',
@@ -708,6 +726,42 @@ VALUES (
         1
     );
 
+-- Rider 1 emergency contact (earliest id = primary)
+INSERT INTO
+    delivery_rider_emergency_contact (
+        delivery_rider_id,
+        first_name,
+        middle_name,
+        last_name,
+        contact_number,
+        relationship,
+        address
+    )
+VALUES (
+        @rider1_id,
+        'Maria',
+        NULL,
+        'Dela Cruz',
+        '09171112222',
+        'Spouse',
+        '88 Rider Hub, Barangay Poblacion, Makati, Metro Manila'
+    );
+
+-- Rider 1 driver's license document (SVG placeholder path)
+INSERT INTO
+    delivery_rider_document (
+        delivery_rider_id,
+        drivers_license,
+        issue_date,
+        expiry_date
+    )
+VALUES (
+        @rider1_id,
+        'uploads/riders/documents/placeholder-license.svg',
+        '2021-06-15',
+        DATE_ADD(CURDATE(), INTERVAL 10 YEAR)
+    );
+
 -- Rider 2: Car, verified, available
 INSERT INTO
     delivery_rider (
@@ -741,6 +795,7 @@ INSERT INTO
     delivery_rider_profile (
         delivery_rider_id,
         financial_account_id,
+        profile_picture,
         vehicle_type,
         vehicle_plate,
         verification_status,
@@ -753,6 +808,7 @@ INSERT INTO
 VALUES (
         @rider2_id,
         @rider2_financial_id,
+        NULL,
         'car',
         'XYZ5678',
         'verified',
@@ -789,6 +845,42 @@ VALUES (
         1
     );
 
+-- Rider 2 emergency contact
+INSERT INTO
+    delivery_rider_emergency_contact (
+        delivery_rider_id,
+        first_name,
+        middle_name,
+        last_name,
+        contact_number,
+        relationship,
+        address
+    )
+VALUES (
+        @rider2_id,
+        'Jose',
+        NULL,
+        'Santos',
+        '09182223333',
+        'Father',
+        '22-D Mabini Ave., Barangay Bel-Air, Makati, Metro Manila'
+    );
+
+-- Rider 2 driver's license document (SVG placeholder path)
+INSERT INTO
+    delivery_rider_document (
+        delivery_rider_id,
+        drivers_license,
+        issue_date,
+        expiry_date
+    )
+VALUES (
+        @rider2_id,
+        'uploads/riders/documents/placeholder-license.svg',
+        '2020-11-03',
+        DATE_ADD(CURDATE(), INTERVAL 10 YEAR)
+    );
+
 -- Rider 3: Bicycle, pending, not available
 INSERT INTO
     delivery_rider (
@@ -822,6 +914,7 @@ INSERT INTO
     delivery_rider_profile (
         delivery_rider_id,
         financial_account_id,
+        profile_picture,
         vehicle_type,
         vehicle_plate,
         verification_status,
@@ -834,6 +927,7 @@ INSERT INTO
 VALUES (
         @rider3_id,
         @rider3_financial_id,
+        NULL,
         'bicycle',
         NULL,
         'pending',
@@ -868,6 +962,42 @@ VALUES (
         '1103',
         'Philippines',
         1
+    );
+
+-- Rider 3 emergency contact
+INSERT INTO
+    delivery_rider_emergency_contact (
+        delivery_rider_id,
+        first_name,
+        middle_name,
+        last_name,
+        contact_number,
+        relationship,
+        address
+    )
+VALUES (
+        @rider3_id,
+        'Lourdes',
+        NULL,
+        'Fernandez',
+        '09183334444',
+        'Mother',
+        '5-B Luna St., Barangay Kamuning, Quezon City, Metro Manila'
+    );
+
+-- Rider 3 driver's license document (SVG placeholder path)
+INSERT INTO
+    delivery_rider_document (
+        delivery_rider_id,
+        drivers_license,
+        issue_date,
+        expiry_date
+    )
+VALUES (
+        @rider3_id,
+        'uploads/riders/documents/placeholder-license.svg',
+        '2024-02-20',
+        DATE_ADD(CURDATE(), INTERVAL 10 YEAR)
     );
 
 -- =====================================================
@@ -2918,21 +3048,20 @@ VALUES (
 -- =====================================================
 -- 8. PRODUCT COMPOSITION
 -- =====================================================
--- Column order (matches revised schema):
+-- Column order:
 --   product_id, ingredient_id, is_default, default_quantity,
 --   min_quantity, max_quantity, price_modifier,
 --   display_order, is_required
 --
 -- Semantics:
---   is_default = 1  ->  this row is selected by default
---   is_required = 1 ->  this row anchors a required choice group
+--   is_default = 1  ->  selected by default
+--   is_required = 1 ->  anchors a required choice group
 --   Defaults carry price_modifier = 0.00
 -- =====================================================
 
 -- -----------------------------------------------------
 -- 8.1 Garden Harvest Bowl
 -- -----------------------------------------------------
-
 INSERT INTO
     product_composition (
         product_id,
@@ -3103,7 +3232,6 @@ VALUES (
 -- -----------------------------------------------------
 -- 8.2 Market Greens Salad
 -- -----------------------------------------------------
-
 INSERT INTO
     product_composition (
         product_id,
@@ -3241,7 +3369,6 @@ VALUES (
 -- -----------------------------------------------------
 -- 8.3 Morning Power Smoothie
 -- -----------------------------------------------------
-
 INSERT INTO
     product_composition (
         product_id,
@@ -3324,7 +3451,6 @@ VALUES (
 -- -----------------------------------------------------
 -- 8.4 Sunrise Breakfast Bowl
 -- -----------------------------------------------------
-
 INSERT INTO
     product_composition (
         product_id,
@@ -3418,7 +3544,6 @@ VALUES (
 -- -----------------------------------------------------
 -- 8.5 Seaside Poke Bowl
 -- -----------------------------------------------------
-
 INSERT INTO
     product_composition (
         product_id,
@@ -3545,7 +3670,6 @@ VALUES (
 -- -----------------------------------------------------
 -- 8.6 Keto Power Bowl
 -- -----------------------------------------------------
-
 INSERT INTO
     product_composition (
         product_id,
@@ -3661,7 +3785,6 @@ VALUES (
 -- -----------------------------------------------------
 -- 8.7 Keto Smash Burger
 -- -----------------------------------------------------
-
 INSERT INTO
     product_composition (
         product_id,
@@ -3755,7 +3878,6 @@ VALUES (
 -- -----------------------------------------------------
 -- 8.8 Keto Garden Salad
 -- -----------------------------------------------------
-
 INSERT INTO
     product_composition (
         product_id,
@@ -3860,7 +3982,6 @@ VALUES (
 -- -----------------------------------------------------
 -- 8.9 Keto Butcher Plate
 -- -----------------------------------------------------
-
 INSERT INTO
     product_composition (
         product_id,
@@ -3954,7 +4075,6 @@ VALUES (
 -- -----------------------------------------------------
 -- 8.10 Keto Cauliflower Pizza
 -- -----------------------------------------------------
-
 INSERT INTO
     product_composition (
         product_id,
@@ -4048,7 +4168,6 @@ VALUES (
 -- -----------------------------------------------------
 -- 8.11 Nori Hand Roll Set
 -- -----------------------------------------------------
-
 INSERT INTO
     product_composition (
         product_id,
@@ -4153,7 +4272,6 @@ VALUES (
 -- -----------------------------------------------------
 -- 8.12 Rainbow Poke Bowl
 -- -----------------------------------------------------
-
 INSERT INTO
     product_composition (
         product_id,
@@ -4291,7 +4409,6 @@ VALUES (
 -- -----------------------------------------------------
 -- 8.13 Tokyo Noodle Bowl
 -- -----------------------------------------------------
-
 INSERT INTO
     product_composition (
         product_id,
@@ -4407,7 +4524,6 @@ VALUES (
 -- -----------------------------------------------------
 -- 8.14 Osaka Rice Bowl
 -- -----------------------------------------------------
-
 INSERT INTO
     product_composition (
         product_id,
@@ -4523,7 +4639,6 @@ VALUES (
 -- -----------------------------------------------------
 -- 8.15 Wok-Tossed Vegetables
 -- -----------------------------------------------------
-
 INSERT INTO
     product_composition (
         product_id,
@@ -4617,8 +4732,6 @@ VALUES (
 -- =====================================================
 -- 9. DERIVE dietary_information.calories FOR CUSTOMIZABLE PRODUCTS
 -- =====================================================
--- Sum of (ingredient.calories * default_quantity) over the
--- default rows of each customizable product.
 UPDATE dietary_information di
 JOIN (
     SELECT p.dietary_information_id, SUM(
@@ -4773,3 +4886,41 @@ FROM
     LEFT JOIN dietary_information di ON di.dietary_information_id = p.dietary_information_id
 WHERE
     di.dietary_information_id IS NULL;
+
+-- V9. Every rider has at least one emergency contact.
+SELECT dr.delivery_rider_id, dr.email, COUNT(ec.emergency_contact_id) AS emergency_contact_count
+FROM
+    delivery_rider dr
+    LEFT JOIN delivery_rider_emergency_contact ec ON ec.delivery_rider_id = dr.delivery_rider_id
+GROUP BY
+    dr.delivery_rider_id,
+    dr.email
+HAVING
+    emergency_contact_count = 0;
+
+-- V10. Every rider has a driver's license document row,
+-- and every expiry_date is in the future.
+SELECT
+    dr.delivery_rider_id,
+    dr.email,
+    drd.document_id,
+    drd.drivers_license,
+    drd.issue_date,
+    drd.expiry_date,
+    CASE
+        WHEN drd.document_id IS NULL THEN 'missing_document'
+        WHEN drd.expiry_date IS NULL THEN 'missing_expiry'
+        WHEN drd.expiry_date < CURDATE() THEN 'expired'
+        ELSE 'valid'
+    END AS license_state
+FROM
+    delivery_rider dr
+    LEFT JOIN delivery_rider_document drd ON drd.delivery_rider_id = dr.delivery_rider_id
+ORDER BY dr.delivery_rider_id;
+
+-- V11. Rider profile picture paths are NULL (photo not uploaded).
+SELECT dr.delivery_rider_id, dr.email, drp.profile_picture
+FROM
+    delivery_rider dr
+    JOIN delivery_rider_profile drp ON drp.delivery_rider_id = dr.delivery_rider_id
+ORDER BY dr.delivery_rider_id;
