@@ -2,8 +2,19 @@
 /**
  * FitPal Restaurant Header
  *
+ * Contract
+ * --------
+ * 1. The header NEVER writes to $_SESSION. Only the sign-in handler
+ *    and the sign-out handler are allowed to do that.
+ *
+ * 2. The header NEVER queries the DB to re-validate a session. If
+ *    $_SESSION['restaurant_account_id'] is missing, the user is
+ *    logged out — period. This is what makes sign-out work.
+ *
+ * 3. $assetBase is computed here so pages never compute it twice.
+ *
  * @package FitPal
- * @version 1.0
+ * @version 2.0 — No re-authentication. No session writes.
  */
 
 declare(strict_types=1);
@@ -32,34 +43,22 @@ function getRestaurantAssetBase(): string
 
 $assetBase = getRestaurantAssetBase();
 
-$isLoggedIn     = false;
-$accountName    = '';
+/* --------------------------------------------------------------
+ * READ-ONLY SESSION SNAPSHOT
+ *
+ * We read from $_SESSION only. If the keys are not there, the user
+ * is treated as logged out. No DB call. No writes.
+ * -------------------------------------------------------------- */
+
+$isLoggedIn     = !empty($_SESSION['restaurant_account_id']);
+$accountName    = $isLoggedIn ? (string)($_SESSION['user_name']    ?? '') : '';
+$businessName   = $isLoggedIn ? (string)($_SESSION['business_name'] ?? '') : '';
+$restaurantRole = $isLoggedIn ? (string)($_SESSION['restaurant_role'] ?? '') : '';
+$restaurantScope = $isLoggedIn ? (string)($_SESSION['restaurant_scope'] ?? 'owner') : '';
+
 $accountInitial = '';
-$restaurantRole = '';
-$businessName   = '';
-
-if (!empty($_SESSION['restaurant_account_id'])) {
-    $isLoggedIn = true;
-    try {
-        $stmt = $database_connection->prepare(
-            "SELECT ra.first_name, ra.last_name, ra.role, r.business_name
-             FROM restaurant_account ra
-             JOIN restaurant r ON ra.restaurant_id = r.restaurant_id
-             WHERE ra.restaurant_account_id = :id
-             LIMIT 1"
-        );
-        $stmt->execute([':id' => (int)$_SESSION['restaurant_account_id']]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if ($row) {
-            $accountName    = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
-            $accountInitial = strtoupper(substr((string)($row['first_name'] ?? 'R'), 0, 1));
-            $restaurantRole = (string)($row['role'] ?? 'owner');
-            $businessName   = (string)($row['business_name'] ?? '');
-        }
-    } catch (PDOException $e) {
-        // Silently fail
-    }
+if ($accountName !== '') {
+    $accountInitial = strtoupper(substr($accountName, 0, 1));
 }
 
 $currentPage = basename($_SERVER['PHP_SELF']);
@@ -124,11 +123,15 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
                 <ul class="nav-list">
                     <li class="nav-item">
                         <a href="dashboard.php"
-                            class="nav-link <?php echo ($currentPage === 'dashboard.php') ? 'active' : ''; ?>">Dashboard</a>
+                            class="nav-link <?php echo ($currentPage === 'dashboard.php') ? 'active' : ''; ?>">
+                            Dashboard
+                        </a>
                     </li>
                     <li class="nav-item">
                         <a href="profile.php"
-                            class="nav-link <?php echo ($currentPage === 'profile.php') ? 'active' : ''; ?>">Profile</a>
+                            class="nav-link <?php echo ($currentPage === 'profile.php') ? 'active' : ''; ?>">
+                            Profile
+                        </a>
                     </li>
                 </ul>
 
@@ -136,8 +139,9 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
                     <div class="user-profile-circle"
                         title="<?php echo htmlspecialchars($accountName !== '' ? $accountName : 'Account', ENT_QUOTES, 'UTF-8'); ?>">
                         <?php if ($accountInitial !== ''): ?>
-                        <span
-                            class="user-initial"><?php echo htmlspecialchars($accountInitial, ENT_QUOTES, 'UTF-8'); ?></span>
+                        <span class="user-initial">
+                            <?php echo htmlspecialchars($accountInitial, ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
                         <?php else: ?>
                         <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="Profile"
                             class="profile-icon">
@@ -180,14 +184,16 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
             <li class="mobile-nav-item mobile-user-greeting">
                 <div class="mobile-user-avatar">
                     <?php if ($accountInitial !== ''): ?>
-                    <span
-                        class="user-initial-large"><?php echo htmlspecialchars($accountInitial, ENT_QUOTES, 'UTF-8'); ?></span>
+                    <span class="user-initial-large">
+                        <?php echo htmlspecialchars($accountInitial, ENT_QUOTES, 'UTF-8'); ?>
+                    </span>
                     <?php else: ?>
                     <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="Profile">
                     <?php endif; ?>
                 </div>
-                <span
-                    class="mobile-user-name"><?php echo htmlspecialchars($accountName !== '' ? $accountName : 'Account', ENT_QUOTES, 'UTF-8'); ?></span>
+                <span class="mobile-user-name">
+                    <?php echo htmlspecialchars($accountName !== '' ? $accountName : 'Account', ENT_QUOTES, 'UTF-8'); ?>
+                </span>
             </li>
             <li class="mobile-nav-divider"></li>
             <li class="mobile-nav-item">

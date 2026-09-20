@@ -1,7 +1,7 @@
 # Web Project Structure
 
 **Project:** fitpal
-**Generated:** 2026-09-20 22:33:58
+**Generated:** 2026-09-20 23:23:11
 **Mode:** all
 
 ```
@@ -129,6 +129,29 @@ fitpal/
 │   ├── content-fetcher.py
 │   └── tree-mapper.py
 ├── restaurant/
+│   ├── assets/
+│   │   ├── css/
+│   │   │   ├── header.css
+│   │   │   ├── sign-in.css
+│   │   │   └── sign-up.css
+│   │   └── ui/
+│   │       └── js/
+│   │           ├── header.js
+│   │           ├── sign-in.js
+│   │           └── sign-up.js
+│   ├── backend/
+│   │   ├── database/
+│   │   │   ├── restaurant-connect.php
+│   │   │   └── restaurant-queries.php
+│   │   └── handlers/
+│   │       ├── sign-in-handler.php
+│   │       ├── sign-out-handler.php
+│   │       └── sign-up-handler.php
+│   ├── includes/
+│   │   └── header.php
+│   └── pages/
+│       ├── sign-in.php
+│       └── sign-up.php
 ├── rider/
 │   ├── assets/
 │   │   ├── css/
@@ -368,16 +391,16 @@ fitpal/
 | File Type | Count |
 |-----------|-------|
 | HTML Files | 0 |
-| PHP Files | 77 |
-| CSS Files | 36 |
-| JavaScript Files | 27 |
+| PHP Files | 85 |
+| CSS Files | 39 |
+| JavaScript Files | 30 |
 | JSON Files | 0 |
 | Text/Markdown | 7 |
 | Image Files | 141 |
 | Other Files | 12 |
 
-**Total Directories:** 54
-**Total Files:** 299
+**Total Directories:** 63
+**Total Files:** 313
 
 ---
 

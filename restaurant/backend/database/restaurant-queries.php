@@ -2,13 +2,23 @@
 /**
  * FitPal Restaurant Database Queries
  *
- * Pure data-access layer for the restaurant, restaurant_account,
- * restaurant_branch, and restaurant_permit tables.
+ * Pure data-access layer for:
+ *   - restaurant
+ *   - restaurant_account
+ *   - restaurant_branch
+ *   - restaurant_permit
+ *   - orders / queue_item (read-only for dashboard stats)
  *
  * No $_POST, no header(), no echo.
  *
+ * Every function that a page or handler might need is defined here.
+ * A page that calls getBranchesWithAccounts() must require this file
+ * BEFORE the call. See sign-in.php for the correct include order.
+ *
  * @package FitPal
- * @version 1.1
+ * @version 2.0 — Consolidated: auth + uniqueness + creation + permits
+ *                + branch lookup + owner/branch dashboard stats +
+ *                chart scale.
  */
 
 declare(strict_types=1);
@@ -21,7 +31,7 @@ declare(strict_types=1);
  * Find a restaurant account by email or username.
  *
  * @param PDO    $db
- * @param string $identifier Email or username
+ * @param string $identifier
  * @return array<string, mixed>|false
  */
 function findRestaurantAccountByIdentifier(PDO $db, string $identifier): array|false
@@ -55,7 +65,7 @@ function findRestaurantAccountByIdentifier(PDO $db, string $identifier): array|f
 }
 
 /**
- * Find a restaurant account with owner/branch disambiguation.
+ * Find a restaurant account scoped to owner or branch roles.
  *
  * @param PDO    $db
  * @param string $identifier
@@ -112,7 +122,7 @@ function findRestaurantAccountByScope(
 }
 
 /**
- * Find a branch account by identifier, scoped to a specific branch.
+ * Find a branch account by identifier AND branch code.
  *
  * @param PDO    $db
  * @param string $identifier
@@ -160,8 +170,8 @@ function findBranchAccountByIdentifierAndCode(
 }
 
 /**
- * List all active branches that have at least one active branch-scoped
- * account. Used to populate the branch selector on the sign-in page.
+ * List every active branch that has at least one active branch-scoped
+ * account. Populates the Branch tab's dropdown on sign-in.php.
  *
  * @param PDO $db
  * @return array<int, array<string, mixed>>
@@ -188,7 +198,7 @@ function getBranchesWithAccounts(PDO $db): array
 }
 
 /**
- * Get the full restaurant account profile.
+ * Full profile row for a restaurant account.
  *
  * @param PDO $db
  * @param int $accountId
@@ -297,11 +307,11 @@ function restaurantBranchCodeExists(PDO $db, string $code): bool
  * ============================================================= */
 
 /**
- * Create a new restaurant row with verification_status = 'pending'.
+ * Create a restaurant row with verification_status = 'pending'.
  *
  * @param PDO   $db
  * @param array $data
- * @return int New restaurant_id
+ * @return int
  */
 function createRestaurant(PDO $db, array $data): int
 {
@@ -323,10 +333,10 @@ function createRestaurant(PDO $db, array $data): int
 }
 
 /**
- * Create a new financial account for a restaurant branch.
+ * Create a financial account for a restaurant branch.
  *
  * @param PDO $db
- * @return int New financial_account_id
+ * @return int
  */
 function createRestaurantFinancialAccount(PDO $db): int
 {
@@ -345,7 +355,7 @@ function createRestaurantFinancialAccount(PDO $db): int
  * @param int   $restaurantId
  * @param int   $financialAccountId
  * @param array $data
- * @return int New restaurant_branch_id
+ * @return int
  */
 function createRestaurantBranch(
     PDO $db,
@@ -379,12 +389,12 @@ function createRestaurantBranch(
 }
 
 /**
- * Create a restaurant owner account (branch_id = NULL, role = 'owner').
+ * Create a restaurant owner account (role = 'owner', branch_id = NULL).
  *
  * @param PDO   $db
  * @param int   $restaurantId
  * @param array $data
- * @return int New restaurant_account_id
+ * @return int
  */
 function createRestaurantOwnerAccount(PDO $db, int $restaurantId, array $data): int
 {
@@ -414,14 +424,14 @@ function createRestaurantOwnerAccount(PDO $db, int $restaurantId, array $data): 
  * ============================================================= */
 
 /**
- * Insert a permit photo row for a restaurant.
+ * Insert a permit photo row.
  *
  * @param PDO    $db
  * @param int    $restaurantId
- * @param string $filePath     Project-root-relative path
- * @param string $originalName Original filename
- * @param int    $order        Display order (0-based)
- * @return int New permit_id
+ * @param string $filePath
+ * @param string $originalName
+ * @param int    $order
+ * @return int
  */
 function createRestaurantPermit(
     PDO $db,
@@ -446,7 +456,7 @@ function createRestaurantPermit(
 }
 
 /**
- * Fetch all permits for a restaurant, ordered by display_order.
+ * Fetch all permits for a restaurant.
  *
  * @param PDO $db
  * @param int $restaurantId
@@ -499,4 +509,400 @@ function generateBranchCode(PDO $db, string $businessName): string
     }
 
     return $base . bin2hex(random_bytes(2));
+}
+
+/* =============================================================
+ * OWNER DASHBOARD
+ * ============================================================= */
+
+/**
+ * Restaurant-wide stats for the owner dashboard.
+ *
+ * @param PDO $db
+ * @param int $restaurantId
+ * @return array<string, int|float>
+ */
+function getOwnerDashboardStats(PDO $db, int $restaurantId): array
+{
+    $stats = [
+        'branch_count'        => 0,
+        'product_count'       => 0,
+        'total_orders'        => 0,
+        'orders_today'        => 0,
+        'orders_this_week'    => 0,
+        'active_orders'       => 0,
+        'delivered_orders'    => 0,
+        'gross_revenue'       => 0.0,
+        'revenue_this_week'   => 0.0,
+        'revenue_today'       => 0.0,
+        'average_order_value' => 0.0,
+    ];
+
+    $row = $db->prepare(
+        "SELECT
+            (SELECT COUNT(*) FROM restaurant_branch WHERE restaurant_id = :rid) AS branch_count,
+            (SELECT COUNT(*) FROM product p
+                JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
+              WHERE rb.restaurant_id = :rid2 AND p.is_active = 1) AS product_count"
+    );
+    $row->execute([':rid' => $restaurantId, ':rid2' => $restaurantId]);
+    $counts = $row->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    $stats['branch_count']  = (int)($counts['branch_count'] ?? 0);
+    $stats['product_count'] = (int)($counts['product_count'] ?? 0);
+
+    $orderRow = $db->prepare(
+        "SELECT
+            COUNT(DISTINCT o.order_id) AS total_orders,
+            SUM(CASE WHEN DATE(o.order_date) = CURDATE() THEN 1 ELSE 0 END) AS orders_today,
+            SUM(CASE WHEN o.order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) THEN 1 ELSE 0 END) AS orders_this_week,
+            SUM(CASE WHEN o.order_status IN ('pending','preparing','delivering') THEN 1 ELSE 0 END) AS active_orders,
+            SUM(CASE WHEN o.order_status = 'delivered' THEN 1 ELSE 0 END) AS delivered_orders
+         FROM orders o
+         JOIN queue_item qi ON qi.order_id = o.order_id
+         JOIN restaurant_branch rb ON qi.branch_id = rb.restaurant_branch_id
+         WHERE rb.restaurant_id = :rid"
+    );
+    $orderRow->execute([':rid' => $restaurantId]);
+    $orders = $orderRow->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    $stats['total_orders']     = (int)($orders['total_orders'] ?? 0);
+    $stats['orders_today']     = (int)($orders['orders_today'] ?? 0);
+    $stats['orders_this_week'] = (int)($orders['orders_this_week'] ?? 0);
+    $stats['active_orders']    = (int)($orders['active_orders'] ?? 0);
+    $stats['delivered_orders'] = (int)($orders['delivered_orders'] ?? 0);
+
+    $revRow = $db->prepare(
+        "SELECT
+            COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0) AS gross_revenue,
+            COALESCE(SUM(CASE
+                WHEN o.order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+                THEN qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
+                ELSE 0 END), 0) AS revenue_this_week,
+            COALESCE(SUM(CASE
+                WHEN DATE(o.order_date) = CURDATE()
+                THEN qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
+                ELSE 0 END), 0) AS revenue_today
+         FROM orders o
+         JOIN queue_item qi ON qi.order_id = o.order_id
+         JOIN restaurant_branch rb ON qi.branch_id = rb.restaurant_branch_id
+         WHERE rb.restaurant_id = :rid
+           AND o.order_status NOT IN ('cancelled', 'refunded')"
+    );
+    $revRow->execute([':rid' => $restaurantId]);
+    $rev = $revRow->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    $stats['gross_revenue']     = (float)($rev['gross_revenue'] ?? 0);
+    $stats['revenue_this_week'] = (float)($rev['revenue_this_week'] ?? 0);
+    $stats['revenue_today']     = (float)($rev['revenue_today'] ?? 0);
+
+    if ($stats['delivered_orders'] > 0) {
+        $stats['average_order_value'] =
+            round($stats['gross_revenue'] / $stats['delivered_orders'], 2);
+    }
+
+    return $stats;
+}
+
+/**
+ * Seven-day revenue series for the owner dashboard chart.
+ *
+ * @param PDO $db
+ * @param int $restaurantId
+ * @param int $days
+ * @return array<int, array<string, mixed>>
+ */
+function getOwnerWeeklyRevenue(PDO $db, int $restaurantId, int $days = 7): array
+{
+    $stmt = $db->prepare(
+        "SELECT
+            DATE(o.order_date) AS day,
+            COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0) AS amount,
+            COUNT(DISTINCT o.order_id) AS orders
+         FROM orders o
+         JOIN queue_item qi ON qi.order_id = o.order_id
+         JOIN restaurant_branch rb ON qi.branch_id = rb.restaurant_branch_id
+         WHERE rb.restaurant_id = :rid
+           AND o.order_status NOT IN ('cancelled', 'refunded')
+           AND o.order_date >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
+         GROUP BY DATE(o.order_date)
+         ORDER BY day ASC"
+    );
+    $stmt->bindValue(':rid', $restaurantId, PDO::PARAM_INT);
+    $stmt->bindValue(':days', $days - 1, PDO::PARAM_INT);
+    $stmt->execute();
+
+    $byDay = [];
+    while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $byDay[$r['day']] = [
+            'amount' => (float)$r['amount'],
+            'orders' => (int)$r['orders'],
+        ];
+    }
+
+    $series = [];
+    for ($i = $days - 1; $i >= 0; $i--) {
+        $ts   = strtotime("-{$i} days");
+        $date = date('Y-m-d', $ts);
+        $series[] = [
+            'date'   => $date,
+            'label'  => date('l', $ts),
+            'short'  => date('D', $ts),
+            'amount' => $byDay[$date]['amount'] ?? 0.0,
+            'orders' => $byDay[$date]['orders'] ?? 0,
+        ];
+    }
+    return $series;
+}
+
+/**
+ * Branches with mini-stats for the owner dashboard.
+ *
+ * @param PDO $db
+ * @param int $restaurantId
+ * @return array<int, array<string, mixed>>
+ */
+function getOwnerBranchOverview(PDO $db, int $restaurantId): array
+{
+    $stmt = $db->prepare(
+        "SELECT
+            rb.restaurant_branch_id,
+            rb.branch_name,
+            rb.branch_code,
+            rb.city,
+            rb.is_active,
+            (SELECT COUNT(*) FROM product p
+              WHERE p.restaurant_branch_id = rb.restaurant_branch_id
+                AND p.is_active = 1) AS product_count,
+            (SELECT COUNT(DISTINCT qi.order_id)
+               FROM queue_item qi
+               JOIN orders o ON o.order_id = qi.order_id
+              WHERE qi.branch_id = rb.restaurant_branch_id
+                AND o.order_status NOT IN ('cancelled','refunded')) AS order_count,
+            (SELECT COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0)
+               FROM queue_item qi
+               JOIN orders o ON o.order_id = qi.order_id
+              WHERE qi.branch_id = rb.restaurant_branch_id
+                AND o.order_status NOT IN ('cancelled','refunded')) AS revenue
+         FROM restaurant_branch rb
+         WHERE rb.restaurant_id = :rid
+         ORDER BY rb.is_active DESC, rb.branch_name ASC"
+    );
+    $stmt->execute([':rid' => $restaurantId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/* =============================================================
+ * BRANCH DASHBOARD
+ * ============================================================= */
+
+/**
+ * Branch-scoped stats.
+ *
+ * @param PDO $db
+ * @param int $branchId
+ * @return array<string, int|float>
+ */
+function getBranchDashboardStats(PDO $db, int $branchId): array
+{
+    $stats = [
+        'product_count'       => 0,
+        'total_orders'        => 0,
+        'orders_today'        => 0,
+        'orders_this_week'    => 0,
+        'active_orders'       => 0,
+        'delivered_orders'    => 0,
+        'gross_revenue'       => 0.0,
+        'revenue_this_week'   => 0.0,
+        'revenue_today'       => 0.0,
+        'average_order_value' => 0.0,
+    ];
+
+    $row = $db->prepare(
+        "SELECT COUNT(*) AS product_count
+         FROM product
+         WHERE restaurant_branch_id = :bid AND is_active = 1"
+    );
+    $row->execute([':bid' => $branchId]);
+    $stats['product_count'] = (int)($row->fetchColumn() ?: 0);
+
+    $orderRow = $db->prepare(
+        "SELECT
+            COUNT(DISTINCT o.order_id) AS total_orders,
+            SUM(CASE WHEN DATE(o.order_date) = CURDATE() THEN 1 ELSE 0 END) AS orders_today,
+            SUM(CASE WHEN o.order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) THEN 1 ELSE 0 END) AS orders_this_week,
+            SUM(CASE WHEN o.order_status IN ('pending','preparing','delivering') THEN 1 ELSE 0 END) AS active_orders,
+            SUM(CASE WHEN o.order_status = 'delivered' THEN 1 ELSE 0 END) AS delivered_orders
+         FROM orders o
+         JOIN queue_item qi ON qi.order_id = o.order_id
+         WHERE qi.branch_id = :bid"
+    );
+    $orderRow->execute([':bid' => $branchId]);
+    $orders = $orderRow->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    $stats['total_orders']     = (int)($orders['total_orders'] ?? 0);
+    $stats['orders_today']     = (int)($orders['orders_today'] ?? 0);
+    $stats['orders_this_week'] = (int)($orders['orders_this_week'] ?? 0);
+    $stats['active_orders']    = (int)($orders['active_orders'] ?? 0);
+    $stats['delivered_orders'] = (int)($orders['delivered_orders'] ?? 0);
+
+    $revRow = $db->prepare(
+        "SELECT
+            COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0) AS gross_revenue,
+            COALESCE(SUM(CASE
+                WHEN o.order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+                THEN qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
+                ELSE 0 END), 0) AS revenue_this_week,
+            COALESCE(SUM(CASE
+                WHEN DATE(o.order_date) = CURDATE()
+                THEN qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
+                ELSE 0 END), 0) AS revenue_today
+         FROM orders o
+         JOIN queue_item qi ON qi.order_id = o.order_id
+         WHERE qi.branch_id = :bid
+           AND o.order_status NOT IN ('cancelled','refunded')"
+    );
+    $revRow->execute([':bid' => $branchId]);
+    $rev = $revRow->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    $stats['gross_revenue']     = (float)($rev['gross_revenue'] ?? 0);
+    $stats['revenue_this_week'] = (float)($rev['revenue_this_week'] ?? 0);
+    $stats['revenue_today']     = (float)($rev['revenue_today'] ?? 0);
+
+    if ($stats['delivered_orders'] > 0) {
+        $stats['average_order_value'] =
+            round($stats['gross_revenue'] / $stats['delivered_orders'], 2);
+    }
+
+    return $stats;
+}
+
+/**
+ * Seven-day revenue series for the branch dashboard chart.
+ *
+ * @param PDO $db
+ * @param int $branchId
+ * @param int $days
+ * @return array<int, array<string, mixed>>
+ */
+function getBranchWeeklyRevenue(PDO $db, int $branchId, int $days = 7): array
+{
+    $stmt = $db->prepare(
+        "SELECT
+            DATE(o.order_date) AS day,
+            COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0) AS amount,
+            COUNT(DISTINCT o.order_id) AS orders
+         FROM orders o
+         JOIN queue_item qi ON qi.order_id = o.order_id
+         WHERE qi.branch_id = :bid
+           AND o.order_status NOT IN ('cancelled','refunded')
+           AND o.order_date >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
+         GROUP BY DATE(o.order_date)
+         ORDER BY day ASC"
+    );
+    $stmt->bindValue(':bid', $branchId, PDO::PARAM_INT);
+    $stmt->bindValue(':days', $days - 1, PDO::PARAM_INT);
+    $stmt->execute();
+
+    $byDay = [];
+    while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $byDay[$r['day']] = [
+            'amount' => (float)$r['amount'],
+            'orders' => (int)$r['orders'],
+        ];
+    }
+
+    $series = [];
+    for ($i = $days - 1; $i >= 0; $i--) {
+        $ts   = strtotime("-{$i} days");
+        $date = date('Y-m-d', $ts);
+        $series[] = [
+            'date'   => $date,
+            'label'  => date('l', $ts),
+            'short'  => date('D', $ts),
+            'amount' => $byDay[$date]['amount'] ?? 0.0,
+            'orders' => $byDay[$date]['orders'] ?? 0,
+        ];
+    }
+    return $series;
+}
+
+/**
+ * Top-selling products for a branch.
+ *
+ * @param PDO $db
+ * @param int $branchId
+ * @param int $limit
+ * @return array<int, array<string, mixed>>
+ */
+function getBranchTopProducts(PDO $db, int $branchId, int $limit = 5): array
+{
+    $stmt = $db->prepare(
+        "SELECT
+            p.product_id,
+            p.name AS product_name,
+            SUM(qi.queue_quantity) AS units_sold,
+            COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0) AS revenue
+         FROM queue_item qi
+         JOIN product p ON qi.product_id = p.product_id
+         JOIN orders o ON qi.order_id = o.order_id
+         WHERE qi.branch_id = :bid
+           AND o.order_status = 'delivered'
+         GROUP BY p.product_id
+         ORDER BY units_sold DESC
+         LIMIT :lim"
+    );
+    $stmt->bindValue(':bid', $branchId, PDO::PARAM_INT);
+    $stmt->bindValue(':lim', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/* =============================================================
+ * CHART SCALE (shared)
+ * ============================================================= */
+
+/**
+ * Pick a nice y-axis ceiling for a weekly bar chart.
+ *
+ * @param float $maxAmount
+ * @return array{ceiling:float, step:float, gridlines:array<int, float>}
+ */
+function getRestaurantChartScale(float $maxAmount): array
+{
+    if ($maxAmount <= 0) {
+        return [
+            'ceiling'   => 1000.0,
+            'step'      => 250.0,
+            'gridlines' => [0.0, 250.0, 500.0, 750.0, 1000.0],
+        ];
+    }
+
+    $magnitude  = 10 ** floor(log10($maxAmount));
+    $normalized = $maxAmount / $magnitude;
+
+    $stepMultiplier = match (true) {
+        $normalized <= 1.5 => 0.25,
+        $normalized <= 3.0 => 0.5,
+        $normalized <= 7.0 => 1.0,
+        default            => 2.0,
+    };
+
+    $step    = $magnitude * $stepMultiplier;
+    $ceiling = ceil($maxAmount / $step) * $step;
+
+    if ($ceiling < $maxAmount * 2) {
+        $ceiling += $step;
+    }
+
+    $gridlines = [];
+    for ($v = 0.0; $v <= $ceiling + 0.001; $v += $step) {
+        $gridlines[] = round($v, 2);
+    }
+
+    return [
+        'ceiling'   => round($ceiling, 2),
+        'step'      => round($step, 2),
+        'gridlines' => $gridlines,
+    ];
 }

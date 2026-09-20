@@ -2,7 +2,7 @@
 
 **Preset:** all_path
 
-**Generated:** 2026-09-20 22:35:07
+**Generated:** 2026-09-20 23:25:43
 
 ---
 
@@ -14,7 +14,7 @@
 # Web Project Structure
 
 **Project:** fitpal
-**Generated:** 2026-09-20 22:33:58
+**Generated:** 2026-09-20 23:23:11
 **Mode:** all
 
 ```
@@ -142,6 +142,29 @@ fitpal/
 │   ├── content-fetcher.py
 │   └── tree-mapper.py
 ├── restaurant/
+│   ├── assets/
+│   │   ├── css/
+│   │   │   ├── header.css
+│   │   │   ├── sign-in.css
+│   │   │   └── sign-up.css
+│   │   └── ui/
+│   │       └── js/
+│   │           ├── header.js
+│   │           ├── sign-in.js
+│   │           └── sign-up.js
+│   ├── backend/
+│   │   ├── database/
+│   │   │   ├── restaurant-connect.php
+│   │   │   └── restaurant-queries.php
+│   │   └── handlers/
+│   │       ├── sign-in-handler.php
+│   │       ├── sign-out-handler.php
+│   │       └── sign-up-handler.php
+│   ├── includes/
+│   │   └── header.php
+│   └── pages/
+│       ├── sign-in.php
+│       └── sign-up.php
 ├── rider/
 │   ├── assets/
 │   │   ├── css/
@@ -381,16 +404,16 @@ fitpal/
 | File Type | Count |
 |-----------|-------|
 | HTML Files | 0 |
-| PHP Files | 77 |
-| CSS Files | 36 |
-| JavaScript Files | 27 |
+| PHP Files | 85 |
+| CSS Files | 39 |
+| JavaScript Files | 30 |
 | JSON Files | 0 |
 | Text/Markdown | 7 |
 | Image Files | 141 |
 | Other Files | 12 |
 
-**Total Directories:** 54
-**Total Files:** 299
+**Total Directories:** 63
+**Total Files:** 313
 
 ---
 
@@ -47129,6 +47152,4971 @@ window.FITPAL_WALLET = {
 };
 </script>
 <script src="../assets/ui/js/wallet.js" defer></script>
+<?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>
+```
+
+---
+
+## File: `fitpal/restaurant/assets/css/header.css`
+
+**Status:** `FOUND`
+
+```css
+/**
+ * FitPal Restaurant Header Styles
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+.restaurant-header {
+    height: 70px;
+    min-height: 70px;
+    max-height: 70px;
+}
+
+.restaurant-header .header-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    height: 100%;
+}
+
+.restaurant-header .nav-link {
+    font-weight: 500;
+    color: var(--gray-600);
+    padding: var(--spacing-2) var(--spacing-3);
+    border-radius: var(--radius-base);
+    transition: all var(--transition-fast);
+    position: relative;
+    font-size: var(--font-size-sm);
+    text-decoration: none;
+}
+
+.restaurant-header .nav-link:hover {
+    color: var(--primary);
+    background-color: var(--gray-50);
+}
+
+.restaurant-header .nav-link.active {
+    color: var(--primary);
+    background-color: rgba(89, 193, 74, 0.1);
+}
+
+.restaurant-header .nav-link.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 20px;
+    height: 3px;
+    background-color: var(--primary);
+    border-radius: var(--radius-full);
+}
+
+.restaurant-header .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-2) var(--spacing-4);
+    border-radius: var(--radius-base);
+    font-weight: var(--font-weight-medium);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
+    text-align: center;
+    text-decoration: none;
+    transition: all var(--transition-fast);
+    border: 2px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.restaurant-header .btn-sm {
+    padding: var(--spacing-1) var(--spacing-3);
+    font-size: var(--font-size-xs);
+    min-height: 32px;
+}
+
+.restaurant-header .btn-primary {
+    background-color: var(--primary);
+    color: var(--white);
+    border-color: var(--primary);
+}
+
+.restaurant-header .btn-primary:hover,
+.restaurant-header .btn-primary:focus {
+    background-color: var(--primary-dark);
+    border-color: var(--primary-dark);
+    color: var(--white);
+}
+
+.restaurant-header .btn-outline {
+    background-color: transparent;
+    color: var(--text);
+    border-color: var(--gray-300);
+}
+
+.restaurant-header .btn-outline:hover,
+.restaurant-header .btn-outline:focus {
+    background-color: var(--gray-50);
+    color: var(--text);
+    border-color: var(--gray-400);
+}
+
+.restaurant-header .nav-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+}
+
+.restaurant-header .logout-btn {
+    font-size: var(--font-size-xs);
+    padding: var(--spacing-1) var(--spacing-3);
+    min-height: 32px;
+}
+
+.menu-toggle {
+    display: none;
+    flex-direction: column;
+    gap: 5px;
+    padding: var(--spacing-2);
+    border-radius: var(--radius-base);
+    background: none;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    z-index: 1001;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.menu-toggle:hover {
+    background: var(--gray-50);
+}
+
+.menu-icon {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 24px;
+}
+
+.menu-icon .bar {
+    display: block;
+    height: 2px;
+    width: 100%;
+    background: var(--text);
+    border-radius: var(--radius-full);
+    transition: transform 0.15s ease, opacity 0.15s ease;
+    transform-origin: center;
+}
+
+.menu-toggle.active .bar:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+}
+
+.menu-toggle.active .bar:nth-child(2) {
+    opacity: 0;
+    transform: scaleX(0);
+}
+
+.menu-toggle.active .bar:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+}
+
+.mobile-overlay {
+    position: fixed;
+    top: 70px;
+    left: 0;
+    width: 100%;
+    height: calc(100vh - 70px);
+    background: rgba(0, 0, 0, 0.3);
+    z-index: var(--z-modal-backdrop);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    pointer-events: none;
+    transform: translateZ(0);
+}
+
+.mobile-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+    will-change: opacity;
+}
+
+.mobile-nav {
+    position: fixed;
+    top: 70px;
+    right: 0;
+    width: 320px;
+    max-width: 85%;
+    height: calc(100vh - 70px);
+    background: var(--white);
+    z-index: var(--z-modal);
+    padding: var(--spacing-6) var(--spacing-4);
+    overflow-y: auto;
+    transform: translateX(100%) translateZ(0);
+    transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    backface-visibility: hidden;
+    contain: layout;
+}
+
+.mobile-nav::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -30px;
+    width: 30px;
+    height: 100%;
+    box-shadow: -30px 0 30px rgba(0, 0, 0, 0.08);
+    pointer-events: none;
+    transform: translateX(0);
+}
+
+.mobile-nav.open {
+    transform: translateX(0) translateZ(0);
+    will-change: transform;
+}
+
+.mobile-nav::-webkit-scrollbar {
+    display: none;
+}
+
+.mobile-nav {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.mobile-nav-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.mobile-nav-item {
+    margin: 0;
+    padding: 0;
+}
+
+.mobile-nav-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-3) var(--spacing-4);
+    color: var(--gray-700);
+    font-weight: 500;
+    font-size: var(--font-size-base);
+    border-radius: var(--radius-base);
+    transition: background 0.1s ease, color 0.1s ease;
+    text-decoration: none;
+    text-align: center;
+    width: 100%;
+}
+
+.mobile-nav-link:hover {
+    background: var(--gray-50);
+    color: var(--primary);
+}
+
+.mobile-nav-link.active {
+    color: var(--primary);
+    background: rgba(89, 193, 74, 0.1);
+}
+
+.mobile-nav-divider {
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--gray-200) 20%, var(--gray-200) 80%, transparent);
+    margin: var(--spacing-3) var(--spacing-2);
+}
+
+.mobile-user-greeting {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-3);
+    padding: var(--spacing-3) var(--spacing-4);
+    background: var(--gray-50);
+    border-radius: var(--radius-base);
+    width: 100%;
+}
+
+.mobile-user-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.mobile-user-avatar .user-initial-large {
+    color: var(--white);
+    font-weight: 700;
+    font-size: 20px;
+    text-transform: uppercase;
+}
+
+.mobile-user-avatar img {
+    width: 24px;
+    height: 24px;
+    filter: brightness(0) saturate(100%) invert(100%);
+}
+
+.mobile-user-name {
+    font-weight: 600;
+    font-size: var(--font-size-base);
+    color: var(--text);
+}
+
+.mobile-nav-link.mobile-login {
+    color: var(--primary);
+    font-weight: 600;
+    background-color: rgba(89, 193, 74, 0.08);
+    margin-top: var(--spacing-1);
+}
+
+.mobile-nav-link.mobile-login:hover {
+    background-color: rgba(89, 193, 74, 0.16);
+    color: var(--primary-dark);
+}
+
+.mobile-nav-link.mobile-logout {
+    color: var(--danger);
+    font-weight: 600;
+    background-color: rgba(220, 53, 69, 0.08);
+    margin-top: var(--spacing-1);
+}
+
+.mobile-nav-link.mobile-logout:hover {
+    background-color: rgba(220, 53, 69, 0.16);
+    color: var(--danger);
+}
+
+.user-profile-circle {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 16px;
+    flex-shrink: 0;
+    border: 2px solid var(--primary);
+    transition: all var(--transition-fast);
+    cursor: default;
+}
+
+.user-profile-circle:hover {
+    border-color: var(--primary-dark);
+    transform: scale(1.05);
+}
+
+.user-profile-circle .user-initial {
+    color: var(--white);
+    font-weight: 700;
+    font-size: 16px;
+    text-transform: uppercase;
+}
+
+.user-profile-circle .profile-icon {
+    width: 20px;
+    height: 20px;
+    filter: brightness(0) saturate(100%) invert(100%);
+}
+
+@media (max-width: 992px) {
+    .restaurant-header .header-nav {
+        display: none;
+    }
+
+    .menu-toggle {
+        display: flex;
+    }
+}
+
+@media (max-width: 768px) {
+    .restaurant-header {
+        height: 60px;
+        min-height: 60px;
+        max-height: 60px;
+    }
+
+    .restaurant-header .logo-text {
+        font-size: var(--font-size-base);
+    }
+
+    .restaurant-header .logo-image {
+        height: 32px;
+    }
+
+    .mobile-nav {
+        top: 60px;
+        height: calc(100vh - 60px);
+        width: 280px;
+        padding: var(--spacing-4) var(--spacing-3);
+    }
+
+    .mobile-overlay {
+        top: 60px;
+        height: calc(100vh - 60px);
+    }
+}
+
+@media (max-width: 576px) {
+    .mobile-user-avatar {
+        width: 38px;
+        height: 38px;
+    }
+
+    .mobile-user-avatar .user-initial-large {
+        font-size: 17px;
+    }
+
+    .mobile-user-name {
+        font-size: var(--font-size-sm);
+    }
+
+    .mobile-nav {
+        width: 100%;
+        max-width: 100%;
+        padding: var(--spacing-4) var(--spacing-3);
+    }
+
+    .mobile-nav-link {
+        padding: var(--spacing-3) var(--spacing-3);
+        font-size: var(--font-size-base);
+    }
+}
+```
+
+---
+
+## File: `fitpal/restaurant/assets/css/sign-in.css`
+
+**Status:** `FOUND`
+
+```css
+/**
+ * FitPal Restaurant Sign-In Styles
+ *
+ * @package FitPal
+ * @version 1.1 — Adds Owner/Branch tabs and branch selector.
+ */
+
+/* ============================================
+   CONTENT WRAPPER
+   ============================================ */
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+}
+
+.sign-in-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 16px;
+    background: linear-gradient(135deg, var(--gray-50) 0%, var(--white) 100%);
+    flex: 1;
+    min-height: calc(100vh - 70px);
+}
+
+.sign-in-page .container {
+    max-width: 440px;
+    margin: 0 auto;
+    padding: 0;
+    width: 100%;
+}
+
+.sign-in-card {
+    background: var(--white);
+    border-radius: var(--radius-xl);
+    padding: 32px 24px;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--gray-200);
+    margin: 16px 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.sign-in-header {
+    text-align: center;
+    margin-bottom: 24px;
+}
+
+.sign-in-header .heading-2 {
+    margin: 0 0 6px 0;
+    color: var(--text);
+}
+
+.sign-in-header .heading-2 span {
+    color: var(--primary);
+}
+
+.sign-in-header .text-muted {
+    color: var(--gray-500);
+    font-size: var(--font-size-base);
+    margin: 0;
+}
+
+/* ============================================
+   SIGN-IN TABS
+   ============================================ */
+
+.sign-in-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    background: var(--gray-100);
+    border-radius: var(--radius-base);
+    padding: 4px;
+    margin-bottom: 24px;
+}
+
+.sign-in-tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--gray-600);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sign-in-tab:hover {
+    color: var(--text);
+}
+
+.sign-in-tab.active {
+    background: var(--white);
+    color: var(--primary);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.sign-in-tab-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+    opacity: 0.6;
+}
+
+.sign-in-tab.active .sign-in-tab-icon {
+    opacity: 1;
+    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+/* ============================================
+   TAB PANELS
+   ============================================ */
+
+.sign-in-panel {
+    display: none;
+}
+
+.sign-in-panel.active {
+    display: block;
+    animation: signInFadeIn 0.2s ease;
+}
+
+@keyframes signInFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================
+   FORM
+   ============================================ */
+
+.sign-in-form .form-group {
+    margin-bottom: 20px;
+}
+
+.sign-in-form .form-label {
+    display: block;
+    font-weight: var(--font-weight-semibold);
+    color: var(--gray-700);
+    margin-bottom: 6px;
+    font-size: var(--font-size-sm);
+}
+
+.sign-in-form .form-control {
+    width: 100%;
+    padding: 14px 16px;
+    border: 2px solid var(--gray-300);
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-base);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    background-color: var(--white);
+    height: 54px;
+    box-sizing: border-box;
+    color: var(--text);
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.sign-in-form .form-control:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(89, 193, 74, 0.15);
+}
+
+.sign-in-form .form-control.error {
+    border-color: var(--danger);
+}
+
+.sign-in-form .form-control.error:focus {
+    box-shadow: 0 0 0 4px rgba(220, 53, 69, 0.15);
+}
+
+.sign-in-form .form-control::placeholder {
+    color: var(--gray-400);
+    font-size: var(--font-size-sm);
+}
+
+.sign-in-form .form-error {
+    color: var(--danger);
+    font-size: var(--font-size-sm);
+    margin-top: 6px;
+    display: none;
+    font-weight: var(--font-weight-medium);
+}
+
+/* ============================================
+   PASSWORD TOGGLE
+   ============================================ */
+
+.password-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.password-wrapper .form-control {
+    padding-right: 56px;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.5;
+    transition: opacity var(--transition-fast);
+    border-radius: var(--radius-sm);
+}
+
+.password-toggle:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.password-toggle img {
+    width: 24px;
+    height: 24px;
+}
+
+.password-toggle:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* ============================================
+   BRANCH SELECTOR
+   ============================================ */
+
+.branch-selector {
+    position: relative;
+}
+
+.branch-selector select {
+    width: 100%;
+    height: 54px;
+    padding: 0 40px 0 16px;
+    border: 2px solid var(--gray-300);
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-base);
+    font-family: inherit;
+    color: var(--text);
+    background-color: var(--white);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23788278' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    box-sizing: border-box;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.branch-selector select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(89, 193, 74, 0.15);
+}
+
+.branch-selector select:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background-color: var(--gray-100);
+}
+
+/* ============================================
+   ALERTS
+   ============================================ */
+
+.alert {
+    padding: 14px 16px;
+    border-radius: var(--radius-base);
+    margin-bottom: 20px;
+    border: 2px solid transparent;
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+}
+
+.alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+.alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+
+/* ============================================
+   BUTTON
+   ============================================ */
+
+.sign-in-form .btn {
+    margin-top: 4px;
+    padding: 16px 20px;
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-bold);
+    height: 56px;
+    width: 100%;
+    border-radius: var(--radius-base);
+    letter-spacing: 0.3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.sign-in-form .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.sign-in-form .btn:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* ============================================
+   FOOTER
+   ============================================ */
+
+.sign-in-footer {
+    margin-top: 24px;
+    text-align: center;
+}
+
+.sign-in-footer .text-muted {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    margin: 10px 0 0 0;
+    line-height: 1.6;
+}
+
+.sign-in-footer .text-muted a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: var(--font-weight-semibold);
+}
+
+.sign-in-footer .text-muted a:hover {
+    color: var(--primary-dark);
+    text-decoration: underline;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 374px) {
+    .sign-in-card {
+        padding: 24px 16px;
+        border-radius: var(--radius-lg);
+    }
+
+    .sign-in-header .heading-2 {
+        font-size: var(--font-size-2xl);
+    }
+
+    .sign-in-form .form-control {
+        height: 48px;
+        padding: 12px 14px;
+        font-size: var(--font-size-sm);
+    }
+
+    .branch-selector select {
+        height: 48px;
+        font-size: var(--font-size-sm);
+    }
+
+    .sign-in-form .btn {
+        height: 48px;
+        font-size: var(--font-size-sm);
+        padding: 12px 16px;
+    }
+
+    .password-toggle img {
+        width: 20px;
+        height: 20px;
+    }
+
+    .password-wrapper .form-control {
+        padding-right: 48px;
+    }
+}
+
+@media (min-width: 768px) {
+    .sign-in-card {
+        padding: 40px 36px;
+    }
+
+    .sign-in-header .heading-2 {
+        font-size: var(--font-size-3xl);
+    }
+
+    .sign-in-form .form-control {
+        height: 52px;
+    }
+
+    .branch-selector select {
+        height: 52px;
+    }
+
+    .sign-in-form .btn {
+        height: 52px;
+    }
+}
+
+/* ============================================
+   SCREEN READER ONLY
+   ============================================ */
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+```
+
+---
+
+## File: `fitpal/restaurant/assets/css/sign-up.css`
+
+**Status:** `FOUND`
+
+```css
+/**
+ * FitPal Restaurant Sign-Up Styles
+ *
+ * @package FitPal
+ * @version 1.1 — Adds permit upload grid.
+ */
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+}
+
+.register-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 16px;
+    background: linear-gradient(135deg, var(--gray-50) 0%, var(--white) 100%);
+    flex: 1;
+    min-height: calc(100vh - 70px);
+}
+
+.register-page .container {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 20px 16px;
+    width: 100%;
+}
+
+.register-card {
+    max-width: 700px;
+    width: 100%;
+    background: var(--white);
+    border-radius: var(--radius-xl);
+    padding: 32px 24px;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--gray-200);
+    margin: 16px 0;
+}
+
+/* Progress — two steps */
+.register-progress {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 30px;
+    padding: 0 20px;
+}
+
+.progress-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+    min-width: 0;
+}
+
+.progress-step .step-number {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-full);
+    background: var(--gray-200);
+    color: var(--gray-500);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: var(--font-weight-bold);
+    font-size: var(--font-size-sm);
+    transition: all var(--transition-base);
+    flex-shrink: 0;
+}
+
+.progress-step.active .step-number {
+    background: var(--primary);
+    color: var(--white);
+    box-shadow: 0 0 0 4px rgba(89, 193, 74, 0.2);
+}
+
+.progress-step.completed .step-number {
+    background: var(--primary);
+    color: var(--white);
+}
+
+.progress-step .step-label {
+    font-size: var(--font-size-xs);
+    color: var(--gray-400);
+    text-align: center;
+    font-weight: var(--font-weight-medium);
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.progress-step.active .step-label,
+.progress-step.completed .step-label {
+    color: var(--primary);
+}
+
+.progress-line {
+    flex: 1;
+    max-width: 120px;
+    height: 2px;
+    background: var(--gray-200);
+    margin: 0 4px;
+    position: relative;
+    top: -12px;
+    transition: background var(--transition-base);
+}
+
+.progress-line.completed {
+    background: var(--primary);
+}
+
+.register-header {
+    text-align: center;
+    margin-bottom: 28px;
+}
+
+.register-header .heading-2 {
+    margin: 0 0 4px 0;
+    color: var(--text);
+}
+
+.register-header .heading-2 span {
+    color: var(--primary);
+}
+
+.register-header .text-muted {
+    color: var(--gray-500);
+    font-size: var(--font-size-base);
+    margin: 0;
+}
+
+.register-step {
+    animation: restaurantStepFade 0.3s ease;
+}
+
+@keyframes restaurantStepFade {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.step-description {
+    margin-bottom: 20px;
+    color: var(--gray-600);
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+    padding: 12px 16px;
+    background: var(--gray-50);
+    border-radius: var(--radius-base);
+    border-left: 3px solid var(--primary);
+}
+
+.step-description p {
+    margin: 0;
+}
+
+.section-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 24px 0 16px 0;
+    color: var(--gray-500);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+
+.section-divider::before,
+.section-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--gray-200);
+}
+
+.register-form .form-group {
+    margin-bottom: 16px;
+    flex: 1;
+    min-width: 0;
+}
+
+.register-form .form-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 0;
+}
+
+.register-form .form-label {
+    display: block;
+    font-weight: var(--font-weight-semibold);
+    color: var(--gray-700);
+    margin-bottom: 4px;
+    font-size: var(--font-size-sm);
+    line-height: 1.4;
+}
+
+.register-form .form-control {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid var(--gray-300);
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-base);
+    font-family: inherit;
+    color: var(--text);
+    background-color: var(--white);
+    height: 48px;
+    box-sizing: border-box;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.register-form .form-control:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(89, 193, 74, 0.15);
+}
+
+.register-form .form-control.error {
+    border-color: var(--danger);
+}
+
+.register-form .form-control.error:focus {
+    box-shadow: 0 0 0 4px rgba(220, 53, 69, 0.15);
+}
+
+.register-form .form-control::placeholder {
+    color: var(--gray-400);
+    font-size: var(--font-size-sm);
+}
+
+.register-form .form-error {
+    color: var(--danger);
+    font-size: var(--font-size-sm);
+    margin-top: 4px;
+    display: none;
+    font-weight: var(--font-weight-medium);
+}
+
+.register-form .form-hint {
+    color: var(--gray-500);
+    font-size: var(--font-size-xs);
+    margin-top: 4px;
+    line-height: 1.4;
+}
+
+.text-danger {
+    color: var(--danger);
+}
+
+.text-muted {
+    color: var(--gray-500);
+}
+
+.register-form textarea.form-control {
+    height: auto;
+    min-height: 100px;
+    padding: 12px 16px;
+    line-height: 1.6;
+}
+
+.password-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.password-wrapper .form-control {
+    padding-right: 48px;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.5;
+    transition: opacity var(--transition-fast);
+    border-radius: var(--radius-sm);
+}
+
+.password-toggle:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.password-toggle img {
+    width: 20px;
+    height: 20px;
+    display: block;
+}
+
+.step-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+    flex-wrap: wrap;
+}
+
+.step-actions .btn {
+    padding: 12px 24px;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    border-radius: var(--radius-base);
+    min-width: 120px;
+    min-height: 46px;
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color var(--transition-fast),
+        border-color var(--transition-fast),
+        color var(--transition-fast),
+        transform 0.1s ease,
+        box-shadow var(--transition-fast);
+}
+
+.step-actions .btn:active {
+    transform: scale(0.98);
+}
+
+.step-actions .btn-outline.btn-prev {
+    background-color: var(--black);
+    color: var(--white);
+    border: 2px solid var(--black);
+}
+
+.step-actions .btn-outline.btn-prev:hover,
+.step-actions .btn-outline.btn-prev:focus {
+    background-color: var(--black);
+    color: var(--white);
+    border-color: var(--black);
+    opacity: 0.85;
+}
+
+.step-actions .btn-primary.btn-next,
+.step-actions .btn-primary#registerBtn {
+    background-color: var(--primary);
+    color: var(--white);
+    border: 2px solid var(--primary);
+}
+
+.step-actions .btn-primary.btn-next:hover,
+.step-actions .btn-primary.btn-next:focus,
+.step-actions .btn-primary#registerBtn:hover,
+.step-actions .btn-primary#registerBtn:focus {
+    background-color: var(--primary-dark);
+    border-color: var(--primary-dark);
+    color: var(--white);
+}
+
+.step-actions .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.alert {
+    padding: 12px 16px;
+    border-radius: var(--radius-base);
+    margin-bottom: 20px;
+    border: 2px solid transparent;
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+}
+
+.alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+.alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+
+/* Terms */
+.terms-group {
+    margin: 24px 0 0 0;
+    padding: 14px 16px;
+    background: rgba(89, 193, 74, 0.05);
+    border-radius: var(--radius-base);
+    border: 1px solid rgba(5, 10, 4, 0.05);
+}
+
+.terms-group.error {
+    background: rgba(220, 53, 69, 0.06);
+    border-color: var(--danger);
+}
+
+.terms-group.error .terms-label {
+    color: var(--danger);
+}
+
+.terms-group.error .custom-checkbox {
+    border-color: var(--danger);
+}
+
+.checkbox-wrapper {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    position: relative;
+}
+
+.checkbox-wrapper input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+    z-index: 2;
+    margin: 0;
+    top: 0;
+    left: 0;
+}
+
+.checkbox-wrapper .custom-checkbox {
+    display: inline-block;
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--gray-300);
+    border-radius: var(--radius-sm);
+    background: var(--white);
+    position: relative;
+    flex-shrink: 0;
+    cursor: pointer;
+    margin-top: 1px;
+    transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.checkbox-wrapper input[type="checkbox"]:checked+.custom-checkbox {
+    background: var(--primary);
+    border-color: var(--primary);
+}
+
+.checkbox-wrapper input[type="checkbox"]:checked+.custom-checkbox::after {
+    content: '';
+    position: absolute;
+    left: 6px;
+    top: 2px;
+    width: 6px;
+    height: 11px;
+    border: solid var(--white);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+    border-radius: 1px;
+}
+
+.checkbox-wrapper input[type="checkbox"]:focus-visible+.custom-checkbox {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.terms-label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--gray-700);
+    line-height: 1.6;
+    cursor: pointer;
+    flex: 1;
+}
+
+.terms-label a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: var(--font-weight-bold);
+}
+
+.terms-label a:hover {
+    color: var(--primary-dark);
+    text-decoration: underline;
+}
+
+.register-footer {
+    margin-top: 24px;
+    text-align: center;
+    padding-top: 20px;
+    border-top: 1px solid var(--gray-200);
+}
+
+.register-footer .text-muted {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    margin: 0;
+    line-height: 1.6;
+}
+
+.register-footer .text-muted a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: var(--font-weight-semibold);
+}
+
+.register-footer .text-muted a:hover {
+    color: var(--primary-dark);
+    text-decoration: underline;
+}
+
+/* Notifier */
+.notifier {
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 10, 4, 0.5);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: var(--z-modal-backdrop);
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+    padding: 20px;
+}
+
+.notifier.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.notifier-content {
+    background: var(--white);
+    padding: 40px 32px 32px;
+    border-radius: var(--radius-xl);
+    max-width: 400px;
+    width: 100%;
+    text-align: center;
+    box-shadow: var(--shadow-xl);
+    animation: restaurantModalFadeIn 0.3s ease;
+}
+
+@keyframes restaurantModalFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.notifier-icon {
+    margin: 0 auto 20px;
+    width: 72px;
+    height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(89, 193, 74, 0.1);
+    border-radius: var(--radius-full);
+}
+
+.notifier-icon img {
+    width: 36px;
+    height: 36px;
+    display: block;
+}
+
+.notifier-content .heading-5 {
+    margin: 0 0 8px 0;
+}
+
+.notifier-content p {
+    font-size: var(--font-size-base);
+    color: var(--gray-600);
+    margin: 0 0 28px 0;
+    line-height: 1.6;
+}
+
+.notifier-content .btn {
+    min-width: 120px;
+    padding: 14px 32px;
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    border-radius: var(--radius-base);
+    min-height: 50px;
+    cursor: pointer;
+    background-color: var(--primary);
+    color: var(--white);
+    border: 2px solid var(--primary);
+    transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.notifier-content .btn:hover {
+    background-color: var(--primary-dark);
+    border-color: var(--primary-dark);
+}
+
+/* ============================================
+   PERMIT UPLOAD GRID
+   ============================================ */
+
+.permit-dropzone-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.permit-slot {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    border: 2px dashed var(--gray-300);
+    border-radius: var(--radius-base);
+    background: var(--gray-50);
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.permit-slot:hover,
+.permit-slot:focus-visible {
+    border-color: var(--primary);
+    background: rgba(89, 193, 74, 0.05);
+    outline: none;
+}
+
+.permit-slot.has-file {
+    border-style: solid;
+    border-color: var(--primary);
+    background: var(--white);
+}
+
+.permit-slot.is-dragover {
+    border-color: var(--primary);
+    background: rgba(89, 193, 74, 0.08);
+}
+
+.permit-slot-inner {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.permit-hint {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 8px;
+    text-align: center;
+}
+
+.permit-hint-icon {
+    width: 24px;
+    height: 24px;
+    display: block;
+    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+    opacity: 0.7;
+}
+
+.permit-hint-text {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--gray-500);
+    line-height: 1.2;
+}
+
+.permit-preview {
+    position: absolute;
+    inset: 0;
+}
+
+.permit-preview[hidden] {
+    display: none;
+}
+
+.permit-preview-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.permit-remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(5, 10, 4, 0.72);
+    color: #ffffff;
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background-color 0.15s ease, transform 0.1s ease;
+    z-index: 2;
+}
+
+.permit-remove:hover,
+.permit-remove:focus-visible {
+    background: var(--danger);
+    outline: none;
+}
+
+.permit-remove:active {
+    transform: scale(0.92);
+}
+
+/* Responsive */
+
+@media (max-width: 768px) {
+    .register-page {
+        padding: 16px 12px;
+    }
+
+    .register-card {
+        padding: 24px 16px;
+        border-radius: var(--radius-lg);
+    }
+
+    .register-header .heading-2 {
+        font-size: var(--font-size-2xl);
+    }
+
+    .register-form .form-row {
+        flex-direction: column;
+        gap: 0;
+    }
+
+    .register-form .form-group {
+        margin-bottom: 14px;
+    }
+
+    .step-actions {
+        flex-direction: column;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    .step-actions .btn {
+        width: 100%;
+        min-width: 100%;
+    }
+
+    .register-progress {
+        padding: 0 4px;
+        gap: 4px;
+    }
+
+    .progress-step .step-number {
+        width: 30px;
+        height: 30px;
+        font-size: var(--font-size-xs);
+    }
+
+    .progress-step .step-label {
+        font-size: 10px;
+    }
+
+    .progress-line {
+        top: -10px;
+        margin: 0 2px;
+    }
+
+    .permit-dropzone-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 480px) {
+    .register-page {
+        padding: 10px 8px;
+    }
+
+    .register-card {
+        padding: 16px 10px;
+        border-radius: var(--radius-lg);
+    }
+
+    .register-header .heading-2 {
+        font-size: var(--font-size-2xl);
+    }
+
+    .register-header .text-muted {
+        font-size: var(--font-size-sm);
+    }
+
+    .register-form .form-control {
+        height: 40px;
+        font-size: var(--font-size-sm);
+        padding: 8px 10px;
+    }
+
+    .register-form .form-label {
+        font-size: var(--font-size-xs);
+    }
+
+    .step-description {
+        font-size: var(--font-size-xs);
+        padding: 8px 10px;
+    }
+
+    .step-description p {
+        font-size: var(--font-size-xs);
+    }
+
+    .step-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+        margin-top: 16px;
+    }
+
+    .step-actions .btn {
+        width: 100%;
+        min-width: unset;
+        padding: 10px 12px;
+        font-size: var(--font-size-sm);
+        min-height: 38px;
+    }
+
+    .register-progress {
+        padding: 0;
+        gap: 0;
+        margin-bottom: 18px;
+    }
+
+    .progress-step .step-number {
+        width: 24px;
+        height: 24px;
+        font-size: 10px;
+    }
+
+    .progress-step .step-label {
+        font-size: 9px;
+    }
+
+    .progress-line {
+        top: -8px;
+        margin: 0 1px;
+        min-width: 4px;
+    }
+
+    .permit-dropzone-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 375px) {
+    .register-card {
+        padding: 12px 8px;
+    }
+
+    .register-header .heading-2 {
+        font-size: var(--font-size-xl);
+    }
+
+    .register-form .form-control {
+        height: 36px;
+        font-size: var(--font-size-xs);
+        padding: 6px 8px;
+    }
+
+    .register-form .form-label {
+        font-size: 11px;
+    }
+
+    .register-form .form-error,
+    .register-form .form-hint {
+        font-size: 10px;
+    }
+
+    .step-actions .btn {
+        padding: 8px 10px;
+        font-size: var(--font-size-xs);
+        min-height: 34px;
+    }
+
+    .progress-step .step-label {
+        font-size: 8px;
+    }
+
+    .progress-step .step-number {
+        width: 22px;
+        height: 22px;
+        font-size: 9px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .register-step,
+    .notifier,
+    .notifier-content,
+    .step-actions .btn,
+    .password-toggle,
+    .terms-group,
+    .custom-checkbox,
+    .permit-slot,
+    .permit-remove {
+        transition: none !important;
+        animation: none !important;
+    }
+}
+```
+
+---
+
+## File: `fitpal/restaurant/assets/ui/js/header.js`
+
+**Status:** `FOUND`
+
+```javascript
+/**
+ * FitPal Restaurant Header JavaScript
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+(function () {
+    'use strict';
+
+    var menuToggle = document.getElementById('menuToggle');
+    var mobileNav = document.getElementById('mobileNav');
+    var mobileOverlay = document.getElementById('mobileOverlay');
+    var header = document.querySelector('.restaurant-header');
+
+    var isMenuOpen = false;
+
+    function toggleMenu(e) {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        isMenuOpen = !isMenuOpen;
+
+        mobileNav.classList.toggle('open', isMenuOpen);
+        menuToggle.classList.toggle('active', isMenuOpen);
+        menuToggle.setAttribute('aria-expanded', String(isMenuOpen));
+        if (mobileOverlay) {
+            mobileOverlay.classList.toggle('active', isMenuOpen);
+        }
+    }
+
+    function handleScroll() {
+        if (header) {
+            header.classList.toggle('header-scrolled', window.pageYOffset > 10);
+        }
+    }
+
+    if (menuToggle && mobileNav) {
+        menuToggle.addEventListener('click', toggleMenu);
+
+        if (mobileOverlay) {
+            mobileOverlay.addEventListener('click', function () {
+                if (isMenuOpen) toggleMenu();
+            });
+        }
+
+        mobileNav.addEventListener('click', function (e) {
+            if (e.target.closest('a') && isMenuOpen) {
+                toggleMenu();
+            }
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && isMenuOpen) {
+                toggleMenu();
+                menuToggle.focus();
+            }
+        });
+
+        var resizeTimer;
+        window.addEventListener('resize', function () {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(function () {
+                if (window.innerWidth > 992 && isMenuOpen) {
+                    toggleMenu();
+                }
+            }, 100);
+        });
+    }
+
+    if (header) {
+        var ticking = false;
+        window.addEventListener('scroll', function () {
+            if (!ticking) {
+                requestAnimationFrame(function () {
+                    handleScroll();
+                    ticking = false;
+                });
+                ticking = true;
+            }
+        }, { passive: true });
+    }
+
+    (function highlightActive() {
+        var currentPage = window.location.pathname.split('/').pop() || 'index.php';
+        var links = document.querySelectorAll('.nav-link, .mobile-nav-link');
+        for (var i = 0; i < links.length; i++) {
+            var link = links[i];
+            var href = link.getAttribute('href');
+            if (!href) continue;
+            var hrefFile = href.split('/').pop() || '';
+            if (
+                hrefFile === currentPage ||
+                (currentPage === 'index.php' && hrefFile === '') ||
+                (currentPage === '' && hrefFile === 'index.php')
+            ) {
+                link.classList.add('active');
+            }
+        }
+    })();
+})();
+```
+
+---
+
+## File: `fitpal/restaurant/assets/ui/js/sign-in.js`
+
+**Status:** `FOUND`
+
+```javascript
+/**
+ * FitPal Restaurant Sign-In JavaScript
+ *
+ * Handles Owner/Branch tab switching, password toggles, and
+ * client-side validation. Real validation is server-side.
+ *
+ * @package FitPal
+ * @version 1.1
+ */
+
+(function () {
+    'use strict';
+
+    document.addEventListener('DOMContentLoaded', function () {
+
+        // ============================================
+        // TAB SWITCHING
+        // ============================================
+        var tabs = document.querySelectorAll('.sign-in-tab');
+        var panels = {
+            owner: document.getElementById('panel-owner'),
+            branch: document.getElementById('panel-branch')
+        };
+
+        tabs.forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                var target = this.getAttribute('data-tab');
+                if (!panels[target]) return;
+
+                tabs.forEach(function (t) {
+                    var isActive = t === tab;
+                    t.classList.toggle('active', isActive);
+                    t.setAttribute('aria-selected', isActive ? 'true' : 'false');
+                });
+
+                Object.keys(panels).forEach(function (key) {
+                    panels[key].classList.toggle('active', key === target);
+                });
+
+                var firstField = panels[target].querySelector('input:not([type="hidden"]), select');
+                if (firstField) setTimeout(function () { firstField.focus(); }, 60);
+            });
+        });
+
+        // ============================================
+        // PASSWORD TOGGLES
+        // ============================================
+        function wirePasswordToggle(toggleId, inputId, iconId) {
+            var btn = document.getElementById(toggleId);
+            var input = document.getElementById(inputId);
+            var icon = document.getElementById(iconId);
+            if (!btn || !input || !icon) return;
+
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                var isPassword = input.type === 'password';
+                input.type = isPassword ? 'text' : 'password';
+                var iconFile = isPassword ? 'password-unhide.svg' : 'password-hide.svg';
+                icon.src = '../../shared/assets/images/icons/' + iconFile;
+                icon.alt = isPassword ? 'Hide password' : 'Show password';
+                this.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+            });
+        }
+
+        wirePasswordToggle('ownerTogglePassword', 'owner_password', 'ownerPasswordIcon');
+        wirePasswordToggle('branchTogglePassword', 'branch_password', 'branchPasswordIcon');
+
+        // ============================================
+        // HELPERS
+        // ============================================
+        function showFieldError(input, errorEl, message) {
+            if (input) input.classList.add('error');
+            if (errorEl) { errorEl.textContent = message; errorEl.style.display = 'block'; }
+        }
+        function clearFieldError(input, errorEl) {
+            if (input) input.classList.remove('error');
+            if (errorEl) { errorEl.textContent = ''; errorEl.style.display = 'none'; }
+        }
+
+        // ============================================
+        // OWNER FORM
+        // ============================================
+        var ownerForm = document.getElementById('signInFormOwner');
+        var ownerIdentifier = document.getElementById('owner_identifier');
+        var ownerPassword = document.getElementById('owner_password');
+        var ownerBtn = document.getElementById('ownerSignInBtn');
+        var ownerIdError = document.getElementById('ownerIdentifierError');
+        var ownerPwError = document.getElementById('ownerPasswordError');
+
+        if (ownerForm) {
+            ownerForm.addEventListener('submit', function (e) {
+                var ok = true;
+                clearFieldError(ownerIdentifier, ownerIdError);
+                clearFieldError(ownerPassword, ownerPwError);
+
+                if (!ownerIdentifier.value.trim()) {
+                    showFieldError(ownerIdentifier, ownerIdError, 'Please enter your email or username.');
+                    ok = false;
+                }
+                if (!ownerPassword.value) {
+                    showFieldError(ownerPassword, ownerPwError, 'Please enter your password.');
+                    ok = false;
+                }
+                if (!ok) { e.preventDefault(); return; }
+
+                ownerBtn.disabled = true;
+                ownerBtn.textContent = 'Signing in...';
+            });
+
+            ownerIdentifier.addEventListener('input', function () {
+                if (this.value.trim()) clearFieldError(this, ownerIdError);
+            });
+            ownerPassword.addEventListener('input', function () {
+                if (this.value) clearFieldError(this, ownerPwError);
+            });
+        }
+
+        // ============================================
+        // BRANCH FORM
+        // ============================================
+        var branchForm = document.getElementById('signInFormBranch');
+        var branchCode = document.getElementById('branch_code');
+        var branchIdentifier = document.getElementById('branch_identifier');
+        var branchPassword = document.getElementById('branch_password');
+        var branchBtn = document.getElementById('branchSignInBtn');
+        var branchCodeError = document.getElementById('branchCodeError');
+        var branchIdError = document.getElementById('branchIdentifierError');
+        var branchPwError = document.getElementById('branchPasswordError');
+
+        if (branchForm) {
+            branchForm.addEventListener('submit', function (e) {
+                var ok = true;
+                clearFieldError(branchCode, branchCodeError);
+                clearFieldError(branchIdentifier, branchIdError);
+                clearFieldError(branchPassword, branchPwError);
+
+                if (!branchCode.value) {
+                    showFieldError(branchCode, branchCodeError, 'Please select a branch.');
+                    ok = false;
+                }
+                if (!branchIdentifier.value.trim()) {
+                    showFieldError(branchIdentifier, branchIdError, 'Please enter your email or username.');
+                    ok = false;
+                }
+                if (!branchPassword.value) {
+                    showFieldError(branchPassword, branchPwError, 'Please enter your password.');
+                    ok = false;
+                }
+                if (!ok) { e.preventDefault(); return; }
+
+                branchBtn.disabled = true;
+                branchBtn.textContent = 'Signing in...';
+            });
+
+            branchCode.addEventListener('change', function () {
+                if (this.value) clearFieldError(this, branchCodeError);
+            });
+            branchIdentifier.addEventListener('input', function () {
+                if (this.value.trim()) clearFieldError(this, branchIdError);
+            });
+            branchPassword.addEventListener('input', function () {
+                if (this.value) clearFieldError(this, branchPwError);
+            });
+        }
+    });
+})();
+```
+
+---
+
+## File: `fitpal/restaurant/assets/ui/js/sign-up.js`
+
+**Status:** `FOUND`
+
+```javascript
+/**
+ * FitPal Restaurant Registration JavaScript
+ *
+ * Two-step form with name/email filtering, password feedback,
+ * permit upload grid (1-5 photos), and fetch submission.
+ *
+ * @package FitPal
+ * @version 1.1 — Adds permit upload grid.
+ */
+
+(function () {
+    'use strict';
+
+    document.addEventListener('DOMContentLoaded', function () {
+
+        var form = document.getElementById('registerForm');
+        if (!form) return;
+
+        var steps = document.querySelectorAll('.register-step');
+        var progressSteps = document.querySelectorAll('.progress-step');
+        var progressLines = document.querySelectorAll('.progress-line');
+        var stepSubtitle = document.getElementById('stepSubtitle');
+        var currentStepInput = document.getElementById('currentStep');
+        var registerError = document.getElementById('registerError');
+        var errorMessage = document.getElementById('errorMessage');
+
+        var nextButtons = document.querySelectorAll('.btn-next');
+        var prevButtons = document.querySelectorAll('.btn-prev');
+
+        // Step 1 — Account holder
+        var firstName = document.getElementById('first_name');
+        var middleName = document.getElementById('middle_name');
+        var lastName = document.getElementById('last_name');
+        var email = document.getElementById('email');
+        var contactNumber = document.getElementById('contact_number');
+        var username = document.getElementById('username');
+        var password = document.getElementById('password');
+        var confirmPassword = document.getElementById('confirm_password');
+
+        // Step 2 — Business
+        var businessName = document.getElementById('business_name');
+        var cuisineType = document.getElementById('cuisine_type');
+        var branchName = document.getElementById('branch_name');
+        var block = document.getElementById('block');
+        var barangay = document.getElementById('barangay');
+        var city = document.getElementById('city');
+        var province = document.getElementById('province');
+        var region = document.getElementById('region');
+        var postalCode = document.getElementById('postal_code');
+
+        var termsCheckbox = document.getElementById('terms');
+        var termsGroup = document.getElementById('termsGroup');
+        var termsError = document.getElementById('termsError');
+        var registerBtn = document.getElementById('registerBtn');
+
+        // Errors
+        var firstNameError = document.getElementById('firstNameError');
+        var lastNameError = document.getElementById('lastNameError');
+        var emailError = document.getElementById('emailError');
+        var contactError = document.getElementById('contactError');
+        var usernameError = document.getElementById('usernameError');
+        var passwordError = document.getElementById('passwordError');
+        var confirmError = document.getElementById('confirmError');
+        var businessNameError = document.getElementById('businessNameError');
+        var cuisineTypeError = document.getElementById('cuisineTypeError');
+        var branchNameError = document.getElementById('branchNameError');
+        var blockError = document.getElementById('blockError');
+        var cityError = document.getElementById('cityError');
+        var postalError = document.getElementById('postalError');
+        var permitsError = document.getElementById('permitsError');
+
+        var stepTitles = [
+            'Step 1 of 2 — Account Holder',
+            'Step 2 of 2 — Business Details'
+        ];
+
+        var currentStep = 1;
+        var totalSteps = 2;
+        var isSubmitting = false;
+
+        var NAME_PATTERN = /^[A-Za-z\s\-']+$/;
+
+        /* ============================================
+           HELPERS
+           ============================================ */
+
+        function isValidPhilippineMobile(number) {
+            var cleaned = String(number).replace(/\s/g, '');
+            if (!/^09\d{9}$/.test(cleaned)) {
+                return { valid: false, message: 'Enter a valid PH mobile number (11 digits, starting with 09).' };
+            }
+            return { valid: true, message: '' };
+        }
+
+        function isValidPassword(pw) {
+            if (pw.length < 8) return { valid: false, message: 'Password must be at least 8 characters.' };
+            if (pw.length > 20) return { valid: false, message: 'Password must be no more than 20 characters.' };
+            if (!/^[A-Za-z0-9]+$/.test(pw)) {
+                return { valid: false, message: 'Password can only contain letters and numbers.' };
+            }
+            if (!/[0-9]/.test(pw)) return { valid: false, message: 'Password must contain at least one number.' };
+            if (!/[A-Za-z]/.test(pw)) return { valid: false, message: 'Password must contain at least one letter.' };
+            return { valid: true, message: '' };
+        }
+
+        function showFieldError(input, errorEl, message) {
+            if (input) input.classList.add('error');
+            if (errorEl) { errorEl.textContent = message; errorEl.style.display = 'block'; }
+        }
+
+        function clearFieldError(input, errorEl) {
+            if (input) input.classList.remove('error');
+            if (errorEl) { errorEl.textContent = ''; errorEl.style.display = 'none'; }
+        }
+
+        function showBanner(message) {
+            if (registerError && errorMessage) {
+                errorMessage.textContent = message;
+                registerError.style.display = 'block';
+            }
+        }
+
+        function hideBanner() {
+            if (registerError) registerError.style.display = 'none';
+        }
+
+        function clearStepErrors(step) {
+            var stepEl = document.getElementById('step' + step);
+            if (!stepEl) return;
+
+            stepEl.querySelectorAll('.form-error').forEach(function (el) {
+                el.textContent = '';
+                el.style.display = 'none';
+            });
+            stepEl.querySelectorAll('.form-control').forEach(function (el) {
+                el.classList.remove('error');
+            });
+
+            if (step === 2 && termsGroup) {
+                termsGroup.classList.remove('error');
+                if (termsError) {
+                    termsError.textContent = '';
+                    termsError.style.display = 'none';
+                }
+            }
+        }
+
+        function safeFocus(el) {
+            if (el && typeof el.focus === 'function') {
+                setTimeout(function () { el.focus(); }, 80);
+            }
+        }
+
+        /* ============================================
+           INPUT FILTERS
+           ============================================ */
+
+        function setupNameInput(input, errorEl) {
+            if (!input) return;
+            input.addEventListener('input', function () {
+                var start = this.selectionStart;
+                var filtered = this.value.replace(/[^A-Za-z\s\-']/g, '');
+                var capitalized = filtered.replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+
+                if (this.value !== capitalized) {
+                    this.value = capitalized;
+                    var newStart = Math.min(start, this.value.length);
+                    this.setSelectionRange(newStart, newStart);
+                }
+                if (errorEl) clearFieldError(this, errorEl);
+            });
+
+            input.addEventListener('blur', function () {
+                if (this.value.length > 0) {
+                    var capitalized = this.value.replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+                    if (this.value !== capitalized) this.value = capitalized;
+                }
+            });
+        }
+
+        function setupEmailInput(input) {
+            if (!input) return;
+            input.addEventListener('input', function () {
+                var start = this.selectionStart;
+                var lower = this.value.toLowerCase();
+                if (this.value !== lower) {
+                    this.value = lower;
+                    var newStart = Math.min(start, this.value.length);
+                    this.setSelectionRange(newStart, newStart);
+                }
+                clearFieldError(this, emailError);
+            });
+        }
+
+        function setupDigitsOnly(input, errorEl) {
+            if (!input) return;
+            input.addEventListener('input', function () {
+                this.value = this.value.replace(/[^0-9\s]/g, '');
+                if (errorEl) clearFieldError(this, errorEl);
+            });
+        }
+
+        function setupAlphanumUnderscore(input) {
+            if (!input) return;
+            input.addEventListener('input', function () {
+                this.value = this.value.replace(/[^A-Za-z0-9_]/g, '');
+                clearFieldError(this, usernameError);
+            });
+        }
+
+        function setupAlphanumOnly(input) {
+            if (!input) return;
+            input.addEventListener('input', function () {
+                this.value = this.value.replace(/[^A-Za-z0-9]/g, '');
+            });
+        }
+
+        function setupPostal(input) {
+            if (!input) return;
+            input.addEventListener('input', function () {
+                this.value = this.value.replace(/[^0-9]/g, '');
+                clearFieldError(this, postalError);
+            });
+        }
+
+        setupNameInput(firstName, firstNameError);
+        setupNameInput(middleName, null);
+        setupNameInput(lastName, lastNameError);
+
+        setupNameInput(businessName, businessNameError);
+        setupNameInput(branchName, branchNameError);
+
+        setupNameInput(block, blockError);
+        setupNameInput(barangay, null);
+        setupNameInput(city, cityError);
+        setupNameInput(province, null);
+        setupNameInput(region, null);
+
+        setupEmailInput(email);
+        setupDigitsOnly(contactNumber, contactError);
+        setupAlphanumUnderscore(username);
+        setupAlphanumOnly(password);
+        setupAlphanumOnly(confirmPassword);
+        setupPostal(postalCode);
+
+        /* ============================================
+           PASSWORD TOGGLES
+           ============================================ */
+
+        function setupPasswordToggle(toggleId, inputId, iconId) {
+            var btn = document.getElementById(toggleId);
+            var input = document.getElementById(inputId);
+            var icon = document.getElementById(iconId);
+            if (!btn || !input || !icon) return;
+
+            btn.addEventListener('click', function () {
+                var isPassword = input.type === 'password';
+                input.type = isPassword ? 'text' : 'password';
+                var iconFile = isPassword ? 'password-unhide.svg' : 'password-hide.svg';
+                icon.src = '../../shared/assets/images/icons/' + iconFile;
+                icon.alt = isPassword ? 'Hide password' : 'Show password';
+                this.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+            });
+        }
+
+        setupPasswordToggle('togglePassword', 'password', 'passwordIcon');
+        setupPasswordToggle('toggleConfirmPassword', 'confirm_password', 'confirmPasswordIcon');
+
+        /* ============================================
+           PERMIT UPLOAD GRID
+           ============================================ */
+
+        var MAX_PERMITS = 5;
+        var MAX_PERMIT_BYTES = 5 * 1024 * 1024;
+        var ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+        var permitSlots = document.querySelectorAll('.permit-slot');
+        var fileObjects = [];
+
+        function indexOfSlot(slot) {
+            for (var i = 0; i < fileObjects.length; i++) {
+                if (fileObjects[i].slot === slot) return i;
+            }
+            return -1;
+        }
+
+        function attachFile(slot, file) {
+            if (ALLOWED_TYPES.indexOf(file.type) === -1) {
+                if (permitsError) {
+                    permitsError.textContent = 'Use JPG, PNG, or WEBP.';
+                    permitsError.style.display = 'block';
+                }
+                return;
+            }
+            if (file.size > MAX_PERMIT_BYTES) {
+                if (permitsError) {
+                    permitsError.textContent = 'Each permit must be under 5 MB.';
+                    permitsError.style.display = 'block';
+                }
+                return;
+            }
+
+            var prev = indexOfSlot(slot);
+            if (prev >= 0) {
+                URL.revokeObjectURL(fileObjects[prev].url);
+                fileObjects.splice(prev, 1);
+            }
+
+            var url = URL.createObjectURL(file);
+            var input = slot.querySelector('.permit-input');
+
+            try {
+                var dt = new DataTransfer();
+                dt.items.add(file);
+                input.files = dt.files;
+            } catch (err) {
+                // Some browsers can't set input.files programmatically.
+            }
+
+            var preview = slot.querySelector('.permit-preview');
+            var previewImg = slot.querySelector('.permit-preview-img');
+            var hint = slot.querySelector('.permit-hint');
+
+            previewImg.src = url;
+            preview.hidden = false;
+            preview.style.display = 'block';
+            hint.hidden = true;
+            slot.classList.add('has-file');
+
+            fileObjects.push({ slot: slot, file: file, url: url });
+
+            if (permitsError) {
+                permitsError.textContent = '';
+                permitsError.style.display = 'none';
+            }
+        }
+
+        function clearSlot(slot) {
+            var idx = indexOfSlot(slot);
+            if (idx >= 0) {
+                URL.revokeObjectURL(fileObjects[idx].url);
+                fileObjects.splice(idx, 1);
+            }
+
+            var input = slot.querySelector('.permit-input');
+            var preview = slot.querySelector('.permit-preview');
+            var previewImg = slot.querySelector('.permit-preview-img');
+            var hint = slot.querySelector('.permit-hint');
+
+            input.value = '';
+            previewImg.removeAttribute('src');
+            preview.hidden = true;
+            preview.style.display = 'none';
+            hint.hidden = false;
+            slot.classList.remove('has-file');
+        }
+
+        permitSlots.forEach(function (slot) {
+            var input = slot.querySelector('.permit-input');
+            var removeBtn = slot.querySelector('.permit-remove');
+
+            slot.setAttribute('tabindex', '0');
+            slot.setAttribute('role', 'button');
+
+            slot.addEventListener('click', function (e) {
+                if (e.target.closest('.permit-remove')) return;
+                input.click();
+            });
+
+            slot.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    input.click();
+                }
+            });
+
+            input.addEventListener('change', function () {
+                if (this.files && this.files[0]) {
+                    attachFile(slot, this.files[0]);
+                }
+            });
+
+            ['dragenter', 'dragover'].forEach(function (evt) {
+                slot.addEventListener(evt, function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    slot.classList.add('is-dragover');
+                });
+            });
+
+            ['dragleave', 'drop'].forEach(function (evt) {
+                slot.addEventListener(evt, function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    slot.classList.remove('is-dragover');
+                });
+            });
+
+            slot.addEventListener('drop', function (e) {
+                var dt = e.dataTransfer;
+                if (!dt || !dt.files || !dt.files[0]) return;
+                attachFile(slot, dt.files[0]);
+            });
+
+            if (removeBtn) {
+                removeBtn.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    clearSlot(slot);
+                });
+            }
+        });
+
+        /* ============================================
+           STEP VALIDATION
+           ============================================ */
+
+        function validateStep1() {
+            var valid = true;
+            clearStepErrors(1);
+
+            var fnVal = firstName ? firstName.value.trim() : '';
+            if (fnVal.length < 2) {
+                showFieldError(firstName, firstNameError, 'First name must be at least 2 characters.');
+                valid = false;
+            } else if (!NAME_PATTERN.test(fnVal)) {
+                showFieldError(firstName, firstNameError, 'First name contains invalid characters.');
+                valid = false;
+            }
+
+            var lnVal = lastName ? lastName.value.trim() : '';
+            if (lnVal.length < 2) {
+                showFieldError(lastName, lastNameError, 'Last name must be at least 2 characters.');
+                valid = false;
+            } else if (!NAME_PATTERN.test(lnVal)) {
+                showFieldError(lastName, lastNameError, 'Last name contains invalid characters.');
+                valid = false;
+            }
+
+            var emailVal = email ? email.value.trim() : '';
+            if (!emailVal) {
+                showFieldError(email, emailError, 'Please enter your email address.');
+                valid = false;
+            } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailVal)) {
+                showFieldError(email, emailError, 'Please enter a valid email address.');
+                valid = false;
+            }
+
+            var contactVal = contactNumber ? contactNumber.value.trim() : '';
+            if (!contactVal) {
+                showFieldError(contactNumber, contactError, 'Please enter your contact number.');
+                valid = false;
+            } else {
+                var ph = isValidPhilippineMobile(contactVal);
+                if (!ph.valid) {
+                    showFieldError(contactNumber, contactError, ph.message);
+                    valid = false;
+                }
+            }
+
+            var unVal = username ? username.value.trim() : '';
+            if (!unVal) {
+                showFieldError(username, usernameError, 'Please choose a username.');
+                valid = false;
+            } else if (unVal.length < 3) {
+                showFieldError(username, usernameError, 'Username must be at least 3 characters.');
+                valid = false;
+            } else if (unVal.length > 20) {
+                showFieldError(username, usernameError, 'Username must be no more than 20 characters.');
+                valid = false;
+            } else if (!/^[A-Za-z0-9_]+$/.test(unVal)) {
+                showFieldError(username, usernameError, 'Only letters, numbers, and underscores.');
+                valid = false;
+            }
+
+            var pwVal = password ? password.value : '';
+            if (!pwVal) {
+                showFieldError(password, passwordError, 'Please create a password.');
+                valid = false;
+            } else {
+                var pwCheck = isValidPassword(pwVal);
+                if (!pwCheck.valid) {
+                    showFieldError(password, passwordError, pwCheck.message);
+                    valid = false;
+                }
+            }
+
+            var cpVal = confirmPassword ? confirmPassword.value : '';
+            if (!cpVal) {
+                showFieldError(confirmPassword, confirmError, 'Please confirm your password.');
+                valid = false;
+            } else if (pwVal !== cpVal) {
+                showFieldError(confirmPassword, confirmError, 'Passwords do not match.');
+                valid = false;
+            }
+
+            return valid;
+        }
+
+        function validateStep2() {
+            var valid = true;
+            clearStepErrors(2);
+
+            var bnVal = businessName ? businessName.value.trim() : '';
+            if (bnVal.length < 2) {
+                showFieldError(businessName, businessNameError, 'Business name is required.');
+                valid = false;
+            }
+
+            var ctVal = cuisineType ? cuisineType.value.trim() : '';
+            if (ctVal.length < 2) {
+                showFieldError(cuisineType, cuisineTypeError, 'Cuisine type is required.');
+                valid = false;
+            }
+
+            var brVal = branchName ? branchName.value.trim() : '';
+            if (brVal.length < 2) {
+                showFieldError(branchName, branchNameError, 'Branch name is required.');
+                valid = false;
+            }
+
+            var blockVal = block ? block.value.trim() : '';
+            if (!blockVal) {
+                showFieldError(block, blockError, 'Block / Street / Unit is required.');
+                valid = false;
+            }
+
+            var cityVal = city ? city.value.trim() : '';
+            if (!cityVal) {
+                showFieldError(city, cityError, 'City or municipality is required.');
+                valid = false;
+            }
+
+            if (fileObjects.length === 0) {
+                if (permitsError) {
+                    permitsError.textContent = 'Please upload at least one permit photo.';
+                    permitsError.style.display = 'block';
+                }
+                valid = false;
+            } else if (permitsError) {
+                permitsError.textContent = '';
+                permitsError.style.display = 'none';
+            }
+
+            if (!termsCheckbox || !termsCheckbox.checked) {
+                if (termsError) {
+                    termsError.textContent = 'You must agree to the Terms and Privacy Policy.';
+                    termsError.style.display = 'block';
+                }
+                if (termsGroup) termsGroup.classList.add('error');
+                valid = false;
+            }
+
+            return valid;
+        }
+
+        function validateStep(step) {
+            switch (step) {
+                case 1: return validateStep1();
+                case 2: return validateStep2();
+                default: return true;
+            }
+        }
+
+        /* ============================================
+           STEP NAVIGATION
+           ============================================ */
+
+        function goToStep(step) {
+            if (step > currentStep && !validateStep(currentStep)) {
+                return;
+            }
+
+            currentStep = step;
+            if (currentStepInput) currentStepInput.value = String(step);
+
+            steps.forEach(function (el, i) {
+                el.style.display = (i + 1 === step) ? 'block' : 'none';
+            });
+
+            progressSteps.forEach(function (el, i) {
+                var n = i + 1;
+                el.classList.toggle('active', n === step);
+                el.classList.toggle('completed', n < step);
+            });
+
+            progressLines.forEach(function (el, i) {
+                el.classList.toggle('completed', i + 1 < step);
+            });
+
+            if (stepSubtitle) {
+                stepSubtitle.textContent = stepTitles[step - 1] || ('Step ' + step + ' of ' + totalSteps);
+            }
+
+            hideBanner();
+
+            var stepEl = document.getElementById('step' + step);
+            if (stepEl) {
+                var firstInput = stepEl.querySelector(
+                    'input:not([type="hidden"]):not([type="file"]), select, textarea'
+                );
+                safeFocus(firstInput);
+            }
+        }
+
+        nextButtons.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var next = parseInt(this.getAttribute('data-next'), 10);
+                if (!isNaN(next) && next <= totalSteps) goToStep(next);
+            });
+        });
+
+        prevButtons.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var prev = parseInt(this.getAttribute('data-prev'), 10);
+                if (!isNaN(prev) && prev >= 1) goToStep(prev);
+            });
+        });
+
+        /* ============================================
+           REAL-TIME PASSWORD FEEDBACK
+           ============================================ */
+
+        if (password) {
+            password.addEventListener('input', function () {
+                var val = this.value;
+                if (val.length === 0) { clearFieldError(this, passwordError); return; }
+                var check = isValidPassword(val);
+                if (check.valid) {
+                    clearFieldError(this, passwordError);
+                } else {
+                    showFieldError(this, passwordError, check.message);
+                }
+
+                if (confirmPassword && confirmPassword.value) {
+                    if (confirmPassword.value === val) {
+                        clearFieldError(confirmPassword, confirmError);
+                    } else {
+                        showFieldError(confirmPassword, confirmError, 'Passwords do not match.');
+                    }
+                }
+            });
+        }
+
+        if (confirmPassword) {
+            confirmPassword.addEventListener('input', function () {
+                var val = this.value;
+                if (!val) { clearFieldError(this, confirmError); return; }
+                if (val === (password ? password.value : '')) {
+                    clearFieldError(this, confirmError);
+                } else {
+                    showFieldError(confirmPassword, confirmError, 'Passwords do not match.');
+                }
+            });
+        }
+
+        /* ============================================
+           BLUR VALIDATION
+           ============================================ */
+
+        if (contactNumber) {
+            contactNumber.addEventListener('blur', function () {
+                var val = this.value.trim();
+                if (!val) return;
+                var ph = isValidPhilippineMobile(val);
+                if (ph.valid) clearFieldError(this, contactError);
+                else showFieldError(this, contactError, ph.message);
+            });
+        }
+
+        if (email) {
+            email.addEventListener('blur', function () {
+                var val = this.value.trim();
+                if (!val) return;
+                if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+                    clearFieldError(this, emailError);
+                } else {
+                    showFieldError(this, emailError, 'Please enter a valid email address.');
+                }
+            });
+        }
+
+        if (username) {
+            username.addEventListener('blur', function () {
+                var val = this.value.trim();
+                if (!val) return;
+                if (val.length < 3) {
+                    showFieldError(this, usernameError, 'Username must be at least 3 characters.');
+                } else if (val.length > 20) {
+                    showFieldError(this, usernameError, 'Username must be no more than 20 characters.');
+                } else if (!/^[A-Za-z0-9_]+$/.test(val)) {
+                    showFieldError(this, usernameError, 'Only letters, numbers, and underscores.');
+                } else {
+                    clearFieldError(this, usernameError);
+                }
+            });
+        }
+
+        if (termsCheckbox) {
+            termsCheckbox.addEventListener('change', function () {
+                if (this.checked) {
+                    if (termsError) { termsError.textContent = ''; termsError.style.display = 'none'; }
+                    if (termsGroup) termsGroup.classList.remove('error');
+                }
+            });
+        }
+
+        /* ============================================
+           SERVER FIELD MAP
+           ============================================ */
+
+        var SERVER_FIELD_MAP = {
+            first_name: { input: firstName, errorEl: firstNameError, step: 1 },
+            last_name: { input: lastName, errorEl: lastNameError, step: 1 },
+            email: { input: email, errorEl: emailError, step: 1 },
+            contact_number: { input: contactNumber, errorEl: contactError, step: 1 },
+            username: { input: username, errorEl: usernameError, step: 1 },
+            password: { input: password, errorEl: passwordError, step: 1 },
+            confirm_password: { input: confirmPassword, errorEl: confirmError, step: 1 },
+
+            business_name: { input: businessName, errorEl: businessNameError, step: 2 },
+            cuisine_type: { input: cuisineType, errorEl: cuisineTypeError, step: 2 },
+            branch_name: { input: branchName, errorEl: branchNameError, step: 2 },
+            block: { input: block, errorEl: blockError, step: 2 },
+            city: { input: city, errorEl: cityError, step: 2 },
+            postal_code: { input: postalCode, errorEl: postalError, step: 2 },
+            permits: { input: null, errorEl: permitsError, step: 2 },
+            terms: { input: null, errorEl: null, step: 2 }
+        };
+
+        /* ============================================
+           FORM SUBMISSION
+           ============================================ */
+
+        if (form) {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                if (isSubmitting) return;
+
+                if (currentStep < totalSteps) {
+                    goToStep(currentStep + 1);
+                    return;
+                }
+
+                if (!validateStep1()) { goToStep(1); return; }
+                if (!validateStep2()) { goToStep(2); return; }
+
+                isSubmitting = true;
+                if (registerBtn) {
+                    registerBtn.disabled = true;
+                    registerBtn.textContent = 'Submitting…';
+                }
+
+                fetch(form.action, {
+                    method: 'POST',
+                    body: new FormData(form),
+                    credentials: 'same-origin'
+                })
+                    .then(function (res) {
+                        return res.json().catch(function () {
+                            throw new Error('Unexpected server response.');
+                        });
+                    })
+                    .then(function (data) {
+                        if (data && data.status === 'success') {
+                            showNotification(
+                                'Registration Submitted',
+                                data.message || 'Your restaurant application has been submitted. Please sign in.',
+                                function () {
+                                    window.location.href = data.redirect || 'sign-in.php';
+                                }
+                            );
+                            return;
+                        }
+
+                        isSubmitting = false;
+                        if (registerBtn) {
+                            registerBtn.disabled = false;
+                            registerBtn.textContent = 'Submit Application';
+                        }
+
+                        if (data && data.field === 'terms') {
+                            if (termsError) {
+                                termsError.textContent = data.message;
+                                termsError.style.display = 'block';
+                            }
+                            if (termsGroup) termsGroup.classList.add('error');
+                            goToStep(2);
+                            return;
+                        }
+
+                        var target = (data && data.field && SERVER_FIELD_MAP[data.field])
+                            ? SERVER_FIELD_MAP[data.field]
+                            : null;
+
+                        if (target && target.errorEl) {
+                            if (target.input) {
+                                showFieldError(target.input, target.errorEl, data.message);
+                            } else {
+                                target.errorEl.textContent = data.message;
+                                target.errorEl.style.display = 'block';
+                            }
+                            if (target.step < currentStep) {
+                                goToStep(target.step);
+                            }
+                            return;
+                        }
+
+                        showBanner((data && data.message) || 'Could not create your account. Please try again.');
+                    })
+                    .catch(function () {
+                        isSubmitting = false;
+                        if (registerBtn) {
+                            registerBtn.disabled = false;
+                            registerBtn.textContent = 'Submit Application';
+                        }
+                        showBanner('An unexpected error occurred. Please try again.');
+                    });
+            });
+        }
+
+        /* ============================================
+           NOTIFIER MODAL
+           ============================================ */
+
+        var notifierModal = document.getElementById('notifierModal');
+        var notifierTitle = document.getElementById('notifierTitle');
+        var notifierMessage = document.getElementById('notifierMessage');
+        var notifierCloseBtn = document.getElementById('notifierCloseBtn');
+
+        function showNotification(title, message, callback) {
+            if (notifierTitle) notifierTitle.textContent = title || 'Success';
+            if (notifierMessage) notifierMessage.textContent = message || '';
+            if (notifierModal) notifierModal.classList.remove('hidden');
+            if (notifierCloseBtn && callback) notifierCloseBtn._callback = callback;
+        }
+
+        function closeNotification() {
+            if (notifierModal) notifierModal.classList.add('hidden');
+            if (notifierCloseBtn && typeof notifierCloseBtn._callback === 'function') {
+                var cb = notifierCloseBtn._callback;
+                notifierCloseBtn._callback = null;
+                cb();
+            }
+        }
+
+        if (notifierCloseBtn) notifierCloseBtn.addEventListener('click', closeNotification);
+        if (notifierModal) {
+            notifierModal.addEventListener('click', function (e) {
+                if (e.target === this) closeNotification();
+            });
+        }
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && notifierModal && !notifierModal.classList.contains('hidden')) {
+                closeNotification();
+            }
+        });
+
+        /* ============================================
+           INIT
+           ============================================ */
+        goToStep(1);
+    });
+})();
+```
+
+---
+
+## File: `fitpal/restaurant/backend/database/restaurant-connect.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Restaurant Database Connection (role wrapper)
+ *
+ * Restaurant pages should require THIS file instead of reaching into
+ * shared/backend/database/database-connect.php directly.
+ *
+ * This does NOT open a second database connection - FitPal's
+ * architecture requires one shared PDO singleton. This file exists
+ * so the restaurant role has its own include point, consistent with
+ * the rest of restaurant/backend/database/.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+declare(strict_types=1);
+
+require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
+
+// $database_connection is now available - the same singleton every role uses.
+```
+
+---
+
+## File: `fitpal/restaurant/backend/database/restaurant-queries.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Restaurant Database Queries
+ *
+ * Pure data-access layer for the restaurant, restaurant_account,
+ * restaurant_branch, and restaurant_permit tables.
+ *
+ * No $_POST, no header(), no echo.
+ *
+ * @package FitPal
+ * @version 1.1
+ */
+
+declare(strict_types=1);
+
+/* =============================================================
+ * AUTHENTICATION
+ * ============================================================= */
+
+/**
+ * Find a restaurant account by email or username.
+ *
+ * @param PDO    $db
+ * @param string $identifier Email or username
+ * @return array<string, mixed>|false
+ */
+function findRestaurantAccountByIdentifier(PDO $db, string $identifier): array|false
+{
+    $stmt = $db->prepare(
+        "SELECT
+            ra.restaurant_account_id,
+            ra.restaurant_id,
+            ra.branch_id,
+            ra.first_name,
+            ra.middle_name,
+            ra.last_name,
+            ra.email,
+            ra.username,
+            ra.password,
+            ra.role,
+            ra.is_active,
+            r.business_name,
+            r.verification_status,
+            r.is_active AS restaurant_active
+         FROM restaurant_account ra
+         JOIN restaurant r ON ra.restaurant_id = r.restaurant_id
+         WHERE ra.email = :email OR ra.username = :username
+         LIMIT 1"
+    );
+    $stmt->execute([
+        ':email'    => $identifier,
+        ':username' => $identifier,
+    ]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Find a restaurant account with owner/branch disambiguation.
+ *
+ * @param PDO    $db
+ * @param string $identifier
+ * @param string $roleScope 'owner' or 'branch'
+ * @return array<string, mixed>|false
+ */
+function findRestaurantAccountByScope(
+    PDO $db,
+    string $identifier,
+    string $roleScope
+): array|false {
+    $ownerRoles  = ['owner', 'partner'];
+    $branchRoles = ['manager', 'staff', 'cashier', 'kitchen'];
+
+    if ($roleScope === 'owner') {
+        $roles = $ownerRoles;
+    } elseif ($roleScope === 'branch') {
+        $roles = $branchRoles;
+    } else {
+        return false;
+    }
+
+    $placeholders = implode(',', array_fill(0, count($roles), '?'));
+
+    $sql = "SELECT
+                ra.restaurant_account_id,
+                ra.restaurant_id,
+                ra.branch_id,
+                ra.first_name,
+                ra.middle_name,
+                ra.last_name,
+                ra.email,
+                ra.username,
+                ra.password,
+                ra.role,
+                ra.is_active,
+                r.business_name,
+                r.verification_status,
+                r.is_active AS restaurant_active,
+                rb.branch_name,
+                rb.branch_code,
+                rb.city AS branch_city
+            FROM restaurant_account ra
+            JOIN restaurant r ON ra.restaurant_id = r.restaurant_id
+            LEFT JOIN restaurant_branch rb ON ra.branch_id = rb.restaurant_branch_id
+            WHERE (ra.email = ? OR ra.username = ?)
+              AND ra.role IN ($placeholders)
+            LIMIT 1";
+
+    $params = array_merge([$identifier, $identifier], $roles);
+    $stmt = $db->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Find a branch account by identifier, scoped to a specific branch.
+ *
+ * @param PDO    $db
+ * @param string $identifier
+ * @param string $branchCode
+ * @return array<string, mixed>|false
+ */
+function findBranchAccountByIdentifierAndCode(
+    PDO $db,
+    string $identifier,
+    string $branchCode
+): array|false {
+    $stmt = $db->prepare(
+        "SELECT
+            ra.restaurant_account_id,
+            ra.restaurant_id,
+            ra.branch_id,
+            ra.first_name,
+            ra.middle_name,
+            ra.last_name,
+            ra.email,
+            ra.username,
+            ra.password,
+            ra.role,
+            ra.is_active,
+            r.business_name,
+            r.verification_status,
+            r.is_active AS restaurant_active,
+            rb.branch_name,
+            rb.branch_code,
+            rb.city AS branch_city
+         FROM restaurant_account ra
+         JOIN restaurant r ON ra.restaurant_id = r.restaurant_id
+         JOIN restaurant_branch rb ON ra.branch_id = rb.restaurant_branch_id
+         WHERE (ra.email = :email OR ra.username = :username)
+           AND rb.branch_code = :branch_code
+           AND ra.role IN ('manager','staff','cashier','kitchen')
+         LIMIT 1"
+    );
+    $stmt->execute([
+        ':email'       => $identifier,
+        ':username'    => $identifier,
+        ':branch_code' => $branchCode,
+    ]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+/**
+ * List all active branches that have at least one active branch-scoped
+ * account. Used to populate the branch selector on the sign-in page.
+ *
+ * @param PDO $db
+ * @return array<int, array<string, mixed>>
+ */
+function getBranchesWithAccounts(PDO $db): array
+{
+    $stmt = $db->query(
+        "SELECT DISTINCT
+            rb.restaurant_branch_id,
+            rb.branch_code,
+            rb.branch_name,
+            rb.city,
+            r.business_name
+         FROM restaurant_branch rb
+         JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
+         JOIN restaurant_account ra ON ra.branch_id = rb.restaurant_branch_id
+         WHERE rb.is_active = 1
+           AND r.is_active = 1
+           AND ra.is_active = 1
+           AND ra.role IN ('manager','staff','cashier','kitchen')
+         ORDER BY r.business_name ASC, rb.branch_name ASC"
+    );
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Get the full restaurant account profile.
+ *
+ * @param PDO $db
+ * @param int $accountId
+ * @return array<string, mixed>|false
+ */
+function getRestaurantAccountProfile(PDO $db, int $accountId): array|false
+{
+    $stmt = $db->prepare(
+        "SELECT
+            ra.restaurant_account_id,
+            ra.restaurant_id,
+            ra.branch_id,
+            ra.first_name,
+            ra.middle_name,
+            ra.last_name,
+            ra.email,
+            ra.username,
+            ra.role,
+            ra.is_active,
+            ra.date_created,
+            r.business_name,
+            r.cuisine_type,
+            r.description AS restaurant_description,
+            r.dietary_tags,
+            r.verification_status,
+            r.verified_at,
+            r.is_active AS restaurant_active,
+            rb.branch_name,
+            rb.branch_code,
+            rb.block,
+            rb.barangay,
+            rb.city,
+            rb.province,
+            rb.region,
+            rb.postal_code,
+            rb.country
+         FROM restaurant_account ra
+         JOIN restaurant r ON ra.restaurant_id = r.restaurant_id
+         LEFT JOIN restaurant_branch rb ON ra.branch_id = rb.restaurant_branch_id
+         WHERE ra.restaurant_account_id = :account_id
+         LIMIT 1"
+    );
+    $stmt->execute([':account_id' => $accountId]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Record a login timestamp.
+ *
+ * @param PDO $db
+ * @param int $accountId
+ * @return void
+ */
+function recordRestaurantLogin(PDO $db, int $accountId): void
+{
+    $stmt = $db->prepare(
+        "UPDATE restaurant r
+         JOIN restaurant_account ra ON r.restaurant_id = ra.restaurant_id
+            SET r.updated_at = NOW()
+          WHERE ra.restaurant_account_id = :account_id"
+    );
+    $stmt->execute([':account_id' => $accountId]);
+}
+
+/* =============================================================
+ * UNIQUENESS CHECKS
+ * ============================================================= */
+
+function restaurantEmailExists(PDO $db, string $email): bool
+{
+    $stmt = $db->prepare("SELECT 1 FROM restaurant_account WHERE email = ? LIMIT 1");
+    $stmt->execute([$email]);
+    return $stmt->fetch() !== false;
+}
+
+function restaurantUsernameExists(PDO $db, string $username): bool
+{
+    $stmt = $db->prepare("SELECT 1 FROM restaurant_account WHERE username = ? LIMIT 1");
+    $stmt->execute([$username]);
+    return $stmt->fetch() !== false;
+}
+
+function restaurantContactExists(PDO $db, string $contact): bool
+{
+    $stmt = $db->prepare("SELECT 1 FROM restaurant_account WHERE contact_number = ? LIMIT 1");
+    $stmt->execute([$contact]);
+    return $stmt->fetch() !== false;
+}
+
+function restaurantBusinessNameExists(PDO $db, string $name): bool
+{
+    $stmt = $db->prepare("SELECT 1 FROM restaurant WHERE business_name = ? LIMIT 1");
+    $stmt->execute([$name]);
+    return $stmt->fetch() !== false;
+}
+
+function restaurantBranchCodeExists(PDO $db, string $code): bool
+{
+    $stmt = $db->prepare("SELECT 1 FROM restaurant_branch WHERE branch_code = ? LIMIT 1");
+    $stmt->execute([$code]);
+    return $stmt->fetch() !== false;
+}
+
+/* =============================================================
+ * CREATION
+ * ============================================================= */
+
+/**
+ * Create a new restaurant row with verification_status = 'pending'.
+ *
+ * @param PDO   $db
+ * @param array $data
+ * @return int New restaurant_id
+ */
+function createRestaurant(PDO $db, array $data): int
+{
+    $stmt = $db->prepare(
+        "INSERT INTO restaurant
+            (business_name, description, cuisine_type, dietary_tags,
+             verification_status, is_active)
+         VALUES
+            (:business_name, :description, :cuisine_type, :dietary_tags,
+             'pending', 1)"
+    );
+    $stmt->execute([
+        ':business_name' => $data['business_name'],
+        ':description'   => $data['description']  !== '' ? $data['description']  : null,
+        ':cuisine_type'  => $data['cuisine_type'] !== '' ? $data['cuisine_type'] : null,
+        ':dietary_tags'  => $data['dietary_tags'] !== '' ? $data['dietary_tags'] : null,
+    ]);
+    return (int)$db->lastInsertId();
+}
+
+/**
+ * Create a new financial account for a restaurant branch.
+ *
+ * @param PDO $db
+ * @return int New financial_account_id
+ */
+function createRestaurantFinancialAccount(PDO $db): int
+{
+    $stmt = $db->prepare(
+        "INSERT INTO financial_account (balance, account_type)
+         VALUES (0.00, 'restaurant')"
+    );
+    $stmt->execute();
+    return (int)$db->lastInsertId();
+}
+
+/**
+ * Create a restaurant branch.
+ *
+ * @param PDO   $db
+ * @param int   $restaurantId
+ * @param int   $financialAccountId
+ * @param array $data
+ * @return int New restaurant_branch_id
+ */
+function createRestaurantBranch(
+    PDO $db,
+    int $restaurantId,
+    int $financialAccountId,
+    array $data
+): int {
+    $stmt = $db->prepare(
+        "INSERT INTO restaurant_branch
+            (restaurant_id, financial_account_id, branch_name, branch_code,
+             block, barangay, city, province, region, postal_code, country,
+             is_active)
+         VALUES
+            (:restaurant_id, :financial_account_id, :branch_name, :branch_code,
+             :block, :barangay, :city, :province, :region, :postal_code,
+             'Philippines', 1)"
+    );
+    $stmt->execute([
+        ':restaurant_id'        => $restaurantId,
+        ':financial_account_id' => $financialAccountId,
+        ':branch_name'          => $data['branch_name'],
+        ':branch_code'          => $data['branch_code'],
+        ':block'                => $data['block']       !== '' ? $data['block']       : null,
+        ':barangay'             => $data['barangay']    !== '' ? $data['barangay']    : null,
+        ':city'                 => $data['city'],
+        ':province'             => $data['province']    !== '' ? $data['province']    : null,
+        ':region'               => $data['region']      !== '' ? $data['region']      : null,
+        ':postal_code'          => $data['postal_code'] !== '' ? $data['postal_code'] : null,
+    ]);
+    return (int)$db->lastInsertId();
+}
+
+/**
+ * Create a restaurant owner account (branch_id = NULL, role = 'owner').
+ *
+ * @param PDO   $db
+ * @param int   $restaurantId
+ * @param array $data
+ * @return int New restaurant_account_id
+ */
+function createRestaurantOwnerAccount(PDO $db, int $restaurantId, array $data): int
+{
+    $stmt = $db->prepare(
+        "INSERT INTO restaurant_account
+            (restaurant_id, branch_id, first_name, middle_name, last_name,
+             email, contact_number, username, password, role, is_active)
+         VALUES
+            (:restaurant_id, NULL, :first_name, :middle_name, :last_name,
+             :email, :contact_number, :username, :password, 'owner', 1)"
+    );
+    $stmt->execute([
+        ':restaurant_id'  => $restaurantId,
+        ':first_name'     => $data['first_name'],
+        ':middle_name'    => $data['middle_name'] !== '' ? $data['middle_name'] : null,
+        ':last_name'      => $data['last_name'],
+        ':email'          => $data['email'],
+        ':contact_number' => $data['contact_number'],
+        ':username'       => $data['username'],
+        ':password'       => $data['password'],
+    ]);
+    return (int)$db->lastInsertId();
+}
+
+/* =============================================================
+ * PERMIT HANDLING
+ * ============================================================= */
+
+/**
+ * Insert a permit photo row for a restaurant.
+ *
+ * @param PDO    $db
+ * @param int    $restaurantId
+ * @param string $filePath     Project-root-relative path
+ * @param string $originalName Original filename
+ * @param int    $order        Display order (0-based)
+ * @return int New permit_id
+ */
+function createRestaurantPermit(
+    PDO $db,
+    int $restaurantId,
+    string $filePath,
+    string $originalName,
+    int $order
+): int {
+    $stmt = $db->prepare(
+        "INSERT INTO restaurant_permit
+            (restaurant_id, file_path, original_name, display_order)
+         VALUES
+            (:restaurant_id, :file_path, :original_name, :display_order)"
+    );
+    $stmt->execute([
+        ':restaurant_id' => $restaurantId,
+        ':file_path'     => $filePath,
+        ':original_name' => $originalName !== '' ? $originalName : null,
+        ':display_order' => $order,
+    ]);
+    return (int)$db->lastInsertId();
+}
+
+/**
+ * Fetch all permits for a restaurant, ordered by display_order.
+ *
+ * @param PDO $db
+ * @param int $restaurantId
+ * @return array<int, array<string, mixed>>
+ */
+function getRestaurantPermits(PDO $db, int $restaurantId): array
+{
+    $stmt = $db->prepare(
+        "SELECT permit_id, file_path, original_name, display_order, created_at
+         FROM restaurant_permit
+         WHERE restaurant_id = :restaurant_id
+         ORDER BY display_order ASC, permit_id ASC"
+    );
+    $stmt->execute([':restaurant_id' => $restaurantId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/* =============================================================
+ * GENERATION HELPERS
+ * ============================================================= */
+
+/**
+ * Generate a unique branch code from a business name.
+ *
+ * @param PDO    $db
+ * @param string $businessName
+ * @return string
+ */
+function generateBranchCode(PDO $db, string $businessName): string
+{
+    $clean = preg_replace('/[^A-Za-z0-9 ]/', '', $businessName) ?? '';
+    $words = preg_split('/\s+/', trim($clean)) ?: [];
+    $initials = '';
+    foreach ($words as $w) {
+        if ($w !== '' && strlen($initials) < 3) {
+            $initials .= strtoupper($w[0]);
+        }
+    }
+    if ($initials === '') {
+        $initials = 'RST';
+    }
+
+    $base = str_pad(substr($initials, 0, 3), 3, 'X');
+
+    for ($i = 1; $i <= 999; $i++) {
+        $candidate = $base . str_pad((string)$i, 3, '0', STR_PAD_LEFT);
+        if (!restaurantBranchCodeExists($db, $candidate)) {
+            return $candidate;
+        }
+    }
+
+    return $base . bin2hex(random_bytes(2));
+}
+```
+
+---
+
+## File: `fitpal/restaurant/backend/handlers/sign-in-handler.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Restaurant Sign-In Handler
+ *
+ * Supports two sign-in modes:
+ *   - Owner:  role IN ('owner', 'partner')
+ *   - Branch: role IN ('manager','staff','cashier','kitchen'),
+ *             scoped to a specific branch_code
+ *
+ * @package FitPal
+ * @version 1.1
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
+require_once __DIR__ . '/../database/restaurant-queries.php';
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    $_SESSION['login_error'] = 'Invalid request method.';
+    header('Location: ../../pages/sign-in.php');
+    exit;
+}
+
+if (
+    !isset($_POST['csrf_token'], $_SESSION['csrf_token']) ||
+    !hash_equals((string)$_SESSION['csrf_token'], (string)$_POST['csrf_token'])
+) {
+    $_SESSION['login_error'] = 'Security validation failed. Please try again.';
+    header('Location: ../../pages/sign-in.php');
+    exit;
+}
+
+$identifier = trim((string)($_POST['identifier'] ?? ''));
+$password   = (string)($_POST['password'] ?? '');
+$roleScope  = (string)($_POST['role_scope'] ?? 'owner');
+$branchCode = trim((string)($_POST['branch_code'] ?? ''));
+
+if ($identifier === '' || $password === '') {
+    $_SESSION['login_error'] = 'Please enter your email/username and password.';
+    header('Location: ../../pages/sign-in.php');
+    exit;
+}
+
+if (!in_array($roleScope, ['owner', 'branch'], true)) {
+    $roleScope = 'owner';
+}
+
+$_SESSION['login_scope'] = $roleScope;
+
+try {
+    if ($roleScope === 'branch') {
+        if ($branchCode === '') {
+            $_SESSION['login_error'] = 'Please select a branch.';
+            header('Location: ../../pages/sign-in.php');
+            exit;
+        }
+        $account = findBranchAccountByIdentifierAndCode(
+            $database_connection,
+            $identifier,
+            $branchCode
+        );
+    } else {
+        $account = findRestaurantAccountByScope(
+            $database_connection,
+            $identifier,
+            'owner'
+        );
+    }
+
+    if (!$account) {
+        $_SESSION['login_error'] = 'Invalid credentials or account does not have access to this scope.';
+        header('Location: ../../pages/sign-in.php');
+        exit;
+    }
+
+    if ((int)$account['is_active'] !== 1) {
+        $_SESSION['login_error'] = 'Your account has been deactivated. Please contact support.';
+        header('Location: ../../pages/sign-in.php');
+        exit;
+    }
+
+    if ((int)$account['restaurant_active'] !== 1) {
+        $_SESSION['login_error'] = 'Your restaurant account is inactive. Please contact support.';
+        header('Location: ../../pages/sign-in.php');
+        exit;
+    }
+
+    // -------- DEVELOPMENT-ONLY BYPASS --------
+    $passwordValid = password_verify($password, (string)$account['password']);
+    if (!$passwordValid && hash_equals((string)$account['password'], $password)) {
+        $passwordValid = true;
+    }
+    // -------- END DEVELOPMENT-ONLY BYPASS --------
+
+    if (!$passwordValid) {
+        $_SESSION['login_error'] = 'Invalid email/username or password.';
+        header('Location: ../../pages/sign-in.php');
+        exit;
+    }
+
+    session_regenerate_id(true);
+
+    $_SESSION['restaurant_account_id']  = (int)$account['restaurant_account_id'];
+    $_SESSION['restaurant_id']          = (int)$account['restaurant_id'];
+    $_SESSION['restaurant_branch_id']   = $account['branch_id'] !== null
+        ? (int)$account['branch_id']
+        : null;
+    $_SESSION['restaurant_branch_code'] = (string)($account['branch_code'] ?? '');
+    $_SESSION['restaurant_branch_name'] = (string)($account['branch_name'] ?? '');
+    $_SESSION['restaurant_scope']       = $roleScope;
+    $_SESSION['user_role']              = 'restaurant';
+    $_SESSION['user_name']              = trim(
+        ($account['first_name'] ?? '') . ' ' . ($account['last_name'] ?? '')
+    );
+    $_SESSION['user_email']             = (string)($account['email'] ?? '');
+    $_SESSION['restaurant_role']        = (string)($account['role'] ?? 'owner');
+    $_SESSION['business_name']          = (string)($account['business_name'] ?? '');
+    $_SESSION['created']                = time();
+
+    recordRestaurantLogin($database_connection, (int)$account['restaurant_account_id']);
+
+    unset($_SESSION['csrf_token']);
+
+    header('Location: ../../pages/dashboard.php');
+    exit;
+
+} catch (PDOException $e) {
+    error_log('Restaurant sign-in DB error: ' . $e->getMessage());
+    $_SESSION['login_error'] = 'An unexpected error occurred. Please try again.';
+    header('Location: ../../pages/sign-in.php');
+    exit;
+} catch (Throwable $e) {
+    error_log('Restaurant sign-in error: ' . $e->getMessage());
+    $_SESSION['login_error'] = 'An unexpected error occurred. Please try again.';
+    header('Location: ../../pages/sign-in.php');
+    exit;
+}
+```
+
+---
+
+## File: `fitpal/restaurant/backend/handlers/sign-out-handler.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Restaurant Sign-Out Handler
+ *
+ * Clears only restaurant-specific session data.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+unset(
+    $_SESSION['restaurant_account_id'],
+    $_SESSION['restaurant_id'],
+    $_SESSION['restaurant_branch_id'],
+    $_SESSION['restaurant_branch_code'],
+    $_SESSION['restaurant_branch_name'],
+    $_SESSION['restaurant_scope'],
+    $_SESSION['user_role'],
+    $_SESSION['user_name'],
+    $_SESSION['user_email'],
+    $_SESSION['restaurant_role'],
+    $_SESSION['business_name']
+);
+
+session_regenerate_id(true);
+
+header('Location: ../../pages/sign-in.php');
+exit;
+```
+
+---
+
+## File: `fitpal/restaurant/backend/handlers/sign-up-handler.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Restaurant Registration Handler
+ *
+ * Creates the following rows in a single DB transaction:
+ *   1. restaurant                   (verification_status = 'pending')
+ *   2. financial_account            (account_type = 'restaurant')
+ *   3. restaurant_branch
+ *   4. restaurant_account           (role = 'owner', branch_id = NULL)
+ *   5. restaurant_permit × 1..5     (permit photos)
+ *
+ * @package FitPal
+ * @version 1.1
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
+require_once __DIR__ . '/../database/restaurant-queries.php';
+
+header('Content-Type: application/json');
+
+const MAX_PERMITS         = 5;
+const MAX_PERMIT_BYTES    = 5 * 1024 * 1024;
+const ALLOWED_PERMIT_MIME = [
+    'image/jpeg' => 'jpg',
+    'image/png'  => 'png',
+    'image/webp' => 'webp',
+];
+
+function respondError(string $message, string $field = ''): void
+{
+    echo json_encode(['status' => 'error', 'message' => $message, 'field' => $field]);
+    exit;
+}
+
+function validatePermitFile(array $file): string
+{
+    if (!isset($file['error']) || is_array($file['error'])) {
+        throw new RuntimeException('Invalid file payload.');
+    }
+    if ($file['error'] === UPLOAD_ERR_NO_FILE) {
+        throw new RuntimeException('Empty slot.');
+    }
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        throw new RuntimeException('Upload failed (code ' . $file['error'] . ').');
+    }
+    if (($file['size'] ?? 0) <= 0) {
+        throw new RuntimeException('Uploaded file is empty.');
+    }
+    if ($file['size'] > MAX_PERMIT_BYTES) {
+        throw new RuntimeException(
+            'Each permit must be under ' . round(MAX_PERMIT_BYTES / 1048576, 1) . ' MB.'
+        );
+    }
+
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    if ($finfo === false) {
+        throw new RuntimeException('Could not inspect file.');
+    }
+    $mime = (string)finfo_file($finfo, $file['tmp_name']);
+    finfo_close($finfo);
+
+    if (!isset(ALLOWED_PERMIT_MIME[$mime])) {
+        throw new RuntimeException('Unsupported permit type. Use JPG, PNG, or WEBP.');
+    }
+    return ALLOWED_PERMIT_MIME[$mime];
+}
+
+function storePermitFile(array $file, string $projectRoot, string $ext, int $index): string
+{
+    $dir = $projectRoot . '/shared/uploads/restaurant-permits';
+    if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+        throw new RuntimeException('Could not create upload directory.');
+    }
+
+    $filename = 'permit_' . time() . '_' . $index . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+    $fullPath = $dir . '/' . $filename;
+
+    if (!move_uploaded_file($file['tmp_name'], $fullPath)) {
+        throw new RuntimeException('Could not save permit file.');
+    }
+
+    return 'shared/uploads/restaurant-permits/' . $filename;
+}
+
+/* -------------------------------------------------------------- */
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    respondError('Invalid request method.');
+}
+
+if (
+    !isset($_POST['csrf_token']) ||
+    !hash_equals((string)($_SESSION['csrf_token'] ?? ''), (string)$_POST['csrf_token'])
+) {
+    respondError('Security validation failed. Please refresh the page and try again.');
+}
+
+/* --------------------------------------------------------------
+ * COLLECT INPUT
+ * -------------------------------------------------------------- */
+
+$firstName       = trim((string)($_POST['first_name'] ?? ''));
+$middleName      = trim((string)($_POST['middle_name'] ?? ''));
+$lastName        = trim((string)($_POST['last_name'] ?? ''));
+$email           = trim((string)($_POST['email'] ?? ''));
+$contactNumber   = trim((string)($_POST['contact_number'] ?? ''));
+$username        = trim((string)($_POST['username'] ?? ''));
+$password        = (string)($_POST['password'] ?? '');
+$confirmPassword = (string)($_POST['confirm_password'] ?? '');
+
+$businessName        = trim((string)($_POST['business_name'] ?? ''));
+$cuisineType         = trim((string)($_POST['cuisine_type'] ?? ''));
+$businessDescription = trim((string)($_POST['business_description'] ?? ''));
+$dietaryTags         = trim((string)($_POST['dietary_tags'] ?? ''));
+
+$branchName = trim((string)($_POST['branch_name'] ?? ''));
+$block      = trim((string)($_POST['block'] ?? ''));
+$barangay   = trim((string)($_POST['barangay'] ?? ''));
+$city       = trim((string)($_POST['city'] ?? ''));
+$province   = trim((string)($_POST['province'] ?? ''));
+$region     = trim((string)($_POST['region'] ?? ''));
+$postalCode = trim((string)($_POST['postal_code'] ?? ''));
+
+$terms = $_POST['terms'] ?? '';
+
+/* --------------------------------------------------------------
+ * REQUIRED + FIELD VALIDATION
+ * -------------------------------------------------------------- */
+
+if (
+    $firstName === '' || $lastName === '' || $email === '' ||
+    $contactNumber === '' || $username === '' || $password === '' ||
+    $businessName === '' || $cuisineType === '' ||
+    $branchName === '' || $block === '' || $city === ''
+) {
+    respondError('Please fill in all required fields.');
+}
+
+$namePattern = "/^[A-Za-z\s\-']+$/u";
+if (strlen($firstName) < 2 || !preg_match($namePattern, $firstName)) {
+    respondError('First name contains invalid characters.', 'first_name');
+}
+if (strlen($lastName) < 2 || !preg_match($namePattern, $lastName)) {
+    respondError('Last name contains invalid characters.', 'last_name');
+}
+if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    respondError('Please enter a valid email address.', 'email');
+}
+
+$cleanedContact = preg_replace('/\s+/', '', $contactNumber);
+if (!preg_match('/^09\d{9}$/', (string)$cleanedContact)) {
+    respondError('Enter a valid PH mobile number (11 digits, starting with 09).', 'contact_number');
+}
+
+if (strlen($username) < 3 || strlen($username) > 20) {
+    respondError('Username must be 3–20 characters.', 'username');
+}
+if (!preg_match('/^[A-Za-z0-9_]+$/', $username)) {
+    respondError('Username can only contain letters, numbers, and underscores.', 'username');
+}
+
+if (strlen($password) < 8 || strlen($password) > 20) {
+    respondError('Password must be 8–20 characters.', 'password');
+}
+if (!preg_match('/^[A-Za-z0-9]+$/', $password)) {
+    respondError('Password can only contain letters and numbers.', 'password');
+}
+if (!preg_match('/[A-Za-z]/', $password) || !preg_match('/[0-9]/', $password)) {
+    respondError('Password must contain at least one letter and one number.', 'password');
+}
+if ($password !== $confirmPassword) {
+    respondError('Passwords do not match.', 'confirm_password');
+}
+
+if (strlen($businessName) < 2) {
+    respondError('Business name must be at least 2 characters.', 'business_name');
+}
+if (strlen($cuisineType) < 2) {
+    respondError('Cuisine type is required.', 'cuisine_type');
+}
+if (strlen($businessDescription) > 2000) {
+    respondError('Business description is too long.', 'business_description');
+}
+if (strlen($branchName) < 2) {
+    respondError('Branch name is required.', 'branch_name');
+}
+if ($block === '') {
+    respondError('Block / Street / Unit is required.', 'block');
+}
+if ($city === '') {
+    respondError('City or municipality is required.', 'city');
+}
+if ($postalCode !== '' && !preg_match('/^[0-9]{3,10}$/', $postalCode)) {
+    respondError('Postal code must be numeric.', 'postal_code');
+}
+if (empty($terms)) {
+    respondError('You must agree to the Terms and Conditions and Privacy Policy.', 'terms');
+}
+
+/* --------------------------------------------------------------
+ * PERMIT FILE VALIDATION
+ * -------------------------------------------------------------- */
+
+$permitFiles = [];
+
+if (isset($_FILES['permits']) && is_array($_FILES['permits']['name'])) {
+    $count = count($_FILES['permits']['name']);
+    if ($count > MAX_PERMITS) {
+        respondError('You can upload at most ' . MAX_PERMITS . ' permits.', 'permits');
+    }
+
+    for ($i = 0; $i < $count; $i++) {
+        $err = $_FILES['permits']['error'][$i] ?? UPLOAD_ERR_NO_FILE;
+        if ($err === UPLOAD_ERR_NO_FILE) {
+            continue;
+        }
+
+        $file = [
+            'name'     => (string)$_FILES['permits']['name'][$i],
+            'type'     => (string)$_FILES['permits']['type'][$i],
+            'tmp_name' => (string)$_FILES['permits']['tmp_name'][$i],
+            'error'    => $err,
+            'size'     => (int)($_FILES['permits']['size'][$i] ?? 0),
+        ];
+
+        try {
+            $ext = validatePermitFile($file);
+        } catch (RuntimeException $e) {
+            respondError('Permit ' . ($i + 1) . ': ' . $e->getMessage(), 'permits');
+        }
+
+        $permitFiles[] = ['file' => $file, 'ext' => $ext];
+    }
+}
+
+if (empty($permitFiles)) {
+    respondError('Please upload at least one permit photo.', 'permits');
+}
+
+/* --------------------------------------------------------------
+ * DATABASE TRANSACTION
+ * -------------------------------------------------------------- */
+
+$movedFiles = [];
+
+try {
+    if (restaurantEmailExists($database_connection, $email)) {
+        respondError('This email address is already registered.', 'email');
+    }
+    if (restaurantUsernameExists($database_connection, $username)) {
+        respondError('This username is already taken.', 'username');
+    }
+    if (restaurantContactExists($database_connection, (string)$cleanedContact)) {
+        respondError('This mobile number is already registered.', 'contact_number');
+    }
+    if (restaurantBusinessNameExists($database_connection, $businessName)) {
+        respondError('This business name is already registered.', 'business_name');
+    }
+
+    $projectRoot = realpath(__DIR__ . '/../../..');
+    if ($projectRoot === false) {
+        respondError('Server storage path unavailable.');
+    }
+
+    $database_connection->beginTransaction();
+
+    $restaurantId = createRestaurant($database_connection, [
+        'business_name' => $businessName,
+        'description'   => $businessDescription,
+        'cuisine_type'  => $cuisineType,
+        'dietary_tags'  => $dietaryTags,
+    ]);
+
+    $financialAccountId = createRestaurantFinancialAccount($database_connection);
+
+    $branchCode = generateBranchCode($database_connection, $businessName);
+    createRestaurantBranch(
+        $database_connection,
+        $restaurantId,
+        $financialAccountId,
+        [
+            'branch_name' => $branchName,
+            'branch_code' => $branchCode,
+            'block'       => $block,
+            'barangay'    => $barangay,
+            'city'        => $city,
+            'province'    => $province,
+            'region'      => $region,
+            'postal_code' => $postalCode,
+        ]
+    );
+
+    $hashed = password_hash($password, PASSWORD_BCRYPT);
+    createRestaurantOwnerAccount($database_connection, $restaurantId, [
+        'first_name'     => $firstName,
+        'middle_name'    => $middleName,
+        'last_name'      => $lastName,
+        'email'          => $email,
+        'contact_number' => (string)$cleanedContact,
+        'username'       => $username,
+        'password'       => $hashed,
+    ]);
+
+    foreach ($permitFiles as $index => $p) {
+        $path = storePermitFile($p['file'], $projectRoot, $p['ext'], $index);
+        $movedFiles[] = $projectRoot . '/' . $path;
+
+        createRestaurantPermit(
+            $database_connection,
+            $restaurantId,
+            $path,
+            (string)$p['file']['name'],
+            $index
+        );
+    }
+
+    $database_connection->commit();
+
+    $_SESSION['registration_success'] =
+        'Restaurant application submitted with ' . count($permitFiles) . ' permit(s). ' .
+        'Please sign in after verification.';
+
+    echo json_encode([
+        'status'   => 'success',
+        'message'  => 'Your restaurant has been registered. An admin will review your permits before activation.',
+        'redirect' => 'sign-in.php',
+    ]);
+    exit;
+
+} catch (PDOException $e) {
+    if ($database_connection->inTransaction()) {
+        $database_connection->rollBack();
+    }
+    foreach ($movedFiles as $p) {
+        if (is_file($p)) @unlink($p);
+    }
+    error_log('Restaurant registration DB error: ' . $e->getMessage());
+
+    $message = $e->getMessage();
+    if (stripos($message, 'Duplicate entry') !== false) {
+        if (stripos($message, 'email') !== false)          respondError('This email address is already registered.', 'email');
+        if (stripos($message, 'username') !== false)       respondError('This username is already taken.', 'username');
+        if (stripos($message, 'contact_number') !== false) respondError('This mobile number is already registered.', 'contact_number');
+        if (stripos($message, 'business_name') !== false)  respondError('This business name is already registered.', 'business_name');
+    }
+    respondError('An unexpected error occurred. Please try again later.');
+
+} catch (Throwable $e) {
+    if ($database_connection->inTransaction()) {
+        $database_connection->rollBack();
+    }
+    foreach ($movedFiles as $p) {
+        if (is_file($p)) @unlink($p);
+    }
+    error_log('Restaurant registration error: ' . $e->getMessage());
+    respondError('An unexpected error occurred. Please try again later.');
+}
+```
+
+---
+
+## File: `fitpal/restaurant/includes/header.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Restaurant Header
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (!isset($_SESSION['created'])) {
+    $_SESSION['created'] = time();
+} elseif (time() - $_SESSION['created'] > 1800) {
+    session_regenerate_id(true);
+    $_SESSION['created'] = time();
+}
+
+require_once __DIR__ . '/../backend/database/restaurant-connect.php';
+
+function getRestaurantAssetBase(): string
+{
+    $scriptPath = $_SERVER['SCRIPT_NAME'];
+    $dirPath    = dirname($scriptPath);
+    $segments   = array_filter(explode('/', $dirPath));
+    $depth      = count($segments);
+    return str_repeat('../', $depth) . 'shared/';
+}
+
+$assetBase = getRestaurantAssetBase();
+
+$isLoggedIn     = false;
+$accountName    = '';
+$accountInitial = '';
+$restaurantRole = '';
+$businessName   = '';
+
+if (!empty($_SESSION['restaurant_account_id'])) {
+    $isLoggedIn = true;
+    try {
+        $stmt = $database_connection->prepare(
+            "SELECT ra.first_name, ra.last_name, ra.role, r.business_name
+             FROM restaurant_account ra
+             JOIN restaurant r ON ra.restaurant_id = r.restaurant_id
+             WHERE ra.restaurant_account_id = :id
+             LIMIT 1"
+        );
+        $stmt->execute([':id' => (int)$_SESSION['restaurant_account_id']]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($row) {
+            $accountName    = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+            $accountInitial = strtoupper(substr((string)($row['first_name'] ?? 'R'), 0, 1));
+            $restaurantRole = (string)($row['role'] ?? 'owner');
+            $businessName   = (string)($row['business_name'] ?? '');
+        }
+    } catch (PDOException $e) {
+        // Silently fail
+    }
+}
+
+$currentPage = basename($_SERVER['PHP_SELF']);
+
+$pageCssMap = [
+    'sign-in.php'   => 'sign-in.css',
+    'sign-up.php'   => 'sign-up.css',
+    'dashboard.php' => 'dashboard.css',
+    'profile.php'   => 'profile.css',
+];
+
+$pageCssFile = $pageCssMap[$currentPage] ?? '';
+$pageCssPath = '';
+if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFile)) {
+    $pageCssPath = '../assets/css/' . $pageCssFile;
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="FitPal - Restaurant Portal">
+    <title>FitPal - Restaurant</title>
+
+    <link rel="icon" type="image/x-icon" href="<?php echo $assetBase; ?>assets/images/brand/Logo.ico">
+    <link rel="shortcut icon" href="<?php echo $assetBase; ?>assets/images/brand/Logo.ico">
+
+    <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/global.css">
+    <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/header.css">
+    <link rel="stylesheet" href="../assets/css/header.css">
+
+    <?php if ($pageCssPath !== ''): ?>
+    <link rel="stylesheet" href="<?php echo $pageCssPath; ?>">
+    <?php endif; ?>
+</head>
+
+<body>
+    <header class="header restaurant-header" role="banner">
+        <div class="header-container">
+            <div class="header-logo">
+                <a href="<?php echo $assetBase; ?>../index.php" class="logo-link" aria-label="FitPal Home">
+                    <img src="<?php echo $assetBase; ?>assets/images/brand/Logo.png" alt="FitPal Logo"
+                        class="logo-image">
+                    <span class="logo-text">Fit<span>Pal</span></span>
+                </a>
+            </div>
+
+            <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation menu" aria-expanded="false"
+                type="button">
+                <span class="menu-icon">
+                    <span class="bar"></span>
+                    <span class="bar"></span>
+                    <span class="bar"></span>
+                </span>
+            </button>
+
+            <nav class="header-nav" id="mainNav" role="navigation" aria-label="Restaurant navigation">
+
+                <?php if ($isLoggedIn): ?>
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <a href="dashboard.php"
+                            class="nav-link <?php echo ($currentPage === 'dashboard.php') ? 'active' : ''; ?>">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="profile.php"
+                            class="nav-link <?php echo ($currentPage === 'profile.php') ? 'active' : ''; ?>">Profile</a>
+                    </li>
+                </ul>
+
+                <div class="nav-actions">
+                    <div class="user-profile-circle"
+                        title="<?php echo htmlspecialchars($accountName !== '' ? $accountName : 'Account', ENT_QUOTES, 'UTF-8'); ?>">
+                        <?php if ($accountInitial !== ''): ?>
+                        <span
+                            class="user-initial"><?php echo htmlspecialchars($accountInitial, ENT_QUOTES, 'UTF-8'); ?></span>
+                        <?php else: ?>
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="Profile"
+                            class="profile-icon">
+                        <?php endif; ?>
+                    </div>
+                    <a href="../backend/handlers/sign-out-handler.php" data-signout
+                        class="btn btn-outline btn-sm logout-btn">Logout</a>
+                </div>
+
+                <?php else: ?>
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <a href="<?php echo $assetBase; ?>../index.php"
+                            class="nav-link <?php echo ($currentPage === 'index.php') ? 'active' : ''; ?>">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="<?php echo $assetBase; ?>pages/about.php"
+                            class="nav-link <?php echo ($currentPage === 'about.php') ? 'active' : ''; ?>">About</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="<?php echo $assetBase; ?>pages/contact.php"
+                            class="nav-link <?php echo ($currentPage === 'contact.php') ? 'active' : ''; ?>">Contact</a>
+                    </li>
+                </ul>
+
+                <div class="nav-actions">
+                    <a href="sign-in.php" class="btn btn-primary btn-sm">Login</a>
+                </div>
+                <?php endif; ?>
+            </nav>
+        </div>
+    </header>
+
+    <div class="mobile-overlay" id="mobileOverlay"></div>
+
+    <nav class="mobile-nav" id="mobileNav" role="navigation" aria-label="Mobile navigation">
+        <ul class="mobile-nav-list">
+
+            <?php if ($isLoggedIn): ?>
+            <li class="mobile-nav-item mobile-user-greeting">
+                <div class="mobile-user-avatar">
+                    <?php if ($accountInitial !== ''): ?>
+                    <span
+                        class="user-initial-large"><?php echo htmlspecialchars($accountInitial, ENT_QUOTES, 'UTF-8'); ?></span>
+                    <?php else: ?>
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="Profile">
+                    <?php endif; ?>
+                </div>
+                <span
+                    class="mobile-user-name"><?php echo htmlspecialchars($accountName !== '' ? $accountName : 'Account', ENT_QUOTES, 'UTF-8'); ?></span>
+            </li>
+            <li class="mobile-nav-divider"></li>
+            <li class="mobile-nav-item">
+                <a href="dashboard.php"
+                    class="mobile-nav-link <?php echo ($currentPage === 'dashboard.php') ? 'active' : ''; ?>">Dashboard</a>
+            </li>
+            <li class="mobile-nav-item">
+                <a href="profile.php"
+                    class="mobile-nav-link <?php echo ($currentPage === 'profile.php') ? 'active' : ''; ?>">Profile</a>
+            </li>
+            <li class="mobile-nav-divider"></li>
+            <li class="mobile-nav-item">
+                <a href="../backend/handlers/sign-out-handler.php" data-signout
+                    class="mobile-nav-link mobile-logout">Logout</a>
+            </li>
+
+            <?php else: ?>
+            <li class="mobile-nav-item">
+                <a href="<?php echo $assetBase; ?>../index.php" class="mobile-nav-link">Home</a>
+            </li>
+            <li class="mobile-nav-item">
+                <a href="<?php echo $assetBase; ?>pages/about.php" class="mobile-nav-link">About</a>
+            </li>
+            <li class="mobile-nav-item">
+                <a href="<?php echo $assetBase; ?>pages/contact.php" class="mobile-nav-link">Contact</a>
+            </li>
+            <li class="mobile-nav-divider"></li>
+            <li class="mobile-nav-item">
+                <a href="sign-in.php" class="mobile-nav-link mobile-login">Login</a>
+            </li>
+            <?php endif; ?>
+        </ul>
+    </nav>
+
+    <main class="main-content" role="main">
+
+        <script src="../assets/ui/js/header.js" defer></script>
+```
+
+---
+
+## File: `fitpal/restaurant/pages/sign-in.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Restaurant Sign-In Page
+ *
+ * Two tabs: Owner (restaurant-wide) and Branch (scoped to a branch).
+ *
+ * @package FitPal
+ * @version 1.1
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (!empty($_SESSION['restaurant_account_id'])) {
+    header('Location: dashboard.php');
+    exit;
+}
+
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+require_once __DIR__ . '/../includes/header.php';
+require_once __DIR__ . '/../backend/database/restaurant-queries.php';
+
+// $assetBase provided by header.php
+
+$errorMessage   = $_SESSION['login_error'] ?? '';
+$successMessage = $_SESSION['registration_success'] ?? '';
+unset($_SESSION['login_error'], $_SESSION['registration_success']);
+
+$branches = [];
+try {
+    $branches = getBranchesWithAccounts($database_connection);
+} catch (PDOException $e) {
+    error_log('Branch list error: ' . $e->getMessage());
+}
+
+$activeTab = $_SESSION['login_scope'] ?? 'owner';
+if (!in_array($activeTab, ['owner', 'branch'], true)) {
+    $activeTab = 'owner';
+}
+unset($_SESSION['login_scope']);
+?>
+
+<div class="content sign-in-page">
+    <div class="container">
+        <div class="sign-in-card">
+            <div class="sign-in-header">
+                <p class="heading-2">Restaurant <span>Sign In</span></p>
+                <p class="text-muted">Choose how you're signing in</p>
+            </div>
+
+            <?php if (!empty($successMessage)): ?>
+            <div class="alert alert-success" role="alert">
+                <?php echo htmlspecialchars($successMessage, ENT_QUOTES, 'UTF-8'); ?>
+            </div>
+            <?php endif; ?>
+
+            <?php if (!empty($errorMessage)): ?>
+            <div class="alert alert-danger" role="alert">
+                <?php echo htmlspecialchars($errorMessage, ENT_QUOTES, 'UTF-8'); ?>
+            </div>
+            <?php endif; ?>
+
+            <div class="sign-in-tabs" role="tablist">
+                <button type="button" class="sign-in-tab <?php echo $activeTab === 'owner' ? 'active' : ''; ?>"
+                    data-tab="owner" role="tab"
+                    aria-selected="<?php echo $activeTab === 'owner' ? 'true' : 'false'; ?>">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/building.svg" alt=""
+                        class="sign-in-tab-icon">
+                    <span>Owner</span>
+                </button>
+                <button type="button" class="sign-in-tab <?php echo $activeTab === 'branch' ? 'active' : ''; ?>"
+                    data-tab="branch" role="tab"
+                    aria-selected="<?php echo $activeTab === 'branch' ? 'true' : 'false'; ?>">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt=""
+                        class="sign-in-tab-icon">
+                    <span>Branch</span>
+                </button>
+            </div>
+
+            <!-- OWNER PANEL -->
+            <div class="sign-in-panel <?php echo $activeTab === 'owner' ? 'active' : ''; ?>" id="panel-owner"
+                role="tabpanel">
+                <form method="POST" action="../backend/handlers/sign-in-handler.php" class="sign-in-form"
+                    id="signInFormOwner" novalidate>
+
+                    <input type="hidden" name="csrf_token"
+                        value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
+                    <input type="hidden" name="role_scope" value="owner">
+
+                    <div class="form-group">
+                        <label for="owner_identifier" class="form-label">Email or Username</label>
+                        <input type="text" id="owner_identifier" name="identifier" class="form-control"
+                            placeholder="Enter your email or username" autocomplete="username" required>
+                        <div class="form-error" id="ownerIdentifierError"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="owner_password" class="form-label">Password</label>
+                        <div class="password-wrapper">
+                            <input type="password" id="owner_password" name="password" class="form-control"
+                                placeholder="Enter your password" autocomplete="current-password" required>
+                            <button type="button" class="password-toggle" id="ownerTogglePassword"
+                                aria-label="Toggle password visibility" tabindex="-1">
+                                <img src="<?php echo $assetBase; ?>assets/images/icons/password-hide.svg" alt=""
+                                    id="ownerPasswordIcon">
+                            </button>
+                        </div>
+                        <div class="form-error" id="ownerPasswordError"></div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-block" id="ownerSignInBtn">
+                        Sign In as Owner
+                    </button>
+                </form>
+            </div>
+
+            <!-- BRANCH PANEL -->
+            <div class="sign-in-panel <?php echo $activeTab === 'branch' ? 'active' : ''; ?>" id="panel-branch"
+                role="tabpanel">
+                <form method="POST" action="../backend/handlers/sign-in-handler.php" class="sign-in-form"
+                    id="signInFormBranch" novalidate>
+
+                    <input type="hidden" name="csrf_token"
+                        value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
+                    <input type="hidden" name="role_scope" value="branch">
+
+                    <?php if (empty($branches)): ?>
+                    <div class="alert alert-danger" role="alert">
+                        No branch accounts are available yet. Please contact your restaurant owner.
+                    </div>
+                    <?php endif; ?>
+
+                    <div class="form-group">
+                        <label for="branch_code" class="form-label">Select Branch</label>
+                        <div class="branch-selector">
+                            <select id="branch_code" name="branch_code" required
+                                <?php echo empty($branches) ? 'disabled' : ''; ?>>
+                                <option value="">— Choose a branch —</option>
+                                <?php foreach ($branches as $b): ?>
+                                <option
+                                    value="<?php echo htmlspecialchars((string)$b['branch_code'], ENT_QUOTES, 'UTF-8'); ?>">
+                                    <?php
+                                    echo htmlspecialchars(
+                                        (string)$b['business_name'] . ' — ' .
+                                        (string)$b['branch_name'] .
+                                        (!empty($b['city']) ? ' (' . $b['city'] . ')' : ''),
+                                        ENT_QUOTES,
+                                        'UTF-8'
+                                    );
+                                    ?>
+                                </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-error" id="branchCodeError"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="branch_identifier" class="form-label">Email or Username</label>
+                        <input type="text" id="branch_identifier" name="identifier" class="form-control"
+                            placeholder="Enter your email or username" autocomplete="username" required>
+                        <div class="form-error" id="branchIdentifierError"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="branch_password" class="form-label">Password</label>
+                        <div class="password-wrapper">
+                            <input type="password" id="branch_password" name="password" class="form-control"
+                                placeholder="Enter your password" autocomplete="current-password" required>
+                            <button type="button" class="password-toggle" id="branchTogglePassword"
+                                aria-label="Toggle password visibility" tabindex="-1">
+                                <img src="<?php echo $assetBase; ?>assets/images/icons/password-hide.svg" alt=""
+                                    id="branchPasswordIcon">
+                            </button>
+                        </div>
+                        <div class="form-error" id="branchPasswordError"></div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-block" id="branchSignInBtn"
+                        <?php echo empty($branches) ? 'disabled' : ''; ?>>
+                        Sign In to Branch
+                    </button>
+                </form>
+            </div>
+
+            <div class="sign-in-footer">
+                <p class="text-muted">
+                    Want to join FitPal? <a href="sign-up.php">Register your restaurant</a>
+                </p>
+                <p class="text-muted">
+                    Not a restaurant?
+                    <a href="<?php echo $assetBase; ?>../customer/pages/sign-in.php">Customer sign-in</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="../assets/ui/js/sign-in.js" defer></script>
+
+<?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>
+```
+
+---
+
+## File: `fitpal/restaurant/pages/sign-up.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Restaurant Registration Page
+ *
+ * Two-step registration:
+ *   Step 1 — Account Holder
+ *   Step 2 — Business Details + up to 5 permit photos + terms
+ *
+ * @package FitPal
+ * @version 1.1
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (!empty($_SESSION['restaurant_account_id'])) {
+    header('Location: dashboard.php');
+    exit;
+}
+
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+require_once __DIR__ . '/../includes/header.php';
+
+$errorMessage = $_SESSION['restaurant_registration_error'] ?? '';
+unset($_SESSION['restaurant_registration_error']);
+?>
+
+<div class="content register-page">
+    <div class="container">
+        <div class="register-card">
+
+            <div class="register-progress" role="progressbar" aria-valuenow="1" aria-valuemin="1" aria-valuemax="2"
+                aria-label="Registration progress">
+                <div class="progress-step active" data-step="1">
+                    <span class="step-number">1</span>
+                    <span class="step-label">Account</span>
+                </div>
+                <div class="progress-line" id="progressLine1"></div>
+                <div class="progress-step" data-step="2">
+                    <span class="step-number">2</span>
+                    <span class="step-label">Business</span>
+                </div>
+            </div>
+
+            <div class="register-header">
+                <p class="heading-2">Register Your <span>Restaurant</span></p>
+                <p class="text-muted" id="stepSubtitle">Step 1 of 2 — Account Holder</p>
+            </div>
+
+            <?php if (!empty($errorMessage)): ?>
+            <div class="alert alert-danger" role="alert">
+                <?php echo htmlspecialchars($errorMessage, ENT_QUOTES, 'UTF-8'); ?>
+            </div>
+            <?php endif; ?>
+
+            <div id="registerError" class="alert alert-danger" style="display: none;" role="alert">
+                <span id="errorMessage"></span>
+            </div>
+
+            <form method="POST" action="../backend/handlers/sign-up-handler.php" class="register-form" id="registerForm"
+                enctype="multipart/form-data" novalidate>
+
+                <input type="hidden" name="csrf_token"
+                    value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
+                <input type="hidden" name="current_step" id="currentStep" value="1">
+
+                <!-- STEP 1 — Account Holder -->
+                <div class="register-step" id="step1">
+
+                    <div class="step-description">
+                        <p>The primary account holder will have full owner-level access to the restaurant dashboard.</p>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="first_name" class="form-label">
+                                First Name <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" id="first_name" name="first_name" class="form-control"
+                                placeholder="Enter your first name" autocomplete="given-name" required>
+                            <div class="form-error" id="firstNameError"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="middle_name" class="form-label">
+                                Middle Name <span class="text-muted">(Optional)</span>
+                            </label>
+                            <input type="text" id="middle_name" name="middle_name" class="form-control"
+                                placeholder="Enter your middle name" autocomplete="additional-name">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="last_name" class="form-label">
+                                Last Name <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" id="last_name" name="last_name" class="form-control"
+                                placeholder="Enter your last name" autocomplete="family-name" required>
+                            <div class="form-error" id="lastNameError"></div>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="email" class="form-label">
+                                Email Address <span class="text-danger">*</span>
+                            </label>
+                            <input type="email" id="email" name="email" class="form-control"
+                                placeholder="Enter your email address" autocomplete="email" required>
+                            <div class="form-error" id="emailError"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="contact_number" class="form-label">
+                                Contact Number <span class="text-danger">*</span>
+                            </label>
+                            <input type="tel" id="contact_number" name="contact_number" class="form-control"
+                                placeholder="09XX XXX XXXX" autocomplete="tel" inputmode="numeric" maxlength="13"
+                                required>
+                            <div class="form-error" id="contactError"></div>
+                            <div class="form-hint">11 digits, starting with 09</div>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="username" class="form-label">
+                                Username <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" id="username" name="username" class="form-control"
+                                placeholder="Choose a username" autocomplete="username" maxlength="20" required>
+                            <div class="form-error" id="usernameError"></div>
+                            <div class="form-hint">3–20 characters; letters, numbers, underscore</div>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="password" class="form-label">
+                                Password <span class="text-danger">*</span>
+                            </label>
+                            <div class="password-wrapper">
+                                <input type="password" id="password" name="password" class="form-control"
+                                    placeholder="Create a password" autocomplete="new-password" maxlength="20" required>
+                                <button type="button" class="password-toggle" id="togglePassword" tabindex="-1"
+                                    aria-label="Toggle password visibility">
+                                    <img src="<?php echo $assetBase; ?>assets/images/icons/password-hide.svg"
+                                        alt="Hide password" id="passwordIcon">
+                                </button>
+                            </div>
+                            <div class="form-error" id="passwordError"></div>
+                            <div class="form-hint">8-20 characters (letters and numbers only)</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="confirm_password" class="form-label">
+                                Confirm Password <span class="text-danger">*</span>
+                            </label>
+                            <div class="password-wrapper">
+                                <input type="password" id="confirm_password" name="confirm_password"
+                                    class="form-control" placeholder="Confirm your password" autocomplete="new-password"
+                                    maxlength="20" required>
+                                <button type="button" class="password-toggle" id="toggleConfirmPassword" tabindex="-1"
+                                    aria-label="Toggle confirm password visibility">
+                                    <img src="<?php echo $assetBase; ?>assets/images/icons/password-hide.svg"
+                                        alt="Hide password" id="confirmPasswordIcon">
+                                </button>
+                            </div>
+                            <div class="form-error" id="confirmError"></div>
+                        </div>
+                    </div>
+
+                    <div class="step-actions">
+                        <button type="button" class="btn btn-primary btn-next" data-next="2">
+                            Next Step
+                        </button>
+                    </div>
+                </div>
+
+                <!-- STEP 2 — Business Details -->
+                <div class="register-step" id="step2" style="display: none;">
+
+                    <div class="step-description">
+                        <p>Tell us about your restaurant and its first branch. You can add more branches later.</p>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="business_name" class="form-label">
+                                Business Name <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" id="business_name" name="business_name" class="form-control"
+                                placeholder="e.g. Green Bowl Cafe" maxlength="100" required>
+                            <div class="form-error" id="businessNameError"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="cuisine_type" class="form-label">
+                                Cuisine Type <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" id="cuisine_type" name="cuisine_type" class="form-control"
+                                placeholder="e.g. Cafe, Asian Fusion, American" maxlength="50" required>
+                            <div class="form-error" id="cuisineTypeError"></div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="business_description" class="form-label">
+                            Business Description <span class="text-muted">(Optional)</span>
+                        </label>
+                        <textarea id="business_description" name="business_description" class="form-control"
+                            placeholder="Describe your restaurant, your specialty, and what makes it unique..."
+                            maxlength="2000"></textarea>
+                        <div class="form-hint">Max 2000 characters</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="dietary_tags" class="form-label">
+                            Dietary Tags <span class="text-muted">(Optional)</span>
+                        </label>
+                        <input type="text" id="dietary_tags" name="dietary_tags" class="form-control"
+                            placeholder="e.g. vegan,organic,gluten_free (comma-separated)" maxlength="200">
+                        <div class="form-hint">Comma-separated. Example: vegan, gluten_free, halal</div>
+                    </div>
+
+                    <div class="section-divider">
+                        <span>First Branch</span>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="branch_name" class="form-label">
+                                Branch Name <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" id="branch_name" name="branch_name" class="form-control"
+                                placeholder="e.g. Main Branch" maxlength="50" required>
+                            <div class="form-error" id="branchNameError"></div>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="block" class="form-label">
+                                Block / Street / Unit <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" id="block" name="block" class="form-control"
+                                placeholder="e.g. 12-A Sunrise St., Unit 5B" autocomplete="address-line1" required>
+                            <div class="form-error" id="blockError"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="barangay" class="form-label">
+                                Barangay <span class="text-muted">(Optional)</span>
+                            </label>
+                            <input type="text" id="barangay" name="barangay" class="form-control"
+                                placeholder="e.g. Barangay San Antonio" autocomplete="address-line2">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="city" class="form-label">
+                                City / Municipality <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" id="city" name="city" class="form-control" placeholder="e.g. Pasig"
+                                autocomplete="address-level2" required>
+                            <div class="form-error" id="cityError"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="province" class="form-label">
+                                Province <span class="text-muted">(Optional)</span>
+                            </label>
+                            <input type="text" id="province" name="province" class="form-control"
+                                placeholder="e.g. Metro Manila" autocomplete="address-level1">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="region" class="form-label">
+                                Region <span class="text-muted">(Optional)</span>
+                            </label>
+                            <input type="text" id="region" name="region" class="form-control" placeholder="e.g. NCR"
+                                autocomplete="address-level1">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="postal_code" class="form-label">
+                                Postal Code <span class="text-muted">(Optional)</span>
+                            </label>
+                            <input type="text" id="postal_code" name="postal_code" class="form-control"
+                                placeholder="e.g. 1605" autocomplete="postal-code" maxlength="10" inputmode="numeric">
+                            <div class="form-error" id="postalError"></div>
+                        </div>
+                    </div>
+
+                    <!-- PERMITS -->
+                    <div class="section-divider">
+                        <span>Permits &amp; Documents</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            Business Permits <span class="text-danger">*</span>
+                        </label>
+                        <p class="form-hint" style="margin-bottom: 10px;">
+                            Upload photos of your business permits, DTI/SEC registration,
+                            sanitary permits, or any document that verifies your restaurant
+                            is authorized to sell food. At least 1, up to 5 photos.
+                        </p>
+
+                        <div class="permit-dropzone-grid" id="permitGrid">
+                            <?php for ($i = 0; $i < 5; $i++): ?>
+                            <div class="permit-slot" data-index="<?php echo $i; ?>">
+                                <input type="file" name="permits[]" id="permit_<?php echo $i; ?>"
+                                    accept="image/jpeg,image/png,image/webp" class="permit-input" hidden>
+
+                                <div class="permit-slot-inner">
+                                    <div class="permit-hint">
+                                        <img src="<?php echo $assetBase; ?>assets/images/icons/image-upload-fill.svg"
+                                            alt="" class="permit-hint-icon"
+                                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/image-line.svg'">
+                                        <span class="permit-hint-text">Add photo</span>
+                                    </div>
+
+                                    <div class="permit-preview" hidden>
+                                        <img src="" alt="Permit preview" class="permit-preview-img">
+                                        <button type="button" class="permit-remove"
+                                            aria-label="Remove this permit">&times;</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <?php endfor; ?>
+                        </div>
+
+                        <div class="form-error" id="permitsError"></div>
+                    </div>
+
+                    <div class="form-group terms-group" id="termsGroup">
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="terms" name="terms" value="1" required>
+                            <span class="custom-checkbox" aria-hidden="true"></span>
+                            <label for="terms" class="terms-label">
+                                I confirm the information above is accurate and I agree to the
+                                <a href="<?php echo $assetBase; ?>pages/terms-conditions.php" target="_blank"
+                                    rel="noopener noreferrer">Terms and Conditions</a>
+                                and
+                                <a href="<?php echo $assetBase; ?>pages/privacy-policy.php" target="_blank"
+                                    rel="noopener noreferrer">Privacy Policy</a>.
+                            </label>
+                        </div>
+                        <div class="form-error" id="termsError"></div>
+                    </div>
+
+                    <div class="step-actions">
+                        <button type="button" class="btn btn-outline btn-prev" data-prev="1">
+                            Back
+                        </button>
+                        <button type="submit" class="btn btn-primary" id="registerBtn">
+                            Submit Application
+                        </button>
+                    </div>
+                </div>
+            </form>
+
+            <div class="register-footer">
+                <p class="text-muted">
+                    Already registered?
+                    <a href="sign-in.php">Sign in to your account</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Notification modal -->
+<div id="notifierModal" class="notifier hidden" role="dialog" aria-modal="true" aria-labelledby="notifierTitle"
+    aria-describedby="notifierMessage">
+    <div class="notifier-content">
+        <div class="notifier-icon" aria-hidden="true">
+            <img src="<?php echo $assetBase; ?>assets/images/icons/verified-fill.svg" alt=""
+                onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/mail.svg'">
+        </div>
+        <p class="heading-5" id="notifierTitle">Application Received</p>
+        <p id="notifierMessage"></p>
+        <button id="notifierCloseBtn" class="btn btn-primary" type="button">Continue to Sign In</button>
+    </div>
+</div>
+
+<script src="../assets/ui/js/sign-up.js" defer></script>
+
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>
 ```
 
