@@ -1,7 +1,7 @@
 # Web Project Structure
 
 **Project:** fitpal
-**Generated:** 2026-09-20 10:09:03
+**Generated:** 2026-09-20 22:33:58
 **Mode:** all
 
 ```
@@ -17,6 +17,7 @@ fitpal/
 │   │   │   └── sign-in.css
 │   │   └── ui/
 │   │       └── js/
+│   │           ├── dashboard.js
 │   │           ├── header.js
 │   │           ├── restaurants.js
 │   │           ├── riders.js
@@ -32,6 +33,7 @@ fitpal/
 │   ├── includes/
 │   │   └── header.php
 │   └── pages/
+│       ├── customers.php
 │       ├── dashboard.php
 │       ├── profile.php
 │       ├── restaurants.php
@@ -112,6 +114,7 @@ fitpal/
 ├── logs/
 │   ├── content-fetcher-configuration/
 │   │   ├── all_path.py
+│   │   ├── rider.py
 │   │   ├── riders.py
 │   │   ├── technical_path.py
 │   │   └── tests_path.py
@@ -121,9 +124,11 @@ fitpal/
 │   ├── output/
 │   │   ├── all_path_fetched_codebase.md
 │   │   ├── project_structure.md
+│   │   ├── rider_fetched_codebase.md
 │   │   └── riders_fetched_codebase.md
 │   ├── content-fetcher.py
 │   └── tree-mapper.py
+├── restaurant/
 ├── rider/
 │   ├── assets/
 │   │   ├── css/
@@ -336,22 +341,11 @@ fitpal/
 │   │   ├── footer.php
 │   │   ├── header.php
 │   │   └── view-helpers.php
-│   ├── pages/
-│   │   ├── about.php
-│   │   ├── contact.php
-│   │   ├── privacy-policy.php
-│   │   └── terms-conditions.php
-│   └── uploads/
-│       ├── rider-documents/
-│       │   ├── rider_1_license_1789866651_fe5a8fc4.png
-│       │   ├── rider_4_license_1789867885_3061ef06.png
-│       │   ├── rider_5_license_1789868172_6fc9a193.png
-│       │   └── rider_6_license_1789863543_5f5dedf2.png
-│       └── rider-profiles/
-│           ├── rider_1_profile_1789866651_8984c238.png
-│           ├── rider_4_profile_1789867885_b7c95589.png
-│           ├── rider_5_profile_1789868172_108c3207.png
-│           └── rider_6_profile_1789863543_06804320.png
+│   └── pages/
+│       ├── about.php
+│       ├── contact.php
+│       ├── privacy-policy.php
+│       └── terms-conditions.php
 ├── sql/
 │   ├── sample/
 │   │   └── seed-data.sql
@@ -374,16 +368,16 @@ fitpal/
 | File Type | Count |
 |-----------|-------|
 | HTML Files | 0 |
-| PHP Files | 76 |
+| PHP Files | 77 |
 | CSS Files | 36 |
-| JavaScript Files | 26 |
+| JavaScript Files | 27 |
 | JSON Files | 0 |
-| Text/Markdown | 6 |
-| Image Files | 149 |
-| Other Files | 11 |
+| Text/Markdown | 7 |
+| Image Files | 141 |
+| Other Files | 12 |
 
-**Total Directories:** 56
-**Total Files:** 303
+**Total Directories:** 54
+**Total Files:** 299
 
 ---
 

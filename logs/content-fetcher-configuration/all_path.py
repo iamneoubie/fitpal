@@ -7,6 +7,40 @@ filesToCheck = [
     # ===== Root =====
     "/index.php",
 
+    # ===== admin/assets/css =====
+    "/admin/assets/css/admin-tables.css",
+    "/admin/assets/css/dashboard.css",
+    "/admin/assets/css/header.css",
+    "/admin/assets/css/profile.css",
+    "/admin/assets/css/sign-in.css",
+
+    # ===== admin/assets/ui/js =====
+    "/admin/assets/ui/js/dashboard.js",
+    "/admin/assets/ui/js/header.js",
+    "/admin/assets/ui/js/restaurants.js",
+    "/admin/assets/ui/js/riders.js",
+    "/admin/assets/ui/js/sign-in.js",
+
+    # ===== admin/backend/database =====
+    "/admin/backend/database/admin-connect.php",
+    "/admin/backend/database/admin-queries.php",
+
+    # ===== admin/backend/handlers =====
+    "/admin/backend/handlers/admin-handler.php",
+    "/admin/backend/handlers/sign-in-handler.php",
+    "/admin/backend/handlers/sign-out-handler.php",
+
+    # ===== admin/includes =====
+    "/admin/includes/header.php",
+
+    # ===== admin/pages =====
+    "/admin/pages/customers.php",
+    "/admin/pages/dashboard.php",
+    "/admin/pages/profile.php",
+    "/admin/pages/restaurants.php",
+    "/admin/pages/riders.php",
+    "/admin/pages/sign-in.php",
+
     # ===== customer/assets/css =====
     "/customer/assets/css/cart.css",
     "/customer/assets/css/checkout.css",
@@ -82,6 +116,7 @@ filesToCheck = [
     "/customer/pages/wallet.php",
 
     # ===== rider/assets/css =====
+    "/rider/assets/css/admin-tables.css",
     "/rider/assets/css/dashboard.css",
     "/rider/assets/css/deliveries.css",
     "/rider/assets/css/earnings.css",
@@ -104,6 +139,7 @@ filesToCheck = [
     "/rider/backend/database/rider-queries.php",
 
     # ===== rider/backend/handlers =====
+    "/rider/backend/handlers/admin-handler.php",
     "/rider/backend/handlers/message-handler.php",
     "/rider/backend/handlers/rider-handler.php",
     "/rider/backend/handlers/sign-in-handler.php",

@@ -2,7 +2,7 @@
 
 **Preset:** all_path
 
-**Generated:** 2026-09-20 10:14:54
+**Generated:** 2026-09-20 22:35:07
 
 ---
 
@@ -14,7 +14,7 @@
 # Web Project Structure
 
 **Project:** fitpal
-**Generated:** 2026-09-20 10:09:03
+**Generated:** 2026-09-20 22:33:58
 **Mode:** all
 
 ```
@@ -30,6 +30,7 @@ fitpal/
 │   │   │   └── sign-in.css
 │   │   └── ui/
 │   │       └── js/
+│   │           ├── dashboard.js
 │   │           ├── header.js
 │   │           ├── restaurants.js
 │   │           ├── riders.js
@@ -45,6 +46,7 @@ fitpal/
 │   ├── includes/
 │   │   └── header.php
 │   └── pages/
+│       ├── customers.php
 │       ├── dashboard.php
 │       ├── profile.php
 │       ├── restaurants.php
@@ -125,6 +127,7 @@ fitpal/
 ├── logs/
 │   ├── content-fetcher-configuration/
 │   │   ├── all_path.py
+│   │   ├── rider.py
 │   │   ├── riders.py
 │   │   ├── technical_path.py
 │   │   └── tests_path.py
@@ -134,9 +137,11 @@ fitpal/
 │   ├── output/
 │   │   ├── all_path_fetched_codebase.md
 │   │   ├── project_structure.md
+│   │   ├── rider_fetched_codebase.md
 │   │   └── riders_fetched_codebase.md
 │   ├── content-fetcher.py
 │   └── tree-mapper.py
+├── restaurant/
 ├── rider/
 │   ├── assets/
 │   │   ├── css/
@@ -349,22 +354,11 @@ fitpal/
 │   │   ├── footer.php
 │   │   ├── header.php
 │   │   └── view-helpers.php
-│   ├── pages/
-│   │   ├── about.php
-│   │   ├── contact.php
-│   │   ├── privacy-policy.php
-│   │   └── terms-conditions.php
-│   └── uploads/
-│       ├── rider-documents/
-│       │   ├── rider_1_license_1789866651_fe5a8fc4.png
-│       │   ├── rider_4_license_1789867885_3061ef06.png
-│       │   ├── rider_5_license_1789868172_6fc9a193.png
-│       │   └── rider_6_license_1789863543_5f5dedf2.png
-│       └── rider-profiles/
-│           ├── rider_1_profile_1789866651_8984c238.png
-│           ├── rider_4_profile_1789867885_b7c95589.png
-│           ├── rider_5_profile_1789868172_108c3207.png
-│           └── rider_6_profile_1789863543_06804320.png
+│   └── pages/
+│       ├── about.php
+│       ├── contact.php
+│       ├── privacy-policy.php
+│       └── terms-conditions.php
 ├── sql/
 │   ├── sample/
 │   │   └── seed-data.sql
@@ -387,16 +381,16 @@ fitpal/
 | File Type | Count |
 |-----------|-------|
 | HTML Files | 0 |
-| PHP Files | 76 |
+| PHP Files | 77 |
 | CSS Files | 36 |
-| JavaScript Files | 26 |
+| JavaScript Files | 27 |
 | JSON Files | 0 |
-| Text/Markdown | 6 |
-| Image Files | 149 |
-| Other Files | 11 |
+| Text/Markdown | 7 |
+| Image Files | 141 |
+| Other Files | 12 |
 
-**Total Directories:** 56
-**Total Files:** 303
+**Total Directories:** 54
+**Total Files:** 299
 
 ---
 
@@ -7328,6 +7322,8179 @@ $hasProducts = !empty($featuredProducts);
 
 <?php
 require_once __DIR__ . '/shared/includes/footer.php';
+```
+
+---
+
+## File: `fitpal/admin/assets/css/admin-tables.css`
+
+**Status:** `FOUND`
+
+```css
+/**
+ * FitPal Admin Tables — shared list page styles
+ * Version 2.0
+ *
+ * Every admin list page (customers, riders, restaurants) uses this
+ * stylesheet. Pages should not define their own list styles.
+ *
+ * Key behaviours:
+ *   - html { scrollbar-gutter: stable } so opening a modal never
+ *     reflows the page behind it.
+ *   - .admin-modal is display:none by default. The .is-open class
+ *     flips it to a flex centered overlay. Transitions only run on
+ *     opacity/transform.
+ *   - Modal scrolls internally via .admin-modal-panel-body with a
+ *     scrollbar that never pushes the panel's width.
+ *
+ * @package FitPal
+ * @version 2.0
+ */
+
+/* ============================================
+   GLOBAL SCROLLBAR HYGIENE
+   ============================================ */
+
+html {
+    scrollbar-gutter: stable;
+}
+
+/* ============================================
+   CONTENT WRAPPER
+   ============================================ */
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+}
+
+.admin-list-page {
+    background: var(--gray-50);
+    padding: 24px 0 40px 0;
+    flex: 1;
+}
+
+.admin-list-page .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 16px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* ============================================
+   PAGE HEADER
+   ============================================ */
+
+.admin-page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.admin-page-header-left {
+    flex: 1;
+    min-width: 0;
+}
+
+.admin-page-header .heading-2 {
+    margin: 0 0 4px 0;
+    font-size: var(--font-size-3xl);
+    line-height: 1.2;
+    color: var(--text);
+}
+
+.admin-page-header .heading-2 span {
+    color: var(--primary);
+}
+
+.admin-page-header .text-muted {
+    color: var(--gray-500);
+    margin: 0;
+    font-size: var(--font-size-sm);
+}
+
+.admin-page-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.admin-page-header-actions .btn-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+}
+
+/* ============================================
+   FILTER BAR
+   ============================================ */
+
+.admin-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-sm);
+}
+
+.admin-search-form {
+    display: flex;
+    flex: 1;
+    min-width: 220px;
+    gap: 8px;
+}
+
+.admin-search-input {
+    flex: 1;
+    height: 40px;
+    padding: 0 14px;
+    border: 1.5px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    background: var(--white);
+    color: var(--text);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    box-sizing: border-box;
+    min-width: 0;
+}
+
+.admin-search-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
+}
+
+.admin-search-btn {
+    flex: 0 0 auto;
+    height: 40px;
+    padding: 0 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    background: var(--primary);
+    color: var(--white);
+    border: 1px solid var(--primary);
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.admin-search-btn:hover {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+}
+
+.admin-search-btn .btn-icon {
+    filter: brightness(0) invert(1);
+}
+
+.admin-filter-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    width: 100%;
+}
+
+.admin-filter-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: var(--radius-full);
+    background: var(--white);
+    border: 1.5px solid var(--gray-200);
+    color: var(--gray-600);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    font-family: inherit;
+}
+
+.admin-filter-tab:hover {
+    border-color: var(--gray-300);
+    background: var(--gray-50);
+}
+
+.admin-filter-tab.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--white);
+}
+
+.admin-filter-tab .filter-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: var(--radius-full);
+    background: var(--gray-200);
+    color: var(--gray-600);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.admin-filter-tab.active .filter-count {
+    background: rgba(255, 255, 255, 0.25);
+    color: var(--white);
+}
+
+/* ============================================
+   DATA TABLE (CARD LAYOUT, NOT <table>)
+   Each row is a grid so we never get horizontal overflow.
+   ============================================ */
+
+.admin-table-card {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+.admin-table-head {
+    display: none;
+}
+
+.admin-table-row {
+    display: grid;
+    gap: 14px;
+    align-items: center;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--gray-100);
+    transition: background 0.15s ease;
+}
+
+.admin-table-row:last-child {
+    border-bottom: none;
+}
+
+.admin-table-row:hover {
+    background: var(--gray-50);
+}
+
+.admin-table-empty {
+    padding: 48px 20px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.admin-table-empty-icon {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 14px;
+    background: var(--gray-100);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px;
+}
+
+.admin-table-empty-icon img {
+    width: 100%;
+    height: 100%;
+    max-width: 32px;
+    max-height: 32px;
+    object-fit: contain;
+    opacity: 0.4;
+}
+
+.admin-table-empty-title {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+    margin: 0 0 6px 0;
+}
+
+.admin-table-empty-text {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    margin: 0;
+    max-width: 320px;
+    line-height: 1.5;
+}
+
+/* ---- Avatar cell ---- */
+.admin-cell-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 16px;
+    flex-shrink: 0;
+    text-transform: uppercase;
+    overflow: hidden;
+}
+
+.admin-cell-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+/* ---- Body cell ---- */
+.admin-cell-body {
+    min-width: 0;
+}
+
+.admin-cell-title {
+    margin: 0 0 2px 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-cell-subtitle {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-cell-meta {
+    margin: 4px 0 0 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+}
+
+.admin-cell-meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* ---- Actions cell ---- */
+.admin-cell-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.admin-cell-actions .btn {
+    white-space: nowrap;
+}
+
+/* ---- Three-column table layout (customers) ---- */
+.admin-table-customers .admin-table-row {
+    grid-template-columns: 44px minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+
+/* ---- Three-column table layout (riders) ---- */
+.admin-table-riders .admin-table-row {
+    grid-template-columns: 44px minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+
+/* ---- Two-column table layout (restaurants) ---- */
+.admin-table-restaurants .admin-table-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+
+/* ============================================
+   PAGINATION
+   ============================================ */
+
+.admin-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--gray-100);
+    flex-wrap: wrap;
+}
+
+.admin-pagination-info {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    margin-right: auto;
+}
+
+.admin-pagination-list {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.admin-pagination-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 12px;
+    border-radius: var(--radius-base);
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    color: var(--gray-600);
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    min-width: 36px;
+    height: 36px;
+    box-sizing: border-box;
+}
+
+.admin-pagination-link:hover:not(.disabled):not(.active) {
+    background: var(--gray-50);
+    border-color: var(--gray-300);
+    color: var(--text);
+}
+
+.admin-pagination-link.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--white);
+    cursor: default;
+}
+
+.admin-pagination-link.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.admin-pagination-ellipsis {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
+    color: var(--gray-400);
+    font-weight: 600;
+}
+
+/* ============================================
+   MODAL
+   ============================================ */
+
+.admin-modal {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-modal);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+    overflow-y: auto;
+}
+
+.admin-modal.is-open {
+    display: flex;
+}
+
+.admin-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 10, 4, 0.6);
+    z-index: 0;
+    cursor: pointer;
+    animation: adminFadeIn 0.18s ease;
+}
+
+.admin-modal-panel {
+    position: relative;
+    z-index: 1;
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xl);
+    width: 640px;
+    max-width: calc(100vw - 40px);
+    max-height: calc(100vh - 40px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: adminScaleIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    margin: auto;
+}
+
+.admin-modal-panel-wide {
+    width: 820px;
+}
+
+.admin-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--gray-200);
+    flex-shrink: 0;
+    gap: 12px;
+}
+
+.admin-modal-header-left {
+    min-width: 0;
+}
+
+.admin-modal-title {
+    margin: 0;
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+    line-height: 1.3;
+}
+
+.admin-modal-subtitle {
+    margin: 2px 0 0 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+}
+
+.admin-modal-close {
+    background: none;
+    border: none;
+    font-size: 22px;
+    line-height: 1;
+    color: var(--gray-400);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: var(--radius-base);
+    flex-shrink: 0;
+    transition: background 0.15s ease, color 0.15s ease;
+    font-family: inherit;
+}
+
+.admin-modal-close:hover {
+    background: var(--gray-100);
+    color: var(--text);
+}
+
+.admin-modal-panel-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 20px 22px;
+}
+
+.admin-modal-panel-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.admin-modal-panel-body::-webkit-scrollbar-track {
+    background: var(--gray-50);
+    border-radius: 4px;
+}
+
+.admin-modal-panel-body::-webkit-scrollbar-thumb {
+    background: var(--gray-300);
+    border-radius: 4px;
+}
+
+.admin-modal-panel-body::-webkit-scrollbar-thumb:hover {
+    background: var(--gray-400);
+}
+
+.admin-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 22px;
+    border-top: 1px solid var(--gray-200);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.admin-modal-footer .btn {
+    min-width: 120px;
+    justify-content: center;
+}
+
+/* ============================================
+   MODAL TABS (for rider details: Info | Documents)
+   ============================================ */
+
+.admin-modal-tabs {
+    display: flex;
+    gap: 2px;
+    border-bottom: 1px solid var(--gray-200);
+    background: var(--gray-50);
+    padding: 0 22px;
+    flex-shrink: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.admin-modal-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.admin-modal-tab {
+    padding: 12px 16px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--gray-600);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    transition: color 0.15s ease, border-color 0.15s ease;
+    font-family: inherit;
+}
+
+.admin-modal-tab:hover {
+    color: var(--text);
+}
+
+.admin-modal-tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+.admin-modal-tab .tab-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: var(--radius-full);
+    background: var(--gray-200);
+    color: var(--gray-600);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.admin-modal-tab.active .tab-count {
+    background: rgba(89, 193, 74, 0.15);
+    color: var(--primary-dark);
+}
+
+.admin-modal-tab-panel {
+    display: none;
+}
+
+.admin-modal-tab-panel.active {
+    display: block;
+}
+
+/* ============================================
+   DETAIL BLOCK (label + value rows)
+   ============================================ */
+
+.admin-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 20px;
+    margin-bottom: 18px;
+}
+
+.admin-detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.admin-detail-item-full {
+    grid-column: 1 / -1;
+}
+
+.admin-detail-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.admin-detail-value {
+    font-size: var(--font-size-sm);
+    color: var(--text);
+    word-break: break-word;
+    line-height: 1.5;
+}
+
+.admin-detail-value-muted {
+    color: var(--gray-500);
+}
+
+/* ============================================
+   SECTION HEADING INSIDE MODALS
+   ============================================ */
+
+.admin-section-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 20px 0 10px 0;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--gray-100);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    color: var(--gray-600);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.admin-section-heading:first-child {
+    margin-top: 0;
+}
+
+.admin-section-heading .section-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: var(--radius-full);
+    background: var(--gray-100);
+    color: var(--gray-500);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+/* ============================================
+   DOCUMENT / LICENSE PREVIEW
+   ============================================ */
+
+.admin-doc-block {
+    margin-bottom: 16px;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    overflow: hidden;
+    background: var(--white);
+}
+
+.admin-doc-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--gray-200);
+    flex-wrap: wrap;
+}
+
+.admin-doc-title {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+}
+
+.admin-doc-meta {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+}
+
+.admin-doc-image {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--gray-100);
+    padding: 12px;
+    min-height: 220px;
+    box-sizing: border-box;
+}
+
+.admin-doc-image img {
+    max-width: 100%;
+    max-height: 400px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    display: block;
+    border-radius: var(--radius-sm);
+    background: var(--white);
+}
+
+.admin-doc-empty {
+    width: 100%;
+    padding: 32px 20px;
+    text-align: center;
+    color: var(--gray-400);
+    font-size: var(--font-size-sm);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.admin-doc-empty img {
+    width: 40px;
+    height: 40px;
+    opacity: 0.4;
+}
+
+/* Pagination inside the documents tab (5 per page) */
+.admin-doc-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 12px 0 4px 0;
+    flex-wrap: wrap;
+}
+
+/* ============================================
+   ADDRESS CARD
+   ============================================ */
+
+.admin-address-card {
+    padding: 12px 14px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    margin-bottom: 10px;
+}
+
+.admin-address-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+}
+
+.admin-address-text {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+/* ============================================
+   EMERGENCY CONTACT CARD
+   ============================================ */
+
+.admin-contact-card {
+    padding: 12px 14px;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    margin-bottom: 10px;
+    background: var(--white);
+}
+
+.admin-contact-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+
+.admin-contact-name {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+}
+
+.admin-contact-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    background: rgba(89, 193, 74, 0.12);
+    color: var(--primary-dark);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.admin-contact-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: var(--font-size-xs);
+    color: var(--gray-600);
+}
+
+.admin-contact-body strong {
+    color: var(--text);
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 992px) {
+    .admin-table-customers .admin-table-row,
+    .admin-table-riders .admin-table-row {
+        grid-template-columns: 44px minmax(0, 1fr) auto;
+        grid-template-areas:
+            "avatar info actions"
+            "avatar meta actions";
+        row-gap: 4px;
+    }
+    .admin-table-customers .admin-table-row .admin-cell-avatar,
+    .admin-table-riders .admin-table-row .admin-cell-avatar {
+        grid-area: avatar;
+        grid-row: span 2;
+    }
+    .admin-table-customers .admin-table-row .admin-cell-body,
+    .admin-table-riders .admin-table-row .admin-cell-body {
+        grid-area: info;
+    }
+    .admin-table-customers .admin-table-row .admin-cell-meta,
+    .admin-table-riders .admin-table-row .admin-cell-meta {
+        grid-area: meta;
+    }
+    .admin-table-customers .admin-table-row .admin-cell-actions,
+    .admin-table-riders .admin-table-row .admin-cell-actions {
+        grid-area: actions;
+    }
+
+    .admin-table-restaurants .admin-table-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "info actions"
+            "meta actions";
+    }
+    .admin-table-restaurants .admin-table-row .admin-cell-body {
+        grid-area: info;
+    }
+    .admin-table-restaurants .admin-table-row .admin-cell-meta {
+        grid-area: meta;
+    }
+    .admin-table-restaurants .admin-table-row .admin-cell-actions {
+        grid-area: actions;
+    }
+}
+
+@media (max-width: 768px) {
+    .admin-list-page {
+        padding: 16px 0 32px 0;
+    }
+    .admin-page-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .admin-page-header .heading-2 {
+        font-size: var(--font-size-2xl);
+    }
+    .admin-page-header-actions {
+        justify-content: flex-start;
+        width: 100%;
+    }
+    .admin-filter-bar {
+        padding: 12px 14px;
+        gap: 10px;
+    }
+    .admin-search-form {
+        min-width: 0;
+        width: 100%;
+    }
+    .admin-filter-tab {
+        padding: 6px 12px;
+        font-size: 11px;
+    }
+
+    .admin-table-customers .admin-table-row,
+    .admin-table-riders .admin-table-row,
+    .admin-table-restaurants .admin-table-row {
+        grid-template-columns: 40px minmax(0, 1fr);
+        grid-template-areas:
+            "avatar info"
+            "avatar meta"
+            "actions actions";
+        row-gap: 6px;
+        padding: 14px 16px;
+    }
+    .admin-table-customers .admin-table-row .admin-cell-avatar,
+    .admin-table-riders .admin-table-row .admin-cell-avatar {
+        grid-area: avatar;
+    }
+    .admin-table-customers .admin-table-row .admin-cell-body,
+    .admin-table-riders .admin-table-row .admin-cell-body,
+    .admin-table-restaurants .admin-table-row .admin-cell-body {
+        grid-area: info;
+    }
+    .admin-table-customers .admin-table-row .admin-cell-meta,
+    .admin-table-riders .admin-table-row .admin-cell-meta,
+    .admin-table-restaurants .admin-table-row .admin-cell-meta {
+        grid-area: meta;
+    }
+    .admin-table-customers .admin-table-row .admin-cell-actions,
+    .admin-table-riders .admin-table-row .admin-cell-actions,
+    .admin-table-restaurants .admin-table-row .admin-cell-actions {
+        grid-area: actions;
+        justify-content: flex-start;
+        width: 100%;
+    }
+    .admin-table-restaurants .admin-table-row {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+            "info"
+            "meta"
+            "actions";
+    }
+
+    .admin-modal {
+        padding: 10px;
+    }
+    .admin-modal-panel {
+        max-width: calc(100vw - 20px);
+        max-height: calc(100vh - 20px);
+    }
+    .admin-modal-header {
+        padding: 14px 16px;
+    }
+    .admin-modal-panel-body {
+        padding: 16px;
+    }
+    .admin-modal-footer {
+        padding: 12px 16px;
+        flex-direction: column-reverse;
+    }
+    .admin-modal-footer .btn {
+        width: 100%;
+    }
+    .admin-detail-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    .admin-modal-tabs {
+        padding: 0 16px;
+    }
+    .admin-modal-tab {
+        padding: 10px 12px;
+        font-size: var(--font-size-xs);
+    }
+}
+
+@media (max-width: 480px) {
+    .admin-list-page .container {
+        padding: 0 12px;
+    }
+    .admin-page-header .heading-2 {
+        font-size: var(--font-size-xl);
+    }
+    .admin-table-customers .admin-table-row,
+    .admin-table-riders .admin-table-row {
+        grid-template-columns: 36px minmax(0, 1fr);
+        padding: 12px 14px;
+    }
+    .admin-cell-avatar {
+        width: 36px;
+        height: 36px;
+        font-size: 14px;
+    }
+    .admin-cell-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .admin-cell-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+    .admin-pagination {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 12px 16px;
+    }
+    .admin-pagination-info {
+        margin-right: 0;
+        text-align: center;
+    }
+    .admin-pagination-link {
+        min-width: 32px;
+        height: 32px;
+        padding: 5px 10px;
+        font-size: var(--font-size-xs);
+    }
+    .admin-doc-image {
+        padding: 8px;
+        min-height: 180px;
+    }
+    .admin-doc-image img {
+        max-height: 300px;
+    }
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+
+@keyframes adminFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes adminScaleIn {
+    from { opacity: 0; transform: scale(0.96) translateY(-8px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .admin-stat-card,
+    .admin-stat-arrow,
+    .admin-stat-arrow-img,
+    .admin-table-row,
+    .admin-pending-row,
+    .admin-pending-arrow,
+    .admin-chart-bar,
+    .admin-chart-tooltip,
+    .admin-modal-backdrop,
+    .admin-modal-panel,
+    .admin-modal-close,
+    .admin-pagination-link,
+    .admin-filter-tab,
+    .admin-search-btn {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+```
+
+---
+
+## File: `fitpal/admin/assets/css/dashboard.css`
+
+**Status:** `FOUND`
+
+```css
+/**
+ * FitPal Admin Dashboard Styles
+ * Version 5.0
+ *
+ * Layout map:
+ *   .admin-dashboard-page
+ *     .container
+ *       .admin-dashboard-header
+ *       .admin-stats-grid
+ *       .admin-dashboard-row   (chart + pending riders)
+ *       .admin-card            (recent moderation activity)
+ *
+ * The recent-orders panel was removed — order operations belong to
+ * the restaurant and rider dashboards. It was replaced by a
+ * "Recent Moderation Activity" feed, which renders through
+ * .admin-activity-* classes.
+ *
+ * Scrollbar policy: reserve the gutter on <html> so hiding the body
+ * scrollbar during modals never reflows the page.
+ *
+ * @package FitPal
+ * @version 5.0 — Removed .admin-order-* rules. Added .admin-activity-*
+ *                rules for the recent-moderation-activity feed.
+ */
+
+html {
+    scrollbar-gutter: stable;
+}
+
+/* ============================================
+   CONTENT WRAPPER
+   ============================================ */
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+}
+
+.admin-dashboard-page {
+    background: var(--gray-50);
+    padding: 24px 0 40px 0;
+    flex: 1;
+}
+
+.admin-dashboard-page .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 16px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* ============================================
+   HEADER
+   ============================================ */
+
+.admin-dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.admin-dashboard-greeting {
+    flex: 1;
+    min-width: 0;
+}
+
+.admin-dashboard-greeting .heading-2 {
+    margin: 0 0 4px 0;
+    font-size: var(--font-size-3xl);
+    line-height: 1.2;
+    color: var(--text);
+}
+
+.admin-dashboard-greeting .heading-2 span {
+    color: var(--primary);
+}
+
+.admin-dashboard-greeting .text-muted {
+    color: var(--gray-500);
+    margin: 0;
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+}
+
+.admin-dashboard-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.admin-dashboard-actions .btn-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+    filter: brightness(0) invert(1);
+}
+
+.admin-dashboard-actions .btn-outline .btn-icon {
+    filter: brightness(0) saturate(100%)
+            invert(20%) sepia(8%) saturate(800%)
+            hue-rotate(50deg) brightness(95%) contrast(95%);
+}
+
+/* ============================================
+   ALERTS
+   ============================================ */
+
+.alert {
+    padding: 12px 18px;
+    border-radius: var(--radius-base);
+    margin-bottom: 20px;
+    border: 1px solid transparent;
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+}
+
+.alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+
+.alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+/* ============================================
+   STAT CARDS
+   ============================================ */
+
+.admin-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+    align-items: stretch;
+}
+
+.admin-stat-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    padding: 18px 20px;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--gray-100);
+    text-decoration: none;
+    color: inherit;
+    position: relative;
+    min-height: 92px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+a.admin-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--gray-200);
+}
+
+a.admin-stat-card:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.admin-stat-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: var(--radius-base);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.admin-stat-icon img {
+    width: 22px;
+    height: 22px;
+    display: block;
+}
+
+.admin-stat-icon-customers    { background: rgba(89, 193, 74, 0.12); }
+.admin-stat-icon-restaurants  { background: rgba(23, 162, 184, 0.12); }
+.admin-stat-icon-riders       { background: rgba(255, 193, 7, 0.14); }
+.admin-stat-icon-revenue      { background: rgba(108, 216, 92, 0.14); }
+
+.admin-stat-icon-customers img {
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+.admin-stat-icon-restaurants img {
+    filter: brightness(0) saturate(100%)
+            invert(52%) sepia(70%) saturate(600%)
+            hue-rotate(160deg) brightness(92%) contrast(85%);
+}
+.admin-stat-icon-riders img {
+    filter: brightness(0) saturate(100%)
+            invert(79%) sepia(90%) saturate(600%)
+            hue-rotate(0deg) brightness(95%) contrast(85%);
+}
+.admin-stat-icon-revenue img {
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.admin-stat-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.admin-stat-number {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--text);
+    margin: 0;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.admin-stat-label {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    margin: 2px 0 0 0;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: var(--font-weight-medium);
+}
+
+.admin-stat-hint {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    margin: 2px 0 0 0;
+}
+
+.admin-stat-hint-active {
+    color: var(--primary);
+    font-weight: var(--font-weight-semibold);
+}
+
+.admin-stat-arrow {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease;
+}
+
+.admin-stat-arrow-img {
+    width: 18px;
+    height: 18px;
+    display: block;
+    flex-shrink: 0;
+    filter: brightness(0) saturate(100%)
+            invert(75%) sepia(0%) saturate(0%)
+            brightness(95%) contrast(90%);
+    transition: filter 0.15s ease;
+}
+
+a.admin-stat-card:hover .admin-stat-arrow {
+    transform: translateX(2px);
+}
+
+a.admin-stat-card:hover .admin-stat-arrow-img {
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+/* ============================================
+   TWO-COLUMN ROW
+   ============================================ */
+
+.admin-dashboard-row {
+    display: grid;
+    gap: 24px;
+    align-items: stretch;
+    margin-bottom: 24px;
+}
+
+.admin-dashboard-row-primary {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}
+
+.admin-dashboard-row > .admin-card {
+    height: 100%;
+    margin-bottom: 0;
+}
+
+/* ============================================
+   CARD BLOCKS
+   ============================================ */
+
+.admin-card {
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--gray-100);
+    margin-bottom: 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.admin-card:last-child {
+    margin-bottom: 0;
+}
+
+.admin-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--gray-100);
+    background: var(--gray-50);
+    flex-shrink: 0;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.admin-card-header .heading-5 {
+    margin: 0;
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+}
+
+.admin-card-link {
+    font-size: var(--font-size-sm);
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: var(--font-weight-medium);
+}
+
+.admin-card-link:hover {
+    text-decoration: underline;
+}
+
+.admin-card-body {
+    padding: 18px 20px;
+}
+
+/* ============================================
+   WEEKLY REVENUE CHART
+   ============================================ */
+
+.admin-chart-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: 20px;
+    min-height: 0;
+}
+
+.admin-weekly-chart {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px;
+    height: 220px;
+    position: relative;
+    flex: 1;
+    min-height: 180px;
+}
+
+.admin-chart-y-axis {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding: 0 4px 22px 0;
+    font-size: 11px;
+    color: var(--gray-400);
+    font-weight: var(--font-weight-medium);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.admin-chart-y-label {
+    white-space: nowrap;
+}
+
+.admin-chart-plot {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.admin-chart-gridline {
+    position: absolute;
+    left: 0;
+    right: 0;
+    border-top: 1px dashed var(--gray-100);
+    height: 0;
+}
+
+.admin-chart-plot .admin-chart-gridline {
+    bottom: 22px;
+}
+
+.admin-chart-plot .admin-chart-gridline:first-child {
+    top: 0;
+    bottom: auto;
+}
+
+.admin-chart-plot .admin-chart-gridline:nth-child(2) { top: 20%; }
+.admin-chart-plot .admin-chart-gridline:nth-child(3) { top: 40%; }
+.admin-chart-plot .admin-chart-gridline:nth-child(4) { top: 60%; }
+.admin-chart-plot .admin-chart-gridline:nth-child(5) { top: 80%; }
+.admin-chart-plot .admin-chart-gridline:last-child {
+    top: auto;
+    bottom: 22px;
+}
+
+.admin-chart-columns {
+    flex: 1;
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    padding-bottom: 22px;
+    position: relative;
+    z-index: 1;
+    min-height: 0;
+}
+
+.admin-chart-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.admin-chart-bar-track {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    min-height: 0;
+    position: relative;
+}
+
+.admin-chart-bar {
+    width: 60%;
+    max-width: 42px;
+    min-height: 4px;
+    background: linear-gradient(180deg, var(--secondary) 0%, var(--primary) 100%);
+    border-radius: 6px 6px 3px 3px;
+    transition: filter 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+    cursor: pointer;
+    outline: none;
+}
+
+.admin-chart-bar.is-empty {
+    background: var(--gray-200);
+    min-height: 4px;
+}
+
+.admin-chart-bar.is-today {
+    background: linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
+    box-shadow: 0 2px 8px rgba(89, 193, 74, 0.25);
+}
+
+.admin-chart-bar:hover,
+.admin-chart-bar:focus-visible {
+    filter: brightness(1.06);
+    box-shadow: 0 4px 14px rgba(89, 193, 74, 0.22);
+}
+
+.admin-chart-label {
+    font-size: 11px;
+    font-weight: var(--font-weight-semibold);
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    line-height: 1;
+}
+
+.admin-chart-label.is-today {
+    color: var(--primary);
+}
+
+.admin-chart-tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--text);
+    color: var(--white);
+    font-size: 11px;
+    font-weight: var(--font-weight-medium);
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-md);
+    opacity: 0;
+    transform: translateY(-2px);
+    transition: opacity 0.12s ease, transform 0.12s ease;
+    white-space: nowrap;
+    z-index: 10;
+}
+
+.admin-chart-tooltip.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.admin-chart-summary {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    padding-top: 16px;
+    border-top: 1px solid var(--gray-100);
+    flex-shrink: 0;
+}
+
+.admin-chart-summary-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.admin-chart-summary-label {
+    font-size: 11px;
+    color: var(--gray-500);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.admin-chart-summary-value {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-bold);
+    color: var(--text);
+    line-height: 1.2;
+}
+
+.admin-chart-summary-hint {
+    font-size: 11px;
+    color: var(--gray-400);
+}
+
+/* ============================================
+   PENDING RIDERS LIST (right column of row)
+   ============================================ */
+
+.admin-pending-list {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
+.admin-pending-row {
+    display: grid;
+    grid-template-columns: 40px 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--gray-100);
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.15s ease;
+}
+
+.admin-pending-row:last-child {
+    border-bottom: none;
+}
+
+.admin-pending-row:hover {
+    background: var(--gray-50);
+}
+
+.admin-pending-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 15px;
+    flex-shrink: 0;
+    text-transform: uppercase;
+    overflow: hidden;
+}
+
+.admin-pending-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.admin-pending-info {
+    min-width: 0;
+}
+
+.admin-pending-name {
+    margin: 0 0 2px 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-pending-meta {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-pending-arrow {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    filter: brightness(0) saturate(100%)
+            invert(75%) sepia(0%) saturate(0%)
+            brightness(95%) contrast(90%);
+    transition: filter 0.15s ease, transform 0.15s ease;
+}
+
+.admin-pending-row:hover .admin-pending-arrow {
+    transform: translateX(2px);
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+/* ============================================
+   RECENT MODERATION ACTIVITY
+   Replaces the old .admin-order-* panel. Each row is a compact
+   list item: icon on the left, name + meta in the middle, status
+   badge on the right.
+   ============================================ */
+
+.admin-activity-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.admin-activity-row {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--gray-100);
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.15s ease;
+}
+
+.admin-activity-row:last-child {
+    border-bottom: none;
+}
+
+.admin-activity-row:hover {
+    background: var(--gray-50);
+}
+
+.admin-activity-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-base);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.admin-activity-icon img {
+    width: 18px;
+    height: 18px;
+    display: block;
+}
+
+.admin-activity-icon-rider {
+    background: rgba(255, 193, 7, 0.14);
+}
+
+.admin-activity-icon-rider img {
+    filter: brightness(0) saturate(100%)
+            invert(79%) sepia(90%) saturate(600%)
+            hue-rotate(0deg) brightness(95%) contrast(85%);
+}
+
+.admin-activity-icon-restaurant {
+    background: rgba(23, 162, 184, 0.12);
+}
+
+.admin-activity-icon-restaurant img {
+    filter: brightness(0) saturate(100%)
+            invert(52%) sepia(70%) saturate(600%)
+            hue-rotate(160deg) brightness(92%) contrast(85%);
+}
+
+.admin-activity-body {
+    min-width: 0;
+}
+
+.admin-activity-name {
+    margin: 0 0 2px 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-activity-meta {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ============================================
+   BADGES
+   ============================================ */
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    line-height: 1;
+    white-space: nowrap;
+    min-height: 22px;
+}
+
+.badge-success   { background: #d4edda; color: #155724; }
+.badge-warning   { background: #fff3cd; color: #856404; }
+.badge-danger    { background: #f8d7da; color: #721c24; }
+.badge-info      { background: #d1ecf1; color: #0c5460; }
+.badge-primary   { background: #cce5ff; color: #004085; }
+.badge-secondary { background: var(--gray-200); color: var(--gray-600); }
+
+/* ============================================
+   EMPTY STATE
+   ============================================ */
+
+.admin-empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.admin-empty-icon {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 14px;
+    background: var(--gray-100);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px;
+}
+
+.admin-empty-icon img {
+    width: 100%;
+    height: 100%;
+    max-width: 32px;
+    max-height: 32px;
+    object-fit: contain;
+    opacity: 0.4;
+}
+
+.admin-empty-title {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+    margin: 0 0 6px 0;
+}
+
+.admin-empty-text {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    margin: 0;
+    max-width: 320px;
+    line-height: 1.5;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 992px) {
+    .admin-stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .admin-dashboard-row-primary {
+        grid-template-columns: 1fr;
+    }
+    .admin-dashboard-row > .admin-card {
+        height: auto;
+    }
+    .admin-weekly-chart {
+        height: 200px;
+    }
+}
+
+@media (max-width: 768px) {
+    .admin-dashboard-page {
+        padding: 16px 0 32px 0;
+    }
+    .admin-dashboard-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .admin-dashboard-greeting .heading-2 {
+        font-size: var(--font-size-2xl);
+    }
+    .admin-dashboard-actions {
+        justify-content: flex-start;
+        width: 100%;
+    }
+    .admin-weekly-chart {
+        height: 180px;
+    }
+    .admin-chart-y-axis { font-size: 10px; }
+    .admin-chart-label  { font-size: 10px; }
+    .admin-chart-columns { gap: 6px; }
+    .admin-chart-summary {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    .admin-chart-summary-item {
+        padding: 8px 0;
+        border-bottom: 1px dashed var(--gray-100);
+    }
+    .admin-chart-summary-item:last-child {
+        border-bottom: none;
+    }
+    .admin-activity-row {
+        grid-template-columns: 36px minmax(0, 1fr) auto;
+        gap: 10px;
+        padding: 12px 16px;
+    }
+    .admin-activity-icon {
+        width: 36px;
+        height: 36px;
+    }
+}
+
+@media (max-width: 480px) {
+    .admin-stats-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+    .admin-stat-card {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 14px;
+        gap: 10px;
+        min-height: 0;
+    }
+    .admin-stat-number { font-size: var(--font-size-base); }
+    .admin-stat-label { font-size: 10px; }
+    .admin-stat-icon { width: 40px; height: 40px; }
+    .admin-stat-icon img { width: 18px; height: 18px; }
+    .admin-stat-arrow { display: none; }
+    .admin-card-header { padding: 12px 16px; }
+    .admin-card-body   { padding: 14px 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .admin-stat-card,
+    .admin-stat-arrow,
+    .admin-stat-arrow-img,
+    .admin-chart-bar,
+    .admin-chart-tooltip,
+    .admin-pending-row,
+    .admin-pending-arrow,
+    .admin-activity-row {
+        transition: none !important;
+    }
+}
+```
+
+---
+
+## File: `fitpal/admin/assets/css/header.css`
+
+**Status:** `FOUND`
+
+```css
+/**
+ * FitPal Admin Header Styles
+ *
+ * Mirrors customer and rider headers. Uses global CSS variables.
+ *
+ * @package FitPal
+ * @version 2.0
+ */
+
+.rider-header,
+.admin-header {
+    height: 70px;
+    min-height: 70px;
+    max-height: 70px;
+}
+
+.admin-header .header-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    height: 100%;
+}
+
+/* Navigation links */
+.admin-header .nav-link {
+    font-weight: 500;
+    color: var(--gray-600);
+    padding: var(--spacing-2) var(--spacing-3);
+    border-radius: var(--radius-base);
+    transition: all var(--transition-fast);
+    position: relative;
+    font-size: var(--font-size-sm);
+    text-decoration: none;
+}
+
+.admin-header .nav-link:hover {
+    color: var(--primary);
+    background-color: var(--gray-50);
+}
+
+.admin-header .nav-link.active {
+    color: var(--primary);
+    background-color: rgba(89, 193, 74, 0.1);
+}
+
+.admin-header .nav-link.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 20px;
+    height: 3px;
+    background-color: var(--primary);
+    border-radius: var(--radius-full);
+}
+
+/* Buttons match shared header exactly */
+.admin-header .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-2);
+    padding: var(--spacing-2) var(--spacing-4);
+    border-radius: var(--radius-base);
+    font-weight: var(--font-weight-medium);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
+    text-align: center;
+    text-decoration: none;
+    transition: all var(--transition-fast);
+    border: 2px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.admin-header .btn-sm {
+    padding: var(--spacing-1) var(--spacing-3);
+    font-size: var(--font-size-xs);
+    min-height: 32px;
+}
+
+.admin-header .btn-primary {
+    background-color: var(--primary);
+    color: var(--white);
+    border-color: var(--primary);
+}
+
+.admin-header .btn-primary:hover,
+.admin-header .btn-primary:focus {
+    background-color: var(--primary-dark);
+    border-color: var(--primary-dark);
+    color: var(--white);
+}
+
+.admin-header .btn-outline {
+    background-color: transparent;
+    color: var(--text);
+    border-color: var(--gray-300);
+}
+
+.admin-header .btn-outline:hover,
+.admin-header .btn-outline:focus {
+    background-color: var(--gray-50);
+    color: var(--text);
+    border-color: var(--gray-400);
+}
+
+.admin-header .nav-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+}
+
+.admin-header .logout-btn {
+    font-size: var(--font-size-xs);
+    padding: var(--spacing-1) var(--spacing-3);
+    min-height: 32px;
+}
+
+/* Mobile toggle */
+.menu-toggle {
+    display: none;
+    flex-direction: column;
+    gap: 5px;
+    padding: var(--spacing-2);
+    border-radius: var(--radius-base);
+    background: none;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    z-index: 1001;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.menu-toggle:hover { background: var(--gray-50); }
+
+.menu-icon {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 24px;
+}
+
+.menu-icon .bar {
+    display: block;
+    height: 2px;
+    width: 100%;
+    background: var(--text);
+    border-radius: var(--radius-full);
+    transition: transform 0.15s ease, opacity 0.15s ease;
+    transform-origin: center;
+}
+
+.menu-toggle.active .bar:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.menu-toggle.active .bar:nth-child(2) { opacity: 0; transform: scaleX(0); }
+.menu-toggle.active .bar:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+/* Mobile overlay */
+.mobile-overlay {
+    position: fixed;
+    top: 70px;
+    left: 0;
+    width: 100%;
+    height: calc(100vh - 70px);
+    background: rgba(0, 0, 0, 0.3);
+    z-index: var(--z-modal-backdrop);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    pointer-events: none;
+    transform: translateZ(0);
+}
+
+.mobile-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+    will-change: opacity;
+}
+
+/* Mobile nav */
+.mobile-nav {
+    position: fixed;
+    top: 70px;
+    right: 0;
+    width: 320px;
+    max-width: 85%;
+    height: calc(100vh - 70px);
+    background: var(--white);
+    z-index: var(--z-modal);
+    padding: var(--spacing-6) var(--spacing-4);
+    overflow-y: auto;
+    transform: translateX(100%) translateZ(0);
+    transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    backface-visibility: hidden;
+    contain: layout;
+}
+
+.mobile-nav::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -30px;
+    width: 30px;
+    height: 100%;
+    box-shadow: -30px 0 30px rgba(0, 0, 0, 0.08);
+    pointer-events: none;
+    transform: translateX(0);
+}
+
+.mobile-nav.open {
+    transform: translateX(0) translateZ(0);
+    will-change: transform;
+}
+
+.mobile-nav::-webkit-scrollbar { display: none; }
+.mobile-nav { -ms-overflow-style: none; scrollbar-width: none; }
+
+.mobile-nav-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.mobile-nav-item { margin: 0; padding: 0; }
+
+.mobile-nav-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-3) var(--spacing-4);
+    color: var(--gray-700);
+    font-weight: 500;
+    font-size: var(--font-size-base);
+    border-radius: var(--radius-base);
+    transition: background 0.1s ease, color 0.1s ease;
+    text-decoration: none;
+    text-align: center;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.mobile-nav-link:hover {
+    background: var(--gray-50);
+    color: var(--primary);
+}
+
+.mobile-nav-link.active {
+    color: var(--primary);
+    background: rgba(89, 193, 74, 0.1);
+}
+
+.mobile-nav-divider {
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--gray-200) 20%, var(--gray-200) 80%, transparent);
+    margin: var(--spacing-3) var(--spacing-2);
+}
+
+.mobile-user-greeting {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-3);
+    padding: var(--spacing-3) var(--spacing-4);
+    background: var(--gray-50);
+    border-radius: var(--radius-base);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.mobile-user-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.mobile-user-avatar .user-initial-large {
+    color: var(--white);
+    font-weight: 700;
+    font-size: 20px;
+    text-transform: uppercase;
+}
+
+.mobile-user-name {
+    font-weight: 600;
+    font-size: var(--font-size-base);
+    color: var(--text);
+}
+
+.mobile-nav-link.mobile-login {
+    color: var(--primary);
+    font-weight: 600;
+    background-color: rgba(89, 193, 74, 0.08);
+    margin-top: var(--spacing-1);
+}
+
+.mobile-nav-link.mobile-login:hover {
+    background-color: rgba(89, 193, 74, 0.16);
+    color: var(--primary-dark);
+}
+
+.mobile-nav-link.mobile-logout {
+    color: var(--danger);
+    font-weight: 600;
+    background-color: rgba(220, 53, 69, 0.08);
+    margin-top: var(--spacing-1);
+}
+
+.mobile-nav-link.mobile-logout:hover {
+    background-color: rgba(220, 53, 69, 0.16);
+    color: var(--danger);
+}
+
+/* Desktop user circle */
+.user-profile-circle {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 16px;
+    flex-shrink: 0;
+    border: 2px solid var(--primary);
+    transition: all var(--transition-fast);
+    cursor: default;
+}
+
+.user-profile-circle:hover {
+    border-color: var(--primary-dark);
+    transform: scale(1.05);
+}
+
+.user-profile-circle .user-initial {
+    color: var(--white);
+    font-weight: 700;
+    font-size: 16px;
+    text-transform: uppercase;
+}
+
+.user-profile-circle .profile-icon {
+    width: 20px;
+    height: 20px;
+    filter: brightness(0) saturate(100%) invert(100%);
+}
+
+@media (max-width: 992px) {
+    .admin-header .header-nav { display: none; }
+    .menu-toggle { display: flex; }
+}
+
+@media (max-width: 768px) {
+    .admin-header {
+        height: 60px;
+        min-height: 60px;
+        max-height: 60px;
+    }
+    .admin-header .logo-text { font-size: var(--font-size-base); }
+    .admin-header .logo-image { height: 32px; }
+    .mobile-nav {
+        top: 60px;
+        height: calc(100vh - 60px);
+        width: 280px;
+        padding: var(--spacing-4) var(--spacing-3);
+    }
+    .mobile-overlay {
+        top: 60px;
+        height: calc(100vh - 60px);
+    }
+}
+
+@media (max-width: 576px) {
+    .mobile-user-avatar { width: 38px; height: 38px; }
+    .mobile-user-avatar .user-initial-large { font-size: 17px; }
+    .mobile-user-name { font-size: var(--font-size-sm); }
+    .mobile-nav {
+        width: 100%;
+        max-width: 100%;
+        padding: var(--spacing-4) var(--spacing-3);
+    }
+    .mobile-nav-link {
+        padding: var(--spacing-3) var(--spacing-3);
+        font-size: var(--font-size-base);
+    }
+}
+```
+
+---
+
+## File: `fitpal/admin/assets/css/profile.css`
+
+**Status:** `FOUND`
+
+```css
+/**
+ * FitPal Admin Profile Page Styles
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+.admin-profile-card {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: 24px;
+    max-width: 720px;
+    margin: 0 auto;
+}
+
+.profile-header-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--gray-100);
+    margin-bottom: 20px;
+}
+
+.profile-avatar-large {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    font-weight: 700;
+    flex-shrink: 0;
+    text-transform: uppercase;
+}
+
+.profile-header-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.profile-name {
+    margin: 0;
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--text);
+    word-break: break-word;
+}
+
+.profile-role-badge {
+    display: inline-block;
+    padding: 3px 12px;
+    border-radius: var(--radius-full);
+    background: rgba(89, 193, 74, 0.1);
+    color: var(--primary-dark);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    width: fit-content;
+}
+
+.profile-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px 24px;
+    margin-bottom: 24px;
+}
+
+.profile-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.profile-field .field-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.profile-field .field-value {
+    font-size: var(--font-size-base);
+    color: var(--text);
+    word-break: break-word;
+    line-height: 1.4;
+}
+
+.profile-field .field-value.muted {
+    color: var(--gray-600);
+}
+
+.profile-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 20px;
+    border-top: 1px solid var(--gray-100);
+}
+
+.profile-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 24px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    text-decoration: none;
+    background: var(--primary);
+    color: var(--white);
+    border: 2px solid var(--primary);
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.profile-actions .btn:hover {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+}
+
+@media (max-width: 640px) {
+    .admin-profile-card {
+        padding: 20px 16px;
+    }
+
+    .profile-fields {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-avatar-large {
+        width: 56px;
+        height: 56px;
+        font-size: 22px;
+    }
+
+    .profile-actions {
+        justify-content: center;
+    }
+
+    .profile-actions .btn {
+        width: 100%;
+    }
+}
+```
+
+---
+
+## File: `fitpal/admin/assets/css/sign-in.css`
+
+**Status:** `FOUND`
+
+```css
+/**
+ * FitPal Admin Sign-In Styles
+ *
+ * Same shell as the customer sign-in: centered card, soft shadow,
+ * comfortable touch targets. Uses global CSS variables.
+ *
+ * @package FitPal
+ * @version 2.0
+ */
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+}
+
+.sign-in-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 16px;
+    background: linear-gradient(135deg, var(--gray-50) 0%, var(--white) 100%);
+    flex: 1;
+    min-height: calc(100vh - 70px);
+}
+
+.sign-in-page .container {
+    max-width: 440px;
+    margin: 0 auto;
+    padding: 0;
+    width: 100%;
+}
+
+.sign-in-card {
+    background: var(--white);
+    border-radius: var(--radius-xl);
+    padding: 32px 24px;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--gray-200);
+    margin: 16px 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.sign-in-header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.sign-in-header .heading-2 {
+    margin: 0 0 6px 0;
+    color: var(--text);
+}
+
+.sign-in-header .heading-2 span {
+    color: var(--primary);
+}
+
+.sign-in-header .text-muted {
+    color: var(--gray-500);
+    font-size: var(--font-size-base);
+    margin: 0;
+}
+
+.sign-in-form .form-group { margin-bottom: 20px; }
+
+.sign-in-form .form-label {
+    display: block;
+    font-weight: var(--font-weight-semibold);
+    color: var(--gray-700);
+    margin-bottom: 6px;
+    font-size: var(--font-size-sm);
+}
+
+.sign-in-form .form-control {
+    width: 100%;
+    padding: 14px 16px;
+    border: 2px solid var(--gray-300);
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-base);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    background-color: var(--white);
+    height: 54px;
+    box-sizing: border-box;
+    color: var(--text);
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.sign-in-form .form-control:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(89, 193, 74, 0.15);
+}
+
+.sign-in-form .form-control.error { border-color: var(--danger); }
+
+.sign-in-form .form-control.error:focus {
+    box-shadow: 0 0 0 4px rgba(220, 53, 69, 0.15);
+}
+
+.sign-in-form .form-control::placeholder {
+    color: var(--gray-400);
+    font-size: var(--font-size-sm);
+}
+
+.sign-in-form .form-error {
+    color: var(--danger);
+    font-size: var(--font-size-sm);
+    margin-top: 6px;
+    display: none;
+    font-weight: var(--font-weight-medium);
+}
+
+.password-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.password-wrapper .form-control { padding-right: 56px; }
+
+.password-toggle {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.5;
+    transition: opacity var(--transition-fast);
+    border-radius: var(--radius-sm);
+}
+
+.password-toggle:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.password-toggle img { width: 24px; height: 24px; }
+
+.password-toggle:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.alert {
+    padding: 14px 16px;
+    border-radius: var(--radius-base);
+    margin-bottom: 20px;
+    border: 2px solid transparent;
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+}
+
+.alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+.alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+
+.sign-in-form .btn {
+    margin-top: 4px;
+    padding: 16px 20px;
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-bold);
+    height: 56px;
+    width: 100%;
+    border-radius: var(--radius-base);
+    letter-spacing: 0.3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.sign-in-form .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.sign-in-form .btn:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.sign-in-footer {
+    margin-top: 24px;
+    text-align: center;
+}
+
+.sign-in-footer .text-muted {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    margin: 10px 0 0 0;
+    line-height: 1.6;
+}
+
+.sign-in-footer .text-muted a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: var(--font-weight-semibold);
+}
+
+.sign-in-footer .text-muted a:hover {
+    color: var(--primary-dark);
+    text-decoration: underline;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+@media (max-width: 374px) {
+    .sign-in-card { padding: 24px 16px; border-radius: var(--radius-lg); }
+    .sign-in-header .heading-2 { font-size: var(--font-size-2xl); }
+    .sign-in-form .form-control { height: 48px; padding: 12px 14px; font-size: var(--font-size-sm); }
+    .sign-in-form .btn { height: 48px; font-size: var(--font-size-sm); padding: 12px 16px; }
+    .password-toggle img { width: 20px; height: 20px; }
+    .password-wrapper .form-control { padding-right: 48px; }
+}
+
+@media (min-width: 768px) {
+    .sign-in-card { padding: 40px 36px; }
+    .sign-in-header .heading-2 { font-size: var(--font-size-3xl); }
+    .sign-in-form .form-control { height: 52px; }
+    .sign-in-form .btn { height: 52px; }
+}
+```
+
+---
+
+## File: `fitpal/admin/assets/ui/js/dashboard.js`
+
+**Status:** `FOUND`
+
+```javascript
+/**
+ * FitPal Admin Dashboard JavaScript
+ *
+ * - Chart tooltip on hover/focus/tap
+ * - Modal open/close with body scroll lock
+ * - Escape key closes the active modal
+ *
+ * @package FitPal
+ * @version 2.0
+ */
+
+(function () {
+    'use strict';
+
+    document.addEventListener('DOMContentLoaded', function () {
+
+        // ============================================
+        // CHART TOOLTIP
+        // ============================================
+        var chart = document.querySelector('.admin-weekly-chart');
+        var tooltip = document.getElementById('adminChartTooltip');
+
+        if (chart && tooltip) {
+            var bars = chart.querySelectorAll('.admin-chart-bar');
+            var activeBar = null;
+
+            function showTooltipFor(bar) {
+                var column = bar.closest('.admin-chart-column');
+                if (!column) return;
+                var day = column.dataset.day || '';
+                var amount = column.dataset.amount || '';
+                tooltip.textContent = day + ' — ' + amount;
+                tooltip.classList.add('is-visible');
+                activeBar = bar;
+                positionTooltip();
+            }
+
+            function hideTooltip() {
+                tooltip.classList.remove('is-visible');
+                activeBar = null;
+            }
+
+            function positionTooltip() {
+                if (!activeBar) return;
+                var chartRect = chart.getBoundingClientRect();
+                var barRect = activeBar.getBoundingClientRect();
+                var tooltipRect = tooltip.getBoundingClientRect();
+
+                var left = barRect.left - chartRect.left
+                         + (barRect.width / 2)
+                         - (tooltipRect.width / 2);
+
+                var top = barRect.top - chartRect.top
+                        - tooltipRect.height
+                        - 8;
+
+                if (left < 4) left = 4;
+                if (left + tooltipRect.width > chartRect.width - 4) {
+                    left = chartRect.width - tooltipRect.width - 4;
+                }
+                if (top < 4) {
+                    top = barRect.bottom - chartRect.top + 8;
+                }
+
+                tooltip.style.left = left + 'px';
+                tooltip.style.top = top + 'px';
+            }
+
+            bars.forEach(function (bar) {
+                bar.addEventListener('mouseenter', function () { showTooltipFor(this); });
+                bar.addEventListener('mouseleave', hideTooltip);
+                bar.addEventListener('focus', function () { showTooltipFor(this); });
+                bar.addEventListener('blur', hideTooltip);
+                bar.addEventListener('touchstart', function (e) {
+                    e.preventDefault();
+                    showTooltipFor(this);
+                }, { passive: false });
+            });
+
+            document.addEventListener('touchstart', function (e) {
+                if (!activeBar) return;
+                if (e.target.closest('.admin-chart-bar')) return;
+                hideTooltip();
+            }, { passive: true });
+
+            var ticking = false;
+            function scheduleReposition() {
+                if (!activeBar) return;
+                if (ticking) return;
+                ticking = true;
+                requestAnimationFrame(function () {
+                    positionTooltip();
+                    ticking = false;
+                });
+            }
+            window.addEventListener('resize', scheduleReposition, { passive: true });
+            window.addEventListener('scroll', scheduleReposition, { passive: true });
+        }
+
+        // ============================================
+        // MODAL OPEN / CLOSE
+        // ============================================
+        function lockScroll() {
+            document.body.style.overflow = 'hidden';
+        }
+
+        function unlockScroll() {
+            document.body.style.overflow = '';
+        }
+
+        function openModal(modal) {
+            if (!modal) return;
+            lockScroll();
+            modal.classList.add('is-open');
+            modal.setAttribute('aria-hidden', 'false');
+            var focusTarget = modal.querySelector('[data-autofocus]');
+            if (focusTarget && typeof focusTarget.focus === 'function') {
+                setTimeout(function () { focusTarget.focus(); }, 80);
+            }
+        }
+
+        function closeModal(modal) {
+            if (!modal) return;
+            modal.classList.remove('is-open');
+            modal.setAttribute('aria-hidden', 'true');
+            if (!document.querySelector('.admin-modal.is-open')) {
+                unlockScroll();
+            }
+        }
+
+        document.addEventListener('click', function (e) {
+            var opener = e.target.closest('[data-open-modal]');
+            if (opener) {
+                e.preventDefault();
+                var modalId = opener.getAttribute('data-open-modal');
+                openModal(document.getElementById(modalId));
+                return;
+            }
+
+            var closer = e.target.closest('[data-close-modal]');
+            if (closer) {
+                e.preventDefault();
+                closeModal(closer.closest('.admin-modal'));
+                return;
+            }
+
+            if (e.target.classList.contains('admin-modal-backdrop')) {
+                closeModal(e.target.closest('.admin-modal'));
+                return;
+            }
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key !== 'Escape') return;
+            var open = document.querySelector('.admin-modal.is-open');
+            if (open) closeModal(open);
+        });
+
+        // ============================================
+        // TAB SWITCHING INSIDE MODALS
+        // ============================================
+        document.addEventListener('click', function (e) {
+            var tab = e.target.closest('.admin-modal-tab');
+            if (!tab) return;
+            e.preventDefault();
+
+            var tabsContainer = tab.closest('.admin-modal-tabs');
+            if (!tabsContainer) return;
+
+            var panelGroup = tabsContainer.parentElement;
+            var targetId = tab.getAttribute('data-tab-target');
+
+            tabsContainer.querySelectorAll('.admin-modal-tab').forEach(function (t) {
+                t.classList.toggle('active', t === tab);
+            });
+
+            panelGroup.querySelectorAll('.admin-modal-tab-panel').forEach(function (p) {
+                p.classList.toggle('active', p.id === targetId);
+            });
+        });
+    });
+})();
+```
+
+---
+
+## File: `fitpal/admin/assets/ui/js/header.js`
+
+**Status:** `FOUND`
+
+```javascript
+/**
+ * FitPal Admin Header JavaScript
+ *
+ * Direct class toggling, no input locks. All animations via CSS.
+ * Mirrors the customer/rider header JS contract exactly.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+(function () {
+    'use strict';
+
+    var menuToggle = document.getElementById('menuToggle');
+    var mobileNav = document.getElementById('mobileNav');
+    var mobileOverlay = document.getElementById('mobileOverlay');
+    var header = document.querySelector('.admin-header');
+
+    var isMenuOpen = false;
+
+    function toggleMenu(e) {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        isMenuOpen = !isMenuOpen;
+
+        mobileNav.classList.toggle('open', isMenuOpen);
+        menuToggle.classList.toggle('active', isMenuOpen);
+        menuToggle.setAttribute('aria-expanded', String(isMenuOpen));
+        if (mobileOverlay) {
+            mobileOverlay.classList.toggle('active', isMenuOpen);
+        }
+    }
+
+    function handleScroll() {
+        if (header) {
+            header.classList.toggle('header-scrolled', window.pageYOffset > 10);
+        }
+    }
+
+    if (menuToggle && mobileNav) {
+        menuToggle.addEventListener('click', toggleMenu);
+
+        if (mobileOverlay) {
+            mobileOverlay.addEventListener('click', function () {
+                if (isMenuOpen) toggleMenu();
+            });
+        }
+
+        mobileNav.addEventListener('click', function (e) {
+            if (e.target.closest('a') && isMenuOpen) {
+                toggleMenu();
+            }
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && isMenuOpen) {
+                toggleMenu();
+                menuToggle.focus();
+            }
+        });
+
+        var resizeTimer;
+        window.addEventListener('resize', function () {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(function () {
+                if (window.innerWidth > 992 && isMenuOpen) {
+                    toggleMenu();
+                }
+            }, 100);
+        });
+    }
+
+    if (header) {
+        var ticking = false;
+        window.addEventListener('scroll', function () {
+            if (!ticking) {
+                requestAnimationFrame(function () {
+                    handleScroll();
+                    ticking = false;
+                });
+                ticking = true;
+            }
+        }, { passive: true });
+    }
+
+    (function highlightActive() {
+        var currentPage = window.location.pathname.split('/').pop() || 'dashboard.php';
+        var links = document.querySelectorAll('.nav-link, .mobile-nav-link');
+        for (var i = 0; i < links.length; i++) {
+            var link = links[i];
+            var href = link.getAttribute('href');
+            if (!href) continue;
+            var hrefFile = href.split('/').pop() || '';
+            if (hrefFile === currentPage) {
+                link.classList.add('active');
+            }
+        }
+    })();
+})();
+```
+
+---
+
+## File: `fitpal/admin/assets/ui/js/restaurants.js`
+
+**Status:** `FOUND`
+
+```javascript
+/**
+ * FitPal Admin Restaurants Page
+ *
+ * Handles:
+ * - Actions dropdown toggling
+ * - View Details modal population
+ * - Contextual bulk selection (only when checkboxes are present)
+ * - Bulk action submission
+ * - Single row action submission (Approve/Deny/Suspend/Reinstate)
+ *
+ * @package FitPal
+ * @version 2.0
+ */
+
+(function () {
+    'use strict';
+
+    document.addEventListener('DOMContentLoaded', function () {
+
+        const cfg = window.FITPAL_ADMIN_RESTAURANTS || {};
+        const csrfToken = cfg.csrfToken || '';
+        const handlerUrl = cfg.handlerUrl || '../backend/handlers/admin-handler.php';
+        const showBulkBar = cfg.showBulkBar || false;
+
+        // Elements
+        const verifyForm = document.getElementById('verifyForm');
+        const verifyRestaurantId = document.getElementById('verifyRestaurantId');
+        const verifyStatus = document.getElementById('verifyStatus');
+        
+        const bulkBar = document.getElementById('bulkBar');
+        const bulkCount = document.getElementById('bulkCount');
+        const bulkClear = document.getElementById('bulkClear');
+        
+        const detailsModal = document.getElementById('detailsModal');
+        const modalRestName = document.getElementById('modalRestName');
+        const modalRestOwner = document.getElementById('modalRestOwner');
+        const modalRestEmail = document.getElementById('modalRestEmail');
+        const modalRestPhone = document.getElementById('modalRestPhone');
+        const modalRestBranches = document.getElementById('modalRestBranches');
+        const modalRestSubmitted = document.getElementById('modalRestSubmitted');
+
+        // ============================================
+        // ACTIONS DROPDOWN
+        // ============================================
+        document.querySelectorAll('.actions-trigger').forEach(btn => {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                const dropdown = this.closest('.actions-dropdown');
+                const isOpen = dropdown.classList.contains('open');
+                
+                // Close all others
+                document.querySelectorAll('.actions-dropdown.open').forEach(d => d.classList.remove('open'));
+                
+                if (!isOpen) {
+                    dropdown.classList.add('open');
+                }
+            });
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function () {
+            document.querySelectorAll('.actions-dropdown.open').forEach(d => d.classList.remove('open'));
+        });
+
+        // ============================================
+        // VIEW DETAILS MODAL
+        // ============================================
+        document.querySelectorAll('.view-details-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                modalRestName.textContent = this.dataset.name;
+                modalRestOwner.textContent = this.dataset.owner;
+                modalRestEmail.textContent = this.dataset.email;
+                modalRestPhone.textContent = this.dataset.phone;
+                modalRestBranches.textContent = this.dataset.branches;
+                modalRestSubmitted.textContent = this.dataset.submitted;
+                
+                detailsModal.classList.add('active');
+            });
+        });
+
+        window.closeDetailsModal = function () {
+            detailsModal.classList.remove('active');
+        };
+
+        // Close on overlay click
+        detailsModal.querySelector('.admin-modal-overlay').addEventListener('click', closeDetailsModal);
+
+        // ============================================
+        // SINGLE ROW ACTIONS (from dropdown)
+        // ============================================
+        document.querySelectorAll('.action-item[data-action="verify_restaurant"]').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const id = this.dataset.id;
+                const status = this.dataset.status;
+                const name = this.dataset.name;
+                
+                if (!id || !status) return;
+
+                if (confirm(`Are you sure you want to mark "${name}" as ${status}?`)) {
+                    verifyRestaurantId.value = id;
+                    verifyStatus.value = status;
+                    verifyForm.submit();
+                }
+            });
+        });
+
+        // ============================================
+        // CONTEXTUAL BULK SELECTION
+        // ============================================
+        if (showBulkBar && bulkBar) {
+            
+            // Create checkboxes dynamically only if we are on a bulk-action tab
+            const table = document.getElementById('restaurantsTable');
+            if (table) {
+                // Add header checkbox
+                const headerRow = table.querySelector('thead tr');
+                if (headerRow) {
+                    const th = document.createElement('th');
+                    th.className = 'col-check';
+                    th.innerHTML = '<input type="checkbox" id="selectAll" aria-label="Select all">';
+                    headerRow.prepend(th);
+                }
+
+                // Add body checkboxes
+                table.querySelectorAll('tbody tr').forEach(row => {
+                    const td = document.createElement('td');
+                    td.className = 'col-check';
+                    td.innerHTML = '<input type="checkbox" class="row-checkbox">';
+                    row.prepend(td);
+                });
+            }
+
+            const selectAll = document.getElementById('selectAll');
+            const rowCheckboxes = document.querySelectorAll('.row-checkbox');
+            const bulkActionBtns = document.querySelectorAll('.bulk-btn[data-bulk-status]');
+
+            function updateBulkBar() {
+                const checked = document.querySelectorAll('.row-checkbox:checked');
+                const count = checked.length;
+                
+                bulkCount.textContent = count;
+                
+                if (count > 0) {
+                    bulkBar.classList.add('active');
+                } else {
+                    bulkBar.classList.remove('active');
+                }
+                
+                if (selectAll) {
+                    selectAll.checked = count > 0 && count === rowCheckboxes.length;
+                    selectAll.indeterminate = count > 0 && count < rowCheckboxes.length;
+                }
+            }
+
+            // Select All handler
+            if (selectAll) {
+                selectAll.addEventListener('change', function () {
+                    rowCheckboxes.forEach(cb => cb.checked = this.checked);
+                    updateBulkBar();
+                });
+            }
+
+            // Row checkbox handlers
+            rowCheckboxes.forEach(cb => {
+                cb.addEventListener('change', updateBulkBar);
+            });
+
+            // Clear bulk selection
+            if (bulkClear) {
+                bulkClear.addEventListener('click', function () {
+                    rowCheckboxes.forEach(cb => cb.checked = false);
+                    if (selectAll) selectAll.checked = false;
+                    updateBulkBar();
+                });
+            }
+
+            // Bulk action submission
+            bulkActionBtns.forEach(btn => {
+                btn.addEventListener('click', function () {
+                    const status = this.dataset.bulkStatus;
+                    const checked = document.querySelectorAll('.row-checkbox:checked');
+                    
+                    if (checked.length === 0) return;
+
+                    if (confirm(`Are you sure you want to apply this action to ${checked.length} item(s)?`)) {
+                        // Since we don't have a single form that handles bulk, 
+                        // we'll create one dynamically to submit all IDs.
+                        const form = document.createElement('form');
+                        form.method = 'POST';
+                        form.action = handlerUrl;
+
+                        const csrfInput = document.createElement('input');
+                        csrfInput.type = 'hidden';
+                        csrfInput.name = 'csrf_token';
+                        csrfInput.value = csrfToken;
+                        form.appendChild(csrfInput);
+
+                        const actionInput = document.createElement('input');
+                        actionInput.type = 'hidden';
+                        actionInput.name = 'action';
+                        actionInput.value = 'verify_restaurant_bulk';
+                        form.appendChild(actionInput);
+
+                        const statusInput = document.createElement('input');
+                        statusInput.type = 'hidden';
+                        statusInput.name = 'status';
+                        statusInput.value = status;
+                        form.appendChild(statusInput);
+
+                        checked.forEach(cb => {
+                            const row = cb.closest('tr');
+                            const id = row.dataset.rowId;
+                            const idInput = document.createElement('input');
+                            idInput.type = 'hidden';
+                            idInput.name = 'restaurant_ids[]';
+                            idInput.value = id;
+                            form.appendChild(idInput);
+                        });
+
+                        document.body.appendChild(form);
+                        form.submit();
+                    }
+                });
+            });
+        }
+
+    });
+})();
+```
+
+---
+
+## File: `fitpal/admin/assets/ui/js/riders.js`
+
+**Status:** `FOUND`
+
+```javascript
+/**
+ * FitPal Admin — Riders Table Interactions
+ *
+ * Same behaviors as restaurants.js but for rider verification.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+(function () {
+    'use strict';
+
+    document.addEventListener('DOMContentLoaded', function () {
+
+        var CFG = window.FITPAL_ADMIN_RIDERS || {};
+        var HANDLER_URL = CFG.handlerUrl || '../backend/handlers/admin-handler.php';
+        var CSRF = CFG.csrfToken || '';
+
+        var table     = document.getElementById('ridersTable');
+        var selectAll = document.getElementById('selectAll');
+        var bulkBar   = document.getElementById('bulkBar');
+        var bulkCount = document.getElementById('bulkCount');
+        var bulkClear = document.getElementById('bulkClear');
+
+        if (!table) return;
+
+        var rowCheckboxes = Array.prototype.slice.call(
+            table.querySelectorAll('.row-checkbox')
+        );
+
+        function refreshBulkBar() {
+            var selected = rowCheckboxes.filter(function (cb) { return cb.checked; });
+            var count = selected.length;
+
+            if (bulkCount) bulkCount.textContent = String(count);
+            if (bulkBar)   bulkBar.hidden = count === 0;
+
+            rowCheckboxes.forEach(function (cb) {
+                var row = cb.closest('tr');
+                if (row) row.classList.toggle('is-selected', cb.checked);
+            });
+
+            if (selectAll) {
+                selectAll.checked = count > 0 && count === rowCheckboxes.length;
+                selectAll.indeterminate = count > 0 && count < rowCheckboxes.length;
+            }
+        }
+
+        rowCheckboxes.forEach(function (cb) {
+            cb.addEventListener('change', refreshBulkBar);
+        });
+
+        if (selectAll) {
+            selectAll.addEventListener('change', function () {
+                var on = selectAll.checked;
+                rowCheckboxes.forEach(function (cb) { cb.checked = on; });
+                refreshBulkBar();
+            });
+        }
+
+        if (bulkClear) {
+            bulkClear.addEventListener('click', function () {
+                rowCheckboxes.forEach(function (cb) { cb.checked = false; });
+                refreshBulkBar();
+            });
+        }
+
+        table.addEventListener('click', function (e) {
+            var btn = e.target.closest('.row-btn');
+            if (!btn) return;
+
+            e.preventDefault();
+
+            var action = btn.getAttribute('data-action');
+            var id     = btn.getAttribute('data-id');
+            var status = btn.getAttribute('data-status');
+            var name   = btn.getAttribute('data-name') || 'this rider';
+
+            if (!action || !id || !status) return;
+
+            var verb = statusLabel(status);
+            if (!window.confirm('Mark "' + name + '" as ' + verb + '?')) return;
+
+            var original = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="btn-label">Saving…</span>';
+
+            var formData = new FormData();
+            formData.append('csrf_token', CSRF);
+            formData.append('action', action);
+            formData.append('rider_id', id);
+            formData.append('status', status);
+
+            fetch(HANDLER_URL, {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function (res) {
+                return res.text().then(function (text) {
+                    try { return JSON.parse(text); }
+                    catch (err) { throw new Error('Server returned: ' + text.slice(0, 200)); }
+                });
+            })
+            .then(function (data) {
+                if (data && data.status === 'success') {
+                    window.location.reload();
+                } else {
+                    btn.disabled = false;
+                    btn.innerHTML = original;
+                    window.alert((data && data.message) || 'Could not update status.');
+                }
+            })
+            .catch(function (err) {
+                console.error('[riders.js] verify failed:', err);
+                btn.disabled = false;
+                btn.innerHTML = original;
+                window.alert('Network error. Please try again.');
+            });
+        });
+
+        if (bulkBar) {
+            bulkBar.addEventListener('click', function (e) {
+                var btn = e.target.closest('.bulk-btn[data-bulk-status]');
+                if (!btn) return;
+
+                e.preventDefault();
+
+                var targetStatus = btn.getAttribute('data-bulk-status');
+                var selected = rowCheckboxes
+                    .filter(function (cb) { return cb.checked; })
+                    .map(function (cb) { return cb.value; });
+
+                if (selected.length === 0) return;
+
+                var verb = statusLabel(targetStatus);
+                if (!window.confirm('Mark ' + selected.length + ' rider(s) as ' + verb + '?')) return;
+
+                var buttons = bulkBar.querySelectorAll('.bulk-btn');
+                buttons.forEach(function (b) { b.disabled = true; });
+
+                var promises = selected.map(function (id) {
+                    var formData = new FormData();
+                    formData.append('csrf_token', CSRF);
+                    formData.append('action', 'verify_rider');
+                    formData.append('rider_id', id);
+                    formData.append('status', targetStatus);
+
+                    return fetch(HANDLER_URL, {
+                        method: 'POST',
+                        body: formData,
+                        credentials: 'same-origin',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    }).then(function (res) { return res.json(); });
+                });
+
+                Promise.all(promises)
+                    .then(function (results) {
+                        var failed = results.filter(function (r) {
+                            return !r || r.status !== 'success';
+                        });
+                        if (failed.length > 0) {
+                            window.alert(
+                                failed.length + ' of ' + selected.length +
+                                ' updates failed. Reloading to reflect the current state.'
+                            );
+                        }
+                        window.location.reload();
+                    })
+                    .catch(function (err) {
+                        console.error('[riders.js] bulk action failed:', err);
+                        buttons.forEach(function (b) { b.disabled = false; });
+                        window.alert('Network error. Please try again.');
+                    });
+            });
+        }
+
+        function statusLabel(status) {
+            switch (status) {
+                case 'verified':  return 'Verified';
+                case 'denied':    return 'Denied';
+                case 'suspended': return 'Suspended';
+                case 'pending':   return 'Pending';
+                default:          return status;
+            }
+        }
+
+        refreshBulkBar();
+    });
+})();
+```
+
+---
+
+## File: `fitpal/admin/assets/ui/js/sign-in.js`
+
+**Status:** `FOUND`
+
+```javascript
+/**
+ * FitPal Admin Sign-In JavaScript
+ *
+ * Handles password toggle and basic client-side validation.
+ * All real validation happens server-side; this is a UX layer only.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+(function () {
+    'use strict';
+
+    document.addEventListener('DOMContentLoaded', function () {
+
+        const form            = document.getElementById('signInForm');
+        const identifier      = document.getElementById('identifier');
+        const password        = document.getElementById('password');
+        const signInBtn       = document.getElementById('signInBtn');
+        const togglePassword  = document.getElementById('togglePassword');
+        const passwordIcon    = document.getElementById('passwordIcon');
+        const identifierError = document.getElementById('identifierError');
+        const passwordError   = document.getElementById('passwordError');
+
+        // ---- Password toggle ----
+        if (togglePassword && password && passwordIcon) {
+            togglePassword.addEventListener('click', function (e) {
+                e.preventDefault();
+                const isPassword = password.type === 'password';
+                password.type    = isPassword ? 'text' : 'password';
+
+                const iconFile   = isPassword ? 'password-unhide.svg' : 'password-hide.svg';
+                passwordIcon.src = '../../shared/assets/images/icons/' + iconFile;
+                passwordIcon.alt = isPassword ? 'Hide password' : 'Show password';
+                this.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+            });
+        }
+
+        // ---- Submit validation ----
+        if (form && signInBtn) {
+            form.addEventListener('submit', function (e) {
+                let isValid = true;
+                clearErrors();
+
+                if (!identifier || !identifier.value.trim()) {
+                    showFieldError(identifier, identifierError, 'Please enter your email or username.');
+                    isValid = false;
+                }
+
+                if (!password || !password.value) {
+                    showFieldError(password, passwordError, 'Please enter your password.');
+                    isValid = false;
+                }
+
+                if (!isValid) {
+                    e.preventDefault();
+                    return;
+                }
+
+                signInBtn.disabled    = true;
+                signInBtn.textContent = 'Signing in...';
+            });
+        }
+
+        // ---- Real-time clear ----
+        if (identifier) {
+            identifier.addEventListener('input', function () {
+                if (this.value.trim()) clearFieldError(this, identifierError);
+            });
+        }
+        if (password) {
+            password.addEventListener('input', function () {
+                if (this.value) clearFieldError(this, passwordError);
+            });
+        }
+
+        // ---- Helpers ----
+        function clearErrors() {
+            clearFieldError(identifier, identifierError);
+            clearFieldError(password, passwordError);
+        }
+        function showFieldError(input, errorEl, message) {
+            if (input)   input.classList.add('error');
+            if (errorEl) { errorEl.textContent = message; errorEl.style.display = 'block'; }
+        }
+        function clearFieldError(input, errorEl) {
+            if (input)   input.classList.remove('error');
+            if (errorEl) { errorEl.textContent = ''; errorEl.style.display = 'none'; }
+        }
+    });
+})();
+```
+
+---
+
+## File: `fitpal/admin/backend/database/admin-connect.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Admin Database Connection (role wrapper)
+ *
+ * Admin pages should require THIS file instead of reaching into
+ * shared/backend/database/database-connect.php directly.
+ *
+ * This does NOT open a second database connection - FitPal's
+ * architecture requires one shared PDO singleton. This file exists
+ * so the admin role has its own include point, consistent with the
+ * customer role.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+declare(strict_types=1);
+
+require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
+
+// $database_connection is now available - the same singleton every role uses.
+```
+
+---
+
+## File: `fitpal/admin/backend/database/admin-queries.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Admin Database Queries
+ *
+ * Pure data-access layer for the admin role. Owns every query against
+ * the customer, delivery_rider, restaurant, financial_account, orders,
+ * and queue_item tables.
+ *
+ * No $_POST, no header(), no echo. Safe to require from any page
+ * because this file only declares functions.
+ *
+ * Pagination contract (every paginated read follows this):
+ *   1. Count query with the same WHERE clause as the data query.
+ *   2. Data query with LIMIT/OFFSET bound as integers.
+ *   3. Return ['rows' => [...], 'total' => N, 'page' => P, 'perPage' => L, 'totalPages' => T].
+ *
+ * Default page size is 5 across every list, matching the admin UI's
+ * "5 rows per tab" layout decision.
+ *
+ * @package FitPal
+ * @version 2.1 — Adds adminMediaUrl() as a thin shim over
+ *                adminAssetUrl() so existing call sites in
+ *                dashboard.php and riders.php do not fatal during
+ *                the rename. Both names are now valid; the shim is
+ *                scheduled for removal once every page is updated.
+ */
+
+declare(strict_types=1);
+
+/* =============================================================
+ * PAGINATION HELPER
+ * ============================================================= */
+
+/**
+ * Normalize a pagination envelope.
+ *
+ * @param int $total
+ * @param int $perPage
+ * @param int $page
+ * @return array{total:int, perPage:int, page:int, totalPages:int}
+ */
+function adminPaginationEnvelope(int $total, int $perPage, int $page): array
+{
+    $perPage = max(1, $perPage);
+    $page    = max(1, $page);
+    $totalPages = $total > 0 ? (int)ceil($total / $perPage) : 1;
+
+    if ($page > $totalPages) {
+        $page = $totalPages;
+    }
+
+    return [
+        'total'      => $total,
+        'perPage'    => $perPage,
+        'page'       => $page,
+        'totalPages' => $totalPages,
+    ];
+}
+
+/* =============================================================
+ * ADMIN LOOKUP + AUTH
+ * ============================================================= */
+
+function findAdminByIdentifier(PDO $db, string $identifier): array|false
+{
+    $stmt = $db->prepare(
+        "SELECT
+            a.administrator_id,
+            a.first_name,
+            a.middle_name,
+            a.last_name,
+            a.email,
+            a.username,
+            a.password,
+            a.is_active,
+            ap.role,
+            ap.permissions
+         FROM administrator a
+         LEFT JOIN administrator_profile ap
+                ON a.administrator_id = ap.administrator_id
+         WHERE a.email = :email OR a.username = :username
+         LIMIT 1"
+    );
+    $stmt->execute([':email' => $identifier, ':username' => $identifier]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+function getAdminProfile(PDO $db, int $adminId): array|false
+{
+    $stmt = $db->prepare(
+        "SELECT
+            a.administrator_id,
+            a.first_name,
+            a.middle_name,
+            a.last_name,
+            a.email,
+            a.contact_number,
+            a.username,
+            a.birthdate,
+            a.gender,
+            a.date_created,
+            a.is_active,
+            ap.role,
+            ap.permissions,
+            ap.last_login,
+            ap.created_at AS profile_created_at
+         FROM administrator a
+         LEFT JOIN administrator_profile ap
+                ON a.administrator_id = ap.administrator_id
+         WHERE a.administrator_id = :admin_id
+         LIMIT 1"
+    );
+    $stmt->execute([':admin_id' => $adminId]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+function updateAdminProfile(
+    PDO $db,
+    int $adminId,
+    string $firstName,
+    string $middleName,
+    string $lastName,
+    string $contactNumber
+): bool {
+    $stmt = $db->prepare(
+        "UPDATE administrator
+            SET first_name     = :first_name,
+                middle_name    = :middle_name,
+                last_name      = :last_name,
+                contact_number = :contact_number
+          WHERE administrator_id = :admin_id"
+    );
+    $stmt->execute([
+        ':first_name'     => $firstName,
+        ':middle_name'    => $middleName !== '' ? $middleName : null,
+        ':last_name'      => $lastName,
+        ':contact_number' => $contactNumber !== '' ? $contactNumber : null,
+        ':admin_id'       => $adminId,
+    ]);
+    return true;
+}
+
+function updateAdminPassword(PDO $db, int $adminId, string $newHashedPassword): bool
+{
+    $stmt = $db->prepare(
+        "UPDATE administrator SET password = :password WHERE administrator_id = :admin_id"
+    );
+    $stmt->execute([':password' => $newHashedPassword, ':admin_id' => $adminId]);
+    return true;
+}
+
+function recordAdminLogin(PDO $db, int $adminId): void
+{
+    $stmt = $db->prepare(
+        "UPDATE administrator_profile SET last_login = NOW() WHERE administrator_id = :admin_id"
+    );
+    $stmt->execute([':admin_id' => $adminId]);
+}
+
+/* =============================================================
+ * DASHBOARD STATS
+ * ============================================================= */
+
+/**
+ * All dashboard counters in three queries:
+ *   1. One aggregate for customer / rider / restaurant counts.
+ *   2. One aggregate for order counts and per-status buckets.
+ *   3. One aggregate for revenue (today / week / all-time).
+ *
+ * Previously this fired six scalar queries; the merged version is
+ * three round-trips.
+ */
+function getAdminDashboardStats(PDO $db): array
+{
+    $stats = [
+        'total_customers'      => 0,
+        'active_customers'     => 0,
+        'total_restaurants'    => 0,
+        'verified_restaurants' => 0,
+        'total_riders'         => 0,
+        'verified_riders'      => 0,
+        'pending_riders'       => 0,
+        'total_orders'         => 0,
+        'orders_today'         => 0,
+        'orders_this_week'     => 0,
+        'active_orders'        => 0,
+        'delivered_orders'     => 0,
+        'cancelled_orders'     => 0,
+        'gross_revenue'        => 0.0,
+        'revenue_this_week'    => 0.0,
+        'revenue_today'        => 0.0,
+    ];
+
+    // ---- Entity counts (one query, three tables via scalar subqueries) ----
+    $entityRow = $db->query(
+        "SELECT
+            (SELECT COUNT(*) FROM customer)                                   AS total_customers,
+            (SELECT COUNT(*) FROM customer WHERE is_active = 1)               AS active_customers,
+            (SELECT COUNT(*) FROM restaurant)                                 AS total_restaurants,
+            (SELECT COUNT(*) FROM restaurant WHERE verification_status = 'verified') AS verified_restaurants,
+            (SELECT COUNT(*) FROM delivery_rider)                             AS total_riders,
+            (SELECT COUNT(*) FROM delivery_rider_profile WHERE verification_status = 'verified') AS verified_riders,
+            (SELECT COUNT(*) FROM delivery_rider_profile WHERE verification_status = 'pending')  AS pending_riders"
+    )->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    $stats['total_customers']      = (int)($entityRow['total_customers'] ?? 0);
+    $stats['active_customers']     = (int)($entityRow['active_customers'] ?? 0);
+    $stats['total_restaurants']    = (int)($entityRow['total_restaurants'] ?? 0);
+    $stats['verified_restaurants'] = (int)($entityRow['verified_restaurants'] ?? 0);
+    $stats['total_riders']         = (int)($entityRow['total_riders'] ?? 0);
+    $stats['verified_riders']      = (int)($entityRow['verified_riders'] ?? 0);
+    $stats['pending_riders']       = (int)($entityRow['pending_riders'] ?? 0);
+
+    // ---- Order status counts ----
+    $orderRow = $db->query(
+        "SELECT
+            COUNT(*) AS total_orders,
+            SUM(CASE WHEN DATE(order_date) = CURDATE() THEN 1 ELSE 0 END) AS orders_today,
+            SUM(CASE WHEN order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) THEN 1 ELSE 0 END) AS orders_this_week,
+            SUM(CASE WHEN order_status IN ('pending','preparing','delivering') THEN 1 ELSE 0 END) AS active_orders,
+            SUM(CASE WHEN order_status = 'delivered' THEN 1 ELSE 0 END) AS delivered_orders,
+            SUM(CASE WHEN order_status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_orders
+         FROM orders"
+    )->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    $stats['total_orders']     = (int)($orderRow['total_orders'] ?? 0);
+    $stats['orders_today']     = (int)($orderRow['orders_today'] ?? 0);
+    $stats['orders_this_week'] = (int)($orderRow['orders_this_week'] ?? 0);
+    $stats['active_orders']    = (int)($orderRow['active_orders'] ?? 0);
+    $stats['delivered_orders'] = (int)($orderRow['delivered_orders'] ?? 0);
+    $stats['cancelled_orders'] = (int)($orderRow['cancelled_orders'] ?? 0);
+
+    // ---- Revenue (excludes cancelled and refunded orders) ----
+    $revRow = $db->query(
+        "SELECT
+            COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0) AS gross_revenue,
+            COALESCE(SUM(CASE
+                WHEN o.order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+                THEN qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
+                ELSE 0 END), 0) AS revenue_this_week,
+            COALESCE(SUM(CASE
+                WHEN DATE(o.order_date) = CURDATE()
+                THEN qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
+                ELSE 0 END), 0) AS revenue_today
+         FROM orders o
+         JOIN queue_item qi ON qi.order_id = o.order_id
+         WHERE o.order_status NOT IN ('cancelled', 'refunded')"
+    )->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    $stats['gross_revenue']     = (float)($revRow['gross_revenue'] ?? 0);
+    $stats['revenue_this_week'] = (float)($revRow['revenue_this_week'] ?? 0);
+    $stats['revenue_today']     = (float)($revRow['revenue_today'] ?? 0);
+
+    return $stats;
+}
+
+/**
+ * Pick a "nice" y-axis ceiling for the weekly revenue chart.
+ *
+ * The rule: never scale to the raw maximum — that makes a single
+ * spike fill the entire chart. Snap up to a rounded step so the
+ * tallest bar always reads at ~40–80% of the chart height.
+ *
+ * @param float $maxAmount
+ * @return array{ceiling:float, step:float, gridlines:array<int,float>}
+ */
+function getAdminChartScale(float $maxAmount): array
+{
+    if ($maxAmount <= 0) {
+        return [
+            'ceiling'   => 1000.0,
+            'step'      => 250.0,
+            'gridlines' => [0.0, 250.0, 500.0, 750.0, 1000.0],
+        ];
+    }
+
+    $magnitude  = 10 ** floor(log10($maxAmount));
+    $normalized = $maxAmount / $magnitude;
+
+    $stepMultiplier = match (true) {
+        $normalized <= 1.5 => 0.25,
+        $normalized <= 3.0 => 0.5,
+        $normalized <= 7.0 => 1.0,
+        default            => 2.0,
+    };
+
+    $step    = $magnitude * $stepMultiplier;
+    $ceiling = ceil($maxAmount / $step) * $step;
+
+    if ($ceiling < $maxAmount * 2) {
+        $ceiling += $step;
+    }
+
+    $gridlines = [];
+    for ($v = 0.0; $v <= $ceiling + 0.001; $v += $step) {
+        $gridlines[] = round($v, 2);
+    }
+
+    return [
+        'ceiling'   => round($ceiling, 2),
+        'step'      => round($step, 2),
+        'gridlines' => $gridlines,
+    ];
+}
+
+/**
+ * Seven-day revenue series, oldest to newest. Days with no orders
+ * are included with amount = 0.
+ *
+ * @param PDO $db
+ * @param int $days
+ * @return array<int, array{date:string, label:string, short:string, amount:float, orders:int}>
+ */
+function getAdminWeeklyRevenue(PDO $db, int $days = 7): array
+{
+    $days = max(1, min(30, $days));
+
+    $stmt = $db->prepare(
+        "SELECT
+            DATE(o.order_date) AS day,
+            COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0) AS amount,
+            COUNT(DISTINCT o.order_id) AS orders
+         FROM orders o
+         JOIN queue_item qi ON qi.order_id = o.order_id
+         WHERE o.order_status NOT IN ('cancelled', 'refunded')
+           AND o.order_date >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
+         GROUP BY DATE(o.order_date)
+         ORDER BY day ASC"
+    );
+    $stmt->bindValue(':days', $days - 1, PDO::PARAM_INT);
+    $stmt->execute();
+
+    $byDay = [];
+    while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $byDay[$r['day']] = [
+            'amount' => (float)$r['amount'],
+            'orders' => (int)$r['orders'],
+        ];
+    }
+
+    $series = [];
+    for ($i = $days - 1; $i >= 0; $i--) {
+        $ts   = strtotime("-{$i} days");
+        $date = date('Y-m-d', $ts);
+        $series[] = [
+            'date'   => $date,
+            'label'  => date('l', $ts),
+            'short'  => date('D', $ts),
+            'amount' => $byDay[$date]['amount'] ?? 0.0,
+            'orders' => $byDay[$date]['orders'] ?? 0,
+        ];
+    }
+    return $series;
+}
+
+/**
+ * Recent verification decisions across riders and restaurants,
+ * merged into a single time-ordered feed.
+ *
+ * Returns one row per entity. The `entity_type` discriminator lets
+ * the page render a unified "Recently Verified" list and build the
+ * correct detail-modal link.
+ *
+ * MariaDB/MySQL does NOT allow LIMIT inside a UNION ALL branch. So
+ * each source is wrapped in its own derived table with LIMIT, and
+ * those derived tables are then unioned. The outer query applies the
+ * final ORDER BY and LIMIT.
+ *
+ * Each side is pre-limited to $limit rows so one source cannot
+ * starve the other out of the merged result.
+ *
+ * @param PDO $db
+ * @param int $limit
+ * @return array<int, array{
+ *     entity_type: string,
+ *     entity_id: int,
+ *     entity_name: string,
+ *     verification_status: string,
+ *     verified_at: string
+ * }>
+ */
+function getRecentVerificationActivity(PDO $db, int $limit = 6): array
+{
+    $limit = max(1, min(20, $limit));
+
+    $sql = "
+        SELECT * FROM (
+            SELECT * FROM (
+                SELECT
+                    'rider' AS entity_type,
+                    dr.delivery_rider_id AS entity_id,
+                    CONCAT(
+                        dr.first_name, ' ',
+                        COALESCE(dr.middle_name, ''), ' ',
+                        dr.last_name
+                    ) AS entity_name,
+                    drp.verification_status,
+                    drp.verified_at
+                FROM delivery_rider_profile drp
+                JOIN delivery_rider dr
+                  ON dr.delivery_rider_id = drp.delivery_rider_id
+                WHERE drp.verified_at IS NOT NULL
+                  AND drp.verification_status IN ('verified', 'denied', 'suspended')
+                ORDER BY drp.verified_at DESC
+                LIMIT :rider_limit
+            ) AS recent_riders
+
+            UNION ALL
+
+            SELECT * FROM (
+                SELECT
+                    'restaurant' AS entity_type,
+                    r.restaurant_id AS entity_id,
+                    r.business_name AS entity_name,
+                    r.verification_status,
+                    r.verified_at
+                FROM restaurant r
+                WHERE r.verified_at IS NOT NULL
+                  AND r.verification_status IN ('verified', 'denied', 'suspended')
+                ORDER BY r.verified_at DESC
+                LIMIT :restaurant_limit
+            ) AS recent_restaurants
+        ) AS combined
+        ORDER BY verified_at DESC
+        LIMIT :outer_limit
+    ";
+
+    $stmt = $db->prepare($sql);
+    $stmt->bindValue(':rider_limit',      $limit, PDO::PARAM_INT);
+    $stmt->bindValue(':restaurant_limit', $limit, PDO::PARAM_INT);
+    $stmt->bindValue(':outer_limit',      $limit, PDO::PARAM_INT);
+    $stmt->execute();
+
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Normalize the middle-name double space in rider names.
+    foreach ($rows as &$row) {
+        $row['entity_name'] = trim((string)preg_replace('/\s+/', ' ', (string)$row['entity_name']));
+        $row['entity_id']   = (int)$row['entity_id'];
+    }
+    unset($row);
+
+    return $rows;
+}
+
+/* =============================================================
+ * CUSTOMER MANAGEMENT (paginated)
+ * ============================================================= */
+
+function getCustomersPaginated(
+    PDO $db,
+    int $page = 1,
+    int $perPage = 5,
+    string $search = '',
+    string $statusFilter = 'all'
+): array {
+    $where  = "WHERE 1=1";
+    $params = [];
+
+    if ($search !== '') {
+        $where .= " AND (c.first_name LIKE :search
+                    OR c.last_name LIKE :search
+                    OR c.email LIKE :search
+                    OR c.username LIKE :search
+                    OR c.contact_number LIKE :search)";
+        $params[':search'] = '%' . $search . '%';
+    }
+
+    if ($statusFilter === 'active') {
+        $where .= " AND c.is_active = 1";
+    } elseif ($statusFilter === 'inactive') {
+        $where .= " AND c.is_active = 0";
+    }
+
+    $countStmt = $db->prepare("SELECT COUNT(*) FROM customer c {$where}");
+    foreach ($params as $k => $v) {
+        $countStmt->bindValue($k, $v);
+    }
+    $countStmt->execute();
+    $total = (int)$countStmt->fetchColumn();
+
+    $env = adminPaginationEnvelope($total, $perPage, $page);
+
+    $stmt = $db->prepare(
+        "SELECT
+            c.customer_id, c.first_name, c.middle_name, c.last_name,
+            c.email, c.contact_number, c.username, c.is_active, c.date_created,
+            cp.dietary_preferences, cp.allergies, cp.fitness_goal,
+            fa.balance,
+            (SELECT COUNT(*) FROM orders o WHERE o.customer_id = c.customer_id) AS order_count
+         FROM customer c
+         LEFT JOIN customer_profile cp ON cp.customer_id = c.customer_id
+         LEFT JOIN financial_account fa ON cp.financial_account_id = fa.financial_account_id
+         {$where}
+         ORDER BY c.date_created DESC
+         LIMIT :limit OFFSET :offset"
+    );
+    foreach ($params as $k => $v) {
+        $stmt->bindValue($k, $v);
+    }
+    $stmt->bindValue(':limit',  $env['perPage'], PDO::PARAM_INT);
+    $stmt->bindValue(':offset', ($env['page'] - 1) * $env['perPage'], PDO::PARAM_INT);
+    $stmt->execute();
+
+    return [
+        'rows'       => $stmt->fetchAll(PDO::FETCH_ASSOC),
+        'total'      => $env['total'],
+        'page'       => $env['page'],
+        'perPage'    => $env['perPage'],
+        'totalPages' => $env['totalPages'],
+    ];
+}
+
+function getCustomerCountsByStatus(PDO $db): array
+{
+    $row = $db->query(
+        "SELECT
+            COUNT(*) AS all_count,
+            SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) AS active_count,
+            SUM(CASE WHEN is_active = 0 THEN 1 ELSE 0 END) AS inactive_count
+         FROM customer"
+    )->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    return [
+        'all'      => (int)($row['all_count'] ?? 0),
+        'active'   => (int)($row['active_count'] ?? 0),
+        'inactive' => (int)($row['inactive_count'] ?? 0),
+    ];
+}
+
+function getCustomerDetails(PDO $db, int $customerId): array|false
+{
+    $stmt = $db->prepare(
+        "SELECT
+            c.customer_id, c.first_name, c.middle_name, c.last_name,
+            c.email, c.contact_number, c.username, c.is_active,
+            c.birthdate, c.gender, c.date_created,
+            cp.dietary_preferences, cp.allergies, cp.fitness_goal,
+            cp.height_cm, cp.weight_kg, cp.profile_picture,
+            fa.balance,
+            (SELECT COUNT(*) FROM orders o WHERE o.customer_id = c.customer_id) AS order_count,
+            (SELECT COUNT(*) FROM customer_address ca WHERE ca.customer_id = c.customer_id) AS address_count
+         FROM customer c
+         LEFT JOIN customer_profile cp ON cp.customer_id = c.customer_id
+         LEFT JOIN financial_account fa ON cp.financial_account_id = fa.financial_account_id
+         WHERE c.customer_id = :cid
+         LIMIT 1"
+    );
+    $stmt->execute([':cid' => $customerId]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+function getCustomerAddresses(PDO $db, int $customerId): array
+{
+    $stmt = $db->prepare(
+        "SELECT customer_address_id, label, block, barangay, city, province,
+                region, postal_code, country, is_default
+         FROM customer_address
+         WHERE customer_id = :cid
+         ORDER BY is_default DESC, customer_address_id ASC"
+    );
+    $stmt->execute([':cid' => $customerId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function getCustomerRecentOrders(PDO $db, int $customerId, int $limit = 5): array
+{
+    $limit = max(1, min(20, $limit));
+
+    $stmt = $db->prepare(
+        "SELECT
+            o.order_id, o.order_status, o.order_date, o.payment_method,
+            o.destination_address,
+            COALESCE((
+                SELECT SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price))
+                FROM queue_item qi WHERE qi.order_id = o.order_id
+            ), 0) AS order_total
+         FROM orders o
+         WHERE o.customer_id = :cid
+         ORDER BY o.order_date DESC
+         LIMIT :limit"
+    );
+    $stmt->bindValue(':cid', $customerId, PDO::PARAM_INT);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function setCustomerActiveStatus(PDO $db, int $customerId, bool $isActive): bool
+{
+    $stmt = $db->prepare(
+        "UPDATE customer SET is_active = :is_active WHERE customer_id = :cid"
+    );
+    $stmt->execute([
+        ':is_active' => $isActive ? 1 : 0,
+        ':cid'       => $customerId,
+    ]);
+    return $stmt->rowCount() > 0;
+}
+
+/* =============================================================
+ * RIDER MANAGEMENT (paginated)
+ * ============================================================= */
+
+function getRidersPaginated(
+    PDO $db,
+    int $page = 1,
+    int $perPage = 5,
+    string $search = '',
+    string $statusFilter = 'all'
+): array {
+    $where  = "WHERE 1=1";
+    $params = [];
+
+    if ($search !== '') {
+        $where .= " AND (dr.first_name LIKE :search
+                    OR dr.last_name LIKE :search
+                    OR dr.email LIKE :search
+                    OR dr.username LIKE :search
+                    OR dr.contact_number LIKE :search)";
+        $params[':search'] = '%' . $search . '%';
+    }
+
+    if ($statusFilter !== 'all') {
+        $where .= " AND drp.verification_status = :status";
+        $params[':status'] = $statusFilter;
+    }
+
+    $countStmt = $db->prepare(
+        "SELECT COUNT(*)
+         FROM delivery_rider dr
+         LEFT JOIN delivery_rider_profile drp ON drp.delivery_rider_id = dr.delivery_rider_id
+         {$where}"
+    );
+    foreach ($params as $k => $v) {
+        $countStmt->bindValue($k, $v);
+    }
+    $countStmt->execute();
+    $total = (int)$countStmt->fetchColumn();
+
+    $env = adminPaginationEnvelope($total, $perPage, $page);
+
+    $stmt = $db->prepare(
+        "SELECT
+            dr.delivery_rider_id, dr.first_name, dr.middle_name, dr.last_name,
+            dr.email, dr.contact_number, dr.username, dr.is_active, dr.date_created,
+            drp.profile_picture, drp.vehicle_type, drp.vehicle_plate,
+            drp.verification_status, drp.average_rating, drp.total_deliveries,
+            drp.is_available, drp.verified_at,
+            fa.balance,
+            (SELECT COUNT(*) FROM delivery_rider_document drd
+              WHERE drd.delivery_rider_id = dr.delivery_rider_id) AS document_count,
+            (SELECT COUNT(*) FROM delivery_rider_emergency_contact ec
+              WHERE ec.delivery_rider_id = dr.delivery_rider_id) AS emergency_contact_count
+         FROM delivery_rider dr
+         LEFT JOIN delivery_rider_profile drp ON drp.delivery_rider_id = dr.delivery_rider_id
+         LEFT JOIN financial_account fa ON fa.financial_account_id = drp.financial_account_id
+         {$where}
+         ORDER BY dr.date_created DESC
+         LIMIT :limit OFFSET :offset"
+    );
+    foreach ($params as $k => $v) {
+        $stmt->bindValue($k, $v);
+    }
+    $stmt->bindValue(':limit',  $env['perPage'], PDO::PARAM_INT);
+    $stmt->bindValue(':offset', ($env['page'] - 1) * $env['perPage'], PDO::PARAM_INT);
+    $stmt->execute();
+
+    return [
+        'rows'       => $stmt->fetchAll(PDO::FETCH_ASSOC),
+        'total'      => $env['total'],
+        'page'       => $env['page'],
+        'perPage'    => $env['perPage'],
+        'totalPages' => $env['totalPages'],
+    ];
+}
+
+function getRiderCountsByStatus(PDO $db): array
+{
+    $row = $db->query(
+        "SELECT
+            COUNT(*) AS all_count,
+            SUM(CASE WHEN verification_status = 'pending'   THEN 1 ELSE 0 END) AS pending_count,
+            SUM(CASE WHEN verification_status = 'verified'  THEN 1 ELSE 0 END) AS verified_count,
+            SUM(CASE WHEN verification_status = 'denied'    THEN 1 ELSE 0 END) AS denied_count,
+            SUM(CASE WHEN verification_status = 'suspended' THEN 1 ELSE 0 END) AS suspended_count
+         FROM delivery_rider_profile"
+    )->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    return [
+        'all'       => (int)($row['all_count'] ?? 0),
+        'pending'   => (int)($row['pending_count'] ?? 0),
+        'verified'  => (int)($row['verified_count'] ?? 0),
+        'denied'    => (int)($row['denied_count'] ?? 0),
+        'suspended' => (int)($row['suspended_count'] ?? 0),
+    ];
+}
+
+function getRiderDetails(PDO $db, int $riderId): array|false
+{
+    $stmt = $db->prepare(
+        "SELECT
+            dr.delivery_rider_id, dr.first_name, dr.middle_name, dr.last_name,
+            dr.email, dr.contact_number, dr.username, dr.is_active, dr.date_created,
+            dr.birthdate, dr.gender,
+            drp.profile_picture, drp.vehicle_type, drp.vehicle_plate,
+            drp.verification_status, drp.average_rating, drp.total_deliveries,
+            drp.is_available, drp.verified_at,
+            fa.balance
+         FROM delivery_rider dr
+         LEFT JOIN delivery_rider_profile drp ON drp.delivery_rider_id = dr.delivery_rider_id
+         LEFT JOIN financial_account fa ON fa.financial_account_id = drp.financial_account_id
+         WHERE dr.delivery_rider_id = :rid
+         LIMIT 1"
+    );
+    $stmt->execute([':rid' => $riderId]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+function getRiderAddress(PDO $db, int $riderId): array|false
+{
+    $stmt = $db->prepare(
+        "SELECT delivery_rider_address_id, block, barangay, city, province,
+                region, postal_code, country, is_default
+         FROM delivery_rider_address
+         WHERE delivery_rider_id = :rid
+         ORDER BY is_default DESC, delivery_rider_address_id ASC
+         LIMIT 1"
+    );
+    $stmt->execute([':rid' => $riderId]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+function getRiderEmergencyContacts(PDO $db, int $riderId): array
+{
+    $stmt = $db->prepare(
+        "SELECT emergency_contact_id, first_name, middle_name, last_name,
+                contact_number, relationship, address, created_at
+         FROM delivery_rider_emergency_contact
+         WHERE delivery_rider_id = :rid
+         ORDER BY emergency_contact_id ASC"
+    );
+    $stmt->execute([':rid' => $riderId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function getRiderDocuments(PDO $db, int $riderId): array
+{
+    $stmt = $db->prepare(
+        "SELECT document_id, drivers_license, issue_date, expiry_date,
+                created_at, updated_at
+         FROM delivery_rider_document
+         WHERE delivery_rider_id = :rid
+         ORDER BY document_id ASC"
+    );
+    $stmt->execute([':rid' => $riderId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function getRiderRecentDeliveries(PDO $db, int $riderId, int $limit = 5): array
+{
+    $limit = max(1, min(20, $limit));
+
+    $stmt = $db->prepare(
+        "SELECT
+            o.order_id, o.order_status, o.order_date, o.delivered_at,
+            o.destination_address,
+            CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
+            COALESCE((
+                SELECT SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price))
+                FROM queue_item qi WHERE qi.order_id = o.order_id
+            ), 0) AS order_total
+         FROM orders o
+         JOIN customer c ON c.customer_id = o.customer_id
+         WHERE o.delivery_rider_id = :rid
+         ORDER BY COALESCE(o.delivered_at, o.order_date) DESC
+         LIMIT :limit"
+    );
+    $stmt->bindValue(':rid', $riderId, PDO::PARAM_INT);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function setRiderVerificationStatus(
+    PDO $db,
+    int $riderId,
+    string $status,
+    int $adminId
+): bool {
+    $allowed = ['pending', 'verified', 'denied', 'suspended'];
+    if (!in_array($status, $allowed, true)) {
+        return false;
+    }
+    $stmt = $db->prepare(
+        "UPDATE delivery_rider_profile
+            SET verification_status  = :status,
+                verified_by_admin_id = :admin_id,
+                verified_at          = CASE WHEN :status2 = 'verified' THEN NOW() ELSE NULL END
+          WHERE delivery_rider_id = :rid"
+    );
+    $stmt->execute([
+        ':status'   => $status,
+        ':status2'  => $status,
+        ':admin_id' => $adminId,
+        ':rid'      => $riderId,
+    ]);
+    return $stmt->rowCount() > 0;
+}
+
+function setRiderActiveStatus(PDO $db, int $riderId, bool $isActive): bool
+{
+    $stmt = $db->prepare(
+        "UPDATE delivery_rider SET is_active = :is_active WHERE delivery_rider_id = :rid"
+    );
+    $stmt->execute([
+        ':is_active' => $isActive ? 1 : 0,
+        ':rid'       => $riderId,
+    ]);
+    return $stmt->rowCount() > 0;
+}
+
+/* =============================================================
+ * RESTAURANT MANAGEMENT (paginated)
+ * ============================================================= */
+
+function getRestaurantsPaginated(
+    PDO $db,
+    int $page = 1,
+    int $perPage = 5,
+    string $search = '',
+    string $statusFilter = 'all'
+): array {
+    $where  = "WHERE 1=1";
+    $params = [];
+
+    if ($search !== '') {
+        $where .= " AND (r.business_name LIKE :search OR r.cuisine_type LIKE :search)";
+        $params[':search'] = '%' . $search . '%';
+    }
+    if ($statusFilter !== 'all') {
+        $where .= " AND r.verification_status = :status";
+        $params[':status'] = $statusFilter;
+    }
+
+    $countStmt = $db->prepare("SELECT COUNT(*) FROM restaurant r {$where}");
+    foreach ($params as $k => $v) {
+        $countStmt->bindValue($k, $v);
+    }
+    $countStmt->execute();
+    $total = (int)$countStmt->fetchColumn();
+
+    $env = adminPaginationEnvelope($total, $perPage, $page);
+
+    $stmt = $db->prepare(
+        "SELECT
+            r.restaurant_id, r.business_name, r.description, r.cuisine_type,
+            r.dietary_tags, r.verification_status, r.verified_at,
+            r.is_active, r.created_at,
+            (SELECT COUNT(*) FROM restaurant_branch rb WHERE rb.restaurant_id = r.restaurant_id) AS branch_count,
+            (SELECT COUNT(*) FROM product p
+                JOIN restaurant_branch rb2 ON p.restaurant_branch_id = rb2.restaurant_branch_id
+              WHERE rb2.restaurant_id = r.restaurant_id AND p.is_active = 1) AS product_count,
+            (SELECT COUNT(DISTINCT qi.order_id)
+                FROM queue_item qi
+                JOIN restaurant_branch rb3 ON qi.branch_id = rb3.restaurant_branch_id
+              WHERE rb3.restaurant_id = r.restaurant_id) AS order_count
+         FROM restaurant r
+         {$where}
+         ORDER BY r.created_at DESC
+         LIMIT :limit OFFSET :offset"
+    );
+    foreach ($params as $k => $v) {
+        $stmt->bindValue($k, $v);
+    }
+    $stmt->bindValue(':limit',  $env['perPage'], PDO::PARAM_INT);
+    $stmt->bindValue(':offset', ($env['page'] - 1) * $env['perPage'], PDO::PARAM_INT);
+    $stmt->execute();
+
+    return [
+        'rows'       => $stmt->fetchAll(PDO::FETCH_ASSOC),
+        'total'      => $env['total'],
+        'page'       => $env['page'],
+        'perPage'    => $env['perPage'],
+        'totalPages' => $env['totalPages'],
+    ];
+}
+
+function getRestaurantCountsByStatus(PDO $db): array
+{
+    $row = $db->query(
+        "SELECT
+            COUNT(*) AS all_count,
+            SUM(CASE WHEN verification_status = 'pending'   THEN 1 ELSE 0 END) AS pending_count,
+            SUM(CASE WHEN verification_status = 'verified'  THEN 1 ELSE 0 END) AS verified_count,
+            SUM(CASE WHEN verification_status = 'denied'    THEN 1 ELSE 0 END) AS denied_count,
+            SUM(CASE WHEN verification_status = 'suspended' THEN 1 ELSE 0 END) AS suspended_count
+         FROM restaurant"
+    )->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    return [
+        'all'       => (int)($row['all_count'] ?? 0),
+        'pending'   => (int)($row['pending_count'] ?? 0),
+        'verified'  => (int)($row['verified_count'] ?? 0),
+        'denied'    => (int)($row['denied_count'] ?? 0),
+        'suspended' => (int)($row['suspended_count'] ?? 0),
+    ];
+}
+
+function getRestaurantDetails(PDO $db, int $restaurantId): array|false
+{
+    $stmt = $db->prepare(
+        "SELECT
+            r.restaurant_id, r.business_name, r.description, r.cuisine_type,
+            r.dietary_tags, r.verification_status, r.verified_at,
+            r.is_active, r.created_at, r.updated_at,
+            (SELECT COUNT(*) FROM restaurant_branch rb WHERE rb.restaurant_id = r.restaurant_id) AS branch_count,
+            (SELECT COUNT(*) FROM product p
+                JOIN restaurant_branch rb2 ON p.restaurant_branch_id = rb2.restaurant_branch_id
+              WHERE rb2.restaurant_id = r.restaurant_id AND p.is_active = 1) AS product_count
+         FROM restaurant r
+         WHERE r.restaurant_id = :rid
+         LIMIT 1"
+    );
+    $stmt->execute([':rid' => $restaurantId]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+function getRestaurantBranches(PDO $db, int $restaurantId): array
+{
+    $stmt = $db->prepare(
+        "SELECT
+            rb.restaurant_branch_id, rb.branch_name, rb.branch_code,
+            rb.block, rb.barangay, rb.city, rb.province, rb.region,
+            rb.postal_code, rb.country, rb.is_active, rb.created_at,
+            fa.balance,
+            (SELECT COUNT(*) FROM product p
+              WHERE p.restaurant_branch_id = rb.restaurant_branch_id AND p.is_active = 1) AS product_count
+         FROM restaurant_branch rb
+         LEFT JOIN financial_account fa ON fa.financial_account_id = rb.financial_account_id
+         WHERE rb.restaurant_id = :rid
+         ORDER BY rb.is_active DESC, rb.branch_name ASC"
+    );
+    $stmt->execute([':rid' => $restaurantId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function getRestaurantAccounts(PDO $db, int $restaurantId): array
+{
+    $stmt = $db->prepare(
+        "SELECT
+            restaurant_account_id, first_name, middle_name, last_name,
+            email, contact_number, username, role, is_active, date_created
+         FROM restaurant_account
+         WHERE restaurant_id = :rid
+         ORDER BY FIELD(role, 'owner', 'partner', 'manager', 'staff', 'cashier', 'kitchen'),
+                  date_created ASC"
+    );
+    $stmt->execute([':rid' => $restaurantId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function setRestaurantVerificationStatus(
+    PDO $db,
+    int $restaurantId,
+    string $status,
+    int $adminId
+): bool {
+    $allowed = ['pending', 'verified', 'denied', 'suspended'];
+    if (!in_array($status, $allowed, true)) {
+        return false;
+    }
+    $stmt = $db->prepare(
+        "UPDATE restaurant
+            SET verification_status  = :status,
+                verified_by_admin_id = :admin_id,
+                verified_at          = CASE WHEN :status2 = 'verified' THEN NOW() ELSE NULL END
+          WHERE restaurant_id = :rid"
+    );
+    $stmt->execute([
+        ':status'   => $status,
+        ':status2'  => $status,
+        ':admin_id' => $adminId,
+        ':rid'      => $restaurantId,
+    ]);
+    return $stmt->rowCount() > 0;
+}
+
+function setRestaurantActiveStatus(PDO $db, int $restaurantId, bool $isActive): bool
+{
+    $stmt = $db->prepare(
+        "UPDATE restaurant SET is_active = :is_active WHERE restaurant_id = :rid"
+    );
+    $stmt->execute([
+        ':is_active' => $isActive ? 1 : 0,
+        ':rid'       => $restaurantId,
+    ]);
+    return $stmt->rowCount() > 0;
+}
+
+/* =============================================================
+ * PRESENTATION HELPERS (pure — no DB access)
+ * ============================================================= */
+
+function formatAdminCurrency(int|float|string|null $amount): string
+{
+    return '₱' . number_format((float)($amount ?? 0), 2);
+}
+
+function formatAdminDate(?string $date): string
+{
+    if ($date === null || $date === '') {
+        return '—';
+    }
+    $ts = strtotime($date);
+    return $ts !== false ? date('M d, Y g:i A', $ts) : $date;
+}
+
+function formatAdminDateShort(?string $date): string
+{
+    if ($date === null || $date === '') {
+        return '—';
+    }
+    $ts = strtotime($date);
+    return $ts !== false ? date('M d, Y', $ts) : $date;
+}
+
+/**
+ * Compose a full name from first / middle / last name parts.
+ * Empty parts are skipped so we never emit double spaces.
+ */
+function adminName(array $row): string
+{
+    $parts = array_filter([
+        $row['first_name']  ?? '',
+        $row['middle_name'] ?? '',
+        $row['last_name']   ?? '',
+    ], static fn($v) => trim((string)$v) !== '');
+
+    return trim(implode(' ', $parts)) ?: '—';
+}
+
+/**
+ * The first letter of the first name, uppercased. Falls back to 'A'
+ * when the row has no first name.
+ */
+function adminInitial(array $row): string
+{
+    $first = trim((string)($row['first_name'] ?? ''));
+    return strtoupper(substr($first !== '' ? $first : 'A', 0, 1));
+}
+
+function adminVerificationBadgeClass(string $status): string
+{
+    return match ($status) {
+        'verified'  => 'badge-success',
+        'pending'   => 'badge-warning',
+        'denied'    => 'badge-danger',
+        'suspended' => 'badge-secondary',
+        default     => 'badge-secondary',
+    };
+}
+
+function adminVerificationLabel(string $status): string
+{
+    return match ($status) {
+        'verified'  => 'Verified',
+        'pending'   => 'Pending',
+        'denied'    => 'Denied',
+        'suspended' => 'Suspended',
+        default     => ucfirst($status),
+    };
+}
+
+/**
+ * Order status → badge class. Used by the customer-detail modal's
+ * recent-orders tab and the rider-detail modal's deliveries tab.
+ */
+function adminOrderStatusBadgeClass(string $status): string
+{
+    return match ($status) {
+        'pending'    => 'badge-warning',
+        'preparing'  => 'badge-info',
+        'delivering' => 'badge-primary',
+        'delivered'  => 'badge-success',
+        'cancelled'  => 'badge-danger',
+        'refunded'   => 'badge-secondary',
+        default      => 'badge-secondary',
+    };
+}
+
+function adminOrderStatusLabel(string $status): string
+{
+    return match ($status) {
+        'pending'    => 'Pending',
+        'preparing'  => 'Preparing',
+        'delivering' => 'For Delivery',
+        'delivered'  => 'Delivered',
+        'cancelled'  => 'Cancelled',
+        'refunded'   => 'Refunded',
+        default      => ucfirst($status),
+    };
+}
+
+function adminRoleLabel(string $role): string
+{
+    return match ($role) {
+        'super_admin' => 'Super Admin',
+        'manager'     => 'Manager',
+        'support'     => 'Support',
+        'owner'       => 'Owner',
+        'partner'     => 'Partner',
+        'cashier'     => 'Cashier',
+        'kitchen'     => 'Kitchen',
+        default       => ucwords(str_replace('_', ' ', $role)),
+    };
+}
+
+function formatRiderAddress(?array $address): string
+{
+    if (!$address) {
+        return '—';
+    }
+    $parts = array_filter([
+        $address['block']       ?? '',
+        $address['barangay']    ?? '',
+        $address['city']        ?? '',
+        $address['province']    ?? '',
+        $address['region']      ?? '',
+        $address['postal_code'] ?? '',
+        $address['country']     ?? '',
+    ], static fn($v) => trim((string)$v) !== '');
+
+    return implode(', ', $parts) ?: '—';
+}
+
+function formatCustomerAddress(array $address): string
+{
+    return formatRiderAddress($address);
+}
+
+function parseAdminTagList(?string $raw): array
+{
+    if ($raw === null || trim($raw) === '') {
+        return [];
+    }
+    return array_values(array_filter(
+        array_map('trim', explode(',', $raw)),
+        static fn($v) => $v !== '' && strtolower($v) !== 'none'
+    ));
+}
+
+/**
+ * Resolve a project-root-relative path into a browser URL.
+ *
+ * The DB stores paths like
+ *   shared/uploads/rider-profiles/rider_12_profile_abc.jpg
+ * and $assetBase ends with 'shared/'. Stripping that suffix gives
+ * the project root; concatenating the stored path gives the URL.
+ *
+ * This is the canonical name. adminMediaUrl() is a deprecated shim
+ * that forwards here for backward compatibility.
+ *
+ * @param string $assetBase    Header-provided asset base ending in 'shared/'.
+ * @param string $relativePath DB-stored path relative to the project root.
+ * @return string
+ */
+function adminAssetUrl(string $assetBase, string $relativePath): string
+{
+    if ($relativePath === '') {
+        return '';
+    }
+
+    $projectRoot = preg_replace('#shared/$#', '', $assetBase);
+    if (!is_string($projectRoot)) {
+        $projectRoot = '';
+    }
+
+    return $projectRoot . $relativePath;
+}
+
+/**
+ * @deprecated Use adminAssetUrl() instead. Kept as a shim so older
+ *             call sites in dashboard.php and riders.php do not fatal
+ *             during the rename. Delete this once every call site has
+ *             been updated to adminAssetUrl().
+ *
+ * @param string $assetBase
+ * @param string $relativePath
+ * @return string
+ */
+function adminMediaUrl(string $assetBase, string $relativePath): string
+{
+    return adminAssetUrl($assetBase, $relativePath);
+}
+```
+
+---
+
+## File: `fitpal/admin/backend/handlers/admin-handler.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Admin Handler
+ *
+ * All admin mutations go through this single endpoint. Actions are
+ * dispatched by the `action` POST field. Each action verifies CSRF,
+ * calls a query-layer function, then flashes a message and redirects.
+ *
+ * Response shape: HTML redirect with a session flash. There is no
+ * JSON API for mutations because every mutation originates from a
+ * normal form submit and every page already renders flashes. AJAX is
+ * unnecessary here.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
+require_once __DIR__ . '/../database/admin-queries.php';
+
+if (empty($_SESSION['administrator_id'])) {
+    header('Location: ../../pages/sign-in.php');
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header('Location: ../../pages/dashboard.php');
+    exit;
+}
+
+if (!isset($_POST['csrf_token'], $_SESSION['csrf_token'])
+    || !hash_equals((string)$_SESSION['csrf_token'], (string)$_POST['csrf_token'])) {
+    $_SESSION['admin_error'] = 'Security validation failed. Please try again.';
+    header('Location: ../../pages/dashboard.php');
+    exit;
+}
+
+$adminId = (int)$_SESSION['administrator_id'];
+$action  = (string)($_POST['action'] ?? '');
+$redirect = (string)($_POST['redirect_to'] ?? 'dashboard.php');
+
+// Whitelist redirect destinations so the field cannot be abused.
+$allowedRedirects = [
+    'dashboard.php', 'customers.php', 'riders.php', 'restaurants.php', 'profile.php',
+];
+if (!in_array($redirect, $allowedRedirects, true)) {
+    $redirect = 'dashboard.php';
+}
+
+$redirectUrl = '../../pages/' . $redirect;
+
+try {
+    switch ($action) {
+
+        case 'update_profile':
+            handleUpdateProfile($database_connection, $adminId);
+            $_SESSION['admin_success'] = 'Profile updated successfully.';
+            break;
+
+        case 'change_password':
+            handleChangePassword($database_connection, $adminId);
+            $_SESSION['admin_success'] = 'Password changed successfully.';
+            break;
+
+        case 'toggle_customer':
+            handleToggleCustomer($database_connection);
+            $_SESSION['admin_success'] = 'Customer status updated.';
+            break;
+
+        case 'set_rider_verification':
+            handleSetRiderVerification($database_connection, $adminId);
+            $_SESSION['admin_success'] = 'Rider verification status updated.';
+            break;
+
+        case 'toggle_rider':
+            handleToggleRider($database_connection);
+            $_SESSION['admin_success'] = 'Rider status updated.';
+            break;
+
+        case 'set_restaurant_verification':
+            handleSetRestaurantVerification($database_connection, $adminId);
+            $_SESSION['admin_success'] = 'Restaurant verification status updated.';
+            break;
+
+        case 'toggle_restaurant':
+            handleToggleRestaurant($database_connection);
+            $_SESSION['admin_success'] = 'Restaurant status updated.';
+            break;
+
+        default:
+            $_SESSION['admin_error'] = 'Unknown action.';
+    }
+} catch (PDOException $e) {
+    error_log('Admin handler DB error: ' . $e->getMessage());
+    $_SESSION['admin_error'] = 'A database error occurred. Please try again.';
+} catch (RuntimeException $e) {
+    $_SESSION['admin_error'] = $e->getMessage();
+} catch (Throwable $e) {
+    error_log('Admin handler error: ' . $e->getMessage());
+    $_SESSION['admin_error'] = 'An unexpected error occurred.';
+}
+
+header('Location: ' . $redirectUrl);
+exit;
+
+/* =============================================================
+ * ACTION HANDLERS
+ * ============================================================= */
+
+function handleUpdateProfile(PDO $db, int $adminId): void
+{
+    $firstName = trim((string)($_POST['first_name'] ?? ''));
+    $middleName = trim((string)($_POST['middle_name'] ?? ''));
+    $lastName = trim((string)($_POST['last_name'] ?? ''));
+    $contact = trim((string)($_POST['contact_number'] ?? ''));
+
+    if (strlen($firstName) < 2 || strlen($lastName) < 2) {
+        throw new RuntimeException('First and last name must be at least 2 characters.');
+    }
+
+    if ($contact !== '' && !preg_match('/^09\d{9}$/', $contact)) {
+        throw new RuntimeException('Contact number must be a valid PH mobile (09XXXXXXXXX).');
+    }
+
+    updateAdminProfile($db, $adminId, $firstName, $middleName, $lastName, $contact);
+}
+
+function handleChangePassword(PDO $db, int $adminId): void
+{
+    $current = (string)($_POST['current_password'] ?? '');
+    $new     = (string)($_POST['new_password'] ?? '');
+    $confirm = (string)($_POST['confirm_password'] ?? '');
+
+    if (strlen($new) < 8 || strlen($new) > 20) {
+        throw new RuntimeException('New password must be 8–20 characters.');
+    }
+    if (!preg_match('/^[A-Za-z0-9]+$/', $new)) {
+        throw new RuntimeException('Password can only contain letters and numbers.');
+    }
+    if (!preg_match('/[A-Za-z]/', $new) || !preg_match('/[0-9]/', $new)) {
+        throw new RuntimeException('Password must contain at least one letter and one number.');
+    }
+    if ($new !== $confirm) {
+        throw new RuntimeException('New password and confirmation do not match.');
+    }
+
+    $stmt = $db->prepare("SELECT password FROM administrator WHERE administrator_id = :id");
+    $stmt->execute([':id' => $adminId]);
+    $stored = (string)$stmt->fetchColumn();
+
+    $valid = password_verify($current, $stored);
+    if (!$valid && hash_equals($stored, $current)) {
+        $valid = true;
+    }
+    if (!$valid) {
+        throw new RuntimeException('Current password is incorrect.');
+    }
+
+    $hashed = password_hash($new, PASSWORD_BCRYPT);
+    updateAdminPassword($db, $adminId, $hashed);
+}
+
+function handleToggleCustomer(PDO $db): void
+{
+    $customerId = (int)($_POST['customer_id'] ?? 0);
+    $activate   = (string)($_POST['activate'] ?? '') === '1';
+    if ($customerId <= 0) {
+        throw new RuntimeException('Invalid customer.');
+    }
+    setCustomerActiveStatus($db, $customerId, $activate);
+}
+
+function handleSetRiderVerification(PDO $db, int $adminId): void
+{
+    $riderId = (int)($_POST['rider_id'] ?? 0);
+    $status  = (string)($_POST['status'] ?? '');
+    if ($riderId <= 0) {
+        throw new RuntimeException('Invalid rider.');
+    }
+    if (!setRiderVerificationStatus($db, $riderId, $status, $adminId)) {
+        throw new RuntimeException('Invalid verification status.');
+    }
+}
+
+function handleToggleRider(PDO $db): void
+{
+    $riderId  = (int)($_POST['rider_id'] ?? 0);
+    $activate = (string)($_POST['activate'] ?? '') === '1';
+    if ($riderId <= 0) {
+        throw new RuntimeException('Invalid rider.');
+    }
+    setRiderActiveStatus($db, $riderId, $activate);
+}
+
+function handleSetRestaurantVerification(PDO $db, int $adminId): void
+{
+    $restaurantId = (int)($_POST['restaurant_id'] ?? 0);
+    $status       = (string)($_POST['status'] ?? '');
+    if ($restaurantId <= 0) {
+        throw new RuntimeException('Invalid restaurant.');
+    }
+    if (!setRestaurantVerificationStatus($db, $restaurantId, $status, $adminId)) {
+        throw new RuntimeException('Invalid verification status.');
+    }
+}
+
+function handleToggleRestaurant(PDO $db): void
+{
+    $restaurantId = (int)($_POST['restaurant_id'] ?? 0);
+    $activate     = (string)($_POST['activate'] ?? '') === '1';
+    if ($restaurantId <= 0) {
+        throw new RuntimeException('Invalid restaurant.');
+    }
+    setRestaurantActiveStatus($db, $restaurantId, $activate);
+}
+```
+
+---
+
+## File: `fitpal/admin/backend/handlers/sign-in-handler.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Admin Sign-In Handler
+ *
+ * Validates credentials against the administrator table.
+ * Contains no SQL — all data access goes through admin-queries.php.
+ *
+ * DEVELOPMENT-ONLY BYPASS: seed data stores plaintext passwords.
+ * Remove before any non-local deployment.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
+require_once __DIR__ . '/../database/admin-queries.php';
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    $_SESSION['login_error'] = 'Invalid request method.';
+    header('Location: ../../pages/sign-in.php');
+    exit;
+}
+
+if (!isset($_POST['csrf_token'], $_SESSION['csrf_token'])
+    || !hash_equals((string)$_SESSION['csrf_token'], (string)$_POST['csrf_token'])) {
+    $_SESSION['login_error'] = 'Security validation failed. Please try again.';
+    header('Location: ../../pages/sign-in.php');
+    exit;
+}
+
+$identifier = trim((string)($_POST['identifier'] ?? ''));
+$password   = (string)($_POST['password'] ?? '');
+
+if ($identifier === '' || $password === '') {
+    $_SESSION['login_error'] = 'Please enter your email/username and password.';
+    header('Location: ../../pages/sign-in.php');
+    exit;
+}
+
+try {
+    $admin = findAdminByIdentifier($database_connection, $identifier);
+
+    if (!$admin) {
+        $_SESSION['login_error'] = 'Invalid email/username or password.';
+        header('Location: ../../pages/sign-in.php');
+        exit;
+    }
+
+    if ((int)$admin['is_active'] !== 1) {
+        $_SESSION['login_error'] = 'Your account has been deactivated. Please contact support.';
+        header('Location: ../../pages/sign-in.php');
+        exit;
+    }
+
+    $passwordValid = password_verify($password, (string)$admin['password']);
+
+    // ---- DEVELOPMENT-ONLY BYPASS ----
+    if (!$passwordValid && hash_equals((string)$admin['password'], $password)) {
+        $passwordValid = true;
+    }
+    // ---- END BYPASS ----
+
+    if (!$passwordValid) {
+        $_SESSION['login_error'] = 'Invalid email/username or password.';
+        header('Location: ../../pages/sign-in.php');
+        exit;
+    }
+
+    session_regenerate_id(true);
+
+    $_SESSION['administrator_id'] = (int)$admin['administrator_id'];
+    $_SESSION['user_role']        = 'admin';
+    $_SESSION['user_name']        = trim(($admin['first_name'] ?? '') . ' ' . ($admin['last_name'] ?? ''));
+    $_SESSION['user_email']       = (string)($admin['email'] ?? '');
+    $_SESSION['admin_role']       = (string)($admin['role'] ?? 'support');
+    $_SESSION['created']          = time();
+
+    recordAdminLogin($database_connection, (int)$admin['administrator_id']);
+
+    unset($_SESSION['csrf_token']);
+
+    header('Location: ../../pages/dashboard.php');
+    exit;
+
+} catch (PDOException $e) {
+    error_log('Admin sign-in DB error: ' . $e->getMessage());
+    $_SESSION['login_error'] = 'An unexpected error occurred. Please try again.';
+    header('Location: ../../pages/sign-in.php');
+    exit;
+}
+```
+
+---
+
+## File: `fitpal/admin/backend/handlers/sign-out-handler.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Admin Sign-Out Handler
+ *
+ * Clears only admin-specific session data. Other role sessions
+ * (customer, rider, restaurant) remain intact.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+unset(
+    $_SESSION['administrator_id'],
+    $_SESSION['user_role'],
+    $_SESSION['user_name'],
+    $_SESSION['user_email'],
+    $_SESSION['admin_role']
+);
+
+session_regenerate_id(true);
+
+header('Location: ../../pages/sign-in.php');
+exit;
+```
+
+---
+
+## File: `fitpal/admin/includes/header.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Admin Header
+ *
+ * Admin-specific header with conditional navigation based on login
+ * status. Mirrors customer/includes/header.php and
+ * rider/includes/header.php so all three roles stay consistent in
+ * behavior, asset resolution, and CSS load order.
+ *
+ * @package FitPal
+ * @version 2.0
+ */
+
+declare(strict_types=1);
+
+// ===== SESSION =====
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (!isset($_SESSION['created'])) {
+    $_SESSION['created'] = time();
+} elseif (time() - $_SESSION['created'] > 1800) {
+    session_regenerate_id(true);
+    $_SESSION['created'] = time();
+}
+
+// ===== DATABASE =====
+require_once __DIR__ . '/../backend/database/admin-connect.php';
+
+// ===== PATH DETECTION =====
+function getAdminAssetBase(): string
+{
+    $scriptPath = $_SERVER['SCRIPT_NAME'];
+    $dirPath    = dirname($scriptPath);
+    $segments   = array_filter(explode('/', $dirPath));
+    $depth      = count($segments);
+    return $depth <= 0 ? './shared/' : str_repeat('../', $depth) . 'shared/';
+}
+
+$assetBase = getAdminAssetBase();
+
+// ===== FETCH ADMIN DATA (if logged in) =====
+$isLoggedIn   = false;
+$adminName    = '';
+$adminInitial = '';
+$adminRole    = '';
+
+if (!empty($_SESSION['administrator_id'])) {
+    $isLoggedIn = true;
+    try {
+        $stmt = $database_connection->prepare(
+            "SELECT a.first_name, a.last_name, ap.role
+             FROM administrator a
+             LEFT JOIN administrator_profile ap ON a.administrator_id = ap.administrator_id
+             WHERE a.administrator_id = :id
+             LIMIT 1"
+        );
+        $stmt->execute([':id' => (int)$_SESSION['administrator_id']]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row) {
+            $adminName    = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+            $adminInitial = strtoupper(substr((string)($row['first_name'] ?? 'A'), 0, 1));
+            $adminRole    = (string)($row['role'] ?? '');
+        }
+    } catch (PDOException $e) {
+        // Silently fail — login state still valid
+    }
+}
+
+// ===== CURRENT PAGE =====
+$currentPage = basename($_SERVER['PHP_SELF']);
+
+// ===== PAGE-SPECIFIC CSS =====
+$pageCssMap = [
+    'sign-in.php'      => 'sign-in.css',
+    'dashboard.php'    => 'dashboard.css',
+    'customers.php'    => 'admin-tables.css',
+    'riders.php'       => 'admin-tables.css',
+    'restaurants.php'  => 'admin-tables.css',
+    'profile.php'      => 'profile.css',
+];
+
+$pageCssFile = $pageCssMap[$currentPage] ?? '';
+$pageCssPath = '';
+if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFile)) {
+    $pageCssPath = '../assets/css/' . $pageCssFile;
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="FitPal - Admin Portal">
+    <title>FitPal - Admin</title>
+
+    <link rel="icon" type="image/x-icon" href="<?php echo $assetBase; ?>assets/images/brand/Logo.ico">
+    <link rel="shortcut icon" href="<?php echo $assetBase; ?>assets/images/brand/Logo.ico">
+
+    <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/global.css">
+    <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/header.css">
+    <link rel="stylesheet" href="../assets/css/header.css">
+
+    <?php if ($pageCssPath !== ''): ?>
+    <link rel="stylesheet" href="<?php echo $pageCssPath; ?>">
+    <?php endif; ?>
+</head>
+
+<body>
+    <header class="header admin-header" role="banner">
+        <div class="header-container">
+            <div class="header-logo">
+                <a href="<?php echo $assetBase; ?>../index.php" class="logo-link" aria-label="FitPal Home">
+                    <img src="<?php echo $assetBase; ?>assets/images/brand/Logo.png" alt="FitPal Logo"
+                        class="logo-image">
+                    <span class="logo-text">Fit<span>Pal</span></span>
+                </a>
+            </div>
+
+            <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation menu" aria-expanded="false"
+                type="button">
+                <span class="menu-icon">
+                    <span class="bar"></span>
+                    <span class="bar"></span>
+                    <span class="bar"></span>
+                </span>
+            </button>
+
+            <nav class="header-nav" id="mainNav" role="navigation" aria-label="Admin navigation">
+                <?php if ($isLoggedIn): ?>
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <a href="dashboard.php"
+                            class="nav-link <?php echo ($currentPage === 'dashboard.php') ? 'active' : ''; ?>">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="customers.php"
+                            class="nav-link <?php echo ($currentPage === 'customers.php') ? 'active' : ''; ?>">Customers</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="riders.php"
+                            class="nav-link <?php echo ($currentPage === 'riders.php') ? 'active' : ''; ?>">Riders</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="restaurants.php"
+                            class="nav-link <?php echo ($currentPage === 'restaurants.php') ? 'active' : ''; ?>">Restaurants</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="profile.php"
+                            class="nav-link <?php echo ($currentPage === 'profile.php') ? 'active' : ''; ?>">Profile</a>
+                    </li>
+                </ul>
+
+                <div class="nav-actions">
+                    <div class="user-profile-circle"
+                        title="<?php echo htmlspecialchars($adminName !== '' ? $adminName : 'Admin', ENT_QUOTES, 'UTF-8'); ?>">
+                        <?php if ($adminInitial !== ''): ?>
+                        <span
+                            class="user-initial"><?php echo htmlspecialchars($adminInitial, ENT_QUOTES, 'UTF-8'); ?></span>
+                        <?php else: ?>
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="Profile"
+                            class="profile-icon">
+                        <?php endif; ?>
+                    </div>
+                    <a href="../backend/handlers/sign-out-handler.php" data-signout
+                        class="btn btn-outline btn-sm logout-btn">Logout</a>
+                </div>
+
+                <?php else: ?>
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <a href="<?php echo $assetBase; ?>../index.php"
+                            class="nav-link <?php echo ($currentPage === 'index.php') ? 'active' : ''; ?>">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="<?php echo $assetBase; ?>pages/about.php"
+                            class="nav-link <?php echo ($currentPage === 'about.php') ? 'active' : ''; ?>">About</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="<?php echo $assetBase; ?>pages/contact.php"
+                            class="nav-link <?php echo ($currentPage === 'contact.php') ? 'active' : ''; ?>">Contact</a>
+                    </li>
+                </ul>
+
+                <div class="nav-actions">
+                    <a href="sign-in.php" class="btn btn-primary btn-sm">Login</a>
+                </div>
+                <?php endif; ?>
+            </nav>
+        </div>
+    </header>
+
+    <div class="mobile-overlay" id="mobileOverlay"></div>
+
+    <nav class="mobile-nav" id="mobileNav" role="navigation" aria-label="Mobile navigation">
+        <ul class="mobile-nav-list">
+            <?php if ($isLoggedIn): ?>
+            <li class="mobile-nav-item mobile-user-greeting">
+                <div class="mobile-user-avatar">
+                    <?php if ($adminInitial !== ''): ?>
+                    <span
+                        class="user-initial-large"><?php echo htmlspecialchars($adminInitial, ENT_QUOTES, 'UTF-8'); ?></span>
+                    <?php else: ?>
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="Profile">
+                    <?php endif; ?>
+                </div>
+                <span
+                    class="mobile-user-name"><?php echo htmlspecialchars($adminName !== '' ? $adminName : 'Admin', ENT_QUOTES, 'UTF-8'); ?></span>
+            </li>
+            <li class="mobile-nav-divider"></li>
+            <li class="mobile-nav-item">
+                <a href="dashboard.php"
+                    class="mobile-nav-link <?php echo ($currentPage === 'dashboard.php') ? 'active' : ''; ?>">Dashboard</a>
+            </li>
+            <li class="mobile-nav-item">
+                <a href="customers.php"
+                    class="mobile-nav-link <?php echo ($currentPage === 'customers.php') ? 'active' : ''; ?>">Customers</a>
+            </li>
+            <li class="mobile-nav-item">
+                <a href="riders.php"
+                    class="mobile-nav-link <?php echo ($currentPage === 'riders.php') ? 'active' : ''; ?>">Riders</a>
+            </li>
+            <li class="mobile-nav-item">
+                <a href="restaurants.php"
+                    class="mobile-nav-link <?php echo ($currentPage === 'restaurants.php') ? 'active' : ''; ?>">Restaurants</a>
+            </li>
+            <li class="mobile-nav-item">
+                <a href="profile.php"
+                    class="mobile-nav-link <?php echo ($currentPage === 'profile.php') ? 'active' : ''; ?>">Profile</a>
+            </li>
+            <li class="mobile-nav-divider"></li>
+            <li class="mobile-nav-item">
+                <a href="../backend/handlers/sign-out-handler.php" data-signout
+                    class="mobile-nav-link mobile-logout">Logout</a>
+            </li>
+            <?php else: ?>
+            <li class="mobile-nav-item">
+                <a href="<?php echo $assetBase; ?>../index.php" class="mobile-nav-link">Home</a>
+            </li>
+            <li class="mobile-nav-item">
+                <a href="<?php echo $assetBase; ?>pages/about.php" class="mobile-nav-link">About</a>
+            </li>
+            <li class="mobile-nav-item">
+                <a href="<?php echo $assetBase; ?>pages/contact.php" class="mobile-nav-link">Contact</a>
+            </li>
+            <li class="mobile-nav-divider"></li>
+            <li class="mobile-nav-item">
+                <a href="sign-in.php" class="mobile-nav-link mobile-login">Login</a>
+            </li>
+            <?php endif; ?>
+        </ul>
+    </nav>
+
+    <main class="main-content" role="main">
+
+        <script src="../assets/ui/js/header.js" defer></script>
+```
+
+---
+
+## File: `fitpal/admin/pages/customers.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Admin — Customers List
+ *
+ * Paginated list of customer accounts with search, status tabs, and
+ * a per-customer detail modal. All mutations go through
+ * admin-handler.php via normal form POSTs. No window.confirm().
+ *
+ * @package FitPal
+ * @version 2.0
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (empty($_SESSION['administrator_id'])) {
+    header('Location: sign-in.php');
+    exit;
+}
+
+require_once __DIR__ . '/../includes/header.php';
+require_once __DIR__ . '/../backend/database/admin-queries.php';
+
+$adminId = (int)$_SESSION['administrator_id'];
+
+$page     = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+$search   = isset($_GET['search']) ? trim((string)$_GET['search']) : '';
+$status   = isset($_GET['status']) ? (string)$_GET['status'] : 'all';
+$openId   = isset($_GET['open']) ? (int)$_GET['open'] : 0;
+$perPage  = 5;
+
+$allowedStatuses = ['all', 'active', 'inactive'];
+if (!in_array($status, $allowedStatuses, true)) {
+    $status = 'all';
+}
+
+$counts = getCustomerCountsByStatus($database_connection);
+$data   = getCustomersPaginated($database_connection, $page, $perPage, $search, $status);
+$rows   = $data['rows'];
+$pagination = $data;
+
+// If the URL asked us to open a specific customer, load it.
+$openCustomer = null;
+$openAddresses = [];
+$openOrders = [];
+if ($openId > 0) {
+    $openCustomer = getCustomerDetails($database_connection, $openId);
+    if ($openCustomer) {
+        $openAddresses = getCustomerAddresses($database_connection, $openId);
+        $openOrders    = getCustomerRecentOrders($database_connection, $openId, 5);
+    }
+}
+
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+$csrfToken = $_SESSION['csrf_token'];
+
+/**
+ * Build a query string preserving current filters.
+ */
+function buildCustomerUrl(array $overrides = []): string
+{
+    $params = [
+        'page'   => $_GET['page']   ?? 1,
+        'search' => $_GET['search'] ?? '',
+        'status' => $_GET['status'] ?? 'all',
+    ];
+    foreach ($overrides as $k => $v) {
+        if ($v === null || $v === '') {
+            unset($params[$k]);
+        } else {
+            $params[$k] = $v;
+        }
+    }
+    return '?' . http_build_query($params);
+}
+?>
+
+<div class="content admin-list-page">
+    <div class="container">
+
+        <header class="admin-page-header">
+            <div class="admin-page-header-left">
+                <h1 class="heading-2">Customer <span>Management</span></h1>
+                <p class="text-muted">Browse, search, and manage customer accounts.</p>
+            </div>
+            <div class="admin-page-header-actions">
+                <a href="dashboard.php" class="btn btn-outline btn-sm">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt="" class="btn-icon"
+                        width="16" height="16" style="filter: none;">
+                    <span>Dashboard</span>
+                </a>
+            </div>
+        </header>
+
+        <?php if (!empty($_SESSION['admin_success'])): ?>
+        <div class="alert alert-success" role="alert">
+            <?php echo htmlspecialchars($_SESSION['admin_success'], ENT_QUOTES, 'UTF-8'); ?>
+            <?php unset($_SESSION['admin_success']); ?>
+        </div>
+        <?php endif; ?>
+
+        <?php if (!empty($_SESSION['admin_error'])): ?>
+        <div class="alert alert-danger" role="alert">
+            <?php echo htmlspecialchars($_SESSION['admin_error'], ENT_QUOTES, 'UTF-8'); ?>
+            <?php unset($_SESSION['admin_error']); ?>
+        </div>
+        <?php endif; ?>
+
+        <!-- FILTER BAR -->
+        <div class="admin-filter-bar">
+            <form method="GET" action="" class="admin-search-form">
+                <input type="hidden" name="status"
+                    value="<?php echo htmlspecialchars($status, ENT_QUOTES, 'UTF-8'); ?>">
+                <input type="text" name="search" class="admin-search-input"
+                    placeholder="Search by name, email, username, or contact…"
+                    value="<?php echo htmlspecialchars($search, ENT_QUOTES, 'UTF-8'); ?>">
+                <button type="submit" class="admin-search-btn">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt="" class="btn-icon"
+                        width="14" height="14">
+                    <span>Search</span>
+                </button>
+            </form>
+
+            <nav class="admin-filter-tabs" aria-label="Customer status filter">
+                <a href="<?php echo htmlspecialchars(buildCustomerUrl(['status' => 'all', 'page' => 1, 'search' => $search]), ENT_QUOTES, 'UTF-8'); ?>"
+                    class="admin-filter-tab <?php echo $status === 'all' ? 'active' : ''; ?>">
+                    All <span class="filter-count"><?php echo number_format($counts['all']); ?></span>
+                </a>
+                <a href="<?php echo htmlspecialchars(buildCustomerUrl(['status' => 'active', 'page' => 1, 'search' => $search]), ENT_QUOTES, 'UTF-8'); ?>"
+                    class="admin-filter-tab <?php echo $status === 'active' ? 'active' : ''; ?>">
+                    Active <span class="filter-count"><?php echo number_format($counts['active']); ?></span>
+                </a>
+                <a href="<?php echo htmlspecialchars(buildCustomerUrl(['status' => 'inactive', 'page' => 1, 'search' => $search]), ENT_QUOTES, 'UTF-8'); ?>"
+                    class="admin-filter-tab <?php echo $status === 'inactive' ? 'active' : ''; ?>">
+                    Inactive <span class="filter-count"><?php echo number_format($counts['inactive']); ?></span>
+                </a>
+            </nav>
+        </div>
+
+        <!-- TABLE -->
+        <div class="admin-table-card">
+            <?php if (empty($rows)): ?>
+            <div class="admin-table-empty">
+                <div class="admin-table-empty-icon" aria-hidden="true">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt=""
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg'">
+                </div>
+                <p class="admin-table-empty-title">No customers found</p>
+                <p class="admin-table-empty-text">
+                    <?php if ($search !== ''): ?>
+                    No results for "<?php echo htmlspecialchars($search, ENT_QUOTES, 'UTF-8'); ?>".
+                    <?php else: ?>
+                    Try a different filter or clear your search.
+                    <?php endif; ?>
+                </p>
+            </div>
+            <?php else: ?>
+            <div class="admin-table-customers">
+                <?php foreach ($rows as $c):
+                    $cid = (int)$c['customer_id'];
+                    $name = adminName($c);
+                    $initial = adminInitial($c);
+                    $isActive = (int)$c['is_active'] === 1;
+                ?>
+                <div class="admin-table-row">
+                    <div class="admin-cell-avatar">
+                        <?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>
+                    </div>
+
+                    <div class="admin-cell-body">
+                        <p class="admin-cell-title"><?php echo htmlspecialchars($name, ENT_QUOTES, 'UTF-8'); ?></p>
+                        <p class="admin-cell-subtitle">
+                            <?php echo htmlspecialchars((string)$c['email'], ENT_QUOTES, 'UTF-8'); ?>
+                        </p>
+                        <div class="admin-cell-meta">
+                            <span class="admin-cell-meta-item">
+                                <?php echo htmlspecialchars((string)($c['contact_number'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                            <span class="admin-cell-meta-item">
+                                @<?php echo htmlspecialchars((string)($c['username'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="admin-cell-body">
+                        <div class="admin-cell-meta">
+                            <span class="admin-cell-meta-item">
+                                <strong><?php echo number_format((int)($c['order_count'] ?? 0)); ?></strong>&nbsp;orders
+                            </span>
+                            <span class="admin-cell-meta-item">
+                                Wallet: <?php echo formatAdminCurrency((float)($c['balance'] ?? 0)); ?>
+                            </span>
+                        </div>
+                        <div class="admin-cell-meta">
+                            <span class="badge <?php echo $isActive ? 'badge-success' : 'badge-secondary'; ?>">
+                                <?php echo $isActive ? 'Active' : 'Inactive'; ?>
+                            </span>
+                            <span class="admin-cell-meta-item">
+                                Joined
+                                <?php echo htmlspecialchars(formatAdminDateShort((string)($c['date_created'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="admin-cell-actions">
+                        <button type="button" class="btn btn-outline btn-sm"
+                            onclick="window.location.href='<?php echo htmlspecialchars(buildCustomerUrl(['open' => $cid]), ENT_QUOTES, 'UTF-8'); ?>'">
+                            <img src="<?php echo $assetBase; ?>assets/images/icons/pages-line.svg" alt=""
+                                class="btn-icon" width="14" height="14" style="filter:none;">
+                            <span>View Details</span>
+                        </button>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+
+            <!-- PAGINATION -->
+            <?php if ($pagination['totalPages'] > 1): ?>
+            <nav class="admin-pagination" aria-label="Customer pagination">
+                <span class="admin-pagination-info">
+                    Showing page <?php echo $pagination['page']; ?> of <?php echo $pagination['totalPages']; ?>
+                    (<?php echo number_format($pagination['total']); ?> total)
+                </span>
+                <ul class="admin-pagination-list">
+                    <?php if ($pagination['page'] > 1): ?>
+                    <li>
+                        <a href="<?php echo htmlspecialchars(buildCustomerUrl(['page' => $pagination['page'] - 1]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="admin-pagination-link">Previous</a>
+                    </li>
+                    <?php else: ?>
+                    <li><span class="admin-pagination-link disabled">Previous</span></li>
+                    <?php endif; ?>
+
+                    <?php
+                    $maxVisible = 5;
+                    $start = max(1, $pagination['page'] - (int)floor($maxVisible / 2));
+                    $end   = min($pagination['totalPages'], $start + $maxVisible - 1);
+                    if ($end - $start + 1 < $maxVisible) {
+                        $start = max(1, $end - $maxVisible + 1);
+                    }
+                    if ($start > 1): ?>
+                    <li>
+                        <a href="<?php echo htmlspecialchars(buildCustomerUrl(['page' => 1]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="admin-pagination-link">1</a>
+                    </li>
+                    <?php if ($start > 2): ?>
+                    <li><span class="admin-pagination-ellipsis">…</span></li>
+                    <?php endif; endif; ?>
+
+                    <?php for ($i = $start; $i <= $end; $i++): ?>
+                    <li>
+                        <?php if ($i === $pagination['page']): ?>
+                        <span class="admin-pagination-link active"><?php echo $i; ?></span>
+                        <?php else: ?>
+                        <a href="<?php echo htmlspecialchars(buildCustomerUrl(['page' => $i]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="admin-pagination-link"><?php echo $i; ?></a>
+                        <?php endif; ?>
+                    </li>
+                    <?php endfor; ?>
+
+                    <?php if ($end < $pagination['totalPages']): ?>
+                    <?php if ($end < $pagination['totalPages'] - 1): ?>
+                    <li><span class="admin-pagination-ellipsis">…</span></li>
+                    <?php endif; ?>
+                    <li>
+                        <a href="<?php echo htmlspecialchars(buildCustomerUrl(['page' => $pagination['totalPages']]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="admin-pagination-link"><?php echo $pagination['totalPages']; ?></a>
+                    </li>
+                    <?php endif; ?>
+
+                    <?php if ($pagination['page'] < $pagination['totalPages']): ?>
+                    <li>
+                        <a href="<?php echo htmlspecialchars(buildCustomerUrl(['page' => $pagination['page'] + 1]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="admin-pagination-link">Next</a>
+                    </li>
+                    <?php else: ?>
+                    <li><span class="admin-pagination-link disabled">Next</span></li>
+                    <?php endif; ?>
+                </ul>
+            </nav>
+            <?php endif; ?>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================
+     CUSTOMER DETAILS MODAL
+     ============================================ -->
+<div class="admin-modal <?php echo $openCustomer ? 'is-open' : ''; ?>" id="customerDetailsModal"
+    aria-hidden="<?php echo $openCustomer ? 'false' : 'true'; ?>" role="dialog">
+    <div class="admin-modal-backdrop"
+        onclick="window.location.href='<?php echo htmlspecialchars(buildCustomerUrl(['open' => null]), ENT_QUOTES, 'UTF-8'); ?>'">
+    </div>
+    <div class="admin-modal-panel admin-modal-panel-wide" role="document">
+        <div class="admin-modal-header">
+            <div class="admin-modal-header-left">
+                <p class="admin-modal-title">
+                    <?php echo $openCustomer
+                        ? htmlspecialchars(adminName($openCustomer), ENT_QUOTES, 'UTF-8')
+                        : 'Customer Details'; ?>
+                </p>
+                <p class="admin-modal-subtitle">
+                    <?php echo $openCustomer
+                        ? htmlspecialchars((string)$openCustomer['email'], ENT_QUOTES, 'UTF-8')
+                        : 'Select a customer to view their details.'; ?>
+                </p>
+            </div>
+            <a href="<?php echo htmlspecialchars(buildCustomerUrl(['open' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                class="admin-modal-close" aria-label="Close">&times;</a>
+        </div>
+
+        <?php if (!$openCustomer): ?>
+        <div class="admin-modal-panel-body">
+            <p class="admin-detail-value admin-detail-value-muted">No customer selected.</p>
+        </div>
+        <?php else: ?>
+        <div class="admin-modal-tabs">
+            <button type="button" class="admin-modal-tab active" data-tab-target="cust-panel-info">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/file-user-line.svg" alt="" width="14" height="14"
+                    style="filter:none;">
+                <span>Info</span>
+            </button>
+            <button type="button" class="admin-modal-tab" data-tab-target="cust-panel-addresses">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="" width="14" height="14"
+                    style="filter:none;">
+                <span>Addresses</span>
+                <span class="tab-count"><?php echo count($openAddresses); ?></span>
+            </button>
+            <button type="button" class="admin-modal-tab" data-tab-target="cust-panel-orders">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/cart-shopping.svg" alt="" width="14" height="14"
+                    style="filter:none;">
+                <span>Recent Orders</span>
+                <span class="tab-count"><?php echo count($openOrders); ?></span>
+            </button>
+        </div>
+
+        <div class="admin-modal-panel-body">
+
+            <!-- TAB: INFO -->
+            <div class="admin-modal-tab-panel active" id="cust-panel-info">
+                <div class="admin-detail-grid">
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Full Name</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars(adminName($openCustomer), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Username</span>
+                        <span class="admin-detail-value">
+                            @<?php echo htmlspecialchars((string)($openCustomer['username'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Email</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars((string)($openCustomer['email'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Contact</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars((string)($openCustomer['contact_number'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Gender</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars((string)($openCustomer['gender'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Birthdate</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars(formatAdminDateShort((string)($openCustomer['birthdate'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Joined</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars(formatAdminDate((string)($openCustomer['date_created'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Status</span>
+                        <span class="admin-detail-value">
+                            <span
+                                class="badge <?php echo (int)$openCustomer['is_active'] === 1 ? 'badge-success' : 'badge-secondary'; ?>">
+                                <?php echo (int)$openCustomer['is_active'] === 1 ? 'Active' : 'Inactive'; ?>
+                            </span>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Wallet Balance</span>
+                        <span class="admin-detail-value">
+                            <?php echo formatAdminCurrency((float)($openCustomer['balance'] ?? 0)); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Orders Placed</span>
+                        <span class="admin-detail-value">
+                            <?php echo number_format((int)($openCustomer['order_count'] ?? 0)); ?>
+                        </span>
+                    </div>
+
+                    <div class="admin-detail-item admin-detail-item-full">
+                        <span class="admin-detail-label">Fitness Goal</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', (string)($openCustomer['fitness_goal'] ?? '—'))), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Height (cm)</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars((string)($openCustomer['height_cm'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Weight (kg)</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars((string)($openCustomer['weight_kg'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+
+                    <div class="admin-detail-item admin-detail-item-full">
+                        <span class="admin-detail-label">Dietary Preferences</span>
+                        <span class="admin-detail-value">
+                            <?php
+                            $diet = parseAdminTagList((string)($openCustomer['dietary_preferences'] ?? ''));
+                            echo empty($diet)
+                                ? '—'
+                                : htmlspecialchars(implode(', ', array_map(
+                                    fn($t) => ucwords(str_replace('_', ' ', $t)),
+                                    $diet
+                                )), ENT_QUOTES, 'UTF-8');
+                            ?>
+                        </span>
+                    </div>
+
+                    <div class="admin-detail-item admin-detail-item-full">
+                        <span class="admin-detail-label">Allergies</span>
+                        <span class="admin-detail-value">
+                            <?php
+                            $alg = parseAdminTagList((string)($openCustomer['allergies'] ?? ''));
+                            echo empty($alg)
+                                ? '—'
+                                : htmlspecialchars(implode(', ', array_map(
+                                    fn($t) => ucwords(str_replace('_', ' ', $t)),
+                                    $alg
+                                )), ENT_QUOTES, 'UTF-8');
+                            ?>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: ADDRESSES -->
+            <div class="admin-modal-tab-panel" id="cust-panel-addresses">
+                <?php if (empty($openAddresses)): ?>
+                <div class="admin-doc-empty">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="">
+                    <span>No addresses on file.</span>
+                </div>
+                <?php else: ?>
+                <?php foreach ($openAddresses as $addr): ?>
+                <div class="admin-address-card">
+                    <div class="admin-address-label">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="" width="14"
+                            height="14" style="filter:none;">
+                        <span><?php echo htmlspecialchars((string)($addr['label'] ?? 'Address'), ENT_QUOTES, 'UTF-8'); ?></span>
+                        <?php if ((int)($addr['is_default'] ?? 0) === 1): ?>
+                        <span class="admin-contact-badge">Default</span>
+                        <?php endif; ?>
+                    </div>
+                    <p class="admin-address-text">
+                        <?php echo htmlspecialchars(formatCustomerAddress($addr), ENT_QUOTES, 'UTF-8'); ?>
+                    </p>
+                </div>
+                <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+
+            <!-- TAB: RECENT ORDERS -->
+            <div class="admin-modal-tab-panel" id="cust-panel-orders">
+                <?php if (empty($openOrders)): ?>
+                <div class="admin-doc-empty">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/cart-shopping.svg" alt="">
+                    <span>No orders yet.</span>
+                </div>
+                <?php else: ?>
+                <div class="admin-orders-list">
+                    <?php foreach ($openOrders as $o): ?>
+                    <div class="admin-order-row">
+                        <div class="admin-order-id-block">
+                            <span class="admin-order-id">Order #<?php echo (int)$o['order_id']; ?></span>
+                            <span class="admin-order-customer">
+                                <?php echo htmlspecialchars(formatAdminDate((string)$o['order_date']), ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                        </div>
+                        <span class="badge <?php echo adminOrderStatusBadgeClass((string)$o['order_status']); ?>">
+                            <?php echo adminOrderStatusLabel((string)$o['order_status']); ?>
+                        </span>
+                        <span class="admin-order-total">
+                            <?php echo formatAdminCurrency((float)$o['order_total']); ?>
+                        </span>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
+            </div>
+
+        </div>
+
+        <div class="admin-modal-footer">
+            <form method="POST" action="../backend/handlers/admin-handler.php" style="display:inline;">
+                <input type="hidden" name="csrf_token"
+                    value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                <input type="hidden" name="action" value="toggle_customer">
+                <input type="hidden" name="customer_id" value="<?php echo (int)$openCustomer['customer_id']; ?>">
+                <input type="hidden" name="activate"
+                    value="<?php echo (int)$openCustomer['is_active'] === 1 ? '0' : '1'; ?>">
+                <input type="hidden" name="redirect_to" value="customers.php">
+                <button type="submit"
+                    class="btn <?php echo (int)$openCustomer['is_active'] === 1 ? 'btn-danger' : 'btn-primary'; ?> btn-sm">
+                    <?php echo (int)$openCustomer['is_active'] === 1 ? 'Deactivate Customer' : 'Activate Customer'; ?>
+                </button>
+            </form>
+            <a href="<?php echo htmlspecialchars(buildCustomerUrl(['open' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                class="btn btn-outline btn-sm">Close</a>
+        </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<script src="../assets/ui/js/dashboard.js" defer></script>
+<?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>
+```
+
+---
+
+## File: `fitpal/admin/pages/dashboard.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Admin Dashboard
+ *
+ * Overview of platform health and the moderation queue.
+ *
+ * Three concerns, in priority order:
+ *   1. Platform counts (customers, restaurants, riders, revenue)
+ *   2. Revenue trend (7-day chart)
+ *   3. Moderation queue (pending riders + recently verified)
+ *
+ * There is deliberately NO "recent orders" panel here. Order-level
+ * operations belong to the restaurant and rider dashboards. Admin
+ * cares about who is on the platform and who just got approved.
+ *
+ * All SQL lives in admin-queries.php.
+ *
+ * @package FitPal
+ * @version 3.0 — Removed recent-orders panel. Added recently-verified
+ *                activity feed.
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (empty($_SESSION['administrator_id'])) {
+    header('Location: sign-in.php');
+    exit;
+}
+
+require_once __DIR__ . '/../includes/header.php';
+require_once __DIR__ . '/../backend/database/admin-queries.php';
+
+$adminId = (int)$_SESSION['administrator_id'];
+$adminProfile = getAdminProfile($database_connection, $adminId) ?: [];
+$firstName = (string)($adminProfile['first_name'] ?? 'Admin');
+
+$stats = getAdminDashboardStats($database_connection);
+
+// ----- Weekly revenue chart -----
+$weeklyRevenue = getAdminWeeklyRevenue($database_connection, 7);
+
+$weeklyMax = 0.0;
+foreach ($weeklyRevenue as $d) {
+    if ($d['amount'] > $weeklyMax) $weeklyMax = $d['amount'];
+}
+$chartScale   = getAdminChartScale($weeklyMax);
+$chartCeiling = $chartScale['ceiling'];
+$today        = date('Y-m-d');
+
+$barHeights = [];
+foreach ($weeklyRevenue as $d) {
+    $pct = $chartCeiling > 0 ? ($d['amount'] / $chartCeiling) * 100 : 0;
+    $barHeights[$d['date']] = $d['amount'] > 0 ? max(4, min(100, $pct)) : 0;
+}
+
+// ----- Pending riders (top 5) -----
+$pendingRidersData = getRidersPaginated($database_connection, 1, 5, '', 'pending');
+$pendingRiders = $pendingRidersData['rows'];
+
+// ----- Recently verified / denied (activity feed) -----
+$recentActivity = getRecentVerificationActivity($database_connection, 6);
+
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+$csrfToken = $_SESSION['csrf_token'];
+?>
+
+<div class="content admin-dashboard-page">
+    <div class="container">
+
+        <header class="admin-dashboard-header">
+            <div class="admin-dashboard-greeting">
+                <h1 class="heading-2">
+                    Welcome back, <span><?php echo htmlspecialchars($firstName, ENT_QUOTES, 'UTF-8'); ?></span>
+                </h1>
+                <p class="text-muted">Platform health and the moderation queue at a glance.</p>
+            </div>
+            <div class="admin-dashboard-actions">
+                <a href="customers.php" class="btn btn-outline btn-sm">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/people-team.svg" alt="" class="btn-icon"
+                        width="16" height="16"
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg'">
+                    <span>Customers</span>
+                </a>
+                <a href="riders.php" class="btn btn-outline btn-sm">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt="" class="btn-icon" width="16"
+                        height="16"
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/package.svg'">
+                    <span>Riders</span>
+                </a>
+                <a href="restaurants.php" class="btn btn-primary btn-sm">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt="" class="btn-icon"
+                        width="16" height="16"
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/community-general.svg'">
+                    <span>Restaurants</span>
+                </a>
+            </div>
+        </header>
+
+        <?php if (!empty($_SESSION['admin_success'])): ?>
+        <div class="alert alert-success" role="alert">
+            <?php echo htmlspecialchars($_SESSION['admin_success'], ENT_QUOTES, 'UTF-8'); ?>
+            <?php unset($_SESSION['admin_success']); ?>
+        </div>
+        <?php endif; ?>
+
+        <?php if (!empty($_SESSION['admin_error'])): ?>
+        <div class="alert alert-danger" role="alert">
+            <?php echo htmlspecialchars($_SESSION['admin_error'], ENT_QUOTES, 'UTF-8'); ?>
+            <?php unset($_SESSION['admin_error']); ?>
+        </div>
+        <?php endif; ?>
+
+        <!-- STAT CARDS -->
+        <section class="admin-stats-grid" aria-label="Platform statistics">
+
+            <a href="customers.php" class="admin-stat-card">
+                <div class="admin-stat-icon admin-stat-icon-customers" aria-hidden="true">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/people-team.svg" alt=""
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg'">
+                </div>
+                <div class="admin-stat-info">
+                    <p class="admin-stat-number"><?php echo number_format($stats['total_customers']); ?></p>
+                    <p class="admin-stat-label">Customers</p>
+                    <p class="admin-stat-hint admin-stat-hint-active">
+                        <?php echo number_format($stats['active_customers']); ?> active
+                    </p>
+                </div>
+                <span class="admin-stat-arrow" aria-hidden="true">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-right-s-line.svg" alt=""
+                        class="admin-stat-arrow-img" width="18" height="18">
+                </span>
+            </a>
+
+            <a href="restaurants.php" class="admin-stat-card">
+                <div class="admin-stat-icon admin-stat-icon-restaurants" aria-hidden="true">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt=""
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/community-general.svg'">
+                </div>
+                <div class="admin-stat-info">
+                    <p class="admin-stat-number"><?php echo number_format($stats['total_restaurants']); ?></p>
+                    <p class="admin-stat-label">Restaurants</p>
+                    <p class="admin-stat-hint">
+                        <?php echo number_format($stats['verified_restaurants']); ?> verified
+                    </p>
+                </div>
+                <span class="admin-stat-arrow" aria-hidden="true">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-right-s-line.svg" alt=""
+                        class="admin-stat-arrow-img" width="18" height="18">
+                </span>
+            </a>
+
+            <a href="riders.php" class="admin-stat-card">
+                <div class="admin-stat-icon admin-stat-icon-riders" aria-hidden="true">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt=""
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/package.svg'">
+                </div>
+                <div class="admin-stat-info">
+                    <p class="admin-stat-number"><?php echo number_format($stats['total_riders']); ?></p>
+                    <p class="admin-stat-label">Riders</p>
+                    <p
+                        class="admin-stat-hint <?php echo $stats['pending_riders'] > 0 ? 'admin-stat-hint-active' : ''; ?>">
+                        <?php echo number_format($stats['pending_riders']); ?> pending review
+                    </p>
+                </div>
+                <span class="admin-stat-arrow" aria-hidden="true">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-right-s-line.svg" alt=""
+                        class="admin-stat-arrow-img" width="18" height="18">
+                </span>
+            </a>
+
+            <div class="admin-stat-card">
+                <div class="admin-stat-icon admin-stat-icon-revenue" aria-hidden="true">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/coin-line.svg" alt=""
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/wallet-line.svg'">
+                </div>
+                <div class="admin-stat-info">
+                    <p class="admin-stat-number"><?php echo formatAdminCurrency($stats['gross_revenue']); ?></p>
+                    <p class="admin-stat-label">Gross Revenue</p>
+                    <p class="admin-stat-hint">
+                        <?php echo number_format($stats['orders_this_week']); ?> orders this week
+                    </p>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- CHART + PENDING RIDERS -->
+        <div class="admin-dashboard-row admin-dashboard-row-primary">
+
+            <section class="admin-card" aria-labelledby="admin-chart-title">
+                <div class="admin-card-header">
+                    <h2 class="heading-5" id="admin-chart-title">Revenue — Last 7 Days</h2>
+                </div>
+
+                <div class="admin-chart-body">
+                    <div class="admin-weekly-chart" role="img"
+                        aria-label="Bar chart of revenue over the last seven days">
+                        <div class="admin-chart-y-axis" aria-hidden="true">
+                            <?php foreach (array_reverse($chartScale['gridlines']) as $grid): ?>
+                            <span class="admin-chart-y-label">₱<?php echo number_format($grid, 0); ?></span>
+                            <?php endforeach; ?>
+                        </div>
+                        <div class="admin-chart-plot">
+                            <?php foreach ($chartScale['gridlines'] as $grid): ?>
+                            <div class="admin-chart-gridline" aria-hidden="true"></div>
+                            <?php endforeach; ?>
+                            <div class="admin-chart-columns">
+                                <?php foreach ($weeklyRevenue as $day):
+                                    $pct = $barHeights[$day['date']];
+                                    $isToday = ($day['date'] === $today);
+                                    $hasValue = $day['amount'] > 0;
+                                ?>
+                                <div class="admin-chart-column"
+                                    data-day="<?php echo htmlspecialchars($day['short'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-amount="<?php echo htmlspecialchars(formatAdminCurrency($day['amount']), ENT_QUOTES, 'UTF-8'); ?>">
+                                    <div class="admin-chart-bar-track">
+                                        <div class="admin-chart-bar <?php echo $isToday ? 'is-today' : ''; ?> <?php echo $hasValue ? '' : 'is-empty'; ?>"
+                                            style="height: <?php echo $pct; ?>%" tabindex="0"
+                                            aria-label="<?php echo htmlspecialchars($day['label'] . ' ' . formatAdminCurrency($day['amount']), ENT_QUOTES, 'UTF-8'); ?>">
+                                        </div>
+                                    </div>
+                                    <span class="admin-chart-label <?php echo $isToday ? 'is-today' : ''; ?>">
+                                        <?php echo htmlspecialchars($day['short'], ENT_QUOTES, 'UTF-8'); ?>
+                                    </span>
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <div class="admin-chart-tooltip" id="adminChartTooltip" role="status" aria-live="polite"></div>
+                    </div>
+
+                    <div class="admin-chart-summary">
+                        <div class="admin-chart-summary-item">
+                            <span class="admin-chart-summary-label">Today</span>
+                            <span class="admin-chart-summary-value">
+                                <?php echo formatAdminCurrency($stats['revenue_today']); ?>
+                            </span>
+                            <span class="admin-chart-summary-hint">
+                                <?php echo number_format($stats['orders_today']); ?> orders
+                            </span>
+                        </div>
+                        <div class="admin-chart-summary-item">
+                            <span class="admin-chart-summary-label">This Week</span>
+                            <span class="admin-chart-summary-value">
+                                <?php echo formatAdminCurrency($stats['revenue_this_week']); ?>
+                            </span>
+                            <span class="admin-chart-summary-hint">
+                                <?php echo number_format($stats['orders_this_week']); ?> orders
+                            </span>
+                        </div>
+                        <div class="admin-chart-summary-item">
+                            <span class="admin-chart-summary-label">All Time</span>
+                            <span class="admin-chart-summary-value">
+                                <?php echo formatAdminCurrency($stats['gross_revenue']); ?>
+                            </span>
+                            <span class="admin-chart-summary-hint">
+                                <?php echo number_format($stats['total_orders']); ?> orders
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="admin-card" aria-labelledby="admin-pending-title">
+                <div class="admin-card-header">
+                    <h2 class="heading-5" id="admin-pending-title">Pending Riders</h2>
+                    <?php if ($stats['pending_riders'] > 0): ?>
+                    <a href="riders.php?status=pending" class="admin-card-link">View All</a>
+                    <?php endif; ?>
+                </div>
+
+                <?php if (empty($pendingRiders)): ?>
+                <div class="admin-empty-state">
+                    <div class="admin-empty-icon" aria-hidden="true">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/verified-fill.svg" alt=""
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/check-circle-fill.svg'">
+                    </div>
+                    <p class="admin-empty-title">All caught up</p>
+                    <p class="admin-empty-text">No riders are awaiting verification.</p>
+                </div>
+                <?php else: ?>
+                <div class="admin-pending-list">
+                    <?php foreach ($pendingRiders as $r):
+                        $riderId = (int)$r['delivery_rider_id'];
+                        $riderName = adminName($r);
+                        $initial = adminInitial($r);
+                        $pic = (string)($r['profile_picture'] ?? '');
+                        $picUrl = $pic !== '' ? adminMediaUrl($assetBase, $pic) : '';
+                    ?>
+                    <a href="riders.php?status=pending&amp;open=<?php echo $riderId; ?>" class="admin-pending-row">
+                        <div class="admin-pending-avatar">
+                            <?php if ($picUrl !== ''): ?>
+                            <img src="<?php echo htmlspecialchars($picUrl, ENT_QUOTES, 'UTF-8'); ?>" alt=""
+                                onerror="this.onerror=null; this.style.display='none'; this.parentNode.textContent='<?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>';">
+                            <?php else: ?>
+                            <?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>
+                            <?php endif; ?>
+                        </div>
+                        <div class="admin-pending-info">
+                            <p class="admin-pending-name">
+                                <?php echo htmlspecialchars($riderName, ENT_QUOTES, 'UTF-8'); ?></p>
+                            <p class="admin-pending-meta">
+                                <?php echo htmlspecialchars((string)($r['email'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
+                            </p>
+                        </div>
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-right-s-line.svg" alt=""
+                            class="admin-pending-arrow" width="18" height="18">
+                    </a>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
+            </section>
+
+        </div>
+
+        <!-- RECENT MODERATION ACTIVITY -->
+        <section class="admin-card" aria-labelledby="admin-activity-title">
+            <div class="admin-card-header">
+                <h2 class="heading-5" id="admin-activity-title">Recent Moderation Activity</h2>
+            </div>
+
+            <?php if (empty($recentActivity)): ?>
+            <div class="admin-empty-state">
+                <div class="admin-empty-icon" aria-hidden="true">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/time-update.svg" alt=""
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/update.svg'">
+                </div>
+                <p class="admin-empty-title">No moderation activity yet</p>
+                <p class="admin-empty-text">Verification decisions will appear here.</p>
+            </div>
+            <?php else: ?>
+            <div class="admin-activity-list">
+                <?php foreach ($recentActivity as $a):
+                    $kind      = (string)$a['entity_type'];   // 'rider' or 'restaurant'
+                    $entityId  = (int)$a['entity_id'];
+                    $entityName = (string)$a['entity_name'];
+                    $status    = (string)$a['verification_status'];
+                    $when      = (string)$a['verified_at'];
+
+                    $openUrl = $kind === 'rider'
+                        ? 'riders.php?open=' . $entityId
+                        : 'restaurants.php?open=' . $entityId;
+
+                    $iconFile = $kind === 'rider'
+                        ? 'order.svg'
+                        : 'restaurant.svg';
+
+                    $statusBadge = adminVerificationBadgeClass($status);
+                    $statusLabel = adminVerificationLabel($status);
+                ?>
+                <a href="<?php echo htmlspecialchars($openUrl, ENT_QUOTES, 'UTF-8'); ?>" class="admin-activity-row">
+                    <div
+                        class="admin-activity-icon admin-activity-icon-<?php echo htmlspecialchars($kind, ENT_QUOTES, 'UTF-8'); ?>">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/<?php echo htmlspecialchars($iconFile, ENT_QUOTES, 'UTF-8'); ?>"
+                            alt="" width="18" height="18"
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/information-fill.svg'">
+                    </div>
+                    <div class="admin-activity-body">
+                        <p class="admin-activity-name">
+                            <?php echo htmlspecialchars($entityName, ENT_QUOTES, 'UTF-8'); ?>
+                        </p>
+                        <p class="admin-activity-meta">
+                            <?php echo $kind === 'rider' ? 'Rider' : 'Restaurant'; ?>
+                            &middot;
+                            <?php echo htmlspecialchars(formatAdminDate($when), ENT_QUOTES, 'UTF-8'); ?>
+                        </p>
+                    </div>
+                    <span class="badge <?php echo $statusBadge; ?>">
+                        <?php echo htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8'); ?>
+                    </span>
+                </a>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+        </section>
+
+    </div>
+</div>
+
+<script src="../assets/ui/js/dashboard.js" defer></script>
+<?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>
+```
+
+---
+
+## File: `fitpal/admin/pages/profile.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Admin Profile
+ *
+ * @package FitPal
+ * @version 2.0
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (empty($_SESSION['administrator_id'])) {
+    header('Location: sign-in.php');
+    exit;
+}
+
+require_once __DIR__ . '/../includes/header.php';
+require_once __DIR__ . '/../backend/database/admin-queries.php';
+
+$adminId = (int)$_SESSION['administrator_id'];
+$profile = getAdminProfile($database_connection, $adminId) ?: [];
+$fullName = adminName($profile);
+$initial  = adminInitial($profile);
+
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+$csrfToken = $_SESSION['csrf_token'];
+?>
+
+<div class="content admin-list-page">
+    <div class="container">
+
+        <header class="admin-page-header">
+            <div class="admin-page-header-left">
+                <h1 class="heading-2">My <span>Profile</span></h1>
+                <p class="text-muted">Manage your administrator account.</p>
+            </div>
+            <div class="admin-page-header-actions">
+                <a href="dashboard.php" class="btn btn-outline btn-sm">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt="" class="btn-icon"
+                        width="16" height="16" style="filter: none;">
+                    <span>Dashboard</span>
+                </a>
+            </div>
+        </header>
+
+        <?php if (!empty($_SESSION['admin_success'])): ?>
+        <div class="alert alert-success" role="alert">
+            <?php echo htmlspecialchars($_SESSION['admin_success'], ENT_QUOTES, 'UTF-8'); ?>
+            <?php unset($_SESSION['admin_success']); ?>
+        </div>
+        <?php endif; ?>
+
+        <?php if (!empty($_SESSION['admin_error'])): ?>
+        <div class="alert alert-danger" role="alert">
+            <?php echo htmlspecialchars($_SESSION['admin_error'], ENT_QUOTES, 'UTF-8'); ?>
+            <?php unset($_SESSION['admin_error']); ?>
+        </div>
+        <?php endif; ?>
+
+        <!-- Profile summary -->
+        <div class="admin-table-card" style="padding: 24px; margin-bottom: 20px;">
+            <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+                <div class="admin-cell-avatar" style="width:64px; height:64px; font-size:24px;">
+                    <?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>
+                </div>
+                <div style="flex:1; min-width:0;">
+                    <p class="admin-cell-title" style="font-size: var(--font-size-xl);">
+                        <?php echo htmlspecialchars($fullName, ENT_QUOTES, 'UTF-8'); ?>
+                    </p>
+                    <p class="admin-cell-subtitle">
+                        <?php echo htmlspecialchars(adminRoleLabel((string)($profile['role'] ?? 'support')), ENT_QUOTES, 'UTF-8'); ?>
+                        &middot;
+                        <?php echo htmlspecialchars((string)($profile['email'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
+                    </p>
+                    <p class="admin-cell-subtitle" style="margin-top:4px;">
+                        Last login:
+                        <?php echo htmlspecialchars(formatAdminDate((string)($profile['last_login'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Update profile -->
+        <div class="admin-table-card" style="padding: 24px; margin-bottom: 20px;">
+            <h3 class="admin-section-heading" style="margin-top:0;">Personal Information</h3>
+            <form method="POST" action="../backend/handlers/admin-handler.php">
+                <input type="hidden" name="csrf_token"
+                    value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                <input type="hidden" name="action" value="update_profile">
+                <input type="hidden" name="redirect_to" value="profile.php">
+
+                <div class="admin-detail-grid">
+                    <div class="admin-detail-item">
+                        <label class="admin-detail-label" for="first_name">First Name</label>
+                        <input type="text" id="first_name" name="first_name" class="admin-search-input"
+                            value="<?php echo htmlspecialchars((string)($profile['first_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                            required minlength="2">
+                    </div>
+                    <div class="admin-detail-item">
+                        <label class="admin-detail-label" for="middle_name">Middle Name</label>
+                        <input type="text" id="middle_name" name="middle_name" class="admin-search-input"
+                            value="<?php echo htmlspecialchars((string)($profile['middle_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                    </div>
+                    <div class="admin-detail-item">
+                        <label class="admin-detail-label" for="last_name">Last Name</label>
+                        <input type="text" id="last_name" name="last_name" class="admin-search-input"
+                            value="<?php echo htmlspecialchars((string)($profile['last_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                            required minlength="2">
+                    </div>
+                    <div class="admin-detail-item">
+                        <label class="admin-detail-label" for="contact_number">Contact Number</label>
+                        <input type="tel" id="contact_number" name="contact_number" class="admin-search-input"
+                            placeholder="09XXXXXXXXX"
+                            value="<?php echo htmlspecialchars((string)($profile['contact_number'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                    </div>
+                    <div class="admin-detail-item">
+                        <label class="admin-detail-label">Email (read-only)</label>
+                        <input type="email" class="admin-search-input"
+                            value="<?php echo htmlspecialchars((string)($profile['email'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                            disabled>
+                    </div>
+                    <div class="admin-detail-item">
+                        <label class="admin-detail-label">Role (read-only)</label>
+                        <input type="text" class="admin-search-input"
+                            value="<?php echo htmlspecialchars(adminRoleLabel((string)($profile['role'] ?? 'support')), ENT_QUOTES, 'UTF-8'); ?>"
+                            disabled>
+                    </div>
+                </div>
+
+                <div style="margin-top: 16px; display: flex; justify-content: flex-end;">
+                    <button type="submit" class="btn btn-primary btn-sm">Save Changes</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Change password -->
+        <div class="admin-table-card" style="padding: 24px;">
+            <h3 class="admin-section-heading" style="margin-top:0;">Change Password</h3>
+            <form method="POST" action="../backend/handlers/admin-handler.php">
+                <input type="hidden" name="csrf_token"
+                    value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                <input type="hidden" name="action" value="change_password">
+                <input type="hidden" name="redirect_to" value="profile.php">
+
+                <div class="admin-detail-grid">
+                    <div class="admin-detail-item admin-detail-item-full">
+                        <label class="admin-detail-label" for="current_password">Current Password</label>
+                        <input type="password" id="current_password" name="current_password" class="admin-search-input"
+                            required autocomplete="current-password">
+                    </div>
+                    <div class="admin-detail-item">
+                        <label class="admin-detail-label" for="new_password">New Password</label>
+                        <input type="password" id="new_password" name="new_password" class="admin-search-input" required
+                            minlength="8" maxlength="20" autocomplete="new-password">
+                    </div>
+                    <div class="admin-detail-item">
+                        <label class="admin-detail-label" for="confirm_password">Confirm New Password</label>
+                        <input type="password" id="confirm_password" name="confirm_password" class="admin-search-input"
+                            required minlength="8" maxlength="20" autocomplete="new-password">
+                    </div>
+                </div>
+
+                <div style="margin-top: 16px; display: flex; justify-content: flex-end;">
+                    <button type="submit" class="btn btn-primary btn-sm">Change Password</button>
+                </div>
+            </form>
+        </div>
+
+    </div>
+</div>
+
+<?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>
+```
+
+---
+
+## File: `fitpal/admin/pages/restaurants.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Admin — Restaurants List
+ *
+ * Paginated restaurant list with verification tabs, search, and a
+ * detail modal that shows branches and account holders.
+ *
+ * @package FitPal
+ * @version 2.0
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (empty($_SESSION['administrator_id'])) {
+    header('Location: sign-in.php');
+    exit;
+}
+
+require_once __DIR__ . '/../includes/header.php';
+require_once __DIR__ . '/../backend/database/admin-queries.php';
+
+$adminId = (int)$_SESSION['administrator_id'];
+
+$page   = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+$search = isset($_GET['search']) ? trim((string)$_GET['search']) : '';
+$status = isset($_GET['status']) ? (string)$_GET['status'] : 'all';
+$openId = isset($_GET['open']) ? (int)$_GET['open'] : 0;
+$perPage = 5;
+
+$allowedStatuses = ['all', 'pending', 'verified', 'denied', 'suspended'];
+if (!in_array($status, $allowedStatuses, true)) {
+    $status = 'all';
+}
+
+$counts = getRestaurantCountsByStatus($database_connection);
+$data   = getRestaurantsPaginated($database_connection, $page, $perPage, $search, $status);
+$rows   = $data['rows'];
+$pagination = $data;
+
+$openRestaurant = null;
+$openBranches = [];
+$openAccounts = [];
+
+if ($openId > 0) {
+    $openRestaurant = getRestaurantDetails($database_connection, $openId);
+    if ($openRestaurant) {
+        $openBranches = getRestaurantBranches($database_connection, $openId);
+        $openAccounts = getRestaurantAccounts($database_connection, $openId);
+    }
+}
+
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+$csrfToken = $_SESSION['csrf_token'];
+
+function buildRestaurantUrl(array $overrides = []): string
+{
+    $params = [
+        'page'   => $_GET['page']   ?? 1,
+        'search' => $_GET['search'] ?? '',
+        'status' => $_GET['status'] ?? 'all',
+    ];
+    foreach ($overrides as $k => $v) {
+        if ($v === null || $v === '') {
+            unset($params[$k]);
+        } else {
+            $params[$k] = $v;
+        }
+    }
+    return '?' . http_build_query($params);
+}
+?>
+
+<div class="content admin-list-page">
+    <div class="container">
+
+        <header class="admin-page-header">
+            <div class="admin-page-header-left">
+                <h1 class="heading-2">Restaurant <span>Management</span></h1>
+                <p class="text-muted">Review and manage restaurant partners.</p>
+            </div>
+            <div class="admin-page-header-actions">
+                <a href="dashboard.php" class="btn btn-outline btn-sm">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt="" class="btn-icon"
+                        width="16" height="16" style="filter: none;">
+                    <span>Dashboard</span>
+                </a>
+            </div>
+        </header>
+
+        <?php if (!empty($_SESSION['admin_success'])): ?>
+        <div class="alert alert-success" role="alert">
+            <?php echo htmlspecialchars($_SESSION['admin_success'], ENT_QUOTES, 'UTF-8'); ?>
+            <?php unset($_SESSION['admin_success']); ?>
+        </div>
+        <?php endif; ?>
+
+        <?php if (!empty($_SESSION['admin_error'])): ?>
+        <div class="alert alert-danger" role="alert">
+            <?php echo htmlspecialchars($_SESSION['admin_error'], ENT_QUOTES, 'UTF-8'); ?>
+            <?php unset($_SESSION['admin_error']); ?>
+        </div>
+        <?php endif; ?>
+
+        <!-- FILTER BAR -->
+        <div class="admin-filter-bar">
+            <form method="GET" action="" class="admin-search-form">
+                <input type="hidden" name="status"
+                    value="<?php echo htmlspecialchars($status, ENT_QUOTES, 'UTF-8'); ?>">
+                <input type="text" name="search" class="admin-search-input"
+                    placeholder="Search by business name or cuisine…"
+                    value="<?php echo htmlspecialchars($search, ENT_QUOTES, 'UTF-8'); ?>">
+                <button type="submit" class="admin-search-btn">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt="" class="btn-icon"
+                        width="14" height="14">
+                    <span>Search</span>
+                </button>
+            </form>
+
+            <nav class="admin-filter-tabs" aria-label="Restaurant verification filter">
+                <a href="<?php echo htmlspecialchars(buildRestaurantUrl(['status' => 'all', 'page' => 1]), ENT_QUOTES, 'UTF-8'); ?>"
+                    class="admin-filter-tab <?php echo $status === 'all' ? 'active' : ''; ?>">
+                    All <span class="filter-count"><?php echo number_format($counts['all']); ?></span>
+                </a>
+                <a href="<?php echo htmlspecialchars(buildRestaurantUrl(['status' => 'pending', 'page' => 1]), ENT_QUOTES, 'UTF-8'); ?>"
+                    class="admin-filter-tab <?php echo $status === 'pending' ? 'active' : ''; ?>">
+                    Pending <span class="filter-count"><?php echo number_format($counts['pending']); ?></span>
+                </a>
+                <a href="<?php echo htmlspecialchars(buildRestaurantUrl(['status' => 'verified', 'page' => 1]), ENT_QUOTES, 'UTF-8'); ?>"
+                    class="admin-filter-tab <?php echo $status === 'verified' ? 'active' : ''; ?>">
+                    Verified <span class="filter-count"><?php echo number_format($counts['verified']); ?></span>
+                </a>
+                <a href="<?php echo htmlspecialchars(buildRestaurantUrl(['status' => 'denied', 'page' => 1]), ENT_QUOTES, 'UTF-8'); ?>"
+                    class="admin-filter-tab <?php echo $status === 'denied' ? 'active' : ''; ?>">
+                    Denied <span class="filter-count"><?php echo number_format($counts['denied']); ?></span>
+                </a>
+                <a href="<?php echo htmlspecialchars(buildRestaurantUrl(['status' => 'suspended', 'page' => 1]), ENT_QUOTES, 'UTF-8'); ?>"
+                    class="admin-filter-tab <?php echo $status === 'suspended' ? 'active' : ''; ?>">
+                    Suspended <span class="filter-count"><?php echo number_format($counts['suspended']); ?></span>
+                </a>
+            </nav>
+        </div>
+
+        <!-- TABLE -->
+        <div class="admin-table-card">
+            <?php if (empty($rows)): ?>
+            <div class="admin-table-empty">
+                <div class="admin-table-empty-icon" aria-hidden="true">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt=""
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/restaurant.svg'">
+                </div>
+                <p class="admin-table-empty-title">No restaurants found</p>
+                <p class="admin-table-empty-text">
+                    <?php if ($search !== ''): ?>
+                    No results for "<?php echo htmlspecialchars($search, ENT_QUOTES, 'UTF-8'); ?>".
+                    <?php else: ?>
+                    Try a different filter.
+                    <?php endif; ?>
+                </p>
+            </div>
+            <?php else: ?>
+            <div class="admin-table-restaurants">
+                <?php foreach ($rows as $r):
+                    $rid = (int)$r['restaurant_id'];
+                    $name = (string)$r['business_name'];
+                    $verification = (string)($r['verification_status'] ?? 'pending');
+                    $isActive = (int)$r['is_active'] === 1;
+                ?>
+                <div class="admin-table-row">
+                    <div class="admin-cell-body">
+                        <p class="admin-cell-title"><?php echo htmlspecialchars($name, ENT_QUOTES, 'UTF-8'); ?></p>
+                        <p class="admin-cell-subtitle">
+                            <?php echo htmlspecialchars((string)($r['cuisine_type'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                        </p>
+                    </div>
+
+                    <div class="admin-cell-body">
+                        <div class="admin-cell-meta">
+                            <span class="badge <?php echo adminVerificationBadgeClass($verification); ?>">
+                                <?php echo adminVerificationLabel($verification); ?>
+                            </span>
+                            <span class="badge <?php echo $isActive ? 'badge-success' : 'badge-secondary'; ?>">
+                                <?php echo $isActive ? 'Active' : 'Inactive'; ?>
+                            </span>
+                        </div>
+                        <div class="admin-cell-meta">
+                            <span class="admin-cell-meta-item">
+                                <?php echo number_format((int)($r['branch_count'] ?? 0)); ?> branches
+                            </span>
+                            <span class="admin-cell-meta-item">
+                                <?php echo number_format((int)($r['product_count'] ?? 0)); ?> products
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="admin-cell-actions">
+                        <button type="button" class="btn btn-outline btn-sm"
+                            onclick="window.location.href='<?php echo htmlspecialchars(buildRestaurantUrl(['open' => $rid]), ENT_QUOTES, 'UTF-8'); ?>'">
+                            <img src="<?php echo $assetBase; ?>assets/images/icons/pages-line.svg" alt=""
+                                class="btn-icon" width="14" height="14" style="filter:none;">
+                            <span>View Details</span>
+                        </button>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+
+            <!-- PAGINATION -->
+            <?php if ($pagination['totalPages'] > 1): ?>
+            <nav class="admin-pagination" aria-label="Restaurant pagination">
+                <span class="admin-pagination-info">
+                    Showing page <?php echo $pagination['page']; ?> of <?php echo $pagination['totalPages']; ?>
+                    (<?php echo number_format($pagination['total']); ?> total)
+                </span>
+                <ul class="admin-pagination-list">
+                    <?php if ($pagination['page'] > 1): ?>
+                    <li>
+                        <a href="<?php echo htmlspecialchars(buildRestaurantUrl(['page' => $pagination['page'] - 1, 'open' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="admin-pagination-link">Previous</a>
+                    </li>
+                    <?php else: ?>
+                    <li><span class="admin-pagination-link disabled">Previous</span></li>
+                    <?php endif; ?>
+
+                    <?php
+                    $maxVisible = 5;
+                    $start = max(1, $pagination['page'] - (int)floor($maxVisible / 2));
+                    $end   = min($pagination['totalPages'], $start + $maxVisible - 1);
+                    if ($end - $start + 1 < $maxVisible) {
+                        $start = max(1, $end - $maxVisible + 1);
+                    }
+                    if ($start > 1): ?>
+                    <li>
+                        <a href="<?php echo htmlspecialchars(buildRestaurantUrl(['page' => 1, 'open' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="admin-pagination-link">1</a>
+                    </li>
+                    <?php if ($start > 2): ?>
+                    <li><span class="admin-pagination-ellipsis">…</span></li>
+                    <?php endif; endif; ?>
+
+                    <?php for ($i = $start; $i <= $end; $i++): ?>
+                    <li>
+                        <?php if ($i === $pagination['page']): ?>
+                        <span class="admin-pagination-link active"><?php echo $i; ?></span>
+                        <?php else: ?>
+                        <a href="<?php echo htmlspecialchars(buildRestaurantUrl(['page' => $i, 'open' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="admin-pagination-link"><?php echo $i; ?></a>
+                        <?php endif; ?>
+                    </li>
+                    <?php endfor; ?>
+
+                    <?php if ($end < $pagination['totalPages']): ?>
+                    <?php if ($end < $pagination['totalPages'] - 1): ?>
+                    <li><span class="admin-pagination-ellipsis">…</span></li>
+                    <?php endif; ?>
+                    <li>
+                        <a href="<?php echo htmlspecialchars(buildRestaurantUrl(['page' => $pagination['totalPages'], 'open' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="admin-pagination-link"><?php echo $pagination['totalPages']; ?></a>
+                    </li>
+                    <?php endif; ?>
+
+                    <?php if ($pagination['page'] < $pagination['totalPages']): ?>
+                    <li>
+                        <a href="<?php echo htmlspecialchars(buildRestaurantUrl(['page' => $pagination['page'] + 1, 'open' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="admin-pagination-link">Next</a>
+                    </li>
+                    <?php else: ?>
+                    <li><span class="admin-pagination-link disabled">Next</span></li>
+                    <?php endif; ?>
+                </ul>
+            </nav>
+            <?php endif; ?>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+<!-- RESTAURANT DETAILS MODAL -->
+<div class="admin-modal <?php echo $openRestaurant ? 'is-open' : ''; ?>" id="restaurantDetailsModal"
+    aria-hidden="<?php echo $openRestaurant ? 'false' : 'true'; ?>" role="dialog">
+    <div class="admin-modal-backdrop"
+        onclick="window.location.href='<?php echo htmlspecialchars(buildRestaurantUrl(['open' => null]), ENT_QUOTES, 'UTF-8'); ?>'">
+    </div>
+    <div class="admin-modal-panel admin-modal-panel-wide" role="document">
+        <div class="admin-modal-header">
+            <div class="admin-modal-header-left">
+                <p class="admin-modal-title">
+                    <?php echo $openRestaurant
+                        ? htmlspecialchars((string)$openRestaurant['business_name'], ENT_QUOTES, 'UTF-8')
+                        : 'Restaurant Details'; ?>
+                </p>
+                <p class="admin-modal-subtitle">
+                    <?php echo $openRestaurant
+                        ? htmlspecialchars((string)($openRestaurant['cuisine_type'] ?? ''), ENT_QUOTES, 'UTF-8')
+                        : 'Select a restaurant to review.'; ?>
+                </p>
+            </div>
+            <a href="<?php echo htmlspecialchars(buildRestaurantUrl(['open' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                class="admin-modal-close" aria-label="Close">&times;</a>
+        </div>
+
+        <?php if (!$openRestaurant): ?>
+        <div class="admin-modal-panel-body">
+            <p class="admin-detail-value admin-detail-value-muted">No restaurant selected.</p>
+        </div>
+        <?php else: ?>
+
+        <?php
+        $openVerification = (string)($openRestaurant['verification_status'] ?? 'pending');
+        $openIsActive = (int)$openRestaurant['is_active'] === 1;
+        ?>
+
+        <div class="admin-modal-tabs">
+            <button type="button" class="admin-modal-tab active" data-tab-target="rest-panel-info">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt="" width="14" height="14"
+                    style="filter:none;">
+                <span>Info</span>
+            </button>
+            <button type="button" class="admin-modal-tab" data-tab-target="rest-panel-branches">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="" width="14" height="14"
+                    style="filter:none;">
+                <span>Branches</span>
+                <span class="tab-count"><?php echo count($openBranches); ?></span>
+            </button>
+            <button type="button" class="admin-modal-tab" data-tab-target="rest-panel-accounts">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/people-team.svg" alt="" width="14" height="14"
+                    style="filter:none;">
+                <span>Accounts</span>
+                <span class="tab-count"><?php echo count($openAccounts); ?></span>
+            </button>
+        </div>
+
+        <div class="admin-modal-panel-body">
+
+            <!-- TAB: INFO -->
+            <div class="admin-modal-tab-panel active" id="rest-panel-info">
+                <div class="admin-detail-grid">
+                    <div class="admin-detail-item admin-detail-item-full">
+                        <span class="admin-detail-label">Business Name</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars((string)$openRestaurant['business_name'], ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Cuisine</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars((string)($openRestaurant['cuisine_type'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Verification</span>
+                        <span class="admin-detail-value">
+                            <span class="badge <?php echo adminVerificationBadgeClass($openVerification); ?>">
+                                <?php echo adminVerificationLabel($openVerification); ?>
+                            </span>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Account Status</span>
+                        <span class="admin-detail-value">
+                            <span class="badge <?php echo $openIsActive ? 'badge-success' : 'badge-secondary'; ?>">
+                                <?php echo $openIsActive ? 'Active' : 'Inactive'; ?>
+                            </span>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Branches</span>
+                        <span class="admin-detail-value">
+                            <?php echo number_format((int)($openRestaurant['branch_count'] ?? 0)); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Products</span>
+                        <span class="admin-detail-value">
+                            <?php echo number_format((int)($openRestaurant['product_count'] ?? 0)); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Created</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars(formatAdminDate((string)($openRestaurant['created_at'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Verified At</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars(formatAdminDate((string)($openRestaurant['verified_at'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item admin-detail-item-full">
+                        <span class="admin-detail-label">Dietary Tags</span>
+                        <span class="admin-detail-value">
+                            <?php
+                            $tags = parseAdminTagList((string)($openRestaurant['dietary_tags'] ?? ''));
+                            echo empty($tags)
+                                ? '—'
+                                : htmlspecialchars(implode(', ', array_map(
+                                    fn($t) => ucwords(str_replace('_', ' ', $t)),
+                                    $tags
+                                )), ENT_QUOTES, 'UTF-8');
+                            ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item admin-detail-item-full">
+                        <span class="admin-detail-label">Description</span>
+                        <span class="admin-detail-value">
+                            <?php echo nl2br(htmlspecialchars((string)($openRestaurant['description'] ?? '—'), ENT_QUOTES, 'UTF-8')); ?>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: BRANCHES -->
+            <div class="admin-modal-tab-panel" id="rest-panel-branches">
+                <?php if (empty($openBranches)): ?>
+                <div class="admin-doc-empty">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="">
+                    <span>No branches on file.</span>
+                </div>
+                <?php else: ?>
+                <?php foreach ($openBranches as $b): ?>
+                <div class="admin-address-card">
+                    <div class="admin-address-label">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/building.svg" alt="" width="14"
+                            height="14" style="filter:none;">
+                        <span><?php echo htmlspecialchars((string)$b['branch_name'], ENT_QUOTES, 'UTF-8'); ?></span>
+                        <span class="admin-contact-badge" style="background: var(--gray-200); color: var(--gray-600);">
+                            <?php echo htmlspecialchars((string)$b['branch_code'], ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                        <span
+                            class="badge <?php echo (int)$b['is_active'] === 1 ? 'badge-success' : 'badge-secondary'; ?>">
+                            <?php echo (int)$b['is_active'] === 1 ? 'Active' : 'Inactive'; ?>
+                        </span>
+                    </div>
+                    <p class="admin-address-text">
+                        <?php
+                        $parts = array_filter([
+                            $b['block'] ?? '',
+                            $b['barangay'] ?? '',
+                            $b['city'] ?? '',
+                            $b['province'] ?? '',
+                            $b['region'] ?? '',
+                            $b['postal_code'] ?? '',
+                            $b['country'] ?? '',
+                        ]);
+                        echo htmlspecialchars(implode(', ', $parts) ?: '—', ENT_QUOTES, 'UTF-8');
+                        ?>
+                    </p>
+                    <div class="admin-cell-meta" style="margin-top:6px;">
+                        <span class="admin-cell-meta-item">
+                            <?php echo number_format((int)($b['product_count'] ?? 0)); ?> products
+                        </span>
+                        <span class="admin-cell-meta-item">
+                            Balance: <?php echo formatAdminCurrency((float)($b['balance'] ?? 0)); ?>
+                        </span>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+
+            <!-- TAB: ACCOUNTS -->
+            <div class="admin-modal-tab-panel" id="rest-panel-accounts">
+                <?php if (empty($openAccounts)): ?>
+                <div class="admin-doc-empty">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/people-team.svg" alt="">
+                    <span>No accounts on file.</span>
+                </div>
+                <?php else: ?>
+                <?php foreach ($openAccounts as $acc): ?>
+                <div class="admin-contact-card">
+                    <div class="admin-contact-header">
+                        <p class="admin-contact-name">
+                            <?php echo htmlspecialchars(adminName($acc), ENT_QUOTES, 'UTF-8'); ?>
+                        </p>
+                        <span class="admin-contact-badge">
+                            <?php echo htmlspecialchars(adminRoleLabel((string)$acc['role']), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                        <span
+                            class="badge <?php echo (int)$acc['is_active'] === 1 ? 'badge-success' : 'badge-secondary'; ?>">
+                            <?php echo (int)$acc['is_active'] === 1 ? 'Active' : 'Inactive'; ?>
+                        </span>
+                    </div>
+                    <div class="admin-contact-body">
+                        <span><strong>Email:</strong>
+                            <?php echo htmlspecialchars((string)$acc['email'], ENT_QUOTES, 'UTF-8'); ?></span>
+                        <span><strong>Contact:</strong>
+                            <?php echo htmlspecialchars((string)($acc['contact_number'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?></span>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+
+        </div>
+
+        <div class="admin-modal-footer">
+            <form method="POST" action="../backend/handlers/admin-handler.php" style="display:inline;">
+                <input type="hidden" name="csrf_token"
+                    value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                <input type="hidden" name="action" value="set_restaurant_verification">
+                <input type="hidden" name="restaurant_id" value="<?php echo (int)$openRestaurant['restaurant_id']; ?>">
+                <input type="hidden" name="status" value="verified">
+                <input type="hidden" name="redirect_to" value="restaurants.php">
+                <button type="submit" class="btn btn-primary btn-sm"
+                    <?php echo $openVerification === 'verified' ? 'disabled' : ''; ?>>
+                    Approve
+                </button>
+            </form>
+
+            <form method="POST" action="../backend/handlers/admin-handler.php" style="display:inline;">
+                <input type="hidden" name="csrf_token"
+                    value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                <input type="hidden" name="action" value="set_restaurant_verification">
+                <input type="hidden" name="restaurant_id" value="<?php echo (int)$openRestaurant['restaurant_id']; ?>">
+                <input type="hidden" name="status" value="denied">
+                <input type="hidden" name="redirect_to" value="restaurants.php">
+                <button type="submit" class="btn btn-danger btn-sm"
+                    <?php echo $openVerification === 'denied' ? 'disabled' : ''; ?>>
+                    Deny
+                </button>
+            </form>
+
+            <form method="POST" action="../backend/handlers/admin-handler.php" style="display:inline;">
+                <input type="hidden" name="csrf_token"
+                    value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                <input type="hidden" name="action" value="toggle_restaurant">
+                <input type="hidden" name="restaurant_id" value="<?php echo (int)$openRestaurant['restaurant_id']; ?>">
+                <input type="hidden" name="activate" value="<?php echo $openIsActive ? '0' : '1'; ?>">
+                <input type="hidden" name="redirect_to" value="restaurants.php">
+                <button type="submit" class="btn btn-outline btn-sm">
+                    <?php echo $openIsActive ? 'Deactivate' : 'Activate'; ?>
+                </button>
+            </form>
+
+            <a href="<?php echo htmlspecialchars(buildRestaurantUrl(['open' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                class="btn btn-outline btn-sm">Close</a>
+        </div>
+
+        <?php endif; ?>
+    </div>
+</div>
+
+<script src="../assets/ui/js/dashboard.js" defer></script>
+<?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>
+```
+
+---
+
+## File: `fitpal/admin/pages/riders.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Admin — Riders List
+ *
+ * Paginated rider list with verification tabs. Row actions trigger
+ * the confirm modal, not window.confirm(). The detail modal has two
+ * tabs: Information and Documents. Documents uses its own 5-per-page
+ * pagination so profile picture and license photos are readable.
+ *
+ * @package FitPal
+ * @version 2.0
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (empty($_SESSION['administrator_id'])) {
+    header('Location: sign-in.php');
+    exit;
+}
+
+require_once __DIR__ . '/../includes/header.php';
+require_once __DIR__ . '/../backend/database/admin-queries.php';
+
+$adminId = (int)$_SESSION['administrator_id'];
+
+$page    = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+$search  = isset($_GET['search']) ? trim((string)$_GET['search']) : '';
+$status  = isset($_GET['status']) ? (string)$_GET['status'] : 'all';
+$openId  = isset($_GET['open']) ? (int)$_GET['open'] : 0;
+$docPage = isset($_GET['doc_page']) ? max(1, (int)$_GET['doc_page']) : 1;
+$perPage = 5;
+
+$allowedStatuses = ['all', 'pending', 'verified', 'denied', 'suspended'];
+if (!in_array($status, $allowedStatuses, true)) {
+    $status = 'all';
+}
+
+$counts = getRiderCountsByStatus($database_connection);
+$data   = getRidersPaginated($database_connection, $page, $perPage, $search, $status);
+$rows   = $data['rows'];
+$pagination = $data;
+
+// Detail modal loads
+$openRider = null;
+$openAddress = null;
+$openContacts = [];
+$openDocuments = [];
+$openDeliveries = [];
+
+if ($openId > 0) {
+    $openRider = getRiderDetails($database_connection, $openId);
+    if ($openRider) {
+        $openAddress    = getRiderAddress($database_connection, $openId);
+        $openContacts   = getRiderEmergencyContacts($database_connection, $openId);
+        $openDocuments  = getRiderDocuments($database_connection, $openId);
+        $openDeliveries = getRiderRecentDeliveries($database_connection, $openId, 5);
+    }
+}
+
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+$csrfToken = $_SESSION['csrf_token'];
+
+/**
+ * Build a query string preserving filters.
+ */
+function buildRiderUrl(array $overrides = []): string
+{
+    $params = [
+        'page'     => $_GET['page']     ?? 1,
+        'search'   => $_GET['search']   ?? '',
+        'status'   => $_GET['status']   ?? 'all',
+        'doc_page' => $_GET['doc_page'] ?? 1,
+    ];
+    foreach ($overrides as $k => $v) {
+        if ($v === null || $v === '') {
+            unset($params[$k]);
+        } else {
+            $params[$k] = $v;
+        }
+    }
+    return '?' . http_build_query($params);
+}
+
+/**
+ * A rider's media URL: strip the trailing 'shared/' from $assetBase
+ * to get the project root, then append the DB-relative path.
+ */
+function riderMediaUrl(string $assetBase, string $relPath): string
+{
+    if ($relPath === '') return '';
+    $projectRoot = preg_replace('#shared/$#', '', $assetBase);
+    return (is_string($projectRoot) ? $projectRoot : '') . $relPath;
+}
+?>
+
+<div class="content admin-list-page">
+    <div class="container">
+
+        <header class="admin-page-header">
+            <div class="admin-page-header-left">
+                <h1 class="heading-2">Rider <span>Management</span></h1>
+                <p class="text-muted">Review rider applications and manage accounts.</p>
+            </div>
+            <div class="admin-page-header-actions">
+                <a href="dashboard.php" class="btn btn-outline btn-sm">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt="" class="btn-icon"
+                        width="16" height="16" style="filter: none;">
+                    <span>Dashboard</span>
+                </a>
+            </div>
+        </header>
+
+        <?php if (!empty($_SESSION['admin_success'])): ?>
+        <div class="alert alert-success" role="alert">
+            <?php echo htmlspecialchars($_SESSION['admin_success'], ENT_QUOTES, 'UTF-8'); ?>
+            <?php unset($_SESSION['admin_success']); ?>
+        </div>
+        <?php endif; ?>
+
+        <?php if (!empty($_SESSION['admin_error'])): ?>
+        <div class="alert alert-danger" role="alert">
+            <?php echo htmlspecialchars($_SESSION['admin_error'], ENT_QUOTES, 'UTF-8'); ?>
+            <?php unset($_SESSION['admin_error']); ?>
+        </div>
+        <?php endif; ?>
+
+        <!-- FILTER BAR -->
+        <div class="admin-filter-bar">
+            <form method="GET" action="" class="admin-search-form">
+                <input type="hidden" name="status"
+                    value="<?php echo htmlspecialchars($status, ENT_QUOTES, 'UTF-8'); ?>">
+                <input type="text" name="search" class="admin-search-input"
+                    placeholder="Search by name, email, or username…"
+                    value="<?php echo htmlspecialchars($search, ENT_QUOTES, 'UTF-8'); ?>">
+                <button type="submit" class="admin-search-btn">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt="" class="btn-icon"
+                        width="14" height="14">
+                    <span>Search</span>
+                </button>
+            </form>
+
+            <nav class="admin-filter-tabs" aria-label="Rider verification filter">
+                <a href="<?php echo htmlspecialchars(buildRiderUrl(['status' => 'all', 'page' => 1]), ENT_QUOTES, 'UTF-8'); ?>"
+                    class="admin-filter-tab <?php echo $status === 'all' ? 'active' : ''; ?>">
+                    All <span class="filter-count"><?php echo number_format($counts['all']); ?></span>
+                </a>
+                <a href="<?php echo htmlspecialchars(buildRiderUrl(['status' => 'pending', 'page' => 1]), ENT_QUOTES, 'UTF-8'); ?>"
+                    class="admin-filter-tab <?php echo $status === 'pending' ? 'active' : ''; ?>">
+                    Pending <span class="filter-count"><?php echo number_format($counts['pending']); ?></span>
+                </a>
+                <a href="<?php echo htmlspecialchars(buildRiderUrl(['status' => 'verified', 'page' => 1]), ENT_QUOTES, 'UTF-8'); ?>"
+                    class="admin-filter-tab <?php echo $status === 'verified' ? 'active' : ''; ?>">
+                    Verified <span class="filter-count"><?php echo number_format($counts['verified']); ?></span>
+                </a>
+                <a href="<?php echo htmlspecialchars(buildRiderUrl(['status' => 'denied', 'page' => 1]), ENT_QUOTES, 'UTF-8'); ?>"
+                    class="admin-filter-tab <?php echo $status === 'denied' ? 'active' : ''; ?>">
+                    Denied <span class="filter-count"><?php echo number_format($counts['denied']); ?></span>
+                </a>
+                <a href="<?php echo htmlspecialchars(buildRiderUrl(['status' => 'suspended', 'page' => 1]), ENT_QUOTES, 'UTF-8'); ?>"
+                    class="admin-filter-tab <?php echo $status === 'suspended' ? 'active' : ''; ?>">
+                    Suspended <span class="filter-count"><?php echo number_format($counts['suspended']); ?></span>
+                </a>
+            </nav>
+        </div>
+
+        <!-- TABLE -->
+        <div class="admin-table-card">
+            <?php if (empty($rows)): ?>
+            <div class="admin-table-empty">
+                <div class="admin-table-empty-icon" aria-hidden="true">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt=""
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/order.svg'">
+                </div>
+                <p class="admin-table-empty-title">No riders found</p>
+                <p class="admin-table-empty-text">
+                    <?php if ($search !== ''): ?>
+                    No results for "<?php echo htmlspecialchars($search, ENT_QUOTES, 'UTF-8'); ?>".
+                    <?php else: ?>
+                    Try a different filter.
+                    <?php endif; ?>
+                </p>
+            </div>
+            <?php else: ?>
+            <div class="admin-table-riders">
+                <?php foreach ($rows as $r):
+                    $rid = (int)$r['delivery_rider_id'];
+                    $name = adminName($r);
+                    $initial = adminInitial($r);
+                    $verification = (string)($r['verification_status'] ?? 'pending');
+                    $isActive = (int)$r['is_active'] === 1;
+                    $pic = (string)($r['profile_picture'] ?? '');
+                    $picUrl = $pic !== '' ? riderMediaUrl($assetBase, $pic) : '';
+                ?>
+                <div class="admin-table-row">
+                    <div class="admin-cell-avatar">
+                        <?php if ($picUrl !== ''): ?>
+                        <img src="<?php echo htmlspecialchars($picUrl, ENT_QUOTES, 'UTF-8'); ?>" alt=""
+                            onerror="this.onerror=null; this.style.display='none'; this.parentNode.textContent='<?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>';">
+                        <?php else: ?>
+                        <?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="admin-cell-body">
+                        <p class="admin-cell-title"><?php echo htmlspecialchars($name, ENT_QUOTES, 'UTF-8'); ?></p>
+                        <p class="admin-cell-subtitle">
+                            <?php echo htmlspecialchars((string)$r['email'], ENT_QUOTES, 'UTF-8'); ?>
+                        </p>
+                        <div class="admin-cell-meta">
+                            <span class="admin-cell-meta-item">
+                                <?php echo htmlspecialchars(ucfirst((string)($r['vehicle_type'] ?? '—')), ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                            <span class="admin-cell-meta-item">
+                                <?php echo htmlspecialchars((string)($r['vehicle_plate'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="admin-cell-body">
+                        <div class="admin-cell-meta">
+                            <span class="badge <?php echo adminVerificationBadgeClass($verification); ?>">
+                                <?php echo adminVerificationLabel($verification); ?>
+                            </span>
+                            <span class="badge <?php echo $isActive ? 'badge-success' : 'badge-secondary'; ?>">
+                                <?php echo $isActive ? 'Active' : 'Inactive'; ?>
+                            </span>
+                        </div>
+                        <div class="admin-cell-meta">
+                            <span class="admin-cell-meta-item">
+                                Rating: <?php echo number_format((float)($r['average_rating'] ?? 0), 1); ?>
+                            </span>
+                            <span class="admin-cell-meta-item">
+                                <?php echo number_format((int)($r['total_deliveries'] ?? 0)); ?> deliveries
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="admin-cell-actions">
+                        <button type="button" class="btn btn-outline btn-sm"
+                            onclick="window.location.href='<?php echo htmlspecialchars(buildRiderUrl(['open' => $rid, 'doc_page' => 1]), ENT_QUOTES, 'UTF-8'); ?>'">
+                            <img src="<?php echo $assetBase; ?>assets/images/icons/pages-line.svg" alt=""
+                                class="btn-icon" width="14" height="14" style="filter:none;">
+                            <span>View Details</span>
+                        </button>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+
+            <!-- PAGINATION -->
+            <?php if ($pagination['totalPages'] > 1): ?>
+            <nav class="admin-pagination" aria-label="Rider pagination">
+                <span class="admin-pagination-info">
+                    Showing page <?php echo $pagination['page']; ?> of <?php echo $pagination['totalPages']; ?>
+                    (<?php echo number_format($pagination['total']); ?> total)
+                </span>
+                <ul class="admin-pagination-list">
+                    <?php if ($pagination['page'] > 1): ?>
+                    <li>
+                        <a href="<?php echo htmlspecialchars(buildRiderUrl(['page' => $pagination['page'] - 1, 'open' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="admin-pagination-link">Previous</a>
+                    </li>
+                    <?php else: ?>
+                    <li><span class="admin-pagination-link disabled">Previous</span></li>
+                    <?php endif; ?>
+
+                    <?php
+                    $maxVisible = 5;
+                    $start = max(1, $pagination['page'] - (int)floor($maxVisible / 2));
+                    $end   = min($pagination['totalPages'], $start + $maxVisible - 1);
+                    if ($end - $start + 1 < $maxVisible) {
+                        $start = max(1, $end - $maxVisible + 1);
+                    }
+                    if ($start > 1): ?>
+                    <li>
+                        <a href="<?php echo htmlspecialchars(buildRiderUrl(['page' => 1, 'open' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="admin-pagination-link">1</a>
+                    </li>
+                    <?php if ($start > 2): ?>
+                    <li><span class="admin-pagination-ellipsis">…</span></li>
+                    <?php endif; endif; ?>
+
+                    <?php for ($i = $start; $i <= $end; $i++): ?>
+                    <li>
+                        <?php if ($i === $pagination['page']): ?>
+                        <span class="admin-pagination-link active"><?php echo $i; ?></span>
+                        <?php else: ?>
+                        <a href="<?php echo htmlspecialchars(buildRiderUrl(['page' => $i, 'open' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="admin-pagination-link"><?php echo $i; ?></a>
+                        <?php endif; ?>
+                    </li>
+                    <?php endfor; ?>
+
+                    <?php if ($end < $pagination['totalPages']): ?>
+                    <?php if ($end < $pagination['totalPages'] - 1): ?>
+                    <li><span class="admin-pagination-ellipsis">…</span></li>
+                    <?php endif; ?>
+                    <li>
+                        <a href="<?php echo htmlspecialchars(buildRiderUrl(['page' => $pagination['totalPages'], 'open' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="admin-pagination-link"><?php echo $pagination['totalPages']; ?></a>
+                    </li>
+                    <?php endif; ?>
+
+                    <?php if ($pagination['page'] < $pagination['totalPages']): ?>
+                    <li>
+                        <a href="<?php echo htmlspecialchars(buildRiderUrl(['page' => $pagination['page'] + 1, 'open' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="admin-pagination-link">Next</a>
+                    </li>
+                    <?php else: ?>
+                    <li><span class="admin-pagination-link disabled">Next</span></li>
+                    <?php endif; ?>
+                </ul>
+            </nav>
+            <?php endif; ?>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================
+     RIDER DETAILS MODAL
+     ============================================ -->
+<div class="admin-modal <?php echo $openRider ? 'is-open' : ''; ?>" id="riderDetailsModal"
+    aria-hidden="<?php echo $openRider ? 'false' : 'true'; ?>" role="dialog">
+    <div class="admin-modal-backdrop"
+        onclick="window.location.href='<?php echo htmlspecialchars(buildRiderUrl(['open' => null, 'doc_page' => null]), ENT_QUOTES, 'UTF-8'); ?>'">
+    </div>
+    <div class="admin-modal-panel admin-modal-panel-wide" role="document">
+        <div class="admin-modal-header">
+            <div class="admin-modal-header-left">
+                <p class="admin-modal-title">
+                    <?php echo $openRider
+                        ? htmlspecialchars(adminName($openRider), ENT_QUOTES, 'UTF-8')
+                        : 'Rider Details'; ?>
+                </p>
+                <p class="admin-modal-subtitle">
+                    <?php echo $openRider
+                        ? htmlspecialchars((string)$openRider['email'], ENT_QUOTES, 'UTF-8')
+                        : 'Select a rider to review their application.'; ?>
+                </p>
+            </div>
+            <a href="<?php echo htmlspecialchars(buildRiderUrl(['open' => null, 'doc_page' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                class="admin-modal-close" aria-label="Close">&times;</a>
+        </div>
+
+        <?php if (!$openRider): ?>
+        <div class="admin-modal-panel-body">
+            <p class="admin-detail-value admin-detail-value-muted">No rider selected.</p>
+        </div>
+        <?php else: ?>
+
+        <?php
+        $openVerification = (string)($openRider['verification_status'] ?? 'pending');
+        $openIsActive = (int)$openRider['is_active'] === 1;
+
+        // Documents tab pagination: 5 per page.
+        $docsPerPage = 5;
+        $totalDocs = count($openDocuments);
+        $totalDocPages = max(1, (int)ceil($totalDocs / $docsPerPage));
+        if ($docPage > $totalDocPages) $docPage = $totalDocPages;
+        $docOffset = ($docPage - 1) * $docsPerPage;
+        $visibleDocs = array_slice($openDocuments, $docOffset, $docsPerPage);
+        ?>
+
+        <div class="admin-modal-tabs">
+            <button type="button" class="admin-modal-tab active" data-tab-target="rider-panel-info">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/file-user-line.svg" alt="" width="14" height="14"
+                    style="filter:none;">
+                <span>Information</span>
+            </button>
+            <button type="button" class="admin-modal-tab" data-tab-target="rider-panel-documents">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/file-image-line.svg" alt="" width="14"
+                    height="14" style="filter:none;">
+                <span>Documents</span>
+                <span class="tab-count"><?php echo $totalDocs; ?></span>
+            </button>
+            <button type="button" class="admin-modal-tab" data-tab-target="rider-panel-deliveries">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt="" width="14" height="14"
+                    style="filter:none;">
+                <span>Deliveries</span>
+                <span class="tab-count"><?php echo count($openDeliveries); ?></span>
+            </button>
+        </div>
+
+        <div class="admin-modal-panel-body">
+
+            <!-- TAB: INFORMATION -->
+            <div class="admin-modal-tab-panel active" id="rider-panel-info">
+                <div class="admin-detail-grid">
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Full Name</span>
+                        <span
+                            class="admin-detail-value"><?php echo htmlspecialchars(adminName($openRider), ENT_QUOTES, 'UTF-8'); ?></span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Username</span>
+                        <span class="admin-detail-value">
+                            @<?php echo htmlspecialchars((string)($openRider['username'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Email</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars((string)$openRider['email'], ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Contact</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars((string)($openRider['contact_number'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Gender</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars((string)($openRider['gender'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Birthdate</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars(formatAdminDateShort((string)($openRider['birthdate'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Joined</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars(formatAdminDate((string)($openRider['date_created'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Verification</span>
+                        <span class="admin-detail-value">
+                            <span class="badge <?php echo adminVerificationBadgeClass($openVerification); ?>">
+                                <?php echo adminVerificationLabel($openVerification); ?>
+                            </span>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Account</span>
+                        <span class="admin-detail-value">
+                            <span class="badge <?php echo $openIsActive ? 'badge-success' : 'badge-secondary'; ?>">
+                                <?php echo $openIsActive ? 'Active' : 'Inactive'; ?>
+                            </span>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Wallet Balance</span>
+                        <span class="admin-detail-value">
+                            <?php echo formatAdminCurrency((float)($openRider['balance'] ?? 0)); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Vehicle</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars(ucfirst((string)($openRider['vehicle_type'] ?? '—')), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Plate</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars((string)($openRider['vehicle_plate'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Average Rating</span>
+                        <span class="admin-detail-value">
+                            <?php echo number_format((float)($openRider['average_rating'] ?? 0), 1); ?> / 5.0
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Total Deliveries</span>
+                        <span class="admin-detail-value">
+                            <?php echo number_format((int)($openRider['total_deliveries'] ?? 0)); ?>
+                        </span>
+                    </div>
+                </div>
+
+                <h3 class="admin-section-heading">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="" width="14"
+                        height="14" style="filter:none;">
+                    Primary Address
+                </h3>
+                <?php if ($openAddress): ?>
+                <div class="admin-address-card">
+                    <p class="admin-address-text">
+                        <?php echo htmlspecialchars(formatRiderAddress($openAddress), ENT_QUOTES, 'UTF-8'); ?>
+                    </p>
+                </div>
+                <?php else: ?>
+                <p class="admin-detail-value admin-detail-value-muted">No address on file.</p>
+                <?php endif; ?>
+
+                <h3 class="admin-section-heading">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg" alt="" width="14"
+                        height="14" style="filter:none;">
+                    Emergency Contacts
+                    <span class="section-count"><?php echo count($openContacts); ?></span>
+                </h3>
+
+                <?php if (empty($openContacts)): ?>
+                <p class="admin-detail-value admin-detail-value-muted">No emergency contacts on file.</p>
+                <?php else: ?>
+                <?php foreach ($openContacts as $idx => $c): ?>
+                <div class="admin-contact-card">
+                    <div class="admin-contact-header">
+                        <p class="admin-contact-name">
+                            <?php echo htmlspecialchars(adminName($c), ENT_QUOTES, 'UTF-8'); ?>
+                        </p>
+                        <?php if ($idx === 0): ?>
+                        <span class="admin-contact-badge">Primary</span>
+                        <?php endif; ?>
+                        <span class="admin-contact-badge" style="background: rgba(23,162,184,0.12); color: #0c5460;">
+                            <?php echo htmlspecialchars((string)($c['relationship'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-contact-body">
+                        <span><strong>Phone:</strong>
+                            <?php echo htmlspecialchars((string)$c['contact_number'], ENT_QUOTES, 'UTF-8'); ?></span>
+                        <?php if (!empty($c['address'])): ?>
+                        <span><strong>Address:</strong>
+                            <?php echo htmlspecialchars((string)$c['address'], ENT_QUOTES, 'UTF-8'); ?></span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+
+            <!-- TAB: DOCUMENTS -->
+            <div class="admin-modal-tab-panel" id="rider-panel-documents">
+                <?php if ($totalDocs === 0): ?>
+                <div class="admin-doc-empty">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/file-image-line.svg" alt="">
+                    <span>No documents on file.</span>
+                </div>
+                <?php else: ?>
+
+                <?php if (!empty($openRider['profile_picture'])): ?>
+                <div class="admin-doc-block">
+                    <div class="admin-doc-head">
+                        <p class="admin-doc-title">Formal Photo</p>
+                        <div class="admin-doc-meta">
+                            <span>Uploaded by rider</span>
+                        </div>
+                    </div>
+                    <div class="admin-doc-image">
+                        <img src="<?php echo htmlspecialchars(riderMediaUrl($assetBase, (string)$openRider['profile_picture']), ENT_QUOTES, 'UTF-8'); ?>"
+                            alt="Rider formal photo"
+                            onerror="this.onerror=null; this.parentNode.innerHTML='<div class=&quot;admin-doc-empty&quot;><span>Image could not be loaded.</span></div>';">
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <?php foreach ($visibleDocs as $doc): ?>
+                <div class="admin-doc-block">
+                    <div class="admin-doc-head">
+                        <p class="admin-doc-title">Driver's License</p>
+                        <div class="admin-doc-meta">
+                            <span>Issued:
+                                <?php echo htmlspecialchars(formatAdminDateShort((string)($doc['issue_date'] ?? '')), ENT_QUOTES, 'UTF-8'); ?></span>
+                            <span>Expires:
+                                <?php echo htmlspecialchars(formatAdminDateShort((string)($doc['expiry_date'] ?? '')), ENT_QUOTES, 'UTF-8'); ?></span>
+                        </div>
+                    </div>
+                    <div class="admin-doc-image">
+                        <img src="<?php echo htmlspecialchars(riderMediaUrl($assetBase, (string)$doc['drivers_license']), ENT_QUOTES, 'UTF-8'); ?>"
+                            alt="Driver's license"
+                            onerror="this.onerror=null; this.parentNode.innerHTML='<div class=&quot;admin-doc-empty&quot;><span>Image could not be loaded.</span></div>';">
+                    </div>
+                </div>
+                <?php endforeach; ?>
+
+                <?php if ($totalDocPages > 1): ?>
+                <nav class="admin-doc-pagination" aria-label="Document pagination">
+                    <ul class="admin-pagination-list">
+                        <?php if ($docPage > 1): ?>
+                        <li>
+                            <a href="<?php echo htmlspecialchars(buildRiderUrl(['doc_page' => $docPage - 1, 'open' => $openId]), ENT_QUOTES, 'UTF-8'); ?>"
+                                class="admin-pagination-link">Previous</a>
+                        </li>
+                        <?php else: ?>
+                        <li><span class="admin-pagination-link disabled">Previous</span></li>
+                        <?php endif; ?>
+
+                        <?php for ($i = 1; $i <= $totalDocPages; $i++): ?>
+                        <li>
+                            <?php if ($i === $docPage): ?>
+                            <span class="admin-pagination-link active"><?php echo $i; ?></span>
+                            <?php else: ?>
+                            <a href="<?php echo htmlspecialchars(buildRiderUrl(['doc_page' => $i, 'open' => $openId]), ENT_QUOTES, 'UTF-8'); ?>"
+                                class="admin-pagination-link"><?php echo $i; ?></a>
+                            <?php endif; ?>
+                        </li>
+                        <?php endfor; ?>
+
+                        <?php if ($docPage < $totalDocPages): ?>
+                        <li>
+                            <a href="<?php echo htmlspecialchars(buildRiderUrl(['doc_page' => $docPage + 1, 'open' => $openId]), ENT_QUOTES, 'UTF-8'); ?>"
+                                class="admin-pagination-link">Next</a>
+                        </li>
+                        <?php else: ?>
+                        <li><span class="admin-pagination-link disabled">Next</span></li>
+                        <?php endif; ?>
+                    </ul>
+                </nav>
+                <?php endif; ?>
+
+                <?php endif; ?>
+            </div>
+
+            <!-- TAB: DELIVERIES -->
+            <div class="admin-modal-tab-panel" id="rider-panel-deliveries">
+                <?php if (empty($openDeliveries)): ?>
+                <div class="admin-doc-empty">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt="">
+                    <span>No deliveries on record.</span>
+                </div>
+                <?php else: ?>
+                <div class="admin-orders-list">
+                    <?php foreach ($openDeliveries as $d): ?>
+                    <div class="admin-order-row">
+                        <div class="admin-order-id-block">
+                            <span class="admin-order-id">Order #<?php echo (int)$d['order_id']; ?></span>
+                            <span class="admin-order-customer">
+                                <?php echo htmlspecialchars((string)($d['customer_name'] ?? 'Customer'), ENT_QUOTES, 'UTF-8'); ?>
+                                &middot;
+                                <?php echo htmlspecialchars(formatAdminDate((string)($d['delivered_at'] ?? $d['order_date'])), ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                        </div>
+                        <span class="badge <?php echo adminOrderStatusBadgeClass((string)$d['order_status']); ?>">
+                            <?php echo adminOrderStatusLabel((string)$d['order_status']); ?>
+                        </span>
+                        <span class="admin-order-total">
+                            <?php echo formatAdminCurrency((float)$d['order_total']); ?>
+                        </span>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
+            </div>
+
+        </div>
+
+        <div class="admin-modal-footer">
+            <form method="POST" action="../backend/handlers/admin-handler.php" style="display:inline;">
+                <input type="hidden" name="csrf_token"
+                    value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                <input type="hidden" name="action" value="set_rider_verification">
+                <input type="hidden" name="rider_id" value="<?php echo (int)$openRider['delivery_rider_id']; ?>">
+                <input type="hidden" name="status" value="verified">
+                <input type="hidden" name="redirect_to" value="riders.php">
+                <button type="submit" class="btn btn-primary btn-sm"
+                    <?php echo $openVerification === 'verified' ? 'disabled' : ''; ?>>
+                    Approve
+                </button>
+            </form>
+
+            <form method="POST" action="../backend/handlers/admin-handler.php" style="display:inline;">
+                <input type="hidden" name="csrf_token"
+                    value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                <input type="hidden" name="action" value="set_rider_verification">
+                <input type="hidden" name="rider_id" value="<?php echo (int)$openRider['delivery_rider_id']; ?>">
+                <input type="hidden" name="status" value="denied">
+                <input type="hidden" name="redirect_to" value="riders.php">
+                <button type="submit" class="btn btn-danger btn-sm"
+                    <?php echo $openVerification === 'denied' ? 'disabled' : ''; ?>>
+                    Deny
+                </button>
+            </form>
+
+            <form method="POST" action="../backend/handlers/admin-handler.php" style="display:inline;">
+                <input type="hidden" name="csrf_token"
+                    value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                <input type="hidden" name="action" value="toggle_rider">
+                <input type="hidden" name="rider_id" value="<?php echo (int)$openRider['delivery_rider_id']; ?>">
+                <input type="hidden" name="activate" value="<?php echo $openIsActive ? '0' : '1'; ?>">
+                <input type="hidden" name="redirect_to" value="riders.php">
+                <button type="submit" class="btn btn-outline btn-sm">
+                    <?php echo $openIsActive ? 'Deactivate' : 'Activate'; ?>
+                </button>
+            </form>
+
+            <a href="<?php echo htmlspecialchars(buildRiderUrl(['open' => null, 'doc_page' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                class="btn btn-outline btn-sm">Close</a>
+        </div>
+
+        <?php endif; ?>
+    </div>
+</div>
+
+<script src="../assets/ui/js/dashboard.js" defer></script>
+<?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>
+```
+
+---
+
+## File: `fitpal/admin/pages/sign-in.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Admin Sign-In Page
+ *
+ * @package FitPal
+ * @version 2.0
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (!empty($_SESSION['administrator_id'])) {
+    header('Location: dashboard.php');
+    exit;
+}
+
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+require_once __DIR__ . '/../includes/header.php';
+
+$errorMessage = $_SESSION['login_error'] ?? '';
+unset($_SESSION['login_error']);
+
+$identifierValue = htmlspecialchars((string)($_POST['identifier'] ?? ''), ENT_QUOTES, 'UTF-8');
+?>
+
+<div class="content sign-in-page">
+    <div class="container">
+        <div class="sign-in-card">
+            <div class="sign-in-header">
+                <p class="heading-2">Admin <span>Sign In</span></p>
+                <p class="text-muted">Access the FitPal control center</p>
+            </div>
+
+            <?php if ($errorMessage !== ''): ?>
+            <div class="alert alert-danger" role="alert">
+                <?php echo htmlspecialchars($errorMessage, ENT_QUOTES, 'UTF-8'); ?>
+            </div>
+            <?php endif; ?>
+
+            <form method="POST" action="../backend/handlers/sign-in-handler.php" class="sign-in-form" id="signInForm"
+                novalidate>
+
+                <input type="hidden" name="csrf_token"
+                    value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
+
+                <div class="form-group">
+                    <label for="identifier" class="form-label">Email or Username</label>
+                    <input type="text" id="identifier" name="identifier" class="form-control"
+                        placeholder="Enter your email or username" autocomplete="username" required
+                        value="<?php echo $identifierValue; ?>">
+                    <div class="form-error" id="identifierError"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="password" class="form-label">Password</label>
+                    <div class="password-wrapper">
+                        <input type="password" id="password" name="password" class="form-control"
+                            placeholder="Enter your password" autocomplete="current-password" required>
+                        <button type="button" class="password-toggle" id="togglePassword"
+                            aria-label="Toggle password visibility" tabindex="-1">
+                            <img src="<?php echo $assetBase; ?>assets/images/icons/password-hide.svg" alt=""
+                                id="passwordIcon">
+                        </button>
+                    </div>
+                    <div class="form-error" id="passwordError"></div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block" id="signInBtn">
+                    Sign In
+                </button>
+            </form>
+
+            <div class="sign-in-footer">
+                <p class="text-muted">
+                    Not an admin? <a href="<?php echo $assetBase; ?>../customer/pages/sign-in.php">Customer sign-in</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    var form = document.getElementById('signInForm');
+    var toggle = document.getElementById('togglePassword');
+    var password = document.getElementById('password');
+    var icon = document.getElementById('passwordIcon');
+    if (toggle && password && icon) {
+        toggle.addEventListener('click', function() {
+            var isPwd = password.type === 'password';
+            password.type = isPwd ? 'text' : 'password';
+            icon.src = isPwd ?
+                '../../shared/assets/images/icons/password-unhide.svg' :
+                '../../shared/assets/images/icons/password-hide.svg';
+        });
+    }
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            var ident = document.getElementById('identifier');
+            var idErr = document.getElementById('identifierError');
+            var pwdErr = document.getElementById('passwordError');
+            [ident, password].forEach(function(el) {
+                if (el) el.classList.remove('error');
+            });
+            [idErr, pwdErr].forEach(function(el) {
+                if (el) {
+                    el.textContent = '';
+                    el.style.display = 'none';
+                }
+            });
+            var ok = true;
+            if (!ident.value.trim()) {
+                ident.classList.add('error');
+                idErr.textContent = 'Please enter your email or username.';
+                idErr.style.display = 'block';
+                ok = false;
+            }
+            if (!password.value) {
+                password.classList.add('error');
+                pwdErr.textContent = 'Please enter your password.';
+                pwdErr.style.display = 'block';
+                ok = false;
+            }
+            if (!ok) e.preventDefault();
+        });
+    }
+})();
+</script>
+
+<?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>
 ```
 
 ---
@@ -38967,6 +47134,1366 @@ window.FITPAL_WALLET = {
 
 ---
 
+## File: `fitpal/rider/assets/css/admin-tables.css`
+
+**Status:** `FOUND`
+
+```css
+/**
+ * FitPal Admin — List Pages (Users / Restaurants / Riders)
+ * Version 4.1 — Container now matches the admin header exactly
+ *                (1200px max-width, var(--spacing-4) side padding).
+ *
+ * Layout contract:
+ *   >= 768px : real <table>, table-layout: fixed. Column widths come
+ *              exclusively from the <thead> row. Body <td> cells
+ *              inherit those widths automatically.
+ *   <  768px : the table collapses into stacked cards. Each <td> uses
+ *              a two-column grid (label gutter + value) so labels
+ *              align to a consistent edge.
+ *
+ * Column grids are declared per page via body classes:
+ *   .admin-page-users        → 7 columns
+ *   .admin-page-restaurants  → 7 columns
+ *   .admin-page-riders       → 7 columns
+ *
+ * Every selector is prefixed with .admin-list-page so shared rules
+ * from global.css cannot win without a fight.
+ */
+
+/* ============================================================
+   PAGE SHELL
+   ============================================================ */
+
+.admin-list-page {
+    flex: 1;
+    display: block;
+    width: 100%;
+    padding: 24px 0 40px 0;
+    min-height: calc(100vh - 70px);
+    background: var(--gray-50);
+    box-sizing: border-box;
+}
+
+.admin-list-page .container {
+    display: block;
+    max-width: 1200px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 0 var(--spacing-4);
+    box-sizing: border-box;
+}
+
+/* ============================================================
+   PAGE HEADER
+   ============================================================ */
+
+.admin-list-page .admin-page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin: 0 0 20px 0;
+    padding: 0 0 16px 0;
+    border-bottom: 2px solid var(--primary);
+}
+
+.admin-list-page .admin-page-header-text {
+    flex: 1 1 320px;
+    min-width: 0;
+}
+
+.admin-list-page .admin-page-title {
+    margin: 0 0 4px 0;
+    padding: 0;
+    font-size: 30px;
+    line-height: 1.15;
+    font-weight: 700;
+    color: var(--text);
+    font-family: inherit;
+}
+
+.admin-list-page .admin-page-title span {
+    color: var(--primary);
+}
+
+.admin-list-page .admin-page-subtitle {
+    margin: 0;
+    padding: 0;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--gray-500);
+    font-family: inherit;
+}
+
+.admin-list-page .admin-page-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+/* ============================================================
+   ALERTS
+   ============================================================ */
+
+.admin-list-page .alert {
+    display: block;
+    padding: 12px 18px;
+    border-radius: 8px;
+    margin: 0 0 18px 0;
+    border: 1px solid transparent;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.admin-list-page .alert-success {
+    color: #155724;
+    background: #d4edda;
+    border-color: #c3e6cb;
+}
+
+.admin-list-page .alert-danger {
+    color: #721c24;
+    background: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+/* ============================================================
+   SUMMARY STRIP
+   ============================================================ */
+
+.admin-list-page .admin-summary-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    margin: 0 0 18px 0;
+}
+
+.admin-list-page .admin-summary-tile {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: #ffffff;
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    text-decoration: none;
+    color: inherit;
+    min-width: 0;
+    transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+    box-sizing: border-box;
+}
+
+.admin-list-page .admin-summary-tile:hover {
+    border-color: var(--gray-300);
+    box-shadow: 0 4px 6px rgba(5, 10, 4, 0.07);
+    transform: translateY(-2px);
+}
+
+.admin-list-page .admin-summary-tile.is-active {
+    border-color: var(--primary);
+    background: rgba(89, 193, 74, 0.05);
+}
+
+.admin-list-page .admin-summary-dot {
+    display: block;
+    width: 10px;
+    height: 10px;
+    min-width: 10px;
+    border-radius: 50%;
+    background: var(--gray-300);
+    flex-shrink: 0;
+}
+
+.admin-list-page .dot-total     { background: var(--gray-500); }
+.admin-list-page .dot-verified,
+.admin-list-page .dot-active    { background: #28a745; }
+.admin-list-page .dot-pending   { background: #ffc107; }
+.admin-list-page .dot-denied    { background: #dc3545; }
+.admin-list-page .dot-suspended,
+.admin-list-page .dot-inactive  { background: var(--gray-400); }
+
+.admin-list-page .admin-summary-body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.admin-list-page .admin-summary-count {
+    display: block;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-list-page .admin-summary-label {
+    display: block;
+    margin: 2px 0 0 0;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ============================================================
+   FILTER BAR
+   ============================================================ */
+
+.admin-list-page .admin-filter-card {
+    display: block;
+    padding: 16px;
+    background: #ffffff;
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    margin: 0 0 16px 0;
+    box-shadow: 0 1px 2px rgba(5, 10, 4, 0.05);
+    box-sizing: border-box;
+}
+
+.admin-list-page .admin-filter-form {
+    display: block;
+    margin: 0;
+    padding: 0;
+}
+
+.admin-list-page .admin-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+/* --- Search --- */
+
+.admin-list-page .admin-filter-search {
+    position: relative;
+    flex: 1 1 320px;
+    min-width: 200px;
+}
+
+.admin-list-page .admin-filter-search-icon {
+    position: absolute;
+    top: 50%;
+    left: 14px;
+    width: 18px;
+    height: 18px;
+    max-width: 18px;
+    max-height: 18px;
+    transform: translateY(-50%);
+    opacity: 0.4;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.admin-list-page .admin-filter-search input[type="text"],
+.admin-list-page .admin-filter-search input:not([type]),
+.admin-list-page .admin-filter-search input {
+    display: block;
+    width: 100%;
+    height: 44px;
+    padding: 0 14px 0 42px;
+    border: 2px solid var(--gray-200);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    font-weight: 400;
+    color: var(--text);
+    background: #ffffff;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+    outline: none;
+}
+
+.admin-list-page .admin-filter-search input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
+}
+
+/* --- Selects --- */
+
+.admin-list-page .admin-filter-select,
+.admin-list-page .admin-filter-perpage,
+.admin-list-page select.admin-filter-select,
+.admin-list-page select.admin-filter-perpage {
+    display: block;
+    height: 44px;
+    padding: 0 36px 0 14px;
+    border: 2px solid var(--gray-200);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    font-weight: 400;
+    color: var(--text);
+    background-color: #ffffff;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23788278' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    box-sizing: border-box;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    margin: 0;
+}
+
+.admin-list-page .admin-filter-select {
+    flex: 0 1 190px;
+    min-width: 160px;
+}
+
+.admin-list-page .admin-filter-perpage {
+    flex: 0 1 140px;
+    min-width: 120px;
+}
+
+.admin-list-page .admin-filter-select:focus,
+.admin-list-page .admin-filter-perpage:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
+}
+
+/* --- Actions --- */
+
+.admin-list-page .admin-filter-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.admin-list-page .admin-filter-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 44px;
+    min-height: 44px;
+    padding: 0 20px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 8px;
+    text-decoration: none;
+    white-space: nowrap;
+    min-width: 90px;
+    box-sizing: border-box;
+    margin: 0;
+}
+
+/* ============================================================
+   RESULTS META
+   ============================================================ */
+
+.admin-list-page .admin-results-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 0 0 12px 0;
+    padding: 0 4px;
+    font-size: 14px;
+    color: var(--gray-600);
+}
+
+.admin-list-page .admin-results-meta strong {
+    color: var(--text);
+    font-weight: 700;
+}
+
+.admin-list-page .admin-results-filter {
+    font-size: 12px;
+    color: var(--gray-500);
+}
+
+/* ============================================================
+   TABLE — DESKTOP (>= 768px)
+   ============================================================
+   table-layout: fixed means column widths come exclusively from the
+   first row (the <thead>). Declaring width on <td> has no effect.
+   ============================================================ */
+
+.admin-list-page .admin-table-card {
+    display: block;
+    background: #ffffff;
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(5, 10, 4, 0.05);
+    margin: 0 0 20px 0;
+    box-sizing: border-box;
+}
+
+.admin-list-page .admin-table {
+    display: table;
+    width: 100%;
+    border-collapse: collapse;
+    border-spacing: 0;
+    font-size: 14px;
+    table-layout: fixed;
+    margin: 0;
+}
+
+.admin-list-page .admin-table thead {
+    display: table-header-group;
+    background: var(--gray-50);
+}
+
+.admin-list-page .admin-table tbody {
+    display: table-row-group;
+}
+
+.admin-list-page .admin-table tr {
+    display: table-row;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.admin-list-page .admin-table th {
+    display: table-cell;
+    padding: 14px 18px;
+    text-align: left;
+    vertical-align: middle;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--gray-600);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--gray-200);
+    background: transparent;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+.admin-list-page .admin-table td {
+    display: table-cell;
+    padding: 16px 18px;
+    vertical-align: middle;
+    color: var(--gray-700);
+    border-bottom: 1px solid var(--gray-100);
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    text-align: left;
+    background: transparent;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+.admin-list-page .admin-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.admin-list-page .admin-table tbody tr:hover td {
+    background: var(--gray-50);
+}
+
+/* ============================================================
+   PER-PAGE COLUMN GRIDS
+   ============================================================
+   Each list page has its own column count and header text, so each
+   gets its own grid driven by a body class on <body>.
+   ============================================================ */
+
+/* --- Fallback 7-column grid (used when no body class matches) --- */
+
+.admin-list-page .admin-table th:nth-child(1) { width: 26%; }
+.admin-list-page .admin-table th:nth-child(2) { width: 18%; }
+.admin-list-page .admin-table th:nth-child(3) { width: 14%; }
+.admin-list-page .admin-table th:nth-child(4) { width: 11%; text-align: right; }
+.admin-list-page .admin-table th:nth-child(5) { width: 12%; }
+.admin-list-page .admin-table th:nth-child(6) { width: 12%; }
+.admin-list-page .admin-table th:nth-child(7) { width: 90px; text-align: right; }
+
+.admin-list-page .admin-table td:nth-child(4),
+.admin-list-page .admin-table td:nth-child(7) { text-align: right; }
+
+/* --- USERS: Customer | Email | Contact | Orders | Status | Joined | Actions --- */
+
+body.admin-page-users .admin-list-page .admin-table th:nth-child(1) { width: 24%; }
+body.admin-page-users .admin-list-page .admin-table th:nth-child(2) { width: 22%; }
+body.admin-page-users .admin-list-page .admin-table th:nth-child(3) { width: 14%; }
+body.admin-page-users .admin-list-page .admin-table th:nth-child(4) { width: 8%;  text-align: right; }
+body.admin-page-users .admin-list-page .admin-table th:nth-child(5) { width: 12%; }
+body.admin-page-users .admin-list-page .admin-table th:nth-child(6) { width: 12%; }
+body.admin-page-users .admin-list-page .admin-table th:nth-child(7) { width: 90px; text-align: right; }
+
+body.admin-page-users .admin-list-page .admin-table td:nth-child(4),
+body.admin-page-users .admin-list-page .admin-table td:nth-child(7) { text-align: right; }
+
+/* --- RESTAURANTS: Business | Cuisine | Branches | Products | Verification | Joined | Actions --- */
+
+body.admin-page-restaurants .admin-list-page .admin-table th:nth-child(1) { width: 26%; }
+body.admin-page-restaurants .admin-list-page .admin-table th:nth-child(2) { width: 16%; }
+body.admin-page-restaurants .admin-list-page .admin-table th:nth-child(3) { width: 10%; text-align: right; }
+body.admin-page-restaurants .admin-list-page .admin-table th:nth-child(4) { width: 10%; text-align: right; }
+body.admin-page-restaurants .admin-list-page .admin-table th:nth-child(5) { width: 13%; }
+body.admin-page-restaurants .admin-list-page .admin-table th:nth-child(6) { width: 13%; }
+body.admin-page-restaurants .admin-list-page .admin-table th:nth-child(7) { width: 90px; text-align: right; }
+
+body.admin-page-restaurants .admin-list-page .admin-table td:nth-child(3),
+body.admin-page-restaurants .admin-list-page .admin-table td:nth-child(4),
+body.admin-page-restaurants .admin-list-page .admin-table td:nth-child(7) { text-align: right; }
+
+/* --- RIDERS: Rider | Contact | Vehicle | Deliveries | Rating | Verification | Actions --- */
+
+body.admin-page-riders .admin-list-page .admin-table th:nth-child(1) { width: 24%; }
+body.admin-page-riders .admin-list-page .admin-table th:nth-child(2) { width: 16%; }
+body.admin-page-riders .admin-list-page .admin-table th:nth-child(3) { width: 14%; }
+body.admin-page-riders .admin-list-page .admin-table th:nth-child(4) { width: 11%; text-align: right; }
+body.admin-page-riders .admin-list-page .admin-table th:nth-child(5) { width: 9%;  text-align: right; }
+body.admin-page-riders .admin-list-page .admin-table th:nth-child(6) { width: 13%; }
+body.admin-page-riders .admin-list-page .admin-table th:nth-child(7) { width: 90px; text-align: right; }
+
+body.admin-page-riders .admin-list-page .admin-table td:nth-child(4),
+body.admin-page-riders .admin-list-page .admin-table td:nth-child(5),
+body.admin-page-riders .admin-list-page .admin-table td:nth-child(7) { text-align: right; }
+
+/* ============================================================
+   CELL CONTENT
+   ============================================================ */
+
+.admin-list-page .admin-cell-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.admin-list-page .admin-cell-primary {
+    display: block;
+    font-weight: 600;
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.35;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+.admin-list-page .admin-cell-secondary {
+    display: block;
+    font-size: 12px;
+    color: var(--gray-500);
+    line-height: 1.35;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+.admin-list-page .admin-cell-mono {
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-list-page .admin-cell-id {
+    display: inline-block;
+    padding: 1px 8px;
+    margin-right: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--gray-600);
+    background: var(--gray-100);
+    border-radius: 4px;
+    font-variant-numeric: tabular-nums;
+    vertical-align: middle;
+    line-height: 1.5;
+}
+
+.admin-list-page .admin-cell-count {
+    display: inline-block;
+    font-weight: 600;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   BADGES
+   ============================================================ */
+
+.admin-list-page .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.admin-list-page .badge-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+}
+
+.admin-list-page .badge-success   { background: #d4edda; color: #155724; }
+.admin-list-page .badge-warning   { background: #fff3cd; color: #856404; }
+.admin-list-page .badge-danger    { background: #f8d7da; color: #721c24; }
+.admin-list-page .badge-secondary { background: var(--gray-200); color: var(--gray-600); }
+.admin-list-page .badge-primary   { background: #cce5ff; color: #004085; }
+
+/* ============================================================
+   ACTION MENU — DESKTOP
+   ============================================================ */
+
+.admin-list-page .admin-actions {
+    position: relative;
+    display: inline-block;
+}
+
+.admin-list-page .admin-actions-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    padding: 0;
+    border-radius: 8px;
+    background: #ffffff;
+    border: 1px solid var(--gray-200);
+    color: var(--gray-600);
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-family: inherit;
+    box-sizing: border-box;
+    margin: 0;
+}
+
+.admin-list-page .admin-actions-toggle:hover {
+    background: var(--gray-50);
+    border-color: var(--gray-300);
+    color: var(--text);
+}
+
+.admin-list-page .admin-actions-toggle[aria-expanded="true"] {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #ffffff;
+}
+
+.admin-list-page .admin-actions-toggle:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.admin-list-page .admin-actions-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    left: auto;
+    min-width: 200px;
+    max-width: 260px;
+    padding: 6px;
+    background: #ffffff;
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14);
+    z-index: 40;
+    box-sizing: border-box;
+}
+
+.admin-list-page .admin-actions-menu.is-open {
+    display: block;
+}
+
+.admin-list-page .admin-actions-menu-title {
+    display: block;
+    padding: 6px 10px 8px;
+    margin: 0 0 4px 0;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--gray-400);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--gray-100);
+}
+
+.admin-list-page .admin-actions-menu form {
+    display: block;
+    margin: 0;
+    padding: 0;
+}
+
+.admin-list-page .admin-action-btn {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 9px 12px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--gray-700);
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.1s ease, color 0.1s ease;
+    box-sizing: border-box;
+    margin: 0;
+}
+
+.admin-list-page .admin-action-btn:hover {
+    background: var(--gray-50);
+    color: var(--text);
+}
+
+.admin-list-page .admin-action-btn.is-primary {
+    color: #3d8a32;
+}
+
+.admin-list-page .admin-action-btn.is-primary:hover {
+    background: rgba(89, 193, 74, 0.1);
+    color: #3d8a32;
+}
+
+.admin-list-page .admin-action-btn.is-danger {
+    color: #dc3545;
+}
+
+.admin-list-page .admin-action-btn.is-danger:hover {
+    background: rgba(220, 53, 69, 0.08);
+    color: #dc3545;
+}
+
+/* ============================================================
+   EMPTY STATE
+   ============================================================ */
+
+.admin-list-page .admin-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 64px 24px;
+    min-height: 340px;
+    background: #ffffff;
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(5, 10, 4, 0.05);
+}
+
+.admin-list-page .admin-empty-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 76px;
+    height: 76px;
+    min-width: 76px;
+    min-height: 76px;
+    max-width: 76px;
+    max-height: 76px;
+    padding: 18px;
+    margin: 0 0 20px 0;
+    background: var(--gray-50);
+    border: 2px dashed var(--gray-200);
+    border-radius: 50%;
+    box-sizing: border-box;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.admin-list-page .admin-empty-icon img {
+    display: block;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    max-width: 40px;
+    max-height: 40px;
+    object-fit: contain;
+    opacity: 0.5;
+}
+
+.admin-list-page .admin-empty-title {
+    margin: 0 0 6px 0;
+    padding: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.admin-list-page .admin-empty-text {
+    margin: 0 0 18px 0;
+    padding: 0;
+    max-width: 380px;
+    font-size: 14px;
+    color: var(--gray-500);
+    line-height: 1.55;
+}
+
+.admin-list-page .admin-empty .btn {
+    min-width: 160px;
+}
+
+/* ============================================================
+   PAGINATION
+   ============================================================ */
+
+.admin-list-page .admin-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 12px 16px;
+    background: #ffffff;
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(5, 10, 4, 0.05);
+    box-sizing: border-box;
+}
+
+.admin-list-page .admin-pagination-info {
+    font-size: 12px;
+    color: var(--gray-500);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.admin-list-page .admin-pagination-info strong {
+    color: var(--text);
+    font-weight: 700;
+}
+
+.admin-list-page .admin-pagination-list {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.admin-list-page .admin-pagination-list > li {
+    display: block;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.admin-list-page .admin-pagination-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 38px;
+    height: 38px;
+    padding: 0 12px;
+    background: #ffffff;
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    color: var(--gray-600);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    transition: all 0.12s ease;
+    cursor: pointer;
+    box-sizing: border-box;
+}
+
+.admin-list-page .admin-pagination-link:hover:not(.is-disabled):not(.is-active) {
+    background: var(--gray-50);
+    border-color: var(--gray-300);
+    color: var(--text);
+}
+
+.admin-list-page .admin-pagination-link.is-active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #ffffff;
+    cursor: default;
+}
+
+.admin-list-page .admin-pagination-link.is-disabled {
+    opacity: 0.4;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+.admin-list-page .admin-pagination-link.is-nav {
+    padding: 0 14px;
+    min-width: 0;
+}
+
+.admin-list-page .admin-pagination-ellipsis {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 30px;
+    height: 38px;
+    color: var(--gray-400);
+    font-weight: 700;
+    font-size: 14px;
+    user-select: none;
+}
+
+.admin-list-page .admin-pagination-jump {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--gray-500);
+    white-space: nowrap;
+}
+
+.admin-list-page .admin-pagination-jump label {
+    margin: 0;
+}
+
+.admin-list-page .admin-pagination-jump input[type="number"] {
+    display: block;
+    width: 60px;
+    height: 34px;
+    padding: 0 8px;
+    border: 1px solid var(--gray-200);
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: inherit;
+    color: var(--text);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    box-sizing: border-box;
+    -webkit-appearance: textfield;
+    appearance: textfield;
+    margin: 0;
+}
+
+.admin-list-page .admin-pagination-jump input[type="number"]::-webkit-inner-spin-button,
+.admin-list-page .admin-pagination-jump input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.admin-list-page .admin-pagination-jump input[type="number"]:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
+}
+
+.admin-list-page .admin-pagination-jump .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 34px;
+    padding: 0 14px;
+    font-size: 12px;
+    border-radius: 6px;
+}
+
+/* ============================================================
+   TABLET — 768 to 1023
+   ============================================================ */
+
+@media (max-width: 1023px) {
+    .admin-list-page .container {
+        padding: 0 var(--spacing-4);
+    }
+
+    .admin-list-page .admin-page-title {
+        font-size: 24px;
+    }
+
+    .admin-list-page .admin-table th,
+    .admin-list-page .admin-table td {
+        padding: 12px 12px;
+    }
+
+    .admin-list-page .admin-table th {
+        font-size: 10px;
+    }
+
+    .admin-list-page .admin-summary-strip {
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    }
+}
+
+/* ============================================================
+   MOBILE — < 768
+   Table becomes stacked cards. Column widths declared above are
+   ignored in this mode because the layout is no longer a table.
+   ============================================================ */
+
+@media (max-width: 767px) {
+    .admin-list-page {
+        padding: 16px 0 28px 0;
+    }
+
+    .admin-list-page .container {
+        padding: 0 var(--spacing-3);
+    }
+
+    .admin-list-page .admin-page-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .admin-list-page .admin-page-title {
+        font-size: 22px;
+    }
+
+    .admin-list-page .admin-page-subtitle {
+        font-size: 13px;
+    }
+
+    .admin-list-page .admin-page-header-actions {
+        width: 100%;
+    }
+
+    .admin-list-page .admin-page-header-actions .btn {
+        flex: 1;
+        justify-content: center;
+    }
+
+    .admin-list-page .admin-summary-strip {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        margin-bottom: 14px;
+    }
+
+    .admin-list-page .admin-summary-tile {
+        padding: 10px 12px;
+        gap: 8px;
+    }
+
+    .admin-list-page .admin-summary-count {
+        font-size: 16px;
+    }
+
+    .admin-list-page .admin-summary-label {
+        font-size: 10px;
+    }
+
+    .admin-list-page .admin-filter-card {
+        padding: 12px;
+        margin-bottom: 14px;
+    }
+
+    .admin-list-page .admin-filter-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .admin-list-page .admin-filter-search,
+    .admin-list-page .admin-filter-select,
+    .admin-list-page .admin-filter-perpage {
+        flex: 1 1 100%;
+        width: 100%;
+        min-width: 0;
+    }
+
+    .admin-list-page .admin-filter-actions {
+        width: 100%;
+        gap: 8px;
+    }
+
+    .admin-list-page .admin-filter-actions .btn {
+        flex: 1;
+        min-width: 0;
+        padding: 0 14px;
+    }
+
+    .admin-list-page .admin-results-meta {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        margin-bottom: 10px;
+    }
+
+    /* ---------- Table → cards ---------- */
+
+    .admin-list-page .admin-table-card {
+        background: transparent;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+        margin-bottom: 14px;
+        overflow: visible;
+    }
+
+    .admin-list-page .admin-table {
+        display: block;
+        width: 100%;
+        table-layout: auto;
+    }
+
+    .admin-list-page .admin-table thead {
+        display: none;
+    }
+
+    .admin-list-page .admin-table tbody {
+        display: block;
+        width: 100%;
+    }
+
+    .admin-list-page .admin-table tr {
+        display: block;
+        width: 100%;
+        margin: 0 0 12px 0;
+        padding: 4px 0;
+        background: #ffffff;
+        border: 1px solid var(--gray-200);
+        border-radius: 12px;
+        box-shadow: 0 1px 2px rgba(5, 10, 4, 0.05);
+        overflow: hidden;
+    }
+
+    .admin-list-page .admin-table tr:last-child {
+        margin-bottom: 0;
+    }
+
+    .admin-list-page .admin-table tr:hover td {
+        background: transparent;
+    }
+
+    .admin-list-page .admin-table td {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        width: 100%;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--gray-100);
+        font-size: 14px;
+        text-align: right;
+        box-sizing: border-box;
+    }
+
+    .admin-list-page .admin-table td:last-child {
+        border-bottom: none;
+    }
+
+    .admin-list-page .admin-table td::before {
+        content: attr(data-label);
+        flex: 0 0 90px;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--gray-500);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        line-height: 1.5;
+        text-align: left;
+        padding-top: 1px;
+    }
+
+    .admin-list-page .admin-table td > * {
+        text-align: right;
+        max-width: calc(100% - 102px);
+        min-width: 0;
+    }
+
+    /* Action cell becomes a full-width footer strip */
+    .admin-list-page .admin-col-actions,
+    .admin-list-page .admin-table td:last-child {
+        display: block;
+        padding: 12px 16px;
+        background: var(--gray-50);
+        border-top: 1px solid var(--gray-100);
+        border-bottom: none;
+        text-align: left;
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .admin-list-page .admin-col-actions::before,
+    .admin-list-page .admin-table td:last-child::before {
+        display: none;
+        content: none;
+    }
+
+    .admin-list-page .admin-actions {
+        display: block;
+        width: 100%;
+        position: static;
+    }
+
+    .admin-list-page .admin-actions-toggle {
+        display: none;
+    }
+
+    .admin-list-page .admin-actions-menu {
+        display: block;
+        position: static;
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        padding: 0;
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        border-radius: 0;
+        top: auto;
+        right: auto;
+    }
+
+    .admin-list-page .admin-actions-menu-title {
+        display: none;
+    }
+
+    .admin-list-page .admin-actions-menu form {
+        display: inline-block;
+        margin: 0 6px 0 0;
+        padding: 0;
+        width: auto;
+    }
+
+    .admin-list-page .admin-actions-menu form:last-child {
+        margin-right: 0;
+    }
+
+    .admin-list-page .admin-action-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: auto;
+        padding: 8px 16px;
+        border: 1px solid var(--gray-300);
+        background: #ffffff;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        text-align: center;
+        color: var(--gray-700);
+    }
+
+    .admin-list-page .admin-action-btn:hover {
+        background: var(--gray-100);
+        border-color: var(--gray-400);
+    }
+
+    .admin-list-page .admin-action-btn.is-primary {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: #ffffff;
+    }
+
+    .admin-list-page .admin-action-btn.is-primary:hover {
+        background: var(--primary-dark);
+        border-color: var(--primary-dark);
+    }
+
+    .admin-list-page .admin-action-btn.is-danger {
+        background: #dc3545;
+        border-color: #dc3545;
+        color: #ffffff;
+    }
+
+    .admin-list-page .admin-action-btn.is-danger:hover {
+        background: #c82333;
+        border-color: #c82333;
+    }
+
+    .admin-list-page .admin-pagination {
+        flex-direction: column;
+        gap: 12px;
+        padding: 12px;
+    }
+
+    .admin-list-page .admin-pagination-info {
+        text-align: center;
+        width: 100%;
+    }
+
+    .admin-list-page .admin-pagination-list {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .admin-list-page .admin-pagination-link {
+        min-width: 34px;
+        height: 34px;
+        padding: 0 10px;
+        font-size: 13px;
+    }
+
+    .admin-list-page .admin-pagination-link.is-nav {
+        padding: 0 10px;
+    }
+
+    .admin-list-page .admin-pagination-jump {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+}
+
+/* ============================================================
+   VERY SMALL MOBILE (< 400)
+   ============================================================ */
+
+@media (max-width: 400px) {
+    .admin-list-page .admin-page-title {
+        font-size: 20px;
+    }
+
+    .admin-list-page .admin-table td {
+        padding: 8px 14px;
+        font-size: 13px;
+    }
+
+    .admin-list-page .admin-table td::before {
+        flex-basis: 80px;
+        font-size: 10px;
+    }
+
+    .admin-list-page .admin-table td > * {
+        max-width: calc(100% - 92px);
+    }
+
+    .admin-list-page .admin-summary-tile {
+        padding: 8px 10px;
+    }
+
+    .admin-list-page .admin-summary-count {
+        font-size: 15px;
+    }
+
+    .admin-list-page .admin-pagination-link {
+        min-width: 30px;
+        height: 30px;
+        padding: 0 8px;
+        font-size: 12px;
+    }
+
+    .admin-list-page .admin-pagination-link.is-nav {
+        padding: 0 8px;
+    }
+
+    .admin-list-page .admin-action-btn {
+        padding: 7px 12px;
+        font-size: 11px;
+    }
+}
+```
+
+---
+
 ## File: `fitpal/rider/assets/css/dashboard.css`
 
 **Status:** `FOUND`
@@ -48568,6 +58095,167 @@ if (!function_exists('truncateText')) {
         }
         return substr($text, 0, $length) . '...';
     }
+}
+```
+
+---
+
+## File: `fitpal/rider/backend/handlers/admin-handler.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Admin Action Handler
+ *
+ * Handles the three admin mutations from the management pages:
+ *   - toggle_customer_active
+ *   - set_restaurant_status
+ *   - set_rider_status
+ *
+ * All three redirect back to their respective pages with a session
+ * flash message. Contains no SQL — all data access is via
+ * admin-queries.php.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (empty($_SESSION['administrator_id'])) {
+    $_SESSION['admin_error'] = 'Please sign in to perform this action.';
+    header('Location: ../../pages/sign-in.php');
+    exit;
+}
+
+require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
+require_once __DIR__ . '/../database/admin-queries.php';
+
+// ---- CSRF ----
+if (
+    !isset($_POST['csrf_token'], $_SESSION['csrf_token']) ||
+    !hash_equals((string)$_SESSION['csrf_token'], (string)$_POST['csrf_token'])
+) {
+    $_SESSION['admin_error'] = 'Security validation failed. Please try again.';
+    header('Location: ' . ($_SERVER['HTTP_REFERER'] ?? '../../pages/dashboard.php'));
+    exit;
+}
+
+$adminId = (int)$_SESSION['administrator_id'];
+$action  = (string)($_POST['action'] ?? '');
+
+/**
+ * Redirect back to the given page with a flash message.
+ */
+function adminRedirect(string $page, string $type, string $message): never
+{
+    $_SESSION['admin_' . $type] = $message;
+    header('Location: ../../pages/' . $page);
+    exit;
+}
+
+try {
+    switch ($action) {
+
+        case 'toggle_customer_active': {
+            $customerId = (int)($_POST['customer_id'] ?? 0);
+            $setActive  = (string)($_POST['set_active'] ?? '') === '1';
+
+            if ($customerId <= 0) {
+                adminRedirect('users.php', 'error', 'Invalid customer ID.');
+            }
+
+            $changed = setCustomerActive($database_connection, $customerId, $setActive);
+
+            if (!$changed) {
+                adminRedirect('users.php', 'error', 'No changes were made to this customer.');
+            }
+
+            adminRedirect(
+                'users.php',
+                'success',
+                'Customer #' . $customerId . ' ' . ($setActive ? 'activated' : 'deactivated') . '.'
+            );
+        }
+
+        case 'set_restaurant_status': {
+            $restaurantId = (int)($_POST['restaurant_id'] ?? 0);
+            $status       = (string)($_POST['verification_status'] ?? '');
+
+            if ($restaurantId <= 0) {
+                adminRedirect('restaurants.php', 'error', 'Invalid restaurant ID.');
+            }
+
+            $allowed = ['pending', 'verified', 'denied', 'suspended'];
+            if (!in_array($status, $allowed, true)) {
+                adminRedirect('restaurants.php', 'error', 'Invalid verification status.');
+            }
+
+            $changed = setRestaurantVerificationStatus(
+                $database_connection,
+                $restaurantId,
+                $status,
+                $adminId
+            );
+
+            if (!$changed) {
+                adminRedirect('restaurants.php', 'error', 'No changes were made to this restaurant.');
+            }
+
+            adminRedirect(
+                'restaurants.php',
+                'success',
+                'Restaurant #' . $restaurantId . ' marked as ' . $status . '.'
+            );
+        }
+
+        case 'set_rider_status': {
+            $riderId = (int)($_POST['rider_id'] ?? 0);
+            $status  = (string)($_POST['verification_status'] ?? '');
+
+            if ($riderId <= 0) {
+                adminRedirect('riders.php', 'error', 'Invalid rider ID.');
+            }
+
+            $allowed = ['pending', 'verified', 'denied', 'suspended'];
+            if (!in_array($status, $allowed, true)) {
+                adminRedirect('riders.php', 'error', 'Invalid verification status.');
+            }
+
+            $changed = setRiderVerificationStatus(
+                $database_connection,
+                $riderId,
+                $status,
+                $adminId
+            );
+
+            if (!$changed) {
+                adminRedirect('riders.php', 'error', 'No changes were made to this rider.');
+            }
+
+            adminRedirect(
+                'riders.php',
+                'success',
+                'Rider #' . $riderId . ' marked as ' . $status . '.'
+            );
+        }
+
+        default:
+            adminRedirect('dashboard.php', 'error', 'Invalid action.');
+    }
+
+} catch (PDOException $e) {
+    error_log('Admin handler DB error: ' . $e->getMessage());
+    adminRedirect('dashboard.php', 'error', 'A system error occurred. Please try again.');
+} catch (Throwable $e) {
+    error_log('Admin handler error: ' . $e->getMessage());
+    adminRedirect('dashboard.php', 'error', 'An unexpected error occurred.');
 }
 ```
 
