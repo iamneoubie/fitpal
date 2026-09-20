@@ -12,11 +12,15 @@
  *
  * Both tabs post to admin-handler.php. The handler validates and
  * redirects back here with a flash message. All SQL lives in
- * admin-queries.php. This page contains no SQL.
+ * admin-queries.php. This page contains no SQL and no inline JS.
+ * The asset base travels to profile.js as a data-asset-base
+ * attribute on the .profile-page container.
  *
  * @package FitPal
- * @version 3.0 — Two-tab layout. Removed every inline style. Proper
- *                profile.css classes. Added profile.js.
+ * @version 3.1 — Removed the inline <script> that defined
+ *                window.FITPAL_ADMIN_PROFILE. The same value now
+ *                travels on .profile-page as data-asset-base and is
+ *                read by profile.js.
  */
 
 declare(strict_types=1);
@@ -47,7 +51,7 @@ if (empty($_SESSION['csrf_token'])) {
 $csrfToken = $_SESSION['csrf_token'];
 ?>
 
-<div class="content profile-page">
+<div class="content profile-page" data-asset-base="<?php echo htmlspecialchars($assetBase, ENT_QUOTES, 'UTF-8'); ?>">
     <div class="container">
 
         <!-- ============================================
@@ -306,11 +310,6 @@ $csrfToken = $_SESSION['csrf_token'];
     </div>
 </div>
 
-<script>
-window.FITPAL_ADMIN_PROFILE = {
-    assetBase: '<?php echo htmlspecialchars($assetBase, ENT_QUOTES, 'UTF-8'); ?>'
-};
-</script>
 <script src="../assets/ui/js/profile.js" defer></script>
 
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>

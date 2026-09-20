@@ -18,7 +18,11 @@
  * in the same class of browsers as the rest of the admin pages.
  *
  * @package FitPal
- * @version 1.0
+ * @version 2.0 — Reads the asset base from the .profile-page
+ *                container's data-asset-base attribute instead of
+ *                window.FITPAL_ADMIN_PROFILE. The inline <script>
+ *                that defined that global was removed from
+ *                profile.php.
  */
 
 (function () {
@@ -26,8 +30,11 @@
 
     document.addEventListener('DOMContentLoaded', function () {
 
-        var CFG = window.FITPAL_ADMIN_PROFILE || {};
-        var ASSET_BASE = CFG.assetBase || '../../shared/';
+        var profilePage = document.querySelector('.profile-page');
+        var assetBase = profilePage
+            ? (profilePage.getAttribute('data-asset-base') || '')
+            : '';
+        var ASSET_BASE = assetBase || '../../shared/';
 
         /* ============================================
          * TABS

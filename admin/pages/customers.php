@@ -10,8 +10,9 @@
  * Behavior comes from customers.js.
  *
  * @package FitPal
- * @version 3.0 — Inline styles replaced with CSS classes. Loads
- *                customers.js instead of dashboard.js.
+ * @version 3.1 — Removed inline onerror from empty-state icon and
+ *                inline onclick from modal backdrop. Backdrop now
+ *                carries data-close-url consumed by customers.js.
  */
 
 declare(strict_types=1);
@@ -144,9 +145,9 @@ function buildCustomerUrl(array $overrides = []): string
         <div class="admin-table-card">
             <?php if (empty($rows)): ?>
             <div class="admin-table-empty">
-                <div class="admin-table-empty-icon" aria-hidden="true">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt=""
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg'">
+                <div class="admin-table-empty-icon" aria-hidden="true"
+                    data-fallback-src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt="">
                 </div>
                 <p class="admin-table-empty-title">No customers found</p>
                 <p class="admin-table-empty-text">
@@ -289,7 +290,7 @@ function buildCustomerUrl(array $overrides = []): string
 <div class="admin-modal <?php echo $openCustomer ? 'is-open' : ''; ?>" id="customerDetailsModal"
     aria-hidden="<?php echo $openCustomer ? 'false' : 'true'; ?>" role="dialog">
     <div class="admin-modal-backdrop"
-        onclick="window.location.href='<?php echo htmlspecialchars(buildCustomerUrl(['open' => null]), ENT_QUOTES, 'UTF-8'); ?>'">
+        data-close-url="<?php echo htmlspecialchars(buildCustomerUrl(['open' => null]), ENT_QUOTES, 'UTF-8'); ?>">
     </div>
     <div class="admin-modal-panel admin-modal-panel-wide" role="document">
         <div class="admin-modal-header">

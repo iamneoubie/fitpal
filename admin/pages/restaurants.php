@@ -5,12 +5,15 @@
  * Paginated restaurant list with verification tabs, search, and a
  * detail modal that shows branches and account holders.
  *
- * No inline CSS. Styles come from restaurants.css. Behavior comes
- * from restaurants.js.
+ * No inline CSS. No inline JS. Styles come from restaurants.css.
+ * Behavior comes from restaurants.js.
  *
  * @package FitPal
- * @version 3.0 — Inline styles replaced with CSS classes. Loads
- *                restaurants.js instead of dashboard.js.
+ * @version 3.1 — Removed inline onerror from empty-state icon and
+ *                inline onclick from modal backdrop. Icon fallback
+ *                travels as data-fallback-src; backdrop close URL
+ *                travels as data-close-url. Both consumed by
+ *                restaurants.js.
  */
 
 declare(strict_types=1);
@@ -152,9 +155,9 @@ function buildRestaurantUrl(array $overrides = []): string
         <div class="admin-table-card">
             <?php if (empty($rows)): ?>
             <div class="admin-table-empty">
-                <div class="admin-table-empty-icon" aria-hidden="true">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt=""
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/restaurant.svg'">
+                <div class="admin-table-empty-icon" aria-hidden="true"
+                    data-fallback-src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt="">
                 </div>
                 <p class="admin-table-empty-title">No restaurants found</p>
                 <p class="admin-table-empty-text">
@@ -284,7 +287,7 @@ function buildRestaurantUrl(array $overrides = []): string
 <div class="admin-modal <?php echo $openRestaurant ? 'is-open' : ''; ?>" id="restaurantDetailsModal"
     aria-hidden="<?php echo $openRestaurant ? 'false' : 'true'; ?>" role="dialog">
     <div class="admin-modal-backdrop"
-        onclick="window.location.href='<?php echo htmlspecialchars(buildRestaurantUrl(['open' => null]), ENT_QUOTES, 'UTF-8'); ?>'">
+        data-close-url="<?php echo htmlspecialchars(buildRestaurantUrl(['open' => null]), ENT_QUOTES, 'UTF-8'); ?>">
     </div>
     <div class="admin-modal-panel admin-modal-panel-wide" role="document">
         <div class="admin-modal-header">

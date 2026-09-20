@@ -1,18 +1,38 @@
 /**
  * FitPal Admin Dashboard JavaScript
  *
+ * - Chart bar height application from data-bar-height
  * - Chart tooltip on hover/focus/tap
  * - Modal open/close with body scroll lock
  * - Escape key closes the active modal
  *
  * @package FitPal
- * @version 2.0
+ * @version 3.0 — Applies chart bar heights from data-bar-height so
+ *                dashboard.php no longer emits an inline style
+ *                attribute. Bar heights are set before tooltip
+ *                wiring so tooltip positioning sees final geometry.
  */
 
 (function () {
     'use strict';
 
     document.addEventListener('DOMContentLoaded', function () {
+
+        // ============================================
+        // CHART BAR HEIGHTS
+        // ============================================
+        // Per-bar geometry travels as data-bar-height from PHP. This
+        // loop applies it before the tooltip wiring runs so the
+        // tooltip's bounding-rect math reflects the final heights.
+        document.querySelectorAll('.admin-chart-bar[data-bar-height]').forEach(function (bar) {
+            var value = bar.getAttribute('data-bar-height');
+            if (value === null || value === '') return;
+
+            var pct = parseFloat(value);
+            if (isNaN(pct)) return;
+
+            bar.style.height = pct + '%';
+        });
 
         // ============================================
         // CHART TOOLTIP

@@ -7,12 +7,15 @@
  * Documents, and Deliveries. Documents uses its own 5-per-page
  * pagination so profile picture and license photos are readable.
  *
- * No inline CSS. Styles come from riders.css. Behavior comes from
- * riders.js.
+ * No inline CSS. No inline JS. Styles come from riders.css. Behavior
+ * comes from riders.js.
  *
  * @package FitPal
- * @version 3.0 — Inline styles replaced with CSS classes. Loads
- *                riders.js instead of dashboard.js.
+ * @version 3.2 — Modal tab icons swapped to existing assets that
+ *                better match their panels: riding-fill.svg for the
+ *                Information tab, id-card-line.svg for the Documents
+ *                tab. Deliveries tab keeps order.svg. No structural
+ *                change to the modal.
  */
 
 declare(strict_types=1);
@@ -167,9 +170,9 @@ function riderMediaUrl(string $assetBase, string $relPath): string
         <div class="admin-table-card">
             <?php if (empty($rows)): ?>
             <div class="admin-table-empty">
-                <div class="admin-table-empty-icon" aria-hidden="true">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt=""
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/order.svg'">
+                <div class="admin-table-empty-icon" aria-hidden="true"
+                    data-fallback-src="<?php echo $assetBase; ?>assets/images/icons/order.svg">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt="">
                 </div>
                 <p class="admin-table-empty-title">No riders found</p>
                 <p class="admin-table-empty-text">
@@ -195,7 +198,7 @@ function riderMediaUrl(string $assetBase, string $relPath): string
                     <div class="admin-cell-avatar">
                         <?php if ($picUrl !== ''): ?>
                         <img src="<?php echo htmlspecialchars($picUrl, ENT_QUOTES, 'UTF-8'); ?>" alt=""
-                            onerror="this.onerror=null; this.style.display='none'; this.parentNode.textContent='<?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>';">
+                            data-initial="<?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>">
                         <?php else: ?>
                         <?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>
                         <?php endif; ?>
@@ -319,7 +322,7 @@ function riderMediaUrl(string $assetBase, string $relPath): string
 <div class="admin-modal <?php echo $openRider ? 'is-open' : ''; ?>" id="riderDetailsModal"
     aria-hidden="<?php echo $openRider ? 'false' : 'true'; ?>" role="dialog">
     <div class="admin-modal-backdrop"
-        onclick="window.location.href='<?php echo htmlspecialchars(buildRiderUrl(['open' => null, 'doc_page' => null]), ENT_QUOTES, 'UTF-8'); ?>'">
+        data-close-url="<?php echo htmlspecialchars(buildRiderUrl(['open' => null, 'doc_page' => null]), ENT_QUOTES, 'UTF-8'); ?>">
     </div>
     <div class="admin-modal-panel admin-modal-panel-wide" role="document">
         <div class="admin-modal-header">
@@ -359,13 +362,13 @@ function riderMediaUrl(string $assetBase, string $relPath): string
 
         <div class="admin-modal-tabs">
             <button type="button" class="admin-modal-tab active" data-tab-target="rider-panel-info">
-                <img src="<?php echo $assetBase; ?>assets/images/icons/file-user-line.svg" alt="" width="14" height="14"
+                <img src="<?php echo $assetBase; ?>assets/images/icons/riding-fill.svg" alt="" width="14" height="14"
                     class="btn-icon-no-filter">
                 <span>Information</span>
             </button>
             <button type="button" class="admin-modal-tab" data-tab-target="rider-panel-documents">
-                <img src="<?php echo $assetBase; ?>assets/images/icons/file-image-line.svg" alt="" width="14"
-                    height="14" class="btn-icon-no-filter">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/id-card-line.svg" alt="" width="14" height="14"
+                    class="btn-icon-no-filter">
                 <span>Documents</span>
                 <span class="tab-count"><?php echo $totalDocs; ?></span>
             </button>
@@ -524,7 +527,7 @@ function riderMediaUrl(string $assetBase, string $relPath): string
             <div class="admin-modal-tab-panel" id="rider-panel-documents">
                 <?php if ($totalDocs === 0): ?>
                 <div class="admin-doc-empty">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/file-image-line.svg" alt="">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/id-card-line.svg" alt="">
                     <span>No documents on file.</span>
                 </div>
                 <?php else: ?>
@@ -539,8 +542,7 @@ function riderMediaUrl(string $assetBase, string $relPath): string
                     </div>
                     <div class="admin-doc-image">
                         <img src="<?php echo htmlspecialchars(riderMediaUrl($assetBase, (string)$openRider['profile_picture']), ENT_QUOTES, 'UTF-8'); ?>"
-                            alt="Rider formal photo"
-                            onerror="this.onerror=null; this.parentNode.innerHTML='<div class=&quot;admin-doc-empty&quot;><span>Image could not be loaded.</span></div>';">
+                            alt="Rider formal photo">
                     </div>
                 </div>
                 <?php endif; ?>
@@ -558,8 +560,7 @@ function riderMediaUrl(string $assetBase, string $relPath): string
                     </div>
                     <div class="admin-doc-image">
                         <img src="<?php echo htmlspecialchars(riderMediaUrl($assetBase, (string)$doc['drivers_license']), ENT_QUOTES, 'UTF-8'); ?>"
-                            alt="Driver's license"
-                            onerror="this.onerror=null; this.parentNode.innerHTML='<div class=&quot;admin-doc-empty&quot;><span>Image could not be loaded.</span></div>';">
+                            alt="Driver's license">
                     </div>
                 </div>
                 <?php endforeach; ?>

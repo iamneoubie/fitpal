@@ -1,5 +1,5 @@
 filesToCheck = [
-    # File Structure
+    # ===== File Structure =====
     "/logs/output/project_structure.md",
     "/sql/database.sql",
     "/sql/sample/seed-data.sql",
@@ -21,6 +21,7 @@ filesToCheck = [
     "/admin/assets/ui/js/customers.js",
     "/admin/assets/ui/js/dashboard.js",
     "/admin/assets/ui/js/header.js",
+    "/admin/assets/ui/js/logout.js",
     "/admin/assets/ui/js/profile.js",
     "/admin/assets/ui/js/restaurants.js",
     "/admin/assets/ui/js/riders.js",
@@ -67,6 +68,7 @@ filesToCheck = [
     "/customer/assets/ui/js/checkout.js",
     "/customer/assets/ui/js/dashboard.js",
     "/customer/assets/ui/js/header.js",
+    "/customer/assets/ui/js/logout.js",
     "/customer/assets/ui/js/menu.js",
     "/customer/assets/ui/js/orders.js",
     "/customer/assets/ui/js/product-detail.js",
@@ -226,4 +228,11 @@ filesToCheck = [
     "/shared/pages/contact.php",
     "/shared/pages/privacy-policy.php",
     "/shared/pages/terms-conditions.php",
+
+    # ===== test/customer =====
+    "/test/customer/cart-test.php",
+    "/test/customer/menu-test.php",
+    "/test/customer/product-detail-test.php",
+    "/test/customer/sign-in-test.php",
+    "/test/customer/sign-up-test.php",
 ]

@@ -5,16 +5,14 @@
  * Overview of platform health and the moderation queue.
  *
  * All SQL lives in admin-queries.php. This page contains no SQL,
- * no inline CSS, and no inline JS. The single style="" attribute on
- * the chart bars is the same server-computed geometry the customer
- * dashboard uses — a per-row value that cannot live in a static
- * stylesheet.
+ * no inline CSS, and no inline JS. Per-bar chart geometry travels
+ * as data-bar-height and is applied by dashboard.js on load, so no
+ * style attribute ever appears in the markup.
  *
  * @package FitPal
- * @version 4.1 — Removed every onerror fallback. Every referenced
- *                SVG exists in shared/assets/images/icons/, so the
- *                fallback chain was dead code and violated the
- *                no-inline-JS rule.
+ * @version 4.2 — Removed the last inline style attribute. Chart bar
+ *                heights now travel as data-bar-height and are
+ *                applied by dashboard.js.
  */
 
 declare(strict_types=1);
@@ -206,7 +204,7 @@ $csrfToken = $_SESSION['csrf_token'];
                                     data-amount="<?php echo htmlspecialchars(formatAdminCurrency($day['amount']), ENT_QUOTES, 'UTF-8'); ?>">
                                     <div class="admin-chart-bar-track">
                                         <div class="admin-chart-bar <?php echo $isToday ? 'is-today' : ''; ?> <?php echo $hasValue ? '' : 'is-empty'; ?>"
-                                            style="height: <?php echo $pct; ?>%" tabindex="0"
+                                            data-bar-height="<?php echo $pct; ?>" tabindex="0"
                                             aria-label="<?php echo htmlspecialchars($day['label'] . ' ' . formatAdminCurrency($day['amount']), ENT_QUOTES, 'UTF-8'); ?>">
                                         </div>
                                     </div>

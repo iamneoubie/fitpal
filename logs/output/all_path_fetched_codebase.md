@@ -2,441 +2,15 @@
 
 **Preset:** all_path
 
-**Generated:** 2026-09-21 00:38:21
+**Generated:** 2026-09-21 01:19:29
 
 ---
 
 ## File: `fitpal/logs/output/project_structure.md`
 
-**Status:** `FOUND`
+**Status:** `MISSING`
 
-```markdown
-# Web Project Structure
-
-**Project:** fitpal
-**Generated:** 2026-09-21 00:37:16
-**Mode:** all
-
-```
-fitpal/
-│
-├── admin/
-│   ├── assets/
-│   │   ├── css/
-│   │   │   ├── admin-tables.css
-│   │   │   ├── customers.css
-│   │   │   ├── dashboard.css
-│   │   │   ├── header.css
-│   │   │   ├── profile.css
-│   │   │   ├── restaurants.css
-│   │   │   ├── riders.css
-│   │   │   └── sign-in.css
-│   │   └── ui/
-│   │       └── js/
-│   │           ├── customers.js
-│   │           ├── dashboard.js
-│   │           ├── header.js
-│   │           ├── profile.js
-│   │           ├── restaurants.js
-│   │           ├── riders.js
-│   │           └── sign-in.js
-│   ├── backend/
-│   │   ├── database/
-│   │   │   ├── admin-connect.php
-│   │   │   └── admin-queries.php
-│   │   └── handlers/
-│   │       ├── admin-handler.php
-│   │       ├── sign-in-handler.php
-│   │       └── sign-out-handler.php
-│   ├── includes/
-│   │   └── header.php
-│   └── pages/
-│       ├── customers.php
-│       ├── dashboard.php
-│       ├── profile.php
-│       ├── restaurants.php
-│       ├── riders.php
-│       └── sign-in.php
-├── customer/
-│   ├── assets/
-│   │   ├── css/
-│   │   │   ├── cart.css
-│   │   │   ├── checkout.css
-│   │   │   ├── dashboard.css
-│   │   │   ├── header.css
-│   │   │   ├── menu-filter.css
-│   │   │   ├── menu-product.css
-│   │   │   ├── menu.css
-│   │   │   ├── orders.css
-│   │   │   ├── product-detail.css
-│   │   │   ├── profile.css
-│   │   │   ├── queue-panel.css
-│   │   │   ├── sign-in.css
-│   │   │   ├── sign-up.css
-│   │   │   └── wallet.css
-│   │   └── ui/
-│   │       └── js/
-│   │           ├── cart.js
-│   │           ├── checkout.js
-│   │           ├── dashboard.js
-│   │           ├── header.js
-│   │           ├── menu.js
-│   │           ├── orders.js
-│   │           ├── product-detail.js
-│   │           ├── profile.js
-│   │           ├── queue-panel.js
-│   │           ├── sign-in.js
-│   │           ├── sign-out.js
-│   │           ├── sign-up.js
-│   │           └── wallet.js
-│   ├── backend/
-│   │   ├── database/
-│   │   │   ├── address-queries.php
-│   │   │   ├── branch-queries.php
-│   │   │   ├── cart-queries.php
-│   │   │   ├── customer-connect.php
-│   │   │   ├── customer-queries.php
-│   │   │   ├── dashboard-queries.php
-│   │   │   ├── fee-queries.php
-│   │   │   ├── order-queries.php
-│   │   │   ├── product-queries.php
-│   │   │   ├── queue-queries.php
-│   │   │   ├── rider-queries.php
-│   │   │   └── wallet-queries.php
-│   │   └── handlers/
-│   │       ├── address-handler.php
-│   │       ├── cart-handler.php
-│   │       ├── checkout-handler.php
-│   │       ├── feedback-handler.php
-│   │       ├── get-branch-handler.php
-│   │       ├── order-handler.php
-│   │       ├── place-order-handler.php
-│   │       ├── queue-handler.php
-│   │       ├── sign-in-handler.php
-│   │       ├── sign-out-handler.php
-│   │       ├── sign-up-handler.php
-│   │       └── wallet-handler.php
-│   ├── includes/
-│   │   └── header.php
-│   └── pages/
-│       ├── cart.php
-│       ├── checkout.php
-│       ├── dashboard.php
-│       ├── menu.php
-│       ├── orders.php
-│       ├── product-detail.php
-│       ├── profile.php
-│       ├── sign-in.php
-│       ├── sign-up.php
-│       └── wallet.php
-├── logs/
-│   ├── content-fetcher-configuration/
-│   │   ├── all_path.py
-│   │   └── restaurant.py
-│   ├── instructions/
-│   │   ├── test-create-guide.md
-│   │   └── updating-fetcher-guide.md
-│   ├── output/
-│   │   ├── all_path_fetched_codebase.md
-│   │   ├── project_structure.md
-│   │   └── restaurant_fetched_codebase.md
-│   ├── content-fetcher.py
-│   └── tree-mapper.py
-├── restaurant/
-│   ├── assets/
-│   │   ├── css/
-│   │   │   ├── dashboard.css
-│   │   │   ├── header.css
-│   │   │   ├── profile.css
-│   │   │   ├── sign-in.css
-│   │   │   └── sign-up.css
-│   │   └── ui/
-│   │       └── js/
-│   │           ├── dashboard.js
-│   │           ├── header.js
-│   │           ├── logout.js
-│   │           ├── profile.js
-│   │           ├── sign-in.js
-│   │           └── sign-up.js
-│   ├── backend/
-│   │   ├── database/
-│   │   │   ├── restaurant-connect.php
-│   │   │   └── restaurant-queries.php
-│   │   └── handlers/
-│   │       ├── profile-handler.php
-│   │       ├── sign-in-handler.php
-│   │       ├── sign-out-handler.php
-│   │       └── sign-up-handler.php
-│   ├── includes/
-│   │   └── header.php
-│   └── pages/
-│       ├── dashboard.php
-│       ├── profile.php
-│       ├── sign-in.php
-│       └── sign-up.php
-├── rider/
-│   ├── assets/
-│   │   ├── css/
-│   │   │   ├── admin-tables.css
-│   │   │   ├── dashboard.css
-│   │   │   ├── deliveries.css
-│   │   │   ├── earnings.css
-│   │   │   ├── header.css
-│   │   │   ├── profile.css
-│   │   │   ├── sign-in.css
-│   │   │   └── sign-up.css
-│   │   └── ui/
-│   │       └── js/
-│   │           ├── dashboard.js
-│   │           ├── deliveries.js
-│   │           ├── earnings.js
-│   │           ├── header.js
-│   │           ├── logout.js
-│   │           ├── profile.js
-│   │           ├── sign-in.js
-│   │           └── sign-up.js
-│   ├── backend/
-│   │   ├── database/
-│   │   │   ├── rider-connect.php
-│   │   │   └── rider-queries.php
-│   │   └── handlers/
-│   │       ├── admin-handler.php
-│   │       ├── message-handler.php
-│   │       ├── rider-handler.php
-│   │       ├── sign-in-handler.php
-│   │       ├── sign-out-handler.php
-│   │       └── sign-up-handler.php
-│   ├── includes/
-│   │   └── header.php
-│   └── pages/
-│       ├── dashboard.php
-│       ├── deliveries.php
-│       ├── earnings.php
-│       ├── profile.php
-│       ├── sign-in.php
-│       └── sign-up.php
-├── shared/
-│   ├── assets/
-│   │   ├── css/
-│   │   │   ├── about.css
-│   │   │   ├── contact.css
-│   │   │   ├── database-connect.css
-│   │   │   ├── footer.css
-│   │   │   ├── global.css
-│   │   │   ├── header.css
-│   │   │   ├── landing.css
-│   │   │   ├── privacy-policy.css
-│   │   │   └── terms-conditions.css
-│   │   ├── images/
-│   │   │   ├── brand/
-│   │   │   │   ├── Logo.ico
-│   │   │   │   └── Logo.png
-│   │   │   ├── icons/
-│   │   │   │   ├── about-empty.svg
-│   │   │   │   ├── about-fill.svg
-│   │   │   │   ├── add-circle-empty.svg
-│   │   │   │   ├── add-line.svg
-│   │   │   │   ├── add-to-queue.svg
-│   │   │   │   ├── add.svg
-│   │   │   │   ├── arrow-drop-down-line.svg
-│   │   │   │   ├── arrow-drop-left-line (1).svg
-│   │   │   │   ├── arrow-drop-left-line.svg
-│   │   │   │   ├── arrow-drop-right-line.svg
-│   │   │   │   ├── arrow-drop-up-line.svg
-│   │   │   │   ├── arrow-go-back-line.svg
-│   │   │   │   ├── arrow-left-circle-line.svg
-│   │   │   │   ├── arrow-left-line.svg
-│   │   │   │   ├── arrow-left-long-line.svg
-│   │   │   │   ├── arrow-left-s-line.svg
-│   │   │   │   ├── arrow-right-long-line.svg
-│   │   │   │   ├── arrow-right-s-line.svg
-│   │   │   │   ├── arrow-turn-back-line.svg
-│   │   │   │   ├── bill-fill.svg
-│   │   │   │   ├── bill-line.svg
-│   │   │   │   ├── building.svg
-│   │   │   │   ├── cancel.svg
-│   │   │   │   ├── car-fill.svg
-│   │   │   │   ├── car-line.svg
-│   │   │   │   ├── cart-arrow-downsvg.svg
-│   │   │   │   ├── cart-arrow-up.svg
-│   │   │   │   ├── cart-plus.svg
-│   │   │   │   ├── cart-shopping-fast.svg
-│   │   │   │   ├── cart-shopping.svg
-│   │   │   │   ├── chart-line-up.svg
-│   │   │   │   ├── close-circle-fill.svg
-│   │   │   │   ├── close-circle-line.svg
-│   │   │   │   ├── close-fill.svg
-│   │   │   │   ├── close-large-fill.svg
-│   │   │   │   ├── close-large-line.svg
-│   │   │   │   ├── close-line.svg
-│   │   │   │   ├── coin-fill.svg
-│   │   │   │   ├── coin-line.svg
-│   │   │   │   ├── community-general.svg
-│   │   │   │   ├── contact-us-fill.svg
-│   │   │   │   ├── contact-us-line.svg
-│   │   │   │   ├── draggable.svg
-│   │   │   │   ├── dropdown-list.svg
-│   │   │   │   ├── edit.svg
-│   │   │   │   ├── equalizer-line.svg
-│   │   │   │   ├── facebook-mono.svg
-│   │   │   │   ├── facebook.svg
-│   │   │   │   ├── file-image-fill.svg
-│   │   │   │   ├── file-image-line.svg
-│   │   │   │   ├── file-user-fill.svg
-│   │   │   │   ├── file-user-line.svg
-│   │   │   │   ├── file-warning-fill.svg
-│   │   │   │   ├── fill-form.svg
-│   │   │   │   ├── focus-line.svg
-│   │   │   │   ├── folder-user-fill.svg
-│   │   │   │   ├── folder-user-line.svg
-│   │   │   │   ├── funds-box-analytic-fill.svg
-│   │   │   │   ├── funds-circle-analytic-fill.svg
-│   │   │   │   ├── gallery-fill.svg
-│   │   │   │   ├── github-mono.svg
-│   │   │   │   ├── github.svg
-│   │   │   │   ├── hamburger-menu.svg
-│   │   │   │   ├── hand-coin-fill.svg
-│   │   │   │   ├── hand-coin-line.svg
-│   │   │   │   ├── history-line.svg
-│   │   │   │   ├── id-card-fill.svg
-│   │   │   │   ├── id-card-line.svg
-│   │   │   │   ├── image-edit-fill.svg
-│   │   │   │   ├── image-fill.svg
-│   │   │   │   ├── image-line.svg
-│   │   │   │   ├── image-upload-fill.svg
-│   │   │   │   ├── info-card-fill.svg
-│   │   │   │   ├── info-card-line.svg
-│   │   │   │   ├── information-fill.svg
-│   │   │   │   ├── instagram-mono.svg
-│   │   │   │   ├── instagram.svg
-│   │   │   │   ├── list-settings-fill.svg
-│   │   │   │   ├── list-settings-line.svg
-│   │   │   │   ├── list-view.svg
-│   │   │   │   ├── location-fill.svg
-│   │   │   │   ├── location-target-fill.svg
-│   │   │   │   ├── logoutsvg.svg
-│   │   │   │   ├── mail.svg
-│   │   │   │   ├── menu-search-fill.svg
-│   │   │   │   ├── more-horizonal-fill.svg
-│   │   │   │   ├── more-horizontal-line.svg
-│   │   │   │   ├── more-vertical-fill.svg
-│   │   │   │   ├── more-vertical-line.svg
-│   │   │   │   ├── multi-image-fill.svg
-│   │   │   │   ├── order.svg
-│   │   │   │   ├── package.svg
-│   │   │   │   ├── pages-line.svg
-│   │   │   │   ├── password-hide.svg
-│   │   │   │   ├── password-unhide.svg
-│   │   │   │   ├── people-team.svg
-│   │   │   │   ├── phone-fill.svg
-│   │   │   │   ├── phone-line.svg
-│   │   │   │   ├── profile.svg
-│   │   │   │   ├── qr-code-fill.svg
-│   │   │   │   ├── qr-code-line.svg
-│   │   │   │   ├── qr-scan-fill.svg
-│   │   │   │   ├── qr-scan-line.svg
-│   │   │   │   ├── question-fill.svg
-│   │   │   │   ├── question-line.svg
-│   │   │   │   ├── remove-circle-fillsvg
-│   │   │   │   ├── remove-circle-line.svg
-│   │   │   │   ├── remove-fill.svg
-│   │   │   │   ├── remove-large-fill.svg
-│   │   │   │   ├── remove-large-line.svg
-│   │   │   │   ├── remove-line.svg
-│   │   │   │   ├── reset.svg
-│   │   │   │   ├── restaurant-fill.svg
-│   │   │   │   ├── restaurant.svg
-│   │   │   │   ├── riding-fill.svg
-│   │   │   │   ├── riding-line.svg
-│   │   │   │   ├── save-empty.svg
-│   │   │   │   ├── save-fill.svg
-│   │   │   │   ├── search-line.svg
-│   │   │   │   ├── star-empty.svg
-│   │   │   │   ├── star-fill.svg
-│   │   │   │   ├── subtract-fill.svg
-│   │   │   │   ├── subtract-line.svg
-│   │   │   │   ├── target-fill.svg
-│   │   │   │   ├── taxi-fill.svg
-│   │   │   │   ├── taxi-line.svg
-│   │   │   │   ├── time-fill.svg
-│   │   │   │   ├── time-update.svg
-│   │   │   │   ├── trash.svg
-│   │   │   │   ├── update.svg
-│   │   │   │   ├── updatesvg.svg
-│   │   │   │   ├── user-minus-fill.svg
-│   │   │   │   ├── user-minus-line.svg
-│   │   │   │   ├── user-profile-circle.svg
-│   │   │   │   ├── verified-badge-fill.svg
-│   │   │   │   ├── verified-badge-line.svg
-│   │   │   │   ├── verified-empty.svg
-│   │   │   │   ├── verified-fill.svg
-│   │   │   │   ├── wallet-fill.svg
-│   │   │   │   ├── wallet-line.svg
-│   │   │   │   ├── x-formerly-twitter.svg
-│   │   │   │   ├── youtube-mono.svg
-│   │   │   │   └── youtube.svg
-│   │   │   ├── payment/
-│   │   │   │   └── QR.jpg
-│   │   │   ├── rider-image/
-│   │   │   │   └── rider.png
-│   │   │   └── showcase/
-│   │   │       └── hero-image.png
-│   │   └── ui/
-│   │       └── js/
-│   │           ├── contact.js
-│   │           └── header.js
-│   ├── backend/
-│   │   └── database/
-│   │       ├── database-connect.php
-│   │       └── landing-queries.php
-│   ├── includes/
-│   │   ├── footer.php
-│   │   ├── header.php
-│   │   └── view-helpers.php
-│   ├── pages/
-│   │   ├── about.php
-│   │   ├── contact.php
-│   │   ├── privacy-policy.php
-│   │   └── terms-conditions.php
-│   └── uploads/
-├── sql/
-│   ├── sample/
-│   │   └── seed-data.sql
-│   └── database.sql
-├── test/
-│   └── customer/
-│       ├── cart-test.php
-│       ├── menu-test.php
-│       ├── product-detail-test.php
-│       ├── sign-in-test.php
-│       └── sign-up-test.php
-├── .gitignore
-├── index.php
-├── LICENSE
-└── readme.md
-```
-
-## Summary
-
-| File Type | Count |
-|-----------|-------|
-| HTML Files | 0 |
-| PHP Files | 88 |
-| CSS Files | 44 |
-| JavaScript Files | 36 |
-| JSON Files | 0 |
-| Text/Markdown | 6 |
-| Image Files | 147 |
-| Other Files | 9 |
-
-**Total Directories:** 64
-**Total Files:** 329
-
----
-
-*Generated by Web Project Tree Mapper*
-*Script: tree-mapper.py*
-```
+*[File not found]*
 
 ---
 
@@ -10841,9 +10415,27 @@ a.admin-stat-card:hover .admin-stat-arrow-img {
  *
  * Mirrors customer and rider headers. Uses global CSS variables.
  *
+ * Reserves the scrollbar gutter on <html> so hiding the body
+ * scrollbar when the logout modal opens does not shift the page.
+ * Same guard used by customer/assets/css/header.css and
+ * rider/assets/css/header.css.
+ *
  * @package FitPal
- * @version 2.0
+ * @version 3.0 — Logout confirmation modal styles added;
+ *                scrollbar-gutter: stable added.
  */
+
+/* Reserve the scrollbar gutter permanently. With this in place, the
+   viewport's usable width is identical whether a scrollbar is visible
+   or not, so nothing reflows when the body scrollbar is hidden by a
+   modal scroll lock. */
+html {
+    scrollbar-gutter: stable;
+}
+
+/* ============================================
+   HEADER HEIGHTS
+   ============================================ */
 
 .rider-header,
 .admin-header {
@@ -10858,7 +10450,10 @@ a.admin-stat-card:hover .admin-stat-arrow-img {
     height: 100%;
 }
 
-/* Navigation links */
+/* ============================================
+   NAVIGATION LINKS
+   ============================================ */
+
 .admin-header .nav-link {
     font-weight: 500;
     color: var(--gray-600);
@@ -10892,7 +10487,10 @@ a.admin-stat-card:hover .admin-stat-arrow-img {
     border-radius: var(--radius-full);
 }
 
-/* Buttons match shared header exactly */
+/* ============================================
+   BUTTONS — match shared header exactly
+   ============================================ */
+
 .admin-header .btn {
     display: inline-flex;
     align-items: center;
@@ -10909,6 +10507,7 @@ a.admin-stat-card:hover .admin-stat-arrow-img {
     border: 2px solid transparent;
     cursor: pointer;
     white-space: nowrap;
+    font-family: inherit;
 }
 
 .admin-header .btn-sm {
@@ -10955,7 +10554,10 @@ a.admin-stat-card:hover .admin-stat-arrow-img {
     min-height: 32px;
 }
 
-/* Mobile toggle */
+/* ============================================
+   MOBILE TOGGLE
+   ============================================ */
+
 .menu-toggle {
     display: none;
     flex-direction: column;
@@ -10971,7 +10573,9 @@ a.admin-stat-card:hover .admin-stat-arrow-img {
     -webkit-tap-highlight-color: transparent;
 }
 
-.menu-toggle:hover { background: var(--gray-50); }
+.menu-toggle:hover {
+    background: var(--gray-50);
+}
 
 .menu-icon {
     display: flex;
@@ -10990,11 +10594,23 @@ a.admin-stat-card:hover .admin-stat-arrow-img {
     transform-origin: center;
 }
 
-.menu-toggle.active .bar:nth-child(1) { transform: translateY(7px) rotate(45deg); }
-.menu-toggle.active .bar:nth-child(2) { opacity: 0; transform: scaleX(0); }
-.menu-toggle.active .bar:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+.menu-toggle.active .bar:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+}
 
-/* Mobile overlay */
+.menu-toggle.active .bar:nth-child(2) {
+    opacity: 0;
+    transform: scaleX(0);
+}
+
+.menu-toggle.active .bar:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+}
+
+/* ============================================
+   MOBILE OVERLAY
+   ============================================ */
+
 .mobile-overlay {
     position: fixed;
     top: 70px;
@@ -11015,7 +10631,10 @@ a.admin-stat-card:hover .admin-stat-arrow-img {
     will-change: opacity;
 }
 
-/* Mobile nav */
+/* ============================================
+   MOBILE NAV
+   ============================================ */
+
 .mobile-nav {
     position: fixed;
     top: 70px;
@@ -11050,8 +10669,14 @@ a.admin-stat-card:hover .admin-stat-arrow-img {
     will-change: transform;
 }
 
-.mobile-nav::-webkit-scrollbar { display: none; }
-.mobile-nav { -ms-overflow-style: none; scrollbar-width: none; }
+.mobile-nav::-webkit-scrollbar {
+    display: none;
+}
+
+.mobile-nav {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
 
 .mobile-nav-list {
     list-style: none;
@@ -11062,7 +10687,10 @@ a.admin-stat-card:hover .admin-stat-arrow-img {
     gap: 2px;
 }
 
-.mobile-nav-item { margin: 0; padding: 0; }
+.mobile-nav-item {
+    margin: 0;
+    padding: 0;
+}
 
 .mobile-nav-link {
     display: flex;
@@ -11078,6 +10706,11 @@ a.admin-stat-card:hover .admin-stat-arrow-img {
     text-align: center;
     width: 100%;
     box-sizing: border-box;
+    /* Reset native button appearance for the logout button variant */
+    font-family: inherit;
+    border: none;
+    background: none;
+    cursor: pointer;
 }
 
 .mobile-nav-link:hover {
@@ -11095,6 +10728,10 @@ a.admin-stat-card:hover .admin-stat-arrow-img {
     background: linear-gradient(to right, transparent, var(--gray-200) 20%, var(--gray-200) 80%, transparent);
     margin: var(--spacing-3) var(--spacing-2);
 }
+
+/* ============================================
+   MOBILE USER GREETING
+   ============================================ */
 
 .mobile-user-greeting {
     display: flex;
@@ -11132,6 +10769,10 @@ a.admin-stat-card:hover .admin-stat-arrow-img {
     color: var(--text);
 }
 
+/* ============================================
+   MOBILE NAV — SPECIAL LINKS
+   ============================================ */
+
 .mobile-nav-link.mobile-login {
     color: var(--primary);
     font-weight: 600;
@@ -11156,7 +10797,10 @@ a.admin-stat-card:hover .admin-stat-arrow-img {
     color: var(--danger);
 }
 
-/* Desktop user circle */
+/* ============================================
+   DESKTOP USER CIRCLE
+   ============================================ */
+
 .user-profile-circle {
     width: 36px;
     height: 36px;
@@ -11192,9 +10836,18 @@ a.admin-stat-card:hover .admin-stat-arrow-img {
     filter: brightness(0) saturate(100%) invert(100%);
 }
 
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
 @media (max-width: 992px) {
-    .admin-header .header-nav { display: none; }
-    .menu-toggle { display: flex; }
+    .admin-header .header-nav {
+        display: none;
+    }
+
+    .menu-toggle {
+        display: flex;
+    }
 }
 
 @media (max-width: 768px) {
@@ -11203,14 +10856,22 @@ a.admin-stat-card:hover .admin-stat-arrow-img {
         min-height: 60px;
         max-height: 60px;
     }
-    .admin-header .logo-text { font-size: var(--font-size-base); }
-    .admin-header .logo-image { height: 32px; }
+
+    .admin-header .logo-text {
+        font-size: var(--font-size-base);
+    }
+
+    .admin-header .logo-image {
+        height: 32px;
+    }
+
     .mobile-nav {
         top: 60px;
         height: calc(100vh - 60px);
         width: 280px;
         padding: var(--spacing-4) var(--spacing-3);
     }
+
     .mobile-overlay {
         top: 60px;
         height: calc(100vh - 60px);
@@ -11218,17 +10879,177 @@ a.admin-stat-card:hover .admin-stat-arrow-img {
 }
 
 @media (max-width: 576px) {
-    .mobile-user-avatar { width: 38px; height: 38px; }
-    .mobile-user-avatar .user-initial-large { font-size: 17px; }
-    .mobile-user-name { font-size: var(--font-size-sm); }
+    .mobile-user-avatar {
+        width: 38px;
+        height: 38px;
+    }
+
+    .mobile-user-avatar .user-initial-large {
+        font-size: 17px;
+    }
+
+    .mobile-user-name {
+        font-size: var(--font-size-sm);
+    }
+
     .mobile-nav {
         width: 100%;
         max-width: 100%;
         padding: var(--spacing-4) var(--spacing-3);
     }
+
     .mobile-nav-link {
         padding: var(--spacing-3) var(--spacing-3);
         font-size: var(--font-size-base);
+    }
+}
+
+/* ============================================
+   LOGOUT CONFIRMATION MODAL
+   ============================================ */
+
+.logout-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.logout-modal.active {
+    opacity: 1;
+}
+
+.logout-modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(5, 10, 4, 0.6);
+    cursor: pointer;
+}
+
+.logout-modal-content {
+    position: relative;
+    background: var(--white);
+    border-radius: var(--radius-xl);
+    padding: 32px 24px 24px;
+    max-width: 420px;
+    width: 100%;
+    text-align: center;
+    box-shadow: var(--shadow-xl);
+    transform: scale(0.95) translateY(-10px);
+    opacity: 0;
+    transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s ease;
+    box-sizing: border-box;
+}
+
+.logout-modal.active .logout-modal-content {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+}
+
+.logout-modal-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 16px;
+    background: rgba(220, 53, 69, 0.1);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.logout-modal-icon img {
+    width: 28px;
+    height: 28px;
+    display: block;
+    filter: brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(600%) hue-rotate(330deg) brightness(90%) contrast(85%);
+}
+
+.logout-modal-title {
+    margin: 0 0 8px 0;
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--text);
+}
+
+.logout-modal-text {
+    margin: 0 0 24px 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    line-height: 1.6;
+}
+
+.logout-modal-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.logout-btn-cancel,
+.logout-btn-confirm {
+    flex: 1;
+    padding: 12px 20px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    font-family: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid transparent;
+    min-height: 46px;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.logout-btn-cancel {
+    background: #1a1a1a;
+    color: #ffffff;
+    border-color: #1a1a1a;
+}
+
+.logout-btn-cancel:hover {
+    background: #000000;
+    border-color: #000000;
+}
+
+.logout-btn-confirm {
+    background: var(--danger);
+    color: #ffffff;
+    border-color: var(--danger);
+}
+
+.logout-btn-confirm:hover {
+    background: #b91c1c;
+    border-color: #b91c1c;
+}
+
+@media (max-width: 480px) {
+    .logout-modal-content {
+        padding: 24px 18px 18px;
+    }
+
+    .logout-modal-actions {
+        flex-direction: column-reverse;
+    }
+
+    .logout-btn-cancel,
+    .logout-btn-confirm {
+        width: 100%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .logout-modal,
+    .logout-modal-content,
+    .logout-btn-cancel,
+    .logout-btn-confirm {
+        transition: none !important;
     }
 }
 ```
@@ -14829,6 +14650,80 @@ html {
 
 ---
 
+## File: `fitpal/admin/assets/ui/js/logout.js`
+
+**Status:** `FOUND`
+
+```javascript
+/**
+ * FitPal Admin Logout Confirmation
+ *
+ * Intercepts clicks on [data-logout-trigger] elements and shows a
+ * Yes/No confirmation modal. The modal's confirm anchor navigates to
+ * sign-out-handler.php. Cancel closes the modal.
+ *
+ * The modal markup is rendered by includes/header.php on every
+ * authenticated page, so this script works everywhere.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+(function () {
+    'use strict';
+
+    document.addEventListener('DOMContentLoaded', function () {
+
+        var modal = document.getElementById('logoutModal');
+        if (!modal) return;
+
+        var confirmBtn = modal.querySelector('.logout-btn-confirm');
+        var cancelNodes = modal.querySelectorAll('[data-logout-cancel]');
+        var triggers = document.querySelectorAll('[data-logout-trigger]');
+
+        function openModal() {
+            document.body.style.overflow = 'hidden';
+            modal.style.display = 'flex';
+            void modal.offsetWidth;
+            modal.classList.add('active');
+            if (confirmBtn) setTimeout(function () { confirmBtn.focus(); }, 80);
+        }
+
+        function closeModal() {
+            modal.classList.remove('active');
+            setTimeout(function () {
+                if (!modal.classList.contains('active')) {
+                    modal.style.display = 'none';
+                    document.body.style.overflow = '';
+                }
+            }, 220);
+        }
+
+        triggers.forEach(function (trigger) {
+            trigger.addEventListener('click', function (e) {
+                e.preventDefault();
+                openModal();
+            });
+        });
+
+        cancelNodes.forEach(function (node) {
+            node.addEventListener('click', function (e) {
+                e.preventDefault();
+                closeModal();
+            });
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modal.classList.contains('active')) {
+                closeModal();
+            }
+        });
+    });
+})();
+```
+
+---
+
 ## File: `fitpal/admin/assets/ui/js/profile.js`
 
 **Status:** `FOUND`
@@ -17232,14 +17127,17 @@ exit;
  *
  * Admin-specific header with conditional navigation based on login
  * status. Mirrors customer/includes/header.php and
- * rider/includes/header.php so all three roles stay consistent in
+ * rider/includes/header.php so all four roles stay consistent in
  * behavior, asset resolution, and CSS load order.
  *
+ * Logout uses a confirmation modal, matching the customer, rider,
+ * and restaurant headers. The logout buttons carry
+ * data-logout-trigger so logout.js intercepts the click and opens
+ * #logoutModal.
+ *
  * @package FitPal
- * @version 3.0 — $pageCssMap now points each list page at its own
- *                stylesheet. admin-tables.css has been retired and
- *                replaced by customers.css / restaurants.css /
- *                riders.css.
+ * @version 4.0 — Logout confirmation modal added. $pageCssMap still
+ *                points each list page at its own stylesheet.
  */
 
 declare(strict_types=1);
@@ -17395,8 +17293,9 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
                             class="profile-icon">
                         <?php endif; ?>
                     </div>
-                    <a href="../backend/handlers/sign-out-handler.php" data-signout
-                        class="btn btn-outline btn-sm logout-btn">Logout</a>
+                    <button type="button" class="btn btn-outline btn-sm logout-btn" data-logout-trigger>
+                        Logout
+                    </button>
                 </div>
 
                 <?php else: ?>
@@ -17463,8 +17362,9 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
             </li>
             <li class="mobile-nav-divider"></li>
             <li class="mobile-nav-item">
-                <a href="../backend/handlers/sign-out-handler.php" data-signout
-                    class="mobile-nav-link mobile-logout">Logout</a>
+                <button type="button" class="mobile-nav-link mobile-logout" data-logout-trigger>
+                    Logout
+                </button>
             </li>
             <?php else: ?>
             <li class="mobile-nav-item">
@@ -17484,9 +17384,32 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
         </ul>
     </nav>
 
+    <!-- ============================================
+         LOGOUT CONFIRMATION MODAL
+         ============================================ -->
+    <div class="logout-modal" id="logoutModal" style="display: none;" role="dialog" aria-modal="true"
+        aria-labelledby="logoutModalTitle">
+        <div class="logout-modal-overlay" data-logout-cancel></div>
+        <div class="logout-modal-content">
+            <div class="logout-modal-icon" aria-hidden="true">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/logoutsvg.svg" alt=""
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/information-fill.svg'">
+            </div>
+            <p class="logout-modal-title" id="logoutModalTitle">Sign out?</p>
+            <p class="logout-modal-text">You'll need to sign in again to access the admin portal.</p>
+            <div class="logout-modal-actions">
+                <button type="button" class="logout-btn-cancel" data-logout-cancel>Cancel</button>
+                <a href="../backend/handlers/sign-out-handler.php" class="logout-btn-confirm">
+                    Yes, sign out
+                </a>
+            </div>
+        </div>
+    </div>
+
     <main class="main-content" role="main">
 
         <script src="../assets/ui/js/header.js" defer></script>
+        <script src="../assets/ui/js/logout.js" defer></script>
 ```
 
 ---
@@ -23660,10 +23583,29 @@ html {
 ```css
 /**
  * FitPal Customer Header Styles
- * 
+ *
  * Customer-specific header overrides and additions.
  * Uses global CSS variables from global.css.
+ *
+ * Mirrors rider/assets/css/header.css so all authenticated roles
+ * share the same logout confirmation modal treatment.
+ *
+ * Reserves the scrollbar gutter on <html> so hiding the body
+ * scrollbar when the logout modal opens does not shift the page.
+ *
+ * @package FitPal
+ * @version 2.1 - scrollbar-gutter: stable added so the logout modal
+ *                does not reflow the page behind it.
  */
+
+/* Reserve the scrollbar gutter permanently. With this in place, the
+   viewport's usable width is identical whether a scrollbar is visible
+   or not, so nothing reflows when the body scrollbar is hidden by a
+   modal scroll lock. This is the same guard used by cart.css,
+   orders.css, and wallet.css. */
+html {
+    scrollbar-gutter: stable;
+}
 
 /* ============================================
    CUSTOMER HEADER OVERRIDES
@@ -23936,6 +23878,11 @@ html {
     text-decoration: none;
     text-align: center;
     width: 100%;
+    /* Reset native button appearance for the logout button variant */
+    font-family: inherit;
+    border: none;
+    background: none;
+    cursor: pointer;
 }
 
 .mobile-nav-link:hover {
@@ -24067,6 +24014,31 @@ html {
 }
 
 /* ============================================
+   NAV BADGE (Cart Count)
+   ============================================ */
+
+.nav-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    margin-left: 4px;
+    border-radius: var(--radius-full);
+    background: var(--primary);
+    color: var(--white);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    vertical-align: middle;
+}
+
+.mobile-nav-link .nav-badge {
+    margin-left: 6px;
+}
+
+/* ============================================
    RESPONSIVE
    ============================================ */
 
@@ -24128,32 +24100,153 @@ html {
     }
 }
 
-
-/* NEW FEATURE */
-
 /* ============================================
-   NAV BADGE (Cart Count)
+   LOGOUT CONFIRMATION MODAL
    ============================================ */
 
-.nav-badge {
+.logout-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.logout-modal.active {
+    opacity: 1;
+}
+
+.logout-modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(5, 10, 4, 0.6);
+    cursor: pointer;
+}
+
+.logout-modal-content {
+    position: relative;
+    background: var(--white);
+    border-radius: var(--radius-xl);
+    padding: 32px 24px 24px;
+    max-width: 420px;
+    width: 100%;
+    text-align: center;
+    box-shadow: var(--shadow-xl);
+    transform: scale(0.95) translateY(-10px);
+    opacity: 0;
+    transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s ease;
+    box-sizing: border-box;
+}
+
+.logout-modal.active .logout-modal-content {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+}
+
+.logout-modal-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 16px;
+    background: rgba(220, 53, 69, 0.1);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.logout-modal-icon img {
+    width: 28px;
+    height: 28px;
+    display: block;
+    filter: brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(600%) hue-rotate(330deg) brightness(90%) contrast(85%);
+}
+
+.logout-modal-title {
+    margin: 0 0 8px 0;
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--text);
+}
+
+.logout-modal-text {
+    margin: 0 0 24px 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    line-height: 1.6;
+}
+
+.logout-modal-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.logout-btn-cancel,
+.logout-btn-confirm {
+    flex: 1;
+    padding: 12px 20px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    font-family: inherit;
+    text-decoration: none;
+    cursor: pointer;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    margin-left: 4px;
-    border-radius: var(--radius-full);
-    background: var(--primary);
-    color: var(--white);
-    font-size: 10px;
-    font-weight: 700;
-    line-height: 1;
-    vertical-align: middle;
+    border: 2px solid transparent;
+    min-height: 46px;
+    text-align: center;
+    box-sizing: border-box;
 }
 
-.mobile-nav-link .nav-badge {
-    margin-left: 6px;
+.logout-btn-cancel {
+    background: #1a1a1a;
+    color: #ffffff;
+    border-color: #1a1a1a;
+}
+
+.logout-btn-cancel:hover {
+    background: #000000;
+    border-color: #000000;
+}
+
+.logout-btn-confirm {
+    background: var(--danger);
+    color: #ffffff;
+    border-color: var(--danger);
+}
+
+.logout-btn-confirm:hover {
+    background: #b91c1c;
+    border-color: #b91c1c;
+}
+
+@media (max-width: 480px) {
+    .logout-modal-content {
+        padding: 24px 18px 18px;
+    }
+
+    .logout-modal-actions {
+        flex-direction: column-reverse;
+    }
+
+    .logout-btn-cancel,
+    .logout-btn-confirm {
+        width: 100%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .logout-modal,
+    .logout-modal-content,
+    .logout-btn-cancel,
+    .logout-btn-confirm {
+        transition: none !important;
+    }
 }
 ```
 
@@ -35018,6 +35111,80 @@ html {
         }
     })();
 
+})();
+```
+
+---
+
+## File: `fitpal/customer/assets/ui/js/logout.js`
+
+**Status:** `FOUND`
+
+```javascript
+/**
+ * FitPal Customer Logout Confirmation
+ *
+ * Intercepts clicks on [data-logout-trigger] elements and shows a
+ * Yes/No confirmation modal. The modal's confirm anchor navigates to
+ * sign-out-handler.php. Cancel closes the modal.
+ *
+ * The modal markup is rendered by includes/header.php on every
+ * authenticated page, so this script works everywhere.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+(function () {
+    'use strict';
+
+    document.addEventListener('DOMContentLoaded', function () {
+
+        var modal = document.getElementById('logoutModal');
+        if (!modal) return;
+
+        var confirmBtn = modal.querySelector('.logout-btn-confirm');
+        var cancelNodes = modal.querySelectorAll('[data-logout-cancel]');
+        var triggers = document.querySelectorAll('[data-logout-trigger]');
+
+        function openModal() {
+            document.body.style.overflow = 'hidden';
+            modal.style.display = 'flex';
+            void modal.offsetWidth;
+            modal.classList.add('active');
+            if (confirmBtn) setTimeout(function () { confirmBtn.focus(); }, 80);
+        }
+
+        function closeModal() {
+            modal.classList.remove('active');
+            setTimeout(function () {
+                if (!modal.classList.contains('active')) {
+                    modal.style.display = 'none';
+                    document.body.style.overflow = '';
+                }
+            }, 220);
+        }
+
+        triggers.forEach(function (trigger) {
+            trigger.addEventListener('click', function (e) {
+                e.preventDefault();
+                openModal();
+            });
+        });
+
+        cancelNodes.forEach(function (node) {
+            node.addEventListener('click', function (e) {
+                e.preventDefault();
+                closeModal();
+            });
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modal.classList.contains('active')) {
+                closeModal();
+            }
+        });
+    });
 })();
 ```
 
@@ -46584,8 +46751,12 @@ try {
  *
  * Customer-specific header with conditional navigation based on login status.
  *
+ * Logout uses a confirmation modal, matching the rider and restaurant
+ * headers. The logout buttons carry data-logout-trigger so logout.js
+ * intercepts the click and opens #logoutModal.
+ *
  * @package FitPal
- * @version 1.3 - Added Cart and Wallet navigation
+ * @version 1.4 - Logout confirmation modal added.
  */
 
 declare(strict_types=1);
@@ -46767,8 +46938,9 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
                             class="profile-icon">
                         <?php endif; ?>
                     </div>
-                    <a href="../backend/handlers/sign-out-handler.php" data-signout
-                        class="btn btn-outline btn-sm logout-btn">Logout</a>
+                    <button type="button" class="btn btn-outline btn-sm logout-btn" data-logout-trigger>
+                        Logout
+                    </button>
                 </div>
 
                 <?php else: ?>
@@ -46845,8 +47017,9 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
             </li>
             <li class="mobile-nav-divider"></li>
             <li class="mobile-nav-item">
-                <a href="../backend/handlers/sign-out-handler.php" data-signout
-                    class="mobile-nav-link mobile-logout">Logout</a>
+                <button type="button" class="mobile-nav-link mobile-logout" data-logout-trigger>
+                    Logout
+                </button>
             </li>
 
             <?php else: ?>
@@ -46867,10 +47040,33 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
         </ul>
     </nav>
 
+    <!-- ============================================
+         LOGOUT CONFIRMATION MODAL
+         ============================================ -->
+    <div class="logout-modal" id="logoutModal" style="display: none;" role="dialog" aria-modal="true"
+        aria-labelledby="logoutModalTitle">
+        <div class="logout-modal-overlay" data-logout-cancel></div>
+        <div class="logout-modal-content">
+            <div class="logout-modal-icon" aria-hidden="true">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/logoutsvg.svg" alt=""
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/information-fill.svg'">
+            </div>
+            <p class="logout-modal-title" id="logoutModalTitle">Sign out?</p>
+            <p class="logout-modal-text">You'll need to sign in again to access your account.</p>
+            <div class="logout-modal-actions">
+                <button type="button" class="logout-btn-cancel" data-logout-cancel>Cancel</button>
+                <a href="../backend/handlers/sign-out-handler.php" class="logout-btn-confirm">
+                    Yes, sign out
+                </a>
+            </div>
+        </div>
+    </div>
+
     <main class="main-content" role="main">
 
         <!-- Load ONLY the customer header JS (not the shared one) -->
         <script src="../assets/ui/js/header.js" defer></script>
+        <script src="../assets/ui/js/logout.js" defer></script>
 ```
 
 ---
@@ -58516,7 +58712,7 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
                     onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/information-fill.svg'">
             </div>
             <p class="logout-modal-title" id="logoutModalTitle">Sign out?</p>
-            <p class="logout-modal-text">You'll need to sign in again to access the restaurant dashboard.</p>
+            <p class="logout-modal-text">ou'll need to sign in again to access your account.</p>
             <div class="logout-modal-actions">
                 <button type="button" class="logout-btn-cancel" data-logout-cancel>Cancel</button>
                 <a href="../backend/handlers/sign-out-handler.php" class="logout-btn-confirm">
@@ -64074,12 +64270,25 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
  * Riders do NOT have a cart, so there is no .nav-badge rule here.
  *
  * Includes the logout confirmation modal styles at the bottom,
- * mirroring the restaurant header.
+ * mirroring the restaurant and customer headers.
+ *
+ * Reserves the scrollbar gutter on <html> so hiding the body
+ * scrollbar when the logout modal opens does not shift the page.
  *
  * @package FitPal
- * @version 3.0 — Adds logout confirmation modal styles, mobile user
- *                greeting link variant.
+ * @version 3.1 - scrollbar-gutter: stable added so the logout modal
+ *                does not reflow the page behind it. Matches the fix
+ *                already applied to customer/assets/css/header.css.
  */
+
+/* Reserve the scrollbar gutter permanently. With this in place, the
+   viewport's usable width is identical whether a scrollbar is visible
+   or not, so nothing reflows when the body scrollbar is hidden by a
+   modal scroll lock. This is the same guard used by cart.css,
+   orders.css, and wallet.css on the customer side. */
+html {
+    scrollbar-gutter: stable;
+}
 
 /* ============================================
    RIDER HEADER OVERRIDES
@@ -64708,6 +64917,15 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
     .logout-btn-cancel,
     .logout-btn-confirm {
         width: 100%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .logout-modal,
+    .logout-modal-content,
+    .logout-btn-cancel,
+    .logout-btn-confirm {
+        transition: none !important;
     }
 }
 ```
@@ -82422,6 +82640,4765 @@ $termsSections = [
 // Include shared footer
 require_once __DIR__ . '/../includes/footer.php';
 ?>
+```
+
+---
+
+## File: `fitpal/test/customer/cart-test.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Cart System Test
+ *
+ * Validates the cart pipeline end-to-end:
+ *   menu product card → add-to-cart-handler.php → cart table
+ *                    → get-queue-handler.php → queue panel UI
+ *
+ * Two tiers of tests:
+ *   (A) STRUCTURAL — files, form actions, token checks.
+ *   (B) LOGIC — DB invariants and PHP/JS contracts that catch the
+ *       bug classes that actually surfaced during development:
+ *         - form action not pointing at add-to-cart-handler.php
+ *         - JS preventDefault() on .add-to-cart-form submit
+ *         - queue-panel.js hijacking form submit via window.addToQueue
+ *         - queue-panel.js reading from sessionStorage instead of the DB
+ *         - handler trusting client total_price without server recompute
+ *         - handler not using INSERT ... ON DUPLICATE KEY / row lock
+ *         - get-queue-handler returning anything other than the cart table
+ *
+ * Sections with 0 tests render as NEUTRAL, not as a pass.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// ============================================
+// PATHS
+// ============================================
+$basePath     = realpath(__DIR__ . '/../..');
+$customerPath = $basePath . '/customer';
+$sharedPath   = $basePath . '/shared';
+
+// ============================================
+// TEST HARNESS
+// ============================================
+$sections = [];
+
+/**
+ * Record a test result.
+ *
+ * @param string      $name
+ * @param bool        $result
+ * @param string      $message
+ * @param string      $section
+ * @param string      $tier     'logic' or 'structural'
+ * @return bool
+ */
+function testResult(string $name, bool $result, string $message = '', string $section = 'General', string $tier = 'logic'): bool
+{
+    global $sections;
+    if (!isset($sections[$section])) {
+        $sections[$section] = [];
+    }
+    $sections[$section][] = [
+        'name'    => $name,
+        'status'  => $result ? 'PASS' : 'FAIL',
+        'message' => $message,
+        'passed'  => $result,
+        'tier'    => $tier,
+    ];
+    return $result;
+}
+
+/**
+ * Register a section that has no runnable tests.
+ *
+ * @param string $section
+ * @param string $reason
+ */
+function markSectionSkipped(string $section, string $reason): void
+{
+    global $sections;
+    if (!isset($sections[$section])) {
+        $sections[$section] = [];
+    }
+    $sections[$section][] = [
+        'name'    => 'Section skipped',
+        'status'  => 'SKIP',
+        'message' => $reason,
+        'passed'  => null,
+        'tier'    => 'structural',
+    ];
+}
+
+/**
+ * Render one section with correct pass/fail/skip accounting.
+ *
+ * @param string $title
+ * @param string $sectionName
+ * @param bool   $defaultCollapsed
+ */
+function renderSection(string $title, string $sectionName, bool $defaultCollapsed = true): void
+{
+    global $sections;
+
+    $tests = $sections[$sectionName] ?? [];
+    $total = 0; $passed = 0; $failed = 0; $skipped = 0;
+
+    foreach ($tests as $t) {
+        if ($t['passed'] === null) {
+            $skipped++;
+        } else {
+            $total++;
+            if ($t['passed']) {
+                $passed++;
+            } else {
+                $failed++;
+            }
+        }
+    }
+
+    if ($total === 0) {
+        $countClass = 'count-neutral';
+        $countText  = $skipped > 0 ? 'skipped' : '0';
+    } elseif ($failed === 0) {
+        $countClass = 'count-pass';
+        $countText  = "{$passed}/{$total}";
+    } elseif ($failed <= 2) {
+        $countClass = 'count-warning';
+        $countText  = "{$passed}/{$total}";
+    } else {
+        $countClass = 'count-fail';
+        $countText  = "{$passed}/{$total}";
+    }
+
+    // Sections with failures default to OPEN so reviewers cannot miss them.
+    if ($failed > 0) {
+        $defaultCollapsed = false;
+    }
+
+    $sectionId      = 'section-' . preg_replace('/[^a-zA-Z0-9]/', '-', $sectionName);
+    $contentId      = 'content-' . preg_replace('/[^a-zA-Z0-9]/', '-', $sectionName);
+    $collapsedClass = $defaultCollapsed ? 'section-collapsed' : '';
+
+    echo "<div class='test-section {$collapsedClass}' id='{$sectionId}'>";
+    echo "<div class='section-header' data-target='{$contentId}'>";
+    echo "<h2>" . htmlspecialchars($title) . " <span class='section-count {$countClass}'>({$countText})</span></h2>";
+    echo "<button class='section-toggle' aria-expanded='" . ($defaultCollapsed ? 'false' : 'true') . "' aria-controls='{$contentId}' type='button'>";
+    echo "<span class='toggle-icon'>" . ($defaultCollapsed ? '+' : '-') . "</span>";
+    echo "</button>";
+    echo "</div>";
+    echo "<div class='test-grid' id='{$contentId}' style='display: " . ($defaultCollapsed ? 'none' : 'grid') . ";'>";
+
+    if (empty($tests)) {
+        echo "<div class='test-item' style='border-left-color: #edf2f0;'>";
+        echo "<div class='test-name' style='color: #a0aec0;'>No tests in this section</div>";
+        echo "</div>";
+    } else {
+        foreach ($tests as $test) {
+            if ($test['passed'] === null) {
+                echo "<div class='test-item skip'>";
+                echo "<div class='test-name'>" . htmlspecialchars($test['name']) . "</div>";
+                echo "<div class='test-status skip'>SKIP</div>";
+                echo "<div class='test-message'>" . htmlspecialchars($test['message']) . "</div>";
+                echo "</div>";
+                continue;
+            }
+            $cls = $test['passed'] ? 'pass' : 'fail';
+            $txt = $test['passed'] ? 'PASS' : 'FAIL';
+            echo "<div class='test-item {$cls}'>";
+            echo "<div class='test-name'>" . htmlspecialchars($test['name']) . "</div>";
+            echo "<div class='test-status {$cls}'>{$txt}</div>";
+            echo "<div class='test-message'>" . htmlspecialchars($test['message']) . "</div>";
+            echo "</div>";
+        }
+    }
+
+    echo "</div>";
+    echo "</div>";
+}
+
+/**
+ * Asset base relative to the current script location.
+ *
+ * @return string
+ */
+function getAssetBase(): string
+{
+    $scriptPath = $_SERVER['SCRIPT_NAME'];
+    $dirPath    = dirname($scriptPath);
+    $segments   = array_filter(explode('/', $dirPath));
+    $depth      = count($segments);
+    if ($depth <= 0) {
+        return './shared/';
+    }
+    return str_repeat('../', $depth) . 'shared/';
+}
+
+$protocol  = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http';
+$host      = $_SERVER['HTTP_HOST'];
+$baseUrl   = $protocol . '://' . $host;
+$assetBase = getAssetBase();
+
+// ============================================
+// HEAD
+// ============================================
+echo <<<HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FitPal Cart System Test</title>
+<link rel="stylesheet" href="{$assetBase}assets/css/global.css">
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; overflow-x: hidden; }
+    body { background: #f4f6f9; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    .test-container { max-width: 100%; padding: 0; margin: 0; }
+    .test-header { background: linear-gradient(135deg, #2d3748, #1a202c); color: white; padding: 30px; border-radius: 12px; margin-bottom: 30px; width: 100%; }
+    .test-header h1 { margin: 0; font-size: 28px; }
+    .test-header p { margin: 10px 0 0 0; opacity: 0.8; }
+    .test-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; width: 100%; }
+    .summary-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center; }
+    .summary-card .number { font-size: 32px; font-weight: 700; }
+    .summary-card .label { color: #718096; font-size: 14px; margin-top: 5px; }
+    .summary-card.total .number { color: #2d3748; }
+    .summary-card.passed .number { color: #48bb78; }
+    .summary-card.failed .number { color: #fc8181; }
+    .summary-card.rate .number { color: #4299e1; }
+    .test-grid { display: grid; gap: 10px; padding: 15px; width: 100%; }
+    .test-item { background: white; border-radius: 8px; padding: 12px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; width: 100%; }
+    .test-item.pass { border-left-color: #48bb78; }
+    .test-item.fail { border-left-color: #fc8181; }
+    .test-item.skip { border-left-color: #cbd5e0; opacity: 0.75; }
+    .test-item .test-name { font-weight: 600; font-size: 14px; flex: 1; min-width: 180px; }
+    .test-item .test-status { display: inline-block; padding: 2px 14px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; margin: 0 10px; }
+    .test-item .test-status.pass { background: #c6f6d5; color: #22543d; }
+    .test-item .test-status.fail { background: #fed7d7; color: #9b2c2c; }
+    .test-item .test-status.skip { background: #edf2f7; color: #718096; }
+    .test-item .test-message { color: #718096; font-size: 13px; min-width: 100px; text-align: right; }
+    .test-section { background: white; border-radius: 10px; margin-top: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; width: 100%; }
+    .section-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; cursor: pointer; background: #f7fafc; border-bottom: 1px solid #e2e8f0; user-select: none; width: 100%; }
+    .section-header:hover { background: #edf2f7; }
+    .section-header h2 { margin: 0; font-size: 18px; color: #2d3748; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .section-count { font-size: 14px; font-weight: 600; padding: 2px 12px; border-radius: 20px; }
+    .count-pass { background: #c6f6d5; color: #22543d; }
+    .count-warning { background: #fefcbf; color: #975a16; }
+    .count-fail { background: #fed7d7; color: #9b2c2c; }
+    .count-neutral { background: #edf2f7; color: #718096; }
+    .section-toggle { background: none; border: none; font-size: 20px; cursor: pointer; color: #718096; padding: 0 10px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 6px; flex-shrink: 0; }
+    .section-toggle:hover { background: #e2e8f0; }
+    .toggle-icon { display: inline-block; transition: transform 0.2s ease; }
+    .section-collapsed .toggle-icon { transform: rotate(0deg); }
+    .live-test { padding: 10px 0; width: 100%; }
+    .live-test iframe { width: 100%; height: 500px; border: 1px solid #e2e8f0; border-radius: 6px; margin-top: 10px; display: block; }
+    .btn-test { display: inline-block; padding: 8px 16px; background: #4299e1; color: white; border-radius: 6px; text-decoration: none; font-size: 13px; margin-top: 10px; }
+    .btn-test:hover { background: #3182ce; }
+    .btn-test-group { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+    .btn-test.danger { background: #e53e3e; }
+    .btn-test.danger:hover { background: #c53030; }
+    .btn-test.success { background: #48bb78; }
+    .btn-test.success:hover { background: #38a169; }
+    .btn-test.warning { background: #ed8936; }
+    .btn-test.warning:hover { background: #dd6b20; }
+    .top-section { margin-bottom: 20px; width: 100%; }
+    .note-box { margin-top: 15px; padding: 15px; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; }
+    .note-box p { font-size: 13px; color: #78350f; margin: 5px 0 0 0; }
+    .note-box p:first-child { font-weight: 600; color: #92400e; margin-top: 0; }
+    .note-box ul { font-size: 13px; color: #78350f; margin: 5px 0 0 0; padding-left: 20px; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 10px 0; }
+    .data-table th { background: #edf2f7; padding: 8px 12px; text-align: left; font-weight: 600; }
+    .data-table td { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; }
+    .data-table tr:hover { background: #f7fafc; }
+    .status-ok { color: #48bb78; font-weight: 600; }
+    .status-fail { color: #fc8181; font-weight: 600; }
+    @media (max-width: 640px) {
+        body { padding: 10px; }
+        .test-header { padding: 20px; }
+        .test-header h1 { font-size: 22px; }
+        .test-summary { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .summary-card { padding: 15px; }
+        .summary-card .number { font-size: 24px; }
+        .section-header { padding: 12px 15px; flex-wrap: wrap; }
+        .section-header h2 { font-size: 16px; }
+        .section-count { font-size: 12px; padding: 2px 10px; }
+        .test-item { padding: 10px 15px; flex-direction: column; align-items: flex-start; gap: 5px; }
+        .test-item .test-name { font-size: 13px; min-width: auto; width: 100%; }
+        .test-item .test-status { margin: 0 10px 0 0; }
+        .test-item .test-message { text-align: left; width: 100%; min-width: auto; }
+        .test-grid { padding: 10px; }
+        .live-test iframe { height: 350px; }
+        .btn-test-group { gap: 8px; }
+        .btn-test { font-size: 12px; padding: 6px 12px; }
+        .data-table { font-size: 11px; }
+        .data-table th, .data-table td { padding: 4px 8px; }
+    }
+</style>
+</head>
+<body>
+<div class="test-container">
+HTML;
+
+// ============================================
+// HEADER
+// ============================================
+echo "<div class='test-header'>";
+echo "<h1>FitPal Cart System Test</h1>";
+echo "<p>Validates menu → add-to-cart → cart table → queue panel pipeline.</p>";
+echo "<p style='font-size:13px;opacity:0.6;margin-top:10px;'>Base Path: " . htmlspecialchars((string)$basePath) . " | Base URL: " . htmlspecialchars($baseUrl) . "</p>";
+echo "</div>";
+
+// ============================================
+// DB CONNECTION
+// ============================================
+$dbFile = $sharedPath . '/backend/database/database-connect.php';
+$db = null;
+
+if (file_exists($dbFile)) {
+    testResult('Database file exists', true, 'File found', 'Database', 'structural');
+    try {
+        $database_host     = 'localhost';
+        $database_port     = 3306;
+        $database_name     = 'fitpal_food_delivery';
+        $database_username = 'root';
+        $database_password = '';
+        $database_charset  = 'utf8mb4';
+
+        $dsn = sprintf(
+            'mysql:host=%s;port=%d;dbname=%s;charset=%s',
+            $database_host, $database_port, $database_name, $database_charset
+        );
+        $db = new PDO($dsn, $database_username, $database_password, [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+        ]);
+        testResult('Database connection', true, 'PDO connection established', 'Database', 'structural');
+    } catch (PDOException $e) {
+        testResult('Database connection', false, 'PDO error: ' . $e->getMessage(), 'Database', 'structural');
+        $db = null;
+    }
+} else {
+    testResult('Database file exists', false, 'Missing: ' . $dbFile, 'Database', 'structural');
+}
+
+// ============================================
+// SECTION A — FILES
+// ============================================
+$criticalFiles = [
+    'menu.php'                    => $customerPath . '/pages/menu.php',
+    'checkout.php'                => $customerPath . '/pages/checkout.php',
+    'add-to-cart-handler.php'     => $customerPath . '/backend/handlers/add-to-cart-handler.php',
+    'get-queue-handler.php'       => $customerPath . '/backend/handlers/get-queue-handler.php',
+    'sync-queue-handler.php'      => $customerPath . '/backend/handlers/sync-queue-handler.php',
+    'place-order-handler.php'     => $customerPath . '/backend/handlers/place-order-handler.php',
+    'cart-queries.php'            => $customerPath . '/backend/database/cart-queries.php',
+    'menu.js'                     => $customerPath . '/assets/ui/js/menu.js',
+    'queue-panel.js'              => $customerPath . '/assets/ui/js/queue-panel.js',
+    'queue-panel.css'             => $customerPath . '/assets/css/queue-panel.css',
+    'menu-product.css'            => $customerPath . '/assets/css/menu-product.css',
+    'customer header.php'         => $customerPath . '/includes/header.php',
+    'shared footer.php'           => $sharedPath   . '/includes/footer.php',
+    'database-connect.php'        => $sharedPath   . '/backend/database/database-connect.php',
+];
+
+foreach ($criticalFiles as $label => $path) {
+    $ok = file_exists($path);
+    testResult($label, $ok, $ok ? 'Found' : 'Missing: ' . $path, 'Files', 'structural');
+}
+
+// ============================================
+// SECTION B — DB SCHEMA (cart)
+// ============================================
+if ($db !== null) {
+    // cart table
+    $stmt = $db->query("SHOW TABLES LIKE 'cart'");
+    $hasCart = $stmt->rowCount() > 0;
+    testResult('Table exists: cart', $hasCart, $hasCart ? 'Present' : 'Missing', 'Schema', 'structural');
+
+    if ($hasCart) {
+        // Required columns
+        $requiredCols = [
+            'cart_id', 'customer_id', 'product_id',
+            'quantity', 'price', 'added_at', 'customization_data',
+        ];
+        $stmt = $db->query("SHOW COLUMNS FROM cart");
+        $haveCols = array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'Field');
+        foreach ($requiredCols as $col) {
+            $ok = in_array($col, $haveCols, true);
+            testResult("cart.{$col}", $ok, $ok ? 'Present' : 'Missing', 'Schema', 'structural');
+        }
+
+        // Unique key on (customer_id, product_id) keeps the upsert path honest
+        $stmt = $db->query("SHOW INDEX FROM cart WHERE Key_name = 'unique_cart_item'");
+        $hasUnique = $stmt->rowCount() > 0;
+        testResult(
+            'Unique key: (customer_id, product_id)',
+            $hasUnique,
+            $hasUnique
+                ? 'Present — prevents duplicate rows for the same product'
+                : 'Missing — handler must implement upsert manually',
+            'Schema'
+        );
+
+        // FK: cart.customer_id → customer
+        $stmt = $db->query(
+            "SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'cart'
+               AND COLUMN_NAME = 'customer_id'
+               AND REFERENCED_TABLE_NAME = 'customer'"
+        );
+        $hasFkCustomer = (int)$stmt->fetchColumn() > 0;
+        testResult('FK: cart.customer_id → customer', $hasFkCustomer, $hasFkCustomer ? 'Present' : 'Missing', 'Schema', 'structural');
+
+        // FK: cart.product_id → product
+        $stmt = $db->query(
+            "SELECT COUNT(*) FROM information_schema.KEY_COLUMN_USAGE
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'cart'
+               AND COLUMN_NAME = 'product_id'
+               AND REFERENCED_TABLE_NAME = 'product'"
+        );
+        $hasFkProduct = (int)$stmt->fetchColumn() > 0;
+        testResult('FK: cart.product_id → product', $hasFkProduct, $hasFkProduct ? 'Present' : 'Missing', 'Schema', 'structural');
+
+        // CHECK: quantity > 0
+        $stmt = $db->query(
+            "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'cart'
+               AND CONSTRAINT_TYPE = 'CHECK'"
+        );
+        $hasChecks = (int)$stmt->fetchColumn() > 0;
+        testResult('cart has CHECK constraints', $hasChecks, $hasChecks ? 'Present' : 'None found (optional)', 'Schema');
+    }
+}
+
+// ============================================
+// SECTION C — DB INVARIANTS (live cart data)
+// ============================================
+if ($db !== null) {
+    // C1. No orphan cart rows (customer_id no longer in customer)
+    $stmt = $db->query(
+        "SELECT COUNT(*) FROM cart c
+         LEFT JOIN customer cu ON c.customer_id = cu.customer_id
+         WHERE cu.customer_id IS NULL"
+    );
+    $orphanCustomers = (int)$stmt->fetchColumn();
+    testResult(
+        'No orphan cart.customer_id',
+        $orphanCustomers === 0,
+        $orphanCustomers === 0 ? 'Clean' : "{$orphanCustomers} orphan row(s)",
+        'DB Invariants'
+    );
+
+    // C2. No cart rows pointing at missing products
+    $stmt = $db->query(
+        "SELECT COUNT(*) FROM cart c
+         LEFT JOIN product p ON c.product_id = p.product_id
+         WHERE p.product_id IS NULL"
+    );
+    $orphanProducts = (int)$stmt->fetchColumn();
+    testResult(
+        'No orphan cart.product_id',
+        $orphanProducts === 0,
+        $orphanProducts === 0 ? 'Clean' : "{$orphanProducts} orphan row(s)",
+        'DB Invariants'
+    );
+
+    // C3. quantity must be > 0
+    $stmt = $db->query("SELECT COUNT(*) FROM cart WHERE quantity <= 0");
+    $badQty = (int)$stmt->fetchColumn();
+    testResult(
+        'All cart.quantity > 0',
+        $badQty === 0,
+        $badQty === 0 ? 'Clean' : "{$badQty} row(s) with quantity <= 0",
+        'DB Invariants'
+    );
+
+    // C4. price must be >= 0
+    $stmt = $db->query("SELECT COUNT(*) FROM cart WHERE price < 0");
+    $badPrice = (int)$stmt->fetchColumn();
+    testResult(
+        'All cart.price >= 0',
+        $badPrice === 0,
+        $badPrice === 0 ? 'Clean' : "{$badPrice} row(s) with negative price",
+        'DB Invariants'
+    );
+
+    // C5. customization_data must be NULL or valid JSON
+    $stmt = $db->query(
+        "SELECT COUNT(*) FROM cart
+         WHERE customization_data IS NOT NULL
+           AND JSON_VALID(customization_data) = 0"
+    );
+    $badJson = (int)$stmt->fetchColumn();
+    testResult(
+        'customization_data is NULL or valid JSON',
+        $badJson === 0,
+        $badJson === 0 ? 'Clean' : "{$badJson} row(s) with invalid JSON",
+        'DB Invariants'
+    );
+
+    // C6. No duplicate (customer_id, product_id) pairs
+    $stmt = $db->query(
+        "SELECT customer_id, product_id, COUNT(*) AS cnt
+         FROM cart
+         GROUP BY customer_id, product_id
+         HAVING cnt > 1
+         LIMIT 5"
+    );
+    $dupes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    testResult(
+        'No duplicate (customer_id, product_id)',
+        empty($dupes),
+        empty($dupes)
+            ? 'Clean'
+            : count($dupes) . ' duplicate pair(s): '
+              . implode(', ', array_map(
+                    fn($r) => "cust={$r['customer_id']}/prod={$r['product_id']} x{$r['cnt']}",
+                    $dupes
+                )),
+        'DB Invariants'
+    );
+
+    // C7. cart price should not exceed product.base_price + sane modifier cap.
+    //     This is a soft invariant: if the client is allowed to set price,
+    //     it should still be bounded. Cap = base_price + 10x.
+    $stmt = $db->query(
+        "SELECT c.cart_id, c.price, p.base_price, p.price AS product_price, p.name
+         FROM cart c
+         JOIN product p ON c.product_id = p.product_id
+         WHERE p.base_price IS NOT NULL
+           AND c.price > GREATEST(p.base_price, p.price) * 10"
+    );
+    $suspicious = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    testResult(
+        'No cart price wildly exceeds product price',
+        empty($suspicious),
+        empty($suspicious)
+            ? 'Clean (no row > 10x base price)'
+            : count($suspicious) . ' suspicious row(s): '
+              . implode(', ', array_map(
+                    fn($r) => "cart={$r['cart_id']} {$r['name']} price={$r['price']} base={$r['base_price']}",
+                    array_slice($suspicious, 0, 3)
+                )),
+        'DB Invariants'
+    );
+}
+
+// ============================================
+// SECTION D — PHP CONTRACT (menu.php)
+// ============================================
+$menuPath = $customerPath . '/pages/menu.php';
+if (file_exists($menuPath)) {
+    $menu = file_get_contents($menuPath);
+
+    // Must include add-to-cart-handler.php as the form action
+    preg_match_all(
+        '/<form[^>]*class=["\'][^"\']*add-to-cart-form[^"\']*["\'][^>]*action=["\']([^"\']+)["\']/i',
+        $menu,
+        $actionFirst
+    );
+    preg_match_all(
+        '/<form[^>]*action=["\']([^"\']+)["\'][^>]*class=["\'][^"\']*add-to-cart-form[^"\']*["\']/i',
+        $menu,
+        $actionLast
+    );
+    $actions = array_merge($actionFirst[1] ?? [], $actionLast[1] ?? []);
+
+    $allPointToHandler = true;
+    $actionList = [];
+    foreach ($actions as $a) {
+        $actionList[] = $a;
+        if (strpos($a, 'add-to-cart-handler.php') === false) {
+            $allPointToHandler = false;
+        }
+    }
+
+    testResult(
+        'add-to-cart-form action → add-to-cart-handler.php',
+        $allPointToHandler && !empty($actions),
+        empty($actions)
+            ? 'No .add-to-cart-form found with an action attribute'
+            : 'Actions: ' . implode(', ', array_unique($actionList)),
+        'PHP Contract'
+    );
+
+    // Must render a hidden CSRF field inside the form
+    $hasFormCsrf = (bool)preg_match(
+        '/<form[^>]*add-to-cart-form[^>]*>.*?name=["\']csrf_token["\']/si',
+        $menu
+    );
+    testResult(
+        'Form contains csrf_token input',
+        $hasFormCsrf,
+        $hasFormCsrf ? 'Found' : 'Missing — handler will reject with security validation failed',
+        'PHP Contract'
+    );
+
+    // Must render a hidden product_id input
+    $hasProductId = (bool)preg_match(
+        '/<form[^>]*add-to-cart-form[^>]*>.*?name=["\']product_id["\']/si',
+        $menu
+    );
+    testResult(
+        'Form contains product_id input',
+        $hasProductId,
+        $hasProductId ? 'Found' : 'Missing — handler cannot identify product',
+        'PHP Contract'
+    );
+
+    // Must render a quantity input
+    $hasQuantity = (bool)preg_match(
+        '/<form[^>]*add-to-cart-form[^>]*>.*?name=["\']quantity["\']/si',
+        $menu
+    );
+    testResult(
+        'Form contains quantity input',
+        $hasQuantity,
+        $hasQuantity ? 'Found' : 'Missing',
+        'PHP Contract'
+    );
+
+    // Must render the queue panel container
+    $hasPanel = strpos($menu, 'queuePanelWrapper') !== false;
+    testResult(
+        'Renders queuePanelWrapper container',
+        $hasPanel,
+        $hasPanel ? 'Found' : 'Missing — panel has no mount point',
+        'PHP Contract'
+    );
+
+    // Must include queue-panel.js
+    $hasPanelJs = strpos($menu, 'queue-panel.js') !== false;
+    testResult(
+        'Includes queue-panel.js',
+        $hasPanelJs,
+        $hasPanelJs ? 'Found' : 'Missing',
+        'PHP Contract'
+    );
+
+    // Must NOT render a second <!DOCTYPE>
+    $doctypeCount = substr_count(strtolower($menu), '<!doctype');
+    testResult(
+        'No duplicate <!DOCTYPE>',
+        $doctypeCount === 0,
+        $doctypeCount === 0 ? 'Clean' : "Found {$doctypeCount} — page contract violation",
+        'PHP Contract',
+        'structural'
+    );
+}
+
+// ============================================
+// SECTION E — JS CONTRACT (menu.js)
+// ============================================
+$menuJsPath = $customerPath . '/assets/ui/js/menu.js';
+if (file_exists($menuJsPath)) {
+    $menuJs = file_get_contents($menuJsPath);
+
+    // Must NOT preventDefault on .add-to-cart-form submit
+    $hasPreventOnCartForm = preg_match(
+        '/add-to-cart-form[\s\S]{0,400}?preventDefault/',
+        $menuJs
+    ) === 1;
+
+    testResult(
+        'menu.js does NOT preventDefault on cart form submit',
+        !$hasPreventOnCartForm,
+        $hasPreventOnCartForm
+            ? 'Found preventDefault near add-to-cart-form — form POST will be blocked'
+            : 'Clean',
+        'JS Contract'
+    );
+
+    // Must NOT call window.addToQueue from a submit handler
+    $hasHijack = preg_match(
+        '/add-to-cart-form[\s\S]{0,600}?window\.addToQueue/',
+        $menuJs
+    ) === 1;
+    testResult(
+        'menu.js does NOT call window.addToQueue from submit',
+        !$hasHijack,
+        $hasHijack
+            ? 'Found window.addToQueue near add-to-cart-form — form is hijacked'
+            : 'Clean',
+        'JS Contract'
+    );
+
+    // Must still attach a submit listener for loading state (no preventDefault)
+    $hasSubmitListener = strpos($menuJs, "addEventListener('submit'") !== false
+                      || strpos($menuJs, 'addEventListener("submit"') !== false;
+    testResult(
+        'menu.js attaches a submit listener',
+        $hasSubmitListener,
+        $hasSubmitListener ? 'Found (loading state only)' : 'Missing',
+        'JS Contract'
+    );
+
+    // Quantity controls should be present
+    $hasQtyControls = strpos($menuJs, 'qty-plus') !== false
+                   && strpos($menuJs, 'qty-minus') !== false;
+    testResult(
+        'menu.js binds qty +/- buttons',
+        $hasQtyControls,
+        $hasQtyControls ? 'Found' : 'Missing',
+        'JS Contract'
+    );
+
+    // Uses strict mode
+    $hasStrict = strpos($menuJs, "'use strict'") !== false
+              || strpos($menuJs, '"use strict"') !== false;
+    testResult("'use strict'", $hasStrict, $hasStrict ? 'Found' : 'Missing', 'JS Contract', 'structural');
+}
+
+// ============================================
+// SECTION F — JS CONTRACT (queue-panel.js)
+// ============================================
+$panelJsPath = $customerPath . '/assets/ui/js/queue-panel.js';
+if (file_exists($panelJsPath)) {
+    $panelJs = file_get_contents($panelJsPath);
+
+    // Must NOT hijack .add-to-cart-form submissions
+    $hasSubmitHijack = preg_match(
+        '/document\.addEventListener\(\s*[\'"]submit[\'"][\s\S]{0,600}?add-to-cart-form/',
+        $panelJs
+    ) === 1;
+    testResult(
+        'queue-panel.js does NOT hijack add-to-cart submits',
+        !$hasSubmitHijack,
+        $hasSubmitHijack
+            ? 'Found document.submit handler intercepting .add-to-cart-form'
+            : 'Clean',
+        'JS Contract'
+    );
+
+    // Must NOT read/write sessionStorage as source of truth
+    $usesSessionStorage = strpos($panelJs, 'sessionStorage.getItem') !== false
+                       || strpos($panelJs, 'sessionStorage.setItem') !== false;
+    testResult(
+        'queue-panel.js does NOT use sessionStorage',
+        !$usesSessionStorage,
+        $usesSessionStorage
+            ? 'Found sessionStorage access — panel should read the DB instead'
+            : 'Clean',
+        'JS Contract'
+    );
+
+    // Must hit get-queue-handler.php to fetch cart state
+    $callsGetQueue = strpos($panelJs, 'get-queue-handler.php') !== false;
+    testResult(
+        'queue-panel.js calls get-queue-handler.php',
+        $callsGetQueue,
+        $callsGetQueue ? 'Found' : 'Missing — panel has no data source',
+        'JS Contract'
+    );
+
+    // Must hit sync-queue-handler.php for mutations
+    $callsSyncQueue = strpos($panelJs, 'sync-queue-handler.php') !== false;
+    testResult(
+        'queue-panel.js calls sync-queue-handler.php',
+        $callsSyncQueue,
+        $callsSyncQueue ? 'Found' : 'Missing — panel cannot persist removes/qty changes',
+        'JS Contract'
+    );
+
+    // Must define loadQueueFromServer
+    $hasLoader = strpos($panelJs, 'loadQueueFromServer') !== false;
+    testResult(
+        'queue-panel.js defines loadQueueFromServer',
+        $hasLoader,
+        $hasLoader ? 'Found' : 'Missing',
+        'JS Contract'
+    );
+
+    // Uses strict mode
+    $hasStrict = strpos($panelJs, "'use strict'") !== false
+              || strpos($panelJs, '"use strict"') !== false;
+    testResult("'use strict'", $hasStrict, $hasStrict ? 'Found' : 'Missing', 'JS Contract', 'structural');
+}
+
+// ============================================
+// SECTION G — HANDLER CONTRACT (add-to-cart-handler.php)
+// ============================================
+$addHandlerPath = $customerPath . '/backend/handlers/add-to-cart-handler.php';
+if (file_exists($addHandlerPath)) {
+    $h = file_get_contents($addHandlerPath);
+
+    // Auth
+    $hasAuth = strpos($h, "customer_id") !== false
+            && strpos($h, '$_SESSION') !== false;
+    testResult('Auth check present', $hasAuth, $hasAuth ? 'Found' : 'Missing', 'Handler Contract');
+
+    // CSRF
+    $hasCsrf = strpos($h, 'csrf_token') !== false;
+    testResult('CSRF check present', $hasCsrf, $hasCsrf ? 'Found' : 'Missing', 'Handler Contract');
+
+    // Transaction
+    $hasTx = strpos($h, 'beginTransaction') !== false;
+    testResult('Uses a transaction', $hasTx, $hasTx ? 'Found' : 'Missing', 'Handler Contract');
+
+    // Row lock on product
+    $locksProduct = preg_match(
+        '/FROM\s+product[\s\S]{0,200}?FOR\s+UPDATE/i',
+        $h
+    ) === 1;
+    testResult(
+        'Locks product row (FOR UPDATE)',
+        $locksProduct,
+        $locksProduct
+            ? 'Found'
+            : 'Missing — concurrent adds may oversell',
+        'Handler Contract'
+    );
+
+    // Reads existing cart row
+    $readsExisting = preg_match(
+        '/FROM\s+cart[\s\S]{0,200}?(WHERE|customer_id)/i',
+        $h
+    ) === 1;
+    testResult(
+        'Reads existing cart row',
+        $readsExisting,
+        $readsExisting
+            ? 'Found'
+            : 'Missing — handler may insert duplicate rows',
+        'Handler Contract'
+    );
+
+    // Either UPDATE for existing + INSERT for new, or INSERT ... ON DUPLICATE KEY
+    $hasUpdate = stripos($h, 'UPDATE cart') !== false;
+    $hasUpsert = stripos($h, 'ON DUPLICATE KEY UPDATE') !== false;
+    testResult(
+        'Has update-or-insert path',
+        $hasUpdate || $hasUpsert,
+        $hasUpdate
+            ? 'Found UPDATE cart'
+            : ($hasUpsert ? 'Found ON DUPLICATE KEY UPDATE' : 'Missing — cannot re-add'),
+        'Handler Contract'
+    );
+
+    // Must NOT blindly trust client total_price
+    $trustsClientTotal = preg_match(
+        '/\$_POST\s*\[\s*[\'"]total_price[\'"]\s*\]/',
+        $h
+    ) === 1;
+    testResult(
+        'Does not trust client total_price',
+        !$trustsClientTotal,
+        $trustsClientTotal
+            ? 'Found $_POST["total_price"] usage — client controls the price'
+            : 'Clean (server-side pricing)',
+        'Handler Contract'
+    );
+
+    // Uses base_price as the source of truth
+    $usesBasePrice = strpos($h, 'base_price') !== false;
+    testResult(
+        'Uses product.base_price for pricing',
+        $usesBasePrice,
+        $usesBasePrice
+            ? 'Found'
+            : 'Missing — pricing may drift from admin-set base',
+        'Handler Contract'
+    );
+
+    // Handles both success and error via session flash + redirect
+    $hasSuccessFlash = strpos($h, 'cart_success') !== false
+                    || strpos($h, 'queue_success') !== false;
+    $hasErrorFlash   = strpos($h, 'cart_error') !== false
+                    || strpos($h, 'queue_error') !== false;
+    testResult(
+        'Sets success flash',
+        $hasSuccessFlash,
+        $hasSuccessFlash ? 'Found' : 'Missing',
+        'Handler Contract'
+    );
+    testResult(
+        'Sets error flash',
+        $hasErrorFlash,
+        $hasErrorFlash ? 'Found' : 'Missing',
+        'Handler Contract'
+    );
+
+    // Redirects after handling (no silent exit)
+    $redirects = strpos($h, "header('Location:") !== false
+              || strpos($h, 'header("Location:') !== false;
+    testResult(
+        'Redirects after handling',
+        $redirects,
+        $redirects ? 'Found' : 'Missing',
+        'Handler Contract'
+    );
+}
+
+// ============================================
+// SECTION H — HANDLER CONTRACT (get-queue-handler.php)
+// ============================================
+$getHandlerPath = $customerPath . '/backend/handlers/get-queue-handler.php';
+if (file_exists($getHandlerPath)) {
+    $g = file_get_contents($getHandlerPath);
+
+    // Must read from the cart table
+    $readsCart = preg_match('/FROM\s+cart\b/i', $g) === 1;
+    testResult(
+        'Reads from cart table',
+        $readsCart,
+        $readsCart
+            ? 'Found'
+            : 'Missing — handler may read the wrong source',
+        'Handler Contract'
+    );
+
+    // Must scope by customer
+    $scopesByCustomer = stripos($g, 'customer_id') !== false;
+    testResult(
+        'Scopes by customer_id',
+        $scopesByCustomer,
+        $scopesByCustomer ? 'Found' : 'Missing — leaks other users carts',
+        'Handler Contract'
+    );
+
+    // Must return JSON
+    $returnsJson = stripos($g, 'application/json') !== false;
+    testResult(
+        'Returns JSON content-type',
+        $returnsJson,
+        $returnsJson ? 'Found' : 'Missing',
+        'Handler Contract'
+    );
+
+    // Must return a "queue" array in the JSON shape (the panel expects it)
+    $returnsQueue = strpos($g, "'queue'") !== false
+                 || strpos($g, '"queue"') !== false;
+    testResult(
+        'Response includes "queue" array',
+        $returnsQueue,
+        $returnsQueue ? 'Found' : 'Missing — panel reads data.queue',
+        'Handler Contract'
+    );
+}
+
+// ============================================
+// SECTION I — HANDLER CONTRACT (sync-queue-handler.php)
+// ============================================
+$syncHandlerPath = $customerPath . '/backend/handlers/sync-queue-handler.php';
+if (file_exists($syncHandlerPath)) {
+    $s = file_get_contents($syncHandlerPath);
+
+    // Must use a transaction
+    $hasTx = strpos($s, 'beginTransaction') !== false;
+    testResult(
+        'Uses a transaction',
+        $hasTx,
+        $hasTx ? 'Found' : 'Missing — partial syncs possible',
+        'Handler Contract'
+    );
+
+    // Must delete cart rows not present in the incoming queue
+    $hasDelete = stripos($s, 'DELETE FROM cart') !== false;
+    testResult(
+        'Deletes cart rows not in payload',
+        $hasDelete,
+        $hasDelete ? 'Found' : 'Missing — stale rows may linger',
+        'Handler Contract'
+    );
+
+    // Must NOT trust client-sent price without re-reading product
+    $trustsClientPrice = preg_match(
+        '/\$_POST[\s\S]{0,200}?price|json_decode[\s\S]{0,200}?\$item\[[\'"]price[\'"]\]/',
+        $s
+    ) === 1;
+    $reReadsProduct = preg_match(
+        '/FROM\s+product[\s\S]{0,200}?(base_price|price)/i',
+        $s
+    ) === 1;
+    testResult(
+        'Re-reads product price from DB',
+        $reReadsProduct,
+        $reReadsProduct
+            ? 'Found'
+            : 'Missing — syncing trusts client-supplied price',
+        'Handler Contract'
+    );
+    testResult(
+        'Does not blindly trust client price',
+        !$trustsClientPrice || $reReadsProduct,
+        $trustsClientPrice
+            ? ($reReadsProduct ? 'Client price present but overridden by DB' : 'Only client price trusted')
+            : 'Clean',
+        'Handler Contract'
+    );
+
+    // CSRF
+    $hasCsrf = strpos($s, 'csrf_token') !== false;
+    testResult('CSRF check present', $hasCsrf, $hasCsrf ? 'Found' : 'Missing', 'Handler Contract');
+}
+
+// ============================================
+// SECTION J — HANDLER CONTRACT (place-order-handler.php)
+// ============================================
+$placeHandlerPath = $customerPath . '/backend/handlers/place-order-handler.php';
+if (file_exists($placeHandlerPath)) {
+    $p = file_get_contents($placeHandlerPath);
+
+    // Must read cart via cart-queries (single source of truth)
+    $usesCartQueries = stripos($p, 'cart-queries') !== false
+                    || stripos($p, 'getCartGroupedByBranch') !== false;
+    testResult(
+        'Uses cart-queries helper',
+        $usesCartQueries,
+        $usesCartQueries ? 'Found' : 'Missing — duplicated cart read logic',
+        'Handler Contract'
+    );
+
+    // Must NOT insert into the GENERATED column total_amount
+    $insertsTotal = preg_match(
+        '/INSERT\s+INTO\s+orders[\s\S]{0,400}?total_amount/i',
+        $p
+    ) === 1;
+    testResult(
+        'Does not insert into GENERATED total_amount',
+        !$insertsTotal,
+        $insertsTotal
+            ? 'Found total_amount in INSERT — generated column will error'
+            : 'Clean',
+        'Handler Contract'
+    );
+
+    // Uses a transaction
+    $hasTx = strpos($p, 'beginTransaction') !== false;
+    testResult(
+        'Uses a transaction',
+        $hasTx,
+        $hasTx ? 'Found' : 'Missing — partial orders possible',
+        'Handler Contract'
+    );
+
+    // Locks product stock
+    $locksProduct = preg_match(
+        '/FROM\s+product[\s\S]{0,300}?FOR\s+UPDATE/i',
+        $p
+    ) === 1;
+    testResult(
+        'Locks product rows (FOR UPDATE)',
+        $locksProduct,
+        $locksProduct
+            ? 'Found'
+            : 'Missing — stock race conditions possible',
+        'Handler Contract'
+    );
+
+    // Decrements stock
+    $decrements = stripos($p, 'SET stock = stock -') !== false
+               || stripos($p, 'UPDATE product') !== false;
+    testResult(
+        'Decrements product stock',
+        $decrements,
+        $decrements ? 'Found' : 'Missing',
+        'Handler Contract'
+    );
+
+    // Clears cart after order
+    $clearsCart = stripos($p, 'DELETE FROM cart') !== false;
+    testResult(
+        'Clears cart after order',
+        $clearsCart,
+        $clearsCart ? 'Found' : 'Missing',
+        'Handler Contract'
+    );
+
+    // CSRF
+    $hasCsrf = strpos($p, 'csrf_token') !== false;
+    testResult('CSRF check present', $hasCsrf, $hasCsrf ? 'Found' : 'Missing', 'Handler Contract');
+}
+
+// ============================================
+// SECTION K — ROUND-TRIP SMOKE TEST (read-only)
+// Confirms the cart table responds to a normal SELECT scoped by customer.
+// We do not mutate anything here — only verify the query shape works.
+// ============================================
+if ($db !== null) {
+    try {
+        $stmt = $db->query(
+            "SELECT c.cart_id, c.product_id, c.quantity, c.price, c.customization_data,
+                    p.name AS product_name, p.base_price, p.stock
+             FROM cart c
+             JOIN product p ON c.product_id = p.product_id
+             ORDER BY c.added_at DESC
+             LIMIT 5"
+        );
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        testResult(
+            'Cart join query executes',
+            true,
+            count($rows) . ' row(s) returned',
+            'Round-Trip'
+        );
+
+        $allValidJson = true;
+        foreach ($rows as $r) {
+            if ($r['customization_data'] !== null
+                && json_decode((string)$r['customization_data'], true) === null
+                && json_last_error() !== JSON_ERROR_NONE) {
+                $allValidJson = false;
+                break;
+            }
+        }
+        testResult(
+            'Returned customization_data parses as JSON',
+            $allValidJson,
+            $allValidJson ? 'All rows valid' : 'At least one row is not valid JSON',
+            'Round-Trip'
+        );
+    } catch (PDOException $e) {
+        testResult(
+            'Cart join query executes',
+            false,
+            'PDO error: ' . $e->getMessage(),
+            'Round-Trip'
+        );
+    }
+
+    // Live cart summary
+    try {
+        $stmt = $db->query(
+            "SELECT
+                COUNT(*)                   AS total_rows,
+                COUNT(DISTINCT customer_id) AS distinct_customers,
+                COALESCE(SUM(quantity), 0) AS total_units,
+                COALESCE(SUM(quantity * price), 0) AS total_value
+             FROM cart"
+        );
+        $summary = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        testResult(
+            'Cart summary computes',
+            true,
+            sprintf(
+                'rows=%d customers=%d units=%d value=₱%.2f',
+                (int)($summary['total_rows'] ?? 0),
+                (int)($summary['distinct_customers'] ?? 0),
+                (int)($summary['total_units'] ?? 0),
+                (float)($summary['total_value'] ?? 0)
+            ),
+            'Round-Trip'
+        );
+    } catch (PDOException $e) {
+        testResult(
+            'Cart summary computes',
+            false,
+            'PDO error: ' . $e->getMessage(),
+            'Round-Trip'
+        );
+    }
+}
+
+// ============================================
+// TOTALS
+// ============================================
+$totalTests = 0; $totalPassed = 0; $totalFailed = 0; $totalSkipped = 0;
+
+foreach ($sections as $tests) {
+    foreach ($tests as $t) {
+        if ($t['passed'] === null) {
+            $totalSkipped++;
+            continue;
+        }
+        $totalTests++;
+        if ($t['passed']) {
+            $totalPassed++;
+        } else {
+            $totalFailed++;
+        }
+    }
+}
+$passRate = $totalTests > 0 ? round(($totalPassed / $totalTests) * 100) : 0;
+
+// ============================================
+// SUMMARY + LIVE SECTION
+// ============================================
+echo "<div class='top-section'>";
+echo "<div class='test-summary'>";
+echo "<div class='summary-card total'><div class='number'>{$totalTests}</div><div class='label'>Total Tests</div></div>";
+echo "<div class='summary-card passed'><div class='number'>{$totalPassed}</div><div class='label'>Passed</div></div>";
+echo "<div class='summary-card failed'><div class='number'>{$totalFailed}</div><div class='label'>Failed</div></div>";
+echo "<div class='summary-card rate'><div class='number'>{$passRate}%</div><div class='label'>Pass Rate</div></div>";
+echo "</div>";
+
+echo "<div class='test-section' id='section-live'>";
+echo "<div class='section-header' data-target='content-live'>";
+echo "<h2>Live Test <span class='section-count count-neutral'>(Live)</span></h2>";
+echo "<button class='section-toggle' aria-expanded='false' aria-controls='content-live' type='button'><span class='toggle-icon'>+</span></button>";
+echo "</div>";
+echo "<div class='test-grid' id='content-live' style='display: none;'>";
+echo "<div class='live-test'>";
+echo "<p><strong>Exercise the cart pipeline in order:</strong></p>";
+echo "<div class='btn-test-group'>";
+echo "<a href='" . htmlspecialchars($baseUrl) . "/customer/pages/sign-in.php' target='_blank' class='btn-test'>1. Sign In</a>";
+echo "<a href='" . htmlspecialchars($baseUrl) . "/customer/pages/menu.php' target='_blank' class='btn-test'>2. Menu</a>";
+echo "<a href='" . htmlspecialchars($baseUrl) . "/customer/backend/handlers/get-queue-handler.php' target='_blank' class='btn-test warning'>3. Inspect Cart JSON</a>";
+echo "<a href='" . htmlspecialchars($baseUrl) . "/customer/pages/checkout.php' target='_blank' class='btn-test success'>4. Checkout</a>";
+echo "</div>";
+
+echo "<div class='note-box'>";
+echo "<p>What to verify manually:</p>";
+echo "<ul>";
+echo "<li><strong>DB write:</strong> after clicking Add, run <code>SELECT * FROM cart;</code> and confirm a row exists for the logged-in customer_id</li>";
+echo "<li><strong>No double-post:</strong> only one POST should appear in the Network tab when you click Add once</li>";
+echo "<li><strong>No hijack:</strong> the Network tab must show a POST to <code>/customer/backend/handlers/add-to-cart-handler.php</code>, not a sessionStorage write</li>";
+echo "<li><strong>Re-add same product:</strong> quantity should increase on the existing row (not create a duplicate)</li>";
+echo "<li><strong>Panel sync:</strong> the queue panel should show the item on next page load — it reads the same cart table</li>";
+echo "<li><strong>Remove from panel:</strong> the row should disappear from <code>cart</code> after the panel's remove action posts to <code>sync-queue-handler.php</code></li>";
+echo "<li><strong>Checkout:</strong> placing an order should clear the cart and create a row in <code>orders</code> + <code>queue_item</code></li>";
+echo "</ul>";
+echo "</div>";
+
+echo "<p style='margin-top:15px;'><strong>Live cart JSON snapshot:</strong></p>";
+echo "<p style='font-size:13px;color:#718096;margin:5px 0;'>GET " . htmlspecialchars($baseUrl . '/customer/backend/handlers/get-queue-handler.php') . "</p>";
+echo "</div>";
+echo "</div>";
+echo "</div>";
+echo "</div>";
+
+// ============================================
+// RENDER SECTIONS
+// ============================================
+renderSection('Database Tests',        'Database',          true);
+renderSection('File Tests',            'Files',             true);
+renderSection('Schema Tests',          'Schema',            true);
+renderSection('DB Invariant Tests',    'DB Invariants',     false);
+renderSection('PHP Contract Tests',    'PHP Contract',      false);
+renderSection('JS Contract Tests',     'JS Contract',       false);
+renderSection('Handler Contract',      'Handler Contract',  false);
+renderSection('Round-Trip Tests',      'Round-Trip',        false);
+
+// ============================================
+// RAW DATA
+// ============================================
+echo "<div class='test-section' id='section-raw-data'>";
+echo "<div class='section-header' data-target='content-raw-data'>";
+echo "<h2>Raw Data <span class='section-count count-neutral'>(View Only)</span></h2>";
+echo "<button class='section-toggle' aria-expanded='false' aria-controls='content-raw-data' type='button'>";
+echo "<span class='toggle-icon'>+</span>";
+echo "</button>";
+echo "</div>";
+echo "<div class='test-grid' id='content-raw-data' style='display: none;'>";
+
+if ($db !== null) {
+    // Cart summary
+    try {
+        $stmt = $db->query(
+            "SELECT
+                COUNT(*)                             AS total_rows,
+                COUNT(DISTINCT customer_id)          AS distinct_customers,
+                COUNT(DISTINCT product_id)           AS distinct_products,
+                COALESCE(SUM(quantity), 0)           AS total_units,
+                COALESCE(SUM(quantity * price), 0)   AS total_value
+             FROM cart"
+        );
+        $summary = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        echo "<h3 style='margin: 10px 0 5px 0; font-size: 16px;'>Cart Summary</h3>";
+        echo "<table class='data-table'>";
+        echo "<tr><th>Metric</th><th>Value</th><th>Status</th></tr>";
+
+        $rows = [
+            'Total cart rows'        => [(int)($summary['total_rows'] ?? 0), 'ok'],
+            'Distinct customers'     => [(int)($summary['distinct_customers'] ?? 0), 'ok'],
+            'Distinct products'      => [(int)($summary['distinct_products'] ?? 0), 'ok'],
+            'Total units in carts'   => [(int)($summary['total_units'] ?? 0), 'ok'],
+            'Total cart value'       => ['₱' . number_format((float)($summary['total_value'] ?? 0), 2), 'ok'],
+        ];
+        foreach ($rows as $label => [$val, $status]) {
+            $statusClass = $status === 'ok' ? 'status-ok' : 'status-fail';
+            $statusText  = $status === 'ok' ? 'OK' : 'ISSUE';
+            echo "<tr>";
+            echo "<td>" . htmlspecialchars($label) . "</td>";
+            echo "<td>" . htmlspecialchars((string)$val) . "</td>";
+            echo "<td class='{$statusClass}'>" . $statusText . "</td>";
+            echo "</tr>";
+        }
+        echo "</table>";
+    } catch (PDOException $e) {
+        echo "<p style='color:#c53030;font-size:13px;'>Summary query failed: "
+            . htmlspecialchars($e->getMessage()) . "</p>";
+    }
+
+    // Recent cart rows
+    try {
+        $stmt = $db->query(
+            "SELECT c.cart_id, c.customer_id, c.product_id, c.quantity, c.price,
+                    c.added_at, p.name AS product_name, p.base_price
+             FROM cart c
+             JOIN product p ON c.product_id = p.product_id
+             ORDER BY c.added_at DESC
+             LIMIT 10"
+        );
+        $recent = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo "<h3 style='margin: 15px 0 5px 0; font-size: 16px;'>Most Recent Cart Rows</h3>";
+        if (empty($recent)) {
+            echo "<p style='color:#718096;font-size:13px;'>Cart is empty.</p>";
+        } else {
+            echo "<table class='data-table'>";
+            echo "<tr>";
+            echo "<th>cart_id</th><th>customer_id</th><th>product_id</th>";
+            echo "<th>product</th><th>qty</th><th>price</th><th>base_price</th><th>added_at</th>";
+            echo "</tr>";
+            foreach ($recent as $r) {
+                echo "<tr>";
+                echo "<td>" . htmlspecialchars((string)$r['cart_id']) . "</td>";
+                echo "<td>" . htmlspecialchars((string)$r['customer_id']) . "</td>";
+                echo "<td>" . htmlspecialchars((string)$r['product_id']) . "</td>";
+                echo "<td>" . htmlspecialchars((string)$r['product_name']) . "</td>";
+                echo "<td>" . htmlspecialchars((string)$r['quantity']) . "</td>";
+                echo "<td>₱" . htmlspecialchars(number_format((float)$r['price'], 2)) . "</td>";
+                echo "<td>₱" . htmlspecialchars(number_format((float)$r['base_price'], 2)) . "</td>";
+                echo "<td>" . htmlspecialchars((string)$r['added_at']) . "</td>";
+                echo "</tr>";
+            }
+            echo "</table>";
+        }
+    } catch (PDOException $e) {
+        echo "<p style='color:#c53030;font-size:13px;'>Recent rows query failed: "
+            . htmlspecialchars($e->getMessage()) . "</p>";
+    }
+} else {
+    echo "<p style='color:#c53030;font-size:13px;'>Database connection unavailable.</p>";
+}
+
+echo "</div>";
+echo "</div>";
+
+// ============================================
+// COLLAPSIBLE SECTIONS
+// ============================================
+echo <<<JS
+<script>
+(function() {
+    'use strict';
+    var sectionHeaders = document.querySelectorAll('.section-header');
+
+    sectionHeaders.forEach(function(header) {
+        var targetId  = header.getAttribute('data-target');
+        var content   = document.getElementById(targetId);
+        var toggleBtn = header.querySelector('.section-toggle');
+        var icon      = toggleBtn ? toggleBtn.querySelector('.toggle-icon') : null;
+        if (!content || !toggleBtn || !icon) return;
+
+        header.addEventListener('click', function(e) {
+            if (e.target.closest('.section-toggle')) return;
+            toggleSection(header, content, toggleBtn, icon);
+        });
+        toggleBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            toggleSection(header, content, toggleBtn, icon);
+        });
+        header.setAttribute('role', 'button');
+        header.setAttribute('tabindex', '0');
+        header.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleSection(header, content, toggleBtn, icon);
+            }
+        });
+    });
+
+    function toggleSection(header, content, toggleBtn, icon) {
+        var collapsed = header.classList.contains('section-collapsed');
+        if (collapsed) {
+            header.classList.remove('section-collapsed');
+            toggleBtn.setAttribute('aria-expanded', 'true');
+            content.style.display = 'grid';
+            icon.textContent = '-';
+        } else {
+            header.classList.add('section-collapsed');
+            toggleBtn.setAttribute('aria-expanded', 'false');
+            content.style.display = 'none';
+            icon.textContent = '+';
+        }
+    }
+})();
+</script>
+JS;
+
+echo "</div></body></html>";
+```
+
+---
+
+## File: `fitpal/test/customer/menu-test.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Menu Page Probe Test
+ * Validates menu data directly from database
+ *
+ * @package FitPal
+ * @version 2.4
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+$basePath = realpath(__DIR__ . '/../..');
+$customerPath = $basePath . '/customer';
+$sharedPath = $basePath . '/shared';
+
+$passed = 0;
+$failed = 0;
+
+$sections = [];
+
+function testResult($name, $result, $message = '', $section = 'General') {
+    global $sections, $passed, $failed;
+    $status = $result ? 'PASS' : 'FAIL';
+    if ($result) $passed++; else $failed++;
+    
+    if (!isset($sections[$section])) {
+        $sections[$section] = [];
+    }
+    $sections[$section][] = [
+        'name' => $name,
+        'status' => $status,
+        'message' => $message,
+        'passed' => $result
+    ];
+    return $result;
+}
+
+function renderSection($title, $sectionName, $defaultCollapsed = true) {
+    global $sections;
+    
+    $totalTests = isset($sections[$sectionName]) ? count($sections[$sectionName]) : 0;
+    $passedTests = 0;
+    if (isset($sections[$sectionName])) {
+        foreach ($sections[$sectionName] as $test) {
+            if ($test['passed']) $passedTests++;
+        }
+    }
+    
+    $failedTests = $totalTests - $passedTests;
+    $allPassed = ($totalTests > 0 && $failedTests === 0);
+    $hasFailures = ($failedTests > 0);
+    
+    $sectionId = 'section-' . preg_replace('/[^a-zA-Z0-9]/', '-', $sectionName);
+    $contentId = 'content-' . preg_replace('/[^a-zA-Z0-9]/', '-', $sectionName);
+    
+    $collapsedClass = $defaultCollapsed ? 'section-collapsed' : '';
+    
+    echo "<div class='test-section {$collapsedClass}' id='{$sectionId}'>";
+    echo "<div class='section-header' data-target='{$contentId}'>";
+    
+    $countClass = 'count-neutral';
+    if ($allPassed) {
+        $countClass = 'count-pass';
+    } elseif ($hasFailures && $failedTests <= 2) {
+        $countClass = 'count-warning';
+    } elseif ($hasFailures && $failedTests > 2) {
+        $countClass = 'count-fail';
+    }
+    
+    echo "<h2>{$title} <span class='section-count {$countClass}'>({$passedTests}/{$totalTests})</span></h2>";
+    echo "<button class='section-toggle' aria-expanded='" . ($defaultCollapsed ? 'false' : 'true') . "' aria-controls='{$contentId}' type='button'>";
+    echo "<span class='toggle-icon'>" . ($defaultCollapsed ? '+' : '-') . "</span>";
+    echo "</button>";
+    echo "</div>";
+    echo "<div class='test-grid' id='{$contentId}' style='display: " . ($defaultCollapsed ? 'none' : 'grid') . ";'>";
+    
+    if (isset($sections[$sectionName]) && !empty($sections[$sectionName])) {
+        foreach ($sections[$sectionName] as $test) {
+            $statusClass = $test['passed'] ? 'pass' : 'fail';
+            $statusText = $test['passed'] ? 'PASS' : 'FAIL';
+            
+            echo "<div class='test-item {$statusClass}'>";
+            echo "<div class='test-name'>" . htmlspecialchars($test['name']) . "</div>";
+            echo "<div class='test-status {$statusClass}'>" . $statusText . "</div>";
+            echo "<div class='test-message'>" . htmlspecialchars($test['message']) . "</div>";
+            echo "</div>";
+        }
+    } else {
+        echo "<div class='test-item' style='border-left-color: #edf2f0;'>";
+        echo "<div class='test-name' style='color: #a0aec0;'>No tests in this section</div>";
+        echo "</div>";
+    }
+    
+    echo "</div>";
+    echo "</div>";
+}
+
+function renderLiveMenuSection($baseUrl, $defaultCollapsed = true) {
+    global $sections;
+    
+    $sectionName = 'Live Menu';
+    $totalTests = isset($sections[$sectionName]) ? count($sections[$sectionName]) : 0;
+    $passedTests = 0;
+    if (isset($sections[$sectionName])) {
+        foreach ($sections[$sectionName] as $test) {
+            if ($test['passed']) $passedTests++;
+        }
+    }
+    
+    $failedTests = $totalTests - $passedTests;
+    $allPassed = ($totalTests > 0 && $failedTests === 0);
+    $hasFailures = ($failedTests > 0);
+    
+    $collapsedClass = $defaultCollapsed ? 'section-collapsed' : '';
+    $contentId = 'content-live-menu';
+    
+    echo "<div class='test-section {$collapsedClass}' id='section-live-menu'>";
+    echo "<div class='section-header' data-target='{$contentId}'>";
+    
+    $countClass = 'count-neutral';
+    if ($allPassed) {
+        $countClass = 'count-pass';
+    } elseif ($hasFailures && $failedTests <= 2) {
+        $countClass = 'count-warning';
+    } elseif ($hasFailures && $failedTests > 2) {
+        $countClass = 'count-fail';
+    }
+    
+    echo "<h2>Live Menu Test <span class='section-count {$countClass}'>({$passedTests}/{$totalTests})</span></h2>";
+    echo "<button class='section-toggle' aria-expanded='" . ($defaultCollapsed ? 'false' : 'true') . "' aria-controls='{$contentId}' type='button'>";
+    echo "<span class='toggle-icon'>" . ($defaultCollapsed ? '+' : '-') . "</span>";
+    echo "</button>";
+    echo "</div>";
+    echo "<div class='test-grid' id='{$contentId}' style='display: " . ($defaultCollapsed ? 'none' : 'grid') . ";'>";
+    
+    if (isset($sections[$sectionName]) && !empty($sections[$sectionName])) {
+        foreach ($sections[$sectionName] as $test) {
+            $statusClass = $test['passed'] ? 'pass' : 'fail';
+            $statusText = $test['passed'] ? 'PASS' : 'FAIL';
+            
+            echo "<div class='test-item {$statusClass}'>";
+            echo "<div class='test-name'>" . htmlspecialchars($test['name']) . "</div>";
+            echo "<div class='test-status {$statusClass}'>" . $statusText . "</div>";
+            echo "<div class='test-message'>" . htmlspecialchars($test['message']) . "</div>";
+            echo "</div>";
+        }
+    }
+    
+    echo "<div class='live-test'>";
+    echo "<p><strong>View the menu page:</strong></p>";
+    echo "<p style='font-size:13px;color:#718096;margin:5px 0;'>URL: " . htmlspecialchars($baseUrl . '/customer/pages/menu.php') . "</p>";
+    echo "<iframe src='" . $baseUrl . "/customer/pages/menu.php'></iframe>";
+    echo "<div class='btn-test-group'>";
+    echo "<a href='" . $baseUrl . "/customer/pages/menu.php' target='_blank' class='btn-test'>Open Menu</a>";
+    echo "<a href='" . $baseUrl . "/customer/pages/sign-in.php' target='_blank' class='btn-test'>Sign In</a>";
+    echo "</div>";
+    echo "</div>";
+    
+    echo "</div>";
+    echo "</div>";
+}
+
+function getAssetBase() {
+    $scriptPath = $_SERVER['SCRIPT_NAME'];
+    $dirPath = dirname($scriptPath);
+    $segments = array_filter(explode('/', $dirPath));
+    $depth = count($segments);
+    if ($depth <= 0) return './shared/';
+    return str_repeat('../', $depth) . 'shared/';
+}
+
+$protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http';
+$host = $_SERVER['HTTP_HOST'];
+$baseUrl = $protocol . '://' . $host;
+
+$assetBase = getAssetBase();
+
+echo "<!DOCTYPE html>
+<html lang='en'>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>FitPal Menu Probe Test</title>
+    <link rel='stylesheet' href='{$assetBase}assets/css/global.css'>
+    <style>
+        /* ===== Exact same base styles as sign-in/sign-up tests ===== */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { width: 100%; overflow-x: hidden; }
+        body { background: #f4f6f9; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        .test-container { max-width: 100%; padding: 0; margin: 0; }
+        .test-header { background: linear-gradient(135deg, #2d3748, #1a202c); color: white; padding: 30px; border-radius: 12px; margin-bottom: 30px; width: 100%; }
+        .test-header h1 { margin: 0; font-size: 28px; }
+        .test-header p { margin: 10px 0 0 0; opacity: 0.8; }
+        .test-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; width: 100%; }
+        .summary-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center; }
+        .summary-card .number { font-size: 32px; font-weight: 700; }
+        .summary-card .label { color: #718096; font-size: 14px; margin-top: 5px; }
+        .summary-card.total .number { color: #2d3748; }
+        .summary-card.passed .number { color: #48bb78; }
+        .summary-card.failed .number { color: #fc8181; }
+        .summary-card.rate .number { color: #4299e1; }
+        .test-grid { display: grid; gap: 10px; padding: 15px; width: 100%; }
+        .test-item { background: white; border-radius: 8px; padding: 12px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; width: 100%; }
+        .test-item.pass { border-left-color: #48bb78; }
+        .test-item.fail { border-left-color: #fc8181; }
+        .test-item .test-name { font-weight: 600; font-size: 14px; flex: 1; min-width: 180px; }
+        .test-item .test-status { display: inline-block; padding: 2px 14px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; margin: 0 10px; }
+        .test-item .test-status.pass { background: #c6f6d5; color: #22543d; }
+        .test-item .test-status.fail { background: #fed7d7; color: #9b2c2c; }
+        .test-item .test-message { color: #718096; font-size: 13px; min-width: 100px; text-align: right; }
+        .test-section { background: white; border-radius: 10px; margin-top: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; width: 100%; }
+        .section-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; cursor: pointer; background: #f7fafc; border-bottom: 1px solid #e2e8f0; user-select: none; width: 100%; }
+        .section-header:hover { background: #edf2f7; }
+        .section-header h2 { margin: 0; font-size: 18px; color: #2d3748; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .section-count { font-size: 14px; font-weight: 600; padding: 2px 12px; border-radius: 20px; }
+        .count-pass { background: #c6f6d5; color: #22543d; }
+        .count-warning { background: #fefcbf; color: #975a16; }
+        .count-fail { background: #fed7d7; color: #9b2c2c; }
+        .count-neutral { background: #edf2f7; color: #718096; }
+        .section-toggle { background: none; border: none; font-size: 20px; cursor: pointer; color: #718096; padding: 0 10px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 6px; flex-shrink: 0; }
+        .section-toggle:hover { background: #e2e8f0; }
+        .toggle-icon { display: inline-block; transition: transform 0.2s ease; }
+        .section-collapsed .toggle-icon { transform: rotate(0deg); }
+        .live-test { padding: 10px 0; width: 100%; }
+        .live-test iframe { width: 100%; height: 500px; border: 1px solid #e2e8f0; border-radius: 6px; margin-top: 10px; display: block; }
+        .btn-test { display: inline-block; padding: 8px 16px; background: #4299e1; color: white; border-radius: 6px; text-decoration: none; font-size: 13px; margin-top: 10px; }
+        .btn-test:hover { background: #3182ce; }
+        .btn-test-group { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+        .top-section { margin-bottom: 20px; width: 100%; }
+        
+        /* ===== Extra styles for the raw data table (kept from original) ===== */
+        .data-table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 10px 0; }
+        .data-table th { background: #edf2f7; padding: 8px 12px; text-align: left; font-weight: 600; }
+        .data-table td { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; }
+        .data-table tr:hover { background: #f7fafc; }
+        .status-ok { color: #48bb78; font-weight: 600; }
+        .status-fail { color: #fc8181; font-weight: 600; }
+        .db-error-box { background: #fff5f5; border: 1px solid #feb2b2; border-radius: 8px; padding: 15px; margin: 10px 0; color: #c53030; width: 100%; }
+        
+        /* ===== Responsive ===== */
+        @media (max-width: 640px) {
+            body { padding: 10px; }
+            .test-header { padding: 20px; }
+            .test-header h1 { font-size: 22px; }
+            .test-summary { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+            .summary-card { padding: 15px; }
+            .summary-card .number { font-size: 24px; }
+            .section-header { padding: 12px 15px; flex-wrap: wrap; }
+            .section-header h2 { font-size: 16px; }
+            .section-count { font-size: 12px; padding: 2px 10px; }
+            .test-item { padding: 10px 15px; flex-direction: column; align-items: flex-start; gap: 5px; }
+            .test-item .test-name { font-size: 13px; min-width: auto; width: 100%; }
+            .test-item .test-status { margin: 0 10px 0 0; }
+            .test-item .test-message { text-align: left; width: 100%; min-width: auto; }
+            .test-grid { padding: 10px; }
+            .live-test iframe { height: 350px; }
+            .btn-test-group { gap: 8px; }
+            .btn-test { font-size: 12px; padding: 6px 12px; }
+            .data-table { font-size: 11px; }
+            .data-table th, .data-table td { padding: 4px 8px; }
+        }
+        
+        @media (max-width: 400px) {
+            .test-summary { grid-template-columns: 1fr 1fr; gap: 8px; }
+            .summary-card { padding: 10px; }
+            .summary-card .number { font-size: 20px; }
+            .section-header h2 { font-size: 14px; }
+            .section-count { font-size: 11px; padding: 1px 8px; }
+            .test-item .test-name { font-size: 12px; }
+            .live-test iframe { height: 280px; }
+        }
+    </style>
+</head>
+<body>
+<div class='test-container'>";
+
+echo "
+<div class='test-header'>
+    <h1>FitPal Menu Probe Test</h1>
+    <p>Validates menu data directly from database</p>
+    <p style='font-size:13px;opacity:0.6;margin-top:10px;'>
+        Base Path: " . htmlspecialchars($basePath) . " | 
+        Base URL: " . htmlspecialchars($baseUrl) . "
+    </p>
+</div>";
+
+// ============================================
+// PROBE THE DATABASE DIRECTLY (no HTTP calls)
+// ============================================
+
+require_once $sharedPath . '/backend/database/database-connect.php';
+
+$dbData = [];
+
+if (isset($database_connection) && $database_connection instanceof PDO) {
+    try {
+        // 1. Count all products
+        $stmt = $database_connection->query("SELECT COUNT(*) as total FROM product");
+        $dbData['total_products'] = (int)$stmt->fetchColumn();
+        
+        // 2. Count active products
+        $stmt = $database_connection->query("SELECT COUNT(*) as total FROM product WHERE is_active = 1");
+        $dbData['active_products'] = (int)$stmt->fetchColumn();
+        
+        // 3. Count active branches
+        $stmt = $database_connection->query("SELECT COUNT(*) as total FROM restaurant_branch WHERE is_active = 1");
+        $dbData['active_branches'] = (int)$stmt->fetchColumn();
+        
+        // 4. Count active restaurants
+        $stmt = $database_connection->query("SELECT COUNT(*) as total FROM restaurant WHERE is_active = 1");
+        $dbData['active_restaurants'] = (int)$stmt->fetchColumn();
+        
+        // 5. Products with NULL branch
+        $stmt = $database_connection->query("SELECT COUNT(*) as total FROM product WHERE restaurant_branch_id IS NULL");
+        $dbData['null_branch_products'] = (int)$stmt->fetchColumn();
+        
+        // 6. Products that would appear in menu
+        $stmt = $database_connection->query(
+            "SELECT COUNT(*) as total 
+             FROM product p
+             JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
+             JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
+             WHERE p.is_active = 1 AND rb.is_active = 1 AND r.is_active = 1"
+        );
+        $dbData['fully_active_products'] = (int)$stmt->fetchColumn();
+        
+        // 7. Sample products
+        $stmt = $database_connection->query(
+            "SELECT p.product_id, p.name, p.is_active, p.restaurant_branch_id,
+                    rb.branch_name, rb.is_active as branch_active,
+                    r.business_name, r.is_active as restaurant_active
+             FROM product p
+             LEFT JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
+             LEFT JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
+             LIMIT 5"
+        );
+        $dbData['sample_products'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        testResult('Database Connected', true, 'Connection established', 'Database');
+        testResult('Active Products Exist', $dbData['active_products'] > 0, $dbData['active_products'] . ' active products', 'Database');
+        testResult('Active Branches Exist', $dbData['active_branches'] > 0, $dbData['active_branches'] . ' active branches', 'Database');
+        testResult('Active Restaurants Exist', $dbData['active_restaurants'] > 0, $dbData['active_restaurants'] . ' active restaurants', 'Database');
+        testResult('No NULL Branch Products', $dbData['null_branch_products'] === 0, $dbData['null_branch_products'] . ' products with NULL branch', 'Database');
+        testResult('Fully Active Products (menu-ready)', $dbData['fully_active_products'] > 0, $dbData['fully_active_products'] . ' products ready for menu', 'Database');
+        
+    } catch (PDOException $e) {
+        testResult('Database Query', false, 'Error: ' . $e->getMessage(), 'Database');
+        $dbData['error'] = $e->getMessage();
+    }
+} else {
+    testResult('Database Connection', false, 'Could not connect to database', 'Database');
+}
+
+// ============================================
+// CHECK FILES EXIST
+// ============================================
+
+$filesToCheck = [
+    'Menu Page' => $customerPath . '/pages/menu.php',
+    'Product Queries' => $customerPath . '/backend/database/product-queries.php',
+    'Menu CSS' => $customerPath . '/assets/css/menu.css',
+];
+
+foreach ($filesToCheck as $name => $path) {
+    $exists = file_exists($path);
+    testResult($name, $exists, $exists ? 'Found' : 'Missing', 'Files');
+}
+
+// ============================================
+// LIVE MENU TESTS - MOVED HERE BEFORE renderLiveMenuSection()
+// ============================================
+
+$menuPageExists = file_exists($customerPath . '/pages/menu.php');
+testResult('Menu Page Accessible', $menuPageExists, $menuPageExists ? 'Page found' : 'Page missing', 'Live Menu');
+
+$productQueriesExists = file_exists($customerPath . '/backend/database/product-queries.php');
+testResult('Product Queries Included', $productQueriesExists, $productQueriesExists ? 'File found' : 'File missing', 'Live Menu');
+
+$menuCssExists = file_exists($customerPath . '/assets/css/menu.css');
+testResult('Menu CSS Exists', $menuCssExists, $menuCssExists ? 'Stylesheet found' : 'Stylesheet missing', 'Live Menu');
+
+// ============================================
+// CALCULATE TOTALS
+// ============================================
+$totalTests = 0;
+$totalPassed = 0;
+$totalFailed = 0;
+
+foreach ($sections as $section) {
+    foreach ($section as $test) {
+        $totalTests++;
+        if ($test['passed']) $totalPassed++;
+        else $totalFailed++;
+    }
+}
+
+$passRate = $totalTests > 0 ? round(($totalPassed / $totalTests) * 100) : 0;
+
+// ============================================
+// TOP SECTION: SUMMARY + LIVE MENU (Stacked vertically)
+// ============================================
+echo "<div class='top-section'>";
+
+// Summary Cards
+echo "<div class='test-summary'>";
+echo "<div class='summary-card total'><div class='number'>{$totalTests}</div><div class='label'>Total Tests</div></div>";
+echo "<div class='summary-card passed'><div class='number'>{$totalPassed}</div><div class='label'>Passed</div></div>";
+echo "<div class='summary-card failed'><div class='number'>{$totalFailed}</div><div class='label'>Failed</div></div>";
+echo "<div class='summary-card rate'><div class='number'>{$passRate}%</div><div class='label'>Pass Rate</div></div>";
+echo "</div>";
+
+// Live Menu (with heading, pass count, and collapsible)
+renderLiveMenuSection($baseUrl, true);
+
+echo "</div>";
+
+// ============================================
+// RENDER ALL SECTIONS (Collapsed by default)
+// ============================================
+
+renderSection('Database Tests', 'Database', true);
+renderSection('File Tests', 'Files', true);
+
+// ============================================
+// RAW DATA DISPLAY
+// ============================================
+echo "<div class='test-section' id='section-raw-data'>";
+echo "<div class='section-header' data-target='content-raw-data'>";
+echo "<h2>Raw Data <span class='section-count count-neutral'>(View Only)</span></h2>";
+echo "<button class='section-toggle' aria-expanded='false' aria-controls='content-raw-data' type='button'>";
+echo "<span class='toggle-icon'>+</span>";
+echo "</button>";
+echo "</div>";
+echo "<div class='test-grid' id='content-raw-data' style='display: none;'>";
+
+if (!empty($dbData)) {
+    echo "<h3 style='margin: 10px 0 5px 0; font-size: 16px;'>Database Summary</h3>";
+    echo "<table class='data-table'>";
+    echo "<tr><th>Metric</th><th>Value</th><th>Status</th></tr>";
+    
+    $metrics = [
+        'Total Products' => $dbData['total_products'] ?? 'N/A',
+        'Active Products' => $dbData['active_products'] ?? 'N/A',
+        'Active Branches' => $dbData['active_branches'] ?? 'N/A',
+        'Active Restaurants' => $dbData['active_restaurants'] ?? 'N/A',
+        'Products with NULL Branch' => $dbData['null_branch_products'] ?? 'N/A',
+        'Fully Active Products (menu-ready)' => $dbData['fully_active_products'] ?? 'N/A',
+    ];
+    
+    foreach ($metrics as $label => $value) {
+        $statusClass = 'status-ok';
+        $statusText = 'OK';
+        
+        if (strpos($label, 'NULL') !== false && $value > 0) {
+            $statusClass = 'status-fail';
+            $statusText = 'ISSUE';
+        } elseif (strpos($label, 'Fully') !== false && $value == 0) {
+            $statusClass = 'status-fail';
+            $statusText = 'ISSUE';
+        } elseif ($label === 'Active Products' && $value == 0) {
+            $statusClass = 'status-fail';
+            $statusText = 'ISSUE';
+        } elseif ($label === 'Active Branches' && $value == 0) {
+            $statusClass = 'status-fail';
+            $statusText = 'ISSUE';
+        } elseif ($label === 'Active Restaurants' && $value == 0) {
+            $statusClass = 'status-fail';
+            $statusText = 'ISSUE';
+        }
+        
+        echo "<tr>";
+        echo "<td>" . htmlspecialchars($label) . "</td>";
+        echo "<td>" . htmlspecialchars((string)$value) . "</td>";
+        echo "<td class='{$statusClass}'>" . $statusText . "</td>";
+        echo "</tr>";
+    }
+    echo "</table>";
+    
+    if (!empty($dbData['sample_products'])) {
+        echo "<h3 style='margin: 15px 0 5px 0; font-size: 16px;'>Sample Products</h3>";
+        echo "<table class='data-table'>";
+        echo "<tr><th>ID</th><th>Name</th><th>Active</th><th>Branch</th><th>Branch Active</th><th>Restaurant</th><th>Restaurant Active</th></tr>";
+        foreach ($dbData['sample_products'] as $p) {
+            $pActive = $p['is_active'] ? 'Yes' : 'No';
+            $bActive = isset($p['branch_active']) ? ($p['branch_active'] ? 'Yes' : 'No') : 'N/A';
+            $rActive = isset($p['restaurant_active']) ? ($p['restaurant_active'] ? 'Yes' : 'No') : 'N/A';
+            echo "<tr>";
+            echo "<td>" . ($p['product_id'] ?? 'N/A') . "</td>";
+            echo "<td>" . htmlspecialchars($p['name'] ?? 'N/A') . "</td>";
+            echo "<td>" . $pActive . "</td>";
+            echo "<td>" . htmlspecialchars($p['branch_name'] ?? 'NULL') . "</td>";
+            echo "<td>" . $bActive . "</td>";
+            echo "<td>" . htmlspecialchars($p['business_name'] ?? 'NULL') . "</td>";
+            echo "<td>" . $rActive . "</td>";
+            echo "</tr>";
+        }
+        echo "</table>";
+    }
+}
+
+echo "</div>";
+echo "</div>";
+
+// ============================================
+// COLLAPSIBLE SECTIONS JAVASCRIPT (exactly as in sign-in test)
+// ============================================
+echo "
+<script>
+(function() {
+    'use strict';
+
+    var sectionHeaders = document.querySelectorAll('.section-header');
+
+    sectionHeaders.forEach(function(header) {
+        var targetId = header.getAttribute('data-target');
+        var content = document.getElementById(targetId);
+        var toggleBtn = header.querySelector('.section-toggle');
+        var icon = toggleBtn ? toggleBtn.querySelector('.toggle-icon') : null;
+
+        if (!content || !toggleBtn || !icon) return;
+
+        header.addEventListener('click', function(e) {
+            if (e.target.closest('.section-toggle')) return;
+            toggleSection(header, content, toggleBtn, icon);
+        });
+
+        toggleBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            toggleSection(header, content, toggleBtn, icon);
+        });
+
+        header.setAttribute('role', 'button');
+        header.setAttribute('tabindex', '0');
+        header.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleSection(header, content, toggleBtn, icon);
+            }
+        });
+    });
+
+    function toggleSection(header, content, toggleBtn, icon) {
+        var isCollapsed = header.classList.contains('section-collapsed');
+
+        if (isCollapsed) {
+            header.classList.remove('section-collapsed');
+            toggleBtn.setAttribute('aria-expanded', 'true');
+            content.style.display = 'grid';
+            icon.textContent = '-';
+        } else {
+            header.classList.add('section-collapsed');
+            toggleBtn.setAttribute('aria-expanded', 'false');
+            content.style.display = 'none';
+            icon.textContent = '+';
+        }
+    }
+})();
+</script>
+";
+
+echo "
+</div>
+</body>
+</html>";
+```
+
+---
+
+## File: `fitpal/test/customer/product-detail-test.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Product Detail Test
+ *
+ * Two tiers of tests:
+ *   (A) STRUCTURAL — file presence, token checks. Cheap, but weak.
+ *   (B) LOGIC — DB-driven invariants that catch the bug classes
+ *       that motivated this test suite:
+ *         - dietary_information.calories != sum of defaults
+ *         - min_quantity > default_quantity (UI cannot render default)
+ *         - multiple defaults in one choice group
+ *         - PHP not emitting data-* attributes JS reads
+ *         - JS reading different attribute names than PHP writes
+ *
+ * Sections with 0 tests render as NEUTRAL, not as a pass.
+ *
+ * @package FitPal
+ * @version 2.0
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// ============================================
+// PATHS
+// ============================================
+$basePath     = realpath(__DIR__ . '/../..');
+$customerPath = $basePath . '/customer';
+$sharedPath   = $basePath . '/shared';
+
+// ============================================
+// TEST HARNESS
+// ============================================
+$sections = [];
+
+/**
+ * Record a test result.
+ *
+ * @param string $name
+ * @param bool   $result
+ * @param string $message
+ * @param string $section
+ * @param string $tier    'logic' or 'structural'
+ * @return bool
+ */
+function testResult(string $name, bool $result, string $message = '', string $section = 'General', string $tier = 'logic'): bool
+{
+    global $sections;
+    if (!isset($sections[$section])) {
+        $sections[$section] = [];
+    }
+    $sections[$section][] = [
+        'name'    => $name,
+        'status'  => $result ? 'PASS' : 'FAIL',
+        'message' => $message,
+        'passed'  => $result,
+        'tier'    => $tier,
+    ];
+    return $result;
+}
+
+/**
+ * Register a section that had no tests (so it renders neutral, not green).
+ *
+ * @param string $section
+ * @param string $reason
+ */
+function markSectionSkipped(string $section, string $reason): void
+{
+    global $sections;
+    if (!isset($sections[$section])) {
+        $sections[$section] = [];
+    }
+    // A single sentinel that is neither pass nor fail — renderSection
+    // treats status "SKIP" as neutral and counts it separately.
+    $sections[$section][] = [
+        'name'    => 'Section skipped',
+        'status'  => 'SKIP',
+        'message' => $reason,
+        'passed'  => null,
+        'tier'    => 'structural',
+    ];
+}
+
+/**
+ * Render one section with correct pass/fail/skip accounting.
+ *
+ * @param string $title
+ * @param string $sectionName
+ * @param bool   $defaultCollapsed
+ */
+function renderSection(string $title, string $sectionName, bool $defaultCollapsed = true): void
+{
+    global $sections;
+
+    $tests = $sections[$sectionName] ?? [];
+    $total = 0; $passed = 0; $failed = 0; $skipped = 0;
+
+    foreach ($tests as $t) {
+        if ($t['passed'] === null) {
+            $skipped++;
+        } else {
+            $total++;
+            if ($t['passed']) {
+                $passed++;
+            } else {
+                $failed++;
+            }
+        }
+    }
+
+    // A section with only skipped sentinels shows neutral.
+    if ($total === 0) {
+        $countClass = 'count-neutral';
+        $countText  = $skipped > 0 ? 'skipped' : '0';
+        $allPassed  = false;
+    } elseif ($failed === 0) {
+        $countClass = 'count-pass';
+        $countText  = "{$passed}/{$total}";
+        $allPassed  = true;
+    } elseif ($failed <= 2) {
+        $countClass = 'count-warning';
+        $countText  = "{$passed}/{$total}";
+        $allPassed  = false;
+    } else {
+        $countClass = 'count-fail';
+        $countText  = "{$passed}/{$total}";
+        $allPassed  = false;
+    }
+
+    // Sections with failures default to OPEN so reviewers cannot miss them.
+    if ($failed > 0) {
+        $defaultCollapsed = false;
+    }
+
+    $sectionId = 'section-' . preg_replace('/[^a-zA-Z0-9]/', '-', $sectionName);
+    $contentId = 'content-' . preg_replace('/[^a-zA-Z0-9]/', '-', $sectionName);
+    $collapsedClass = $defaultCollapsed ? 'section-collapsed' : '';
+
+    echo "<div class='test-section {$collapsedClass}' id='{$sectionId}'>";
+    echo "<div class='section-header' data-target='{$contentId}'>";
+    echo "<h2>" . htmlspecialchars($title) . " <span class='section-count {$countClass}'>({$countText})</span></h2>";
+    echo "<button class='section-toggle' aria-expanded='" . ($defaultCollapsed ? 'false' : 'true') . "' aria-controls='{$contentId}' type='button'>";
+    echo "<span class='toggle-icon'>" . ($defaultCollapsed ? '+' : '-') . "</span>";
+    echo "</button>";
+    echo "</div>";
+    echo "<div class='test-grid' id='{$contentId}' style='display: " . ($defaultCollapsed ? 'none' : 'grid') . ";'>";
+
+    if (empty($tests)) {
+        echo "<div class='test-item' style='border-left-color: #edf2f0;'>";
+        echo "<div class='test-name' style='color: #a0aec0;'>No tests in this section</div>";
+        echo "</div>";
+    } else {
+        foreach ($tests as $test) {
+            if ($test['passed'] === null) {
+                echo "<div class='test-item skip'>";
+                echo "<div class='test-name'>" . htmlspecialchars($test['name']) . "</div>";
+                echo "<div class='test-status skip'>SKIP</div>";
+                echo "<div class='test-message'>" . htmlspecialchars($test['message']) . "</div>";
+                echo "</div>";
+                continue;
+            }
+            $cls = $test['passed'] ? 'pass' : 'fail';
+            $txt = $test['passed'] ? 'PASS' : 'FAIL';
+            echo "<div class='test-item {$cls}'>";
+            echo "<div class='test-name'>" . htmlspecialchars($test['name']) . "</div>";
+            echo "<div class='test-status {$cls}'>{$txt}</div>";
+            echo "<div class='test-message'>" . htmlspecialchars($test['message']) . "</div>";
+            echo "</div>";
+        }
+    }
+
+    echo "</div>";
+    echo "</div>";
+}
+
+/**
+ * Asset base relative to the current script location.
+ *
+ * @return string
+ */
+function getAssetBase(): string
+{
+    $scriptPath = $_SERVER['SCRIPT_NAME'];
+    $dirPath    = dirname($scriptPath);
+    $segments   = array_filter(explode('/', $dirPath));
+    $depth      = count($segments);
+    if ($depth <= 0) {
+        return './shared/';
+    }
+    return str_repeat('../', $depth) . 'shared/';
+}
+
+$protocol  = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http';
+$host      = $_SERVER['HTTP_HOST'];
+$baseUrl   = $protocol . '://' . $host;
+$assetBase = getAssetBase();
+
+// ============================================
+// HEAD
+// ============================================
+echo <<<HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FitPal Product Detail Test</title>
+<link rel="stylesheet" href="{$assetBase}assets/css/global.css">
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; overflow-x: hidden; }
+    body { background: #f4f6f9; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    .test-container { max-width: 100%; padding: 0; margin: 0; }
+    .test-header { background: linear-gradient(135deg, #2d3748, #1a202c); color: white; padding: 30px; border-radius: 12px; margin-bottom: 30px; width: 100%; }
+    .test-header h1 { margin: 0; font-size: 28px; }
+    .test-header p { margin: 10px 0 0 0; opacity: 0.8; }
+    .test-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; width: 100%; }
+    .summary-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center; }
+    .summary-card .number { font-size: 32px; font-weight: 700; }
+    .summary-card .label { color: #718096; font-size: 14px; margin-top: 5px; }
+    .summary-card.total .number { color: #2d3748; }
+    .summary-card.passed .number { color: #48bb78; }
+    .summary-card.failed .number { color: #fc8181; }
+    .summary-card.rate .number { color: #4299e1; }
+    .test-grid { display: grid; gap: 10px; padding: 15px; width: 100%; }
+    .test-item { background: white; border-radius: 8px; padding: 12px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; width: 100%; }
+    .test-item.pass { border-left-color: #48bb78; }
+    .test-item.fail { border-left-color: #fc8181; }
+    .test-item.skip { border-left-color: #cbd5e0; opacity: 0.75; }
+    .test-item .test-name { font-weight: 600; font-size: 14px; flex: 1; min-width: 180px; }
+    .test-item .test-status { display: inline-block; padding: 2px 14px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; margin: 0 10px; }
+    .test-item .test-status.pass { background: #c6f6d5; color: #22543d; }
+    .test-item .test-status.fail { background: #fed7d7; color: #9b2c2c; }
+    .test-item .test-status.skip { background: #edf2f7; color: #718096; }
+    .test-item .test-message { color: #718096; font-size: 13px; min-width: 100px; text-align: right; }
+    .test-section { background: white; border-radius: 10px; margin-top: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; width: 100%; }
+    .section-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; cursor: pointer; background: #f7fafc; border-bottom: 1px solid #e2e8f0; user-select: none; width: 100%; }
+    .section-header:hover { background: #edf2f7; }
+    .section-header h2 { margin: 0; font-size: 18px; color: #2d3748; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .section-count { font-size: 14px; font-weight: 600; padding: 2px 12px; border-radius: 20px; }
+    .count-pass { background: #c6f6d5; color: #22543d; }
+    .count-warning { background: #fefcbf; color: #975a16; }
+    .count-fail { background: #fed7d7; color: #9b2c2c; }
+    .count-neutral { background: #edf2f7; color: #718096; }
+    .section-toggle { background: none; border: none; font-size: 20px; cursor: pointer; color: #718096; padding: 0 10px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 6px; flex-shrink: 0; }
+    .section-toggle:hover { background: #e2e8f0; }
+    .toggle-icon { display: inline-block; transition: transform 0.2s ease; }
+    .live-test { padding: 10px 0; width: 100%; }
+    .btn-test { display: inline-block; padding: 8px 16px; background: #4299e1; color: white; border-radius: 6px; text-decoration: none; font-size: 13px; margin-top: 10px; }
+    .btn-test:hover { background: #3182ce; }
+    .btn-test-group { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+    .btn-test.danger { background: #e53e3e; }
+    .btn-test.danger:hover { background: #c53030; }
+    .btn-test.success { background: #48bb78; }
+    .btn-test.success:hover { background: #38a169; }
+    .btn-test.warning { background: #ed8936; }
+    .btn-test.warning:hover { background: #dd6b20; }
+    .top-section { margin-bottom: 20px; width: 100%; }
+    .note-box { margin-top: 15px; padding: 15px; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; }
+    .note-box p { font-size: 13px; color: #78350f; margin: 5px 0 0 0; }
+    .note-box p:first-child { font-weight: 600; color: #92400e; margin-top: 0; }
+    .note-box ul { font-size: 13px; color: #78350f; margin: 5px 0 0 0; padding-left: 20px; }
+    @media (max-width: 640px) {
+        body { padding: 10px; }
+        .test-header { padding: 20px; }
+        .test-header h1 { font-size: 22px; }
+        .test-summary { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .summary-card { padding: 15px; }
+        .summary-card .number { font-size: 24px; }
+        .section-header { padding: 12px 15px; flex-wrap: wrap; }
+        .section-header h2 { font-size: 16px; }
+        .section-count { font-size: 12px; padding: 2px 10px; }
+        .test-item { padding: 10px 15px; flex-direction: column; align-items: flex-start; gap: 5px; }
+        .test-item .test-name { font-size: 13px; min-width: auto; width: 100%; }
+        .test-item .test-status { margin: 0 10px 0 0; }
+        .test-item .test-message { text-align: left; width: 100%; min-width: auto; }
+        .test-grid { padding: 10px; }
+    }
+</style>
+</head>
+<body>
+<div class="test-container">
+HTML;
+
+// ============================================
+// HEADER
+// ============================================
+echo "<div class='test-header'>";
+echo "<h1>FitPal Product Detail Test</h1>";
+echo "<p>Structural checks plus DB-driven invariants for the product-detail feature.</p>";
+echo "<p style='font-size:13px;opacity:0.6;margin-top:10px;'>Base Path: " . htmlspecialchars((string)$basePath) . " | Base URL: " . htmlspecialchars($baseUrl) . "</p>";
+echo "</div>";
+
+// ============================================
+// DB CONNECTION
+// ============================================
+$dbFile = $sharedPath . '/backend/database/database-connect.php';
+$db = null;
+
+if (file_exists($dbFile)) {
+    testResult('Database file exists', true, 'File found', 'Database', 'structural');
+    try {
+        $database_host = 'localhost';
+        $database_port = 3306;
+        $database_name = 'fitpal_food_delivery';
+        $database_username = 'root';
+        $database_password = '';
+        $database_charset = 'utf8mb4';
+
+        $dsn = sprintf(
+            'mysql:host=%s;port=%d;dbname=%s;charset=%s',
+            $database_host, $database_port, $database_name, $database_charset
+        );
+        $db = new PDO($dsn, $database_username, $database_password, [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+        ]);
+        testResult('Database connection', true, 'PDO connection established', 'Database', 'structural');
+    } catch (PDOException $e) {
+        testResult('Database connection', false, 'PDO error: ' . $e->getMessage(), 'Database', 'structural');
+        $db = null;
+    }
+} else {
+    testResult('Database file exists', false, 'Missing: ' . $dbFile, 'Database', 'structural');
+}
+
+// ============================================
+// SECTION A — STRUCTURAL: files + includes
+// ============================================
+$criticalFiles = [
+    'product-detail.php'         => $customerPath . '/pages/product-detail.php',
+    'product-detail.css'         => $customerPath . '/assets/css/product-detail.css',
+    'product-detail.js'          => $customerPath . '/assets/ui/js/product-detail.js',
+    'cart-handler.php'           => $customerPath . '/backend/handlers/cart-handler.php',
+    'customer header.php'        => $customerPath . '/includes/header.php',
+    'shared footer.php'          => $sharedPath   . '/includes/footer.php',
+    'database-connect.php'       => $sharedPath   . '/backend/database/database-connect.php',
+];
+foreach ($criticalFiles as $label => $path) {
+    $ok = file_exists($path);
+    testResult($label, $ok, $ok ? 'Found' : 'Missing: ' . $path, 'Files', 'structural');
+}
+
+// ============================================
+// SECTION B — DB SCHEMA
+// ============================================
+if ($db !== null) {
+    // Required tables
+    foreach (['product', 'product_composition', 'ingredient', 'dietary_information'] as $tbl) {
+        $stmt = $db->query("SHOW TABLES LIKE " . $db->quote($tbl));
+        $exists = $stmt->rowCount() > 0;
+        testResult("Table exists: {$tbl}", $exists, $exists ? 'Present' : 'Missing', 'Schema', 'structural');
+    }
+
+    // Required columns on product_composition
+    $requiredCompCols = [
+        'composition_id', 'product_id', 'ingredient_id',
+        'is_default', 'default_quantity', 'max_quantity',
+        'price_modifier', 'display_order',
+        'is_required', 'min_quantity', 'max_quantity_per_item',
+    ];
+    $stmt = $db->query("SHOW COLUMNS FROM product_composition");
+    $haveCols = array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'Field');
+    foreach ($requiredCompCols as $col) {
+        $ok = in_array($col, $haveCols, true);
+        testResult("product_composition.{$col}", $ok, $ok ? 'Present' : 'Missing', 'Schema', 'structural');
+    }
+}
+
+// ============================================
+// SECTION C — PHP CONTRACT
+// Verify product-detail.php emits the data-* attributes JS reads.
+// ============================================
+$pdPath = $customerPath . '/pages/product-detail.php';
+if (file_exists($pdPath)) {
+    $pd = file_get_contents($pdPath);
+
+    // Must NOT still reference the removed $liveQty <= $minQty pattern
+    // that produced out-of-range modifier quantities.
+    $hasLiveQtyBug = strpos($pd, '$liveQty') !== false
+                  && strpos($pd, '$liveQty <= $minQty') !== false;
+    testResult(
+        'No legacy $liveQty clamp bug',
+        !$hasLiveQtyBug,
+        $hasLiveQtyBug
+            ? 'Found $liveQty <= $minQty — will emit out-of-range modifier start values'
+            : 'Clean',
+        'PHP Contract'
+    );
+
+    // Must emit data-default-quantity on modifier-option
+    $hasDefaultQtyAttr = strpos($pd, 'data-default-quantity') !== false;
+    testResult(
+        'Emits data-default-quantity',
+        $hasDefaultQtyAttr,
+        $hasDefaultQtyAttr ? 'Found' : 'Missing — JS delta math will be wrong',
+        'PHP Contract'
+    );
+
+    // Must emit data-is-default on radios/checkboxes
+    $hasIsDefault = strpos($pd, 'data-is-default') !== false;
+    testResult(
+        'Emits data-is-default',
+        $hasIsDefault,
+        $hasIsDefault ? 'Found' : 'Missing — JS cannot identify default input',
+        'PHP Contract'
+    );
+
+    // Must emit data-min-qty and data-max-qty on modifiers
+    $hasMinQty = strpos($pd, 'data-min-qty') !== false;
+    $hasMaxQty = strpos($pd, 'data-max-qty') !== false;
+    testResult('Emits data-min-qty', $hasMinQty, $hasMinQty ? 'Found' : 'Missing', 'PHP Contract');
+    testResult('Emits data-max-qty', $hasMaxQty, $hasMaxQty ? 'Found' : 'Missing', 'PHP Contract');
+
+    // Must emit data-base-price and data-base-calories on the root container
+    $hasBasePriceRoot = strpos($pd, 'data-base-price') !== false;
+    $hasBaseCalRoot   = strpos($pd, 'data-base-calories') !== false;
+    testResult('Root data-base-price', $hasBasePriceRoot, $hasBasePriceRoot ? 'Found' : 'Missing', 'PHP Contract');
+    testResult('Root data-base-calories', $hasBaseCalRoot, $hasBaseCalRoot ? 'Found' : 'Missing', 'PHP Contract');
+
+    // Must emit data-component-kind so JS can dispatch on kind
+    $hasComponentKind = strpos($pd, 'data-component-kind') !== false;
+    testResult('data-component-kind', $hasComponentKind, $hasComponentKind ? 'Found' : 'Missing', 'PHP Contract');
+
+    // Uses CSRF token
+    $hasCsrf = strpos($pd, 'csrf_token') !== false;
+    testResult('CSRF token present', $hasCsrf, $hasCsrf ? 'Found' : 'Missing', 'PHP Contract');
+
+    // No second <!DOCTYPE> in the page (page contract violation)
+    $doctypeCount = substr_count(strtolower($pd), '<!doctype');
+    testResult(
+        'No duplicate <!DOCTYPE>',
+        $doctypeCount === 0,
+        $doctypeCount === 0 ? 'Clean' : "Found {$doctypeCount} — page contract violation",
+        'PHP Contract'
+    );
+}
+
+// ============================================
+// SECTION D — JS CONTRACT
+// Verify product-detail.js reads the attributes PHP writes.
+// ============================================
+$pdJsPath = $customerPath . '/assets/ui/js/product-detail.js';
+if (file_exists($pdJsPath)) {
+    $js = file_get_contents($pdJsPath);
+
+    // Must read data-is-default
+    $readsIsDefault = strpos($js, 'data-is-default') !== false
+                   || strpos($js, 'isDefault') !== false;
+    testResult('JS reads data-is-default', $readsIsDefault, $readsIsDefault ? 'Found' : 'Missing', 'JS Contract');
+
+    // Must read data-default-quantity
+    $readsDefaultQty = strpos($js, 'dataset.defaultQuantity') !== false
+                    || strpos($js, 'data-default-quantity') !== false;
+    testResult('JS reads data-default-quantity', $readsDefaultQty, $readsDefaultQty ? 'Found' : 'Missing', 'JS Contract');
+
+    // Must define calculateTotals (not the old calculateTotalPrice)
+    $hasCalculateTotals = strpos($js, 'function calculateTotals') !== false
+                       || strpos($js, 'calculateTotals =') !== false;
+    testResult('JS defines calculateTotals', $hasCalculateTotals, $hasCalculateTotals ? 'Found' : 'Missing — old calculateTotalPrice?', 'JS Contract');
+
+    // Must compute a delta, not re-add the full default
+    $hasDelta = strpos($js, 'currentQty - defaultQty') !== false
+             || strpos($js, 'selectedPrice - defaultPrice') !== false
+             || strpos($js, 'sp - dp') !== false;
+    testResult('JS uses delta math', $hasDelta, $hasDelta ? 'Found' : 'Missing — will double-count defaults', 'JS Contract');
+
+    // Uses strict mode and const/let only
+    $hasStrict = strpos($js, "'use strict'") !== false;
+    testResult("'use strict'", $hasStrict, $hasStrict ? 'Found' : 'Missing', 'JS Contract');
+
+    $hasVar = preg_match('/\bvar\s+\w/', $js) === 1;
+    testResult('No var keyword', !$hasVar, $hasVar ? 'Found var declaration' : 'Clean', 'JS Contract');
+}
+
+// ============================================
+// SECTION E — DB INVARIANTS
+// These are the bugs that actually showed up in the UI.
+// ============================================
+if ($db !== null) {
+
+    // E1. Every product_composition row must have min <= default <= max_quantity
+    $stmt = $db->query(
+        "SELECT
+            pc.composition_id,
+            p.name AS product_name,
+            i.name AS ingredient_name,
+            pc.min_quantity,
+            pc.default_quantity,
+            pc.max_quantity,
+            pc.max_quantity_per_item,
+            pc.is_required
+         FROM product_composition pc
+         JOIN product p ON p.product_id = pc.product_id
+         JOIN ingredient i ON i.ingredient_id = pc.ingredient_id"
+    );
+    $badRangeRows = [];
+    $requiredNonDefaultRows = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $min  = (int)$row['min_quantity'];
+        $def  = (int)$row['default_quantity'];
+        $max  = (int)$row['max_quantity'];
+        $maxPer = (int)$row['max_quantity_per_item'];
+        $req  = (bool)$row['is_required'];
+
+        // Range on the quantity stepper
+        if ($min > $def || $def > $max) {
+            $badRangeRows[] = sprintf(
+                '%s / %s: min=%d default=%d max=%d',
+                $row['product_name'], $row['ingredient_name'],
+                $min, $def, $max
+            );
+        }
+
+        // For required modifiers with min >= 1, default must equal min
+        if ($maxPer > 1 && $req && $min >= 1 && $def !== $min) {
+            $requiredNonDefaultRows[] = sprintf(
+                '%s / %s: required with min=%d but default=%d',
+                $row['product_name'], $row['ingredient_name'], $min, $def
+            );
+        }
+    }
+    testResult(
+        'min_quantity <= default_quantity <= max_quantity',
+        empty($badRangeRows),
+        empty($badRangeRows)
+            ? 'All ' . $stmt->rowCount() . ' rows satisfy the range'
+            : count($badRangeRows) . ' row(s) violate: ' . implode(' | ', array_slice($badRangeRows, 0, 3)),
+        'DB Invariants'
+    );
+    testResult(
+        'Required modifiers default to their minimum',
+        empty($requiredNonDefaultRows),
+        empty($requiredNonDefaultRows)
+            ? 'Consistent'
+            : implode(' | ', array_slice($requiredNonDefaultRows, 0, 3)),
+        'DB Invariants'
+    );
+
+    // E2. Every choice group (same product + display_order, max_quantity_per_item=1)
+    //     must have at most one is_default=1 row.
+    $stmt = $db->query(
+        "SELECT
+            pc.product_id,
+            pc.display_order,
+            p.name AS product_name,
+            SUM(CASE WHEN pc.is_default = 1 THEN 1 ELSE 0 END) AS default_count,
+            COUNT(*) AS group_size
+         FROM product_composition pc
+         JOIN product p ON p.product_id = pc.product_id
+         WHERE pc.max_quantity_per_item = 1
+         GROUP BY pc.product_id, pc.display_order, p.name
+         HAVING default_count > 1"
+    );
+    $multiDefaultGroups = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    testResult(
+        'At most one default per choice group',
+        empty($multiDefaultGroups),
+        empty($multiDefaultGroups)
+            ? 'All choice groups have <= 1 default'
+            : count($multiDefaultGroups) . ' group(s) with multiple defaults: '
+              . implode(', ', array_map(fn($r) => "{$r['product_name']}#{$r['display_order']} ({$r['default_count']})", array_slice($multiDefaultGroups, 0, 3))),
+        'DB Invariants'
+    );
+
+    // E3. For every customizable product:
+    //       dietary_information.calories == SUM(default ingredient calories)
+    //     This is the invariant that was broken for Vegetable Stir Fry.
+    $stmt = $db->query(
+        "SELECT
+            p.product_id,
+            p.name AS product_name,
+            di.calories AS stored_calories,
+            COALESCE((
+                SELECT SUM(i.calories * GREATEST(pc.default_quantity, pc.min_quantity))
+                FROM product_composition pc
+                JOIN ingredient i ON i.ingredient_id = pc.ingredient_id
+                WHERE pc.product_id = p.product_id AND pc.is_default = 1
+            ), 0) AS derived_calories
+         FROM product p
+         JOIN dietary_information di ON di.dietary_information_id = p.dietary_information_id
+         WHERE p.is_customizable = 1"
+    );
+    $calorieMismatches = [];
+    $calorieRows = 0;
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $calorieRows++;
+        $stored  = (int)$row['stored_calories'];
+        $derived = (int)$row['derived_calories'];
+        if ($stored !== $derived) {
+            $calorieMismatches[] = sprintf(
+                '%s: stored=%d derived=%d (diff %+d)',
+                $row['product_name'], $stored, $derived, $stored - $derived
+            );
+        }
+    }
+    testResult(
+        'dietary_information.calories == defaults sum',
+        empty($calorieMismatches),
+        empty($calorieMismatches)
+            ? "All {$calorieRows} customizable product(s) agree"
+            : count($calorieMismatches) . ' product(s) disagree: ' . implode(' | ', array_slice($calorieMismatches, 0, 3)),
+        'DB Invariants'
+    );
+
+    // E4. Every customizable product has at least one default ingredient.
+    $stmt = $db->query(
+        "SELECT p.product_id, p.name
+         FROM product p
+         WHERE p.is_customizable = 1
+           AND NOT EXISTS (
+               SELECT 1 FROM product_composition pc
+               WHERE pc.product_id = p.product_id AND pc.is_default = 1
+           )"
+    );
+    $noDefaultProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    testResult(
+        'Every customizable product has a default',
+        empty($noDefaultProducts),
+        empty($noDefaultProducts)
+            ? 'All customizable products have at least one default'
+            : count($noDefaultProducts) . ' product(s) missing defaults: '
+              . implode(', ', array_column(array_slice($noDefaultProducts, 0, 3), 'name')),
+        'DB Invariants'
+    );
+
+    // E5. base_price must be > 0 for every active product.
+    $stmt = $db->query(
+        "SELECT p.product_id, p.name, p.price, p.base_price
+         FROM product p
+         WHERE p.is_active = 1 AND (p.base_price IS NULL OR p.base_price <= 0)"
+    );
+    $badPrice = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    testResult(
+        'All active products have base_price > 0',
+        empty($badPrice),
+        empty($badPrice)
+            ? 'All active products priced'
+            : count($badPrice) . ' with base_price <= 0: '
+              . implode(', ', array_map(fn($r) => "{$r['name']}(price={$r['price']},base={$r['base_price']})", array_slice($badPrice, 0, 3))),
+        'DB Invariants'
+    );
+
+    // E6. No product with a "Spinach-style" trap:
+    //       is_required=0, min_quantity > 0, default_quantity < min_quantity
+    //     Already covered by E1's range check, but the specific combination
+    //     is worth calling out because it produced the UI symptom directly.
+    $stmt = $db->query(
+        "SELECT p.name AS product_name, i.name AS ingredient_name,
+                pc.min_quantity, pc.default_quantity
+         FROM product_composition pc
+         JOIN product p ON p.product_id = pc.product_id
+         JOIN ingredient i ON i.ingredient_id = pc.ingredient_id
+         WHERE pc.is_required = 0
+           AND pc.min_quantity > 0
+           AND pc.default_quantity < pc.min_quantity"
+    );
+    $spinachTraps = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    testResult(
+        'No optional modifier requires > default',
+        empty($spinachTraps),
+        empty($spinachTraps)
+            ? 'Consistent'
+            : count($spinachTraps) . ' trap(s): '
+              . implode(' | ', array_map(fn($r) => "{$r['product_name']}/{$r['ingredient_name']} min={$r['min_quantity']} def={$r['default_quantity']}", array_slice($spinachTraps, 0, 3))),
+        'DB Invariants'
+    );
+}
+
+// ============================================
+// SECTION F — PER-PRODUCT DEEP CHECK
+// Renders product-detail.php's source and asserts that each product's
+// defaults map to a numeric calorie value that will be the same in all
+// three places (card, main step, customize step).
+// ============================================
+if ($db !== null) {
+    $stmt = $db->query(
+        "SELECT p.product_id, p.name
+         FROM product p
+         WHERE p.is_active = 1 AND p.is_customizable = 1
+         ORDER BY p.product_id"
+    );
+    $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($products as $prod) {
+        $pid = (int)$prod['product_id'];
+
+        // Query composition + ingredient the same way PHP does.
+        $cStmt = $db->prepare(
+            "SELECT
+                pc.ingredient_id, pc.is_default, pc.default_quantity,
+                pc.min_quantity, pc.max_quantity, pc.max_quantity_per_item,
+                pc.is_required, pc.display_order,
+                i.name AS ingredient_name, i.calories AS ingredient_calories
+             FROM product_composition pc
+             JOIN ingredient i ON i.ingredient_id = pc.ingredient_id
+             WHERE pc.product_id = :pid AND i.is_active = 1
+             ORDER BY pc.display_order, i.name"
+        );
+        $cStmt->execute([':pid' => $pid]);
+        $rows = $cStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (empty($rows)) {
+            testResult(
+                "#{$pid} {$prod['name']}",
+                false,
+                'Customizable product has no active composition rows',
+                'Per-Product Check'
+            );
+            continue;
+        }
+
+        // Group by display_order, classify, and sum defaults — the
+        // same algorithm product-detail.php uses.
+        $byOrder = [];
+        foreach ($rows as $r) {
+            $byOrder[(int)$r['display_order']][] = $r;
+        }
+
+        $derivedCalories = 0;
+        $problems = [];
+
+        foreach ($byOrder as $order => $group) {
+            $count        = count($group);
+            $groupMaxPer  = 1;
+            $groupReq     = false;
+            $defaultCount = 0;
+
+            foreach ($group as $r) {
+                $groupMaxPer = max($groupMaxPer, (int)$r['max_quantity_per_item']);
+                $groupReq    = $groupReq || (bool)$r['is_required'];
+                $defaultCount += (int)$r['is_default'];
+            }
+
+            $firstMin = (int)$group[0]['min_quantity'];
+
+            if ($groupMaxPer === 1) {
+                if ($count === 1 && $groupReq && $firstMin === 1) {
+                    // static
+                    $qty = max((int)$group[0]['default_quantity'], (int)$group[0]['min_quantity'], 1);
+                    $derivedCalories += (int)$group[0]['ingredient_calories'] * $qty;
+                } else {
+                    // choice
+                    $chosen = null;
+                    foreach ($group as $r) {
+                        if ((int)$r['is_default'] === 1) { $chosen = $r; break; }
+                    }
+                    if ($chosen !== null) {
+                        $derivedCalories += (int)$chosen['ingredient_calories'];
+                    }
+                }
+            } elseif ($count === 1) {
+                // modifier
+                $qty = max((int)$group[0]['default_quantity'], (int)$group[0]['min_quantity']);
+                $derivedCalories += (int)$group[0]['ingredient_calories'] * $qty;
+            } else {
+                // multi
+                foreach ($group as $r) {
+                    if ((int)$r['is_default'] === 1) {
+                        $qty = max((int)$r['default_quantity'], (int)$r['min_quantity']);
+                        $derivedCalories += (int)$r['ingredient_calories'] * $qty;
+                    }
+                }
+            }
+
+            if ($groupMaxPer === 1 && $defaultCount > 1) {
+                $problems[] = "order={$order} has {$defaultCount} defaults";
+            }
+        }
+
+        $sStmt = $db->prepare(
+            "SELECT di.calories
+             FROM product p
+             JOIN dietary_information di ON di.dietary_information_id = p.dietary_information_id
+             WHERE p.product_id = :pid"
+        );
+        $sStmt->execute([':pid' => $pid]);
+        $stored = (int)($sStmt->fetchColumn() ?: 0);
+
+        $ok = ($stored === $derivedCalories) && empty($problems);
+        $msg = $ok
+            ? "stored={$stored} kcal matches defaults sum"
+            : "stored={$stored} vs derived={$derivedCalories}"
+              . (empty($problems) ? '' : ' | ' . implode('; ', $problems));
+
+        testResult("#{$pid} {$prod['name']}", $ok, $msg, 'Per-Product Check');
+    }
+}
+
+// ============================================
+// SECTION G — HANDLER CONTRACT
+// The add-to-cart handler must accept what product-detail.php submits.
+// ============================================
+$handlerPath = $customerPath . '/backend/handlers/cart-handler.php';
+if (file_exists($handlerPath)) {
+    $h = file_get_contents($handlerPath);
+
+    testResult(
+        'Handler calls session_start',
+        strpos($h, 'session_start') !== false,
+        'Presence check',
+        'Handler Contract'
+    );
+    testResult(
+        'Handler validates CSRF',
+        strpos($h, 'csrf_token') !== false,
+        'Presence check',
+        'Handler Contract'
+    );
+    testResult(
+        'Handler reads customizations payload',
+        strpos($h, 'customizations') !== false,
+        'Presence check',
+        'Handler Contract'
+    );
+    testResult(
+        'Handler stores customization_data JSON',
+        strpos($h, 'customization_data') !== false,
+        'Presence check',
+        'Handler Contract'
+    );
+
+    // Must not trust the client total_price without a fallback
+    $trustsClient = strpos($h, "\$_POST['total_price']") !== false
+                 && strpos($h, 'base_price') === false;
+    testResult(
+        'Handler does not blindly trust client price',
+        !$trustsClient,
+        $trustsClient
+            ? 'Only reads $_POST[\'total_price\'] without server-side base_price fallback'
+            : 'Server-side price logic present',
+        'Handler Contract'
+    );
+}
+
+// ============================================
+// SECTION H — LIVE LINKS (discovered from DB)
+// ============================================
+$liveProducts = [];
+if ($db !== null) {
+    $stmt = $db->query(
+        "SELECT p.product_id, p.name
+         FROM product p
+         WHERE p.is_active = 1
+         ORDER BY p.is_customizable DESC, p.product_id
+         LIMIT 5"
+    );
+    $liveProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+// ============================================
+// TOTALS
+// ============================================
+$totalTests = 0; $totalPassed = 0; $totalFailed = 0; $totalSkipped = 0;
+
+foreach ($sections as $tests) {
+    foreach ($tests as $t) {
+        if ($t['passed'] === null) {
+            $totalSkipped++;
+            continue;
+        }
+        $totalTests++;
+        if ($t['passed']) {
+            $totalPassed++;
+        } else {
+            $totalFailed++;
+        }
+    }
+}
+$passRate = $totalTests > 0 ? round(($totalPassed / $totalTests) * 100) : 0;
+
+// ============================================
+// SUMMARY + LIVE SECTION
+// ============================================
+echo "<div class='top-section'>";
+echo "<div class='test-summary'>";
+echo "<div class='summary-card total'><div class='number'>{$totalTests}</div><div class='label'>Total Tests</div></div>";
+echo "<div class='summary-card passed'><div class='number'>{$totalPassed}</div><div class='label'>Passed</div></div>";
+echo "<div class='summary-card failed'><div class='number'>{$totalFailed}</div><div class='label'>Failed</div></div>";
+echo "<div class='summary-card rate'><div class='number'>{$passRate}%</div><div class='label'>Pass Rate</div></div>";
+echo "</div>";
+
+echo "<div class='test-section' id='section-live'>";
+echo "<div class='section-header' data-target='content-live'>";
+echo "<h2>Live Test <span class='section-count count-neutral'>(Live)</span></h2>";
+echo "<button class='section-toggle' aria-expanded='false' aria-controls='content-live' type='button'><span class='toggle-icon'>+</span></button>";
+echo "</div>";
+echo "<div class='test-grid' id='content-live' style='display: none;'>";
+echo "<div class='live-test'>";
+echo "<p><strong>Open product detail for products discovered in the DB:</strong></p>";
+echo "<div class='btn-test-group'>";
+if (!empty($liveProducts)) {
+    foreach ($liveProducts as $lp) {
+        $pid  = (int)$lp['product_id'];
+        $name = htmlspecialchars($lp['name']);
+        echo "<a href='" . htmlspecialchars($baseUrl) . "/customer/pages/product-detail.php?id={$pid}' target='_blank' class='btn-test'>#{$pid} {$name}</a>";
+    }
+} else {
+    echo "<span style='color:#a0aec0;font-size:13px;'>No active products found in DB.</span>";
+}
+echo "</div>";
+echo "<div class='btn-test-group' style='margin-top:15px;'>";
+echo "<a href='" . htmlspecialchars($baseUrl) . "/customer/pages/menu.php' target='_blank' class='btn-test warning'>Menu</a>";
+echo "<a href='" . htmlspecialchars($baseUrl) . "/customer/pages/dashboard.php' target='_blank' class='btn-test success'>Dashboard</a>";
+echo "</div>";
+
+echo "<div class='note-box'>";
+echo "<p>What to verify manually on each product page:</p>";
+echo "<ul>";
+echo "<li>Main step: the kcal badge and total match the menu card</li>";
+echo "<li>Customize step opens with the total unchanged</li>";
+echo "<li>Every modifier stepper starts at a value between its min and max</li>";
+echo "<li>Every required modifier's minus button is disabled at its minimum</li>";
+echo "<li>Adding an optional ingredient raises both price and calories by the stated amount</li>";
+echo "<li>Picking a different base/protein produces a total consistent with the option's stated delta</li>";
+echo "</ul>";
+echo "</div>";
+
+echo "</div>";
+echo "</div>";
+echo "</div>";
+echo "</div>";
+
+// ============================================
+// RENDER SECTIONS
+// ============================================
+renderSection('Database Tests',      'Database',         true);
+renderSection('File Tests',          'Files',            true);
+renderSection('Schema Tests',        'Schema',           true);
+renderSection('PHP Contract Tests',  'PHP Contract',     false);
+renderSection('JS Contract Tests',   'JS Contract',      false);
+renderSection('DB Invariant Tests',  'DB Invariants',    false);
+renderSection('Per-Product Check',   'Per-Product Check', false);
+renderSection('Handler Contract',    'Handler Contract', true);
+
+// ============================================
+// COLLAPSIBLE SECTIONS
+// ============================================
+echo <<<JS
+<script>
+(function() {
+    'use strict';
+    var sectionHeaders = document.querySelectorAll('.section-header');
+
+    sectionHeaders.forEach(function(header) {
+        var targetId  = header.getAttribute('data-target');
+        var content   = document.getElementById(targetId);
+        var toggleBtn = header.querySelector('.section-toggle');
+        var icon      = toggleBtn ? toggleBtn.querySelector('.toggle-icon') : null;
+        if (!content || !toggleBtn || !icon) return;
+
+        header.addEventListener('click', function(e) {
+            if (e.target.closest('.section-toggle')) return;
+            toggleSection(header, content, toggleBtn, icon);
+        });
+        toggleBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            toggleSection(header, content, toggleBtn, icon);
+        });
+        header.setAttribute('role', 'button');
+        header.setAttribute('tabindex', '0');
+        header.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleSection(header, content, toggleBtn, icon);
+            }
+        });
+    });
+
+    function toggleSection(header, content, toggleBtn, icon) {
+        var collapsed = header.classList.contains('section-collapsed');
+        if (collapsed) {
+            header.classList.remove('section-collapsed');
+            toggleBtn.setAttribute('aria-expanded', 'true');
+            content.style.display = 'grid';
+            icon.textContent = '-';
+        } else {
+            header.classList.add('section-collapsed');
+            toggleBtn.setAttribute('aria-expanded', 'false');
+            content.style.display = 'none';
+            icon.textContent = '+';
+        }
+    }
+})();
+</script>
+JS;
+
+echo "</div></body></html>";
+```
+
+---
+
+## File: `fitpal/test/customer/sign-in-test.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Customer Sign-In System Test
+ * Validates the customer sign-in flow
+ *
+ * @package FitPal
+ * @version 2.8
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+$basePath = realpath(__DIR__ . '/../..');
+$customerPath = $basePath . '/customer';
+$sharedPath = $basePath . '/shared';
+
+$passed = 0;
+$failed = 0;
+
+$sections = [];
+
+function testResult($name, $result, $message = '', $section = 'General') {
+    global $sections, $passed, $failed;
+    $status = $result ? 'PASS' : 'FAIL';
+    if ($result) $passed++; else $failed++;
+    
+    if (!isset($sections[$section])) {
+        $sections[$section] = [];
+    }
+    $sections[$section][] = [
+        'name' => $name,
+        'status' => $status,
+        'message' => $message,
+        'passed' => $result
+    ];
+    return $result;
+}
+
+function renderSection($title, $sectionName, $defaultCollapsed = true) {
+    global $sections;
+    
+    $totalTests = isset($sections[$sectionName]) ? count($sections[$sectionName]) : 0;
+    $passedTests = 0;
+    if (isset($sections[$sectionName])) {
+        foreach ($sections[$sectionName] as $test) {
+            if ($test['passed']) $passedTests++;
+        }
+    }
+    
+    $failedTests = $totalTests - $passedTests;
+    $allPassed = ($totalTests > 0 && $failedTests === 0);
+    $hasFailures = ($failedTests > 0);
+    
+    $sectionId = 'section-' . preg_replace('/[^a-zA-Z0-9]/', '-', $sectionName);
+    $contentId = 'content-' . preg_replace('/[^a-zA-Z0-9]/', '-', $sectionName);
+    
+    $collapsedClass = $defaultCollapsed ? 'section-collapsed' : '';
+    
+    echo "<div class='test-section {$collapsedClass}' id='{$sectionId}'>";
+    echo "<div class='section-header' data-target='{$contentId}'>";
+    
+    $countClass = 'count-neutral';
+    if ($allPassed) {
+        $countClass = 'count-pass';
+    } elseif ($hasFailures && $failedTests <= 2) {
+        $countClass = 'count-warning';
+    } elseif ($hasFailures && $failedTests > 2) {
+        $countClass = 'count-fail';
+    }
+    
+    echo "<h2>{$title} <span class='section-count {$countClass}'>({$passedTests}/{$totalTests})</span></h2>";
+    echo "<button class='section-toggle' aria-expanded='" . ($defaultCollapsed ? 'false' : 'true') . "' aria-controls='{$contentId}' type='button'>";
+    echo "<span class='toggle-icon'>" . ($defaultCollapsed ? '+' : '-') . "</span>";
+    echo "</button>";
+    echo "</div>";
+    echo "<div class='test-grid' id='{$contentId}' style='display: " . ($defaultCollapsed ? 'none' : 'grid') . ";'>";
+    
+    if (isset($sections[$sectionName]) && !empty($sections[$sectionName])) {
+        foreach ($sections[$sectionName] as $test) {
+            $statusClass = $test['passed'] ? 'pass' : 'fail';
+            $statusText = $test['passed'] ? 'PASS' : 'FAIL';
+            
+            echo "<div class='test-item {$statusClass}'>";
+            echo "<div class='test-name'>" . htmlspecialchars($test['name']) . "</div>";
+            echo "<div class='test-status {$statusClass}'>" . $statusText . "</div>";
+            echo "<div class='test-message'>" . htmlspecialchars($test['message']) . "</div>";
+            echo "</div>";
+        }
+    } else {
+        echo "<div class='test-item' style='border-left-color: #edf2f0;'>";
+        echo "<div class='test-name' style='color: #a0aec0;'>No tests in this section</div>";
+        echo "</div>";
+    }
+    
+    echo "</div>";
+    echo "</div>";
+}
+
+function renderLiveFormSection($baseUrl, $defaultCollapsed = true) {
+    global $sections;
+    
+    $sectionName = 'Live Form';
+    $totalTests = isset($sections[$sectionName]) ? count($sections[$sectionName]) : 0;
+    $passedTests = 0;
+    if (isset($sections[$sectionName])) {
+        foreach ($sections[$sectionName] as $test) {
+            if ($test['passed']) $passedTests++;
+        }
+    }
+    
+    $failedTests = $totalTests - $passedTests;
+    $allPassed = ($totalTests > 0 && $failedTests === 0);
+    $hasFailures = ($failedTests > 0);
+    
+    $collapsedClass = $defaultCollapsed ? 'section-collapsed' : '';
+    $contentId = 'content-live-form';
+    
+    echo "<div class='test-section {$collapsedClass}' id='section-live-form'>";
+    echo "<div class='section-header' data-target='{$contentId}'>";
+    
+    $countClass = 'count-neutral';
+    if ($allPassed) {
+        $countClass = 'count-pass';
+    } elseif ($hasFailures && $failedTests <= 2) {
+        $countClass = 'count-warning';
+    } elseif ($hasFailures && $failedTests > 2) {
+        $countClass = 'count-fail';
+    }
+    
+    echo "<h2>Live Form Test <span class='section-count {$countClass}'>({$passedTests}/{$totalTests})</span></h2>";
+    echo "<button class='section-toggle' aria-expanded='" . ($defaultCollapsed ? 'false' : 'true') . "' aria-controls='{$contentId}' type='button'>";
+    echo "<span class='toggle-icon'>" . ($defaultCollapsed ? '+' : '-') . "</span>";
+    echo "</button>";
+    echo "</div>";
+    echo "<div class='test-grid' id='{$contentId}' style='display: " . ($defaultCollapsed ? 'none' : 'grid') . ";'>";
+    
+    if (isset($sections[$sectionName]) && !empty($sections[$sectionName])) {
+        foreach ($sections[$sectionName] as $test) {
+            $statusClass = $test['passed'] ? 'pass' : 'fail';
+            $statusText = $test['passed'] ? 'PASS' : 'FAIL';
+            
+            echo "<div class='test-item {$statusClass}'>";
+            echo "<div class='test-name'>" . htmlspecialchars($test['name']) . "</div>";
+            echo "<div class='test-status {$statusClass}'>" . $statusText . "</div>";
+            echo "<div class='test-message'>" . htmlspecialchars($test['message']) . "</div>";
+            echo "</div>";
+        }
+    }
+    
+    echo "<div class='live-test'>";
+    echo "<p><strong>Test the sign-in form:</strong></p>";
+    echo "<p style='font-size:13px;color:#718096;margin:5px 0;'>URL: " . htmlspecialchars($baseUrl . '/customer/pages/sign-in.php') . "</p>";
+    echo "<p style='font-size:13px;color:#718096;margin:5px 0 10px 0;'>Test credentials: test@example.com / admin123</p>";
+    echo "<iframe src='" . $baseUrl . "/customer/pages/sign-in.php'></iframe>";
+    echo "<div class='btn-test-group'>";
+    echo "<a href='" . $baseUrl . "/customer/pages/sign-in.php' target='_blank' class='btn-test'>Open Sign-In</a>";
+    echo "<a href='" . $baseUrl . "/customer/pages/sign-up.php' target='_blank' class='btn-test'>Open Sign-Up</a>";
+    echo "<a href='" . $baseUrl . "/customer/pages/dashboard.php' target='_blank' class='btn-test'>Open Dashboard</a>";
+    echo "<a href='" . $baseUrl . "/customer/backend/handlers/sign-in-handler.php' target='_blank' class='btn-test'>Test Handler</a>";
+    echo "</div>";
+    echo "</div>";
+    
+    echo "</div>";
+    echo "</div>";
+}
+
+function getAssetBase() {
+    $scriptPath = $_SERVER['SCRIPT_NAME'];
+    $dirPath = dirname($scriptPath);
+    $segments = array_filter(explode('/', $dirPath));
+    $depth = count($segments);
+    if ($depth <= 0) return './shared/';
+    return str_repeat('../', $depth) . 'shared/';
+}
+
+$protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http';
+$host = $_SERVER['HTTP_HOST'];
+$baseUrl = $protocol . '://' . $host;
+
+$assetBase = getAssetBase();
+
+echo "<!DOCTYPE html>
+<html lang='en'>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>FitPal Sign-In System Test</title>
+    <link rel='stylesheet' href='{$assetBase}assets/css/global.css'>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { width: 100%; overflow-x: hidden; }
+        body { background: #f4f6f9; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        .test-container { max-width: 100%; padding: 0; margin: 0; }
+        .test-header { background: linear-gradient(135deg, #2d3748, #1a202c); color: white; padding: 30px; border-radius: 12px; margin-bottom: 30px; width: 100%; }
+        .test-header h1 { margin: 0; font-size: 28px; }
+        .test-header p { margin: 10px 0 0 0; opacity: 0.8; }
+        .test-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; width: 100%; }
+        .summary-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); text-align: center; }
+        .summary-card .number { font-size: 32px; font-weight: 700; }
+        .summary-card .label { color: #718096; font-size: 14px; margin-top: 5px; }
+        .summary-card.total .number { color: #2d3748; }
+        .summary-card.passed .number { color: #48bb78; }
+        .summary-card.failed .number { color: #fc8181; }
+        .summary-card.rate .number { color: #4299e1; }
+        .test-grid { display: grid; gap: 10px; padding: 15px; width: 100%; }
+        .test-item { background: white; border-radius: 8px; padding: 12px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; width: 100%; }
+        .test-item.pass { border-left-color: #48bb78; }
+        .test-item.fail { border-left-color: #fc8181; }
+        .test-item .test-name { font-weight: 600; font-size: 14px; flex: 1; min-width: 180px; }
+        .test-item .test-status { display: inline-block; padding: 2px 14px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; margin: 0 10px; }
+        .test-item .test-status.pass { background: #c6f6d5; color: #22543d; }
+        .test-item .test-status.fail { background: #fed7d7; color: #9b2c2c; }
+        .test-item .test-message { color: #718096; font-size: 13px; min-width: 100px; text-align: right; }
+        .test-section { background: white; border-radius: 10px; margin-top: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; width: 100%; }
+        .section-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; cursor: pointer; background: #f7fafc; border-bottom: 1px solid #e2e8f0; user-select: none; width: 100%; }
+        .section-header:hover { background: #edf2f7; }
+        .section-header h2 { margin: 0; font-size: 18px; color: #2d3748; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .section-count { font-size: 14px; font-weight: 600; padding: 2px 12px; border-radius: 20px; }
+        .count-pass { background: #c6f6d5; color: #22543d; }
+        .count-warning { background: #fefcbf; color: #975a16; }
+        .count-fail { background: #fed7d7; color: #9b2c2c; }
+        .count-neutral { background: #edf2f7; color: #718096; }
+        .section-toggle { background: none; border: none; font-size: 20px; cursor: pointer; color: #718096; padding: 0 10px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 6px; flex-shrink: 0; }
+        .section-toggle:hover { background: #e2e8f0; }
+        .toggle-icon { display: inline-block; transition: transform 0.2s ease; }
+        .section-collapsed .toggle-icon { transform: rotate(0deg); }
+        .live-test { padding: 10px 0; width: 100%; }
+        .live-test iframe { width: 100%; height: 500px; border: 1px solid #e2e8f0; border-radius: 6px; margin-top: 10px; display: block; }
+        .btn-test { display: inline-block; padding: 8px 16px; background: #4299e1; color: white; border-radius: 6px; text-decoration: none; font-size: 13px; margin-top: 10px; }
+        .btn-test:hover { background: #3182ce; }
+        .btn-test-group { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+        .db-error-box { background: #fff5f5; border: 1px solid #feb2b2; border-radius: 8px; padding: 15px; margin: 10px 0; color: #c53030; width: 100%; }
+        .db-error-box code { background: #fed7d7; padding: 2px 6px; border-radius: 4px; }
+        .top-section { margin-bottom: 20px; width: 100%; }
+        
+        @media (max-width: 640px) {
+            body { padding: 10px; }
+            .test-header { padding: 20px; }
+            .test-header h1 { font-size: 22px; }
+            .test-summary { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+            .summary-card { padding: 15px; }
+            .summary-card .number { font-size: 24px; }
+            .section-header { padding: 12px 15px; flex-wrap: wrap; }
+            .section-header h2 { font-size: 16px; }
+            .section-count { font-size: 12px; padding: 2px 10px; }
+            .test-item { padding: 10px 15px; flex-direction: column; align-items: flex-start; gap: 5px; }
+            .test-item .test-name { font-size: 13px; min-width: auto; width: 100%; }
+            .test-item .test-status { margin: 0 10px 0 0; }
+            .test-item .test-message { text-align: left; width: 100%; min-width: auto; }
+            .test-grid { padding: 10px; }
+            .live-test iframe { height: 350px; }
+            .btn-test-group { gap: 8px; }
+            .btn-test { font-size: 12px; padding: 6px 12px; }
+        }
+        
+        @media (max-width: 400px) {
+            .test-summary { grid-template-columns: 1fr 1fr; gap: 8px; }
+            .summary-card { padding: 10px; }
+            .summary-card .number { font-size: 20px; }
+            .section-header h2 { font-size: 14px; }
+            .section-count { font-size: 11px; padding: 1px 8px; }
+            .test-item .test-name { font-size: 12px; }
+            .live-test iframe { height: 280px; }
+        }
+    </style>
+</head>
+<body>
+<div class='test-container'>";
+
+echo "
+<div class='test-header'>
+    <h1>FitPal Sign-In System Test</h1>
+    <p>Validates the customer sign-in flow</p>
+    <p style='font-size:13px;opacity:0.6;margin-top:10px;'>
+        Base Path: " . htmlspecialchars($basePath) . " | 
+        Base URL: " . htmlspecialchars($baseUrl) . "
+    </p>
+</div>";
+
+// ============================================
+// RUN ALL TESTS FIRST
+// ============================================
+
+// Database Tests
+$dbFile = $sharedPath . '/backend/database/database-connect.php';
+
+if (file_exists($dbFile)) {
+    testResult('Database File Exists', true, 'File found', 'Database');
+    
+    $content = file_get_contents($dbFile);
+    if (strpos($content, '$database_connection') !== false) {
+        testResult('Database File Parsed', true, 'Connection code found', 'Database');
+        
+        $database_host = 'localhost';
+        $database_port = 3306;
+        $database_name = 'fitpal_food_delivery';
+        $database_username = 'root';
+        $database_password = '';
+        $database_charset = 'utf8mb4';
+        
+        try {
+            $data_source_name = sprintf(
+                'mysql:host=%s;port=%d;dbname=%s;charset=%s',
+                $database_host,
+                $database_port,
+                $database_name,
+                $database_charset
+            );
+            
+            $test_connection = new PDO(
+                $data_source_name,
+                $database_username,
+                $database_password,
+                [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                    PDO::ATTR_EMULATE_PREPARES => false,
+                ]
+            );
+            
+            testResult('Database Connection', true, 'PDO connection established', 'Database');
+            
+            $stmt = $test_connection->query("SELECT 1 as test");
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            testResult('Database Query', $result !== false, 'Query executed successfully', 'Database');
+            
+            $stmt = $test_connection->query("SHOW TABLES LIKE 'customer'");
+            $hasCustomerTable = $stmt->rowCount() > 0;
+            testResult('Customer Table', $hasCustomerTable, $hasCustomerTable ? 'Exists' : 'Missing', 'Database');
+            
+        } catch (PDOException $e) {
+            testResult('Database Connection', false, 'PDO Error: ' . $e->getMessage(), 'Database');
+        }
+    } else {
+        testResult('Database File Parsed', false, 'Connection code not found', 'Database');
+    }
+} else {
+    testResult('Database File Exists', false, 'File not found: ' . $dbFile, 'Database');
+}
+
+// Session Tests
+$sessionActive = session_status() === PHP_SESSION_ACTIVE;
+testResult('Session Active', $sessionActive, $sessionActive ? 'Active' : 'Inactive', 'Session');
+
+if ($sessionActive) {
+    testResult('Session ID', session_id() !== '', 'Session ID exists', 'Session');
+    
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    testResult('CSRF Token', !empty($_SESSION['csrf_token']), 'Token generated', 'Session');
+}
+
+// Core File Tests
+$criticalFiles = [
+    'Sign-In Page' => $customerPath . '/pages/sign-in.php',
+    'Sign-In Handler' => $customerPath . '/backend/handlers/sign-in-handler.php',
+    'Sign-In JS' => $customerPath . '/assets/ui/js/sign-in.js',
+    'Sign-In CSS' => $customerPath . '/assets/css/sign-in.css',
+    'Customer Header' => $customerPath . '/includes/header.php',
+    'Customer Dashboard' => $customerPath . '/pages/dashboard.php',
+    'Shared Header' => $sharedPath . '/includes/header.php',
+    'Shared Footer' => $sharedPath . '/includes/footer.php',
+    'Database Connect' => $sharedPath . '/backend/database/database-connect.php',
+];
+
+foreach ($criticalFiles as $name => $path) {
+    $exists = file_exists($path);
+    testResult($name, $exists, $exists ? 'Found' : 'Missing', 'Core Files');
+}
+
+// Live Form Tests
+$signInPageExists = file_exists($customerPath . '/pages/sign-in.php');
+testResult('Sign-In Page Accessible', $signInPageExists, $signInPageExists ? 'Page found' : 'Page missing', 'Live Form');
+
+$signUpPageExists = file_exists($customerPath . '/pages/sign-up.php');
+testResult('Sign-Up Page Accessible', $signUpPageExists, $signUpPageExists ? 'Page found' : 'Page missing', 'Live Form');
+
+$dashboardExists = file_exists($customerPath . '/pages/dashboard.php');
+testResult('Dashboard Page Accessible', $dashboardExists, $dashboardExists ? 'Page found' : 'Page missing', 'Live Form');
+
+$handlerExists = file_exists($customerPath . '/backend/handlers/sign-in-handler.php');
+testResult('Handler Accessible', $handlerExists, $handlerExists ? 'File found' : 'File missing', 'Live Form');
+
+// Sign-In Page Structure
+$signInPage = $customerPath . '/pages/sign-in.php';
+if (file_exists($signInPage)) {
+    $content = file_get_contents($signInPage);
+    testResult('Page Readable', true, 'File loaded', 'Page Structure');
+    
+    preg_match('/<form[^>]*id=["\']signInForm["\'][^>]*>/i', $content, $formMatches);
+    testResult('Form (signInForm)', !empty($formMatches), !empty($formMatches) ? 'Found' : 'Missing', 'Page Structure');
+    
+    preg_match('/<input[^>]*name=["\']csrf_token["\'][^>]*>/i', $content, $csrfMatches);
+    testResult('CSRF Token Field', !empty($csrfMatches), !empty($csrfMatches) ? 'Found' : 'Missing', 'Page Structure');
+    
+    $expectedFields = ['identifier', 'password'];
+    $foundFields = [];
+    preg_match_all('/<input[^>]*name=["\']([^"\']+)["\'][^>]*>/i', $content, $fieldMatches);
+    $foundFields = $fieldMatches[1] ?? [];
+    $allFound = true;
+    $missingFields = [];
+    foreach ($expectedFields as $field) {
+        if (!in_array($field, $foundFields)) {
+            $allFound = false;
+            $missingFields[] = $field;
+        }
+    }
+    testResult('Required Fields', $allFound, $allFound ? 'All present' : 'Missing: ' . implode(', ', $missingFields), 'Page Structure');
+    
+    preg_match('/<div[^>]*id=["\']identifierError["\'][^>]*>/i', $content, $identifierErrorMatches);
+    testResult('Identifier Error Container', !empty($identifierErrorMatches), !empty($identifierErrorMatches) ? 'Found' : 'Missing', 'Page Structure');
+    
+    preg_match('/<div[^>]*id=["\']passwordError["\'][^>]*>/i', $content, $passwordErrorMatches);
+    testResult('Password Error Container', !empty($passwordErrorMatches), !empty($passwordErrorMatches) ? 'Found' : 'Missing', 'Page Structure');
+    
+    preg_match('/<button[^>]*id=["\']togglePassword["\'][^>]*>/i', $content, $toggleMatches);
+    testResult('Password Toggle Button', !empty($toggleMatches), !empty($toggleMatches) ? 'Found' : 'Missing', 'Page Structure');
+    
+    preg_match('/<a[^>]*href=["\'][^"\']*sign-up\.php["\'][^>]*>/i', $content, $signUpLinkMatches);
+    testResult('Sign-Up Link', !empty($signUpLinkMatches), !empty($signUpLinkMatches) ? 'Found' : 'Missing', 'Page Structure');
+    
+    $hasSignInJS = strpos($content, 'sign-in.js') !== false;
+    testResult('sign-in.js Included', $hasSignInJS, $hasSignInJS ? 'Found' : 'Missing', 'Page Structure');
+    
+    preg_match('/<form[^>]*action=["\']([^"\']+)["\'][^>]*>/i', $content, $actionMatches);
+    if (!empty($actionMatches[1])) {
+        $formAction = $actionMatches[1];
+        $isCorrect = strpos($formAction, 'sign-in-handler.php') !== false;
+        testResult('Form Action', $isCorrect, $isCorrect ? 'Correct: ' . htmlspecialchars($formAction) : 'Check: ' . htmlspecialchars($formAction), 'Page Structure');
+    }
+} else {
+    testResult('Sign-In Page', false, 'File not found', 'Page Structure');
+}
+
+// Handler Checks
+$handlerPath = $customerPath . '/backend/handlers/sign-in-handler.php';
+if (file_exists($handlerPath)) {
+    $handlerContent = file_get_contents($handlerPath);
+    testResult('Handler Readable', true, 'File loaded', 'Handler');
+
+    $hasSessionStart = strpos($handlerContent, 'session_start') !== false;
+    testResult('session_start()', $hasSessionStart, $hasSessionStart ? 'Found' : 'Missing', 'Handler');
+
+    $hasDatabase = strpos($handlerContent, 'database-connect.php') !== false;
+    testResult('Database Include', $hasDatabase, $hasDatabase ? 'Found' : 'Missing', 'Handler');
+
+    $hasCsrfValidation = strpos($handlerContent, 'csrf_token') !== false;
+    testResult('CSRF Validation', $hasCsrfValidation, $hasCsrfValidation ? 'Found' : 'Missing', 'Handler');
+
+    $hasPasswordVerify = strpos($handlerContent, 'password_verify') !== false;
+    testResult('password_verify()', $hasPasswordVerify, $hasPasswordVerify ? 'Found' : 'Missing', 'Handler');
+
+    $hasSessionRegenerate = strpos($handlerContent, 'session_regenerate_id') !== false;
+    testResult('Session Regenerate', $hasSessionRegenerate, $hasSessionRegenerate ? 'Found' : 'Missing', 'Handler');
+
+    $hasSessionSet = strpos($handlerContent, 'customer_id') !== false
+        && strpos($handlerContent, '$_SESSION') !== false;
+    testResult('Session Variables Set', $hasSessionSet, $hasSessionSet ? 'Found' : 'Missing', 'Handler');
+
+    $redirectCorrect = strpos($handlerContent, '../../pages/dashboard.php') !== false;
+    testResult('Redirect to Dashboard', $redirectCorrect, $redirectCorrect ? 'Correct path' : 'Check redirect path', 'Handler');
+
+    $errorRedirectCorrect = strpos($handlerContent, '../../pages/sign-in.php') !== false;
+    testResult('Error Redirect to Sign-In', $errorRedirectCorrect, $errorRedirectCorrect ? 'Correct path' : 'Check error redirect path', 'Handler');
+
+    $hasActiveCheck = strpos($handlerContent, 'is_active') !== false;
+    testResult('Account Active Check', $hasActiveCheck, $hasActiveCheck ? 'Found' : 'Missing', 'Handler');
+
+    // Development bypass — handler accepts a stored hash pasted in as plaintext
+    $hasDevBypass = strpos($handlerContent, 'hash_equals') !== false
+        && strpos($handlerContent, 'isPasswordValid') !== false;
+    testResult('Development Bypass', $hasDevBypass, $hasDevBypass ? 'Found' : 'Missing', 'Handler');
+} else {
+    testResult('Handler', false, 'File not found', 'Handler');
+}
+
+// JavaScript Checks
+$jsPath = $customerPath . '/assets/ui/js/sign-in.js';
+if (file_exists($jsPath)) {
+    $jsContent = file_get_contents($jsPath);
+    testResult('sign-in.js Readable', true, 'File loaded', 'JavaScript');
+    
+    $hasDOMContent = strpos($jsContent, 'DOMContentLoaded') !== false;
+    testResult('DOMContentLoaded', $hasDOMContent, $hasDOMContent ? 'Found' : 'Missing', 'JavaScript');
+    
+    $hasFormRef = strpos($jsContent, 'signInForm') !== false;
+    testResult('Form Reference', $hasFormRef, $hasFormRef ? 'Found' : 'Missing', 'JavaScript');
+    
+    $hasPasswordToggle = strpos($jsContent, 'togglePassword') !== false;
+    testResult('Password Toggle', $hasPasswordToggle, $hasPasswordToggle ? 'Found' : 'Missing', 'JavaScript');
+    
+    $hasSubmit = strpos($jsContent, 'addEventListener') !== false && strpos($jsContent, 'submit') !== false;
+    testResult('Form Submit Handler', $hasSubmit, $hasSubmit ? 'Found' : 'Missing', 'JavaScript');
+    
+    $hasFieldErrors = strpos($jsContent, 'identifierError') !== false && strpos($jsContent, 'passwordError') !== false;
+    testResult('Field Error Handling', $hasFieldErrors, $hasFieldErrors ? 'Found' : 'Missing', 'JavaScript');
+    
+    $hasInputValidation = strpos($jsContent, 'input') !== false && strpos($jsContent, 'addEventListener') !== false;
+    testResult('Input Validation', $hasInputValidation, $hasInputValidation ? 'Found' : 'Missing', 'JavaScript');
+} else {
+    testResult('sign-in.js', false, 'File not found', 'JavaScript');
+}
+
+// CSS Checks
+$cssPath = $customerPath . '/assets/css/sign-in.css';
+if (file_exists($cssPath)) {
+    $cssContent = file_get_contents($cssPath);
+    testResult('sign-in.css Readable', true, 'File loaded', 'CSS');
+    
+    $hasFormStyles = strpos($cssContent, 'sign-in-form') !== false || strpos($cssContent, 'sign-in') !== false;
+    testResult('Form Styles', $hasFormStyles, $hasFormStyles ? 'Found' : 'Missing', 'CSS');
+    
+    $hasPasswordWrapper = strpos($cssContent, 'password-wrapper') !== false || strpos($cssContent, 'password-toggle') !== false;
+    testResult('Password Toggle Styles', $hasPasswordWrapper, $hasPasswordWrapper ? 'Found' : 'Missing', 'CSS');
+    
+    $hasErrorStyles = strpos($cssContent, '.error') !== false;
+    testResult('Error Styles', $hasErrorStyles, $hasErrorStyles ? 'Found' : 'Missing', 'CSS');
+    
+    $hasCardStyles = strpos($cssContent, 'sign-in-card') !== false || strpos($cssContent, 'card') !== false;
+    testResult('Card Styles', $hasCardStyles, $hasCardStyles ? 'Found' : 'Missing', 'CSS');
+    
+    $hasButtonStyles = strpos($cssContent, 'btn') !== false;
+    testResult('Button Styles', $hasButtonStyles, $hasButtonStyles ? 'Found' : 'Missing', 'CSS');
+    
+    $hasMediaQuery = strpos($cssContent, '@media') !== false;
+    testResult('Responsive (Media Queries)', $hasMediaQuery, $hasMediaQuery ? 'Found' : 'Missing', 'CSS');
+} else {
+    testResult('sign-in.css', false, 'File not found', 'CSS');
+}
+
+// ============================================
+// CALCULATE TOTALS
+// ============================================
+$totalTests = 0;
+$totalPassed = 0;
+$totalFailed = 0;
+
+foreach ($sections as $section) {
+    foreach ($section as $test) {
+        $totalTests++;
+        if ($test['passed']) $totalPassed++;
+        else $totalFailed++;
+    }
+}
+
+$passRate = $totalTests > 0 ? round(($totalPassed / $totalTests) * 100) : 0;
+
+// ============================================
+// TOP SECTION: SUMMARY + LIVE FORM (Stacked vertically)
+// ============================================
+echo "<div class='top-section'>";
+
+// Summary Cards
+echo "<div class='test-summary'>";
+echo "<div class='summary-card total'><div class='number'>{$totalTests}</div><div class='label'>Total Tests</div></div>";
+echo "<div class='summary-card passed'><div class='number'>{$totalPassed}</div><div class='label'>Passed</div></div>";
+echo "<div class='summary-card failed'><div class='number'>{$totalFailed}</div><div class='label'>Failed</div></div>";
+echo "<div class='summary-card rate'><div class='number'>{$passRate}%</div><div class='label'>Pass Rate</div></div>";
+echo "</div>";
+
+// Live Form (with heading, pass count, and collapsible)
+renderLiveFormSection($baseUrl, true);
+
+echo "</div>";
+
+// ============================================
+// RENDER ALL SECTIONS (Collapsed by default)
+// ============================================
+
+renderSection('Database Tests', 'Database', true);
+renderSection('Session Tests', 'Session', true);
+renderSection('Core File Tests', 'Core Files', true);
+renderSection('Sign-In Page Structure', 'Page Structure', true);
+renderSection('Handler Checks', 'Handler', true);
+renderSection('JavaScript Checks', 'JavaScript', true);
+renderSection('CSS Checks', 'CSS', true);
+
+// ============================================
+// COLLAPSIBLE SECTIONS JAVASCRIPT
+// ============================================
+echo "
+<script>
+(function() {
+    'use strict';
+
+    var sectionHeaders = document.querySelectorAll('.section-header');
+
+    sectionHeaders.forEach(function(header) {
+        var targetId = header.getAttribute('data-target');
+        var content = document.getElementById(targetId);
+        var toggleBtn = header.querySelector('.section-toggle');
+        var icon = toggleBtn ? toggleBtn.querySelector('.toggle-icon') : null;
+
+        if (!content || !toggleBtn || !icon) return;
+
+        header.addEventListener('click', function(e) {
+            if (e.target.closest('.section-toggle')) return;
+            toggleSection(header, content, toggleBtn, icon);
+        });
+
+        toggleBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            toggleSection(header, content, toggleBtn, icon);
+        });
+
+        header.setAttribute('role', 'button');
+        header.setAttribute('tabindex', '0');
+        header.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleSection(header, content, toggleBtn, icon);
+            }
+        });
+    });
+
+    function toggleSection(header, content, toggleBtn, icon) {
+        var isCollapsed = header.classList.contains('section-collapsed');
+
+        if (isCollapsed) {
+            header.classList.remove('section-collapsed');
+            toggleBtn.setAttribute('aria-expanded', 'true');
+            content.style.display = 'grid';
+            icon.textContent = '-';
+        } else {
+            header.classList.add('section-collapsed');
+            toggleBtn.setAttribute('aria-expanded', 'false');
+            content.style.display = 'none';
+            icon.textContent = '+';
+        }
+    }
+})();
+</script>
+";
+
+echo "
+</div>
+</body>
+</html>";
+```
+
+---
+
+## File: `fitpal/test/customer/sign-up-test.php`
+
+**Status:** `FOUND`
+
+```php
+<?php
+/**
+ * FitPal Customer Sign-Up System Test
+ *
+ * Structural test of the customer multi-step registration flow.
+ *
+ * @package FitPal
+ * @version 3.2
+ */
+
+declare(strict_types=1);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+$basePath     = realpath(__DIR__ . '/../..');
+$customerPath = $basePath . '/customer';
+$sharedPath   = $basePath . '/shared';
+
+$passed   = 0;
+$failed   = 0;
+$sections = [];
+
+function testResult(string $name, bool $result, string $message = '', string $section = 'General'): bool
+{
+    global $sections, $passed, $failed;
+    $status = $result ? 'PASS' : 'FAIL';
+    if ($result) $passed++; else $failed++;
+
+    if (!isset($sections[$section])) {
+        $sections[$section] = [];
+    }
+    $sections[$section][] = [
+        'name'    => $name,
+        'status'  => $status,
+        'message' => $message,
+        'passed'  => $result,
+    ];
+    return $result;
+}
+
+function stripPhpComments(string $source): string
+{
+    $source = preg_replace('#/\*.*?\*/#s', '', $source) ?? $source;
+    $source = preg_replace('#^\s*//.*$#m', '', $source) ?? $source;
+    return $source;
+}
+
+function stripJsComments(string $source): string
+{
+    $source = preg_replace('#/\*.*?\*/#s', '', $source) ?? $source;
+    $source = preg_replace('#^\s*//.*$#m', '', $source) ?? $source;
+    return $source;
+}
+
+function extractInputNames(string $html): array
+{
+    $names = [];
+    if (preg_match_all('/\bname=["\']([^"\']+)["\']/i', $html, $m)) {
+        $names = array_values(array_unique($m[1]));
+    }
+    return $names;
+}
+
+function fileDefinesFunction(string $source, string $fnName): bool
+{
+    $stripped = stripPhpComments($source);
+    return (bool)preg_match(
+        '/\bfunction\s+' . preg_quote($fnName, '/') . '\s*\(/',
+        $stripped
+    );
+}
+
+function fileCallsFunction(string $source, string $fnName): bool
+{
+    $stripped = stripPhpComments($source);
+    return (bool)preg_match(
+        '/\b' . preg_quote($fnName, '/') . '\s*\(/',
+        $stripped
+    );
+}
+
+function renderSection(string $title, string $sectionName, bool $defaultCollapsed = true): void
+{
+    global $sections;
+
+    $totalTests  = isset($sections[$sectionName]) ? count($sections[$sectionName]) : 0;
+    $passedTests = 0;
+    if (isset($sections[$sectionName])) {
+        foreach ($sections[$sectionName] as $test) {
+            if ($test['passed']) $passedTests++;
+        }
+    }
+
+    $failedTests = $totalTests - $passedTests;
+    $allPassed   = ($totalTests > 0 && $failedTests === 0);
+    $hasFailures = ($failedTests > 0);
+
+    $sectionId = 'section-' . preg_replace('/[^a-zA-Z0-9]/', '-', $sectionName);
+    $contentId = 'content-' . preg_replace('/[^a-zA-Z0-9]/', '-', $sectionName);
+
+    $collapsedClass = $defaultCollapsed ? 'section-collapsed' : '';
+
+    echo '<div class="test-section ' . $collapsedClass . '" id="' . $sectionId . '">';
+    echo '<div class="section-header" data-target="' . $contentId . '">';
+
+    $countClass = 'count-neutral';
+    if ($allPassed) {
+        $countClass = 'count-pass';
+    } elseif ($hasFailures && $failedTests <= 2) {
+        $countClass = 'count-warning';
+    } elseif ($hasFailures && $failedTests > 2) {
+        $countClass = 'count-fail';
+    }
+
+    echo '<h2>' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8')
+       . ' <span class="section-count ' . $countClass . '">('
+       . $passedTests . '/' . $totalTests
+       . ')</span></h2>';
+
+    echo '<button class="section-toggle" aria-expanded="'
+       . ($defaultCollapsed ? 'false' : 'true')
+       . '" aria-controls="' . $contentId . '" type="button">';
+    echo '<span class="toggle-icon">' . ($defaultCollapsed ? '+' : '-') . '</span>';
+    echo '</button>';
+    echo '</div>';
+    echo '<div class="test-grid" id="' . $contentId . '" style="display: '
+       . ($defaultCollapsed ? 'none' : 'grid') . ';">';
+
+    if (isset($sections[$sectionName]) && !empty($sections[$sectionName])) {
+        foreach ($sections[$sectionName] as $test) {
+            $statusClass = $test['passed'] ? 'pass' : 'fail';
+            $statusText  = $test['passed'] ? 'PASS' : 'FAIL';
+
+            echo '<div class="test-item ' . $statusClass . '">';
+            echo '<div class="test-name">' . htmlspecialchars($test['name'], ENT_QUOTES, 'UTF-8') . '</div>';
+            echo '<div class="test-status ' . $statusClass . '">' . $statusText . '</div>';
+            echo '<div class="test-message">' . htmlspecialchars($test['message'], ENT_QUOTES, 'UTF-8') . '</div>';
+            echo '</div>';
+        }
+    }
+
+    echo '</div>';
+    echo '</div>';
+}
+
+function renderLiveFormSection(string $baseUrl, bool $defaultCollapsed = true): void
+{
+    $contentId = 'content-live-form';
+
+    echo '<div class="test-section ' . ($defaultCollapsed ? 'section-collapsed' : '') . '" id="section-live-form">';
+    echo '<div class="section-header" data-target="' . $contentId . '">';
+    echo '<h2>Live Form <span class="section-count count-neutral">(0/0)</span></h2>';
+    echo '<button class="section-toggle" aria-expanded="'
+       . ($defaultCollapsed ? 'false' : 'true')
+       . '" aria-controls="' . $contentId . '" type="button">';
+    echo '<span class="toggle-icon">' . ($defaultCollapsed ? '+' : '-') . '</span>';
+    echo '</button>';
+    echo '</div>';
+    echo '<div class="test-grid" id="' . $contentId . '" style="display: '
+       . ($defaultCollapsed ? 'none' : 'grid') . ';">';
+
+    echo '<div class="live-test">';
+    echo '<p><strong>Test the sign-up form:</strong></p>';
+    echo '<p style="font-size:13px;color:#718096;margin:5px 0;">URL: '
+       . htmlspecialchars($baseUrl . '/customer/pages/sign-up.php', ENT_QUOTES, 'UTF-8')
+       . '</p>';
+    echo '<iframe src="' . htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8') . '/customer/pages/sign-up.php"></iframe>';
+    echo '<div class="btn-test-group">';
+    echo '<a href="' . htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8')
+       . '/customer/pages/sign-up.php" target="_blank" class="btn-test">Open Sign-Up</a>';
+    echo '<a href="' . htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8')
+       . '/customer/pages/sign-in.php" target="_blank" class="btn-test">Open Sign-In</a>';
+    echo '</div>';
+    echo '</div>';
+
+    echo '</div>';
+    echo '</div>';
+}
+
+function getAssetBase(): string
+{
+    $scriptPath = $_SERVER['SCRIPT_NAME'] ?? '';
+    $dirPath    = dirname($scriptPath);
+    $segments   = array_filter(explode('/', $dirPath));
+    $depth      = count($segments);
+    if ($depth <= 0) return './shared/';
+    return str_repeat('../', $depth) . 'shared/';
+}
+
+// ------------------------------------------------------------------
+// RUN THE TESTS
+// ------------------------------------------------------------------
+
+$protocol  = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+$host      = $_SERVER['HTTP_HOST'] ?? 'localhost';
+$baseUrl   = $protocol . '://' . $host;
+$assetBase = getAssetBase();
+
+// ---------------------------------------------------------------
+// DATABASE
+// ---------------------------------------------------------------
+$dbFile = $sharedPath . '/backend/database/database-connect.php';
+
+if (file_exists($dbFile)) {
+    testResult('Database File Exists', true, 'File found', 'Database');
+
+    $content  = file_get_contents($dbFile);
+    $stripped = stripPhpComments($content);
+
+    testResult(
+        'Database Uses PDO',
+        (bool)preg_match('/new\s+PDO\s*\(/', $stripped),
+        preg_match('/new\s+PDO\s*\(/', $stripped) ? 'new PDO() found' : 'No PDO instantiation',
+        'Database'
+    );
+
+    testResult(
+        'Database Assigns $database_connection',
+        (bool)preg_match('/\$database_connection\s*=\s*new\s+PDO/', $stripped),
+        'Assignment found',
+        'Database'
+    );
+
+    try {
+        $dsn = 'mysql:host=localhost;port=3306;dbname=fitpal_food_delivery;charset=utf8mb4';
+        $test_connection = new PDO($dsn, 'root', '', [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+        ]);
+        testResult('Live Database Connection', true, 'PDO connection established', 'Database');
+
+        $tables = ['customer', 'customer_profile', 'financial_account'];
+        foreach ($tables as $t) {
+            $stmt   = $test_connection->query('SHOW TABLES LIKE ' . $test_connection->quote($t));
+            $exists = $stmt->rowCount() > 0;
+            testResult("Table: {$t}", $exists, $exists ? 'Exists' : 'Missing', 'Database');
+        }
+    } catch (PDOException $e) {
+        testResult('Live Database Connection', false, 'PDO Error: ' . $e->getMessage(), 'Database');
+    }
+} else {
+    testResult('Database File Exists', false, 'File not found: ' . $dbFile, 'Database');
+}
+
+// ---------------------------------------------------------------
+// SESSION
+// ---------------------------------------------------------------
+$sessionActive = session_status() === PHP_SESSION_ACTIVE;
+testResult('Session Active', $sessionActive, $sessionActive ? 'Active' : 'Inactive', 'Session');
+
+if ($sessionActive) {
+    testResult('Session ID', session_id() !== '', 'Session ID exists', 'Session');
+
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    testResult(
+        'CSRF Token',
+        !empty($_SESSION['csrf_token']) && strlen($_SESSION['csrf_token']) === 64,
+        'Token is 64 hex characters',
+        'Session'
+    );
+}
+
+// ---------------------------------------------------------------
+// CORE FILES
+// ---------------------------------------------------------------
+$criticalFiles = [
+    'Sign-Up Page'      => $customerPath . '/pages/sign-up.php',
+    'Sign-Up Handler'   => $customerPath . '/backend/handlers/sign-up-handler.php',
+    'Sign-Up JS'        => $customerPath . '/assets/ui/js/sign-up.js',
+    'Sign-Up CSS'       => $customerPath . '/assets/css/sign-up.css',
+    'Customer Header'   => $customerPath . '/includes/header.php',
+    'Sign-In Handler'   => $customerPath . '/backend/handlers/sign-in-handler.php',
+    'Shared Header'     => $sharedPath . '/includes/header.php',
+    'Shared Footer'     => $sharedPath . '/includes/footer.php',
+    'Database Connect'  => $sharedPath . '/backend/database/database-connect.php',
+];
+
+foreach ($criticalFiles as $name => $path) {
+    $exists = file_exists($path);
+    testResult($name, $exists, $exists ? 'Found' : 'Missing', 'Core Files');
+}
+
+// ---------------------------------------------------------------
+// SIGN-UP PAGE STRUCTURE
+// ---------------------------------------------------------------
+$signUpPage = $customerPath . '/pages/sign-up.php';
+
+if (file_exists($signUpPage)) {
+    $pageContent = file_get_contents($signUpPage);
+
+    $formBlock = null;
+    if (preg_match(
+        '/<form[^>]*\bid=["\']registerForm["\'][^>]*>(.*?)<\/form>/is',
+        $pageContent,
+        $formMatch
+    )) {
+        $formBlock = $formMatch[1];
+    }
+
+    testResult(
+        'Form (registerForm) Present',
+        $formBlock !== null,
+        $formBlock !== null ? 'Form element found' : 'Form element missing',
+        'Page Structure'
+    );
+
+    if ($formBlock !== null) {
+        $hasCsrf = (bool)preg_match(
+            '/<input[^>]*\bname=["\']csrf_token["\'][^>]*>/i',
+            $formBlock
+        );
+        testResult(
+            'CSRF Token Field Inside Form',
+            $hasCsrf,
+            $hasCsrf ? 'Present inside form' : 'Missing from form',
+            'Page Structure'
+        );
+
+        $hasCorrectAction = (bool)preg_match(
+            '/action=["\'][^"\']*sign-up-handler\.php["\']/i',
+            $pageContent
+        );
+        testResult(
+            'Form Action → sign-up-handler.php',
+            $hasCorrectAction,
+            $hasCorrectAction ? 'Correct' : 'Wrong or missing action',
+            'Page Structure'
+        );
+
+        $expectedFields = [
+            'first_name', 'last_name', 'birthdate', 'gender',
+            'email', 'contact_number', 'username', 'password',
+            'confirm_password', 'terms',
+        ];
+
+        $presentNames = extractInputNames($formBlock);
+        $missing = [];
+        foreach ($expectedFields as $field) {
+            if (!in_array($field, $presentNames, true)) {
+                $missing[] = $field;
+            }
+        }
+        testResult(
+            'Required Fields Inside Form',
+            empty($missing),
+            empty($missing) ? 'All present' : 'Missing: ' . implode(', ', $missing),
+            'Page Structure'
+        );
+
+        preg_match_all(
+            '/class=["\'][^"\']*\bregister-step\b[^"\']*["\']/i',
+            $pageContent,
+            $stepMatches
+        );
+        $stepCount = count($stepMatches[0] ?? []);
+        testResult(
+            'Four Register Steps',
+            $stepCount === 4,
+            "Found {$stepCount} steps",
+            'Page Structure'
+        );
+
+        $stepIdsFound = [];
+        for ($i = 1; $i <= 4; $i++) {
+            if (preg_match('/\bid=["\']step' . $i . '["\']/i', $pageContent)) {
+                $stepIdsFound[] = $i;
+            }
+        }
+        testResult(
+            'Step IDs step1..step4',
+            count($stepIdsFound) === 4,
+            count($stepIdsFound) === 4
+                ? 'All present'
+                : 'Missing: ' . implode(',', array_diff([1, 2, 3, 4], $stepIdsFound)),
+            'Page Structure'
+        );
+    }
+
+    testResult(
+        'Dietary Options Container',
+        (bool)preg_match('/\bid=["\']dietaryOptions["\']/i', $pageContent),
+        preg_match('/\bid=["\']dietaryOptions["\']/i', $pageContent) ? 'Found' : 'Missing',
+        'Page Structure'
+    );
+
+    testResult(
+        'Allergy Options Container',
+        (bool)preg_match('/\bid=["\']allergyOptions["\']/i', $pageContent),
+        preg_match('/\bid=["\']allergyOptions["\']/i', $pageContent) ? 'Found' : 'Missing',
+        'Page Structure'
+    );
+
+    testResult(
+        'Fitness Goal Select',
+        (bool)preg_match('/<select[^>]*\bid=["\']fitness_goal["\']/i', $pageContent),
+        preg_match('/<select[^>]*\bid=["\']fitness_goal["\']/i', $pageContent) ? 'Found' : 'Missing',
+        'Page Structure'
+    );
+
+    testResult(
+        'Notifier Modal',
+        (bool)preg_match('/\bid=["\']notifierModal["\']/i', $pageContent),
+        preg_match('/\bid=["\']notifierModal["\']/i', $pageContent) ? 'Found' : 'Missing',
+        'Page Structure'
+    );
+
+    testResult(
+        'sign-up.js Loaded',
+        (bool)preg_match('/<script[^>]*src=["\'][^"\']*sign-up\.js["\']/i', $pageContent),
+        'Script tag present',
+        'Page Structure'
+    );
+
+
+} else {
+    testResult('Sign-Up Page', false, 'File not found', 'Page Structure');
+}
+
+// ---------------------------------------------------------------
+// SIGN-UP HANDLER
+// ---------------------------------------------------------------
+$handlerPath = $customerPath . '/backend/handlers/sign-up-handler.php';
+
+if (file_exists($handlerPath)) {
+    $handlerContent  = file_get_contents($handlerPath);
+    $handlerStripped = stripPhpComments($handlerContent);
+
+    testResult(
+        'session_start() Called',
+        (bool)preg_match('/\bsession_start\s*\(\s*\)/', $handlerStripped),
+        preg_match('/\bsession_start\s*\(\s*\)/', $handlerStripped) ? 'Found' : 'Missing',
+        'Handler'
+    );
+
+    testResult(
+        'Database Required',
+        (bool)preg_match('/require_once[^;]*database-connect\.php/', $handlerStripped),
+        'require_once database-connect.php found',
+        'Handler'
+    );
+
+    testResult(
+        'customer-queries.php Required',
+        (bool)preg_match('/require_once[^;]*customer-queries\.php/', $handlerStripped),
+        'Query layer required',
+        'Handler'
+    );
+
+    $requiredCalls = [
+        'emailExists'            => 'calls emailExists()',
+        'usernameExists'         => 'calls usernameExists()',
+        'contactExists'          => 'calls contactExists()',
+        'createFinancialAccount' => 'calls createFinancialAccount()',
+        'createCustomer'         => 'calls createCustomer()',
+        'createCustomerProfile'  => 'calls createCustomerProfile()',
+    ];
+
+    foreach ($requiredCalls as $fn => $desc) {
+        testResult(
+            "Handler Calls {$fn}()",
+            fileCallsFunction($handlerStripped, $fn),
+            $desc,
+            'Handler'
+        );
+    }
+
+    testResult(
+        'Defines respondError()',
+        fileDefinesFunction($handlerStripped, 'respondError'),
+        'respondError helper defined',
+        'Handler'
+    );
+
+    testResult(
+        'Uses beginTransaction',
+        (bool)preg_match('/->beginTransaction\s*\(/', $handlerStripped),
+        'Transaction started',
+        'Handler'
+    );
+
+    testResult(
+        'Uses commit',
+        (bool)preg_match('/->commit\s*\(/', $handlerStripped),
+        'Transaction committed',
+        'Handler'
+    );
+
+    testResult(
+        'Uses rollBack',
+        (bool)preg_match('/->rollBack\s*\(/', $handlerStripped),
+        'Rollback on error',
+        'Handler'
+    );
+
+    testResult(
+        'Uses password_hash',
+        (bool)preg_match('/\bpassword_hash\s*\(/', $handlerStripped),
+        'Password hashed',
+        'Handler'
+    );
+
+    testResult(
+        'Uses FILTER_VALIDATE_EMAIL',
+        (bool)preg_match('/FILTER_VALIDATE_EMAIL/', $handlerStripped),
+        'Email validated',
+        'Handler'
+    );
+
+    // Accept either a PHP header redirect or a JSON redirect key.
+    $hasHeaderRedirect = (bool)preg_match(
+        '/header\s*\(\s*[\'"]Location:\s*[^\'"]*sign-in\.php[\'"]\s*\)/',
+        $handlerStripped
+    );
+    $hasJsonRedirect = (bool)preg_match(
+        '/[\'"]redirect[\'"]\s*=>\s*[\'"]sign-in\.php[\'"]/',
+        $handlerStripped
+    );
+
+    testResult(
+        'Redirects to sign-in.php',
+        $hasHeaderRedirect || $hasJsonRedirect,
+        $hasHeaderRedirect
+            ? 'Location header present'
+            : ($hasJsonRedirect ? 'JSON redirect key present' : 'No redirect target found'),
+        'Handler'
+    );
+
+    testResult(
+        'Returns JSON Response',
+        (bool)preg_match('/header\s*\(\s*[\'"]Content-Type:\s*application\/json/i', $handlerStripped),
+        'JSON Content-Type set',
+        'Handler'
+    );
+} else {
+    testResult('Handler', false, 'File not found', 'Handler');
+}
+
+// ---------------------------------------------------------------
+// SIGN-UP JAVASCRIPT
+// ---------------------------------------------------------------
+$jsPath = $customerPath . '/assets/ui/js/sign-up.js';
+
+if (file_exists($jsPath)) {
+    $jsContent  = file_get_contents($jsPath);
+    $jsStripped = stripJsComments($jsContent);
+
+    testResult(
+        'DOMContentLoaded Bound',
+        (bool)preg_match('/addEventListener\s*\(\s*[\'"]DOMContentLoaded[\'"]/', $jsStripped),
+        'DOMContentLoaded listener registered',
+        'JavaScript'
+    );
+
+    $expectedFunctions = ['goToStep', 'validateStep', 'validateStep4', 'showFieldError', 'showNotification'];
+    foreach ($expectedFunctions as $fn) {
+        testResult(
+            "Defines {$fn}()",
+            (bool)preg_match('/function\s+' . preg_quote($fn, '/') . '\s*\(/', $jsStripped),
+            "function {$fn}() defined",
+            'JavaScript'
+        );
+    }
+
+    testResult(
+        'Password Toggle Bound',
+        (bool)preg_match('/togglePassword/', $jsStripped)
+        && (bool)preg_match('/addEventListener\s*\(\s*[\'"]click[\'"]/', $jsStripped),
+        'Click listener on toggle present',
+        'JavaScript'
+    );
+
+    testResult(
+        'Submit Listener Registered',
+        (bool)preg_match('/addEventListener\s*\(\s*[\'"]submit[\'"]/', $jsStripped),
+        'submit listener present',
+        'JavaScript'
+    );
+
+    testResult(
+        'Uses fetch()',
+        (bool)preg_match('/\bfetch\s*\(/', $jsStripped),
+        'fetch() call present',
+        'JavaScript'
+    );
+
+    testResult(
+        'Uses FormData',
+        (bool)preg_match('/new\s+FormData\s*\(/', $jsStripped),
+        'FormData instantiated',
+        'JavaScript'
+    );
+
+    testResult(
+        'Option Cards Setup',
+        (bool)preg_match('/option-card/', $jsStripped)
+        && (bool)preg_match('/dietaryOptions|allergyOptions/', $jsStripped),
+        'Option card containers wired',
+        'JavaScript'
+    );
+
+    testResult(
+        'Notifier Modal Reference',
+        (bool)preg_match('/notifierModal/', $jsStripped),
+        'Modal id referenced',
+        'JavaScript'
+    );
+
+    testResult(
+        'Fetch to form.action',
+        (bool)preg_match('/fetch\s*\(\s*form\.action/', $jsStripped),
+        'Submits to form.action',
+        'JavaScript'
+    );
+} else {
+    testResult('sign-up.js', false, 'File not found', 'JavaScript');
+}
+
+// ---------------------------------------------------------------
+// SIGN-UP CSS
+// ---------------------------------------------------------------
+$cssPath = $customerPath . '/assets/css/sign-up.css';
+
+if (file_exists($cssPath)) {
+    $cssContent = file_get_contents($cssPath);
+
+    $expectedSelectors = [
+        'register-step',
+        'register-progress',
+        'option-card',
+        'form-error',
+        '.error',
+        '@media',
+    ];
+
+    foreach ($expectedSelectors as $selector) {
+        testResult(
+            "Selector: {$selector}",
+            strpos($cssContent, $selector) !== false,
+            strpos($cssContent, $selector) !== false ? 'Found' : 'Missing',
+            'CSS'
+        );
+    }
+} else {
+    testResult('sign-up.css', false, 'File not found', 'CSS');
+}
+
+// ------------------------------------------------------------------
+// CALCULATE TOTALS
+// ------------------------------------------------------------------
+$totalTests  = 0;
+$totalPassed = 0;
+$totalFailed = 0;
+
+foreach ($sections as $section) {
+    foreach ($section as $test) {
+        $totalTests++;
+        if ($test['passed']) $totalPassed++;
+        else $totalFailed++;
+    }
+}
+
+$passRate = $totalTests > 0 ? round(($totalPassed / $totalTests) * 100) : 0;
+?>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FitPal Sign-Up System Test</title>
+    <link rel="stylesheet" href="<?= htmlspecialchars($assetBase, ENT_QUOTES, 'UTF-8') ?>assets/css/global.css">
+    <style>
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+
+    html,
+    body {
+        width: 100%;
+        overflow-x: hidden;
+    }
+
+    body {
+        background: #f4f6f9;
+        padding: 20px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .test-container {
+        max-width: 100%;
+        padding: 0;
+        margin: 0;
+    }
+
+    .test-header {
+        background: linear-gradient(135deg, #2d3748, #1a202c);
+        color: white;
+        padding: 30px;
+        border-radius: 12px;
+        margin-bottom: 30px;
+        width: 100%;
+    }
+
+    .test-header h1 {
+        margin: 0;
+        font-size: 28px;
+    }
+
+    .test-header p {
+        margin: 10px 0 0 0;
+        opacity: 0.8;
+    }
+
+    .test-summary {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 15px;
+        margin-bottom: 20px;
+        width: 100%;
+    }
+
+    .summary-card {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        text-align: center;
+    }
+
+    .summary-card .number {
+        font-size: 32px;
+        font-weight: 700;
+    }
+
+    .summary-card .label {
+        color: #718096;
+        font-size: 14px;
+        margin-top: 5px;
+    }
+
+    .summary-card.total .number {
+        color: #2d3748;
+    }
+
+    .summary-card.passed .number {
+        color: #48bb78;
+    }
+
+    .summary-card.failed .number {
+        color: #fc8181;
+    }
+
+    .summary-card.rate .number {
+        color: #4299e1;
+    }
+
+    .test-grid {
+        display: grid;
+        gap: 10px;
+        padding: 15px;
+        width: 100%;
+    }
+
+    .test-item {
+        background: white;
+        border-radius: 8px;
+        padding: 12px 20px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        border-left: 4px solid #e2e8f0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        width: 100%;
+    }
+
+    .test-item.pass {
+        border-left-color: #48bb78;
+    }
+
+    .test-item.fail {
+        border-left-color: #fc8181;
+    }
+
+    .test-item .test-name {
+        font-weight: 600;
+        font-size: 14px;
+        flex: 1;
+        min-width: 180px;
+    }
+
+    .test-item .test-status {
+        display: inline-block;
+        padding: 2px 14px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        margin: 0 10px;
+    }
+
+    .test-item .test-status.pass {
+        background: #c6f6d5;
+        color: #22543d;
+    }
+
+    .test-item .test-status.fail {
+        background: #fed7d7;
+        color: #9b2c2c;
+    }
+
+    .test-item .test-message {
+        color: #718096;
+        font-size: 13px;
+        min-width: 100px;
+        text-align: right;
+    }
+
+    .test-section {
+        background: white;
+        border-radius: 10px;
+        margin-top: 15px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+        width: 100%;
+    }
+
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px 20px;
+        cursor: pointer;
+        background: #f7fafc;
+        border-bottom: 1px solid #e2e8f0;
+        user-select: none;
+        width: 100%;
+    }
+
+    .section-header:hover {
+        background: #edf2f7;
+    }
+
+    .section-header h2 {
+        margin: 0;
+        font-size: 18px;
+        color: #2d3748;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .section-count {
+        font-size: 14px;
+        font-weight: 600;
+        padding: 2px 12px;
+        border-radius: 20px;
+    }
+
+    .count-pass {
+        background: #c6f6d5;
+        color: #22543d;
+    }
+
+    .count-warning {
+        background: #fefcbf;
+        color: #975a16;
+    }
+
+    .count-fail {
+        background: #fed7d7;
+        color: #9b2c2c;
+    }
+
+    .count-neutral {
+        background: #edf2f7;
+        color: #718096;
+    }
+
+    .section-toggle {
+        background: none;
+        border: none;
+        font-size: 20px;
+        cursor: pointer;
+        color: #718096;
+        padding: 0 10px;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        flex-shrink: 0;
+    }
+
+    .section-toggle:hover {
+        background: #e2e8f0;
+    }
+
+    .toggle-icon {
+        display: inline-block;
+        transition: transform 0.2s ease;
+    }
+
+    .section-collapsed .toggle-icon {
+        transform: rotate(0deg);
+    }
+
+    .live-test {
+        padding: 10px 0;
+        width: 100%;
+    }
+
+    .live-test iframe {
+        width: 100%;
+        height: 500px;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        margin-top: 10px;
+        display: block;
+    }
+
+    .btn-test {
+        display: inline-block;
+        padding: 8px 16px;
+        background: #4299e1;
+        color: white;
+        border-radius: 6px;
+        text-decoration: none;
+        font-size: 13px;
+        margin-top: 10px;
+    }
+
+    .btn-test:hover {
+        background: #3182ce;
+    }
+
+    .btn-test-group {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+    }
+
+    .top-section {
+        margin-bottom: 20px;
+        width: 100%;
+    }
+
+    @media (max-width: 640px) {
+        body {
+            padding: 10px;
+        }
+
+        .test-header {
+            padding: 20px;
+        }
+
+        .test-header h1 {
+            font-size: 22px;
+        }
+
+        .test-summary {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .summary-card {
+            padding: 15px;
+        }
+
+        .summary-card .number {
+            font-size: 24px;
+        }
+
+        .section-header {
+            padding: 12px 15px;
+            flex-wrap: wrap;
+        }
+
+        .section-header h2 {
+            font-size: 16px;
+        }
+
+        .section-count {
+            font-size: 12px;
+            padding: 2px 10px;
+        }
+
+        .test-item {
+            padding: 10px 15px;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 5px;
+        }
+
+        .test-item .test-name {
+            font-size: 13px;
+            min-width: auto;
+            width: 100%;
+        }
+
+        .test-item .test-status {
+            margin: 0 10px 0 0;
+        }
+
+        .test-item .test-message {
+            text-align: left;
+            width: 100%;
+            min-width: auto;
+        }
+
+        .test-grid {
+            padding: 10px;
+        }
+
+        .live-test iframe {
+            height: 350px;
+        }
+    }
+    </style>
+</head>
+
+<body>
+    <div class="test-container">
+
+        <div class="test-header">
+            <h1>FitPal Sign-Up System Test</h1>
+            <p>Structural validation of the customer multi-step registration flow</p>
+            <p style="font-size:13px;opacity:0.6;margin-top:10px;">
+                Base Path: <?= htmlspecialchars($basePath, ENT_QUOTES, 'UTF-8') ?> |
+                Base URL: <?= htmlspecialchars($baseUrl, ENT_QUOTES, 'UTF-8') ?>
+            </p>
+        </div>
+
+        <div class="top-section">
+            <div class="test-summary">
+                <div class="summary-card total">
+                    <div class="number"><?= $totalTests ?></div>
+                    <div class="label">Total Tests</div>
+                </div>
+                <div class="summary-card passed">
+                    <div class="number"><?= $totalPassed ?></div>
+                    <div class="label">Passed</div>
+                </div>
+                <div class="summary-card failed">
+                    <div class="number"><?= $totalFailed ?></div>
+                    <div class="label">Failed</div>
+                </div>
+                <div class="summary-card rate">
+                    <div class="number"><?= $passRate ?>%</div>
+                    <div class="label">Pass Rate</div>
+                </div>
+            </div>
+
+            <?php renderLiveFormSection($baseUrl, true); ?>
+        </div>
+
+        <?php
+    renderSection('Database Tests', 'Database', true);
+    renderSection('Session Tests', 'Session', true);
+    renderSection('Core File Tests', 'Core Files', true);
+    renderSection('Sign-Up Page Structure', 'Page Structure', true);
+    renderSection('Handler Checks', 'Handler', true);
+    renderSection('JavaScript Checks', 'JavaScript', true);
+    renderSection('CSS Checks', 'CSS', true);
+    ?>
+
+    </div>
+
+    <script>
+    (function() {
+        'use strict';
+        var sectionHeaders = document.querySelectorAll('.section-header');
+        sectionHeaders.forEach(function(header) {
+            var targetId = header.getAttribute('data-target');
+            var content = document.getElementById(targetId);
+            var toggleBtn = header.querySelector('.section-toggle');
+            var icon = toggleBtn ? toggleBtn.querySelector('.toggle-icon') : null;
+            if (!content || !toggleBtn || !icon) return;
+
+            function toggle() {
+                var isCollapsed = header.classList.contains('section-collapsed');
+                if (isCollapsed) {
+                    header.classList.remove('section-collapsed');
+                    toggleBtn.setAttribute('aria-expanded', 'true');
+                    content.style.display = 'grid';
+                    icon.textContent = '-';
+                } else {
+                    header.classList.add('section-collapsed');
+                    toggleBtn.setAttribute('aria-expanded', 'false');
+                    content.style.display = 'none';
+                    icon.textContent = '+';
+                }
+            }
+
+            header.addEventListener('click', function(e) {
+                if (e.target.closest('.section-toggle')) return;
+                toggle();
+            });
+            toggleBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                toggle();
+            });
+            header.setAttribute('role', 'button');
+            header.setAttribute('tabindex', '0');
+            header.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggle();
+                }
+            });
+        });
+    })();
+    </script>
+</body>
+
+</html>
 ```
 
 ---
