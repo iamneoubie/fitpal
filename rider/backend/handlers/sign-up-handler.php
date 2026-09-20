@@ -2,27 +2,25 @@
 /**
  * FitPal Rider Registration Handler
  *
- * Creates the following rows in a single database transaction:
- *   1. financial_account          (account_type = 'rider')
- *   2. delivery_rider             (account credentials)
- *   3. delivery_rider_profile     (vehicle + verification_status = 'pending')
- *   4. delivery_rider_address     (default address)
+ * Creates the following rows in a single DB transaction:
+ *   1. financial_account                 (account_type = 'rider')
+ *   2. delivery_rider                    (account credentials)
+ *   3. delivery_rider_profile            (vehicle + profile_picture + pending verification)
+ *   4. delivery_rider_address            (no label — schema revision dropped it)
+ *   5. delivery_rider_emergency_contact  (via insertRiderEmergencyContact)
+ *   6. delivery_rider_document           (via insertRiderDocument)
  *
- * Emergency-contact fields are validated and stored on the session
- * under 'rider_emergency_contact' so admin tooling can retrieve them
- * later without a schema change. If you later add dedicated columns
- * to delivery_rider_profile, move them there.
+ * File uploads are validated first, then moved into their final
+ * folders once the DB rows are created. If anything fails after a
+ * file has been moved, the file is unlinked and the transaction is
+ * rolled back.
  *
- * Responds with JSON so sign-up.js can show the success modal and
- * redirect on acknowledgement. Validation failures return HTTP 200
- * with {status:'error', message, field} — the client reads the body,
- * not the status code.
- *
- * The rider is NOT logged in after registration — they must sign in
- * afterward, matching the customer flow.
+ * Responds with JSON. The rider is NOT logged in after registration.
  *
  * @package FitPal
- * @version 2.0 — Adds emergency contact, vehicle make/model/year.
+ * @version 3.1 — Fixes undefined helper calls; guarantees rollback
+ *                and file cleanup on every failure path; avoids
+ *                double-validating uploads.
  */
 
 declare(strict_types=1);
@@ -35,6 +33,10 @@ require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/rider-queries.php';
 
 header('Content-Type: application/json');
+
+/* --------------------------------------------------------------
+ * HELPERS
+ * -------------------------------------------------------------- */
 
 /**
  * Terminate with a JSON error payload.
@@ -51,12 +53,86 @@ function respondError(string $message, string $field = ''): void
     exit;
 }
 
-// ===== REQUEST METHOD =====
+/**
+ * Validate an uploaded file and return its extension + mime type.
+ *
+ * @param array  $file        $_FILES entry
+ * @param int    $maxBytes
+ * @param array<string,string> $allowedMime  map of mime => ext
+ * @return array{ext:string, mime:string}
+ * @throws RuntimeException
+ */
+function validateUpload(array $file, int $maxBytes, array $allowedMime): array
+{
+    if (!isset($file['error']) || is_array($file['error'])) {
+        throw new RuntimeException('Invalid upload payload.');
+    }
+    if ($file['error'] === UPLOAD_ERR_NO_FILE) {
+        throw new RuntimeException('No file uploaded.');
+    }
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        throw new RuntimeException('Upload failed (code ' . $file['error'] . ').');
+    }
+    if (!isset($file['size']) || $file['size'] <= 0) {
+        throw new RuntimeException('Uploaded file is empty.');
+    }
+    if ($file['size'] > $maxBytes) {
+        throw new RuntimeException(
+            'File size must be under ' . round($maxBytes / 1048576, 1) . ' MB.'
+        );
+    }
+
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    if ($finfo === false) {
+        throw new RuntimeException('Could not inspect file.');
+    }
+    $mime = (string)finfo_file($finfo, $file['tmp_name']);
+    finfo_close($finfo);
+
+    if (!isset($allowedMime[$mime])) {
+        throw new RuntimeException('Unsupported file type. Use JPG, PNG, or WEBP.');
+    }
+
+    return ['ext' => $allowedMime[$mime], 'mime' => $mime];
+}
+
+/**
+ * Move an uploaded file into its final folder and return the
+ * project-root-relative path stored in the DB.
+ *
+ * @throws RuntimeException
+ */
+function storeUpload(
+    array $file,
+    string $projectRoot,
+    string $subfolder,
+    string $basename,
+    string $ext
+): string {
+    $dir = $projectRoot . '/shared/uploads/' . $subfolder;
+
+    if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+        throw new RuntimeException('Could not create upload directory.');
+    }
+
+    $filename = $basename . '_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+    $fullPath = $dir . '/' . $filename;
+
+    if (!move_uploaded_file($file['tmp_name'], $fullPath)) {
+        throw new RuntimeException('Could not save file.');
+    }
+
+    return 'shared/uploads/' . $subfolder . '/' . $filename;
+}
+
+/* --------------------------------------------------------------
+ * REQUEST GUARDS
+ * -------------------------------------------------------------- */
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     respondError('Invalid request method.');
 }
 
-// ===== CSRF =====
 if (
     !isset($_POST['csrf_token']) ||
     !hash_equals((string)($_SESSION['csrf_token'] ?? ''), (string)$_POST['csrf_token'])
@@ -64,7 +140,10 @@ if (
     respondError('Security validation failed. Please refresh the page and try again.');
 }
 
-// ===== COLLECT INPUT =====
+/* --------------------------------------------------------------
+ * COLLECT INPUT
+ * -------------------------------------------------------------- */
+
 $firstName       = trim((string)($_POST['first_name'] ?? ''));
 $middleName      = trim((string)($_POST['middle_name'] ?? ''));
 $lastName        = trim((string)($_POST['last_name'] ?? ''));
@@ -77,115 +156,97 @@ $password        = (string)($_POST['password'] ?? '');
 $confirmPassword = (string)($_POST['confirm_password'] ?? '');
 $terms           = $_POST['terms'] ?? '';
 
-$vehicleType   = trim((string)($_POST['vehicle_type'] ?? ''));
-$vehiclePlate  = trim((string)($_POST['vehicle_plate'] ?? ''));
-$vehicleMake   = trim((string)($_POST['vehicle_make'] ?? ''));
-$vehicleModel  = trim((string)($_POST['vehicle_model'] ?? ''));
-$vehicleYear   = trim((string)($_POST['vehicle_year'] ?? ''));
+$vehicleType  = trim((string)($_POST['vehicle_type'] ?? ''));
+$vehiclePlate = trim((string)($_POST['vehicle_plate'] ?? ''));
+$vehicleMake  = trim((string)($_POST['vehicle_make'] ?? ''));
+$vehicleModel = trim((string)($_POST['vehicle_model'] ?? ''));
+$vehicleYear  = trim((string)($_POST['vehicle_year'] ?? ''));
 
-$addressLabel         = trim((string)($_POST['address_label'] ?? ''));
-$block                = trim((string)($_POST['block'] ?? ''));
-$barangay             = trim((string)($_POST['barangay'] ?? ''));
-$city                 = trim((string)($_POST['city'] ?? ''));
-$province             = trim((string)($_POST['province'] ?? ''));
-$region               = trim((string)($_POST['region'] ?? ''));
-$postalCode           = trim((string)($_POST['postal_code'] ?? ''));
+$licenseIssue  = trim((string)($_POST['license_issue_date'] ?? ''));
+$licenseExpiry = trim((string)($_POST['license_expiry_date'] ?? ''));
 
-$emergencyName         = trim((string)($_POST['emergency_name'] ?? ''));
-$emergencyRelationship = trim((string)($_POST['emergency_relationship'] ?? ''));
-$emergencyContact      = trim((string)($_POST['emergency_contact'] ?? ''));
+$block      = trim((string)($_POST['block'] ?? ''));
+$barangay   = trim((string)($_POST['barangay'] ?? ''));
+$city       = trim((string)($_POST['city'] ?? ''));
+$province   = trim((string)($_POST['province'] ?? ''));
+$region     = trim((string)($_POST['region'] ?? ''));
+$postalCode = trim((string)($_POST['postal_code'] ?? ''));
 
-// ===== REQUIRED FIELDS =====
+$ecFirstName    = trim((string)($_POST['emergency_first_name'] ?? ''));
+$ecMiddleName   = trim((string)($_POST['emergency_middle_name'] ?? ''));
+$ecLastName     = trim((string)($_POST['emergency_last_name'] ?? ''));
+$ecRelationship = trim((string)($_POST['emergency_relationship'] ?? ''));
+$ecContact      = trim((string)($_POST['emergency_contact'] ?? ''));
+
+/* --------------------------------------------------------------
+ * REQUIRED FIELD CHECK
+ * -------------------------------------------------------------- */
+
 if (
     $firstName === '' || $lastName === '' || $birthdate === '' ||
     $gender === '' || $email === '' || $contactNumber === '' ||
     $username === '' || $password === '' || $vehicleType === '' ||
     $block === '' || $city === '' ||
-    $emergencyName === '' || $emergencyRelationship === '' ||
-    $emergencyContact === ''
+    $ecFirstName === '' || $ecLastName === '' ||
+    $ecRelationship === '' || $ecContact === ''
 ) {
     respondError('Please fill in all required fields.');
 }
 
-// ===== NAME VALIDATION =====
+/* --------------------------------------------------------------
+ * FIELD VALIDATION
+ * -------------------------------------------------------------- */
+
 $namePattern = "/^[A-Za-z\s\-']+$/u";
 
-if (strlen($firstName) < 2) {
-    respondError('First name must be at least 2 characters.', 'first_name');
-}
-if (!preg_match($namePattern, $firstName)) {
+if (strlen($firstName) < 2 || !preg_match($namePattern, $firstName)) {
     respondError('First name contains invalid characters.', 'first_name');
 }
-if (strlen($lastName) < 2) {
-    respondError('Last name must be at least 2 characters.', 'last_name');
-}
-if (!preg_match($namePattern, $lastName)) {
+if (strlen($lastName) < 2 || !preg_match($namePattern, $lastName)) {
     respondError('Last name contains invalid characters.', 'last_name');
 }
-
-// ===== GENDER =====
 if (!in_array($gender, ['Male', 'Female', 'Other'], true)) {
     respondError('Invalid gender selection.', 'gender');
 }
-
-// ===== EMAIL =====
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     respondError('Please enter a valid email address.', 'email');
 }
 
-// ===== CONTACT =====
 $cleanedContact = preg_replace('/\s+/', '', $contactNumber);
 if (!preg_match('/^09\d{9}$/', (string)$cleanedContact)) {
     respondError('Enter a valid PH mobile number (11 digits, starting with 09).', 'contact_number');
 }
 
-// ===== USERNAME =====
-if (strlen($username) < 3) {
-    respondError('Username must be at least 3 characters.', 'username');
-}
-if (strlen($username) > 20) {
-    respondError('Username must be no more than 20 characters.', 'username');
+if (strlen($username) < 3 || strlen($username) > 20) {
+    respondError('Username must be 3–20 characters.', 'username');
 }
 if (!preg_match('/^[A-Za-z0-9_]+$/', $username)) {
     respondError('Username can only contain letters, numbers, and underscores.', 'username');
 }
 
-// ===== PASSWORD =====
-if (strlen($password) < 8) {
-    respondError('Password must be at least 8 characters.', 'password');
-}
-if (strlen($password) > 20) {
-    respondError('Password must be no more than 20 characters.', 'password');
+if (strlen($password) < 8 || strlen($password) > 20) {
+    respondError('Password must be 8–20 characters.', 'password');
 }
 if (!preg_match('/^[A-Za-z0-9]+$/', $password)) {
     respondError('Password can only contain letters and numbers.', 'password');
 }
-if (!preg_match('/[A-Za-z]/', $password)) {
-    respondError('Password must contain at least one letter.', 'password');
-}
-if (!preg_match('/[0-9]/', $password)) {
-    respondError('Password must contain at least one number.', 'password');
+if (!preg_match('/[A-Za-z]/', $password) || !preg_match('/[0-9]/', $password)) {
+    respondError('Password must contain at least one letter and one number.', 'password');
 }
 if ($password !== $confirmPassword) {
     respondError('Passwords do not match.', 'confirm_password');
 }
 
-// ===== AGE =====
 try {
     $bd    = new DateTime($birthdate);
     $today = new DateTime();
     $age   = $today->diff($bd)->y;
-    if ($age < 18) {
-        respondError('You must be at least 18 years old to register as a rider.', 'birthdate');
-    }
-    if ($age > 70) {
-        respondError('Please enter a valid date of birth.', 'birthdate');
-    }
+    if ($age < 18) respondError('You must be at least 18 years old to register as a rider.', 'birthdate');
+    if ($age > 70) respondError('Please enter a valid date of birth.', 'birthdate');
 } catch (Exception $e) {
     respondError('Please enter a valid date of birth.', 'birthdate');
 }
 
-// ===== VEHICLE =====
 $allowedVehicles = ['motorcycle', 'scooter', 'car', 'van', 'bicycle'];
 if (!in_array($vehicleType, $allowedVehicles, true)) {
     respondError('Invalid vehicle type.', 'vehicle_type');
@@ -213,38 +274,97 @@ if ($vehicleYear !== '') {
     $vehicleYearValue = $y;
 }
 
-// ===== ADDRESS =====
-$allowedLabels = ['Home', 'Base', 'Other'];
-$addressLabel  = in_array($addressLabel, $allowedLabels, true) ? $addressLabel : 'Base';
+// ---- License dates ----
+$issueDate  = null;
+$expiryDate = null;
+
+if ($licenseIssue !== '') {
+    try {
+        $d = new DateTime($licenseIssue);
+        if ($d > new DateTime()) {
+            respondError('License issue date cannot be in the future.', 'license_issue_date');
+        }
+        $issueDate = $d->format('Y-m-d');
+    } catch (Exception $e) {
+        respondError('Invalid license issue date.', 'license_issue_date');
+    }
+}
+if ($licenseExpiry !== '') {
+    try {
+        $d = new DateTime($licenseExpiry);
+        if ($d <= new DateTime()) {
+            respondError('License expiry date must be in the future.', 'license_expiry_date');
+        }
+        if ($issueDate !== null && $d <= new DateTime($issueDate)) {
+            respondError('Expiry date must be after the issue date.', 'license_expiry_date');
+        }
+        $expiryDate = $d->format('Y-m-d');
+    } catch (Exception $e) {
+        respondError('Invalid license expiry date.', 'license_expiry_date');
+    }
+}
 
 if ($postalCode !== '' && !preg_match('/^[0-9]{3,10}$/', $postalCode)) {
     respondError('Postal code must be numeric.', 'postal_code');
 }
 
-// ===== EMERGENCY CONTACT =====
-if (strlen($emergencyName) < 2) {
-    respondError('Emergency contact name is required.', 'emergency_name');
+if (strlen($ecFirstName) < 2 || !preg_match($namePattern, $ecFirstName)) {
+    respondError('Emergency contact first name contains invalid characters.', 'emergency_first_name');
 }
+if (strlen($ecLastName) < 2 || !preg_match($namePattern, $ecLastName)) {
+    respondError('Emergency contact last name contains invalid characters.', 'emergency_last_name');
+}
+
 $allowedRelationships = ['Parent', 'Spouse', 'Sibling', 'Relative', 'Friend', 'Other'];
-if (!in_array($emergencyRelationship, $allowedRelationships, true)) {
+if (!in_array($ecRelationship, $allowedRelationships, true)) {
     respondError('Invalid emergency contact relationship.', 'emergency_relationship');
 }
-$cleanedEmergencyContact = preg_replace('/\s+/', '', $emergencyContact);
-if (!preg_match('/^09\d{9}$/', (string)$cleanedEmergencyContact)) {
+
+$cleanedEcContact = preg_replace('/\s+/', '', $ecContact);
+if (!preg_match('/^09\d{9}$/', (string)$cleanedEcContact)) {
     respondError('Emergency contact must be a valid PH mobile number (09XXXXXXXXX).', 'emergency_contact');
 }
 
-// ===== TERMS =====
 if (empty($terms)) {
     respondError('You must agree to the Terms and Conditions and Privacy Policy.', 'terms');
 }
 
-// =====================================================================
-// DATABASE TRANSACTION
-// =====================================================================
+/* --------------------------------------------------------------
+ * FILE UPLOAD VALIDATION (before touching the DB)
+ * -------------------------------------------------------------- */
+
+$allowedImages = [
+    'image/jpeg' => 'jpg',
+    'image/png'  => 'png',
+    'image/webp' => 'webp',
+];
+
+$profileFile = $_FILES['profile_picture'] ?? null;
+$licenseFile = $_FILES['drivers_license'] ?? null;
+
+if (!$profileFile || ($profileFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+    respondError('Please upload a formal profile picture.', 'profile_picture');
+}
+if (!$licenseFile || ($licenseFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+    respondError("Please upload a photo of your driver's license.", 'drivers_license');
+}
+
+// Validate both files once. Reuse the results below.
+try {
+    $profileMeta = validateUpload($profileFile, 2 * 1024 * 1024, $allowedImages);
+    $licenseMeta = validateUpload($licenseFile, 5 * 1024 * 1024, $allowedImages);
+} catch (RuntimeException $e) {
+    respondError($e->getMessage(), 'upload');
+}
+
+/* --------------------------------------------------------------
+ * DATABASE TRANSACTION
+ * -------------------------------------------------------------- */
+
+$movedFiles = [];
 
 try {
-    // ---- Uniqueness checks ----
+    // ---- Uniqueness checks (outside the transaction) ----
     $checkEmail = $database_connection->prepare(
         "SELECT 1 FROM delivery_rider WHERE email = :email LIMIT 1"
     );
@@ -269,21 +389,24 @@ try {
         respondError('This mobile number is already registered.', 'contact_number');
     }
 
-    // ---- Begin transaction ----
+    $projectRoot = realpath(__DIR__ . '/../../..');
+    if ($projectRoot === false) {
+        respondError('Server storage path unavailable.');
+    }
+
     $database_connection->beginTransaction();
 
     // ---- 1. Financial account ----
-    $faStmt = $database_connection->prepare(
-        "INSERT INTO financial_account (balance, account_type)
-         VALUES (0.00, 'rider')"
+    $fa = $database_connection->prepare(
+        "INSERT INTO financial_account (balance, account_type) VALUES (0.00, 'rider')"
     );
-    $faStmt->execute();
+    $fa->execute();
     $financialAccountId = (int)$database_connection->lastInsertId();
 
     // ---- 2. Delivery rider ----
-    $hashedPassword = password_hash($password, PASSWORD_BCRYPT);
+    $hashed = password_hash($password, PASSWORD_BCRYPT);
 
-    $riderStmt = $database_connection->prepare(
+    $rider = $database_connection->prepare(
         "INSERT INTO delivery_rider
             (first_name, middle_name, last_name, birthdate, gender,
              email, contact_number, username, password, is_active)
@@ -291,7 +414,7 @@ try {
             (:first_name, :middle_name, :last_name, :birthdate, :gender,
              :email, :contact_number, :username, :password, 1)"
     );
-    $riderStmt->execute([
+    $rider->execute([
         ':first_name'     => $firstName,
         ':middle_name'    => $middleName !== '' ? $middleName : null,
         ':last_name'      => $lastName,
@@ -300,66 +423,98 @@ try {
         ':email'          => $email,
         ':contact_number' => $cleanedContact,
         ':username'       => $username,
-        ':password'       => $hashedPassword,
+        ':password'       => $hashed,
     ]);
     $deliveryRiderId = (int)$database_connection->lastInsertId();
 
-    // ---- 3. Rider profile ----
-    $profileStmt = $database_connection->prepare(
-        "INSERT INTO delivery_rider_profile
-            (delivery_rider_id, financial_account_id, vehicle_type,
-             vehicle_plate, verification_status, average_rating,
-             total_deliveries, is_available)
-         VALUES
-            (:rider_id, :financial_account_id, :vehicle_type,
-             :vehicle_plate, 'pending', 0.0, 0, 0)"
+    // ---- 3. Move uploaded files ----
+    // Paths are captured so the outer catch can unlink them if a
+    // later step fails.
+    $profilePath = storeUpload(
+        $profileFile,
+        $projectRoot,
+        'rider-profiles',
+        'rider_' . $deliveryRiderId . '_profile',
+        $profileMeta['ext']
     );
-    $profileStmt->execute([
+    $movedFiles[] = $projectRoot . '/' . $profilePath;
+
+    $licensePath = storeUpload(
+        $licenseFile,
+        $projectRoot,
+        'rider-documents',
+        'rider_' . $deliveryRiderId . '_license',
+        $licenseMeta['ext']
+    );
+    $movedFiles[] = $projectRoot . '/' . $licensePath;
+
+    // ---- 4. Rider profile ----
+    $profile = $database_connection->prepare(
+        "INSERT INTO delivery_rider_profile
+            (delivery_rider_id, financial_account_id, profile_picture,
+             vehicle_type, vehicle_plate, verification_status,
+             average_rating, total_deliveries, is_available)
+         VALUES
+            (:rider_id, :financial_account_id, :profile_picture,
+             :vehicle_type, :vehicle_plate, 'pending',
+             0.0, 0, 0)"
+    );
+    $profile->execute([
         ':rider_id'             => $deliveryRiderId,
         ':financial_account_id' => $financialAccountId,
+        ':profile_picture'      => $profilePath,
         ':vehicle_type'         => $vehicleType,
         ':vehicle_plate'        => $vehiclePlate !== '' ? $vehiclePlate : null,
     ]);
 
-    // ---- 4. Rider address ----
-    $addressStmt = $database_connection->prepare(
+    // ---- 5. Rider address (label column dropped) ----
+    $address = $database_connection->prepare(
         "INSERT INTO delivery_rider_address
-            (delivery_rider_id, label, block, barangay, city,
+            (delivery_rider_id, block, barangay, city,
              province, region, postal_code, country, is_default)
          VALUES
-            (:rider_id, :label, :block, :barangay, :city,
+            (:rider_id, :block, :barangay, :city,
              :province, :region, :postal_code, 'Philippines', 1)"
     );
-    $addressStmt->execute([
+    $address->execute([
         ':rider_id'    => $deliveryRiderId,
-        ':label'       => $addressLabel,
         ':block'       => $block,
-        ':barangay'    => $barangay !== '' ? $barangay : null,
+        ':barangay'    => $barangay   !== '' ? $barangay   : null,
         ':city'        => $city,
-        ':province'    => $province !== '' ? $province : null,
-        ':region'      => $region   !== '' ? $region   : null,
+        ':province'    => $province   !== '' ? $province   : null,
+        ':region'      => $region     !== '' ? $region     : null,
         ':postal_code' => $postalCode !== '' ? $postalCode : null,
     ]);
 
-    // ---- 5. Stash extended application fields on the session ----
-    // These are not persisted to the database today because the schema
-    // does not have dedicated columns for them. They are captured here
-    // so that when those columns are added, they can be migrated
-    // without asking riders to re-enter their details.
+    // ---- 6. Emergency contact ----
+    insertRiderEmergencyContact($database_connection, $deliveryRiderId, [
+        'first_name'     => $ecFirstName,
+        'middle_name'    => $ecMiddleName,
+        'last_name'      => $ecLastName,
+        'contact_number' => $cleanedEcContact,
+        'relationship'   => $ecRelationship,
+        'address'        => '',
+    ]);
+
+    // ---- 7. Driver's license document ----
+    insertRiderDocument($database_connection, $deliveryRiderId, [
+        'drivers_license' => $licensePath,
+        'issue_date'      => $issueDate  ?? '',
+        'expiry_date'     => $expiryDate ?? '',
+    ]);
+
+    // ---- 8. Optional extras stashed on session (vehicle make/model/year) ----
+    // These have no dedicated columns yet. Kept so an admin view can
+    // read them on the same page request without a schema change.
     $_SESSION['rider_pending_application'] = [
-        'delivery_rider_id'      => $deliveryRiderId,
-        'vehicle_make'           => $vehicleMake   !== '' ? $vehicleMake  : null,
-        'vehicle_model'          => $vehicleModel  !== '' ? $vehicleModel : null,
-        'vehicle_year'           => $vehicleYearValue,
-        'emergency_contact_name' => $emergencyName,
-        'emergency_relationship' => $emergencyRelationship,
-        'emergency_contact'      => $cleanedEmergencyContact,
+        'delivery_rider_id' => $deliveryRiderId,
+        'vehicle_make'      => $vehicleMake  !== '' ? $vehicleMake  : null,
+        'vehicle_model'     => $vehicleModel !== '' ? $vehicleModel : null,
+        'vehicle_year'      => $vehicleYearValue,
     ];
 
-    // ---- Commit ----
     $database_connection->commit();
 
-    // ---- Flash success for the sign-in page ----
     $_SESSION['registration_success'] = 'Rider application submitted. Please sign in to continue.';
 
     echo json_encode([
@@ -373,24 +528,34 @@ try {
     if ($database_connection->inTransaction()) {
         $database_connection->rollBack();
     }
-    error_log('Rider registration error: ' . $e->getMessage());
+    foreach ($movedFiles as $p) {
+        if (is_file($p)) @unlink($p);
+    }
 
-    if (str_contains($e->getMessage(), 'Duplicate entry')) {
-        if (str_contains($e->getMessage(), 'email')) {
+    error_log('Rider registration DB error: ' . $e->getMessage());
+
+    $message = $e->getMessage();
+    if (stripos($message, 'Duplicate entry') !== false) {
+        if (stripos($message, 'email') !== false) {
             respondError('This email address is already registered.', 'email');
         }
-        if (str_contains($e->getMessage(), 'username')) {
+        if (stripos($message, 'username') !== false) {
             respondError('This username is already taken.', 'username');
         }
-        if (str_contains($e->getMessage(), 'contact_number')) {
+        if (stripos($message, 'contact_number') !== false) {
             respondError('This mobile number is already registered.', 'contact_number');
         }
     }
     respondError('An unexpected error occurred. Please try again later.');
+
 } catch (Throwable $e) {
     if ($database_connection->inTransaction()) {
         $database_connection->rollBack();
     }
+    foreach ($movedFiles as $p) {
+        if (is_file($p)) @unlink($p);
+    }
+
     error_log('Rider registration error: ' . $e->getMessage());
     respondError('An unexpected error occurred. Please try again later.');
 }

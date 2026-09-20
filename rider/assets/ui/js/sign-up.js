@@ -3,19 +3,33 @@
  *
  * Four-step application form with:
  *   - Field-level validation and error clearing
- *   - Automatic name capitalization and email lowercasing
+ *   - Automatic name and address capitalization
+ *   - Email lowercasing
  *   - Password rule feedback
- *   - Vehicle type dependent plate validation
+ *   - File upload previews for the profile picture and driver's license
+ *   - Vehicle-dependent plate validation
  *   - Emergency-contact validation
  *   - Review summary build on Step 4
  *   - Fetch-based submission with JSON response handling
  *
- * All real validation runs server-side in sign-up-handler.php.
+ * IMPORTANT — WHERE THE UPLOADS LIVE
+ * ----------------------------------
+ * The profile-picture and driver's-license inputs live physically
+ * inside Step 4 in the markup. That means:
+ *
+ *   - validateStep1 / validateStep2 must NOT check the upload inputs,
+ *     or clicking "Next Step" from Step 1 will fail because the file
+ *     inputs are still empty at that point.
+ *   - The uploads are checked once, on the final submit path, in
+ *     validateUploads().
+ *
+ * All real validation also runs server-side in sign-up-handler.php.
  * This file is a UX layer only.
  *
  * @package FitPal
- * @version 2.0 — Adds emergency contact, vehicle make/model,
- *                submission via fetch with JSON response.
+ * @version 3.2 — Address fields now share the name-field capitalization
+ *                and filter treatment. Preview <img> uses
+ *                removeAttribute('src') to avoid the broken-image glyph.
  */
 
 (function () {
@@ -29,79 +43,102 @@
         const form = document.getElementById('registerForm');
         if (!form) return;
 
-        const steps = document.querySelectorAll('.register-step');
-        const progressSteps = document.querySelectorAll('.progress-step');
-        const progressLines = document.querySelectorAll('.progress-line');
-        const stepSubtitle = document.getElementById('stepSubtitle');
+        const steps            = document.querySelectorAll('.register-step');
+        const progressSteps    = document.querySelectorAll('.progress-step');
+        const progressLines    = document.querySelectorAll('.progress-line');
+        const stepSubtitle     = document.getElementById('stepSubtitle');
         const currentStepInput = document.getElementById('currentStep');
-        const registerError = document.getElementById('registerError');
-        const errorMessage = document.getElementById('errorMessage');
+        const registerError    = document.getElementById('registerError');
+        const errorMessage     = document.getElementById('errorMessage');
 
         const nextButtons = document.querySelectorAll('.btn-next');
         const prevButtons = document.querySelectorAll('.btn-prev');
 
         // Step 1
-        const firstName = document.getElementById('first_name');
-        const middleName = document.getElementById('middle_name');
-        const lastName = document.getElementById('last_name');
-        const birthdate = document.getElementById('birthdate');
-        const gender = document.getElementById('gender');
-        const email = document.getElementById('email');
-        const contactNumber = document.getElementById('contact_number');
-        const username = document.getElementById('username');
-        const password = document.getElementById('password');
+        const firstName       = document.getElementById('first_name');
+        const middleName      = document.getElementById('middle_name');
+        const lastName        = document.getElementById('last_name');
+        const birthdate       = document.getElementById('birthdate');
+        const gender          = document.getElementById('gender');
+        const email           = document.getElementById('email');
+        const contactNumber   = document.getElementById('contact_number');
+        const username        = document.getElementById('username');
+        const password        = document.getElementById('password');
         const confirmPassword = document.getElementById('confirm_password');
 
         // Step 2
-        const vehicleType = document.getElementById('vehicle_type');
+        const vehicleType  = document.getElementById('vehicle_type');
         const vehiclePlate = document.getElementById('vehicle_plate');
-        const vehicleMake = document.getElementById('vehicle_make');
+        const vehicleMake  = document.getElementById('vehicle_make');
         const vehicleModel = document.getElementById('vehicle_model');
-        const vehicleYear = document.getElementById('vehicle_year');
+        const vehicleYear  = document.getElementById('vehicle_year');
 
         // Step 3
-        const addressLabel = document.getElementById('address_label');
-        const block = document.getElementById('block');
-        const barangay = document.getElementById('barangay');
-        const city = document.getElementById('city');
-        const province = document.getElementById('province');
-        const region = document.getElementById('region');
-        const postalCode = document.getElementById('postal_code');
-        const emergencyName = document.getElementById('emergency_name');
-        const emergencyRelationship = document.getElementById('emergency_relationship');
-        const emergencyContact = document.getElementById('emergency_contact');
+        const block               = document.getElementById('block');
+        const barangay            = document.getElementById('barangay');
+        const city                = document.getElementById('city');
+        const province            = document.getElementById('province');
+        const region              = document.getElementById('region');
+        const postalCode          = document.getElementById('postal_code');
+        const emergencyFirstName  = document.getElementById('emergency_first_name');
+        const emergencyMiddleName = document.getElementById('emergency_middle_name');
+        const emergencyLastName   = document.getElementById('emergency_last_name');
+        const emergencyRel        = document.getElementById('emergency_relationship');
+        const emergencyContact    = document.getElementById('emergency_contact');
 
-        // Step 4
+        // Step 4 — uploads + license dates + terms
+        const profileInput      = document.getElementById('profile_picture');
+        const profileDropzone   = document.getElementById('profileDropzone');
+        const profilePreview    = document.getElementById('profilePreview');
+        const profilePreviewImg = document.getElementById('profilePreviewImg');
+        const profileHint       = document.getElementById('profileHint');
+        const profileRemove     = document.getElementById('profileRemove');
+        const profilePicError   = document.getElementById('profilePictureError');
+
+        const licenseInput      = document.getElementById('drivers_license');
+        const licenseDropzone   = document.getElementById('licenseDropzone');
+        const licensePreview    = document.getElementById('licensePreview');
+        const licensePreviewImg = document.getElementById('licensePreviewImg');
+        const licenseHint       = document.getElementById('licenseHint');
+        const licenseRemove     = document.getElementById('licenseRemove');
+        const licenseError      = document.getElementById('driversLicenseError');
+
+        const licenseIssue    = document.getElementById('license_issue_date');
+        const licenseExpiry   = document.getElementById('license_expiry_date');
+        const licenseIssueError  = document.getElementById('licenseIssueError');
+        const licenseExpiryError = document.getElementById('licenseExpiryError');
+
         const termsCheckbox = document.getElementById('terms');
-        const termsGroup = document.getElementById('termsGroup');
-        const termsError = document.getElementById('termsError');
-        const registerBtn = document.getElementById('registerBtn');
+        const termsGroup    = document.getElementById('termsGroup');
+        const termsError    = document.getElementById('termsError');
+        const registerBtn   = document.getElementById('registerBtn');
 
         // Error elements
-        const firstNameError = document.getElementById('firstNameError');
-        const lastNameError = document.getElementById('lastNameError');
-        const birthdateError = document.getElementById('birthdateError');
-        const genderError = document.getElementById('genderError');
-        const emailError = document.getElementById('emailError');
-        const contactError = document.getElementById('contactError');
-        const usernameError = document.getElementById('usernameError');
-        const passwordError = document.getElementById('passwordError');
-        const confirmError = document.getElementById('confirmError');
-        const vehicleTypeError = document.getElementById('vehicleTypeError');
-        const vehiclePlateError = document.getElementById('vehiclePlateError');
-        const vehicleYearError = document.getElementById('vehicleYearError');
-        const blockError = document.getElementById('blockError');
-        const cityError = document.getElementById('cityError');
-        const postalError = document.getElementById('postalError');
-        const emergencyNameError = document.getElementById('emergencyNameError');
-        const emergencyRelationshipError = document.getElementById('emergencyRelationshipError');
-        const emergencyContactError = document.getElementById('emergencyContactError');
+        const firstNameError          = document.getElementById('firstNameError');
+        const lastNameError           = document.getElementById('lastNameError');
+        const birthdateError          = document.getElementById('birthdateError');
+        const genderError             = document.getElementById('genderError');
+        const emailError              = document.getElementById('emailError');
+        const contactError            = document.getElementById('contactError');
+        const usernameError           = document.getElementById('usernameError');
+        const passwordError           = document.getElementById('passwordError');
+        const confirmError            = document.getElementById('confirmError');
+        const vehicleTypeError        = document.getElementById('vehicleTypeError');
+        const vehiclePlateError       = document.getElementById('vehiclePlateError');
+        const vehicleYearError        = document.getElementById('vehicleYearError');
+        const blockError              = document.getElementById('blockError');
+        const cityError               = document.getElementById('cityError');
+        const postalError             = document.getElementById('postalError');
+        const emergencyFirstNameError = document.getElementById('emergencyFirstNameError');
+        const emergencyLastNameError  = document.getElementById('emergencyLastNameError');
+        const emergencyRelError       = document.getElementById('emergencyRelationshipError');
+        const emergencyContactError   = document.getElementById('emergencyContactError');
 
         const stepTitles = [
             'Step 1 of 4 — Personal Information',
             'Step 2 of 4 — Vehicle Details',
             'Step 3 of 4 — Address & Emergency Contact',
-            'Step 4 of 4 — Review & Terms',
+            'Step 4 of 4 — Verification & Review',
         ];
 
         let currentStep = 1;
@@ -109,6 +146,7 @@
         let isSubmitting = false;
 
         const NAME_PATTERN = /^[A-Za-z\s\-']+$/;
+        const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
         // ============================================
         // HELPERS
@@ -265,6 +303,19 @@
         setupNameInput(firstName, firstNameError);
         setupNameInput(middleName, null);
         setupNameInput(lastName, lastNameError);
+
+        // Address fields — same capitalization + filter treatment as names.
+        setupNameInput(block, blockError);
+        setupNameInput(barangay, null);
+        setupNameInput(city, cityError);
+        setupNameInput(province, null);
+        setupNameInput(region, null);
+
+        // Emergency contact fields
+        setupNameInput(emergencyFirstName, emergencyFirstNameError);
+        setupNameInput(emergencyMiddleName, null);
+        setupNameInput(emergencyLastName, emergencyLastNameError);
+
         setupEmailInput(email);
         setupDigitsOnly(contactNumber, contactError);
         setupDigitsOnly(emergencyContact, emergencyContactError);
@@ -279,9 +330,9 @@
         // ============================================
 
         function setupPasswordToggle(toggleId, inputId, iconId) {
-            const btn = document.getElementById(toggleId);
+            const btn   = document.getElementById(toggleId);
             const input = document.getElementById(inputId);
-            const icon = document.getElementById(iconId);
+            const icon  = document.getElementById(iconId);
             if (!btn || !input || !icon) return;
 
             btn.addEventListener('click', function () {
@@ -298,7 +349,140 @@
         setupPasswordToggle('toggleConfirmPassword', 'confirm_password', 'confirmPasswordIcon');
 
         // ============================================
+        // FILE UPLOAD HELPERS
+        // ============================================
+
+        function wireUploader(cfg) {
+            const {
+                input, dropzone, preview, previewImg, hint, removeBtn, errorEl,
+                allowedTypes, maxBytes,
+            } = cfg;
+
+            if (!input || !dropzone) return { clearPreview: function () {} };
+
+            let currentUrl = null;
+
+            function clearPreview() {
+                if (currentUrl) {
+                    URL.revokeObjectURL(currentUrl);
+                    currentUrl = null;
+                }
+                if (preview) preview.hidden = true;
+                if (hint)    hint.hidden    = false;
+                if (previewImg) previewImg.removeAttribute('src');
+                input.value = '';
+                dropzone.classList.remove('has-file');
+            }
+
+            function setPreview(file) {
+                if (currentUrl) URL.revokeObjectURL(currentUrl);
+                currentUrl = URL.createObjectURL(file);
+                if (previewImg) previewImg.src = currentUrl;
+                if (preview) preview.hidden = false;
+                if (hint)    hint.hidden    = true;
+                dropzone.classList.add('has-file');
+            }
+
+            function validateAndSet(file) {
+                clearFieldError(input, errorEl);
+                if (!file) return;
+
+                if (!allowedTypes.includes(file.type)) {
+                    showFieldError(input, errorEl, 'Unsupported file type. Use JPG, PNG, or WEBP.');
+                    clearPreview();
+                    return;
+                }
+                if (file.size > maxBytes) {
+                    const maxMB = Math.round(maxBytes / 1048576 * 10) / 10;
+                    showFieldError(input, errorEl, 'File must be under ' + maxMB + ' MB.');
+                    clearPreview();
+                    return;
+                }
+                setPreview(file);
+            }
+
+            dropzone.addEventListener('click', function (e) {
+                if (e.target.closest('.upload-remove')) return;
+                input.click();
+            });
+            dropzone.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    input.click();
+                }
+            });
+
+            input.addEventListener('change', function () {
+                if (this.files && this.files[0]) validateAndSet(this.files[0]);
+            });
+
+            ['dragenter', 'dragover'].forEach(function (evt) {
+                dropzone.addEventListener(evt, function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropzone.classList.add('is-dragover');
+                });
+            });
+            ['dragleave', 'drop'].forEach(function (evt) {
+                dropzone.addEventListener(evt, function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropzone.classList.remove('is-dragover');
+                });
+            });
+            dropzone.addEventListener('drop', function (e) {
+                const dt = e.dataTransfer;
+                if (!dt || !dt.files || !dt.files[0]) return;
+                const file = dt.files[0];
+                try {
+                    const transfer = new DataTransfer();
+                    transfer.items.add(file);
+                    input.files = transfer.files;
+                } catch (err) {
+                    console.warn('[sign-up] Could not attach dropped file to input.');
+                }
+                validateAndSet(file);
+            });
+
+            if (removeBtn) {
+                removeBtn.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    clearPreview();
+                    clearFieldError(input, errorEl);
+                });
+            }
+
+            return { clearPreview };
+        }
+
+        wireUploader({
+            input:        profileInput,
+            dropzone:     profileDropzone,
+            preview:      profilePreview,
+            previewImg:   profilePreviewImg,
+            hint:         profileHint,
+            removeBtn:    profileRemove,
+            errorEl:      profilePicError,
+            allowedTypes: ALLOWED_IMAGE_TYPES,
+            maxBytes:     2 * 1024 * 1024,
+        });
+
+        wireUploader({
+            input:        licenseInput,
+            dropzone:     licenseDropzone,
+            preview:      licensePreview,
+            previewImg:   licensePreviewImg,
+            hint:         licenseHint,
+            removeBtn:    licenseRemove,
+            errorEl:      licenseError,
+            allowedTypes: ALLOWED_IMAGE_TYPES,
+            maxBytes:     5 * 1024 * 1024,
+        });
+
+        // ============================================
         // VALIDATION — STEP 1
+        // No upload checks here. Uploads live on Step 4.
         // ============================================
 
         function validateStep1() {
@@ -410,6 +594,7 @@
 
         // ============================================
         // VALIDATION — STEP 2
+        // No upload checks here. Uploads live on Step 4.
         // ============================================
 
         function validateStep2() {
@@ -421,7 +606,7 @@
                 valid = false;
             }
 
-            const isMotorVehicle = vehicleType?.value && vehicleType.value !== 'bicycle';
+            const isMotorVehicle = vehicleType && vehicleType.value && vehicleType.value !== 'bicycle';
             if (isMotorVehicle) {
                 const plateVal = vehiclePlate ? vehiclePlate.value.trim() : '';
                 if (!plateVal) {
@@ -465,15 +650,21 @@
                 valid = false;
             }
 
-            const enVal = emergencyName ? emergencyName.value.trim() : '';
-            if (enVal.length < 2) {
-                showFieldError(emergencyName, emergencyNameError, 'Emergency contact name is required.');
+            const efnVal = emergencyFirstName ? emergencyFirstName.value.trim() : '';
+            if (efnVal.length < 2) {
+                showFieldError(emergencyFirstName, emergencyFirstNameError, 'Emergency contact first name is required.');
                 valid = false;
             }
 
-            const erVal = emergencyRelationship ? emergencyRelationship.value : '';
+            const elnVal = emergencyLastName ? emergencyLastName.value.trim() : '';
+            if (elnVal.length < 2) {
+                showFieldError(emergencyLastName, emergencyLastNameError, 'Emergency contact last name is required.');
+                valid = false;
+            }
+
+            const erVal = emergencyRel ? emergencyRel.value : '';
             if (!erVal) {
-                showFieldError(emergencyRelationship, emergencyRelationshipError, 'Please select a relationship.');
+                showFieldError(emergencyRel, emergencyRelError, 'Please select a relationship.');
                 valid = false;
             }
 
@@ -493,11 +684,82 @@
         }
 
         // ============================================
-        // VALIDATION — STEP 4
+        // VALIDATION — STEP 4 (uploads + license dates + terms)
+        // This is the only place the upload inputs are checked.
         // ============================================
+
+        function validateUploads() {
+            let valid = true;
+
+            // Profile picture
+            if (!profileInput || !profileInput.files || !profileInput.files[0]) {
+                showFieldError(profileInput, profilePicError, 'Please upload a formal profile picture.');
+                valid = false;
+            } else {
+                const f = profileInput.files[0];
+                if (!ALLOWED_IMAGE_TYPES.includes(f.type)) {
+                    showFieldError(profileInput, profilePicError, 'Unsupported file type.');
+                    valid = false;
+                } else if (f.size > 2 * 1024 * 1024) {
+                    showFieldError(profileInput, profilePicError, 'File must be under 2 MB.');
+                    valid = false;
+                }
+            }
+
+            // Driver's license
+            if (!licenseInput || !licenseInput.files || !licenseInput.files[0]) {
+                showFieldError(licenseInput, licenseError, "Please upload a photo of your driver's license.");
+                valid = false;
+            } else {
+                const f = licenseInput.files[0];
+                if (!ALLOWED_IMAGE_TYPES.includes(f.type)) {
+                    showFieldError(licenseInput, licenseError, 'Unsupported file type.');
+                    valid = false;
+                } else if (f.size > 5 * 1024 * 1024) {
+                    showFieldError(licenseInput, licenseError, 'File must be under 5 MB.');
+                    valid = false;
+                }
+            }
+
+            return valid;
+        }
+
+        function validateLicenseDates() {
+            let valid = true;
+
+            if (licenseIssue && licenseIssue.value) {
+                const d = new Date(licenseIssue.value);
+                if (d > new Date()) {
+                    showFieldError(licenseIssue, licenseIssueError, 'Issue date cannot be in the future.');
+                    valid = false;
+                }
+            }
+
+            if (licenseExpiry && licenseExpiry.value) {
+                const d = new Date(licenseExpiry.value);
+                if (d <= new Date()) {
+                    showFieldError(licenseExpiry, licenseExpiryError, 'Expiry date must be in the future.');
+                    valid = false;
+                }
+                if (licenseIssue && licenseIssue.value) {
+                    const issue = new Date(licenseIssue.value);
+                    if (d <= issue) {
+                        showFieldError(licenseExpiry, licenseExpiryError, 'Expiry must be after issue date.');
+                        valid = false;
+                    }
+                }
+            }
+
+            return valid;
+        }
 
         function validateStep4() {
             clearStepErrors(4);
+
+            let valid = true;
+
+            if (!validateUploads())     valid = false;
+            if (!validateLicenseDates()) valid = false;
 
             if (!termsCheckbox || !termsCheckbox.checked) {
                 if (termsError) {
@@ -505,10 +767,10 @@
                     termsError.style.display = 'block';
                 }
                 if (termsGroup) termsGroup.classList.add('error');
-                return false;
+                valid = false;
             }
 
-            return true;
+            return valid;
         }
 
         function validateStep(step) {
@@ -526,27 +788,58 @@
         // ============================================
 
         function buildReviewSummary() {
-            const fullName = [firstName?.value, middleName?.value, lastName?.value]
+            const fullName = [firstName && firstName.value, middleName && middleName.value, lastName && lastName.value]
+                .map(function (v) { return (v || '').trim(); })
+                .filter(Boolean)
+                .join(' ');
+
+            const emergencyFullName = [
+                emergencyFirstName && emergencyFirstName.value,
+                emergencyMiddleName && emergencyMiddleName.value,
+                emergencyLastName && emergencyLastName.value,
+            ]
                 .map(function (v) { return (v || '').trim(); })
                 .filter(Boolean)
                 .join(' ');
 
             const addressParts = [block, barangay, city, province, region, postalCode]
-                .map(function (el) { return (el?.value || '').trim(); })
+                .map(function (el) { return (el && el.value || '').trim(); })
                 .filter(Boolean);
 
-            const vehicleTypeText = vehicleType?.options[vehicleType.selectedIndex]?.text || '—';
-            const plateText = vehiclePlate?.value ? vehiclePlate.value.trim() : '—';
-            const makeText = vehicleMake?.value ? vehicleMake.value.trim() : '';
-            const modelText = vehicleModel?.value ? vehicleModel.value.trim() : '';
+            const vehicleTypeText = (vehicleType && vehicleType.options[vehicleType.selectedIndex])
+                ? vehicleType.options[vehicleType.selectedIndex].text
+                : '—';
+            const plateText = (vehiclePlate && vehiclePlate.value) ? vehiclePlate.value.trim() : '—';
+            const makeText  = (vehicleMake && vehicleMake.value) ? vehicleMake.value.trim() : '';
+            const modelText = (vehicleModel && vehicleModel.value) ? vehicleModel.value.trim() : '';
             const makeModel = [makeText, modelText].filter(Boolean).join(' ') || '—';
 
-            const emergencyRelText = emergencyRelationship?.options[emergencyRelationship.selectedIndex]?.text || '—';
+            const emergencyRelText = (emergencyRel && emergencyRel.options[emergencyRel.selectedIndex])
+                ? emergencyRel.options[emergencyRel.selectedIndex].text
+                : '—';
+
+            const profileFileName = (profileInput && profileInput.files && profileInput.files[0])
+                ? profileInput.files[0].name
+                : '—';
+            const licenseFileName = (licenseInput && licenseInput.files && licenseInput.files[0])
+                ? licenseInput.files[0].name
+                : '—';
+
+            let licenseDatesText = '—';
+            if ((licenseIssue && licenseIssue.value) || (licenseExpiry && licenseExpiry.value)) {
+                const fmt = function (d) {
+                    if (!d) return '?';
+                    const t = new Date(d);
+                    if (isNaN(t.getTime())) return d;
+                    return t.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+                };
+                licenseDatesText = fmt(licenseIssue && licenseIssue.value) + ' → ' + fmt(licenseExpiry && licenseExpiry.value);
+            }
 
             setText('reviewName', fullName || '—');
-            setText('reviewEmail', email?.value || '—');
-            setText('reviewContact', contactNumber?.value || '—');
-            setText('reviewUsername', username?.value || '—');
+            setText('reviewEmail', (email && email.value) || '—');
+            setText('reviewContact', (contactNumber && contactNumber.value) || '—');
+            setText('reviewUsername', (username && username.value) || '—');
 
             setText('reviewVehicleType', vehicleTypeText);
             setText('reviewVehiclePlate', plateText);
@@ -554,14 +847,15 @@
 
             setText('reviewAddress', addressParts.join(', ') || '—');
 
-            setText('reviewEmergencyName', emergencyName?.value || '—');
+            setText('reviewEmergencyName', emergencyFullName || '—');
             setText('reviewEmergencyRelationship', emergencyRelText);
-            setText('reviewEmergencyContact', emergencyContact?.value || '—');
+            setText('reviewEmergencyContact', (emergencyContact && emergencyContact.value) || '—');
         }
 
         function setText(id, value) {
             const el = document.getElementById(id);
-            if (el) el.textContent = value;
+            if (!el) return;
+            el.textContent = value;
         }
 
         // ============================================
@@ -602,7 +896,9 @@
 
             const stepEl = document.getElementById('step' + step);
             if (stepEl) {
-                const firstInput = stepEl.querySelector('input:not([type="hidden"]), select');
+                const firstInput = stepEl.querySelector(
+                    'input:not([type="hidden"]):not([type="file"]), select'
+                );
                 safeFocus(firstInput);
             }
 
@@ -775,6 +1071,16 @@
                             return;
                         }
 
+                        if (data && data.field === 'upload') {
+                            if (/license/i.test(data.message || '')) {
+                                showFieldError(licenseInput, licenseError, data.message);
+                            } else {
+                                showFieldError(profileInput, profilePicError, data.message);
+                            }
+                            goToStep(4);
+                            return;
+                        }
+
                         showBanner((data && data.message) || 'Could not create your account. Please try again.');
                     })
                     .catch(function () {
@@ -792,15 +1098,15 @@
         // NOTIFIER MODAL
         // ============================================
 
-        const notifierModal = document.getElementById('notifierModal');
-        const notifierTitle = document.getElementById('notifierTitle');
-        const notifierMessage = document.getElementById('notifierMessage');
+        const notifierModal    = document.getElementById('notifierModal');
+        const notifierTitle    = document.getElementById('notifierTitle');
+        const notifierMessage  = document.getElementById('notifierMessage');
         const notifierCloseBtn = document.getElementById('notifierCloseBtn');
 
         function showNotification(title, message, callback) {
-            if (notifierTitle) notifierTitle.textContent = title || 'Success';
+            if (notifierTitle)   notifierTitle.textContent   = title || 'Success';
             if (notifierMessage) notifierMessage.textContent = message || '';
-            if (notifierModal) notifierModal.classList.remove('hidden');
+            if (notifierModal)   notifierModal.classList.remove('hidden');
             if (notifierCloseBtn && callback) notifierCloseBtn._callback = callback;
         }
 

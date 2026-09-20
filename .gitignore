@@ -11,3 +11,4 @@
 /logs
 *env
 *txt
+/shared/uploads/*

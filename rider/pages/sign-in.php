@@ -117,8 +117,6 @@ $heroFallback      = $assetBase . 'assets/images/showcase/hero-image.png';
                     <a href="sign-up.php" class="rider-btn rider-btn-light">Apply now</a>
                 </form>
             </div>
-
-            <div class="rider-version">v1.0.0</div>
         </div>
     </main>
 </div>

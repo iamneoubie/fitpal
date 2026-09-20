@@ -1,13 +1,19 @@
 /**
  * FitPal Rider Profile Page JavaScript
  *
- * Handles:
- *   - Profile edit toggle
- *   - Profile picture upload
- *   - Form submission
+ * Responsibilities:
+ *   - Tab switching (Personal Information | Address)
+ *   - Edit-profile toggle (enable only the contact field)
+ *   - Profile picture upload via rider-handler.php
+ *   - Form submission via fetch, JSON response
+ *   - Toast notifications
+ *
+ * Mirrors the customer profile JS style: var-only, ES5-friendly,
+ * no external dependencies, single DOMContentLoaded wrapper.
  *
  * @package FitPal
- * @version 1.0
+ * @version 2.0 — Tab switching + edit toggle + picture upload;
+ *                layout aligned with the customer profile page.
  */
 
 (function () {
@@ -15,46 +21,91 @@
 
     document.addEventListener('DOMContentLoaded', function () {
 
-        var CFG = window.FITPAL_RIDER_PROFILE || {};
-        var CSRF_TOKEN = CFG.csrfToken || '';
-        var ASSET_BASE = CFG.assetBase || '../../shared/';
+        var CFG         = window.FITPAL_RIDER_PROFILE || {};
+        var CSRF_TOKEN  = CFG.csrfToken  || '';
+        var ASSET_BASE  = CFG.assetBase  || '../../shared/';
 
         // ============================================
-        // EDIT TOGGLE
+        // TABS
         // ============================================
-        var editBtn = document.getElementById('editProfileBtn');
-        var cancelBtn = document.getElementById('cancelEditBtn');
-        var formActions = document.getElementById('profileFormActions');
-        var form = document.getElementById('riderProfileForm');
-        var saveBtn = document.getElementById('saveProfileBtn');
-        var contactInput = document.getElementById('contactInput');
+        var tabs        = document.querySelectorAll('.profile-tab');
+        var tabContents = document.querySelectorAll('.profile-tab-content');
 
-        if (editBtn && form && formActions) {
-            editBtn.addEventListener('click', function () {
-                // Enable only editable fields
-                if (contactInput) contactInput.disabled = false;
-
-                formActions.style.display = 'flex';
-                editBtn.style.display = 'none';
-
-                if (contactInput) contactInput.focus();
+        function switchTab(tabId) {
+            tabs.forEach(function (tab) {
+                tab.classList.toggle('active', tab.dataset.tab === tabId);
+            });
+            tabContents.forEach(function (content) {
+                content.classList.toggle('active', content.id === 'tab-' + tabId);
             });
         }
 
+        tabs.forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                switchTab(this.dataset.tab);
+            });
+        });
+
+        // ============================================
+        // EDIT-PROFILE TOGGLE
+        // Only the contact number is editable from this page. Everything
+        // else is shown read-only and must go through support.
+        // ============================================
+        var editBtn         = document.getElementById('editProfileBtn');
+        var cancelBtn       = document.getElementById('cancelEditBtn');
+        var formActions     = document.getElementById('profileActions');
+        var form            = document.getElementById('riderProfileForm');
+        var saveBtn         = document.getElementById('saveProfileBtn');
+        var contactInput    = document.getElementById('contact_number');
+
+        function enterEditMode() {
+            if (contactInput) contactInput.disabled = false;
+            if (formActions) formActions.classList.remove('is-hidden');
+            if (editBtn) editBtn.style.display = 'none';
+            if (contactInput) contactInput.focus();
+        }
+
+        function exitEditMode() {
+            if (contactInput) contactInput.disabled = true;
+            if (formActions) formActions.classList.add('is-hidden');
+            if (editBtn) editBtn.style.display = '';
+        }
+
+        if (editBtn) {
+            editBtn.addEventListener('click', enterEditMode);
+        }
+
         if (cancelBtn) {
-            cancelBtn.addEventListener('click', function () {
-                // Reload page to reset
-                window.location.reload();
+            cancelBtn.addEventListener('click', function (e) {
+                e.preventDefault();
+                // Reset the field to what the server rendered, then
+                // leave edit mode without a full reload.
+                if (contactInput) {
+                    contactInput.value = contactInput.defaultValue || '';
+                }
+                exitEditMode();
+            });
+        }
+
+        // ============================================
+        // INPUT FILTER — contact number: digits + spaces only
+        // ============================================
+        if (contactInput) {
+            contactInput.addEventListener('input', function () {
+                var cleaned = this.value.replace(/[^0-9\s]/g, '');
+                if (this.value !== cleaned) {
+                    this.value = cleaned;
+                }
             });
         }
 
         // ============================================
         // PROFILE PICTURE UPLOAD
         // ============================================
-        var uploadBtn = document.getElementById('uploadPictureBtn');
-        var pictureInput = document.getElementById('profilePictureInput');
-        var avatarImg = document.getElementById('profileAvatarImg');
-        var avatarInitial = document.getElementById('profileAvatarInitial');
+        var uploadBtn       = document.getElementById('uploadPictureBtn');
+        var pictureInput    = document.getElementById('profilePictureInput');
+        var avatarImg       = document.getElementById('profileAvatarImg');
+        var avatarInitial   = document.getElementById('profileAvatarInitial');
 
         if (uploadBtn && pictureInput) {
             uploadBtn.addEventListener('click', function () {
@@ -66,19 +117,16 @@
 
                 var file = this.files[0];
 
-                // Validate type
                 if (!file.type.startsWith('image/')) {
                     showToast('Please select an image file.', 'error');
                     return;
                 }
-
-                // Validate size (max 2 MB)
                 if (file.size > 2 * 1024 * 1024) {
                     showToast('Image must be under 2 MB.', 'error');
                     return;
                 }
 
-                // Show preview immediately
+                // Local preview while the upload is in flight.
                 var reader = new FileReader();
                 reader.onload = function (e) {
                     if (avatarImg) {
@@ -89,7 +137,6 @@
                 };
                 reader.readAsDataURL(file);
 
-                // Upload
                 uploadPicture(file);
             });
         }
@@ -165,35 +212,53 @@
             });
         }
 
+        // ============================================
+        // TOAST
+        // ============================================
         function showToast(message, type) {
-            var toast = document.getElementById('riderToast');
-            if (!toast) {
-                toast = document.createElement('div');
-                toast.id = 'riderToast';
-                toast.style.cssText = [
-                    'position:fixed', 'top:80px', 'right:20px',
-                    'padding:12px 20px', 'border-radius:8px',
-                    'font-size:14px', 'font-weight:500', 'z-index:9999',
-                    'transform:translateX(120%)',
-                    'transition:transform .3s cubic-bezier(.4,0,.2,1)',
-                    'max-width:360px', 'box-shadow:0 4px 16px rgba(0,0,0,.15)'
-                ].join(';');
-                document.body.appendChild(toast);
+            var existing = document.querySelector('.rider-toast');
+            if (existing) existing.remove();
+
+            var toast = document.createElement('div');
+            toast.className = 'rider-toast ' + (type || 'success');
+            toast.setAttribute('role', 'alert');
+
+            var iconFile = type === 'error' ? 'file-warning-fill.svg' : 'verified-fill.svg';
+
+            toast.innerHTML =
+                '<span class="rider-toast-icon">' +
+                    '<img src="' + ASSET_BASE + 'assets/images/icons/' + iconFile + '" alt="">' +
+                '</span>' +
+                '<span class="rider-toast-message"></span>';
+
+            // Assign message via textContent so nothing user-supplied
+            // is ever parsed as HTML.
+            var messageEl = toast.querySelector('.rider-toast-message');
+            if (messageEl) messageEl.textContent = message;
+
+            document.body.appendChild(toast);
+
+            setTimeout(function () {
+                toast.style.animation = 'riderToastOut 0.3s ease';
+                setTimeout(function () { toast.remove(); }, 300);
+            }, 3000);
+        }
+
+        // ============================================
+        // INITIAL TAB STATE
+        // ============================================
+        var firstActiveTab = document.querySelector('.profile-tab.active');
+        if (!firstActiveTab) {
+            var firstTab = document.querySelector('.profile-tab');
+            if (firstTab) {
+                switchTab(firstTab.dataset.tab);
             }
-            var palette = {
-                success: ['#d1fae5', '#065f46'],
-                error: ['#fee2e2', '#991b1b']
-            };
-            var colors = palette[type] || palette.success;
-            toast.style.background = colors[0];
-            toast.style.color = colors[1];
-            toast.textContent = message;
-            void toast.offsetWidth;
-            toast.style.transform = 'translateX(0)';
-            clearTimeout(toast._timer);
-            toast._timer = setTimeout(function () {
-                toast.style.transform = 'translateX(120%)';
-            }, 2800);
+        }
+
+        // Ensure the edit action row starts hidden if the server did
+        // not already mark it as hidden.
+        if (formActions && !formActions.classList.contains('is-hidden')) {
+            formActions.classList.add('is-hidden');
         }
     });
 })();

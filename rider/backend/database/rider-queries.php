@@ -3,13 +3,16 @@
  * FitPal Rider Database Queries
  *
  * Pure data-access layer for the delivery_rider,
- * delivery_rider_profile, delivery_rider_address, orders,
- * and transaction tables.
+ * delivery_rider_profile, delivery_rider_address,
+ * delivery_rider_emergency_contact, delivery_rider_document,
+ * orders, and transaction tables.
  *
  * No $_POST, no header(), no echo.
  *
  * @package FitPal
- * @version 2.1 — Fixed leading whitespace that broke header() calls.
+ * @version 3.0 — KYC revision: address label dropped; adds
+ *                insertRiderEmergencyContact and insertRiderDocument
+ *                for the registration handler.
  */
 
 declare(strict_types=1);
@@ -116,6 +119,85 @@ function updateRiderContact(PDO $db, int $riderId, string $contactNumber): bool
         ':rider_id'       => $riderId,
     ]);
     return true;
+}
+
+// ============================================
+// REGISTRATION WRITES
+// ============================================
+
+/**
+ * Insert a rider's emergency contact row.
+ *
+ * The schema treats the earliest-created row (lowest
+ * emergency_contact_id) as the primary contact, so no is_primary
+ * flag is needed here.
+ *
+ * @param PDO   $db
+ * @param int   $riderId
+ * @param array{
+ *     first_name: string,
+ *     middle_name: string,
+ *     last_name: string,
+ *     contact_number: string,
+ *     relationship: string,
+ *     address: string
+ * } $data
+ * @return int  New emergency_contact_id
+ */
+function insertRiderEmergencyContact(PDO $db, int $riderId, array $data): int
+{
+    $stmt = $db->prepare(
+        "INSERT INTO delivery_rider_emergency_contact
+            (delivery_rider_id, first_name, middle_name, last_name,
+             contact_number, relationship, address)
+         VALUES
+            (:rider_id, :first_name, :middle_name, :last_name,
+             :contact_number, :relationship, :address)"
+    );
+    $stmt->execute([
+        ':rider_id'       => $riderId,
+        ':first_name'     => $data['first_name'],
+        ':middle_name'    => $data['middle_name']    !== '' ? $data['middle_name']    : null,
+        ':last_name'      => $data['last_name'],
+        ':contact_number' => $data['contact_number'],
+        ':relationship'   => $data['relationship'],
+        ':address'        => $data['address']        !== '' ? $data['address']        : null,
+    ]);
+
+    return (int)$db->lastInsertId();
+}
+
+/**
+ * Insert a rider's driver's license document row.
+ *
+ * delivery_rider_document.drivers_license is NOT NULL. The caller
+ * must have already moved the uploaded file and produced a path.
+ *
+ * @param PDO   $db
+ * @param int   $riderId
+ * @param array{
+ *     drivers_license: string,
+ *     issue_date: string,
+ *     expiry_date: string
+ * } $data
+ * @return int  New document_id
+ */
+function insertRiderDocument(PDO $db, int $riderId, array $data): int
+{
+    $stmt = $db->prepare(
+        "INSERT INTO delivery_rider_document
+            (delivery_rider_id, drivers_license, issue_date, expiry_date)
+         VALUES
+            (:rider_id, :drivers_license, :issue_date, :expiry_date)"
+    );
+    $stmt->execute([
+        ':rider_id'        => $riderId,
+        ':drivers_license' => $data['drivers_license'],
+        ':issue_date'      => $data['issue_date']  !== '' ? $data['issue_date']  : null,
+        ':expiry_date'     => $data['expiry_date'] !== '' ? $data['expiry_date'] : null,
+    ]);
+
+    return (int)$db->lastInsertId();
 }
 
 // ============================================
@@ -264,7 +346,7 @@ function getRiderWeeklyEarnings(PDO $db, int $riderId, int $days = 7): array
 
     $series = [];
     for ($i = $days - 1; $i >= 0; $i--) {
-        $ts = strtotime("-{$i} days");
+        $ts   = strtotime("-{$i} days");
         $date = date('Y-m-d', $ts);
         $series[] = [
             'date'       => $date,
@@ -322,7 +404,7 @@ function getRiderChartScale(float $maxAmount): array
         ];
     }
 
-    $magnitude = 10 ** floor(log10($maxAmount));
+    $magnitude  = 10 ** floor(log10($maxAmount));
     $normalized = $maxAmount / $magnitude;
 
     $stepMultiplier = match (true) {
@@ -332,7 +414,7 @@ function getRiderChartScale(float $maxAmount): array
         default            => 2.0,
     };
 
-    $step = $magnitude * $stepMultiplier;
+    $step    = $magnitude * $stepMultiplier;
     $ceiling = ceil($maxAmount / $step) * $step;
 
     if ($ceiling < $maxAmount * 2) {
@@ -523,7 +605,6 @@ function getRiderDefaultAddress(PDO $db, int $riderId): array|false
     $stmt = $db->prepare(
         "SELECT
             delivery_rider_address_id,
-            label,
             block,
             barangay,
             city,

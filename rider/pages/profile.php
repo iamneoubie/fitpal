@@ -2,10 +2,22 @@
 /**
  * FitPal Rider Profile Page
  *
- * Profile info + picture upload + vehicle + address + logout.
+ * Layout mirrors the customer profile page so both roles feel
+ * like the same product:
+ *   - page-title-header with back button
+ *   - profile-header-card (avatar + name + role + stat)
+ *   - profile-tabs (Personal Information | Address)
+ *   - profile-card with card-header + card-body
+ *   - edit-in-place personal information form
+ *   - logout row at the bottom
+ *
+ * No inline SQL. All reads go through rider-queries.php.
+ * Header include ordering: $assetBase is defined by
+ * rider/includes/header.php, so the header is required before any
+ * code that depends on it, and before any markup is emitted.
  *
  * @package FitPal
- * @version 1.1 — Header include moved after all DB reads.
+ * @version 2.0 — Layout aligned with the customer profile page.
  */
 
 declare(strict_types=1);
@@ -21,6 +33,9 @@ if (empty($_SESSION['delivery_rider_id'])) {
 
 require_once __DIR__ . '/../backend/database/rider-connect.php';
 require_once __DIR__ . '/../backend/database/rider-queries.php';
+
+// Header defines $assetBase and outputs <head> + <header>.
+require_once __DIR__ . '/../includes/header.php';
 
 $riderId = (int)$_SESSION['delivery_rider_id'];
 
@@ -60,12 +75,25 @@ $statusClass = match ($status) {
     default     => 'badge-secondary',
 };
 
-// Profile picture: stored as a path relative to project root
+/*
+ * Profile picture URL.
+ *
+ * The DB stores a project-root-relative path such as
+ *   shared/uploads/rider-profiles/rider_12_profile_abc.jpg
+ *
+ * $assetBase from the header ends with 'shared/', so the URL to that
+ * file is <projectRootUrl> + shared/uploads/... . The project root URL
+ * is produced by trimming the trailing 'shared/' from $assetBase. All
+ * of this is guarded so a missing $assetBase can never crash the page.
+ */
 $profilePicUrl = '';
-if ($profilePic !== '') {
-    // assetBase ends with 'shared/'. Strip it to get back to project root.
+
+if ($profilePic !== '' && is_string($assetBase) && $assetBase !== '') {
     $projectRootUrl = preg_replace('#shared/$#', '', $assetBase);
-    $profilePicUrl  = $projectRootUrl . $profilePic;
+    if (!is_string($projectRootUrl)) {
+        $projectRootUrl = '';
+    }
+    $profilePicUrl = $projectRootUrl . $profilePic;
 }
 
 if (empty($_SESSION['csrf_token'])) {
@@ -73,25 +101,56 @@ if (empty($_SESSION['csrf_token'])) {
 }
 $csrfToken = $_SESSION['csrf_token'];
 
+/**
+ * "Joined March 2026" style caption. Returns an em-dash if the
+ * timestamp cannot be parsed.
+ */
 function formatJoinedDate(string $date): string
 {
     $ts = strtotime($date);
     return $ts !== false ? date('F Y', $ts) : '—';
 }
 
-require_once __DIR__ . '/../includes/header.php';
+/**
+ * Build the address display string from the rider address row.
+ * delivery_rider_address.label was dropped in the current schema,
+ * so no label is prefixed here.
+ */
+function formatRiderAddress(array $address): string
+{
+    $parts = array_filter([
+        $address['block']       ?? '',
+        $address['barangay']    ?? '',
+        $address['city']        ?? '',
+        $address['province']    ?? '',
+        $address['region']      ?? '',
+        $address['postal_code'] ?? '',
+        $address['country']     ?? '',
+    ]);
+    return implode(', ', $parts);
+}
 ?>
 
-<div class="content rider-profile-page">
+<div class="content profile-page">
     <div class="container">
 
-        <header class="rider-page-header">
-            <div>
-                <h1 class="heading-2">My <span>Profile</span></h1>
-                <p class="text-muted">Manage your personal information and account settings</p>
+        <!-- ============================================
+             PAGE TITLE HEADER
+             ============================================ -->
+        <div class="page-title-header">
+            <div class="page-title-header-top">
+                <a href="dashboard.php" class="back-btn">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt="Back"
+                        class="back-btn-icon" width="20" height="20">
+                    <span>Back to Dashboard</span>
+                </a>
+                <h1>My Profile</h1>
             </div>
-        </header>
+        </div>
 
+        <!-- ============================================
+             FLASH MESSAGES
+             ============================================ -->
         <?php if (isset($_SESSION['rider_success'])): ?>
         <div class="alert alert-success" role="alert">
             <?php echo htmlspecialchars($_SESSION['rider_success'], ENT_QUOTES, 'UTF-8'); ?>
@@ -106,176 +165,221 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
         <?php endif; ?>
 
-        <section class="rider-profile-hero">
-            <div class="rider-profile-avatar-wrap">
-                <div class="rider-profile-avatar" id="profileAvatarPreview">
-                    <?php if ($profilePicUrl !== ''): ?>
-                    <img src="<?php echo htmlspecialchars($profilePicUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="Profile"
-                        id="profileAvatarImg"
-                        onerror="this.onerror=null; this.style.display='none'; document.getElementById('profileAvatarInitial').style.display='flex';">
-                    <span class="rider-profile-avatar-initial" id="profileAvatarInitial" style="display: none;">
-                        <?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>
-                    </span>
-                    <?php else: ?>
-                    <span class="rider-profile-avatar-initial" id="profileAvatarInitial" style="display: flex;">
-                        <?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>
-                    </span>
-                    <img src="" alt="Profile" id="profileAvatarImg" style="display: none;">
-                    <?php endif; ?>
+        <!-- ============================================
+             PROFILE HEADER CARD
+             ============================================ -->
+        <div class="profile-header-card">
+            <div class="profile-header-left">
+                <div class="profile-avatar">
+                    <div class="profile-avatar-wrap">
+                        <?php if ($profilePicUrl !== ''): ?>
+                        <img src="<?php echo htmlspecialchars($profilePicUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="Profile"
+                            id="profileAvatarImg"
+                            onerror="this.onerror=null; this.style.display='none'; var el=document.getElementById('profileAvatarInitial'); if(el){el.style.display='flex';}">
+                        <span class="profile-avatar-placeholder" id="profileAvatarInitial" style="display: none;">
+                            <?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                        <?php else: ?>
+                        <span class="profile-avatar-placeholder" id="profileAvatarInitial" style="display: flex;">
+                            <?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                        <img src="" alt="Profile" id="profileAvatarImg" style="display: none;">
+                        <?php endif; ?>
+
+                        <button type="button" class="profile-avatar-edit" id="uploadPictureBtn"
+                            aria-label="Change profile picture">
+                            <img src="<?php echo $assetBase; ?>assets/images/icons/edit.svg" alt="Edit">
+                        </button>
+                        <input type="file" id="profilePictureInput" accept="image/jpeg,image/png,image/webp" hidden>
+                    </div>
                 </div>
-                <button type="button" class="rider-profile-avatar-edit" id="uploadPictureBtn"
-                    aria-label="Change profile picture">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/edit.svg" alt="Edit">
+
+                <div class="profile-name-role">
+                    <p class="profile-full-name">
+                        <?php echo htmlspecialchars($fullName ?: 'Rider', ENT_QUOTES, 'UTF-8'); ?>
+                    </p>
+                    <span class="profile-role-badge">
+                        Rider<?php if ($username !== ''): ?> &middot;
+                        @<?php echo htmlspecialchars($username, ENT_QUOTES, 'UTF-8'); ?><?php endif; ?>
+                    </span>
+                    <span class="profile-meta-line">
+                        <span class="badge <?php echo $statusClass; ?>">
+                            <?php echo htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                        <?php if ($dateJoined !== ''): ?>
+                        <span class="profile-joined">
+                            Joined <?php echo htmlspecialchars(formatJoinedDate($dateJoined), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                        <?php endif; ?>
+                    </span>
+                </div>
+            </div>
+
+            <div class="profile-header-right">
+                <div class="profile-stat">
+                    <span class="profile-stat-value"><?php echo number_format($rating, 1); ?></span>
+                    <span class="profile-stat-label">Rating</span>
+                </div>
+                <div class="profile-stat">
+                    <span class="profile-stat-value"><?php echo number_format($deliveries); ?></span>
+                    <span class="profile-stat-label">Deliveries</span>
+                </div>
+                <button type="button" id="editProfileBtn" class="btn btn-edit">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/edit.svg" alt="Edit" class="btn-icon">
+                    Edit Profile
                 </button>
-                <input type="file" id="profilePictureInput" accept="image/jpeg,image/png,image/webp,image/gif"
-                    style="display: none;">
             </div>
+        </div>
 
-            <div class="rider-profile-hero-info">
-                <h2 class="rider-profile-name">
-                    <?php echo htmlspecialchars($fullName ?: 'Rider', ENT_QUOTES, 'UTF-8'); ?>
-                </h2>
-                <p class="rider-profile-username">
-                    @<?php echo htmlspecialchars($username, ENT_QUOTES, 'UTF-8'); ?>
-                </p>
-                <div class="rider-profile-badges">
-                    <span class="badge <?php echo $statusClass; ?>">
-                        <?php echo htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8'); ?>
-                    </span>
-                    <?php if ($dateJoined !== ''): ?>
-                    <span class="rider-profile-joined">
-                        Joined <?php echo htmlspecialchars(formatJoinedDate($dateJoined), ENT_QUOTES, 'UTF-8'); ?>
-                    </span>
+        <!-- ============================================
+             TABS
+             ============================================ -->
+        <div class="profile-tabs">
+            <button type="button" class="profile-tab active" data-tab="personal">
+                Personal Information
+            </button>
+            <button type="button" class="profile-tab" data-tab="address">
+                Address
+            </button>
+        </div>
+
+        <!-- ============================================
+             TAB: PERSONAL INFORMATION
+             ============================================ -->
+        <div class="profile-tab-content active" id="tab-personal">
+            <div class="profile-card">
+                <div class="card-header">
+                    <h3>Personal Information</h3>
+                </div>
+                <div class="card-body">
+                    <form id="riderProfileForm" method="POST" action="../backend/handlers/rider-handler.php">
+                        <input type="hidden" name="csrf_token"
+                            value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="update_profile">
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="first_name" class="field-label">First Name</label>
+                                <input type="text" id="first_name" name="first_name" class="form-control"
+                                    value="<?php echo htmlspecialchars($firstName, ENT_QUOTES, 'UTF-8'); ?>" disabled>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="middle_name" class="field-label">Middle Name</label>
+                                <input type="text" id="middle_name" name="middle_name" class="form-control"
+                                    value="<?php echo htmlspecialchars($middleName, ENT_QUOTES, 'UTF-8'); ?>" disabled>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="last_name" class="field-label">Last Name</label>
+                                <input type="text" id="last_name" name="last_name" class="form-control"
+                                    value="<?php echo htmlspecialchars($lastName, ENT_QUOTES, 'UTF-8'); ?>" disabled>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="username" class="field-label">Username</label>
+                                <input type="text" id="username" class="form-control"
+                                    value="<?php echo htmlspecialchars($username, ENT_QUOTES, 'UTF-8'); ?>" disabled>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="email" class="field-label">Email</label>
+                                <input type="email" id="email" class="form-control"
+                                    value="<?php echo htmlspecialchars($email, ENT_QUOTES, 'UTF-8'); ?>" disabled>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="contact_number" class="field-label">Contact Number</label>
+                                <input type="tel" id="contact_number" name="contact_number" class="form-control"
+                                    value="<?php echo htmlspecialchars($contact, ENT_QUOTES, 'UTF-8'); ?>" disabled
+                                    placeholder="09XXXXXXXXX">
+                            </div>
+                        </div>
+
+                        <div class="profile-actions is-hidden" id="profileActions">
+                            <button type="button" id="cancelEditBtn" class="btn btn-cancel">Cancel</button>
+                            <button type="submit" class="btn btn-primary" id="saveProfileBtn">Save Changes</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================
+             TAB: ADDRESS
+             ============================================ -->
+        <div class="profile-tab-content" id="tab-address">
+            <div class="profile-card address-card">
+                <div class="card-header">
+                    <h3>Primary Address</h3>
+                </div>
+                <div class="card-body">
+                    <?php if ($address): ?>
+                    <div class="address-item default">
+                        <div class="address-item-header">
+                            <div class="address-item-label">
+                                <span class="badge badge-primary">Default</span>
+                                <span class="address-label">Primary Address</span>
+                            </div>
+                        </div>
+                        <div class="address-item-body">
+                            <p><?php echo htmlspecialchars(formatRiderAddress($address), ENT_QUOTES, 'UTF-8'); ?></p>
+                        </div>
+                    </div>
+                    <p class="address-note">
+                        To change your address, please contact support.
+                    </p>
+                    <?php else: ?>
+                    <div class="empty-state">
+                        <div class="empty-icon">
+                            <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg"
+                                alt="No addresses">
+                        </div>
+                        <p class="text-muted">No address on file yet.</p>
+                        <p class="text-muted small">Contact support to add your primary address.</p>
+                    </div>
                     <?php endif; ?>
                 </div>
             </div>
+        </div>
 
-            <div class="rider-profile-hero-stats">
-                <div class="rider-profile-hero-stat">
-                    <span class="rider-profile-hero-stat-value"><?php echo number_format($rating, 1); ?></span>
-                    <span class="rider-profile-hero-stat-label">Rating</span>
-                </div>
-                <div class="rider-profile-hero-stat">
-                    <span class="rider-profile-hero-stat-value"><?php echo number_format($deliveries); ?></span>
-                    <span class="rider-profile-hero-stat-label">Deliveries</span>
-                </div>
+        <!-- ============================================
+             VEHICLE INFORMATION
+             ============================================ -->
+        <div class="profile-card" style="margin-top: 24px;">
+            <div class="card-header">
+                <h3>Vehicle Information</h3>
             </div>
-        </section>
-
-        <section class="rider-card">
-            <div class="rider-card-header">
-                <h2 class="heading-5">Personal Information</h2>
-                <button type="button" class="rider-card-link" id="editProfileBtn">Edit</button>
-            </div>
-            <div class="rider-card-body">
-                <form id="riderProfileForm" method="POST" action="../backend/handlers/rider-handler.php">
-                    <input type="hidden" name="csrf_token"
-                        value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
-                    <input type="hidden" name="action" value="update_profile">
-
-                    <div class="rider-form-grid">
-                        <div class="rider-form-group">
-                            <label class="rider-form-label">First Name</label>
-                            <input type="text" name="first_name" class="rider-form-control"
-                                value="<?php echo htmlspecialchars($firstName, ENT_QUOTES, 'UTF-8'); ?>" disabled>
-                        </div>
-                        <div class="rider-form-group">
-                            <label class="rider-form-label">Middle Name</label>
-                            <input type="text" name="middle_name" class="rider-form-control"
-                                value="<?php echo htmlspecialchars($middleName, ENT_QUOTES, 'UTF-8'); ?>" disabled>
-                        </div>
-                        <div class="rider-form-group">
-                            <label class="rider-form-label">Last Name</label>
-                            <input type="text" name="last_name" class="rider-form-control"
-                                value="<?php echo htmlspecialchars($lastName, ENT_QUOTES, 'UTF-8'); ?>" disabled>
-                        </div>
-                        <div class="rider-form-group">
-                            <label class="rider-form-label">Email</label>
-                            <input type="email" name="email" class="rider-form-control"
-                                value="<?php echo htmlspecialchars($email, ENT_QUOTES, 'UTF-8'); ?>" disabled>
-                        </div>
-                        <div class="rider-form-group">
-                            <label class="rider-form-label">Contact Number</label>
-                            <input type="tel" name="contact_number" id="contactInput" class="rider-form-control"
-                                value="<?php echo htmlspecialchars($contact, ENT_QUOTES, 'UTF-8'); ?>" disabled
-                                placeholder="09XXXXXXXXX">
-                        </div>
-                        <div class="rider-form-group">
-                            <label class="rider-form-label">Username</label>
-                            <input type="text" name="username" class="rider-form-control"
-                                value="<?php echo htmlspecialchars($username, ENT_QUOTES, 'UTF-8'); ?>" disabled>
-                        </div>
-                    </div>
-
-                    <div class="rider-form-actions" id="profileFormActions" style="display: none;">
-                        <button type="button" class="btn btn-secondary btn-sm" id="cancelEditBtn">Cancel</button>
-                        <button type="submit" class="btn btn-primary btn-sm" id="saveProfileBtn">Save Changes</button>
-                    </div>
-                </form>
-            </div>
-        </section>
-
-        <section class="rider-card">
-            <div class="rider-card-header">
-                <h2 class="heading-5">Vehicle Information</h2>
-            </div>
-            <div class="rider-card-body">
-                <div class="rider-vehicle-display">
-                    <div class="rider-vehicle-icon">
+            <div class="card-body">
+                <div class="vehicle-display">
+                    <div class="vehicle-icon">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt="Vehicle"
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/community-general.svg'">
                     </div>
-                    <div class="rider-vehicle-info">
-                        <p class="rider-vehicle-name">
-                            <?php echo htmlspecialchars(ucfirst($vehicle ?: '—'), ENT_QUOTES, 'UTF-8'); ?>
+                    <div class="vehicle-info">
+                        <p class="vehicle-name">
+                            <?php echo htmlspecialchars(ucfirst($vehicle ?: 'Not recorded'), ENT_QUOTES, 'UTF-8'); ?>
                         </p>
-                        <p class="rider-vehicle-plate">
+                        <p class="vehicle-plate">
                             <?php echo $plate !== '' ? htmlspecialchars($plate, ENT_QUOTES, 'UTF-8') : 'No plate recorded'; ?>
                         </p>
                     </div>
                 </div>
-                <p class="rider-vehicle-note">
+                <p class="vehicle-note">
                     Vehicle information cannot be edited directly. Contact support to make changes.
                 </p>
             </div>
-        </section>
+        </div>
 
-        <?php if ($address): ?>
-        <section class="rider-card">
-            <div class="rider-card-header">
-                <h2 class="heading-5">Address</h2>
-            </div>
-            <div class="rider-card-body">
-                <div class="rider-address-display">
-                    <div class="rider-address-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="Address">
-                    </div>
-                    <div class="rider-address-info">
-                        <p class="rider-address-label">
-                            <?php echo htmlspecialchars($address['label'] ?? 'Home', ENT_QUOTES, 'UTF-8'); ?>
-                        </p>
-                        <p class="rider-address-text">
-                            <?php
-                            $parts = array_filter([
-                                $address['block']       ?? '',
-                                $address['barangay']    ?? '',
-                                $address['city']        ?? '',
-                                $address['province']    ?? '',
-                                $address['region']      ?? '',
-                                $address['postal_code'] ?? '',
-                                $address['country']     ?? '',
-                            ]);
-                            echo htmlspecialchars(implode(', ', $parts), ENT_QUOTES, 'UTF-8');
-                            ?>
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </section>
-        <?php endif; ?>
-
-        <div class="rider-logout-wrap">
-            <a href="../backend/handlers/sign-out-handler.php" class="btn btn-outline btn-sm rider-logout-btn">
+        <!-- ============================================
+             LOGOUT
+             ============================================ -->
+        <div class="logout-wrap">
+            <a href="../backend/handlers/sign-out-handler.php" class="btn btn-cancel logout-btn">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/logout-box-r-line.svg" alt="" class="btn-icon"
                     width="16" height="16"
                     onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/cancel.svg'">
