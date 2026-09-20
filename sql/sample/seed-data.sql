@@ -1,8 +1,8 @@
 -- =====================================================
 -- FitPal Seed Data
--- Version 5.3
+-- Version 5.4
 --
--- ALIGNED WITH: fitpal_food_delivery schema v5.2
+-- ALIGNED WITH: fitpal_food_delivery schema v5.3
 --   - customer_address is a CHILD of customer
 --   - delivery_rider_address is a CHILD of delivery_rider
 --   - product_composition has NO max_quantity_per_item
@@ -10,6 +10,31 @@
 --   - cart UNIQUE includes customization_hash
 --   - delivery_rider_emergency_contact (no is_primary; earliest id = primary)
 --   - delivery_rider_document (drivers_license path + issue_date + expiry_date)
+--   - restaurant_permit (file_path + original_name + display_order)
+--
+-- v5.4 changes
+-- ------------
+--   + Section 4.5: restaurant_permit rows for all three seeded
+--     restaurants. Three permits each, display_order 0..2, matching
+--     the 0-based index the registration handler produces.
+--   + Permit file_path values use the SAME prefix the handler
+--     writes ('shared/uploads/restaurant-permits/...') so admin
+--     review screens resolve seeded data identically to real data.
+--   + Permit original_name is never NULL (schema NOT NULL).
+--   + Verification queries V12–V14 added at the end.
+--
+-- PREREQUISITE
+-- ------------
+-- Four SVG placeholder files must exist on disk before this seed
+-- is meaningful for admin review screens:
+--
+--   shared/uploads/restaurant-permits/placeholder-dti.svg
+--   shared/uploads/restaurant-permits/placeholder-mayors-permit.svg
+--   shared/uploads/restaurant-permits/placeholder-sanitary.svg
+--   shared/uploads/restaurant-permits/placeholder-business.svg
+--
+-- The SQL below cannot create files. See the SVG definitions after
+-- the seed for their contents.
 --
 -- PRINCIPLES
 --   1. Every account gets at least one address row.
@@ -30,6 +55,10 @@
 --      'uploads/riders/documents/placeholder-license.svg'.
 --      The app overwrites this path when a rider uploads a real
 --      license.
+--   7. Every restaurant gets three permit rows pointing at
+--      shared SVG placeholders under shared/uploads/. The path
+--      prefix matches what sign-up-handler.php writes so seeded
+--      data and real data are indistinguishable to the read side.
 -- =====================================================
 
 USE fitpal_food_delivery;
@@ -196,7 +225,7 @@ VALUES (
 SET @customer_address_id = LAST_INSERT_ID();
 
 -- =====================================================
--- 4. RESTAURANTS, BRANCHES, ACCOUNTS, RIDERS
+-- 4. RESTAURANTS, BRANCHES, ACCOUNTS, RIDERS, PERMITS
 -- =====================================================
 
 -- -----------------------------------------------------
@@ -345,6 +374,34 @@ VALUES (
         1
     );
 
+-- Green Bowl Cafe permits (3 rows, display_order 0..2)
+-- Path prefix matches sign-up-handler.php's storePermitFile() output.
+INSERT INTO
+    restaurant_permit (
+        restaurant_id,
+        file_path,
+        original_name,
+        display_order
+    )
+VALUES (
+        @rest1_id,
+        'shared/uploads/restaurant-permits/placeholder-dti.svg',
+        'DTI-Certificate-of-Business-Name.svg',
+        0
+    ),
+    (
+        @rest1_id,
+        'shared/uploads/restaurant-permits/placeholder-mayors-permit.svg',
+        'Mayors-Permit-2026.svg',
+        1
+    ),
+    (
+        @rest1_id,
+        'shared/uploads/restaurant-permits/placeholder-sanitary.svg',
+        'Sanitary-Permit.svg',
+        2
+    );
+
 -- -----------------------------------------------------
 -- 4.2 Keto Kitchen — high-fat, low-carb
 -- -----------------------------------------------------
@@ -488,6 +545,33 @@ VALUES (
         1
     );
 
+-- Keto Kitchen permits (3 rows, display_order 0..2)
+INSERT INTO
+    restaurant_permit (
+        restaurant_id,
+        file_path,
+        original_name,
+        display_order
+    )
+VALUES (
+        @rest2_id,
+        'shared/uploads/restaurant-permits/placeholder-dti.svg',
+        'DTI-Registration-Keto-Kitchen.svg',
+        0
+    ),
+    (
+        @rest2_id,
+        'shared/uploads/restaurant-permits/placeholder-business.svg',
+        'Business-Permit-Makati.svg',
+        1
+    ),
+    (
+        @rest2_id,
+        'shared/uploads/restaurant-permits/placeholder-sanitary.svg',
+        'Sanitary-Permit-KK.svg',
+        2
+    );
+
 -- -----------------------------------------------------
 -- 4.3 Asian Fusion Fit — gluten-free Asian, halal-friendly
 -- -----------------------------------------------------
@@ -629,6 +713,33 @@ VALUES (
         'staff123',
         'staff',
         1
+    );
+
+-- Asian Fusion Fit permits (3 rows, display_order 0..2)
+INSERT INTO
+    restaurant_permit (
+        restaurant_id,
+        file_path,
+        original_name,
+        display_order
+    )
+VALUES (
+        @rest3_id,
+        'shared/uploads/restaurant-permits/placeholder-dti.svg',
+        'DTI-AFF-Registration.svg',
+        0
+    ),
+    (
+        @rest3_id,
+        'shared/uploads/restaurant-permits/placeholder-mayors-permit.svg',
+        'Mayors-Permit-Quezon-City.svg',
+        1
+    ),
+    (
+        @rest3_id,
+        'shared/uploads/restaurant-permits/placeholder-business.svg',
+        'Business-Permit-AFF.svg',
+        2
     );
 
 -- -----------------------------------------------------
@@ -4924,3 +5035,43 @@ FROM
     delivery_rider dr
     JOIN delivery_rider_profile drp ON drp.delivery_rider_id = dr.delivery_rider_id
 ORDER BY dr.delivery_rider_id;
+
+-- V12. Every restaurant has at least one permit row.
+SELECT r.restaurant_id, r.business_name, COUNT(rp.permit_id) AS permit_count
+FROM
+    restaurant r
+    LEFT JOIN restaurant_permit rp ON rp.restaurant_id = r.restaurant_id
+GROUP BY
+    r.restaurant_id,
+    r.business_name
+HAVING
+    permit_count = 0;
+
+-- V13. No permit row has a NULL or empty original_name.
+SELECT
+    permit_id,
+    restaurant_id,
+    file_path,
+    original_name
+FROM restaurant_permit
+WHERE
+    original_name IS NULL
+    OR original_name = '';
+
+-- V14. Permit display_order values within each restaurant are
+-- contiguous starting at 0 (catches seed off-by-one mistakes).
+SELECT
+    rp.restaurant_id,
+    COUNT(*) AS permit_count,
+    MIN(rp.display_order) AS min_order,
+    MAX(rp.display_order) AS max_order,
+    CASE
+        WHEN MIN(rp.display_order) <> 0 THEN 'not_zero_based'
+        WHEN MAX(rp.display_order) <> COUNT(*) - 1 THEN 'not_contiguous'
+        ELSE 'ok'
+    END AS order_state
+FROM restaurant_permit rp
+GROUP BY
+    rp.restaurant_id
+HAVING
+    order_state <> 'ok';

@@ -1,8 +1,19 @@
 -- =====================================================
--- DATABASE: fitpal_food_delivery v.1.0.1
+-- DATABASE: fitpal_food_delivery v.1.1.0
 -- Dietary Meal Ordering and Restaurant Nutrition Analytics System
 -- WITH FULL CUSTOMIZABLE MEAL SUPPORT
 -- ACID Compliant with Proper Constraints
+--
+-- v1.1.0 changes
+-- --------------
+--   + Table 12: restaurant_permit — permit/verification photos
+--     uploaded during restaurant registration. Integrated into
+--     the main DDL rather than added as a post-hoc CREATE TABLE,
+--     so the schema file remains the single source of truth.
+--   + original_name tightened to NOT NULL (handler always supplies it).
+--   + display_order CHECK (>= 0).
+--   + idx_order renamed to idx_restaurant_order (it indexes the
+--     composite (restaurant_id, display_order), not an order_id).
 --
 -- Totals policy: orders no longer store subtotal, delivery_charge,
 -- or total_amount. They are computed on read from queue_item
@@ -128,7 +139,7 @@ CREATE TABLE delivery_rider_address (
 ) COMMENT = 'Delivery rider addresses (one rider -> many addresses)';
 
 -- =====================================================
--- 5b. [NEW] DELIVERY_RIDER_EMERGENCY_CONTACT
+-- 5b. DELIVERY_RIDER_EMERGENCY_CONTACT
 -- No is_primary flag. The row with the lowest
 -- emergency_contact_id (earliest created) is treated as primary.
 -- relationship is a free-form string for scalability.
@@ -237,7 +248,7 @@ CREATE TABLE delivery_rider_profile (
 ) COMMENT = 'Delivery rider profile with verification and performance data';
 
 -- =====================================================
--- 8b. [NEW] DELIVERY_RIDER_DOCUMENT
+-- 8b. DELIVERY_RIDER_DOCUMENT
 -- Just the driver's license file path + issue/expiry dates.
 -- =====================================================
 CREATE TABLE delivery_rider_document (
@@ -331,7 +342,35 @@ CREATE TABLE restaurant_branch (
 ) COMMENT = 'Restaurant branches with financial accounts';
 
 -- =====================================================
--- 12. RESTAURANT_ACCOUNT
+-- 12. RESTAURANT_PERMIT
+-- Permit/verification photos uploaded during restaurant
+-- registration. One restaurant -> 1..5 permits. display_order
+-- preserves the order the applicant uploaded them in, so an
+-- admin review screen can render them in a stable sequence.
+--
+-- Lifecycle: rows are written inside the registration
+-- transaction (sign-up-handler.php) alongside the restaurant
+-- row itself, so a restaurant never exists without at least
+-- one permit. Deleting the restaurant cascades to its permits.
+--
+-- Review state lives on restaurant.verification_status, not
+-- here. Per-permit approval would be a different feature and
+-- is intentionally not modeled.
+-- =====================================================
+CREATE TABLE restaurant_permit (
+    permit_id INT AUTO_INCREMENT PRIMARY KEY,
+    restaurant_id INT NOT NULL,
+    file_path VARCHAR(255) NOT NULL,
+    original_name VARCHAR(255) NOT NULL,
+    display_order INT NOT NULL DEFAULT 0 CHECK (display_order >= 0),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (restaurant_id) REFERENCES restaurant (restaurant_id) ON DELETE CASCADE,
+    INDEX idx_restaurant (restaurant_id),
+    INDEX idx_restaurant_order (restaurant_id, display_order)
+) COMMENT = 'Permit/verification photos uploaded during restaurant registration';
+
+-- =====================================================
+-- 13. RESTAURANT_ACCOUNT
 -- =====================================================
 CREATE TABLE restaurant_account (
     restaurant_account_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -370,7 +409,7 @@ CREATE TABLE restaurant_account (
 ) COMMENT = 'All restaurant-side logins — owner, partner, manager, staff';
 
 -- =====================================================
--- 13. DIETARY_INFORMATION
+-- 14. DIETARY_INFORMATION
 -- =====================================================
 CREATE TABLE dietary_information (
     dietary_information_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -407,7 +446,7 @@ CREATE TABLE dietary_information (
 ) COMMENT = 'Nutritional and dietary information for products';
 
 -- =====================================================
--- 14. PRODUCT
+-- 15. PRODUCT
 -- =====================================================
 CREATE TABLE product (
     product_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -438,7 +477,7 @@ CREATE TABLE product (
 ) COMMENT = 'Product listings with nutritional information and customization support';
 
 -- =====================================================
--- 15. INGREDIENT
+-- 16. INGREDIENT
 -- =====================================================
 CREATE TABLE ingredient (
     ingredient_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -460,7 +499,7 @@ CREATE TABLE ingredient (
 ) COMMENT = 'Master list of all ingredients for product customization';
 
 -- =====================================================
--- 16. PRODUCT_COMPOSITION
+-- 17. PRODUCT_COMPOSITION
 -- =====================================================
 CREATE TABLE product_composition (
     composition_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -487,7 +526,7 @@ CREATE TABLE product_composition (
 ) COMMENT = 'Defines which ingredients can be customized for each product';
 
 -- =====================================================
--- 17. CART
+-- 18. CART
 -- =====================================================
 CREATE TABLE cart (
     cart_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -521,7 +560,7 @@ CREATE TABLE cart (
 ) COMMENT = 'Shopping cart items with customization data';
 
 -- =====================================================
--- 18. ORDERS
+-- 19. ORDERS
 -- destination_address is a historical snapshot: it deliberately
 -- does NOT reference customer_address, so deleting a saved address
 -- never affects past orders. Price totals are computed from
@@ -565,7 +604,7 @@ CREATE TABLE orders (
 ) COMMENT = 'Order transactions';
 
 -- =====================================================
--- 19. QUEUE_ITEM
+-- 20. QUEUE_ITEM
 -- =====================================================
 CREATE TABLE queue_item (
     queue_item_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -590,7 +629,7 @@ CREATE TABLE queue_item (
 ) COMMENT = 'Kitchen queue items with customization support';
 
 -- =====================================================
--- 20. CUSTOMIZATION_INSTANCE
+-- 21. CUSTOMIZATION_INSTANCE
 -- =====================================================
 CREATE TABLE customization_instance (
     instance_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -610,7 +649,7 @@ CREATE TABLE customization_instance (
 ) COMMENT = 'Customer customizations for each order item';
 
 -- =====================================================
--- 21. TRANSACTION
+-- 22. TRANSACTION
 -- =====================================================
 CREATE TABLE transaction (
     transaction_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -642,7 +681,7 @@ CREATE TABLE transaction (
 ) COMMENT = 'Financial transaction history';
 
 -- =====================================================
--- 22. FEEDBACK
+-- 23. FEEDBACK
 -- =====================================================
 CREATE TABLE feedback (
     feedback_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -662,7 +701,7 @@ CREATE TABLE feedback (
 ) COMMENT = 'Product reviews and feedback';
 
 -- =====================================================
--- 23. NOTIFICATION
+-- 24. NOTIFICATION
 -- =====================================================
 CREATE TABLE notification (
     notification_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -684,7 +723,7 @@ CREATE TABLE notification (
 ) COMMENT = 'System notifications';
 
 -- =====================================================
--- 24. MESSAGE
+-- 25. MESSAGE
 -- =====================================================
 CREATE TABLE message (
     message_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -1233,7 +1272,7 @@ BEGIN
     ORDER BY ci.created_at ASC;
 END$$
 
--- [NEW] Fetch a rider's KYC summary for admin review screens.
+-- Fetch a rider's KYC summary for admin review screens.
 CREATE PROCEDURE sp_get_rider_kyc_summary(IN p_delivery_rider_id INT)
 BEGIN
     SELECT
@@ -1495,7 +1534,7 @@ WHERE
 GROUP BY
     p.product_id;
 
--- [NEW] Rider KYC overview for admin dashboards.
+-- Rider KYC overview for admin dashboards.
 CREATE OR REPLACE VIEW rider_kyc_overview AS
 SELECT
     dr.delivery_rider_id,
