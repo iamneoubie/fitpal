@@ -4,14 +4,17 @@
  *
  * Admin-specific header with conditional navigation based on login
  * status. Mirrors customer/includes/header.php and
- * rider/includes/header.php so all three roles stay consistent in
+ * rider/includes/header.php so all four roles stay consistent in
  * behavior, asset resolution, and CSS load order.
  *
+ * Logout uses a confirmation modal, matching the customer, rider,
+ * and restaurant headers. The logout buttons carry
+ * data-logout-trigger so logout.js intercepts the click and opens
+ * #logoutModal.
+ *
  * @package FitPal
- * @version 3.0 — $pageCssMap now points each list page at its own
- *                stylesheet. admin-tables.css has been retired and
- *                replaced by customers.css / restaurants.css /
- *                riders.css.
+ * @version 4.0 — Logout confirmation modal added. $pageCssMap still
+ *                points each list page at its own stylesheet.
  */
 
 declare(strict_types=1);
@@ -167,8 +170,9 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
                             class="profile-icon">
                         <?php endif; ?>
                     </div>
-                    <a href="../backend/handlers/sign-out-handler.php" data-signout
-                        class="btn btn-outline btn-sm logout-btn">Logout</a>
+                    <button type="button" class="btn btn-outline btn-sm logout-btn" data-logout-trigger>
+                        Logout
+                    </button>
                 </div>
 
                 <?php else: ?>
@@ -235,8 +239,9 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
             </li>
             <li class="mobile-nav-divider"></li>
             <li class="mobile-nav-item">
-                <a href="../backend/handlers/sign-out-handler.php" data-signout
-                    class="mobile-nav-link mobile-logout">Logout</a>
+                <button type="button" class="mobile-nav-link mobile-logout" data-logout-trigger>
+                    Logout
+                </button>
             </li>
             <?php else: ?>
             <li class="mobile-nav-item">
@@ -256,6 +261,29 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
         </ul>
     </nav>
 
+    <!-- ============================================
+         LOGOUT CONFIRMATION MODAL
+         ============================================ -->
+    <div class="logout-modal" id="logoutModal" style="display: none;" role="dialog" aria-modal="true"
+        aria-labelledby="logoutModalTitle">
+        <div class="logout-modal-overlay" data-logout-cancel></div>
+        <div class="logout-modal-content">
+            <div class="logout-modal-icon" aria-hidden="true">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/logoutsvg.svg" alt=""
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/information-fill.svg'">
+            </div>
+            <p class="logout-modal-title" id="logoutModalTitle">Sign out?</p>
+            <p class="logout-modal-text">You'll need to sign in again to access the admin portal.</p>
+            <div class="logout-modal-actions">
+                <button type="button" class="logout-btn-cancel" data-logout-cancel>Cancel</button>
+                <a href="../backend/handlers/sign-out-handler.php" class="logout-btn-confirm">
+                    Yes, sign out
+                </a>
+            </div>
+        </div>
+    </div>
+
     <main class="main-content" role="main">
 
         <script src="../assets/ui/js/header.js" defer></script>
+        <script src="../assets/ui/js/logout.js" defer></script>

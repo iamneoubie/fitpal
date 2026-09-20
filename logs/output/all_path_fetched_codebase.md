@@ -2,7 +2,7 @@
 
 **Preset:** all_path
 
-**Generated:** 2026-09-21 00:12:40
+**Generated:** 2026-09-21 00:38:21
 
 ---
 
@@ -14,7 +14,7 @@
 # Web Project Structure
 
 **Project:** fitpal
-**Generated:** 2026-09-21 00:11:29
+**Generated:** 2026-09-21 00:37:16
 **Mode:** all
 
 ```
@@ -24,12 +24,16 @@ fitpal/
 │   ├── assets/
 │   │   ├── css/
 │   │   │   ├── admin-tables.css
+│   │   │   ├── customers.css
 │   │   │   ├── dashboard.css
 │   │   │   ├── header.css
 │   │   │   ├── profile.css
+│   │   │   ├── restaurants.css
+│   │   │   ├── riders.css
 │   │   │   └── sign-in.css
 │   │   └── ui/
 │   │       └── js/
+│   │           ├── customers.js
 │   │           ├── dashboard.js
 │   │           ├── header.js
 │   │           ├── profile.js
@@ -127,13 +131,15 @@ fitpal/
 │       └── wallet.php
 ├── logs/
 │   ├── content-fetcher-configuration/
-│   │   └── all_path.py
+│   │   ├── all_path.py
+│   │   └── restaurant.py
 │   ├── instructions/
 │   │   ├── test-create-guide.md
 │   │   └── updating-fetcher-guide.md
 │   ├── output/
 │   │   ├── all_path_fetched_codebase.md
-│   │   └── project_structure.md
+│   │   ├── project_structure.md
+│   │   └── restaurant_fetched_codebase.md
 │   ├── content-fetcher.py
 │   └── tree-mapper.py
 ├── restaurant/
@@ -185,6 +191,7 @@ fitpal/
 │   │           ├── deliveries.js
 │   │           ├── earnings.js
 │   │           ├── header.js
+│   │           ├── logout.js
 │   │           ├── profile.js
 │   │           ├── sign-in.js
 │   │           └── sign-up.js
@@ -392,7 +399,6 @@ fitpal/
 │   │   ├── privacy-policy.php
 │   │   └── terms-conditions.php
 │   └── uploads/
-│       └── restaurant-permits/
 ├── sql/
 │   ├── sample/
 │   │   └── seed-data.sql
@@ -416,15 +422,15 @@ fitpal/
 |-----------|-------|
 | HTML Files | 0 |
 | PHP Files | 88 |
-| CSS Files | 41 |
-| JavaScript Files | 34 |
+| CSS Files | 44 |
+| JavaScript Files | 36 |
 | JSON Files | 0 |
-| Text/Markdown | 5 |
+| Text/Markdown | 6 |
 | Image Files | 147 |
-| Other Files | 8 |
+| Other Files | 9 |
 
-**Total Directories:** 65
-**Total Files:** 322
+**Total Directories:** 64
+**Total Files:** 329
 
 ---
 
@@ -8720,6 +8726,1151 @@ html {
 
 ---
 
+## File: `fitpal/admin/assets/css/customers.css`
+
+**Status:** `FOUND`
+
+```css
+/**
+ * FitPal Admin — Customers List Page Styles
+ *
+ * Everything this page needs: shell, header, filter bar, table rows,
+ * modal, badges, pagination, utility classes.
+ *
+ * No shared admin-common.css. The customer pattern keeps each page's
+ * CSS self-contained, and this file follows that pattern.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+html {
+    scrollbar-gutter: stable;
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+.btn-icon-no-filter {
+    filter: none !important;
+}
+
+.btn-icon-white {
+    filter: brightness(0) invert(1) !important;
+}
+
+.btn-icon-14 {
+    width: 14px;
+    height: 14px;
+}
+
+.btn-icon-16 {
+    width: 16px;
+    height: 16px;
+}
+
+.form-inline {
+    display: inline;
+}
+
+/* ============================================
+   CONTENT WRAPPER
+   ============================================ */
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+}
+
+.admin-list-page {
+    background: var(--gray-50);
+    padding: 24px 0 40px 0;
+    flex: 1;
+}
+
+.admin-list-page .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 16px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* ============================================
+   PAGE HEADER
+   ============================================ */
+
+.admin-page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.admin-page-header-left {
+    flex: 1;
+    min-width: 0;
+}
+
+.admin-page-header .heading-2 {
+    margin: 0 0 4px 0;
+    font-size: var(--font-size-3xl);
+    line-height: 1.2;
+    color: var(--text);
+}
+
+.admin-page-header .heading-2 span {
+    color: var(--primary);
+}
+
+.admin-page-header .text-muted {
+    color: var(--gray-500);
+    margin: 0;
+    font-size: var(--font-size-sm);
+}
+
+.admin-page-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.admin-page-header-actions .btn-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+}
+
+/* ============================================
+   FILTER BAR
+   ============================================ */
+
+.admin-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-sm);
+}
+
+.admin-search-form {
+    display: flex;
+    flex: 1;
+    min-width: 220px;
+    gap: 8px;
+}
+
+.admin-search-input {
+    flex: 1;
+    height: 40px;
+    padding: 0 14px;
+    border: 1.5px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    background: var(--white);
+    color: var(--text);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    box-sizing: border-box;
+    min-width: 0;
+}
+
+.admin-search-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
+}
+
+.admin-search-btn {
+    flex: 0 0 auto;
+    height: 40px;
+    padding: 0 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    background: var(--primary);
+    color: var(--white);
+    border: 1px solid var(--primary);
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.admin-search-btn:hover {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+}
+
+.admin-search-btn .btn-icon {
+    filter: brightness(0) invert(1);
+}
+
+.admin-filter-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    width: 100%;
+}
+
+.admin-filter-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: var(--radius-full);
+    background: var(--white);
+    border: 1.5px solid var(--gray-200);
+    color: var(--gray-600);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    font-family: inherit;
+}
+
+.admin-filter-tab:hover {
+    border-color: var(--gray-300);
+    background: var(--gray-50);
+}
+
+.admin-filter-tab.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--white);
+}
+
+.admin-filter-tab .filter-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: var(--radius-full);
+    background: var(--gray-200);
+    color: var(--gray-600);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.admin-filter-tab.active .filter-count {
+    background: rgba(255, 255, 255, 0.25);
+    color: var(--white);
+}
+
+/* ============================================
+   DATA TABLE (CARD LAYOUT)
+   ============================================ */
+
+.admin-table-card {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+.admin-table-row {
+    display: grid;
+    gap: 14px;
+    align-items: center;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--gray-100);
+    transition: background 0.15s ease;
+}
+
+.admin-table-row:last-child {
+    border-bottom: none;
+}
+
+.admin-table-row:hover {
+    background: var(--gray-50);
+}
+
+.admin-table-customers .admin-table-row {
+    grid-template-columns: 44px minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+
+.admin-table-empty {
+    padding: 48px 20px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.admin-table-empty-icon {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 14px;
+    background: var(--gray-100);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px;
+}
+
+.admin-table-empty-icon img {
+    width: 100%;
+    height: 100%;
+    max-width: 32px;
+    max-height: 32px;
+    object-fit: contain;
+    opacity: 0.4;
+}
+
+.admin-table-empty-title {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+    margin: 0 0 6px 0;
+}
+
+.admin-table-empty-text {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    margin: 0;
+    max-width: 320px;
+    line-height: 1.5;
+}
+
+.admin-cell-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 16px;
+    flex-shrink: 0;
+    text-transform: uppercase;
+    overflow: hidden;
+}
+
+.admin-cell-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.admin-cell-body {
+    min-width: 0;
+}
+
+.admin-cell-title {
+    margin: 0 0 2px 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-cell-subtitle {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-cell-meta {
+    margin: 4px 0 0 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+}
+
+.admin-cell-meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.admin-cell-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.admin-cell-actions .btn {
+    white-space: nowrap;
+}
+
+/* ============================================
+   PAGINATION
+   ============================================ */
+
+.admin-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--gray-100);
+    flex-wrap: wrap;
+}
+
+.admin-pagination-info {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    margin-right: auto;
+}
+
+.admin-pagination-list {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.admin-pagination-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 12px;
+    border-radius: var(--radius-base);
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    color: var(--gray-600);
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    min-width: 36px;
+    height: 36px;
+    box-sizing: border-box;
+}
+
+.admin-pagination-link:hover:not(.disabled):not(.active) {
+    background: var(--gray-50);
+    border-color: var(--gray-300);
+    color: var(--text);
+}
+
+.admin-pagination-link.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--white);
+    cursor: default;
+}
+
+.admin-pagination-link.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.admin-pagination-ellipsis {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
+    color: var(--gray-400);
+    font-weight: 600;
+}
+
+/* ============================================
+   MODAL
+   ============================================ */
+
+.admin-modal {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-modal);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+    overflow-y: auto;
+}
+
+.admin-modal.is-open {
+    display: flex;
+}
+
+.admin-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 10, 4, 0.6);
+    z-index: 0;
+    cursor: pointer;
+    animation: adminFadeIn 0.18s ease;
+}
+
+.admin-modal-panel {
+    position: relative;
+    z-index: 1;
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xl);
+    width: 640px;
+    max-width: calc(100vw - 40px);
+    max-height: calc(100vh - 40px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: adminScaleIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    margin: auto;
+}
+
+.admin-modal-panel-wide {
+    width: 820px;
+}
+
+.admin-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--gray-200);
+    flex-shrink: 0;
+    gap: 12px;
+}
+
+.admin-modal-header-left {
+    min-width: 0;
+}
+
+.admin-modal-title {
+    margin: 0;
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+    line-height: 1.3;
+}
+
+.admin-modal-subtitle {
+    margin: 2px 0 0 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+}
+
+.admin-modal-close {
+    background: none;
+    border: none;
+    font-size: 22px;
+    line-height: 1;
+    color: var(--gray-400);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: var(--radius-base);
+    flex-shrink: 0;
+    transition: background 0.15s ease, color 0.15s ease;
+    font-family: inherit;
+}
+
+.admin-modal-close:hover {
+    background: var(--gray-100);
+    color: var(--text);
+}
+
+.admin-modal-panel-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 20px 22px;
+}
+
+.admin-modal-panel-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.admin-modal-panel-body::-webkit-scrollbar-track {
+    background: var(--gray-50);
+    border-radius: 4px;
+}
+
+.admin-modal-panel-body::-webkit-scrollbar-thumb {
+    background: var(--gray-300);
+    border-radius: 4px;
+}
+
+.admin-modal-panel-body::-webkit-scrollbar-thumb:hover {
+    background: var(--gray-400);
+}
+
+.admin-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 22px;
+    border-top: 1px solid var(--gray-200);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.admin-modal-footer .btn {
+    min-width: 120px;
+    justify-content: center;
+}
+
+/* ============================================
+   MODAL TABS
+   ============================================ */
+
+.admin-modal-tabs {
+    display: flex;
+    gap: 2px;
+    border-bottom: 1px solid var(--gray-200);
+    background: var(--gray-50);
+    padding: 0 22px;
+    flex-shrink: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.admin-modal-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.admin-modal-tab {
+    padding: 12px 16px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--gray-600);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    transition: color 0.15s ease, border-color 0.15s ease;
+    font-family: inherit;
+}
+
+.admin-modal-tab:hover {
+    color: var(--text);
+}
+
+.admin-modal-tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+.admin-modal-tab .tab-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: var(--radius-full);
+    background: var(--gray-200);
+    color: var(--gray-600);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.admin-modal-tab.active .tab-count {
+    background: rgba(89, 193, 74, 0.15);
+    color: var(--primary-dark);
+}
+
+.admin-modal-tab-panel {
+    display: none;
+}
+
+.admin-modal-tab-panel.active {
+    display: block;
+}
+
+/* ============================================
+   DETAIL BLOCK
+   ============================================ */
+
+.admin-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 20px;
+    margin-bottom: 18px;
+}
+
+.admin-detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.admin-detail-item-full {
+    grid-column: 1 / -1;
+}
+
+.admin-detail-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.admin-detail-value {
+    font-size: var(--font-size-sm);
+    color: var(--text);
+    word-break: break-word;
+    line-height: 1.5;
+}
+
+.admin-detail-value-muted {
+    color: var(--gray-500);
+}
+
+/* ============================================
+   DOCUMENT EMPTY STATE
+   ============================================ */
+
+.admin-doc-empty {
+    width: 100%;
+    padding: 32px 20px;
+    text-align: center;
+    color: var(--gray-400);
+    font-size: var(--font-size-sm);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.admin-doc-empty img {
+    width: 40px;
+    height: 40px;
+    opacity: 0.4;
+}
+
+/* ============================================
+   ADDRESS CARD
+   ============================================ */
+
+.admin-address-card {
+    padding: 12px 14px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    margin-bottom: 10px;
+}
+
+.admin-address-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+}
+
+.admin-address-text {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+/* ============================================
+   CONTACT CARD
+   ============================================ */
+
+.admin-contact-card {
+    padding: 12px 14px;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    margin-bottom: 10px;
+    background: var(--white);
+}
+
+.admin-contact-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+
+.admin-contact-name {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+}
+
+.admin-contact-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    background: rgba(89, 193, 74, 0.12);
+    color: var(--primary-dark);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.admin-contact-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: var(--font-size-xs);
+    color: var(--gray-600);
+}
+
+.admin-contact-body strong {
+    color: var(--text);
+}
+
+/* ============================================
+   ORDERS LIST
+   ============================================ */
+
+.admin-orders-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.admin-order-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+}
+
+.admin-order-id-block {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.admin-order-id {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+}
+
+.admin-order-customer {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+}
+
+.admin-order-total {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-bold);
+    color: var(--text);
+    white-space: nowrap;
+}
+
+/* ============================================
+   BADGES
+   ============================================ */
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    line-height: 1;
+    white-space: nowrap;
+    min-height: 22px;
+}
+
+.badge-success   { background: #d4edda; color: #155724; }
+.badge-warning   { background: #fff3cd; color: #856404; }
+.badge-danger    { background: #f8d7da; color: #721c24; }
+.badge-info      { background: #d1ecf1; color: #0c5460; }
+.badge-primary   { background: #cce5ff; color: #004085; }
+.badge-secondary { background: var(--gray-200); color: var(--gray-600); }
+
+/* ============================================
+   ALERTS
+   ============================================ */
+
+.alert {
+    padding: 12px 18px;
+    border-radius: var(--radius-base);
+    margin-bottom: 20px;
+    border: 1px solid transparent;
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+}
+
+.alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+
+.alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+/* ============================================
+   SECTION HEADING (used in rider modal only,
+   harmless here — kept for parity across the
+   three list-page stylesheets)
+   ============================================ */
+
+.admin-section-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 20px 0 10px 0;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--gray-100);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    color: var(--gray-600);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.admin-section-heading:first-child {
+    margin-top: 0;
+}
+
+.admin-section-heading .section-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: var(--radius-full);
+    background: var(--gray-100);
+    color: var(--gray-500);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 992px) {
+    .admin-table-customers .admin-table-row {
+        grid-template-columns: 44px minmax(0, 1fr) auto;
+        grid-template-areas:
+            "avatar info actions"
+            "avatar meta actions";
+        row-gap: 4px;
+    }
+    .admin-table-customers .admin-table-row .admin-cell-avatar {
+        grid-area: avatar;
+        grid-row: span 2;
+    }
+    .admin-table-customers .admin-table-row .admin-cell-body {
+        grid-area: info;
+    }
+    .admin-table-customers .admin-table-row .admin-cell-meta {
+        grid-area: meta;
+    }
+    .admin-table-customers .admin-table-row .admin-cell-actions {
+        grid-area: actions;
+    }
+}
+
+@media (max-width: 768px) {
+    .admin-list-page {
+        padding: 16px 0 32px 0;
+    }
+    .admin-page-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .admin-page-header .heading-2 {
+        font-size: var(--font-size-2xl);
+    }
+    .admin-page-header-actions {
+        justify-content: flex-start;
+        width: 100%;
+    }
+    .admin-filter-bar {
+        padding: 12px 14px;
+        gap: 10px;
+    }
+    .admin-search-form {
+        min-width: 0;
+        width: 100%;
+    }
+    .admin-filter-tab {
+        padding: 6px 12px;
+        font-size: 11px;
+    }
+
+    .admin-table-customers .admin-table-row {
+        grid-template-columns: 40px minmax(0, 1fr);
+        grid-template-areas:
+            "avatar info"
+            "avatar meta"
+            "actions actions";
+        row-gap: 6px;
+        padding: 14px 16px;
+    }
+    .admin-table-customers .admin-table-row .admin-cell-avatar {
+        grid-area: avatar;
+    }
+    .admin-table-customers .admin-table-row .admin-cell-body {
+        grid-area: info;
+    }
+    .admin-table-customers .admin-table-row .admin-cell-meta {
+        grid-area: meta;
+    }
+    .admin-table-customers .admin-table-row .admin-cell-actions {
+        grid-area: actions;
+        justify-content: flex-start;
+        width: 100%;
+    }
+
+    .admin-modal {
+        padding: 10px;
+    }
+    .admin-modal-panel {
+        max-width: calc(100vw - 20px);
+        max-height: calc(100vh - 20px);
+    }
+    .admin-modal-header {
+        padding: 14px 16px;
+    }
+    .admin-modal-panel-body {
+        padding: 16px;
+    }
+    .admin-modal-footer {
+        padding: 12px 16px;
+        flex-direction: column-reverse;
+    }
+    .admin-modal-footer .btn {
+        width: 100%;
+    }
+    .admin-detail-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    .admin-modal-tabs {
+        padding: 0 16px;
+    }
+    .admin-modal-tab {
+        padding: 10px 12px;
+        font-size: var(--font-size-xs);
+    }
+}
+
+@media (max-width: 480px) {
+    .admin-list-page .container {
+        padding: 0 12px;
+    }
+    .admin-page-header .heading-2 {
+        font-size: var(--font-size-xl);
+    }
+    .admin-table-customers .admin-table-row {
+        grid-template-columns: 36px minmax(0, 1fr);
+        padding: 12px 14px;
+    }
+    .admin-cell-avatar {
+        width: 36px;
+        height: 36px;
+        font-size: 14px;
+    }
+    .admin-cell-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .admin-cell-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+    .admin-pagination {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 12px 16px;
+    }
+    .admin-pagination-info {
+        margin-right: 0;
+        text-align: center;
+    }
+    .admin-pagination-link {
+        min-width: 32px;
+        height: 32px;
+        padding: 5px 10px;
+        font-size: var(--font-size-xs);
+    }
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+
+@keyframes adminFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes adminScaleIn {
+    from { opacity: 0; transform: scale(0.96) translateY(-8px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .admin-table-row,
+    .admin-modal-backdrop,
+    .admin-modal-panel,
+    .admin-modal-close,
+    .admin-pagination-link,
+    .admin-filter-tab,
+    .admin-search-btn {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+```
+
+---
+
 ## File: `fitpal/admin/assets/css/dashboard.css`
 
 **Status:** `FOUND`
@@ -8727,7 +9878,6 @@ html {
 ```css
 /**
  * FitPal Admin Dashboard Styles
- * Version 5.0
  *
  * Layout map:
  *   .admin-dashboard-page
@@ -8737,21 +9887,61 @@ html {
  *       .admin-dashboard-row   (chart + pending riders)
  *       .admin-card            (recent moderation activity)
  *
- * The recent-orders panel was removed — order operations belong to
- * the restaurant and rider dashboards. It was replaced by a
- * "Recent Moderation Activity" feed, which renders through
- * .admin-activity-* classes.
- *
- * Scrollbar policy: reserve the gutter on <html> so hiding the body
- * scrollbar during modals never reflows the page.
- *
  * @package FitPal
- * @version 5.0 — Removed .admin-order-* rules. Added .admin-activity-*
- *                rules for the recent-moderation-activity feed.
+ * @version 6.0 — Adds icon utility classes so pages stop using inline
+ *                filter styles. Everything else unchanged from v5.
  */
 
 html {
     scrollbar-gutter: stable;
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+.btn-icon-no-filter {
+    filter: none !important;
+}
+
+.btn-icon-white {
+    filter: brightness(0) invert(1) !important;
+}
+
+.icon-no-filter {
+    filter: none !important;
+}
+
+.icon-tint-white {
+    filter: brightness(0) invert(1) !important;
+}
+
+.icon-tint-primary {
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%) !important;
+}
+
+.icon-tint-warning {
+    filter: brightness(0) saturate(100%)
+            invert(79%) sepia(90%) saturate(600%)
+            hue-rotate(0deg) brightness(95%) contrast(85%) !important;
+}
+
+.icon-tint-info {
+    filter: brightness(0) saturate(100%)
+            invert(52%) sepia(70%) saturate(600%)
+            hue-rotate(160deg) brightness(92%) contrast(85%) !important;
+}
+
+.btn-icon-14 {
+    width: 14px;
+    height: 14px;
+}
+
+.btn-icon-16 {
+    width: 16px;
+    height: 16px;
 }
 
 /* ============================================
@@ -9289,7 +10479,7 @@ a.admin-stat-card:hover .admin-stat-arrow-img {
 }
 
 /* ============================================
-   PENDING RIDERS LIST (right column of row)
+   PENDING RIDERS LIST
    ============================================ */
 
 .admin-pending-list {
@@ -9384,9 +10574,6 @@ a.admin-stat-card:hover .admin-stat-arrow-img {
 
 /* ============================================
    RECENT MODERATION ACTIVITY
-   Replaces the old .admin-order-* panel. Each row is a compact
-   list item: icon on the left, name + meta in the middle, status
-   badge on the right.
    ============================================ */
 
 .admin-activity-list {
@@ -10803,6 +11990,2249 @@ html {
 
 ---
 
+## File: `fitpal/admin/assets/css/restaurants.css`
+
+**Status:** `FOUND`
+
+```css
+/**
+ * FitPal Admin — Restaurants List Page Styles
+ *
+ * Self-contained. Mirrors customers.css structure so the two pages
+ * feel identical, plus page-specific classes for the branch code
+ * badge, spaced meta row, and role badge.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+html {
+    scrollbar-gutter: stable;
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+.btn-icon-no-filter {
+    filter: none !important;
+}
+
+.btn-icon-white {
+    filter: brightness(0) invert(1) !important;
+}
+
+.btn-icon-14 {
+    width: 14px;
+    height: 14px;
+}
+
+.btn-icon-16 {
+    width: 16px;
+    height: 16px;
+}
+
+.form-inline {
+    display: inline;
+}
+
+/* Page-specific badge colors */
+.branch-code-badge {
+    background: var(--gray-200) !important;
+    color: var(--gray-600) !important;
+}
+
+.role-badge-info {
+    background: rgba(23, 162, 184, 0.12) !important;
+    color: #0c5460 !important;
+}
+
+.admin-cell-meta-spaced {
+    margin-top: 6px;
+}
+
+/* ============================================
+   CONTENT WRAPPER
+   ============================================ */
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+}
+
+.admin-list-page {
+    background: var(--gray-50);
+    padding: 24px 0 40px 0;
+    flex: 1;
+}
+
+.admin-list-page .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 16px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* ============================================
+   PAGE HEADER
+   ============================================ */
+
+.admin-page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.admin-page-header-left {
+    flex: 1;
+    min-width: 0;
+}
+
+.admin-page-header .heading-2 {
+    margin: 0 0 4px 0;
+    font-size: var(--font-size-3xl);
+    line-height: 1.2;
+    color: var(--text);
+}
+
+.admin-page-header .heading-2 span {
+    color: var(--primary);
+}
+
+.admin-page-header .text-muted {
+    color: var(--gray-500);
+    margin: 0;
+    font-size: var(--font-size-sm);
+}
+
+.admin-page-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.admin-page-header-actions .btn-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+}
+
+/* ============================================
+   FILTER BAR
+   ============================================ */
+
+.admin-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-sm);
+}
+
+.admin-search-form {
+    display: flex;
+    flex: 1;
+    min-width: 220px;
+    gap: 8px;
+}
+
+.admin-search-input {
+    flex: 1;
+    height: 40px;
+    padding: 0 14px;
+    border: 1.5px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    background: var(--white);
+    color: var(--text);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    box-sizing: border-box;
+    min-width: 0;
+}
+
+.admin-search-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
+}
+
+.admin-search-btn {
+    flex: 0 0 auto;
+    height: 40px;
+    padding: 0 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    background: var(--primary);
+    color: var(--white);
+    border: 1px solid var(--primary);
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.admin-search-btn:hover {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+}
+
+.admin-search-btn .btn-icon {
+    filter: brightness(0) invert(1);
+}
+
+.admin-filter-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    width: 100%;
+}
+
+.admin-filter-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: var(--radius-full);
+    background: var(--white);
+    border: 1.5px solid var(--gray-200);
+    color: var(--gray-600);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    font-family: inherit;
+}
+
+.admin-filter-tab:hover {
+    border-color: var(--gray-300);
+    background: var(--gray-50);
+}
+
+.admin-filter-tab.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--white);
+}
+
+.admin-filter-tab .filter-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: var(--radius-full);
+    background: var(--gray-200);
+    color: var(--gray-600);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.admin-filter-tab.active .filter-count {
+    background: rgba(255, 255, 255, 0.25);
+    color: var(--white);
+}
+
+/* ============================================
+   DATA TABLE (CARD LAYOUT)
+   ============================================ */
+
+.admin-table-card {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+.admin-table-row {
+    display: grid;
+    gap: 14px;
+    align-items: center;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--gray-100);
+    transition: background 0.15s ease;
+}
+
+.admin-table-row:last-child {
+    border-bottom: none;
+}
+
+.admin-table-row:hover {
+    background: var(--gray-50);
+}
+
+.admin-table-restaurants .admin-table-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+
+.admin-table-empty {
+    padding: 48px 20px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.admin-table-empty-icon {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 14px;
+    background: var(--gray-100);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px;
+}
+
+.admin-table-empty-icon img {
+    width: 100%;
+    height: 100%;
+    max-width: 32px;
+    max-height: 32px;
+    object-fit: contain;
+    opacity: 0.4;
+}
+
+.admin-table-empty-title {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+    margin: 0 0 6px 0;
+}
+
+.admin-table-empty-text {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    margin: 0;
+    max-width: 320px;
+    line-height: 1.5;
+}
+
+.admin-cell-body {
+    min-width: 0;
+}
+
+.admin-cell-title {
+    margin: 0 0 2px 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-cell-subtitle {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-cell-meta {
+    margin: 4px 0 0 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+}
+
+.admin-cell-meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.admin-cell-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.admin-cell-actions .btn {
+    white-space: nowrap;
+}
+
+/* ============================================
+   PAGINATION
+   ============================================ */
+
+.admin-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--gray-100);
+    flex-wrap: wrap;
+}
+
+.admin-pagination-info {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    margin-right: auto;
+}
+
+.admin-pagination-list {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.admin-pagination-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 12px;
+    border-radius: var(--radius-base);
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    color: var(--gray-600);
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    min-width: 36px;
+    height: 36px;
+    box-sizing: border-box;
+}
+
+.admin-pagination-link:hover:not(.disabled):not(.active) {
+    background: var(--gray-50);
+    border-color: var(--gray-300);
+    color: var(--text);
+}
+
+.admin-pagination-link.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--white);
+    cursor: default;
+}
+
+.admin-pagination-link.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.admin-pagination-ellipsis {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
+    color: var(--gray-400);
+    font-weight: 600;
+}
+
+/* ============================================
+   MODAL
+   ============================================ */
+
+.admin-modal {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-modal);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+    overflow-y: auto;
+}
+
+.admin-modal.is-open {
+    display: flex;
+}
+
+.admin-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 10, 4, 0.6);
+    z-index: 0;
+    cursor: pointer;
+    animation: adminFadeIn 0.18s ease;
+}
+
+.admin-modal-panel {
+    position: relative;
+    z-index: 1;
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xl);
+    width: 640px;
+    max-width: calc(100vw - 40px);
+    max-height: calc(100vh - 40px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: adminScaleIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    margin: auto;
+}
+
+.admin-modal-panel-wide {
+    width: 820px;
+}
+
+.admin-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--gray-200);
+    flex-shrink: 0;
+    gap: 12px;
+}
+
+.admin-modal-header-left {
+    min-width: 0;
+}
+
+.admin-modal-title {
+    margin: 0;
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+    line-height: 1.3;
+}
+
+.admin-modal-subtitle {
+    margin: 2px 0 0 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+}
+
+.admin-modal-close {
+    background: none;
+    border: none;
+    font-size: 22px;
+    line-height: 1;
+    color: var(--gray-400);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: var(--radius-base);
+    flex-shrink: 0;
+    transition: background 0.15s ease, color 0.15s ease;
+    font-family: inherit;
+}
+
+.admin-modal-close:hover {
+    background: var(--gray-100);
+    color: var(--text);
+}
+
+.admin-modal-panel-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 20px 22px;
+}
+
+.admin-modal-panel-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.admin-modal-panel-body::-webkit-scrollbar-track {
+    background: var(--gray-50);
+    border-radius: 4px;
+}
+
+.admin-modal-panel-body::-webkit-scrollbar-thumb {
+    background: var(--gray-300);
+    border-radius: 4px;
+}
+
+.admin-modal-panel-body::-webkit-scrollbar-thumb:hover {
+    background: var(--gray-400);
+}
+
+.admin-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 22px;
+    border-top: 1px solid var(--gray-200);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.admin-modal-footer .btn {
+    min-width: 120px;
+    justify-content: center;
+}
+
+/* ============================================
+   MODAL TABS
+   ============================================ */
+
+.admin-modal-tabs {
+    display: flex;
+    gap: 2px;
+    border-bottom: 1px solid var(--gray-200);
+    background: var(--gray-50);
+    padding: 0 22px;
+    flex-shrink: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.admin-modal-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.admin-modal-tab {
+    padding: 12px 16px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--gray-600);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    transition: color 0.15s ease, border-color 0.15s ease;
+    font-family: inherit;
+}
+
+.admin-modal-tab:hover {
+    color: var(--text);
+}
+
+.admin-modal-tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+.admin-modal-tab .tab-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: var(--radius-full);
+    background: var(--gray-200);
+    color: var(--gray-600);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.admin-modal-tab.active .tab-count {
+    background: rgba(89, 193, 74, 0.15);
+    color: var(--primary-dark);
+}
+
+.admin-modal-tab-panel {
+    display: none;
+}
+
+.admin-modal-tab-panel.active {
+    display: block;
+}
+
+/* ============================================
+   DETAIL BLOCK
+   ============================================ */
+
+.admin-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 20px;
+    margin-bottom: 18px;
+}
+
+.admin-detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.admin-detail-item-full {
+    grid-column: 1 / -1;
+}
+
+.admin-detail-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.admin-detail-value {
+    font-size: var(--font-size-sm);
+    color: var(--text);
+    word-break: break-word;
+    line-height: 1.5;
+}
+
+.admin-detail-value-muted {
+    color: var(--gray-500);
+}
+
+/* ============================================
+   DOCUMENT EMPTY STATE
+   ============================================ */
+
+.admin-doc-empty {
+    width: 100%;
+    padding: 32px 20px;
+    text-align: center;
+    color: var(--gray-400);
+    font-size: var(--font-size-sm);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.admin-doc-empty img {
+    width: 40px;
+    height: 40px;
+    opacity: 0.4;
+}
+
+/* ============================================
+   ADDRESS CARD
+   ============================================ */
+
+.admin-address-card {
+    padding: 12px 14px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    margin-bottom: 10px;
+}
+
+.admin-address-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+}
+
+.admin-address-text {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+/* ============================================
+   CONTACT CARD
+   ============================================ */
+
+.admin-contact-card {
+    padding: 12px 14px;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    margin-bottom: 10px;
+    background: var(--white);
+}
+
+.admin-contact-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+
+.admin-contact-name {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+}
+
+.admin-contact-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    background: rgba(89, 193, 74, 0.12);
+    color: var(--primary-dark);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.admin-contact-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: var(--font-size-xs);
+    color: var(--gray-600);
+}
+
+.admin-contact-body strong {
+    color: var(--text);
+}
+
+/* ============================================
+   BADGES
+   ============================================ */
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    line-height: 1;
+    white-space: nowrap;
+    min-height: 22px;
+}
+
+.badge-success   { background: #d4edda; color: #155724; }
+.badge-warning   { background: #fff3cd; color: #856404; }
+.badge-danger    { background: #f8d7da; color: #721c24; }
+.badge-info      { background: #d1ecf1; color: #0c5460; }
+.badge-primary   { background: #cce5ff; color: #004085; }
+.badge-secondary { background: var(--gray-200); color: var(--gray-600); }
+
+/* ============================================
+   ALERTS
+   ============================================ */
+
+.alert {
+    padding: 12px 18px;
+    border-radius: var(--radius-base);
+    margin-bottom: 20px;
+    border: 1px solid transparent;
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+}
+
+.alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+
+.alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 992px) {
+    .admin-table-restaurants .admin-table-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "info actions"
+            "meta actions";
+    }
+    .admin-table-restaurants .admin-table-row .admin-cell-body {
+        grid-area: info;
+    }
+    .admin-table-restaurants .admin-table-row .admin-cell-meta {
+        grid-area: meta;
+    }
+    .admin-table-restaurants .admin-table-row .admin-cell-actions {
+        grid-area: actions;
+    }
+}
+
+@media (max-width: 768px) {
+    .admin-list-page {
+        padding: 16px 0 32px 0;
+    }
+    .admin-page-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .admin-page-header .heading-2 {
+        font-size: var(--font-size-2xl);
+    }
+    .admin-page-header-actions {
+        justify-content: flex-start;
+        width: 100%;
+    }
+    .admin-filter-bar {
+        padding: 12px 14px;
+        gap: 10px;
+    }
+    .admin-search-form {
+        min-width: 0;
+        width: 100%;
+    }
+    .admin-filter-tab {
+        padding: 6px 12px;
+        font-size: 11px;
+    }
+
+    .admin-table-restaurants .admin-table-row {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+            "info"
+            "meta"
+            "actions";
+        row-gap: 6px;
+        padding: 14px 16px;
+    }
+    .admin-table-restaurants .admin-table-row .admin-cell-body {
+        grid-area: info;
+    }
+    .admin-table-restaurants .admin-table-row .admin-cell-meta {
+        grid-area: meta;
+    }
+    .admin-table-restaurants .admin-table-row .admin-cell-actions {
+        grid-area: actions;
+        justify-content: flex-start;
+        width: 100%;
+    }
+
+    .admin-modal {
+        padding: 10px;
+    }
+    .admin-modal-panel {
+        max-width: calc(100vw - 20px);
+        max-height: calc(100vh - 20px);
+    }
+    .admin-modal-header {
+        padding: 14px 16px;
+    }
+    .admin-modal-panel-body {
+        padding: 16px;
+    }
+    .admin-modal-footer {
+        padding: 12px 16px;
+        flex-direction: column-reverse;
+    }
+    .admin-modal-footer .btn {
+        width: 100%;
+    }
+    .admin-detail-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    .admin-modal-tabs {
+        padding: 0 16px;
+    }
+    .admin-modal-tab {
+        padding: 10px 12px;
+        font-size: var(--font-size-xs);
+    }
+}
+
+@media (max-width: 480px) {
+    .admin-list-page .container {
+        padding: 0 12px;
+    }
+    .admin-page-header .heading-2 {
+        font-size: var(--font-size-xl);
+    }
+    .admin-pagination {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 12px 16px;
+    }
+    .admin-pagination-info {
+        margin-right: 0;
+        text-align: center;
+    }
+    .admin-pagination-link {
+        min-width: 32px;
+        height: 32px;
+        padding: 5px 10px;
+        font-size: var(--font-size-xs);
+    }
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+
+@keyframes adminFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes adminScaleIn {
+    from { opacity: 0; transform: scale(0.96) translateY(-8px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .admin-table-row,
+    .admin-modal-backdrop,
+    .admin-modal-panel,
+    .admin-modal-close,
+    .admin-pagination-link,
+    .admin-filter-tab,
+    .admin-search-btn {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+```
+
+---
+
+## File: `fitpal/admin/assets/css/riders.css`
+
+**Status:** `FOUND`
+
+```css
+/**
+ * FitPal Admin — Riders List Page Styles
+ *
+ * Self-contained. Mirrors customers.css structure, plus page-specific
+ * classes for the avatar in the table, document blocks, and the
+ * relationship badge.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+html {
+    scrollbar-gutter: stable;
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+.btn-icon-no-filter {
+    filter: none !important;
+}
+
+.btn-icon-white {
+    filter: brightness(0) invert(1) !important;
+}
+
+.btn-icon-14 {
+    width: 14px;
+    height: 14px;
+}
+
+.btn-icon-16 {
+    width: 16px;
+    height: 16px;
+}
+
+.form-inline {
+    display: inline;
+}
+
+.relationship-badge-info {
+    background: rgba(23, 162, 184, 0.12) !important;
+    color: #0c5460 !important;
+}
+
+/* ============================================
+   CONTENT WRAPPER
+   ============================================ */
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+}
+
+.admin-list-page {
+    background: var(--gray-50);
+    padding: 24px 0 40px 0;
+    flex: 1;
+}
+
+.admin-list-page .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 16px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* ============================================
+   PAGE HEADER
+   ============================================ */
+
+.admin-page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.admin-page-header-left {
+    flex: 1;
+    min-width: 0;
+}
+
+.admin-page-header .heading-2 {
+    margin: 0 0 4px 0;
+    font-size: var(--font-size-3xl);
+    line-height: 1.2;
+    color: var(--text);
+}
+
+.admin-page-header .heading-2 span {
+    color: var(--primary);
+}
+
+.admin-page-header .text-muted {
+    color: var(--gray-500);
+    margin: 0;
+    font-size: var(--font-size-sm);
+}
+
+.admin-page-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.admin-page-header-actions .btn-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+}
+
+/* ============================================
+   FILTER BAR
+   ============================================ */
+
+.admin-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-sm);
+}
+
+.admin-search-form {
+    display: flex;
+    flex: 1;
+    min-width: 220px;
+    gap: 8px;
+}
+
+.admin-search-input {
+    flex: 1;
+    height: 40px;
+    padding: 0 14px;
+    border: 1.5px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    background: var(--white);
+    color: var(--text);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    box-sizing: border-box;
+    min-width: 0;
+}
+
+.admin-search-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
+}
+
+.admin-search-btn {
+    flex: 0 0 auto;
+    height: 40px;
+    padding: 0 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    background: var(--primary);
+    color: var(--white);
+    border: 1px solid var(--primary);
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.admin-search-btn:hover {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+}
+
+.admin-search-btn .btn-icon {
+    filter: brightness(0) invert(1);
+}
+
+.admin-filter-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    width: 100%;
+}
+
+.admin-filter-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: var(--radius-full);
+    background: var(--white);
+    border: 1.5px solid var(--gray-200);
+    color: var(--gray-600);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    font-family: inherit;
+}
+
+.admin-filter-tab:hover {
+    border-color: var(--gray-300);
+    background: var(--gray-50);
+}
+
+.admin-filter-tab.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--white);
+}
+
+.admin-filter-tab .filter-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: var(--radius-full);
+    background: var(--gray-200);
+    color: var(--gray-600);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.admin-filter-tab.active .filter-count {
+    background: rgba(255, 255, 255, 0.25);
+    color: var(--white);
+}
+
+/* ============================================
+   DATA TABLE (CARD LAYOUT)
+   ============================================ */
+
+.admin-table-card {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+.admin-table-row {
+    display: grid;
+    gap: 14px;
+    align-items: center;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--gray-100);
+    transition: background 0.15s ease;
+}
+
+.admin-table-row:last-child {
+    border-bottom: none;
+}
+
+.admin-table-row:hover {
+    background: var(--gray-50);
+}
+
+.admin-table-riders .admin-table-row {
+    grid-template-columns: 44px minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+
+.admin-table-empty {
+    padding: 48px 20px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.admin-table-empty-icon {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 14px;
+    background: var(--gray-100);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px;
+}
+
+.admin-table-empty-icon img {
+    width: 100%;
+    height: 100%;
+    max-width: 32px;
+    max-height: 32px;
+    object-fit: contain;
+    opacity: 0.4;
+}
+
+.admin-table-empty-title {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+    margin: 0 0 6px 0;
+}
+
+.admin-table-empty-text {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    margin: 0;
+    max-width: 320px;
+    line-height: 1.5;
+}
+
+.admin-cell-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 16px;
+    flex-shrink: 0;
+    text-transform: uppercase;
+    overflow: hidden;
+}
+
+.admin-cell-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.admin-cell-body {
+    min-width: 0;
+}
+
+.admin-cell-title {
+    margin: 0 0 2px 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-cell-subtitle {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-cell-meta {
+    margin: 4px 0 0 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+}
+
+.admin-cell-meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.admin-cell-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.admin-cell-actions .btn {
+    white-space: nowrap;
+}
+
+/* ============================================
+   PAGINATION
+   ============================================ */
+
+.admin-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--gray-100);
+    flex-wrap: wrap;
+}
+
+.admin-pagination-info {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    margin-right: auto;
+}
+
+.admin-pagination-list {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.admin-pagination-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 12px;
+    border-radius: var(--radius-base);
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    color: var(--gray-600);
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    min-width: 36px;
+    height: 36px;
+    box-sizing: border-box;
+}
+
+.admin-pagination-link:hover:not(.disabled):not(.active) {
+    background: var(--gray-50);
+    border-color: var(--gray-300);
+    color: var(--text);
+}
+
+.admin-pagination-link.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--white);
+    cursor: default;
+}
+
+.admin-pagination-link.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.admin-pagination-ellipsis {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
+    color: var(--gray-400);
+    font-weight: 600;
+}
+
+/* ============================================
+   MODAL
+   ============================================ */
+
+.admin-modal {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-modal);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+    overflow-y: auto;
+}
+
+.admin-modal.is-open {
+    display: flex;
+}
+
+.admin-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 10, 4, 0.6);
+    z-index: 0;
+    cursor: pointer;
+    animation: adminFadeIn 0.18s ease;
+}
+
+.admin-modal-panel {
+    position: relative;
+    z-index: 1;
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xl);
+    width: 640px;
+    max-width: calc(100vw - 40px);
+    max-height: calc(100vh - 40px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: adminScaleIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    margin: auto;
+}
+
+.admin-modal-panel-wide {
+    width: 820px;
+}
+
+.admin-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--gray-200);
+    flex-shrink: 0;
+    gap: 12px;
+}
+
+.admin-modal-header-left {
+    min-width: 0;
+}
+
+.admin-modal-title {
+    margin: 0;
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+    line-height: 1.3;
+}
+
+.admin-modal-subtitle {
+    margin: 2px 0 0 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+}
+
+.admin-modal-close {
+    background: none;
+    border: none;
+    font-size: 22px;
+    line-height: 1;
+    color: var(--gray-400);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: var(--radius-base);
+    flex-shrink: 0;
+    transition: background 0.15s ease, color 0.15s ease;
+    font-family: inherit;
+}
+
+.admin-modal-close:hover {
+    background: var(--gray-100);
+    color: var(--text);
+}
+
+.admin-modal-panel-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 20px 22px;
+}
+
+.admin-modal-panel-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.admin-modal-panel-body::-webkit-scrollbar-track {
+    background: var(--gray-50);
+    border-radius: 4px;
+}
+
+.admin-modal-panel-body::-webkit-scrollbar-thumb {
+    background: var(--gray-300);
+    border-radius: 4px;
+}
+
+.admin-modal-panel-body::-webkit-scrollbar-thumb:hover {
+    background: var(--gray-400);
+}
+
+.admin-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 22px;
+    border-top: 1px solid var(--gray-200);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.admin-modal-footer .btn {
+    min-width: 120px;
+    justify-content: center;
+}
+
+/* ============================================
+   MODAL TABS
+   ============================================ */
+
+.admin-modal-tabs {
+    display: flex;
+    gap: 2px;
+    border-bottom: 1px solid var(--gray-200);
+    background: var(--gray-50);
+    padding: 0 22px;
+    flex-shrink: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.admin-modal-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.admin-modal-tab {
+    padding: 12px 16px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--gray-600);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    transition: color 0.15s ease, border-color 0.15s ease;
+    font-family: inherit;
+}
+
+.admin-modal-tab:hover {
+    color: var(--text);
+}
+
+.admin-modal-tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+.admin-modal-tab .tab-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: var(--radius-full);
+    background: var(--gray-200);
+    color: var(--gray-600);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.admin-modal-tab.active .tab-count {
+    background: rgba(89, 193, 74, 0.15);
+    color: var(--primary-dark);
+}
+
+.admin-modal-tab-panel {
+    display: none;
+}
+
+.admin-modal-tab-panel.active {
+    display: block;
+}
+
+/* ============================================
+   DETAIL BLOCK
+   ============================================ */
+
+.admin-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 20px;
+    margin-bottom: 18px;
+}
+
+.admin-detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.admin-detail-item-full {
+    grid-column: 1 / -1;
+}
+
+.admin-detail-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.admin-detail-value {
+    font-size: var(--font-size-sm);
+    color: var(--text);
+    word-break: break-word;
+    line-height: 1.5;
+}
+
+.admin-detail-value-muted {
+    color: var(--gray-500);
+}
+
+/* ============================================
+   SECTION HEADING
+   ============================================ */
+
+.admin-section-heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 20px 0 10px 0;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--gray-100);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    color: var(--gray-600);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.admin-section-heading:first-child {
+    margin-top: 0;
+}
+
+.admin-section-heading .section-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: var(--radius-full);
+    background: var(--gray-100);
+    color: var(--gray-500);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+/* ============================================
+   DOCUMENT BLOCKS
+   ============================================ */
+
+.admin-doc-block {
+    margin-bottom: 16px;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    overflow: hidden;
+    background: var(--white);
+}
+
+.admin-doc-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--gray-200);
+    flex-wrap: wrap;
+}
+
+.admin-doc-title {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+}
+
+.admin-doc-meta {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+}
+
+.admin-doc-image {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--gray-100);
+    padding: 12px;
+    min-height: 220px;
+    box-sizing: border-box;
+}
+
+.admin-doc-image img {
+    max-width: 100%;
+    max-height: 400px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    display: block;
+    border-radius: var(--radius-sm);
+    background: var(--white);
+}
+
+.admin-doc-empty {
+    width: 100%;
+    padding: 32px 20px;
+    text-align: center;
+    color: var(--gray-400);
+    font-size: var(--font-size-sm);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.admin-doc-empty img {
+    width: 40px;
+    height: 40px;
+    opacity: 0.4;
+}
+
+.admin-doc-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 12px 0 4px 0;
+    flex-wrap: wrap;
+}
+
+/* ============================================
+   ADDRESS CARD
+   ============================================ */
+
+.admin-address-card {
+    padding: 12px 14px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    margin-bottom: 10px;
+}
+
+.admin-address-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+}
+
+.admin-address-text {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+/* ============================================
+   CONTACT CARD
+   ============================================ */
+
+.admin-contact-card {
+    padding: 12px 14px;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    margin-bottom: 10px;
+    background: var(--white);
+}
+
+.admin-contact-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+
+.admin-contact-name {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+}
+
+.admin-contact-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    background: rgba(89, 193, 74, 0.12);
+    color: var(--primary-dark);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.admin-contact-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: var(--font-size-xs);
+    color: var(--gray-600);
+}
+
+.admin-contact-body strong {
+    color: var(--text);
+}
+
+/* ============================================
+   ORDERS LIST (deliveries tab)
+   ============================================ */
+
+.admin-orders-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.admin-order-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+}
+
+.admin-order-id-block {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.admin-order-id {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+}
+
+.admin-order-customer {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+}
+
+.admin-order-total {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-bold);
+    color: var(--text);
+    white-space: nowrap;
+}
+
+/* ============================================
+   BADGES
+   ============================================ */
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    line-height: 1;
+    white-space: nowrap;
+    min-height: 22px;
+}
+
+.badge-success   { background: #d4edda; color: #155724; }
+.badge-warning   { background: #fff3cd; color: #856404; }
+.badge-danger    { background: #f8d7da; color: #721c24; }
+.badge-info      { background: #d1ecf1; color: #0c5460; }
+.badge-primary   { background: #cce5ff; color: #004085; }
+.badge-secondary { background: var(--gray-200); color: var(--gray-600); }
+
+/* ============================================
+   ALERTS
+   ============================================ */
+
+.alert {
+    padding: 12px 18px;
+    border-radius: var(--radius-base);
+    margin-bottom: 20px;
+    border: 1px solid transparent;
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+}
+
+.alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+
+.alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 992px) {
+    .admin-table-riders .admin-table-row {
+        grid-template-columns: 44px minmax(0, 1fr) auto;
+        grid-template-areas:
+            "avatar info actions"
+            "avatar meta actions";
+        row-gap: 4px;
+    }
+    .admin-table-riders .admin-table-row .admin-cell-avatar {
+        grid-area: avatar;
+        grid-row: span 2;
+    }
+    .admin-table-riders .admin-table-row .admin-cell-body {
+        grid-area: info;
+    }
+    .admin-table-riders .admin-table-row .admin-cell-meta {
+        grid-area: meta;
+    }
+    .admin-table-riders .admin-table-row .admin-cell-actions {
+        grid-area: actions;
+    }
+}
+
+@media (max-width: 768px) {
+    .admin-list-page {
+        padding: 16px 0 32px 0;
+    }
+    .admin-page-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .admin-page-header .heading-2 {
+        font-size: var(--font-size-2xl);
+    }
+    .admin-page-header-actions {
+        justify-content: flex-start;
+        width: 100%;
+    }
+    .admin-filter-bar {
+        padding: 12px 14px;
+        gap: 10px;
+    }
+    .admin-search-form {
+        min-width: 0;
+        width: 100%;
+    }
+    .admin-filter-tab {
+        padding: 6px 12px;
+        font-size: 11px;
+    }
+
+    .admin-table-riders .admin-table-row {
+        grid-template-columns: 40px minmax(0, 1fr);
+        grid-template-areas:
+            "avatar info"
+            "avatar meta"
+            "actions actions";
+        row-gap: 6px;
+        padding: 14px 16px;
+    }
+    .admin-table-riders .admin-table-row .admin-cell-avatar {
+        grid-area: avatar;
+    }
+    .admin-table-riders .admin-table-row .admin-cell-body {
+        grid-area: info;
+    }
+    .admin-table-riders .admin-table-row .admin-cell-meta {
+        grid-area: meta;
+    }
+    .admin-table-riders .admin-table-row .admin-cell-actions {
+        grid-area: actions;
+        justify-content: flex-start;
+        width: 100%;
+    }
+
+    .admin-modal {
+        padding: 10px;
+    }
+    .admin-modal-panel {
+        max-width: calc(100vw - 20px);
+        max-height: calc(100vh - 20px);
+    }
+    .admin-modal-header {
+        padding: 14px 16px;
+    }
+    .admin-modal-panel-body {
+        padding: 16px;
+    }
+    .admin-modal-footer {
+        padding: 12px 16px;
+        flex-direction: column-reverse;
+    }
+    .admin-modal-footer .btn {
+        width: 100%;
+    }
+    .admin-detail-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    .admin-modal-tabs {
+        padding: 0 16px;
+    }
+    .admin-modal-tab {
+        padding: 10px 12px;
+        font-size: var(--font-size-xs);
+    }
+}
+
+@media (max-width: 480px) {
+    .admin-list-page .container {
+        padding: 0 12px;
+    }
+    .admin-page-header .heading-2 {
+        font-size: var(--font-size-xl);
+    }
+    .admin-table-riders .admin-table-row {
+        grid-template-columns: 36px minmax(0, 1fr);
+        padding: 12px 14px;
+    }
+    .admin-cell-avatar {
+        width: 36px;
+        height: 36px;
+        font-size: 14px;
+    }
+    .admin-cell-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .admin-cell-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+    .admin-pagination {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 12px 16px;
+    }
+    .admin-pagination-info {
+        margin-right: 0;
+        text-align: center;
+    }
+    .admin-pagination-link {
+        min-width: 32px;
+        height: 32px;
+        padding: 5px 10px;
+        font-size: var(--font-size-xs);
+    }
+    .admin-doc-image {
+        padding: 8px;
+        min-height: 180px;
+    }
+    .admin-doc-image img {
+        max-height: 300px;
+    }
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+
+@keyframes adminFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes adminScaleIn {
+    from { opacity: 0; transform: scale(0.96) translateY(-8px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .admin-table-row,
+    .admin-modal-backdrop,
+    .admin-modal-panel,
+    .admin-modal-close,
+    .admin-pagination-link,
+    .admin-filter-tab,
+    .admin-search-btn {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+```
+
+---
+
 ## File: `fitpal/admin/assets/css/sign-in.css`
 
 **Status:** `FOUND`
@@ -11057,6 +14487,43 @@ html {
     .sign-in-form .form-control { height: 52px; }
     .sign-in-form .btn { height: 52px; }
 }
+```
+
+---
+
+## File: `fitpal/admin/assets/ui/js/customers.js`
+
+**Status:** `FOUND`
+
+```javascript
+/**
+ * FitPal Admin — Customers Page
+ *
+ * The customer detail modal is URL-driven (?open=ID). This file
+ * adds keyboard support for closing it.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+(function () {
+    'use strict';
+
+    document.addEventListener('DOMContentLoaded', function () {
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key !== 'Escape') return;
+
+            var openModal = document.querySelector('.admin-modal.is-open');
+            if (!openModal) return;
+
+            var closeLink = openModal.querySelector('.admin-modal-close');
+            if (closeLink) {
+                closeLink.click();
+            }
+        });
+    });
+})();
 ```
 
 ---
@@ -12266,25 +15733,25 @@ require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
  *
  * Pure data-access layer for the admin role. Owns every query against
  * the customer, delivery_rider, restaurant, financial_account, orders,
- * and queue_item tables.
+ * and queue_item tables. Also owns the presentation helpers that
+ * operate on rows from those tables, matching the customer pattern
+ * where role-specific formatters live alongside the queries that
+ * produce their input.
  *
- * No $_POST, no header(), no echo. Safe to require from any page
- * because this file only declares functions.
+ * No $_POST, no header(), no echo.
  *
  * Pagination contract (every paginated read follows this):
  *   1. Count query with the same WHERE clause as the data query.
  *   2. Data query with LIMIT/OFFSET bound as integers.
  *   3. Return ['rows' => [...], 'total' => N, 'page' => P, 'perPage' => L, 'totalPages' => T].
  *
- * Default page size is 5 across every list, matching the admin UI's
- * "5 rows per tab" layout decision.
+ * Default page size is 5 across every list.
  *
  * @package FitPal
- * @version 2.1 — Adds adminMediaUrl() as a thin shim over
- *                adminAssetUrl() so existing call sites in
- *                dashboard.php and riders.php do not fatal during
- *                the rename. Both names are now valid; the shim is
- *                scheduled for removal once every page is updated.
+ * @version 3.0 — Adds getAdminPasswordHash() so the handler no longer
+ *                carries its own SQL. Removes the deprecated
+ *                adminMediaUrl() shim; adminAssetUrl() is the only
+ *                name now.
  */
 
 declare(strict_types=1);
@@ -12293,14 +15760,6 @@ declare(strict_types=1);
  * PAGINATION HELPER
  * ============================================================= */
 
-/**
- * Normalize a pagination envelope.
- *
- * @param int $total
- * @param int $perPage
- * @param int $page
- * @return array{total:int, perPage:int, page:int, totalPages:int}
- */
 function adminPaginationEnvelope(int $total, int $perPage, int $page): array
 {
     $perPage = max(1, $perPage);
@@ -12345,6 +15804,18 @@ function findAdminByIdentifier(PDO $db, string $identifier): array|false
     );
     $stmt->execute([':email' => $identifier, ':username' => $identifier]);
     return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+function getAdminPasswordHash(PDO $db, int $adminId): string
+{
+    $stmt = $db->prepare(
+        "SELECT password
+           FROM administrator
+          WHERE administrator_id = :admin_id
+          LIMIT 1"
+    );
+    $stmt->execute([':admin_id' => $adminId]);
+    return (string)$stmt->fetchColumn();
 }
 
 function getAdminProfile(PDO $db, int $adminId): array|false
@@ -12423,15 +15894,6 @@ function recordAdminLogin(PDO $db, int $adminId): void
  * DASHBOARD STATS
  * ============================================================= */
 
-/**
- * All dashboard counters in three queries:
- *   1. One aggregate for customer / rider / restaurant counts.
- *   2. One aggregate for order counts and per-status buckets.
- *   3. One aggregate for revenue (today / week / all-time).
- *
- * Previously this fired six scalar queries; the merged version is
- * three round-trips.
- */
 function getAdminDashboardStats(PDO $db): array
 {
     $stats = [
@@ -12453,7 +15915,6 @@ function getAdminDashboardStats(PDO $db): array
         'revenue_today'        => 0.0,
     ];
 
-    // ---- Entity counts (one query, three tables via scalar subqueries) ----
     $entityRow = $db->query(
         "SELECT
             (SELECT COUNT(*) FROM customer)                                   AS total_customers,
@@ -12473,7 +15934,6 @@ function getAdminDashboardStats(PDO $db): array
     $stats['verified_riders']      = (int)($entityRow['verified_riders'] ?? 0);
     $stats['pending_riders']       = (int)($entityRow['pending_riders'] ?? 0);
 
-    // ---- Order status counts ----
     $orderRow = $db->query(
         "SELECT
             COUNT(*) AS total_orders,
@@ -12492,7 +15952,6 @@ function getAdminDashboardStats(PDO $db): array
     $stats['delivered_orders'] = (int)($orderRow['delivered_orders'] ?? 0);
     $stats['cancelled_orders'] = (int)($orderRow['cancelled_orders'] ?? 0);
 
-    // ---- Revenue (excludes cancelled and refunded orders) ----
     $revRow = $db->query(
         "SELECT
             COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0) AS gross_revenue,
@@ -12516,16 +15975,6 @@ function getAdminDashboardStats(PDO $db): array
     return $stats;
 }
 
-/**
- * Pick a "nice" y-axis ceiling for the weekly revenue chart.
- *
- * The rule: never scale to the raw maximum — that makes a single
- * spike fill the entire chart. Snap up to a rounded step so the
- * tallest bar always reads at ~40–80% of the chart height.
- *
- * @param float $maxAmount
- * @return array{ceiling:float, step:float, gridlines:array<int,float>}
- */
 function getAdminChartScale(float $maxAmount): array
 {
     if ($maxAmount <= 0) {
@@ -12565,14 +16014,6 @@ function getAdminChartScale(float $maxAmount): array
     ];
 }
 
-/**
- * Seven-day revenue series, oldest to newest. Days with no orders
- * are included with amount = 0.
- *
- * @param PDO $db
- * @param int $days
- * @return array<int, array{date:string, label:string, short:string, amount:float, orders:int}>
- */
 function getAdminWeeklyRevenue(PDO $db, int $days = 7): array
 {
     $days = max(1, min(30, $days));
@@ -12615,32 +16056,6 @@ function getAdminWeeklyRevenue(PDO $db, int $days = 7): array
     return $series;
 }
 
-/**
- * Recent verification decisions across riders and restaurants,
- * merged into a single time-ordered feed.
- *
- * Returns one row per entity. The `entity_type` discriminator lets
- * the page render a unified "Recently Verified" list and build the
- * correct detail-modal link.
- *
- * MariaDB/MySQL does NOT allow LIMIT inside a UNION ALL branch. So
- * each source is wrapped in its own derived table with LIMIT, and
- * those derived tables are then unioned. The outer query applies the
- * final ORDER BY and LIMIT.
- *
- * Each side is pre-limited to $limit rows so one source cannot
- * starve the other out of the merged result.
- *
- * @param PDO $db
- * @param int $limit
- * @return array<int, array{
- *     entity_type: string,
- *     entity_id: int,
- *     entity_name: string,
- *     verification_status: string,
- *     verified_at: string
- * }>
- */
 function getRecentVerificationActivity(PDO $db, int $limit = 6): array
 {
     $limit = max(1, min(20, $limit));
@@ -12695,7 +16110,6 @@ function getRecentVerificationActivity(PDO $db, int $limit = 6): array
 
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Normalize the middle-name double space in rider names.
     foreach ($rows as &$row) {
         $row['entity_name'] = trim((string)preg_replace('/\s+/', ' ', (string)$row['entity_name']));
         $row['entity_id']   = (int)$row['entity_id'];
@@ -13261,7 +16675,9 @@ function setRestaurantActiveStatus(PDO $db, int $restaurantId, bool $isActive): 
 }
 
 /* =============================================================
- * PRESENTATION HELPERS (pure — no DB access)
+ * PRESENTATION HELPERS
+ * Operate on rows returned by the queries above. No DB access.
+ * Live here so admin pages and handlers share a single source.
  * ============================================================= */
 
 function formatAdminCurrency(int|float|string|null $amount): string
@@ -13287,10 +16703,6 @@ function formatAdminDateShort(?string $date): string
     return $ts !== false ? date('M d, Y', $ts) : $date;
 }
 
-/**
- * Compose a full name from first / middle / last name parts.
- * Empty parts are skipped so we never emit double spaces.
- */
 function adminName(array $row): string
 {
     $parts = array_filter([
@@ -13302,10 +16714,6 @@ function adminName(array $row): string
     return trim(implode(' ', $parts)) ?: '—';
 }
 
-/**
- * The first letter of the first name, uppercased. Falls back to 'A'
- * when the row has no first name.
- */
 function adminInitial(array $row): string
 {
     $first = trim((string)($row['first_name'] ?? ''));
@@ -13334,10 +16742,6 @@ function adminVerificationLabel(string $status): string
     };
 }
 
-/**
- * Order status → badge class. Used by the customer-detail modal's
- * recent-orders tab and the rider-detail modal's deliveries tab.
- */
 function adminOrderStatusBadgeClass(string $status): string
 {
     return match ($status) {
@@ -13420,9 +16824,6 @@ function parseAdminTagList(?string $raw): array
  * and $assetBase ends with 'shared/'. Stripping that suffix gives
  * the project root; concatenating the stored path gives the URL.
  *
- * This is the canonical name. adminMediaUrl() is a deprecated shim
- * that forwards here for backward compatibility.
- *
  * @param string $assetBase    Header-provided asset base ending in 'shared/'.
  * @param string $relativePath DB-stored path relative to the project root.
  * @return string
@@ -13439,21 +16840,6 @@ function adminAssetUrl(string $assetBase, string $relativePath): string
     }
 
     return $projectRoot . $relativePath;
-}
-
-/**
- * @deprecated Use adminAssetUrl() instead. Kept as a shim so older
- *             call sites in dashboard.php and riders.php do not fatal
- *             during the rename. Delete this once every call site has
- *             been updated to adminAssetUrl().
- *
- * @param string $assetBase
- * @param string $relativePath
- * @return string
- */
-function adminMediaUrl(string $assetBase, string $relativePath): string
-{
-    return adminAssetUrl($assetBase, $relativePath);
 }
 ```
 
@@ -13477,8 +16863,13 @@ function adminMediaUrl(string $assetBase, string $relativePath): string
  * normal form submit and every page already renders flashes. AJAX is
  * unnecessary here.
  *
+ * This file contains NO SQL. Every read and write goes through
+ * admin-queries.php.
+ *
  * @package FitPal
- * @version 1.0
+ * @version 2.0 — Removed the inline SELECT in handleChangePassword();
+ *                it now calls getAdminPasswordHash() from the query
+ *                layer.
  */
 
 declare(strict_types=1);
@@ -13616,9 +17007,7 @@ function handleChangePassword(PDO $db, int $adminId): void
         throw new RuntimeException('New password and confirmation do not match.');
     }
 
-    $stmt = $db->prepare("SELECT password FROM administrator WHERE administrator_id = :id");
-    $stmt->execute([':id' => $adminId]);
-    $stored = (string)$stmt->fetchColumn();
+    $stored = getAdminPasswordHash($db, $adminId);
 
     $valid = password_verify($current, $stored);
     if (!$valid && hash_equals($stored, $current)) {
@@ -13847,7 +17236,10 @@ exit;
  * behavior, asset resolution, and CSS load order.
  *
  * @package FitPal
- * @version 2.0
+ * @version 3.0 — $pageCssMap now points each list page at its own
+ *                stylesheet. admin-tables.css has been retired and
+ *                replaced by customers.css / restaurants.css /
+ *                riders.css.
  */
 
 declare(strict_types=1);
@@ -13914,9 +17306,9 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 $pageCssMap = [
     'sign-in.php'      => 'sign-in.css',
     'dashboard.php'    => 'dashboard.css',
-    'customers.php'    => 'admin-tables.css',
-    'riders.php'       => 'admin-tables.css',
-    'restaurants.php'  => 'admin-tables.css',
+    'customers.php'    => 'customers.css',
+    'riders.php'       => 'riders.css',
+    'restaurants.php'  => 'restaurants.css',
     'profile.php'      => 'profile.css',
 ];
 
@@ -14110,10 +17502,14 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
  *
  * Paginated list of customer accounts with search, status tabs, and
  * a per-customer detail modal. All mutations go through
- * admin-handler.php via normal form POSTs. No window.confirm().
+ * admin-handler.php via normal form POSTs.
+ *
+ * No inline CSS. No inline JS. Styles come from customers.css.
+ * Behavior comes from customers.js.
  *
  * @package FitPal
- * @version 2.0
+ * @version 3.0 — Inline styles replaced with CSS classes. Loads
+ *                customers.js instead of dashboard.js.
  */
 
 declare(strict_types=1);
@@ -14148,7 +17544,6 @@ $data   = getCustomersPaginated($database_connection, $page, $perPage, $search, 
 $rows   = $data['rows'];
 $pagination = $data;
 
-// If the URL asked us to open a specific customer, load it.
 $openCustomer = null;
 $openAddresses = [];
 $openOrders = [];
@@ -14165,9 +17560,6 @@ if (empty($_SESSION['csrf_token'])) {
 }
 $csrfToken = $_SESSION['csrf_token'];
 
-/**
- * Build a query string preserving current filters.
- */
 function buildCustomerUrl(array $overrides = []): string
 {
     $params = [
@@ -14196,8 +17588,8 @@ function buildCustomerUrl(array $overrides = []): string
             </div>
             <div class="admin-page-header-actions">
                 <a href="dashboard.php" class="btn btn-outline btn-sm">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt="" class="btn-icon"
-                        width="16" height="16" style="filter: none;">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt=""
+                        class="btn-icon btn-icon-no-filter" width="16" height="16">
                     <span>Dashboard</span>
                 </a>
             </div>
@@ -14217,7 +17609,6 @@ function buildCustomerUrl(array $overrides = []): string
         </div>
         <?php endif; ?>
 
-        <!-- FILTER BAR -->
         <div class="admin-filter-bar">
             <form method="GET" action="" class="admin-search-form">
                 <input type="hidden" name="status"
@@ -14226,8 +17617,8 @@ function buildCustomerUrl(array $overrides = []): string
                     placeholder="Search by name, email, username, or contact…"
                     value="<?php echo htmlspecialchars($search, ENT_QUOTES, 'UTF-8'); ?>">
                 <button type="submit" class="admin-search-btn">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt="" class="btn-icon"
-                        width="14" height="14">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt=""
+                        class="btn-icon btn-icon-14" width="14" height="14">
                     <span>Search</span>
                 </button>
             </form>
@@ -14248,7 +17639,6 @@ function buildCustomerUrl(array $overrides = []): string
             </nav>
         </div>
 
-        <!-- TABLE -->
         <div class="admin-table-card">
             <?php if (empty($rows)): ?>
             <div class="admin-table-empty">
@@ -14314,18 +17704,17 @@ function buildCustomerUrl(array $overrides = []): string
                     </div>
 
                     <div class="admin-cell-actions">
-                        <button type="button" class="btn btn-outline btn-sm"
-                            onclick="window.location.href='<?php echo htmlspecialchars(buildCustomerUrl(['open' => $cid]), ENT_QUOTES, 'UTF-8'); ?>'">
+                        <a href="<?php echo htmlspecialchars(buildCustomerUrl(['open' => $cid]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="btn btn-outline btn-sm">
                             <img src="<?php echo $assetBase; ?>assets/images/icons/pages-line.svg" alt=""
-                                class="btn-icon" width="14" height="14" style="filter:none;">
+                                class="btn-icon btn-icon-no-filter btn-icon-14" width="14" height="14">
                             <span>View Details</span>
-                        </button>
+                        </a>
                     </div>
                 </div>
                 <?php endforeach; ?>
             </div>
 
-            <!-- PAGINATION -->
             <?php if ($pagination['totalPages'] > 1): ?>
             <nav class="admin-pagination" aria-label="Customer pagination">
                 <span class="admin-pagination-info">
@@ -14395,9 +17784,6 @@ function buildCustomerUrl(array $overrides = []): string
     </div>
 </div>
 
-<!-- ============================================
-     CUSTOMER DETAILS MODAL
-     ============================================ -->
 <div class="admin-modal <?php echo $openCustomer ? 'is-open' : ''; ?>" id="customerDetailsModal"
     aria-hidden="<?php echo $openCustomer ? 'false' : 'true'; ?>" role="dialog">
     <div class="admin-modal-backdrop"
@@ -14429,18 +17815,18 @@ function buildCustomerUrl(array $overrides = []): string
         <div class="admin-modal-tabs">
             <button type="button" class="admin-modal-tab active" data-tab-target="cust-panel-info">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/file-user-line.svg" alt="" width="14" height="14"
-                    style="filter:none;">
+                    class="btn-icon-no-filter">
                 <span>Info</span>
             </button>
             <button type="button" class="admin-modal-tab" data-tab-target="cust-panel-addresses">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="" width="14" height="14"
-                    style="filter:none;">
+                    class="btn-icon-no-filter">
                 <span>Addresses</span>
                 <span class="tab-count"><?php echo count($openAddresses); ?></span>
             </button>
             <button type="button" class="admin-modal-tab" data-tab-target="cust-panel-orders">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/cart-shopping.svg" alt="" width="14" height="14"
-                    style="filter:none;">
+                    class="btn-icon-no-filter">
                 <span>Recent Orders</span>
                 <span class="tab-count"><?php echo count($openOrders); ?></span>
             </button>
@@ -14448,7 +17834,6 @@ function buildCustomerUrl(array $overrides = []): string
 
         <div class="admin-modal-panel-body">
 
-            <!-- TAB: INFO -->
             <div class="admin-modal-tab-panel active" id="cust-panel-info">
                 <div class="admin-detail-grid">
                     <div class="admin-detail-item">
@@ -14567,7 +17952,6 @@ function buildCustomerUrl(array $overrides = []): string
                 </div>
             </div>
 
-            <!-- TAB: ADDRESSES -->
             <div class="admin-modal-tab-panel" id="cust-panel-addresses">
                 <?php if (empty($openAddresses)): ?>
                 <div class="admin-doc-empty">
@@ -14579,7 +17963,7 @@ function buildCustomerUrl(array $overrides = []): string
                 <div class="admin-address-card">
                     <div class="admin-address-label">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="" width="14"
-                            height="14" style="filter:none;">
+                            height="14" class="btn-icon-no-filter">
                         <span><?php echo htmlspecialchars((string)($addr['label'] ?? 'Address'), ENT_QUOTES, 'UTF-8'); ?></span>
                         <?php if ((int)($addr['is_default'] ?? 0) === 1): ?>
                         <span class="admin-contact-badge">Default</span>
@@ -14593,7 +17977,6 @@ function buildCustomerUrl(array $overrides = []): string
                 <?php endif; ?>
             </div>
 
-            <!-- TAB: RECENT ORDERS -->
             <div class="admin-modal-tab-panel" id="cust-panel-orders">
                 <?php if (empty($openOrders)): ?>
                 <div class="admin-doc-empty">
@@ -14625,7 +18008,7 @@ function buildCustomerUrl(array $overrides = []): string
         </div>
 
         <div class="admin-modal-footer">
-            <form method="POST" action="../backend/handlers/admin-handler.php" style="display:inline;">
+            <form method="POST" action="../backend/handlers/admin-handler.php" class="form-inline">
                 <input type="hidden" name="csrf_token"
                     value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="action" value="toggle_customer">
@@ -14645,7 +18028,7 @@ function buildCustomerUrl(array $overrides = []): string
     </div>
 </div>
 
-<script src="../assets/ui/js/dashboard.js" defer></script>
+<script src="../assets/ui/js/customers.js" defer></script>
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>
 ```
 
@@ -14662,20 +18045,17 @@ function buildCustomerUrl(array $overrides = []): string
  *
  * Overview of platform health and the moderation queue.
  *
- * Three concerns, in priority order:
- *   1. Platform counts (customers, restaurants, riders, revenue)
- *   2. Revenue trend (7-day chart)
- *   3. Moderation queue (pending riders + recently verified)
- *
- * There is deliberately NO "recent orders" panel here. Order-level
- * operations belong to the restaurant and rider dashboards. Admin
- * cares about who is on the platform and who just got approved.
- *
- * All SQL lives in admin-queries.php.
+ * All SQL lives in admin-queries.php. This page contains no SQL,
+ * no inline CSS, and no inline JS. The single style="" attribute on
+ * the chart bars is the same server-computed geometry the customer
+ * dashboard uses — a per-row value that cannot live in a static
+ * stylesheet.
  *
  * @package FitPal
- * @version 3.0 — Removed recent-orders panel. Added recently-verified
- *                activity feed.
+ * @version 4.1 — Removed every onerror fallback. Every referenced
+ *                SVG exists in shared/assets/images/icons/, so the
+ *                fallback chain was dead code and violated the
+ *                no-inline-JS rule.
  */
 
 declare(strict_types=1);
@@ -14698,7 +18078,6 @@ $firstName = (string)($adminProfile['first_name'] ?? 'Admin');
 
 $stats = getAdminDashboardStats($database_connection);
 
-// ----- Weekly revenue chart -----
 $weeklyRevenue = getAdminWeeklyRevenue($database_connection, 7);
 
 $weeklyMax = 0.0;
@@ -14715,11 +18094,9 @@ foreach ($weeklyRevenue as $d) {
     $barHeights[$d['date']] = $d['amount'] > 0 ? max(4, min(100, $pct)) : 0;
 }
 
-// ----- Pending riders (top 5) -----
 $pendingRidersData = getRidersPaginated($database_connection, 1, 5, '', 'pending');
 $pendingRiders = $pendingRidersData['rows'];
 
-// ----- Recently verified / denied (activity feed) -----
 $recentActivity = getRecentVerificationActivity($database_connection, 6);
 
 if (empty($_SESSION['csrf_token'])) {
@@ -14741,20 +18118,17 @@ $csrfToken = $_SESSION['csrf_token'];
             <div class="admin-dashboard-actions">
                 <a href="customers.php" class="btn btn-outline btn-sm">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/people-team.svg" alt="" class="btn-icon"
-                        width="16" height="16"
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg'">
+                        width="16" height="16">
                     <span>Customers</span>
                 </a>
                 <a href="riders.php" class="btn btn-outline btn-sm">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt="" class="btn-icon" width="16"
-                        height="16"
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/package.svg'">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/riding-fill.svg" alt="" class="btn-icon"
+                        width="16" height="16">
                     <span>Riders</span>
                 </a>
                 <a href="restaurants.php" class="btn btn-primary btn-sm">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt="" class="btn-icon"
-                        width="16" height="16"
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/community-general.svg'">
+                        width="16" height="16">
                     <span>Restaurants</span>
                 </a>
             </div>
@@ -14774,13 +18148,11 @@ $csrfToken = $_SESSION['csrf_token'];
         </div>
         <?php endif; ?>
 
-        <!-- STAT CARDS -->
         <section class="admin-stats-grid" aria-label="Platform statistics">
 
             <a href="customers.php" class="admin-stat-card">
                 <div class="admin-stat-icon admin-stat-icon-customers" aria-hidden="true">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/people-team.svg" alt=""
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg'">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/people-team.svg" alt="">
                 </div>
                 <div class="admin-stat-info">
                     <p class="admin-stat-number"><?php echo number_format($stats['total_customers']); ?></p>
@@ -14797,8 +18169,7 @@ $csrfToken = $_SESSION['csrf_token'];
 
             <a href="restaurants.php" class="admin-stat-card">
                 <div class="admin-stat-icon admin-stat-icon-restaurants" aria-hidden="true">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt=""
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/community-general.svg'">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt="">
                 </div>
                 <div class="admin-stat-info">
                     <p class="admin-stat-number"><?php echo number_format($stats['total_restaurants']); ?></p>
@@ -14815,8 +18186,7 @@ $csrfToken = $_SESSION['csrf_token'];
 
             <a href="riders.php" class="admin-stat-card">
                 <div class="admin-stat-icon admin-stat-icon-riders" aria-hidden="true">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt=""
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/package.svg'">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt="">
                 </div>
                 <div class="admin-stat-info">
                     <p class="admin-stat-number"><?php echo number_format($stats['total_riders']); ?></p>
@@ -14834,8 +18204,7 @@ $csrfToken = $_SESSION['csrf_token'];
 
             <div class="admin-stat-card">
                 <div class="admin-stat-icon admin-stat-icon-revenue" aria-hidden="true">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/coin-line.svg" alt=""
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/wallet-line.svg'">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/coin-line.svg" alt="">
                 </div>
                 <div class="admin-stat-info">
                     <p class="admin-stat-number"><?php echo formatAdminCurrency($stats['gross_revenue']); ?></p>
@@ -14848,7 +18217,6 @@ $csrfToken = $_SESSION['csrf_token'];
 
         </section>
 
-        <!-- CHART + PENDING RIDERS -->
         <div class="admin-dashboard-row admin-dashboard-row-primary">
 
             <section class="admin-card" aria-labelledby="admin-chart-title">
@@ -14936,8 +18304,7 @@ $csrfToken = $_SESSION['csrf_token'];
                 <?php if (empty($pendingRiders)): ?>
                 <div class="admin-empty-state">
                     <div class="admin-empty-icon" aria-hidden="true">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/verified-fill.svg" alt=""
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/check-circle-fill.svg'">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/verified-fill.svg" alt="">
                     </div>
                     <p class="admin-empty-title">All caught up</p>
                     <p class="admin-empty-text">No riders are awaiting verification.</p>
@@ -14949,13 +18316,12 @@ $csrfToken = $_SESSION['csrf_token'];
                         $riderName = adminName($r);
                         $initial = adminInitial($r);
                         $pic = (string)($r['profile_picture'] ?? '');
-                        $picUrl = $pic !== '' ? adminMediaUrl($assetBase, $pic) : '';
+                        $picUrl = $pic !== '' ? adminAssetUrl($assetBase, $pic) : '';
                     ?>
                     <a href="riders.php?status=pending&amp;open=<?php echo $riderId; ?>" class="admin-pending-row">
                         <div class="admin-pending-avatar">
                             <?php if ($picUrl !== ''): ?>
-                            <img src="<?php echo htmlspecialchars($picUrl, ENT_QUOTES, 'UTF-8'); ?>" alt=""
-                                onerror="this.onerror=null; this.style.display='none'; this.parentNode.textContent='<?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>';">
+                            <img src="<?php echo htmlspecialchars($picUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="">
                             <?php else: ?>
                             <?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>
                             <?php endif; ?>
@@ -14977,7 +18343,6 @@ $csrfToken = $_SESSION['csrf_token'];
 
         </div>
 
-        <!-- RECENT MODERATION ACTIVITY -->
         <section class="admin-card" aria-labelledby="admin-activity-title">
             <div class="admin-card-header">
                 <h2 class="heading-5" id="admin-activity-title">Recent Moderation Activity</h2>
@@ -14986,8 +18351,7 @@ $csrfToken = $_SESSION['csrf_token'];
             <?php if (empty($recentActivity)): ?>
             <div class="admin-empty-state">
                 <div class="admin-empty-icon" aria-hidden="true">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/time-update.svg" alt=""
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/update.svg'">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/time-update.svg" alt="">
                 </div>
                 <p class="admin-empty-title">No moderation activity yet</p>
                 <p class="admin-empty-text">Verification decisions will appear here.</p>
@@ -14995,7 +18359,7 @@ $csrfToken = $_SESSION['csrf_token'];
             <?php else: ?>
             <div class="admin-activity-list">
                 <?php foreach ($recentActivity as $a):
-                    $kind      = (string)$a['entity_type'];   // 'rider' or 'restaurant'
+                    $kind      = (string)$a['entity_type'];
                     $entityId  = (int)$a['entity_id'];
                     $entityName = (string)$a['entity_name'];
                     $status    = (string)$a['verification_status'];
@@ -15016,8 +18380,7 @@ $csrfToken = $_SESSION['csrf_token'];
                     <div
                         class="admin-activity-icon admin-activity-icon-<?php echo htmlspecialchars($kind, ENT_QUOTES, 'UTF-8'); ?>">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/<?php echo htmlspecialchars($iconFile, ENT_QUOTES, 'UTF-8'); ?>"
-                            alt="" width="18" height="18"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/information-fill.svg'">
+                            alt="" width="18" height="18">
                     </div>
                     <div class="admin-activity-body">
                         <p class="admin-activity-name">
@@ -15384,8 +18747,12 @@ window.FITPAL_ADMIN_PROFILE = {
  * Paginated restaurant list with verification tabs, search, and a
  * detail modal that shows branches and account holders.
  *
+ * No inline CSS. Styles come from restaurants.css. Behavior comes
+ * from restaurants.js.
+ *
  * @package FitPal
- * @version 2.0
+ * @version 3.0 — Inline styles replaced with CSS classes. Loads
+ *                restaurants.js instead of dashboard.js.
  */
 
 declare(strict_types=1);
@@ -15465,8 +18832,8 @@ function buildRestaurantUrl(array $overrides = []): string
             </div>
             <div class="admin-page-header-actions">
                 <a href="dashboard.php" class="btn btn-outline btn-sm">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt="" class="btn-icon"
-                        width="16" height="16" style="filter: none;">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt=""
+                        class="btn-icon btn-icon-no-filter btn-icon-16" width="16" height="16">
                     <span>Dashboard</span>
                 </a>
             </div>
@@ -15486,7 +18853,6 @@ function buildRestaurantUrl(array $overrides = []): string
         </div>
         <?php endif; ?>
 
-        <!-- FILTER BAR -->
         <div class="admin-filter-bar">
             <form method="GET" action="" class="admin-search-form">
                 <input type="hidden" name="status"
@@ -15495,8 +18861,8 @@ function buildRestaurantUrl(array $overrides = []): string
                     placeholder="Search by business name or cuisine…"
                     value="<?php echo htmlspecialchars($search, ENT_QUOTES, 'UTF-8'); ?>">
                 <button type="submit" class="admin-search-btn">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt="" class="btn-icon"
-                        width="14" height="14">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt=""
+                        class="btn-icon btn-icon-14" width="14" height="14">
                     <span>Search</span>
                 </button>
             </form>
@@ -15525,7 +18891,6 @@ function buildRestaurantUrl(array $overrides = []): string
             </nav>
         </div>
 
-        <!-- TABLE -->
         <div class="admin-table-card">
             <?php if (empty($rows)): ?>
             <div class="admin-table-empty">
@@ -15578,18 +18943,17 @@ function buildRestaurantUrl(array $overrides = []): string
                     </div>
 
                     <div class="admin-cell-actions">
-                        <button type="button" class="btn btn-outline btn-sm"
-                            onclick="window.location.href='<?php echo htmlspecialchars(buildRestaurantUrl(['open' => $rid]), ENT_QUOTES, 'UTF-8'); ?>'">
+                        <a href="<?php echo htmlspecialchars(buildRestaurantUrl(['open' => $rid]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="btn btn-outline btn-sm">
                             <img src="<?php echo $assetBase; ?>assets/images/icons/pages-line.svg" alt=""
-                                class="btn-icon" width="14" height="14" style="filter:none;">
+                                class="btn-icon btn-icon-no-filter btn-icon-14" width="14" height="14">
                             <span>View Details</span>
-                        </button>
+                        </a>
                     </div>
                 </div>
                 <?php endforeach; ?>
             </div>
 
-            <!-- PAGINATION -->
             <?php if ($pagination['totalPages'] > 1): ?>
             <nav class="admin-pagination" aria-label="Restaurant pagination">
                 <span class="admin-pagination-info">
@@ -15659,7 +19023,6 @@ function buildRestaurantUrl(array $overrides = []): string
     </div>
 </div>
 
-<!-- RESTAURANT DETAILS MODAL -->
 <div class="admin-modal <?php echo $openRestaurant ? 'is-open' : ''; ?>" id="restaurantDetailsModal"
     aria-hidden="<?php echo $openRestaurant ? 'false' : 'true'; ?>" role="dialog">
     <div class="admin-modal-backdrop"
@@ -15697,18 +19060,18 @@ function buildRestaurantUrl(array $overrides = []): string
         <div class="admin-modal-tabs">
             <button type="button" class="admin-modal-tab active" data-tab-target="rest-panel-info">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt="" width="14" height="14"
-                    style="filter:none;">
+                    class="btn-icon-no-filter">
                 <span>Info</span>
             </button>
             <button type="button" class="admin-modal-tab" data-tab-target="rest-panel-branches">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="" width="14" height="14"
-                    style="filter:none;">
+                    class="btn-icon-no-filter">
                 <span>Branches</span>
                 <span class="tab-count"><?php echo count($openBranches); ?></span>
             </button>
             <button type="button" class="admin-modal-tab" data-tab-target="rest-panel-accounts">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/people-team.svg" alt="" width="14" height="14"
-                    style="filter:none;">
+                    class="btn-icon-no-filter">
                 <span>Accounts</span>
                 <span class="tab-count"><?php echo count($openAccounts); ?></span>
             </button>
@@ -15716,7 +19079,6 @@ function buildRestaurantUrl(array $overrides = []): string
 
         <div class="admin-modal-panel-body">
 
-            <!-- TAB: INFO -->
             <div class="admin-modal-tab-panel active" id="rest-panel-info">
                 <div class="admin-detail-grid">
                     <div class="admin-detail-item admin-detail-item-full">
@@ -15794,7 +19156,6 @@ function buildRestaurantUrl(array $overrides = []): string
                 </div>
             </div>
 
-            <!-- TAB: BRANCHES -->
             <div class="admin-modal-tab-panel" id="rest-panel-branches">
                 <?php if (empty($openBranches)): ?>
                 <div class="admin-doc-empty">
@@ -15806,9 +19167,9 @@ function buildRestaurantUrl(array $overrides = []): string
                 <div class="admin-address-card">
                     <div class="admin-address-label">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/building.svg" alt="" width="14"
-                            height="14" style="filter:none;">
+                            height="14" class="btn-icon-no-filter">
                         <span><?php echo htmlspecialchars((string)$b['branch_name'], ENT_QUOTES, 'UTF-8'); ?></span>
-                        <span class="admin-contact-badge" style="background: var(--gray-200); color: var(--gray-600);">
+                        <span class="admin-contact-badge branch-code-badge">
                             <?php echo htmlspecialchars((string)$b['branch_code'], ENT_QUOTES, 'UTF-8'); ?>
                         </span>
                         <span
@@ -15830,7 +19191,7 @@ function buildRestaurantUrl(array $overrides = []): string
                         echo htmlspecialchars(implode(', ', $parts) ?: '—', ENT_QUOTES, 'UTF-8');
                         ?>
                     </p>
-                    <div class="admin-cell-meta" style="margin-top:6px;">
+                    <div class="admin-cell-meta admin-cell-meta-spaced">
                         <span class="admin-cell-meta-item">
                             <?php echo number_format((int)($b['product_count'] ?? 0)); ?> products
                         </span>
@@ -15843,7 +19204,6 @@ function buildRestaurantUrl(array $overrides = []): string
                 <?php endif; ?>
             </div>
 
-            <!-- TAB: ACCOUNTS -->
             <div class="admin-modal-tab-panel" id="rest-panel-accounts">
                 <?php if (empty($openAccounts)): ?>
                 <div class="admin-doc-empty">
@@ -15879,7 +19239,7 @@ function buildRestaurantUrl(array $overrides = []): string
         </div>
 
         <div class="admin-modal-footer">
-            <form method="POST" action="../backend/handlers/admin-handler.php" style="display:inline;">
+            <form method="POST" action="../backend/handlers/admin-handler.php" class="form-inline">
                 <input type="hidden" name="csrf_token"
                     value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="action" value="set_restaurant_verification">
@@ -15892,7 +19252,7 @@ function buildRestaurantUrl(array $overrides = []): string
                 </button>
             </form>
 
-            <form method="POST" action="../backend/handlers/admin-handler.php" style="display:inline;">
+            <form method="POST" action="../backend/handlers/admin-handler.php" class="form-inline">
                 <input type="hidden" name="csrf_token"
                     value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="action" value="set_restaurant_verification">
@@ -15905,7 +19265,7 @@ function buildRestaurantUrl(array $overrides = []): string
                 </button>
             </form>
 
-            <form method="POST" action="../backend/handlers/admin-handler.php" style="display:inline;">
+            <form method="POST" action="../backend/handlers/admin-handler.php" class="form-inline">
                 <input type="hidden" name="csrf_token"
                     value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="action" value="toggle_restaurant">
@@ -15925,7 +19285,7 @@ function buildRestaurantUrl(array $overrides = []): string
     </div>
 </div>
 
-<script src="../assets/ui/js/dashboard.js" defer></script>
+<script src="../assets/ui/js/restaurants.js" defer></script>
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>
 ```
 
@@ -15941,12 +19301,16 @@ function buildRestaurantUrl(array $overrides = []): string
  * FitPal Admin — Riders List
  *
  * Paginated rider list with verification tabs. Row actions trigger
- * the confirm modal, not window.confirm(). The detail modal has two
- * tabs: Information and Documents. Documents uses its own 5-per-page
+ * the confirm modal. The detail modal has three tabs: Information,
+ * Documents, and Deliveries. Documents uses its own 5-per-page
  * pagination so profile picture and license photos are readable.
  *
+ * No inline CSS. Styles come from riders.css. Behavior comes from
+ * riders.js.
+ *
  * @package FitPal
- * @version 2.0
+ * @version 3.0 — Inline styles replaced with CSS classes. Loads
+ *                riders.js instead of dashboard.js.
  */
 
 declare(strict_types=1);
@@ -15982,7 +19346,6 @@ $data   = getRidersPaginated($database_connection, $page, $perPage, $search, $st
 $rows   = $data['rows'];
 $pagination = $data;
 
-// Detail modal loads
 $openRider = null;
 $openAddress = null;
 $openContacts = [];
@@ -16004,9 +19367,6 @@ if (empty($_SESSION['csrf_token'])) {
 }
 $csrfToken = $_SESSION['csrf_token'];
 
-/**
- * Build a query string preserving filters.
- */
 function buildRiderUrl(array $overrides = []): string
 {
     $params = [
@@ -16025,10 +19385,6 @@ function buildRiderUrl(array $overrides = []): string
     return '?' . http_build_query($params);
 }
 
-/**
- * A rider's media URL: strip the trailing 'shared/' from $assetBase
- * to get the project root, then append the DB-relative path.
- */
 function riderMediaUrl(string $assetBase, string $relPath): string
 {
     if ($relPath === '') return '';
@@ -16047,8 +19403,8 @@ function riderMediaUrl(string $assetBase, string $relPath): string
             </div>
             <div class="admin-page-header-actions">
                 <a href="dashboard.php" class="btn btn-outline btn-sm">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt="" class="btn-icon"
-                        width="16" height="16" style="filter: none;">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt=""
+                        class="btn-icon btn-icon-no-filter btn-icon-16" width="16" height="16">
                     <span>Dashboard</span>
                 </a>
             </div>
@@ -16068,7 +19424,6 @@ function riderMediaUrl(string $assetBase, string $relPath): string
         </div>
         <?php endif; ?>
 
-        <!-- FILTER BAR -->
         <div class="admin-filter-bar">
             <form method="GET" action="" class="admin-search-form">
                 <input type="hidden" name="status"
@@ -16077,8 +19432,8 @@ function riderMediaUrl(string $assetBase, string $relPath): string
                     placeholder="Search by name, email, or username…"
                     value="<?php echo htmlspecialchars($search, ENT_QUOTES, 'UTF-8'); ?>">
                 <button type="submit" class="admin-search-btn">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt="" class="btn-icon"
-                        width="14" height="14">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt=""
+                        class="btn-icon btn-icon-14" width="14" height="14">
                     <span>Search</span>
                 </button>
             </form>
@@ -16107,7 +19462,6 @@ function riderMediaUrl(string $assetBase, string $relPath): string
             </nav>
         </div>
 
-        <!-- TABLE -->
         <div class="admin-table-card">
             <?php if (empty($rows)): ?>
             <div class="admin-table-empty">
@@ -16180,18 +19534,17 @@ function riderMediaUrl(string $assetBase, string $relPath): string
                     </div>
 
                     <div class="admin-cell-actions">
-                        <button type="button" class="btn btn-outline btn-sm"
-                            onclick="window.location.href='<?php echo htmlspecialchars(buildRiderUrl(['open' => $rid, 'doc_page' => 1]), ENT_QUOTES, 'UTF-8'); ?>'">
+                        <a href="<?php echo htmlspecialchars(buildRiderUrl(['open' => $rid, 'doc_page' => 1]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="btn btn-outline btn-sm">
                             <img src="<?php echo $assetBase; ?>assets/images/icons/pages-line.svg" alt=""
-                                class="btn-icon" width="14" height="14" style="filter:none;">
+                                class="btn-icon btn-icon-no-filter btn-icon-14" width="14" height="14">
                             <span>View Details</span>
-                        </button>
+                        </a>
                     </div>
                 </div>
                 <?php endforeach; ?>
             </div>
 
-            <!-- PAGINATION -->
             <?php if ($pagination['totalPages'] > 1): ?>
             <nav class="admin-pagination" aria-label="Rider pagination">
                 <span class="admin-pagination-info">
@@ -16261,9 +19614,6 @@ function riderMediaUrl(string $assetBase, string $relPath): string
     </div>
 </div>
 
-<!-- ============================================
-     RIDER DETAILS MODAL
-     ============================================ -->
 <div class="admin-modal <?php echo $openRider ? 'is-open' : ''; ?>" id="riderDetailsModal"
     aria-hidden="<?php echo $openRider ? 'false' : 'true'; ?>" role="dialog">
     <div class="admin-modal-backdrop"
@@ -16297,7 +19647,6 @@ function riderMediaUrl(string $assetBase, string $relPath): string
         $openVerification = (string)($openRider['verification_status'] ?? 'pending');
         $openIsActive = (int)$openRider['is_active'] === 1;
 
-        // Documents tab pagination: 5 per page.
         $docsPerPage = 5;
         $totalDocs = count($openDocuments);
         $totalDocPages = max(1, (int)ceil($totalDocs / $docsPerPage));
@@ -16309,18 +19658,18 @@ function riderMediaUrl(string $assetBase, string $relPath): string
         <div class="admin-modal-tabs">
             <button type="button" class="admin-modal-tab active" data-tab-target="rider-panel-info">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/file-user-line.svg" alt="" width="14" height="14"
-                    style="filter:none;">
+                    class="btn-icon-no-filter">
                 <span>Information</span>
             </button>
             <button type="button" class="admin-modal-tab" data-tab-target="rider-panel-documents">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/file-image-line.svg" alt="" width="14"
-                    height="14" style="filter:none;">
+                    height="14" class="btn-icon-no-filter">
                 <span>Documents</span>
                 <span class="tab-count"><?php echo $totalDocs; ?></span>
             </button>
             <button type="button" class="admin-modal-tab" data-tab-target="rider-panel-deliveries">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt="" width="14" height="14"
-                    style="filter:none;">
+                    class="btn-icon-no-filter">
                 <span>Deliveries</span>
                 <span class="tab-count"><?php echo count($openDeliveries); ?></span>
             </button>
@@ -16328,7 +19677,6 @@ function riderMediaUrl(string $assetBase, string $relPath): string
 
         <div class="admin-modal-panel-body">
 
-            <!-- TAB: INFORMATION -->
             <div class="admin-modal-tab-panel active" id="rider-panel-info">
                 <div class="admin-detail-grid">
                     <div class="admin-detail-item">
@@ -16422,7 +19770,7 @@ function riderMediaUrl(string $assetBase, string $relPath): string
 
                 <h3 class="admin-section-heading">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="" width="14"
-                        height="14" style="filter:none;">
+                        height="14" class="btn-icon-no-filter">
                     Primary Address
                 </h3>
                 <?php if ($openAddress): ?>
@@ -16437,7 +19785,7 @@ function riderMediaUrl(string $assetBase, string $relPath): string
 
                 <h3 class="admin-section-heading">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg" alt="" width="14"
-                        height="14" style="filter:none;">
+                        height="14" class="btn-icon-no-filter">
                     Emergency Contacts
                     <span class="section-count"><?php echo count($openContacts); ?></span>
                 </h3>
@@ -16454,7 +19802,7 @@ function riderMediaUrl(string $assetBase, string $relPath): string
                         <?php if ($idx === 0): ?>
                         <span class="admin-contact-badge">Primary</span>
                         <?php endif; ?>
-                        <span class="admin-contact-badge" style="background: rgba(23,162,184,0.12); color: #0c5460;">
+                        <span class="admin-contact-badge relationship-badge-info">
                             <?php echo htmlspecialchars((string)($c['relationship'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
                         </span>
                     </div>
@@ -16471,7 +19819,6 @@ function riderMediaUrl(string $assetBase, string $relPath): string
                 <?php endif; ?>
             </div>
 
-            <!-- TAB: DOCUMENTS -->
             <div class="admin-modal-tab-panel" id="rider-panel-documents">
                 <?php if ($totalDocs === 0): ?>
                 <div class="admin-doc-empty">
@@ -16553,7 +19900,6 @@ function riderMediaUrl(string $assetBase, string $relPath): string
                 <?php endif; ?>
             </div>
 
-            <!-- TAB: DELIVERIES -->
             <div class="admin-modal-tab-panel" id="rider-panel-deliveries">
                 <?php if (empty($openDeliveries)): ?>
                 <div class="admin-doc-empty">
@@ -16587,7 +19933,7 @@ function riderMediaUrl(string $assetBase, string $relPath): string
         </div>
 
         <div class="admin-modal-footer">
-            <form method="POST" action="../backend/handlers/admin-handler.php" style="display:inline;">
+            <form method="POST" action="../backend/handlers/admin-handler.php" class="form-inline">
                 <input type="hidden" name="csrf_token"
                     value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="action" value="set_rider_verification">
@@ -16600,7 +19946,7 @@ function riderMediaUrl(string $assetBase, string $relPath): string
                 </button>
             </form>
 
-            <form method="POST" action="../backend/handlers/admin-handler.php" style="display:inline;">
+            <form method="POST" action="../backend/handlers/admin-handler.php" class="form-inline">
                 <input type="hidden" name="csrf_token"
                     value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="action" value="set_rider_verification">
@@ -16613,7 +19959,7 @@ function riderMediaUrl(string $assetBase, string $relPath): string
                 </button>
             </form>
 
-            <form method="POST" action="../backend/handlers/admin-handler.php" style="display:inline;">
+            <form method="POST" action="../backend/handlers/admin-handler.php" class="form-inline">
                 <input type="hidden" name="csrf_token"
                     value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="action" value="toggle_rider">
@@ -16633,7 +19979,7 @@ function riderMediaUrl(string $assetBase, string $relPath): string
     </div>
 </div>
 
-<script src="../assets/ui/js/dashboard.js" defer></script>
+<script src="../assets/ui/js/riders.js" defer></script>
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>
 ```
 
@@ -16649,7 +19995,8 @@ function riderMediaUrl(string $assetBase, string $relPath): string
  * FitPal Admin Sign-In Page
  *
  * @package FitPal
- * @version 2.0
+ * @version 3.0 — Removed the inline <script> block. The sign-in JS
+ *                lives entirely in admin/assets/ui/js/sign-in.js.
  */
 
 declare(strict_types=1);
@@ -16731,54 +20078,7 @@ $identifierValue = htmlspecialchars((string)($_POST['identifier'] ?? ''), ENT_QU
     </div>
 </div>
 
-<script>
-(function() {
-    'use strict';
-    var form = document.getElementById('signInForm');
-    var toggle = document.getElementById('togglePassword');
-    var password = document.getElementById('password');
-    var icon = document.getElementById('passwordIcon');
-    if (toggle && password && icon) {
-        toggle.addEventListener('click', function() {
-            var isPwd = password.type === 'password';
-            password.type = isPwd ? 'text' : 'password';
-            icon.src = isPwd ?
-                '../../shared/assets/images/icons/password-unhide.svg' :
-                '../../shared/assets/images/icons/password-hide.svg';
-        });
-    }
-    if (form) {
-        form.addEventListener('submit', function(e) {
-            var ident = document.getElementById('identifier');
-            var idErr = document.getElementById('identifierError');
-            var pwdErr = document.getElementById('passwordError');
-            [ident, password].forEach(function(el) {
-                if (el) el.classList.remove('error');
-            });
-            [idErr, pwdErr].forEach(function(el) {
-                if (el) {
-                    el.textContent = '';
-                    el.style.display = 'none';
-                }
-            });
-            var ok = true;
-            if (!ident.value.trim()) {
-                ident.classList.add('error');
-                idErr.textContent = 'Please enter your email or username.';
-                idErr.style.display = 'block';
-                ok = false;
-            }
-            if (!password.value) {
-                password.classList.add('error');
-                pwdErr.textContent = 'Please enter your password.';
-                pwdErr.style.display = 'block';
-                ok = false;
-            }
-            if (!ok) e.preventDefault();
-        });
-    }
-})();
-</script>
+<script src="../assets/ui/js/sign-in.js" defer></script>
 
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>
 ```
@@ -60773,13 +64073,12 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
  *
  * Riders do NOT have a cart, so there is no .nav-badge rule here.
  *
+ * Includes the logout confirmation modal styles at the bottom,
+ * mirroring the restaurant header.
+ *
  * @package FitPal
- * @version 2.0 — Rebuilt from scratch to match the customer header
- *                layout. Removed leftover Git merge markers, the
- *                malformed nested docblock, and the duplicated
- *                .rider-header block that caused the stylesheet to
- *                parse incorrectly (and the profile page to lose
- *                its background).
+ * @version 3.0 — Adds logout confirmation modal styles, mobile user
+ *                greeting link variant.
  */
 
 /* ============================================
@@ -60855,6 +64154,7 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
     border: 2px solid transparent;
     cursor: pointer;
     white-space: nowrap;
+    font-family: inherit;
 }
 
 .rider-header .btn-sm {
@@ -61056,6 +64356,10 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
     text-decoration: none;
     text-align: center;
     width: 100%;
+    font-family: inherit;
+    border: none;
+    background: none;
+    cursor: pointer;
 }
 
 .mobile-nav-link:hover {
@@ -61075,10 +64379,15 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
 }
 
 /* ============================================
-   MOBILE USER GREETING
+   MOBILE USER GREETING — link variant
    ============================================ */
 
 .mobile-user-greeting {
+    display: block;
+    padding: 0;
+}
+
+.mobile-user-greeting-link {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -61087,6 +64396,14 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
     background: var(--gray-50);
     border-radius: var(--radius-base);
     width: 100%;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.15s ease;
+    box-sizing: border-box;
+}
+
+.mobile-user-greeting-link:hover {
+    background: var(--gray-100);
 }
 
 .mobile-user-avatar {
@@ -61165,7 +64482,7 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
     flex-shrink: 0;
     border: 2px solid var(--primary);
     transition: all var(--transition-fast);
-    cursor: default;
+    text-decoration: none;
 }
 
 .user-profile-circle:hover {
@@ -61253,6 +64570,146 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
         font-size: var(--font-size-base);
     }
 }
+
+/* ============================================
+   LOGOUT CONFIRMATION MODAL
+   ============================================ */
+
+.logout-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.logout-modal.active {
+    opacity: 1;
+}
+
+.logout-modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(5, 10, 4, 0.6);
+    cursor: pointer;
+}
+
+.logout-modal-content {
+    position: relative;
+    background: var(--white);
+    border-radius: var(--radius-xl);
+    padding: 32px 24px 24px;
+    max-width: 420px;
+    width: 100%;
+    text-align: center;
+    box-shadow: var(--shadow-xl);
+    transform: scale(0.95) translateY(-10px);
+    opacity: 0;
+    transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s ease;
+    box-sizing: border-box;
+}
+
+.logout-modal.active .logout-modal-content {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+}
+
+.logout-modal-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 16px;
+    background: rgba(220, 53, 69, 0.1);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.logout-modal-icon img {
+    width: 28px;
+    height: 28px;
+    display: block;
+    filter: brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(600%) hue-rotate(330deg) brightness(90%) contrast(85%);
+}
+
+.logout-modal-title {
+    margin: 0 0 8px 0;
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--text);
+}
+
+.logout-modal-text {
+    margin: 0 0 24px 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    line-height: 1.6;
+}
+
+.logout-modal-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.logout-btn-cancel,
+.logout-btn-confirm {
+    flex: 1;
+    padding: 12px 20px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    font-family: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid transparent;
+    min-height: 46px;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.logout-btn-cancel {
+    background: #1a1a1a;
+    color: #ffffff;
+    border-color: #1a1a1a;
+}
+
+.logout-btn-cancel:hover {
+    background: #000000;
+    border-color: #000000;
+}
+
+.logout-btn-confirm {
+    background: var(--danger);
+    color: #ffffff;
+    border-color: var(--danger);
+}
+
+.logout-btn-confirm:hover {
+    background: #b91c1c;
+    border-color: #b91c1c;
+}
+
+@media (max-width: 480px) {
+    .logout-modal-content {
+        padding: 24px 18px 18px;
+    }
+
+    .logout-modal-actions {
+        flex-direction: column-reverse;
+    }
+
+    .logout-btn-cancel,
+    .logout-btn-confirm {
+        width: 100%;
+    }
+}
 ```
 
 ---
@@ -61279,11 +64736,13 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
  *           .card-header / .card-body
  *       .logout-wrap
  *
+ * Includes the logout button styled to match the header's modal-
+ * triggered sign-out. The button carries data-logout-trigger so the
+ * shared logout.js intercepts it before navigation.
+ *
  * @package FitPal
- * @version 3.0 — Full rebuild. Removed the malformed nested docblock,
- *                the leftover Git merge markers, the duplicated
- *                .profile-card-header rule, and the unbalanced braces
- *                that caused the page background to disappear.
+ * @version 3.2 — Adds logout button styles matching the confirmation
+ *                modal flow.
  */
 
 /* ============================================
@@ -61887,11 +65346,30 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
     white-space: nowrap;
 }
 
-.badge-success   { background: #d4edda; color: #155724; }
-.badge-warning   { background: #fff3cd; color: #856404; }
-.badge-danger    { background: #f8d7da; color: #721c24; }
-.badge-secondary { background: var(--gray-200); color: var(--gray-600); }
-.badge-primary   { background: var(--primary); color: var(--white); }
+.badge-success {
+    background: #d4edda;
+    color: #155724;
+}
+
+.badge-warning {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.badge-danger {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.badge-secondary {
+    background: var(--gray-200);
+    color: var(--gray-600);
+}
+
+.badge-primary {
+    background: var(--primary);
+    color: var(--white);
+}
 
 /* ============================================
    EMPTY STATE
@@ -62019,13 +65497,27 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
 }
 
 @keyframes riderToastIn {
-    from { transform: translateX(120%); opacity: 0; }
-    to   { transform: translateX(0);    opacity: 1; }
+    from {
+        transform: translateX(120%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
 }
 
 @keyframes riderToastOut {
-    from { transform: translateX(0);    opacity: 1; }
-    to   { transform: translateX(120%); opacity: 0; }
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+
+    to {
+        transform: translateX(120%);
+        opacity: 0;
+    }
 }
 
 /* ============================================
@@ -62251,6 +65743,7 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
    ============================================ */
 
 @media (prefers-reduced-motion: reduce) {
+
     .profile-tab,
     .btn-edit,
     .logout-btn,
@@ -65350,6 +68843,80 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
         }
     })();
 
+})();
+```
+
+---
+
+## File: `fitpal/rider/assets/ui/js/logout.js`
+
+**Status:** `FOUND`
+
+```javascript
+/**
+ * FitPal Rider Logout Confirmation
+ *
+ * Intercepts clicks on [data-logout-trigger] elements and shows a
+ * Yes/No confirmation modal. The modal's confirm anchor navigates to
+ * sign-out-handler.php. Cancel closes the modal.
+ *
+ * The modal markup is rendered by includes/header.php on every
+ * authenticated page, so this script works everywhere.
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+(function () {
+    'use strict';
+
+    document.addEventListener('DOMContentLoaded', function () {
+
+        var modal = document.getElementById('logoutModal');
+        if (!modal) return;
+
+        var confirmBtn = modal.querySelector('.logout-btn-confirm');
+        var cancelNodes = modal.querySelectorAll('[data-logout-cancel]');
+        var triggers = document.querySelectorAll('[data-logout-trigger]');
+
+        function openModal() {
+            document.body.style.overflow = 'hidden';
+            modal.style.display = 'flex';
+            void modal.offsetWidth;
+            modal.classList.add('active');
+            if (confirmBtn) setTimeout(function () { confirmBtn.focus(); }, 80);
+        }
+
+        function closeModal() {
+            modal.classList.remove('active');
+            setTimeout(function () {
+                if (!modal.classList.contains('active')) {
+                    modal.style.display = 'none';
+                    document.body.style.overflow = '';
+                }
+            }, 220);
+        }
+
+        triggers.forEach(function (trigger) {
+            trigger.addEventListener('click', function (e) {
+                e.preventDefault();
+                openModal();
+            });
+        });
+
+        cancelNodes.forEach(function (node) {
+            node.addEventListener('click', function (e) {
+                e.preventDefault();
+                closeModal();
+            });
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modal.classList.contains('active')) {
+                closeModal();
+            }
+        });
+    });
 })();
 ```
 
@@ -69175,17 +72742,18 @@ try {
  * FitPal Rider Header
  *
  * Rider-specific header with conditional navigation based on login
- * status. Mirrors customer/includes/header.php so the two roles stay
- * consistent in behavior, asset resolution, and CSS load order.
+ * status. Mirrors customer/includes/header.php and
+ * restaurant/includes/header.php so all roles stay consistent.
  *
  * Rider users do NOT have a cart, so there is no cart badge and no
  * cart-count query here. The nav reflects rider-only surfaces:
  * Dashboard, Deliveries, Earnings, and Profile.
  *
  * @package FitPal
- * @version 1.3 — Mirrors the customer header exactly in load order
- *                and asset resolution. Removed duplicate CSS load
- *                comments. Bumped version to match the CSS rebuild.
+ * @version 1.4 — Adds logout confirmation modal (mirrors the
+ *                restaurant header). Desktop avatar and mobile
+ *                greeting link to profile.php. Logout triggers use
+ *                data-logout-trigger so logout.js can intercept.
  */
 
 declare(strict_types=1);
@@ -69335,8 +72903,9 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
                 </ul>
 
                 <div class="nav-actions">
-                    <div class="user-profile-circle"
-                        title="<?php echo htmlspecialchars($riderName, ENT_QUOTES, 'UTF-8'); ?>">
+                    <a href="profile.php" class="user-profile-circle"
+                        title="<?php echo htmlspecialchars($riderName, ENT_QUOTES, 'UTF-8'); ?>"
+                        aria-label="Go to profile">
                         <?php if (!empty($riderInitial)): ?>
                         <span
                             class="user-initial"><?php echo htmlspecialchars($riderInitial, ENT_QUOTES, 'UTF-8'); ?></span>
@@ -69344,9 +72913,10 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
                         <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="Profile"
                             class="profile-icon">
                         <?php endif; ?>
-                    </div>
-                    <a href="../backend/handlers/sign-out-handler.php" data-signout
-                        class="btn btn-outline btn-sm logout-btn">Logout</a>
+                    </a>
+                    <button type="button" class="btn btn-outline btn-sm logout-btn" data-logout-trigger>
+                        Logout
+                    </button>
                 </div>
 
                 <?php else: ?>
@@ -69380,15 +72950,19 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
 
             <?php if ($isLoggedIn): ?>
             <li class="mobile-nav-item mobile-user-greeting">
-                <div class="mobile-user-avatar">
-                    <?php if (!empty($riderInitial)): ?>
-                    <span
-                        class="user-initial-large"><?php echo htmlspecialchars($riderInitial, ENT_QUOTES, 'UTF-8'); ?></span>
-                    <?php else: ?>
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="Profile">
-                    <?php endif; ?>
-                </div>
-                <span class="mobile-user-name"><?php echo htmlspecialchars($riderName, ENT_QUOTES, 'UTF-8'); ?></span>
+                <a href="profile.php" class="mobile-user-greeting-link">
+                    <div class="mobile-user-avatar">
+                        <?php if (!empty($riderInitial)): ?>
+                        <span
+                            class="user-initial-large"><?php echo htmlspecialchars($riderInitial, ENT_QUOTES, 'UTF-8'); ?></span>
+                        <?php else: ?>
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt="Profile">
+                        <?php endif; ?>
+                    </div>
+                    <span class="mobile-user-name">
+                        <?php echo htmlspecialchars($riderName, ENT_QUOTES, 'UTF-8'); ?>
+                    </span>
+                </a>
             </li>
             <li class="mobile-nav-divider"></li>
             <li class="mobile-nav-item">
@@ -69409,8 +72983,9 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
             </li>
             <li class="mobile-nav-divider"></li>
             <li class="mobile-nav-item">
-                <a href="../backend/handlers/sign-out-handler.php" data-signout
-                    class="mobile-nav-link mobile-logout">Logout</a>
+                <button type="button" class="mobile-nav-link mobile-logout" data-logout-trigger>
+                    Logout
+                </button>
             </li>
 
             <?php else: ?>
@@ -69431,9 +73006,32 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
         </ul>
     </nav>
 
+    <!-- ============================================
+         LOGOUT CONFIRMATION MODAL
+         ============================================ -->
+    <div class="logout-modal" id="logoutModal" style="display: none;" role="dialog" aria-modal="true"
+        aria-labelledby="logoutModalTitle">
+        <div class="logout-modal-overlay" data-logout-cancel></div>
+        <div class="logout-modal-content">
+            <div class="logout-modal-icon" aria-hidden="true">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/logoutsvg.svg" alt=""
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/information-fill.svg'">
+            </div>
+            <p class="logout-modal-title" id="logoutModalTitle">Sign out?</p>
+            <p class="logout-modal-text">You'll need to sign in again to access the rider dashboard.</p>
+            <div class="logout-modal-actions">
+                <button type="button" class="logout-btn-cancel" data-logout-cancel>Cancel</button>
+                <a href="../backend/handlers/sign-out-handler.php" class="logout-btn-confirm">
+                    Yes, sign out
+                </a>
+            </div>
+        </div>
+    </div>
+
     <main class="main-content" role="main">
 
         <script src="../assets/ui/js/header.js" defer></script>
+        <script src="../assets/ui/js/logout.js" defer></script>
 ```
 
 ---
@@ -70749,17 +74347,16 @@ window.FITPAL_RIDER_EARNINGS = {
  *   - edit-in-place contact number
  *   - vehicle snapshot (read-only)
  *   - address snapshot (read-only, contact support to change)
- *   - logout row
+ *   - logout row (uses confirmation modal via header's logout.js)
  *
  * No inline SQL. All reads go through rider-queries.php.
  * $assetBase is defined by rider/includes/header.php, so the header
  * is required before any code that depends on it.
  *
  * @package FitPal
- * @version 3.0 — Full rebuild. Removed the broken vehicle card and
- *                malformed tab structure. Three tabs now: Personal,
- *                Vehicle, Address. Everything the page renders is
- *                a class defined in rider/assets/css/profile.css.
+ * @version 3.1 — Profile page logout now goes through the shared
+ *                confirmation modal. The button carries
+ *                data-logout-trigger so logout.js intercepts it.
  */
 
 declare(strict_types=1);
@@ -71132,12 +74729,12 @@ $plateLabel   = $plate !== '' ? $plate : 'No plate recorded';
              LOGOUT
              ============================================ -->
         <div class="logout-wrap">
-            <a href="../backend/handlers/sign-out-handler.php" class="btn btn-cancel logout-btn">
+            <button type="button" class="btn btn-cancel logout-btn" data-logout-trigger>
                 <img src="<?php echo $assetBase; ?>assets/images/icons/logoutsvg.svg" alt="" class="btn-icon" width="16"
                     height="16"
                     onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/cancel.svg'">
                 <span>Sign Out</span>
-            </a>
+            </button>
         </div>
 
     </div>

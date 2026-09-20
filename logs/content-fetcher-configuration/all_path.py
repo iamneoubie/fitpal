@@ -9,12 +9,16 @@ filesToCheck = [
 
     # ===== admin/assets/css =====
     "/admin/assets/css/admin-tables.css",
+    "/admin/assets/css/customers.css",
     "/admin/assets/css/dashboard.css",
     "/admin/assets/css/header.css",
     "/admin/assets/css/profile.css",
+    "/admin/assets/css/restaurants.css",
+    "/admin/assets/css/riders.css",
     "/admin/assets/css/sign-in.css",
 
     # ===== admin/assets/ui/js =====
+    "/admin/assets/ui/js/customers.js",
     "/admin/assets/ui/js/dashboard.js",
     "/admin/assets/ui/js/header.js",
     "/admin/assets/ui/js/profile.js",
@@ -165,6 +169,7 @@ filesToCheck = [
     "/rider/assets/ui/js/deliveries.js",
     "/rider/assets/ui/js/earnings.js",
     "/rider/assets/ui/js/header.js",
+    "/rider/assets/ui/js/logout.js",
     "/rider/assets/ui/js/profile.js",
     "/rider/assets/ui/js/sign-in.js",
     "/rider/assets/ui/js/sign-up.js",
@@ -221,11 +226,4 @@ filesToCheck = [
     "/shared/pages/contact.php",
     "/shared/pages/privacy-policy.php",
     "/shared/pages/terms-conditions.php",
-
-    # # ===== test/customer =====
-    # "/test/customer/cart-test.php",
-    # "/test/customer/menu-test.php",
-    # "/test/customer/product-detail-test.php",
-    # "/test/customer/sign-in-test.php",
-    # "/test/customer/sign-up-test.php",
 ]

@@ -1,7 +1,7 @@
 # Web Project Structure
 
 **Project:** fitpal
-**Generated:** 2026-09-21 00:11:29
+**Generated:** 2026-09-21 00:37:16
 **Mode:** all
 
 ```
@@ -11,12 +11,16 @@ fitpal/
 │   ├── assets/
 │   │   ├── css/
 │   │   │   ├── admin-tables.css
+│   │   │   ├── customers.css
 │   │   │   ├── dashboard.css
 │   │   │   ├── header.css
 │   │   │   ├── profile.css
+│   │   │   ├── restaurants.css
+│   │   │   ├── riders.css
 │   │   │   └── sign-in.css
 │   │   └── ui/
 │   │       └── js/
+│   │           ├── customers.js
 │   │           ├── dashboard.js
 │   │           ├── header.js
 │   │           ├── profile.js
@@ -114,13 +118,15 @@ fitpal/
 │       └── wallet.php
 ├── logs/
 │   ├── content-fetcher-configuration/
-│   │   └── all_path.py
+│   │   ├── all_path.py
+│   │   └── restaurant.py
 │   ├── instructions/
 │   │   ├── test-create-guide.md
 │   │   └── updating-fetcher-guide.md
 │   ├── output/
 │   │   ├── all_path_fetched_codebase.md
-│   │   └── project_structure.md
+│   │   ├── project_structure.md
+│   │   └── restaurant_fetched_codebase.md
 │   ├── content-fetcher.py
 │   └── tree-mapper.py
 ├── restaurant/
@@ -172,6 +178,7 @@ fitpal/
 │   │           ├── deliveries.js
 │   │           ├── earnings.js
 │   │           ├── header.js
+│   │           ├── logout.js
 │   │           ├── profile.js
 │   │           ├── sign-in.js
 │   │           └── sign-up.js
@@ -379,7 +386,6 @@ fitpal/
 │   │   ├── privacy-policy.php
 │   │   └── terms-conditions.php
 │   └── uploads/
-│       └── restaurant-permits/
 ├── sql/
 │   ├── sample/
 │   │   └── seed-data.sql
@@ -403,15 +409,15 @@ fitpal/
 |-----------|-------|
 | HTML Files | 0 |
 | PHP Files | 88 |
-| CSS Files | 41 |
-| JavaScript Files | 34 |
+| CSS Files | 44 |
+| JavaScript Files | 36 |
 | JSON Files | 0 |
-| Text/Markdown | 5 |
+| Text/Markdown | 6 |
 | Image Files | 147 |
-| Other Files | 8 |
+| Other Files | 9 |
 
-**Total Directories:** 65
-**Total Files:** 322
+**Total Directories:** 64
+**Total Files:** 329
 
 ---
 

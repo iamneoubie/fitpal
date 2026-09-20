@@ -8,12 +8,25 @@
  * Riders do NOT have a cart, so there is no .nav-badge rule here.
  *
  * Includes the logout confirmation modal styles at the bottom,
- * mirroring the restaurant header.
+ * mirroring the restaurant and customer headers.
+ *
+ * Reserves the scrollbar gutter on <html> so hiding the body
+ * scrollbar when the logout modal opens does not shift the page.
  *
  * @package FitPal
- * @version 3.0 — Adds logout confirmation modal styles, mobile user
- *                greeting link variant.
+ * @version 3.1 - scrollbar-gutter: stable added so the logout modal
+ *                does not reflow the page behind it. Matches the fix
+ *                already applied to customer/assets/css/header.css.
  */
+
+/* Reserve the scrollbar gutter permanently. With this in place, the
+   viewport's usable width is identical whether a scrollbar is visible
+   or not, so nothing reflows when the body scrollbar is hidden by a
+   modal scroll lock. This is the same guard used by cart.css,
+   orders.css, and wallet.css on the customer side. */
+html {
+    scrollbar-gutter: stable;
+}
 
 /* ============================================
    RIDER HEADER OVERRIDES
@@ -642,5 +655,14 @@
     .logout-btn-cancel,
     .logout-btn-confirm {
         width: 100%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .logout-modal,
+    .logout-modal-content,
+    .logout-btn-cancel,
+    .logout-btn-confirm {
+        transition: none !important;
     }
 }

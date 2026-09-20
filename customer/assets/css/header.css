@@ -1,9 +1,28 @@
 /**
  * FitPal Customer Header Styles
- * 
+ *
  * Customer-specific header overrides and additions.
  * Uses global CSS variables from global.css.
+ *
+ * Mirrors rider/assets/css/header.css so all authenticated roles
+ * share the same logout confirmation modal treatment.
+ *
+ * Reserves the scrollbar gutter on <html> so hiding the body
+ * scrollbar when the logout modal opens does not shift the page.
+ *
+ * @package FitPal
+ * @version 2.1 - scrollbar-gutter: stable added so the logout modal
+ *                does not reflow the page behind it.
  */
+
+/* Reserve the scrollbar gutter permanently. With this in place, the
+   viewport's usable width is identical whether a scrollbar is visible
+   or not, so nothing reflows when the body scrollbar is hidden by a
+   modal scroll lock. This is the same guard used by cart.css,
+   orders.css, and wallet.css. */
+html {
+    scrollbar-gutter: stable;
+}
 
 /* ============================================
    CUSTOMER HEADER OVERRIDES
@@ -276,6 +295,11 @@
     text-decoration: none;
     text-align: center;
     width: 100%;
+    /* Reset native button appearance for the logout button variant */
+    font-family: inherit;
+    border: none;
+    background: none;
+    cursor: pointer;
 }
 
 .mobile-nav-link:hover {
@@ -407,6 +431,31 @@
 }
 
 /* ============================================
+   NAV BADGE (Cart Count)
+   ============================================ */
+
+.nav-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    margin-left: 4px;
+    border-radius: var(--radius-full);
+    background: var(--primary);
+    color: var(--white);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    vertical-align: middle;
+}
+
+.mobile-nav-link .nav-badge {
+    margin-left: 6px;
+}
+
+/* ============================================
    RESPONSIVE
    ============================================ */
 
@@ -468,30 +517,151 @@
     }
 }
 
-
-/* NEW FEATURE */
-
 /* ============================================
-   NAV BADGE (Cart Count)
+   LOGOUT CONFIRMATION MODAL
    ============================================ */
 
-.nav-badge {
+.logout-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.logout-modal.active {
+    opacity: 1;
+}
+
+.logout-modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(5, 10, 4, 0.6);
+    cursor: pointer;
+}
+
+.logout-modal-content {
+    position: relative;
+    background: var(--white);
+    border-radius: var(--radius-xl);
+    padding: 32px 24px 24px;
+    max-width: 420px;
+    width: 100%;
+    text-align: center;
+    box-shadow: var(--shadow-xl);
+    transform: scale(0.95) translateY(-10px);
+    opacity: 0;
+    transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s ease;
+    box-sizing: border-box;
+}
+
+.logout-modal.active .logout-modal-content {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+}
+
+.logout-modal-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 16px;
+    background: rgba(220, 53, 69, 0.1);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.logout-modal-icon img {
+    width: 28px;
+    height: 28px;
+    display: block;
+    filter: brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(600%) hue-rotate(330deg) brightness(90%) contrast(85%);
+}
+
+.logout-modal-title {
+    margin: 0 0 8px 0;
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--text);
+}
+
+.logout-modal-text {
+    margin: 0 0 24px 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    line-height: 1.6;
+}
+
+.logout-modal-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.logout-btn-cancel,
+.logout-btn-confirm {
+    flex: 1;
+    padding: 12px 20px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    font-family: inherit;
+    text-decoration: none;
+    cursor: pointer;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    margin-left: 4px;
-    border-radius: var(--radius-full);
-    background: var(--primary);
-    color: var(--white);
-    font-size: 10px;
-    font-weight: 700;
-    line-height: 1;
-    vertical-align: middle;
+    border: 2px solid transparent;
+    min-height: 46px;
+    text-align: center;
+    box-sizing: border-box;
 }
 
-.mobile-nav-link .nav-badge {
-    margin-left: 6px;
+.logout-btn-cancel {
+    background: #1a1a1a;
+    color: #ffffff;
+    border-color: #1a1a1a;
+}
+
+.logout-btn-cancel:hover {
+    background: #000000;
+    border-color: #000000;
+}
+
+.logout-btn-confirm {
+    background: var(--danger);
+    color: #ffffff;
+    border-color: var(--danger);
+}
+
+.logout-btn-confirm:hover {
+    background: #b91c1c;
+    border-color: #b91c1c;
+}
+
+@media (max-width: 480px) {
+    .logout-modal-content {
+        padding: 24px 18px 18px;
+    }
+
+    .logout-modal-actions {
+        flex-direction: column-reverse;
+    }
+
+    .logout-btn-cancel,
+    .logout-btn-confirm {
+        width: 100%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .logout-modal,
+    .logout-modal-content,
+    .logout-btn-cancel,
+    .logout-btn-confirm {
+        transition: none !important;
+    }
 }

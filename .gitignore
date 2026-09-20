@@ -11,3 +11,5 @@ logs/
 *env
 *txt
 /shared/uploads/*
+logs/output/all_path_fetched_codebase.md
+logs/output/project_structure.md

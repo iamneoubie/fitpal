@@ -244,7 +244,7 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
                     onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/information-fill.svg'">
             </div>
             <p class="logout-modal-title" id="logoutModalTitle">Sign out?</p>
-            <p class="logout-modal-text">You'll need to sign in again to access the restaurant dashboard.</p>
+            <p class="logout-modal-text">ou'll need to sign in again to access your account.</p>
             <div class="logout-modal-actions">
                 <button type="button" class="logout-btn-cancel" data-logout-cancel>Cancel</button>
                 <a href="../backend/handlers/sign-out-handler.php" class="logout-btn-confirm">
