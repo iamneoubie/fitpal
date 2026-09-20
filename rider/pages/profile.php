@@ -2,22 +2,26 @@
 /**
  * FitPal Rider Profile Page
  *
- * Layout mirrors the customer profile page so both roles feel
- * like the same product:
- *   - page-title-header with back button
- *   - profile-header-card (avatar + name + role + stat)
- *   - profile-tabs (Personal Information | Address)
+ * Layout mirrors customer/pages/profile.php so both roles feel like
+ * the same product:
+ *   - page-title-header with back button + page title
+ *   - profile-header-card (avatar + name + role + status + edit)
+ *   - profile-tabs (Personal | Vehicle | Address)
  *   - profile-card with card-header + card-body
- *   - edit-in-place personal information form
- *   - logout row at the bottom
+ *   - edit-in-place contact number
+ *   - vehicle snapshot (read-only)
+ *   - address snapshot (read-only, contact support to change)
+ *   - logout row
  *
  * No inline SQL. All reads go through rider-queries.php.
- * Header include ordering: $assetBase is defined by
- * rider/includes/header.php, so the header is required before any
- * code that depends on it, and before any markup is emitted.
+ * $assetBase is defined by rider/includes/header.php, so the header
+ * is required before any code that depends on it.
  *
  * @package FitPal
- * @version 2.0 — Layout aligned with the customer profile page.
+ * @version 3.0 — Full rebuild. Removed the broken vehicle card and
+ *                malformed tab structure. Three tabs now: Personal,
+ *                Vehicle, Address. Everything the page renders is
+ *                a class defined in rider/assets/css/profile.css.
  */
 
 declare(strict_types=1);
@@ -129,6 +133,11 @@ function formatRiderAddress(array $address): string
     ]);
     return implode(', ', $parts);
 }
+
+$addressText = $address ? formatRiderAddress($address) : '';
+
+$vehicleLabel = $vehicle !== '' ? ucfirst($vehicle) : 'Not recorded';
+$plateLabel   = $plate !== '' ? $plate : 'No plate recorded';
 ?>
 
 <div class="content profile-page">
@@ -170,28 +179,26 @@ function formatRiderAddress(array $address): string
              ============================================ -->
         <div class="profile-header-card">
             <div class="profile-header-left">
-                <div class="profile-avatar">
-                    <div class="profile-avatar-wrap">
-                        <?php if ($profilePicUrl !== ''): ?>
-                        <img src="<?php echo htmlspecialchars($profilePicUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="Profile"
-                            id="profileAvatarImg"
-                            onerror="this.onerror=null; this.style.display='none'; var el=document.getElementById('profileAvatarInitial'); if(el){el.style.display='flex';}">
-                        <span class="profile-avatar-placeholder" id="profileAvatarInitial" style="display: none;">
-                            <?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>
-                        </span>
-                        <?php else: ?>
-                        <span class="profile-avatar-placeholder" id="profileAvatarInitial" style="display: flex;">
-                            <?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>
-                        </span>
-                        <img src="" alt="Profile" id="profileAvatarImg" style="display: none;">
-                        <?php endif; ?>
+                <div class="profile-avatar-wrap">
+                    <?php if ($profilePicUrl !== ''): ?>
+                    <img src="<?php echo htmlspecialchars($profilePicUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="Profile"
+                        id="profileAvatarImg" class="profile-avatar-image"
+                        onerror="this.onerror=null; this.style.display='none'; var el=document.getElementById('profileAvatarInitial'); if(el){el.style.display='flex';}">
+                    <span class="profile-avatar-placeholder" id="profileAvatarInitial" style="display: none;">
+                        <?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>
+                    </span>
+                    <?php else: ?>
+                    <span class="profile-avatar-placeholder" id="profileAvatarInitial" style="display: flex;">
+                        <?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>
+                    </span>
+                    <img src="" alt="Profile" id="profileAvatarImg" class="profile-avatar-image" style="display: none;">
+                    <?php endif; ?>
 
-                        <button type="button" class="profile-avatar-edit" id="uploadPictureBtn"
-                            aria-label="Change profile picture">
-                            <img src="<?php echo $assetBase; ?>assets/images/icons/edit.svg" alt="Edit">
-                        </button>
-                        <input type="file" id="profilePictureInput" accept="image/jpeg,image/png,image/webp" hidden>
-                    </div>
+                    <button type="button" class="profile-avatar-edit" id="uploadPictureBtn"
+                        aria-label="Change profile picture">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/edit.svg" alt="">
+                    </button>
+                    <input type="file" id="profilePictureInput" accept="image/jpeg,image/png,image/webp" hidden>
                 </div>
 
                 <div class="profile-name-role">
@@ -224,8 +231,8 @@ function formatRiderAddress(array $address): string
                     <span class="profile-stat-value"><?php echo number_format($deliveries); ?></span>
                     <span class="profile-stat-label">Deliveries</span>
                 </div>
-                <button type="button" id="editProfileBtn" class="btn btn-edit">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/edit.svg" alt="Edit" class="btn-icon">
+                <button type="button" id="editProfileBtn" class="btn-edit">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/edit.svg" alt="" class="btn-icon">
                     Edit Profile
                 </button>
             </div>
@@ -234,11 +241,14 @@ function formatRiderAddress(array $address): string
         <!-- ============================================
              TABS
              ============================================ -->
-        <div class="profile-tabs">
-            <button type="button" class="profile-tab active" data-tab="personal">
+        <div class="profile-tabs" role="tablist">
+            <button type="button" class="profile-tab active" data-tab="personal" role="tab" aria-selected="true">
                 Personal Information
             </button>
-            <button type="button" class="profile-tab" data-tab="address">
+            <button type="button" class="profile-tab" data-tab="vehicle" role="tab" aria-selected="false">
+                Vehicle
+            </button>
+            <button type="button" class="profile-tab" data-tab="address" role="tab" aria-selected="false">
                 Address
             </button>
         </div>
@@ -296,7 +306,7 @@ function formatRiderAddress(array $address): string
                                 <label for="contact_number" class="field-label">Contact Number</label>
                                 <input type="tel" id="contact_number" name="contact_number" class="form-control"
                                     value="<?php echo htmlspecialchars($contact, ENT_QUOTES, 'UTF-8'); ?>" disabled
-                                    placeholder="09XXXXXXXXX">
+                                    placeholder="09XXXXXXXXX" maxlength="11" inputmode="numeric">
                             </div>
                         </div>
 
@@ -310,10 +320,43 @@ function formatRiderAddress(array $address): string
         </div>
 
         <!-- ============================================
+             TAB: VEHICLE
+             ============================================ -->
+        <div class="profile-tab-content" id="tab-vehicle">
+            <div class="profile-card">
+                <div class="card-header">
+                    <h3>Vehicle Information</h3>
+                </div>
+                <div class="card-body">
+                    <div class="info-grid">
+                        <div class="info-row">
+                            <span class="info-label">Vehicle Type</span>
+                            <span class="info-value">
+                                <?php echo htmlspecialchars($vehicleLabel, ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                        </div>
+
+                        <div class="info-row">
+                            <span class="info-label">Plate Number</span>
+                            <span class="info-value">
+                                <?php echo htmlspecialchars($plateLabel, ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                        </div>
+                    </div>
+
+                    <p class="info-note">
+                        Vehicle information cannot be edited directly from this page.
+                        Contact support to make changes.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================
              TAB: ADDRESS
              ============================================ -->
         <div class="profile-tab-content" id="tab-address">
-            <div class="profile-card address-card">
+            <div class="profile-card">
                 <div class="card-header">
                     <h3>Primary Address</h3>
                 </div>
@@ -327,10 +370,10 @@ function formatRiderAddress(array $address): string
                             </div>
                         </div>
                         <div class="address-item-body">
-                            <p><?php echo htmlspecialchars(formatRiderAddress($address), ENT_QUOTES, 'UTF-8'); ?></p>
+                            <p><?php echo htmlspecialchars($addressText, ENT_QUOTES, 'UTF-8'); ?></p>
                         </div>
                     </div>
-                    <p class="address-note">
+                    <p class="info-note">
                         To change your address, please contact support.
                     </p>
                     <?php else: ?>
@@ -339,39 +382,11 @@ function formatRiderAddress(array $address): string
                             <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg"
                                 alt="No addresses">
                         </div>
-                        <p class="text-muted">No address on file yet.</p>
-                        <p class="text-muted small">Contact support to add your primary address.</p>
+                        <p class="empty-title">No address on file yet</p>
+                        <p class="empty-text">Contact support to add your primary address.</p>
                     </div>
                     <?php endif; ?>
                 </div>
-            </div>
-        </div>
-
-        <!-- ============================================
-             VEHICLE INFORMATION
-             ============================================ -->
-        <div class="profile-card" style="margin-top: 24px;">
-            <div class="card-header">
-                <h3>Vehicle Information</h3>
-            </div>
-            <div class="card-body">
-                <div class="vehicle-display">
-                    <div class="vehicle-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt="Vehicle"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/community-general.svg'">
-                    </div>
-                    <div class="vehicle-info">
-                        <p class="vehicle-name">
-                            <?php echo htmlspecialchars(ucfirst($vehicle ?: 'Not recorded'), ENT_QUOTES, 'UTF-8'); ?>
-                        </p>
-                        <p class="vehicle-plate">
-                            <?php echo $plate !== '' ? htmlspecialchars($plate, ENT_QUOTES, 'UTF-8') : 'No plate recorded'; ?>
-                        </p>
-                    </div>
-                </div>
-                <p class="vehicle-note">
-                    Vehicle information cannot be edited directly. Contact support to make changes.
-                </p>
             </div>
         </div>
 
@@ -380,8 +395,8 @@ function formatRiderAddress(array $address): string
              ============================================ -->
         <div class="logout-wrap">
             <a href="../backend/handlers/sign-out-handler.php" class="btn btn-cancel logout-btn">
-                <img src="<?php echo $assetBase; ?>assets/images/icons/logout-box-r-line.svg" alt="" class="btn-icon"
-                    width="16" height="16"
+                <img src="<?php echo $assetBase; ?>assets/images/icons/logoutsvg.svg" alt="" class="btn-icon" width="16"
+                    height="16"
                     onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/cancel.svg'">
                 <span>Sign Out</span>
             </a>

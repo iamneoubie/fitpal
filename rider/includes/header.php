@@ -4,16 +4,16 @@
  *
  * Rider-specific header with conditional navigation based on login
  * status. Mirrors customer/includes/header.php so the two roles stay
- * consistent in behavior and asset resolution.
+ * consistent in behavior, asset resolution, and CSS load order.
  *
- * Rider users do NOT have a cart, so there is no cart badge here.
- * The nav reflects rider-only surfaces: Dashboard, Deliveries,
- * Earnings, and Profile.
+ * Rider users do NOT have a cart, so there is no cart badge and no
+ * cart-count query here. The nav reflects rider-only surfaces:
+ * Dashboard, Deliveries, Earnings, and Profile.
  *
  * @package FitPal
- * @version 1.1 — Adds currentPage detection for deliveries/earnings;
- *                aligns with customer header structure.
->>>>>>> 677b4fcf15b4c92586299707a23a3b9955a24c1d
+ * @version 1.3 — Mirrors the customer header exactly in load order
+ *                and asset resolution. Removed duplicate CSS load
+ *                comments. Bumped version to match the CSS rebuild.
  */
 
 declare(strict_types=1);
@@ -85,24 +85,12 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
 // ===== PAGE-SPECIFIC CSS PRELOADING =====
 $pageCssMap = [
-$pageCssMap = [
-    'sign-in.php'   => 'sign-in.css',
-    'sign-up.php'   => 'sign-up.css',
-    'dashboard.php' => 'dashboard.css',
-    'deliveries.php'=> 'deliveries.css',
-    'earnings.php'  => 'earnings.css',
-    'profile.php'   => 'profile.css',
-];
-    'sign-in.php'   => 'sign-in.css',
-    'sign-up.php'   => 'sign-up.css',
-    'dashboard.php' => 'dashboard.css',
-    'deliveries.php'=> 'deliveries.css',
-    'earnings.php'  => 'earnings.css',
-    'profile.php'   => 'profile.css',
-'deliveries.php'=> 'deliveries.css',
-    'earnings.php'  => 'earnings.css',
-    'profile.php'   => 'profile.css',
->>>>>>> 677b4fcf15b4c92586299707a23a3b9955a24c1d
+    'sign-in.php'    => 'sign-in.css',
+    'sign-up.php'    => 'sign-up.css',
+    'dashboard.php'  => 'dashboard.css',
+    'deliveries.php' => 'deliveries.css',
+    'earnings.php'   => 'earnings.css',
+    'profile.php'    => 'profile.css',
 ];
 
 $pageCssFile = $pageCssMap[$currentPage] ?? '';
@@ -123,7 +111,7 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
     <link rel="icon" type="image/x-icon" href="<?php echo $assetBase; ?>assets/images/brand/Logo.ico">
     <link rel="shortcut icon" href="<?php echo $assetBase; ?>assets/images/brand/Logo.ico">
 
-<link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/global.css">
+    <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/global.css">
     <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/header.css">
     <link rel="stylesheet" href="../assets/css/header.css">
 

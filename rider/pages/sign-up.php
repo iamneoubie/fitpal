@@ -2,11 +2,25 @@
 /**
  * FitPal Rider Registration Page
  *
- * Four-step rider application:
+ * Five-step rider application:
  *   Step 1 — Personal Information
  *   Step 2 — Vehicle Details
  *   Step 3 — Address & Emergency Contact
- *   Step 4 — Verification & Review (profile picture, license, terms)
+ *   Step 4 — Verification Uploads (Formal Photo + Driver's License)
+ *   Step 5 — Review & Submit
+ *
+ * The two required uploads live on Step 4 so the handler can read them
+ * from the same request. They are presented side by side (photo left,
+ * license right) in a two-column grid that collapses to a single
+ * column on tablet and mobile:
+ *   4A. Formal Photo      → $_FILES['profile_picture']
+ *   4B. Driver's License  → $_FILES['drivers_license']
+ *
+ * License issue date and expiry date are both required. An admin
+ * cannot verify a rider without knowing when the license expires.
+ *
+ * Step 5 shows the review summary, the terms checkbox, and the final
+ * submit button.
  *
  * Visual layout mirrors the customer register card so both flows
  * feel like the same product:
@@ -15,7 +29,9 @@
  *   - 32px / 24px card padding
  *
  * @package FitPal
- * @version 3.2 — Card sizing matched to the customer register card.
+ * @version 6.1 — License issue date and expiry date are now required
+ *                on Step 4 (markup) and validated on the client and
+ *                server. Both previously accepted empty values.
  */
 
 declare(strict_types=1);
@@ -61,7 +77,7 @@ $relationshipOptions = [
         <div class="register-card">
 
             <!-- Progress -->
-            <div class="register-progress" role="progressbar" aria-valuenow="1" aria-valuemin="1" aria-valuemax="4"
+            <div class="register-progress" role="progressbar" aria-valuenow="1" aria-valuemin="1" aria-valuemax="5"
                 aria-label="Registration progress">
                 <div class="progress-step active" data-step="1">
                     <span class="step-number">1</span>
@@ -80,13 +96,18 @@ $relationshipOptions = [
                 <div class="progress-line" id="progressLine3"></div>
                 <div class="progress-step" data-step="4">
                     <span class="step-number">4</span>
+                    <span class="step-label">Uploads</span>
+                </div>
+                <div class="progress-line" id="progressLine4"></div>
+                <div class="progress-step" data-step="5">
+                    <span class="step-number">5</span>
                     <span class="step-label">Verify</span>
                 </div>
             </div>
 
             <div class="register-header">
                 <p class="heading-2">Become a <span>FitPal Rider</span></p>
-                <p class="text-muted" id="stepSubtitle">Step 1 of 4 — Personal Information</p>
+                <p class="text-muted" id="stepSubtitle">Step 1 of 5 — Personal Information</p>
             </div>
 
             <?php if (!empty($errorMessage)): ?>
@@ -106,7 +127,9 @@ $relationshipOptions = [
                     value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="current_step" id="currentStep" value="1">
 
-                <!-- STEP 1 — Personal Information -->
+                <!-- ============================================================
+                     STEP 1 — Personal Information
+                     ============================================================ -->
                 <div class="register-step" id="step1">
 
                     <div class="form-row">
@@ -240,7 +263,9 @@ $relationshipOptions = [
                     </div>
                 </div>
 
-                <!-- STEP 2 — Vehicle Details -->
+                <!-- ============================================================
+                     STEP 2 — Vehicle Details
+                     ============================================================ -->
                 <div class="register-step" id="step2" style="display: none;">
 
                     <div class="step-description">
@@ -312,7 +337,9 @@ $relationshipOptions = [
                     </div>
                 </div>
 
-                <!-- STEP 3 — Address & Emergency Contact -->
+                <!-- ============================================================
+                     STEP 3 — Address & Emergency Contact
+                     ============================================================ -->
                 <div class="register-step" id="step3" style="display: none;">
 
                     <div class="step-description">
@@ -445,101 +472,161 @@ $relationshipOptions = [
                     </div>
                 </div>
 
-                <!-- STEP 4 — Verification & Review -->
+                <!-- ============================================================
+                     STEP 4 — Verification Uploads
+                     ============================================================ -->
                 <div class="register-step" id="step4" style="display: none;">
 
                     <div class="step-description">
-                        <p>Upload your verification photos and review your details before submitting.</p>
+                        <p>
+                            We need two photos before you can start delivering: a formal
+                            profile picture and your driver's license. Each has its own
+                            requirements below.
+                        </p>
                     </div>
 
-                    <div class="upload-pair">
-                        <!-- Profile picture -->
-                        <div class="form-group upload-pair-item">
-                            <label class="form-label">
-                                Profile Picture <span class="text-danger">*</span>
-                            </label>
+                    <!-- Two uploads side by side (stacks on mobile) -->
+                    <div class="upload-block-grid">
 
-                            <div class="upload-dropzone upload-avatar" id="profileDropzone" tabindex="0" role="button"
-                                aria-label="Upload profile picture">
-                                <input type="file" id="profile_picture" name="profile_picture"
-                                    accept="image/jpeg,image/png,image/webp" hidden>
+                        <!-- 4A — FORMAL PHOTO (LEFT) -->
+                        <div class="upload-block" id="uploadBlockPhoto">
 
-                                <div class="upload-preview" id="profilePreview" hidden>
-                                    <img src="" alt="Profile preview" id="profilePreviewImg">
-                                    <button type="button" class="upload-remove" id="profileRemove"
-                                        aria-label="Remove image">&times;</button>
-                                </div>
-
-                                <div class="upload-hint" id="profileHint">
-                                    <div class="upload-hint-icon" aria-hidden="true">
-                                        <img src="<?php echo $assetBase; ?>assets/images/icons/image-upload-fill.svg"
-                                            alt=""
-                                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/image-line.svg'">
-                                    </div>
-                                    <p class="upload-hint-title">Upload photo</p>
-                                    <p class="upload-hint-text">JPG, PNG, WEBP &middot; Max 2&nbsp;MB</p>
+                            <div class="upload-block-header">
+                                <div class="upload-block-number" aria-hidden="true">1</div>
+                                <div class="upload-block-heading">
+                                    <h3 class="upload-block-title">
+                                        Formal Photo <span class="text-danger">*</span>
+                                    </h3>
+                                    <p class="upload-block-subtitle">
+                                        Clear, front-facing photo of your face.
+                                    </p>
                                 </div>
                             </div>
 
-                            <p class="form-hint">Clear, front-facing photo.</p>
-                            <div class="form-error" id="profilePictureError"></div>
-                        </div>
+                            <div class="upload-block-body">
+                                <div class="upload-dropzone upload-avatar" id="profileDropzone" tabindex="0"
+                                    role="button" aria-label="Upload formal photo">
+                                    <input type="file" id="profile_picture" name="profile_picture"
+                                        accept="image/jpeg,image/png,image/webp" hidden>
 
-                        <!-- Driver's license -->
-                        <div class="form-group upload-pair-item">
-                            <label class="form-label">
-                                Driver's License <span class="text-danger">*</span>
-                            </label>
+                                    <div class="upload-preview" id="profilePreview" hidden>
+                                        <img src="" alt="Formal photo preview" id="profilePreviewImg">
+                                        <button type="button" class="upload-remove" id="profileRemove"
+                                            aria-label="Remove photo">&times;</button>
+                                    </div>
 
-                            <div class="upload-dropzone upload-avatar" id="licenseDropzone" tabindex="0" role="button"
-                                aria-label="Upload driver's license">
-                                <input type="file" id="drivers_license" name="drivers_license"
-                                    accept="image/jpeg,image/png,image/webp" hidden>
-
-                                <div class="upload-preview" id="licensePreview" hidden>
-                                    <img src="" alt="License preview" id="licensePreviewImg">
-                                    <button type="button" class="upload-remove" id="licenseRemove"
-                                        aria-label="Remove image">&times;</button>
+                                    <div class="upload-hint" id="profileHint">
+                                        <div class="upload-hint-icon" aria-hidden="true">
+                                            <img src="<?php echo $assetBase; ?>assets/images/icons/image-upload-fill.svg"
+                                                alt=""
+                                                onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/image-line.svg'">
+                                        </div>
+                                        <p class="upload-hint-title">Upload photo</p>
+                                        <p class="upload-hint-text">JPG, PNG, WEBP &middot; Max 2&nbsp;MB</p>
+                                    </div>
                                 </div>
 
-                                <div class="upload-hint" id="licenseHint">
-                                    <div class="upload-hint-icon" aria-hidden="true">
-                                        <img src="<?php echo $assetBase; ?>assets/images/icons/id-card-line.svg" alt=""
-                                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-user-line.svg'">
-                                    </div>
-                                    <p class="upload-hint-title">Upload license</p>
-                                    <p class="upload-hint-text">JPG, PNG, WEBP &middot; Max 5&nbsp;MB</p>
+                                <ul class="upload-guidelines">
+                                    <li>Front-facing, well-lit, no filters</li>
+                                    <li>No hats, sunglasses, or face coverings</li>
+                                    <li>Neutral background recommended</li>
+                                </ul>
+
+                                <div class="form-error" id="profilePictureError"></div>
+                            </div>
+                        </div>
+
+                        <!-- 4B — DRIVER'S LICENSE (RIGHT) -->
+                        <div class="upload-block" id="uploadBlockLicense">
+
+                            <div class="upload-block-header">
+                                <div class="upload-block-number" aria-hidden="true">2</div>
+                                <div class="upload-block-heading">
+                                    <h3 class="upload-block-title">
+                                        Driver's License <span class="text-danger">*</span>
+                                    </h3>
+                                    <p class="upload-block-subtitle">
+                                        Photo of your valid driver's license.
+                                    </p>
                                 </div>
                             </div>
 
-                            <p class="form-hint">Must show name, number, and expiry.</p>
-                            <div class="form-error" id="driversLicenseError"></div>
+                            <div class="upload-block-body">
+                                <div class="upload-dropzone upload-avatar" id="licenseDropzone" tabindex="0"
+                                    role="button" aria-label="Upload driver's license">
+                                    <input type="file" id="drivers_license" name="drivers_license"
+                                        accept="image/jpeg,image/png,image/webp" hidden>
+
+                                    <div class="upload-preview" id="licensePreview" hidden>
+                                        <img src="" alt="License preview" id="licensePreviewImg">
+                                        <button type="button" class="upload-remove" id="licenseRemove"
+                                            aria-label="Remove license photo">&times;</button>
+                                    </div>
+
+                                    <div class="upload-hint" id="licenseHint">
+                                        <div class="upload-hint-icon" aria-hidden="true">
+                                            <img src="<?php echo $assetBase; ?>assets/images/icons/id-card-line.svg"
+                                                alt=""
+                                                onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-user-line.svg'">
+                                        </div>
+                                        <p class="upload-hint-title">Upload license</p>
+                                        <p class="upload-hint-text">JPG, PNG, WEBP &middot; Max 5&nbsp;MB</p>
+                                    </div>
+                                </div>
+
+                                <ul class="upload-guidelines">
+                                    <li>All four corners of the card visible</li>
+                                    <li>Name, number, expiry must be readable</li>
+                                    <li>No glare, blur, or partial crops</li>
+                                </ul>
+
+                                <div class="form-error" id="driversLicenseError"></div>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="form-row">
+                    <!-- License dates: full-width row under the pair -->
+                    <div class="form-row upload-block-dates">
                         <div class="form-group">
                             <label for="license_issue_date" class="form-label">
-                                Issue Date <span class="text-muted">(Optional)</span>
+                                License Issue Date <span class="text-danger">*</span>
                             </label>
                             <input type="date" id="license_issue_date" name="license_issue_date" class="form-control"
-                                max="<?php echo date('Y-m-d'); ?>">
+                                max="<?php echo date('Y-m-d'); ?>" required>
                             <div class="form-error" id="licenseIssueError"></div>
                         </div>
 
                         <div class="form-group">
                             <label for="license_expiry_date" class="form-label">
-                                Expiry Date <span class="text-muted">(Optional)</span>
+                                License Expiry Date <span class="text-danger">*</span>
                             </label>
                             <input type="date" id="license_expiry_date" name="license_expiry_date" class="form-control"
-                                min="<?php echo date('Y-m-d', strtotime('+1 day')); ?>">
+                                min="<?php echo date('Y-m-d', strtotime('+1 day')); ?>" required>
                             <div class="form-error" id="licenseExpiryError"></div>
                             <div class="form-hint">Must be a future date</div>
                         </div>
                     </div>
 
-                    <div class="section-divider">
-                        <span>Review Your Information</span>
+                    <div class="step-actions">
+                        <button type="button" class="btn btn-outline btn-prev" data-prev="3">
+                            Back
+                        </button>
+                        <button type="button" class="btn btn-primary btn-next" data-next="5">
+                            Next Step
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                     STEP 5 — Review & Submit
+                     ============================================================ -->
+                <div class="register-step" id="step5" style="display: none;">
+
+                    <div class="step-description">
+                        <p>
+                            Review your information below. If everything looks correct,
+                            accept the terms and submit your application.
+                        </p>
                     </div>
 
                     <div class="review-summary" id="reviewSummary">
@@ -602,6 +689,22 @@ $relationshipOptions = [
                                 <span class="review-value" id="reviewEmergencyContact">—</span>
                             </div>
                         </div>
+
+                        <div class="review-section">
+                            <p class="review-section-title">Verification Uploads</p>
+                            <div class="review-row">
+                                <span class="review-label">Formal Photo</span>
+                                <span class="review-value" id="reviewProfilePhoto">—</span>
+                            </div>
+                            <div class="review-row">
+                                <span class="review-label">Driver's License</span>
+                                <span class="review-value" id="reviewLicensePhoto">—</span>
+                            </div>
+                            <div class="review-row">
+                                <span class="review-label">License Validity</span>
+                                <span class="review-value" id="reviewLicenseDates">—</span>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-group terms-group" id="termsGroup">
@@ -621,7 +724,7 @@ $relationshipOptions = [
                     </div>
 
                     <div class="step-actions">
-                        <button type="button" class="btn btn-outline btn-prev" data-prev="3">
+                        <button type="button" class="btn btn-outline btn-prev" data-prev="4">
                             Back
                         </button>
                         <button type="submit" class="btn btn-primary" id="registerBtn">

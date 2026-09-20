@@ -1,20 +1,15 @@
 <?php
 /**
- * FitPal Admin Verification Handler
+ * FitPal Admin Handler
  *
- * POST endpoint for restaurant and rider verification decisions.
+ * All admin mutations go through this single endpoint. Actions are
+ * dispatched by the `action` POST field. Each action verifies CSRF,
+ * calls a query-layer function, then flashes a message and redirects.
  *
- * Actions:
- *   verify_restaurant  → set verification_status on a restaurant
- *   verify_rider       → set verification_status on a delivery_rider_profile
- *
- * Both actions accept a `status` of: pending | verified | denied | suspended.
- *
- * Contains NO SQL. All data access goes through admin-queries.php.
- *
- * Response convention (matches customer handlers):
- *   - Non-AJAX: session flash + redirect back to the referring list
- *   - AJAX:     JSON with {status, message}
+ * Response shape: HTML redirect with a session flash. There is no
+ * JSON API for mutations because every mutation originates from a
+ * normal form submit and every page already renders flashes. AJAX is
+ * unnecessary here.
  *
  * @package FitPal
  * @version 1.0
@@ -26,211 +21,201 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-$isAjax = (
-    isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
-    strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest'
-);
-
-/**
- * Terminate the request with an error response.
- *
- * @param string $message
- * @param bool   $isAjax
- * @param string $redirect
- * @return never
- */
-function adminFail(string $message, bool $isAjax, string $redirect = '../../pages/dashboard.php'): never
-{
-    if ($isAjax) {
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(['status' => 'error', 'message' => $message]);
-        exit;
-    }
-    $_SESSION['admin_error'] = $message;
-    header('Location: ' . $redirect);
-    exit;
-}
-
-/**
- * Terminate the request with a success response.
- *
- * @param string $message
- * @param bool   $isAjax
- * @param string $redirect
- * @return never
- */
-function adminSuccess(string $message, bool $isAjax, string $redirect = '../../pages/dashboard.php'): never
-{
-    if ($isAjax) {
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(['status' => 'success', 'message' => $message]);
-        exit;
-    }
-    $_SESSION['admin_success'] = $message;
-    header('Location: ' . $redirect);
-    exit;
-}
-
-// ---- Auth ----
-if (empty($_SESSION['administrator_id'])) {
-    adminFail('Please sign in to continue.', $isAjax, '../../pages/sign-in.php');
-}
-
-$adminId = (int)$_SESSION['administrator_id'];
-
-$givenToken = (string)($_POST['csrf_token'] ?? '');
-$sessToken  = (string)($_SESSION['csrf_token'] ?? '');
-
-if ($sessToken === '' || $givenToken === '' || !hash_equals($sessToken, $givenToken)) {
-    adminFail('Security validation failed. Please try again.', $isAjax);
-}
-
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/admin-queries.php';
 
-$action = (string)($_POST['action'] ?? '');
-$status = (string)($_POST['status'] ?? '');
-
-if ($action === '') {
-    adminFail('Missing action.', $isAjax);
+if (empty($_SESSION['administrator_id'])) {
+    header('Location: ../../pages/sign-in.php');
+    exit;
 }
 
-$allowedStatuses = ['pending', 'verified', 'denied', 'suspended'];
-
-if (!in_array($status, $allowedStatuses, true)) {
-    adminFail('Invalid status value.', $isAjax);
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header('Location: ../../pages/dashboard.php');
+    exit;
 }
+
+if (!isset($_POST['csrf_token'], $_SESSION['csrf_token'])
+    || !hash_equals((string)$_SESSION['csrf_token'], (string)$_POST['csrf_token'])) {
+    $_SESSION['admin_error'] = 'Security validation failed. Please try again.';
+    header('Location: ../../pages/dashboard.php');
+    exit;
+}
+
+$adminId = (int)$_SESSION['administrator_id'];
+$action  = (string)($_POST['action'] ?? '');
+$redirect = (string)($_POST['redirect_to'] ?? 'dashboard.php');
+
+// Whitelist redirect destinations so the field cannot be abused.
+$allowedRedirects = [
+    'dashboard.php', 'customers.php', 'riders.php', 'restaurants.php', 'profile.php',
+];
+if (!in_array($redirect, $allowedRedirects, true)) {
+    $redirect = 'dashboard.php';
+}
+
+$redirectUrl = '../../pages/' . $redirect;
 
 try {
     switch ($action) {
 
-        case 'verify_restaurant': {
-            $restaurantId = (int)($_POST['restaurant_id'] ?? 0);
-            if ($restaurantId <= 0) {
-                adminFail('Invalid restaurant ID.', $isAjax, '../../pages/restaurants.php');
-            }
+        case 'update_profile':
+            handleUpdateProfile($database_connection, $adminId);
+            $_SESSION['admin_success'] = 'Profile updated successfully.';
+            break;
 
-            // Ownership check: confirm the restaurant exists before writing.
-            $restaurant = getRestaurantForReview($database_connection, $restaurantId);
-            if (!$restaurant) {
-                adminFail('Restaurant not found.', $isAjax, '../../pages/restaurants.php');
-            }
+        case 'change_password':
+            handleChangePassword($database_connection, $adminId);
+            $_SESSION['admin_success'] = 'Password changed successfully.';
+            break;
 
-            $updated = setRestaurantVerificationStatus(
-                $database_connection,
-                $restaurantId,
-                $adminId,
-                $status
-            );
+        case 'toggle_customer':
+            handleToggleCustomer($database_connection);
+            $_SESSION['admin_success'] = 'Customer status updated.';
+            break;
 
-            if (!$updated) {
-                adminFail('Could not update verification status.', $isAjax, '../../pages/restaurants.php');
-            }
+        case 'set_rider_verification':
+            handleSetRiderVerification($database_connection, $adminId);
+            $_SESSION['admin_success'] = 'Rider verification status updated.';
+            break;
 
-            $label = formatVerificationStatus($status);
-            adminSuccess(
-                'Restaurant marked as ' . $label . '.',
-                $isAjax,
-                '../../pages/restaurants.php'
-            );
-        }
+        case 'toggle_rider':
+            handleToggleRider($database_connection);
+            $_SESSION['admin_success'] = 'Rider status updated.';
+            break;
 
-        case 'verify_rider': {
-            $riderId = (int)($_POST['rider_id'] ?? 0);
-            if ($riderId <= 0) {
-                adminFail('Invalid rider ID.', $isAjax, '../../pages/riders.php');
-            }
+        case 'set_restaurant_verification':
+            handleSetRestaurantVerification($database_connection, $adminId);
+            $_SESSION['admin_success'] = 'Restaurant verification status updated.';
+            break;
 
-            $rider = getRiderForReview($database_connection, $riderId);
-            if (!$rider) {
-                adminFail('Rider not found.', $isAjax, '../../pages/riders.php');
-            }
-
-            $updated = setRiderVerificationStatus(
-                $database_connection,
-                $riderId,
-                $adminId,
-                $status
-            );
-
-            if (!$updated) {
-                adminFail('Could not update verification status.', $isAjax, '../../pages/riders.php');
-            }
-
-            $label = formatVerificationStatus($status);
-            adminSuccess(
-                'Rider marked as ' . $label . '.',
-                $isAjax,
-                '../../pages/riders.php'
-            );
-        }
+        case 'toggle_restaurant':
+            handleToggleRestaurant($database_connection);
+            $_SESSION['admin_success'] = 'Restaurant status updated.';
+            break;
 
         default:
-            adminFail('Invalid action.', $isAjax);
+            $_SESSION['admin_error'] = 'Unknown action.';
     }
-
 } catch (PDOException $e) {
     error_log('Admin handler DB error: ' . $e->getMessage());
-    adminFail('A system error occurred. Please try again.', $isAjax);
+    $_SESSION['admin_error'] = 'A database error occurred. Please try again.';
+} catch (RuntimeException $e) {
+    $_SESSION['admin_error'] = $e->getMessage();
 } catch (Throwable $e) {
     error_log('Admin handler error: ' . $e->getMessage());
-    adminFail('A system error occurred. Please try again.', $isAjax);
+    $_SESSION['admin_error'] = 'An unexpected error occurred.';
 }
 
-// Inside your switch ($action) block in admin-handler.php
+header('Location: ' . $redirectUrl);
+exit;
 
-case 'verify_restaurant_bulk': {
-    $ids = $_POST['restaurant_ids'] ?? [];
-    if (!is_array($ids) || empty($ids)) {
-        adminFail('No restaurants selected.', $isAjax, '../../pages/restaurants.php');
+/* =============================================================
+ * ACTION HANDLERS
+ * ============================================================= */
+
+function handleUpdateProfile(PDO $db, int $adminId): void
+{
+    $firstName = trim((string)($_POST['first_name'] ?? ''));
+    $middleName = trim((string)($_POST['middle_name'] ?? ''));
+    $lastName = trim((string)($_POST['last_name'] ?? ''));
+    $contact = trim((string)($_POST['contact_number'] ?? ''));
+
+    if (strlen($firstName) < 2 || strlen($lastName) < 2) {
+        throw new RuntimeException('First and last name must be at least 2 characters.');
     }
-    
-    $updatedCount = 0;
-    foreach ($ids as $id) {
-        $id = (int)$id;
-        if ($id > 0) {
-            $updated = setRestaurantVerificationStatus(
-                $database_connection,
-                $id,
-                $adminId,
-                $status
-            );
-            if ($updated) $updatedCount++;
-        }
+
+    if ($contact !== '' && !preg_match('/^09\d{9}$/', $contact)) {
+        throw new RuntimeException('Contact number must be a valid PH mobile (09XXXXXXXXX).');
     }
-    
-    $label = formatVerificationStatus($status);
-    adminSuccess(
-        "{$updatedCount} restaurant(s) marked as {$label}.",
-        $isAjax,
-        '../../pages/restaurants.php?status=' . urlencode($status)
-    );
+
+    updateAdminProfile($db, $adminId, $firstName, $middleName, $lastName, $contact);
 }
 
-case 'verify_rider_bulk': {
-    $ids = $_POST['rider_ids'] ?? [];
-    if (!is_array($ids) || empty($ids)) {
-        adminFail('No riders selected.', $isAjax, '../../pages/riders.php');
+function handleChangePassword(PDO $db, int $adminId): void
+{
+    $current = (string)($_POST['current_password'] ?? '');
+    $new     = (string)($_POST['new_password'] ?? '');
+    $confirm = (string)($_POST['confirm_password'] ?? '');
+
+    if (strlen($new) < 8 || strlen($new) > 20) {
+        throw new RuntimeException('New password must be 8–20 characters.');
     }
-    
-    $updatedCount = 0;
-    foreach ($ids as $id) {
-        $id = (int)$id;
-        if ($id > 0) {
-            $updated = setRiderVerificationStatus(
-                $database_connection,
-                $id,
-                $adminId,
-                $status
-            );
-            if ($updated) $updatedCount++;
-        }
+    if (!preg_match('/^[A-Za-z0-9]+$/', $new)) {
+        throw new RuntimeException('Password can only contain letters and numbers.');
     }
-    
-    $label = formatVerificationStatus($status);
-    adminSuccess(
-        "{$updatedCount} rider(s) marked as {$label}.",
-        $isAjax,
-        '../../pages/riders.php?status=' . urlencode($status)
-    );
+    if (!preg_match('/[A-Za-z]/', $new) || !preg_match('/[0-9]/', $new)) {
+        throw new RuntimeException('Password must contain at least one letter and one number.');
+    }
+    if ($new !== $confirm) {
+        throw new RuntimeException('New password and confirmation do not match.');
+    }
+
+    $stmt = $db->prepare("SELECT password FROM administrator WHERE administrator_id = :id");
+    $stmt->execute([':id' => $adminId]);
+    $stored = (string)$stmt->fetchColumn();
+
+    $valid = password_verify($current, $stored);
+    if (!$valid && hash_equals($stored, $current)) {
+        $valid = true;
+    }
+    if (!$valid) {
+        throw new RuntimeException('Current password is incorrect.');
+    }
+
+    $hashed = password_hash($new, PASSWORD_BCRYPT);
+    updateAdminPassword($db, $adminId, $hashed);
+}
+
+function handleToggleCustomer(PDO $db): void
+{
+    $customerId = (int)($_POST['customer_id'] ?? 0);
+    $activate   = (string)($_POST['activate'] ?? '') === '1';
+    if ($customerId <= 0) {
+        throw new RuntimeException('Invalid customer.');
+    }
+    setCustomerActiveStatus($db, $customerId, $activate);
+}
+
+function handleSetRiderVerification(PDO $db, int $adminId): void
+{
+    $riderId = (int)($_POST['rider_id'] ?? 0);
+    $status  = (string)($_POST['status'] ?? '');
+    if ($riderId <= 0) {
+        throw new RuntimeException('Invalid rider.');
+    }
+    if (!setRiderVerificationStatus($db, $riderId, $status, $adminId)) {
+        throw new RuntimeException('Invalid verification status.');
+    }
+}
+
+function handleToggleRider(PDO $db): void
+{
+    $riderId  = (int)($_POST['rider_id'] ?? 0);
+    $activate = (string)($_POST['activate'] ?? '') === '1';
+    if ($riderId <= 0) {
+        throw new RuntimeException('Invalid rider.');
+    }
+    setRiderActiveStatus($db, $riderId, $activate);
+}
+
+function handleSetRestaurantVerification(PDO $db, int $adminId): void
+{
+    $restaurantId = (int)($_POST['restaurant_id'] ?? 0);
+    $status       = (string)($_POST['status'] ?? '');
+    if ($restaurantId <= 0) {
+        throw new RuntimeException('Invalid restaurant.');
+    }
+    if (!setRestaurantVerificationStatus($db, $restaurantId, $status, $adminId)) {
+        throw new RuntimeException('Invalid verification status.');
+    }
+}
+
+function handleToggleRestaurant(PDO $db): void
+{
+    $restaurantId = (int)($_POST['restaurant_id'] ?? 0);
+    $activate     = (string)($_POST['activate'] ?? '') === '1';
+    if ($restaurantId <= 0) {
+        throw new RuntimeException('Invalid restaurant.');
+    }
+    setRestaurantActiveStatus($db, $restaurantId, $activate);
 }

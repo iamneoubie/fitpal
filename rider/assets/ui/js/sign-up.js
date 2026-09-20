@@ -1,35 +1,37 @@
 /**
  * FitPal Rider Registration JavaScript
  *
- * Four-step application form with:
+ * Five-step application form with:
  *   - Field-level validation and error clearing
  *   - Automatic name and address capitalization
+ *   - Title-case capitalization for vehicle make/model
  *   - Email lowercasing
  *   - Password rule feedback
  *   - File upload previews for the profile picture and driver's license
  *   - Vehicle-dependent plate validation
  *   - Emergency-contact validation
- *   - Review summary build on Step 4
- *   - Fetch-based submission with JSON response handling
+ *   - Required license issue/expiry dates (Step 4)
+ *   - Review summary build on Step 5
+ *   - Fetch-based submission with per-field server error routing
  *
  * IMPORTANT — WHERE THE UPLOADS LIVE
  * ----------------------------------
  * The profile-picture and driver's-license inputs live physically
  * inside Step 4 in the markup. That means:
  *
- *   - validateStep1 / validateStep2 must NOT check the upload inputs,
- *     or clicking "Next Step" from Step 1 will fail because the file
- *     inputs are still empty at that point.
- *   - The uploads are checked once, on the final submit path, in
- *     validateUploads().
+ *   - validateStep1 / validateStep2 / validateStep3 must NOT check the
+ *     upload inputs, or clicking "Next Step" from those steps will fail
+ *     because the file inputs are still empty at that point.
+ *   - The uploads are checked in validateStep4(), which runs when the
+ *     user leaves Step 4.
  *
  * All real validation also runs server-side in sign-up-handler.php.
  * This file is a UX layer only.
  *
  * @package FitPal
- * @version 3.2 — Address fields now share the name-field capitalization
- *                and filter treatment. Preview <img> uses
- *                removeAttribute('src') to avoid the broken-image glyph.
+ * @version 4.2 — Added setupTitleCaseInput() for vehicle make/model.
+ *                Replaced the three-branch server error router with a
+ *                fieldMap covering every field the handler can return.
  */
 
 (function () {
@@ -86,7 +88,7 @@
         const emergencyRel        = document.getElementById('emergency_relationship');
         const emergencyContact    = document.getElementById('emergency_contact');
 
-        // Step 4 — uploads + license dates + terms
+        // Step 4 — uploads + license dates
         const profileInput      = document.getElementById('profile_picture');
         const profileDropzone   = document.getElementById('profileDropzone');
         const profilePreview    = document.getElementById('profilePreview');
@@ -108,6 +110,7 @@
         const licenseIssueError  = document.getElementById('licenseIssueError');
         const licenseExpiryError = document.getElementById('licenseExpiryError');
 
+        // Step 5 — review + terms + submit
         const termsCheckbox = document.getElementById('terms');
         const termsGroup    = document.getElementById('termsGroup');
         const termsError    = document.getElementById('termsError');
@@ -135,14 +138,15 @@
         const emergencyContactError   = document.getElementById('emergencyContactError');
 
         const stepTitles = [
-            'Step 1 of 4 — Personal Information',
-            'Step 2 of 4 — Vehicle Details',
-            'Step 3 of 4 — Address & Emergency Contact',
-            'Step 4 of 4 — Verification & Review',
+            'Step 1 of 5 — Personal Information',
+            'Step 2 of 5 — Vehicle Details',
+            'Step 3 of 5 — Address & Emergency Contact',
+            'Step 4 of 5 — Verification Uploads',
+            'Step 5 of 5 — Review & Submit',
         ];
 
         let currentStep = 1;
-        const totalSteps = 4;
+        const totalSteps = 5;
         let isSubmitting = false;
 
         const NAME_PATTERN = /^[A-Za-z\s\-']+$/;
@@ -204,7 +208,7 @@
                 el.classList.remove('error');
             });
 
-            if (step === 4 && termsGroup) {
+            if (step === 5 && termsGroup) {
                 termsGroup.classList.remove('error');
                 if (termsError) {
                     termsError.textContent = '';
@@ -223,12 +227,46 @@
         // INPUT FILTERS
         // ============================================
 
+        /**
+         * Name-style filter: letters, spaces, hyphens, apostrophes.
+         * Auto-capitalizes the first letter of each word.
+         */
         function setupNameInput(input, errorEl) {
             if (!input) return;
 
             input.addEventListener('input', function () {
                 const start = this.selectionStart;
                 const filtered = this.value.replace(/[^A-Za-z\s\-']/g, '');
+                const capitalized = filtered.replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+
+                if (this.value !== capitalized) {
+                    this.value = capitalized;
+                    const newStart = Math.min(start, this.value.length);
+                    this.setSelectionRange(newStart, newStart);
+                }
+                if (errorEl) clearFieldError(this, errorEl);
+            });
+
+            input.addEventListener('blur', function () {
+                if (this.value.length > 0) {
+                    const capitalized = this.value.replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+                    if (this.value !== capitalized) this.value = capitalized;
+                }
+            });
+        }
+
+        /**
+         * Title-case filter for vehicle make/model.
+         * Permits letters, digits, spaces, hyphens, dots, slashes
+         * so values like "Click 125i", "CR-V", "R 1250 GS" survive.
+         * Auto-capitalizes the first letter of each word.
+         */
+        function setupTitleCaseInput(input, errorEl) {
+            if (!input) return;
+
+            input.addEventListener('input', function () {
+                const start = this.selectionStart;
+                const filtered = this.value.replace(/[^A-Za-z0-9\s\-./]/g, '');
                 const capitalized = filtered.replace(/\b\w/g, function (c) { return c.toUpperCase(); });
 
                 if (this.value !== capitalized) {
@@ -315,6 +353,10 @@
         setupNameInput(emergencyFirstName, emergencyFirstNameError);
         setupNameInput(emergencyMiddleName, null);
         setupNameInput(emergencyLastName, emergencyLastNameError);
+
+        // Vehicle make/model — title-case with digit/symbol allowance.
+        setupTitleCaseInput(vehicleMake, null);
+        setupTitleCaseInput(vehicleModel, null);
 
         setupEmailInput(email);
         setupDigitsOnly(contactNumber, contactError);
@@ -482,7 +524,6 @@
 
         // ============================================
         // VALIDATION — STEP 1
-        // No upload checks here. Uploads live on Step 4.
         // ============================================
 
         function validateStep1() {
@@ -594,7 +635,6 @@
 
         // ============================================
         // VALIDATION — STEP 2
-        // No upload checks here. Uploads live on Step 4.
         // ============================================
 
         function validateStep2() {
@@ -684,8 +724,7 @@
         }
 
         // ============================================
-        // VALIDATION — STEP 4 (uploads + license dates + terms)
-        // This is the only place the upload inputs are checked.
+        // VALIDATION — STEP 4 (uploads + license dates)
         // ============================================
 
         function validateUploads() {
@@ -727,23 +766,31 @@
         function validateLicenseDates() {
             let valid = true;
 
-            if (licenseIssue && licenseIssue.value) {
-                const d = new Date(licenseIssue.value);
-                if (d > new Date()) {
+            // Issue date — REQUIRED
+            if (!licenseIssue || !licenseIssue.value) {
+                showFieldError(licenseIssue, licenseIssueError, 'Please enter the license issue date.');
+                valid = false;
+            } else {
+                const issue = new Date(licenseIssue.value);
+                if (issue > new Date()) {
                     showFieldError(licenseIssue, licenseIssueError, 'Issue date cannot be in the future.');
                     valid = false;
                 }
             }
 
-            if (licenseExpiry && licenseExpiry.value) {
-                const d = new Date(licenseExpiry.value);
-                if (d <= new Date()) {
+            // Expiry date — REQUIRED
+            if (!licenseExpiry || !licenseExpiry.value) {
+                showFieldError(licenseExpiry, licenseExpiryError, 'Please enter the license expiry date.');
+                valid = false;
+            } else {
+                const expiry = new Date(licenseExpiry.value);
+                if (expiry <= new Date()) {
                     showFieldError(licenseExpiry, licenseExpiryError, 'Expiry date must be in the future.');
                     valid = false;
                 }
                 if (licenseIssue && licenseIssue.value) {
                     const issue = new Date(licenseIssue.value);
-                    if (d <= issue) {
+                    if (expiry <= issue) {
                         showFieldError(licenseExpiry, licenseExpiryError, 'Expiry must be after issue date.');
                         valid = false;
                     }
@@ -758,8 +805,20 @@
 
             let valid = true;
 
-            if (!validateUploads())     valid = false;
+            if (!validateUploads())      valid = false;
             if (!validateLicenseDates()) valid = false;
+
+            return valid;
+        }
+
+        // ============================================
+        // VALIDATION — STEP 5 (terms)
+        // ============================================
+
+        function validateStep5() {
+            clearStepErrors(5);
+
+            let valid = true;
 
             if (!termsCheckbox || !termsCheckbox.checked) {
                 if (termsError) {
@@ -779,6 +838,7 @@
                 case 2: return validateStep2();
                 case 3: return validateStep3();
                 case 4: return validateStep4();
+                case 5: return validateStep5();
                 default: return true;
             }
         }
@@ -850,6 +910,10 @@
             setText('reviewEmergencyName', emergencyFullName || '—');
             setText('reviewEmergencyRelationship', emergencyRelText);
             setText('reviewEmergencyContact', (emergencyContact && emergencyContact.value) || '—');
+
+            setText('reviewProfilePhoto', profileFileName);
+            setText('reviewLicensePhoto', licenseFileName);
+            setText('reviewLicenseDates', licenseDatesText);
         }
 
         function setText(id, value) {
@@ -885,12 +949,12 @@
             });
 
             if (stepSubtitle) {
-                stepSubtitle.textContent = stepTitles[step - 1] || ('Step ' + step + ' of 4');
+                stepSubtitle.textContent = stepTitles[step - 1] || ('Step ' + step + ' of ' + totalSteps);
             }
 
             hideBanner();
 
-            if (step === 4) {
+            if (step === 5) {
                 buildReviewSummary();
             }
 
@@ -1009,6 +1073,52 @@
         }
 
         // ============================================
+        // SERVER FIELD → INLINE SLOT MAP
+        // Used by the submit handler to route every server-side
+        // `field` value to its inline element and owning step.
+        // ============================================
+
+        const SERVER_FIELD_MAP = {
+            // Step 1
+            first_name:            { input: firstName,          errorEl: firstNameError,          step: 1 },
+            last_name:             { input: lastName,           errorEl: lastNameError,           step: 1 },
+            birthdate:             { input: birthdate,          errorEl: birthdateError,          step: 1 },
+            gender:                { input: gender,             errorEl: genderError,             step: 1 },
+            email:                 { input: email,              errorEl: emailError,              step: 1 },
+            contact_number:        { input: contactNumber,      errorEl: contactError,            step: 1 },
+            username:              { input: username,           errorEl: usernameError,           step: 1 },
+            password:              { input: password,           errorEl: passwordError,           step: 1 },
+            confirm_password:      { input: confirmPassword,    errorEl: confirmError,            step: 1 },
+
+            // Step 2
+            vehicle_type:          { input: vehicleType,        errorEl: vehicleTypeError,        step: 2 },
+            vehicle_plate:         { input: vehiclePlate,       errorEl: vehiclePlateError,       step: 2 },
+            vehicle_year:          { input: vehicleYear,        errorEl: vehicleYearError,        step: 2 },
+
+            // Step 3
+            block:                 { input: block,              errorEl: blockError,              step: 3 },
+            city:                  { input: city,               errorEl: cityError,               step: 3 },
+            postal_code:           { input: postalCode,         errorEl: postalError,             step: 3 },
+            emergency_first_name:  { input: emergencyFirstName, errorEl: emergencyFirstNameError, step: 3 },
+            emergency_last_name:   { input: emergencyLastName,  errorEl: emergencyLastNameError,  step: 3 },
+            emergency_relationship:{ input: emergencyRel,       errorEl: emergencyRelError,       step: 3 },
+            emergency_contact:     { input: emergencyContact,   errorEl: emergencyContactError,   step: 3 },
+
+            // Step 4
+            profile_picture:       { input: profileInput,       errorEl: profilePicError,         step: 4 },
+            drivers_license:       { input: licenseInput,       errorEl: licenseError,            step: 4 },
+            license_issue_date:    { input: licenseIssue,       errorEl: licenseIssueError,       step: 4 },
+            license_expiry_date:   { input: licenseExpiry,      errorEl: licenseExpiryError,      step: 4 },
+            // `upload` is a generic bucket for both files; land it on
+            // the license slot only when the message mentions license,
+            // otherwise on the photo slot. Handled explicitly below.
+            upload:                { input: null,               errorEl: null,                    step: 4 },
+
+            // Step 5 — terms uses the group wrapper, handled explicitly.
+            terms:                 { input: null,               errorEl: null,                    step: 5 },
+        };
+
+        // ============================================
         // FORM SUBMISSION
         // ============================================
 
@@ -1026,6 +1136,7 @@
                 if (!validateStep2()) { goToStep(2); return; }
                 if (!validateStep3()) { goToStep(3); return; }
                 if (!validateStep4()) { goToStep(4); return; }
+                if (!validateStep5()) { goToStep(5); return; }
 
                 isSubmitting = true;
                 if (registerBtn) {
@@ -1061,16 +1172,22 @@
                             registerBtn.textContent = 'Submit Application';
                         }
 
+                        // ---- Terms: uses the group wrapper class ----
                         if (data && data.field === 'terms') {
                             if (termsError) {
                                 termsError.textContent = data.message;
                                 termsError.style.display = 'block';
                             }
                             if (termsGroup) termsGroup.classList.add('error');
-                            goToStep(4);
+                            goToStep(5);
                             return;
                         }
 
+                        // ---- Generic upload bucket ----
+                        // The handler returns field="upload" for any
+                        // validateUpload() failure. Route by inspecting
+                        // the message: if it mentions "license" land on
+                        // the license slot, otherwise on the photo slot.
                         if (data && data.field === 'upload') {
                             if (/license/i.test(data.message || '')) {
                                 showFieldError(licenseInput, licenseError, data.message);
@@ -1081,6 +1198,24 @@
                             return;
                         }
 
+                        // ---- Map every other server field to its slot ----
+                        const target = (data && data.field && SERVER_FIELD_MAP[data.field])
+                            ? SERVER_FIELD_MAP[data.field]
+                            : null;
+
+                        if (target && target.input && target.errorEl) {
+                            showFieldError(target.input, target.errorEl, data.message);
+
+                            // Only bounce back if the user is past the step
+                            // that owns this field. If they're on or before
+                            // it, just highlight the input.
+                            if (target.step < currentStep) {
+                                goToStep(target.step);
+                            }
+                            return;
+                        }
+
+                        // ---- Fallthrough: no specific field ----
                         showBanner((data && data.message) || 'Could not create your account. Please try again.');
                     })
                     .catch(function () {

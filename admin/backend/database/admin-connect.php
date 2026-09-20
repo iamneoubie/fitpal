@@ -5,13 +5,10 @@
  * Admin pages should require THIS file instead of reaching into
  * shared/backend/database/database-connect.php directly.
  *
- * This does NOT open a second database connection - FitPal's architecture
- * requires one shared PDO singleton. This file exists only so the admin
- * role has its own include point, consistent with the rest of
- * admin/backend/database/ (e.g. admin-queries.php).
- *
- * Usage:
- *   require_once __DIR__ . '/../backend/database/admin-connect.php';
+ * This does NOT open a second database connection - FitPal's
+ * architecture requires one shared PDO singleton. This file exists
+ * so the admin role has its own include point, consistent with the
+ * customer role.
  *
  * @package FitPal
  * @version 1.0

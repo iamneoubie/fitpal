@@ -1,21 +1,19 @@
 /**
-/*
  * FitPal Rider Header Styles
  *
- * Rider-specific header overrides. Uses global CSS variables from
- * shared/assets/css/global.css and extends the shared header layout.
+ * Rider-specific header overrides. Mirrors
+ * customer/assets/css/header.css so the two roles stay visually
+ * identical. Uses global CSS variables from global.css.
+ *
+ * Riders do NOT have a cart, so there is no .nav-badge rule here.
  *
  * @package FitPal
- * @version 1.0
- */
- * FitPal Rider Header Styles
- *
- * Rider-specific header overrides. Uses global CSS variables from
- * global.css. Deliberately excludes the .nav-badge rule — riders
- * do not have a cart.
- *
- * @package FitPal
- * @version 1.1 — Retains parity with customer header.
+ * @version 2.0 — Rebuilt from scratch to match the customer header
+ *                layout. Removed leftover Git merge markers, the
+ *                malformed nested docblock, and the duplicated
+ *                .rider-header block that caused the stylesheet to
+ *                parse incorrectly (and the profile page to lose
+ *                its background).
  */
 
 /* ============================================
@@ -23,21 +21,12 @@
    ============================================ */
 
 .rider-header {
-.rider-header {
     height: 70px;
     min-height: 70px;
     max-height: 70px;
 }
 
 .rider-header .header-container {
-    height: 70px;
-    min-height: 70px;
-    max-height: 70px;
-    transition: box-shadow 0.1s ease;
-}
-
-.rider-header .header-container {
->>>>>>> 677b4fcf15b4c92586299707a23a3b9955a24c1d
     max-width: 1200px;
     margin: 0 auto;
     height: 100%;
@@ -203,7 +192,10 @@
     transform: translateY(-7px) rotate(-45deg);
 }
 
-/* Mobile overlay */
+/* ============================================
+   MOBILE OVERLAY
+   ============================================ */
+
 .mobile-overlay {
     position: fixed;
     top: 70px;
@@ -224,7 +216,10 @@
     will-change: opacity;
 }
 
-/* Mobile nav */
+/* ============================================
+   MOBILE NAV
+   ============================================ */
+
 .mobile-nav {
     position: fixed;
     top: 70px;
@@ -359,7 +354,7 @@
 }
 
 /* ============================================
-   MOBILE NAV — special links
+   MOBILE NAV — SPECIAL LINKS
    ============================================ */
 
 .mobile-nav-link.mobile-login {
@@ -441,7 +436,6 @@
 
 @media (max-width: 768px) {
     .rider-header {
->>>>>>> 677b4fcf15b4c92586299707a23a3b9955a24c1d
         height: 60px;
         min-height: 60px;
         max-height: 60px;

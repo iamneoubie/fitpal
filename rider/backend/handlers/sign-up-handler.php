@@ -15,12 +15,16 @@
  * file has been moved, the file is unlinked and the transaction is
  * rolled back.
  *
+ * License issue date and expiry date are REQUIRED. An empty value
+ * triggers a JSON error rather than silently storing NULL.
+ *
  * Responds with JSON. The rider is NOT logged in after registration.
  *
  * @package FitPal
- * @version 3.1 — Fixes undefined helper calls; guarantees rollback
- *                and file cleanup on every failure path; avoids
- *                double-validating uploads.
+ * @version 3.3 — Upload validation failures now return the specific
+ *                field name (`profile_picture` or `drivers_license`)
+ *                instead of the generic `upload`, so the client can
+ *                route each error to the correct inline slot.
  */
 
 declare(strict_types=1);
@@ -193,6 +197,14 @@ if (
     respondError('Please fill in all required fields.');
 }
 
+// License issue/expiry are required — check before any other work.
+if ($licenseIssue === '') {
+    respondError('Please enter the license issue date.', 'license_issue_date');
+}
+if ($licenseExpiry === '') {
+    respondError('Please enter the license expiry date.', 'license_expiry_date');
+}
+
 /* --------------------------------------------------------------
  * FIELD VALIDATION
  * -------------------------------------------------------------- */
@@ -274,34 +286,28 @@ if ($vehicleYear !== '') {
     $vehicleYearValue = $y;
 }
 
-// ---- License dates ----
-$issueDate  = null;
-$expiryDate = null;
-
-if ($licenseIssue !== '') {
-    try {
-        $d = new DateTime($licenseIssue);
-        if ($d > new DateTime()) {
-            respondError('License issue date cannot be in the future.', 'license_issue_date');
-        }
-        $issueDate = $d->format('Y-m-d');
-    } catch (Exception $e) {
-        respondError('Invalid license issue date.', 'license_issue_date');
+// ---- License dates (both required, already checked non-empty above) ----
+try {
+    $issue = new DateTime($licenseIssue);
+    if ($issue > new DateTime()) {
+        respondError('License issue date cannot be in the future.', 'license_issue_date');
     }
+    $issueDate = $issue->format('Y-m-d');
+} catch (Exception $e) {
+    respondError('Invalid license issue date.', 'license_issue_date');
 }
-if ($licenseExpiry !== '') {
-    try {
-        $d = new DateTime($licenseExpiry);
-        if ($d <= new DateTime()) {
-            respondError('License expiry date must be in the future.', 'license_expiry_date');
-        }
-        if ($issueDate !== null && $d <= new DateTime($issueDate)) {
-            respondError('Expiry date must be after the issue date.', 'license_expiry_date');
-        }
-        $expiryDate = $d->format('Y-m-d');
-    } catch (Exception $e) {
-        respondError('Invalid license expiry date.', 'license_expiry_date');
+
+try {
+    $expiry = new DateTime($licenseExpiry);
+    if ($expiry <= new DateTime()) {
+        respondError('License expiry date must be in the future.', 'license_expiry_date');
     }
+    if ($expiry <= new DateTime($issueDate)) {
+        respondError('Expiry date must be after the issue date.', 'license_expiry_date');
+    }
+    $expiryDate = $expiry->format('Y-m-d');
+} catch (Exception $e) {
+    respondError('Invalid license expiry date.', 'license_expiry_date');
 }
 
 if ($postalCode !== '' && !preg_match('/^[0-9]{3,10}$/', $postalCode)) {
@@ -349,12 +355,18 @@ if (!$licenseFile || ($licenseFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ER
     respondError("Please upload a photo of your driver's license.", 'drivers_license');
 }
 
-// Validate both files once. Reuse the results below.
+// Validate each file against its own error field so the client can
+// route the message to the correct inline slot.
 try {
     $profileMeta = validateUpload($profileFile, 2 * 1024 * 1024, $allowedImages);
+} catch (RuntimeException $e) {
+    respondError($e->getMessage(), 'profile_picture');
+}
+
+try {
     $licenseMeta = validateUpload($licenseFile, 5 * 1024 * 1024, $allowedImages);
 } catch (RuntimeException $e) {
-    respondError($e->getMessage(), 'upload');
+    respondError($e->getMessage(), 'drivers_license');
 }
 
 /* --------------------------------------------------------------
@@ -428,8 +440,6 @@ try {
     $deliveryRiderId = (int)$database_connection->lastInsertId();
 
     // ---- 3. Move uploaded files ----
-    // Paths are captured so the outer catch can unlink them if a
-    // later step fails.
     $profilePath = storeUpload(
         $profileFile,
         $projectRoot,
@@ -467,7 +477,7 @@ try {
         ':vehicle_plate'        => $vehiclePlate !== '' ? $vehiclePlate : null,
     ]);
 
-    // ---- 5. Rider address (label column dropped) ----
+    // ---- 5. Rider address ----
     $address = $database_connection->prepare(
         "INSERT INTO delivery_rider_address
             (delivery_rider_id, block, barangay, city,
@@ -499,13 +509,11 @@ try {
     // ---- 7. Driver's license document ----
     insertRiderDocument($database_connection, $deliveryRiderId, [
         'drivers_license' => $licensePath,
-        'issue_date'      => $issueDate  ?? '',
-        'expiry_date'     => $expiryDate ?? '',
+        'issue_date'      => $issueDate,
+        'expiry_date'     => $expiryDate,
     ]);
 
     // ---- 8. Optional extras stashed on session (vehicle make/model/year) ----
-    // These have no dedicated columns yet. Kept so an admin view can
-    // read them on the same page request without a schema change.
     $_SESSION['rider_pending_application'] = [
         'delivery_rider_id' => $deliveryRiderId,
         'vehicle_make'      => $vehicleMake  !== '' ? $vehicleMake  : null,

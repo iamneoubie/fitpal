@@ -2,11 +2,20 @@
  * FitPal Rider Dashboard JavaScript
  *
  * Handles:
- *   - Availability toggle (online/offline)
+ *   - Availability toggle (online/offline) for verified riders
  *   - Chart tooltip positioning
+ *   - Toast notifications
+ *
+ * Availability rule
+ * -----------------
+ * The toggle only exists in the DOM for verified riders. This script
+ * binds to #availabilityToggle and no-ops if the element is missing,
+ * so a pending/denied/suspended rider gets the disabled button without
+ * any client-side branching.
  *
  * @package FitPal
- * @version 2.0
+ * @version 3.0 — Binds only when the toggle is present. Icon paths
+ *                updated to match the reimagined dashboard markup.
  */
 
 (function () {
@@ -17,11 +26,16 @@
         // ============================================
         // CONFIG
         // ============================================
-        var CFG = window.FITPAL_RIDER || {};
+        var CFG        = window.FITPAL_RIDER || {};
         var CSRF_TOKEN = CFG.csrfToken || '';
+        var ASSET_BASE = CFG.assetBase || '../../shared/';
+
+        var ICON_OFFLINE = ASSET_BASE + 'assets/images/icons/close-circle-line.svg';
+        var ICON_ONLINE  = ASSET_BASE + 'assets/images/icons/add-line.svg';
 
         // ============================================
         // AVAILABILITY TOGGLE
+        // Only present for verified riders.
         // ============================================
         var availabilityToggle = document.getElementById('availabilityToggle');
 
@@ -29,11 +43,11 @@
             availabilityToggle.addEventListener('click', function () {
                 var btn = this;
                 var currentAvailable = btn.dataset.available === '1';
-                var newAvailable = !currentAvailable;
+                var newAvailable     = !currentAvailable;
 
                 btn.disabled = true;
-                var originalContent = btn.innerHTML;
-                btn.innerHTML = '<span>Updating...</span>';
+                var originalHTML = btn.innerHTML;
+                btn.innerHTML = '<span>Updating…</span>';
 
                 var body = new URLSearchParams();
                 body.append('csrf_token', CSRF_TOKEN);
@@ -52,20 +66,22 @@
                     .then(function (res) { return res.json(); })
                     .then(function (data) {
                         if (data && data.status === 'success') {
-                            // Update the button state
                             btn.dataset.available = newAvailable ? '1' : '0';
 
                             if (newAvailable) {
                                 btn.classList.remove('btn-primary');
                                 btn.classList.add('btn-outline');
-                                btn.innerHTML = '<img src="' + CFG.assetBase + 'assets/images/icons/close-circle-line.svg" alt="" class="btn-icon" width="16" height="16"><span>Go Offline</span>';
+                                btn.innerHTML =
+                                    '<img src="' + ICON_OFFLINE + '" alt="" class="btn-icon" width="16" height="16">' +
+                                    '<span>Go Offline</span>';
                             } else {
                                 btn.classList.remove('btn-outline');
                                 btn.classList.add('btn-primary');
-                                btn.innerHTML = '<img src="' + CFG.assetBase + 'assets/images/icons/check-line.svg" alt="" class="btn-icon" width="16" height="16"><span>Go Online</span>';
+                                btn.innerHTML =
+                                    '<img src="' + ICON_ONLINE + '" alt="" class="btn-icon" width="16" height="16">' +
+                                    '<span>Go Online</span>';
                             }
 
-                            // Update the greeting text
                             var greetingText = document.querySelector('.rider-dashboard-greeting .text-muted');
                             if (greetingText) {
                                 greetingText.textContent = newAvailable
@@ -73,15 +89,21 @@
                                     : "You're currently offline. Go online to start accepting deliveries.";
                             }
 
-                            showToast(data.message || (newAvailable ? 'You are now online' : 'You are now offline'), 'success');
+                            showToast(
+                                data.message || (newAvailable ? 'You are now online' : 'You are now offline'),
+                                'success'
+                            );
                         } else {
-                            showToast((data && data.message) || 'Could not update availability', 'error');
-                            btn.innerHTML = originalContent;
+                            btn.innerHTML = originalHTML;
+                            showToast(
+                                (data && data.message) || 'Could not update availability',
+                                'error'
+                            );
                         }
                     })
                     .catch(function () {
+                        btn.innerHTML = originalHTML;
                         showToast('Network error. Please try again.', 'error');
-                        btn.innerHTML = originalContent;
                     })
                     .finally(function () {
                         btn.disabled = false;
@@ -92,18 +114,18 @@
         // ============================================
         // CHART TOOLTIP
         // ============================================
-        var chart = document.querySelector('.rider-weekly-chart');
+        var chart   = document.querySelector('.rider-weekly-chart');
         var tooltip = document.getElementById('riderChartTooltip');
 
         if (chart && tooltip) {
-            var bars = chart.querySelectorAll('.rider-chart-bar');
+            var bars      = chart.querySelectorAll('.rider-chart-bar');
             var activeBar = null;
 
             function showTooltipFor(bar) {
                 var column = bar.closest('.rider-chart-column');
                 if (!column) return;
 
-                var day = column.dataset.day || '';
+                var day    = column.dataset.day || '';
                 var amount = column.dataset.amount || '';
 
                 tooltip.textContent = day + ' — ' + amount;
@@ -120,31 +142,29 @@
             function positionTooltip() {
                 if (!activeBar) return;
 
-                var chartRect = chart.getBoundingClientRect();
-                var barRect = activeBar.getBoundingClientRect();
+                var chartRect   = chart.getBoundingClientRect();
+                var barRect     = activeBar.getBoundingClientRect();
                 var tooltipRect = tooltip.getBoundingClientRect();
 
                 var left = barRect.left - chartRect.left
-                    + (barRect.width / 2)
-                    - (tooltipRect.width / 2);
+                         + (barRect.width / 2)
+                         - (tooltipRect.width / 2);
 
                 var top = barRect.top - chartRect.top
-                    - tooltipRect.height
-                    - 8;
+                        - tooltipRect.height
+                        - 8;
 
-                // Clamp horizontally
                 if (left < 4) left = 4;
                 if (left + tooltipRect.width > chartRect.width - 4) {
                     left = chartRect.width - tooltipRect.width - 4;
                 }
 
-                // If no room above, drop below the bar
                 if (top < 4) {
                     top = barRect.bottom - chartRect.top + 8;
                 }
 
                 tooltip.style.left = left + 'px';
-                tooltip.style.top = top + 'px';
+                tooltip.style.top  = top  + 'px';
             }
 
             bars.forEach(function (bar) {
@@ -184,7 +204,7 @@
         }
 
         // ============================================
-        // TOAST NOTIFICATION
+        // TOAST
         // ============================================
         function showToast(message, type) {
             var toast = document.getElementById('riderToast');
@@ -204,13 +224,13 @@
 
             var palette = {
                 success: ['#d1fae5', '#065f46'],
-                error: ['#fee2e2', '#991b1b'],
-                info: ['#dbeafe', '#1e40af']
+                error:   ['#fee2e2', '#991b1b'],
+                info:    ['#dbeafe', '#1e40af']
             };
             var colors = palette[type] || palette.info;
             toast.style.background = colors[0];
-            toast.style.color = colors[1];
-            toast.textContent = message;
+            toast.style.color      = colors[1];
+            toast.textContent      = message;
 
             void toast.offsetWidth;
             toast.style.transform = 'translateX(0)';

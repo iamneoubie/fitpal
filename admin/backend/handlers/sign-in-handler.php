@@ -1,14 +1,15 @@
 <?php
 /**
- * FitPal Administrator Sign-In Handler
+ * FitPal Admin Sign-In Handler
  *
- * Validates credentials against the administrator table, sets the
- * admin session, and redirects to the dashboard.
+ * Validates credentials against the administrator table.
+ * Contains no SQL — all data access goes through admin-queries.php.
+ *
+ * DEVELOPMENT-ONLY BYPASS: seed data stores plaintext passwords.
+ * Remove before any non-local deployment.
  *
  * @package FitPal
- * @version 1.1 — Reads role from administrator_profile via the
- *                updated query. Falls back to 'support' when the
- *                profile row is missing.
+ * @version 1.0
  */
 
 declare(strict_types=1);
@@ -21,104 +22,66 @@ require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/admin-queries.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    $_SESSION['admin_login_error'] = 'Invalid request method.';
+    $_SESSION['login_error'] = 'Invalid request method.';
     header('Location: ../../pages/sign-in.php');
     exit;
 }
 
-if (!isset($_POST['csrf_token'], $_SESSION['csrf_token']) ||
-    !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
-    $_SESSION['admin_login_error'] = 'Security validation failed. Please try again.';
+if (!isset($_POST['csrf_token'], $_SESSION['csrf_token'])
+    || !hash_equals((string)$_SESSION['csrf_token'], (string)$_POST['csrf_token'])) {
+    $_SESSION['login_error'] = 'Security validation failed. Please try again.';
     header('Location: ../../pages/sign-in.php');
     exit;
 }
 
-$identifier = trim($_POST['identifier'] ?? '');
-$password   = $_POST['password'] ?? '';
+$identifier = trim((string)($_POST['identifier'] ?? ''));
+$password   = (string)($_POST['password'] ?? '');
 
 if ($identifier === '' || $password === '') {
-    $_SESSION['admin_login_error'] = 'Please enter your email/username and password.';
+    $_SESSION['login_error'] = 'Please enter your email/username and password.';
     header('Location: ../../pages/sign-in.php');
     exit;
 }
 
 try {
-    $admin = findAdministratorByIdentifier($database_connection, $identifier);
+    $admin = findAdminByIdentifier($database_connection, $identifier);
 
     if (!$admin) {
-        $_SESSION['admin_login_error'] = 'Invalid email/username or password.';
+        $_SESSION['login_error'] = 'Invalid email/username or password.';
         header('Location: ../../pages/sign-in.php');
         exit;
     }
 
     if ((int)$admin['is_active'] !== 1) {
-        $_SESSION['admin_login_error'] = 'Your account has been deactivated.';
+        $_SESSION['login_error'] = 'Your account has been deactivated. Please contact support.';
         header('Location: ../../pages/sign-in.php');
         exit;
     }
 
-    $isPasswordValid = false;
+    $passwordValid = password_verify($password, (string)$admin['password']);
 
-    if (password_verify($password, $admin['password'])) {
-        $isPasswordValid = true;
+    // ---- DEVELOPMENT-ONLY BYPASS ----
+    if (!$passwordValid && hash_equals((string)$admin['password'], $password)) {
+        $passwordValid = true;
     }
+    // ---- END BYPASS ----
 
-    // ============================================================
-    // SECURITY WARNING — DEVELOPMENT-ONLY CODE
-    // ============================================================
-    //
-    // WHAT THIS DOES:
-    //   If password_verify() fails, this fallback compares the
-    //   submitted password against the stored value using plain
-    //   string equality. Anyone who can read the stored value
-    //   (from the DB) can log in as that admin.
-    //
-    // WHY IT EXISTS:
-    //   Seed data stores passwords as plaintext ("admin123"), so
-    //   password_verify() always fails against those rows.
-    //
-    // WHEN TO REMOVE:
-    //   Before any deployment outside local development. See
-    //   customer/backend/handlers/sign-in-handler.php for the full
-    //   rationale — this block mirrors it exactly.
-    // ============================================================
-    if (!$isPasswordValid) {
-        $clean = trim($password);
-        if (hash_equals((string)$admin['password'], $clean)) {
-            $isPasswordValid = true;
-        }
-    }
-    // ============================================================
-    // END DEVELOPMENT-ONLY BLOCK
-    // ============================================================
-
-    if (!$isPasswordValid) {
-        $_SESSION['admin_login_error'] = 'Invalid email/username or password.';
+    if (!$passwordValid) {
+        $_SESSION['login_error'] = 'Invalid email/username or password.';
         header('Location: ../../pages/sign-in.php');
         exit;
     }
 
     session_regenerate_id(true);
 
-    // Role comes from administrator_profile. When the profile row
-    // is missing, $admin['role'] is null and we default to 'support'.
-    $role = isset($admin['role']) && $admin['role'] !== null && $admin['role'] !== ''
-        ? (string)$admin['role']
-        : 'support';
-
     $_SESSION['administrator_id'] = (int)$admin['administrator_id'];
-    $_SESSION['admin_role']       = $role;
     $_SESSION['user_role']        = 'admin';
-    $_SESSION['user_name']        = trim($admin['first_name'] . ' ' . $admin['last_name']);
-    $_SESSION['user_email']       = $admin['email'];
-    $_SESSION['user_username']    = $admin['username'];
+    $_SESSION['user_name']        = trim(($admin['first_name'] ?? '') . ' ' . ($admin['last_name'] ?? ''));
+    $_SESSION['user_email']       = (string)($admin['email'] ?? '');
+    $_SESSION['admin_role']       = (string)($admin['role'] ?? 'support');
     $_SESSION['created']          = time();
 
-    try {
-        touchAdministratorLastLogin($database_connection, (int)$admin['administrator_id']);
-    } catch (Throwable $e) {
-        error_log('Admin last-login update failed: ' . $e->getMessage());
-    }
+    recordAdminLogin($database_connection, (int)$admin['administrator_id']);
 
     unset($_SESSION['csrf_token']);
 
@@ -126,8 +89,8 @@ try {
     exit;
 
 } catch (PDOException $e) {
-    error_log('Admin sign-in error: ' . $e->getMessage());
-    $_SESSION['admin_login_error'] = 'An unexpected error occurred. Please try again.';
+    error_log('Admin sign-in DB error: ' . $e->getMessage());
+    $_SESSION['login_error'] = 'An unexpected error occurred. Please try again.';
     header('Location: ../../pages/sign-in.php');
     exit;
 }

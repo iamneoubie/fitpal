@@ -2,8 +2,9 @@
  * FitPal Rider Profile Page JavaScript
  *
  * Responsibilities:
- *   - Tab switching (Personal Information | Address)
+ *   - Tab switching (Personal | Vehicle | Address)
  *   - Edit-profile toggle (enable only the contact field)
+ *   - Contact-number input filter (digits and spaces only)
  *   - Profile picture upload via rider-handler.php
  *   - Form submission via fetch, JSON response
  *   - Toast notifications
@@ -12,8 +13,9 @@
  * no external dependencies, single DOMContentLoaded wrapper.
  *
  * @package FitPal
- * @version 2.0 — Tab switching + edit toggle + picture upload;
- *                layout aligned with the customer profile page.
+ * @version 3.0 — Aligned with the rebuilt rider/pages/profile.php.
+ *                Now handles three tabs. Contact filter tightened
+ *                to 11 digits. Toast styles come from profile.css.
  */
 
 (function () {
@@ -21,9 +23,9 @@
 
     document.addEventListener('DOMContentLoaded', function () {
 
-        var CFG         = window.FITPAL_RIDER_PROFILE || {};
-        var CSRF_TOKEN  = CFG.csrfToken  || '';
-        var ASSET_BASE  = CFG.assetBase  || '../../shared/';
+        var CFG        = window.FITPAL_RIDER_PROFILE || {};
+        var CSRF_TOKEN = CFG.csrfToken || '';
+        var ASSET_BASE = CFG.assetBase || '../../shared/';
 
         // ============================================
         // TABS
@@ -33,7 +35,9 @@
 
         function switchTab(tabId) {
             tabs.forEach(function (tab) {
-                tab.classList.toggle('active', tab.dataset.tab === tabId);
+                var isActive = tab.dataset.tab === tabId;
+                tab.classList.toggle('active', isActive);
+                tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
             });
             tabContents.forEach(function (content) {
                 content.classList.toggle('active', content.id === 'tab-' + tabId);
@@ -48,15 +52,15 @@
 
         // ============================================
         // EDIT-PROFILE TOGGLE
-        // Only the contact number is editable from this page. Everything
-        // else is shown read-only and must go through support.
+        // Only the contact number is editable from this page.
+        // Everything else is shown read-only and must go through support.
         // ============================================
-        var editBtn         = document.getElementById('editProfileBtn');
-        var cancelBtn       = document.getElementById('cancelEditBtn');
-        var formActions     = document.getElementById('profileActions');
-        var form            = document.getElementById('riderProfileForm');
-        var saveBtn         = document.getElementById('saveProfileBtn');
-        var contactInput    = document.getElementById('contact_number');
+        var editBtn      = document.getElementById('editProfileBtn');
+        var cancelBtn    = document.getElementById('cancelEditBtn');
+        var formActions  = document.getElementById('profileActions');
+        var form         = document.getElementById('riderProfileForm');
+        var saveBtn      = document.getElementById('saveProfileBtn');
+        var contactInput = document.getElementById('contact_number');
 
         function enterEditMode() {
             if (contactInput) contactInput.disabled = false;
@@ -78,6 +82,7 @@
         if (cancelBtn) {
             cancelBtn.addEventListener('click', function (e) {
                 e.preventDefault();
+
                 // Reset the field to what the server rendered, then
                 // leave edit mode without a full reload.
                 if (contactInput) {
@@ -88,13 +93,18 @@
         }
 
         // ============================================
-        // INPUT FILTER — contact number: digits + spaces only
+        // INPUT FILTER — contact number
+        // Keep digits and spaces only. Cap at 11 digits.
         // ============================================
         if (contactInput) {
             contactInput.addEventListener('input', function () {
                 var cleaned = this.value.replace(/[^0-9\s]/g, '');
-                if (this.value !== cleaned) {
-                    this.value = cleaned;
+                var digitsOnly = cleaned.replace(/\D/g, '');
+                if (digitsOnly.length > 11) {
+                    digitsOnly = digitsOnly.slice(0, 11);
+                }
+                if (this.value !== digitsOnly) {
+                    this.value = digitsOnly;
                 }
             });
         }
@@ -102,10 +112,10 @@
         // ============================================
         // PROFILE PICTURE UPLOAD
         // ============================================
-        var uploadBtn       = document.getElementById('uploadPictureBtn');
-        var pictureInput    = document.getElementById('profilePictureInput');
-        var avatarImg       = document.getElementById('profileAvatarImg');
-        var avatarInitial   = document.getElementById('profileAvatarInitial');
+        var uploadBtn     = document.getElementById('uploadPictureBtn');
+        var pictureInput  = document.getElementById('profilePictureInput');
+        var avatarImg     = document.getElementById('profileAvatarImg');
+        var avatarInitial = document.getElementById('profileAvatarInitial');
 
         if (uploadBtn && pictureInput) {
             uploadBtn.addEventListener('click', function () {
@@ -117,12 +127,14 @@
 
                 var file = this.files[0];
 
-                if (!file.type.startsWith('image/')) {
+                if (!file.type || file.type.indexOf('image/') !== 0) {
                     showToast('Please select an image file.', 'error');
+                    pictureInput.value = '';
                     return;
                 }
                 if (file.size > 2 * 1024 * 1024) {
                     showToast('Image must be under 2 MB.', 'error');
+                    pictureInput.value = '';
                     return;
                 }
 
@@ -167,6 +179,8 @@
                 })
                 .finally(function () {
                     if (uploadBtn) uploadBtn.disabled = false;
+                    // Allow re-selecting the same file.
+                    if (pictureInput) pictureInput.value = '';
                 });
         }
 

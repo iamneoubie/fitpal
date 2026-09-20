@@ -2,18 +2,33 @@
 /**
  * FitPal Rider Dashboard
  *
- * Comprehensive dashboard for the rider role showing:
+ * Shows:
  *   - Welcome header with verification status
- *   - Key performance stats (earnings, deliveries, rating, completion rate)
+ *   - Key performance stats (wallet, deliveries, rating, today's earnings)
  *   - Weekly earnings chart
+ *   - Performance metrics (acceptance rate, completion rate, vehicle + status meta)
  *   - Recent deliveries list
- *   - Availability toggle
- *   - Verification status card
+ *   - Verification status card (when not verified)
+ *
+ * Availability rule
+ * -----------------
+ * Only verified riders can toggle their availability. Pending, denied,
+ * and suspended riders see a disabled button with a status label so they
+ * understand why they cannot go online yet.
+ *
+ * Icon rule
+ * ---------
+ * The vehicle icon uses coin-line.svg and is tinted white against the
+ * primary green box. No mask, no fallback chain beyond the one onerror
+ * on the <img>.
  *
  * All SQL lives in rider-queries.php. This page contains no SQL.
  *
  * @package FitPal
- * @version 2.0 — Full analytics dashboard
+ * @version 3.3 — Vehicle block expanded with a meta list (status,
+ *                availability, deliveries, rating) so the performance
+ *                card is no longer top-heavy with empty space beneath
+ *                the vehicle tile.
  */
 
 declare(strict_types=1);
@@ -35,11 +50,11 @@ $riderId = (int)$_SESSION['delivery_rider_id'];
 // ============================================
 // FETCH ALL DASHBOARD DATA
 // ============================================
-$profile      = getRiderProfile($database_connection, $riderId) ?: [];
-$stats        = getRiderDashboardStats($database_connection, $riderId);
-$weeklyEarnings = getRiderWeeklyEarnings($database_connection, $riderId);
+$profile          = getRiderProfile($database_connection, $riderId) ?: [];
+$stats            = getRiderDashboardStats($database_connection, $riderId);
+$weeklyEarnings   = getRiderWeeklyEarnings($database_connection, $riderId);
 $recentDeliveries = getRiderRecentDeliveries($database_connection, $riderId, 5);
-$chartScale   = getRiderChartScale($stats['week_earnings_max'] ?? 0);
+$chartScale       = getRiderChartScale($stats['week_earnings_max'] ?? 0);
 
 // ============================================
 // DERIVED VIEW DATA
@@ -49,10 +64,12 @@ $fullName   = trim(($profile['first_name'] ?? '') . ' ' . ($profile['last_name']
 $balance    = (float)($profile['balance'] ?? 0);
 $rating     = (float)($profile['average_rating'] ?? 0);
 $deliveries = (int)($profile['total_deliveries'] ?? 0);
-$vehicle    = (string)($profile['vehicle_type'] ?? '—');
+$vehicle    = (string)($profile['vehicle_type'] ?? '');
 $plate      = (string)($profile['vehicle_plate'] ?? '');
 $status     = (string)($profile['verification_status'] ?? 'pending');
 $available  = (int)($profile['is_available'] ?? 0) === 1;
+
+$isVerified = ($status === 'verified');
 
 $statusLabel = match ($status) {
     'verified'  => 'Verified',
@@ -71,21 +88,19 @@ $statusClass = match ($status) {
 };
 
 // Stats
-$todayEarnings    = (float)($stats['today_earnings'] ?? 0);
-$todayDeliveries  = (int)($stats['today_deliveries'] ?? 0);
-$weekEarnings     = (float)($stats['week_earnings'] ?? 0);
-$weekDeliveries   = (int)($stats['week_deliveries'] ?? 0);
-$monthEarnings    = (float)($stats['month_earnings'] ?? 0);
-$monthDeliveries  = (int)($stats['month_deliveries'] ?? 0);
-$totalEarnings    = (float)($stats['total_earnings'] ?? 0);
-$acceptanceRate   = (float)($stats['acceptance_rate'] ?? 0);
-$completionRate   = (float)($stats['completion_rate'] ?? 0);
+$todayEarnings   = (float)($stats['today_earnings'] ?? 0);
+$todayDeliveries = (int)($stats['today_deliveries'] ?? 0);
+$weekEarnings    = (float)($stats['week_earnings'] ?? 0);
+$weekDeliveries  = (int)($stats['week_deliveries'] ?? 0);
+$monthEarnings   = (float)($stats['month_earnings'] ?? 0);
+$monthDeliveries = (int)($stats['month_deliveries'] ?? 0);
+$totalEarnings   = (float)($stats['total_earnings'] ?? 0);
+$acceptanceRate  = (float)($stats['acceptance_rate'] ?? 0);
+$completionRate  = (float)($stats['completion_rate'] ?? 0);
 
 // Chart data
 $chartCeiling = $chartScale['ceiling'];
-$chartStep    = $chartScale['step'];
 
-// Bar heights as percentages
 $barHeights = [];
 foreach ($weeklyEarnings as $day) {
     $pct = $chartCeiling > 0 ? ($day['amount'] / $chartCeiling) * 100 : 0;
@@ -94,7 +109,6 @@ foreach ($weeklyEarnings as $day) {
         : 0;
 }
 
-// Today's date for chart highlighting
 $today = date('Y-m-d');
 
 // CSRF for availability toggle
@@ -102,6 +116,10 @@ if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 $csrfToken = $_SESSION['csrf_token'];
+
+// Vehicle display values
+$vehicleLabel = $vehicle !== '' ? ucfirst($vehicle) : 'Not recorded';
+$plateLabel   = $plate !== '' ? $plate : 'No plate recorded';
 ?>
 
 <div class="content rider-dashboard-page">
@@ -116,7 +134,10 @@ $csrfToken = $_SESSION['csrf_token'];
                     Welcome back, <span><?php echo htmlspecialchars($firstName, ENT_QUOTES, 'UTF-8'); ?></span>
                 </h1>
                 <p class="text-muted">
-                    <?php if ($available): ?>
+                    <?php if (!$isVerified): ?>
+                    Your account is <?php echo htmlspecialchars(strtolower($statusLabel), ENT_QUOTES, 'UTF-8'); ?>.
+                    You can't go online until your account is verified.
+                    <?php elseif ($available): ?>
                     You're online and ready to accept deliveries.
                     <?php else: ?>
                     You're currently offline. Go online to start accepting deliveries.
@@ -127,6 +148,8 @@ $csrfToken = $_SESSION['csrf_token'];
                 <span class="badge <?php echo $statusClass; ?>">
                     <?php echo htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8'); ?>
                 </span>
+
+                <?php if ($isVerified): ?>
                 <button type="button" class="btn <?php echo $available ? 'btn-outline' : 'btn-primary'; ?> btn-sm"
                     id="availabilityToggle" data-available="<?php echo $available ? '1' : '0'; ?>"
                     data-csrf="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
@@ -135,11 +158,19 @@ $csrfToken = $_SESSION['csrf_token'];
                         class="btn-icon" width="16" height="16">
                     <span>Go Offline</span>
                     <?php else: ?>
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/check-line.svg" alt="" class="btn-icon"
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/add-line.svg" alt="" class="btn-icon"
                         width="16" height="16">
                     <span>Go Online</span>
                     <?php endif; ?>
                 </button>
+                <?php else: ?>
+                <button type="button" class="btn btn-outline btn-sm" id="availabilityToggleDisabled" disabled
+                    aria-disabled="true" title="Available after verification">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/information-fill.svg" alt="" class="btn-icon"
+                        width="16" height="16">
+                    <span>Awaiting Verification</span>
+                </button>
+                <?php endif; ?>
             </div>
         </header>
 
@@ -164,10 +195,11 @@ $csrfToken = $_SESSION['csrf_token'];
              STAT CARDS ROW
              ============================================ -->
         <section class="rider-stats-grid" aria-label="Performance summary">
+
             <!-- Wallet Balance -->
             <a href="earnings.php" class="rider-stat-card">
-                <div class="rider-stat-icon rider-stat-icon-wallet">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/wallet-fill.svg" alt=""
+                <div class="rider-stat-icon rider-stat-icon-wallet" aria-hidden="true">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/wallet-line.svg" alt=""
                         onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/coin-line.svg'">
                 </div>
                 <div class="rider-stat-info">
@@ -182,9 +214,9 @@ $csrfToken = $_SESSION['csrf_token'];
 
             <!-- Total Deliveries -->
             <a href="deliveries.php" class="rider-stat-card">
-                <div class="rider-stat-icon rider-stat-icon-deliveries">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/package.svg" alt=""
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/order.svg'">
+                <div class="rider-stat-icon rider-stat-icon-deliveries" aria-hidden="true">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt=""
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/package.svg'">
                 </div>
                 <div class="rider-stat-info">
                     <p class="rider-stat-number"><?php echo number_format($deliveries); ?></p>
@@ -203,21 +235,22 @@ $csrfToken = $_SESSION['csrf_token'];
 
             <!-- Average Rating -->
             <div class="rider-stat-card">
-                <div class="rider-stat-icon rider-stat-icon-rating">
+                <div class="rider-stat-icon rider-stat-icon-rating" aria-hidden="true">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/star-fill.svg" alt=""
                         onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/star-empty.svg'">
                 </div>
                 <div class="rider-stat-info">
-                    <p class="rider-stat-number"><?php echo number_format($rating, 1); ?> <span
-                            class="rider-stat-number-small">/ 5.0</span></p>
+                    <p class="rider-stat-number">
+                        <?php echo number_format($rating, 1); ?>
+                        <span class="rider-stat-number-small">/ 5.0</span>
+                    </p>
                     <p class="rider-stat-label">Average Rating</p>
-                    <p class="rider-stat-hint">Based on customer feedback</p>
                 </div>
             </div>
 
             <!-- Today's Earnings -->
             <div class="rider-stat-card">
-                <div class="rider-stat-icon rider-stat-icon-today">
+                <div class="rider-stat-icon rider-stat-icon-today" aria-hidden="true">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/coin-line.svg" alt=""
                         onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/wallet-line.svg'">
                 </div>
@@ -248,7 +281,6 @@ $csrfToken = $_SESSION['csrf_token'];
                 <div class="rider-chart-body">
                     <div class="rider-weekly-chart" role="img"
                         aria-label="Bar chart of earnings over the last seven days">
-                        <!-- Y-axis labels -->
                         <div class="rider-chart-y-axis" aria-hidden="true">
                             <?php foreach (array_reverse($chartScale['gridlines']) as $grid): ?>
                             <span class="rider-chart-y-label">₱<?php echo number_format($grid, 0); ?></span>
@@ -256,16 +288,14 @@ $csrfToken = $_SESSION['csrf_token'];
                         </div>
 
                         <div class="rider-chart-plot">
-                            <!-- Gridlines -->
                             <?php foreach ($chartScale['gridlines'] as $grid): ?>
                             <div class="rider-chart-gridline" aria-hidden="true"></div>
                             <?php endforeach; ?>
 
-                            <!-- Bars -->
                             <div class="rider-chart-columns">
                                 <?php foreach ($weeklyEarnings as $day):
-                                    $pct     = $barHeights[$day['date']];
-                                    $isToday = ($day['date'] === $today);
+                                    $pct      = $barHeights[$day['date']];
+                                    $isToday  = ($day['date'] === $today);
                                     $hasValue = $day['amount'] > 0;
                                 ?>
                                 <div class="rider-chart-column"
@@ -285,16 +315,15 @@ $csrfToken = $_SESSION['csrf_token'];
                             </div>
                         </div>
 
-                        <!-- Floating tooltip -->
                         <div class="rider-chart-tooltip" id="riderChartTooltip" role="status" aria-live="polite"></div>
                     </div>
 
-                    <!-- Summary strip -->
                     <div class="rider-chart-summary">
                         <div class="rider-chart-summary-item">
                             <span class="rider-chart-summary-label">This Week</span>
-                            <span
-                                class="rider-chart-summary-value"><?php echo formatRiderCurrency($weekEarnings); ?></span>
+                            <span class="rider-chart-summary-value">
+                                <?php echo formatRiderCurrency($weekEarnings); ?>
+                            </span>
                             <?php if ($weekDeliveries > 0): ?>
                             <span class="rider-chart-summary-hint">
                                 <?php echo $weekDeliveries; ?>
@@ -304,8 +333,9 @@ $csrfToken = $_SESSION['csrf_token'];
                         </div>
                         <div class="rider-chart-summary-item">
                             <span class="rider-chart-summary-label">Last 30 Days</span>
-                            <span
-                                class="rider-chart-summary-value"><?php echo formatRiderCurrency($monthEarnings); ?></span>
+                            <span class="rider-chart-summary-value">
+                                <?php echo formatRiderCurrency($monthEarnings); ?>
+                            </span>
                             <?php if ($monthDeliveries > 0): ?>
                             <span class="rider-chart-summary-hint">
                                 <?php echo $monthDeliveries; ?>
@@ -315,8 +345,9 @@ $csrfToken = $_SESSION['csrf_token'];
                         </div>
                         <div class="rider-chart-summary-item">
                             <span class="rider-chart-summary-label">All Time</span>
-                            <span
-                                class="rider-chart-summary-value"><?php echo formatRiderCurrency($totalEarnings); ?></span>
+                            <span class="rider-chart-summary-value">
+                                <?php echo formatRiderCurrency($totalEarnings); ?>
+                            </span>
                             <span class="rider-chart-summary-hint">Total earnings</span>
                         </div>
                     </div>
@@ -330,12 +361,12 @@ $csrfToken = $_SESSION['csrf_token'];
                 </div>
 
                 <div class="rider-performance-body">
-                    <!-- Acceptance Rate -->
                     <div class="rider-performance-item">
                         <div class="rider-performance-header">
                             <span class="rider-performance-label">Acceptance Rate</span>
-                            <span
-                                class="rider-performance-value"><?php echo number_format($acceptanceRate, 0); ?>%</span>
+                            <span class="rider-performance-value">
+                                <?php echo number_format($acceptanceRate, 0); ?>%
+                            </span>
                         </div>
                         <div class="rider-performance-bar">
                             <div class="rider-performance-bar-fill"
@@ -344,12 +375,12 @@ $csrfToken = $_SESSION['csrf_token'];
                         <p class="rider-performance-hint">Orders accepted vs. offered</p>
                     </div>
 
-                    <!-- Completion Rate -->
                     <div class="rider-performance-item">
                         <div class="rider-performance-header">
                             <span class="rider-performance-label">Completion Rate</span>
-                            <span
-                                class="rider-performance-value"><?php echo number_format($completionRate, 0); ?>%</span>
+                            <span class="rider-performance-value">
+                                <?php echo number_format($completionRate, 0); ?>%
+                            </span>
                         </div>
                         <div class="rider-performance-bar">
                             <div class="rider-performance-bar-fill rider-performance-bar-fill-success"
@@ -358,22 +389,50 @@ $csrfToken = $_SESSION['csrf_token'];
                         <p class="rider-performance-hint">Deliveries completed vs. started</p>
                     </div>
 
-                    <!-- Vehicle Info -->
                     <div class="rider-performance-vehicle">
                         <span class="rider-performance-vehicle-label">Vehicle</span>
+
                         <div class="rider-performance-vehicle-info">
-                            <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt=""
+                            <img src="<?php echo $assetBase; ?>assets/images/icons/coin-line.svg" alt=""
                                 class="rider-performance-vehicle-icon"
-                                onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/community-general.svg'">
-                            <div>
+                                onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/wallet-line.svg'">
+                            <div class="rider-performance-vehicle-details">
                                 <p class="rider-performance-vehicle-name">
-                                    <?php echo htmlspecialchars(ucfirst($vehicle), ENT_QUOTES, 'UTF-8'); ?>
+                                    <?php echo htmlspecialchars($vehicleLabel, ENT_QUOTES, 'UTF-8'); ?>
                                 </p>
                                 <p class="rider-performance-vehicle-plate">
-                                    <?php echo $plate !== '' ? htmlspecialchars($plate, ENT_QUOTES, 'UTF-8') : 'No plate'; ?>
+                                    <?php echo htmlspecialchars($plateLabel, ENT_QUOTES, 'UTF-8'); ?>
                                 </p>
                             </div>
                         </div>
+
+                        <dl class="rider-performance-vehicle-meta">
+                            <div class="rider-performance-vehicle-meta-row">
+                                <dt>Status</dt>
+                                <dd>
+                                    <span class="badge <?php echo $statusClass; ?>">
+                                        <?php echo htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8'); ?>
+                                    </span>
+                                </dd>
+                            </div>
+                            <div class="rider-performance-vehicle-meta-row">
+                                <dt>Availability</dt>
+                                <dd>
+                                    <span
+                                        class="rider-performance-vehicle-availability <?php echo $available ? 'is-online' : 'is-offline'; ?>">
+                                        <?php echo $available ? 'Online' : 'Offline'; ?>
+                                    </span>
+                                </dd>
+                            </div>
+                            <div class="rider-performance-vehicle-meta-row">
+                                <dt>Total deliveries</dt>
+                                <dd><?php echo number_format($deliveries); ?></dd>
+                            </div>
+                            <div class="rider-performance-vehicle-meta-row">
+                                <dt>Average rating</dt>
+                                <dd><?php echo number_format($rating, 1); ?> / 5.0</dd>
+                            </div>
+                        </dl>
                     </div>
                 </div>
             </aside>
@@ -390,13 +449,15 @@ $csrfToken = $_SESSION['csrf_token'];
 
             <?php if (empty($recentDeliveries)): ?>
             <div class="rider-empty-state">
-                <div class="rider-empty-icon">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/package.svg" alt="No deliveries"
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/order.svg'">
+                <div class="rider-empty-icon" aria-hidden="true">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt=""
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/cart-shopping.svg'">
                 </div>
                 <p class="rider-empty-title">No deliveries yet</p>
                 <p class="rider-empty-text">
-                    <?php if ($available): ?>
+                    <?php if (!$isVerified): ?>
+                    Your account needs to be verified before you can start receiving delivery requests.
+                    <?php elseif ($available): ?>
                     You're online. New delivery requests will appear here.
                     <?php else: ?>
                     Go online to start receiving delivery requests.
@@ -406,14 +467,12 @@ $csrfToken = $_SESSION['csrf_token'];
             <?php else: ?>
             <div class="rider-deliveries-list">
                 <?php foreach ($recentDeliveries as $delivery):
-                    $orderId    = (int)($delivery['order_id'] ?? 0);
+                    $orderId      = (int)($delivery['order_id'] ?? 0);
                     $customerName = (string)($delivery['customer_name'] ?? 'Customer');
                     $destination  = (string)($delivery['destination_address'] ?? '');
                     $deliveredAt  = (string)($delivery['delivered_at'] ?? '');
-                    $orderTotal   = (float)($delivery['order_total'] ?? 0);
                     $riderEarning = (float)($delivery['rider_earning'] ?? 0);
 
-                    // Format delivery time
                     $deliveredTime = '';
                     if ($deliveredAt !== '') {
                         $ts = strtotime($deliveredAt);
@@ -423,9 +482,9 @@ $csrfToken = $_SESSION['csrf_token'];
                     }
                 ?>
                 <div class="rider-delivery-row">
-                    <div class="rider-delivery-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/check-circle-fill.svg" alt="Delivered"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/verified-fill.svg'">
+                    <div class="rider-delivery-icon" aria-hidden="true">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/verified-fill.svg" alt=""
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/check-circle-line.svg'">
                     </div>
                     <div class="rider-delivery-info">
                         <p class="rider-delivery-order">Order #<?php echo $orderId; ?></p>
@@ -438,7 +497,8 @@ $csrfToken = $_SESSION['csrf_token'];
                     </div>
                     <div class="rider-delivery-meta">
                         <p class="rider-delivery-time">
-                            <?php echo htmlspecialchars($deliveredTime, ENT_QUOTES, 'UTF-8'); ?></p>
+                            <?php echo htmlspecialchars($deliveredTime, ENT_QUOTES, 'UTF-8'); ?>
+                        </p>
                         <p class="rider-delivery-earning">
                             +<?php echo formatRiderCurrency($riderEarning); ?>
                         </p>
@@ -452,11 +512,11 @@ $csrfToken = $_SESSION['csrf_token'];
         <!-- ============================================
              VERIFICATION WARNING (if not verified)
              ============================================ -->
-        <?php if ($status !== 'verified'): ?>
+        <?php if (!$isVerified): ?>
         <section class="rider-card rider-card-warning">
             <div class="rider-card-body rider-warning-body">
-                <div class="rider-warning-icon">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg" alt="Warning"
+                <div class="rider-warning-icon" aria-hidden="true">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg" alt=""
                         onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/information-fill.svg'">
                 </div>
                 <div class="rider-warning-content">
@@ -466,6 +526,7 @@ $csrfToken = $_SESSION['csrf_token'];
                     <p class="rider-warning-text">
                         <?php if ($status === 'pending'): ?>
                         Your account is under review. You'll be notified once verification is complete.
+                        You can't go online until then.
                         <?php elseif ($status === 'denied'): ?>
                         Your application was denied. Please contact support for more information.
                         <?php elseif ($status === 'suspended'): ?>
@@ -486,7 +547,8 @@ $csrfToken = $_SESSION['csrf_token'];
 <script>
 window.FITPAL_RIDER = {
     csrfToken: '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>',
-    assetBase: '<?php echo $assetBase; ?>'
+    assetBase: '<?php echo $assetBase; ?>',
+    isVerified: <?php echo $isVerified ? 'true' : 'false'; ?>
 };
 </script>
 <script src="../assets/ui/js/dashboard.js" defer></script>

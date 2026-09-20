@@ -9,8 +9,10 @@
  * Uses only shared global CSS variables from global.css.
  *
  * @package FitPal
- * @version 3.1 — Uploader is now a full-width rectangle; the preview
- *                image only renders when a file is actually set.
+ * @version 5.0 — Five-step flow. Step 4 holds only the two-column
+ *                upload grid. Step 5 holds the review summary,
+ *                terms, and submit. Progress bar accommodates the
+ *                fifth step.
  */
 
 /* ============================================
@@ -59,7 +61,7 @@
 }
 
 /* ============================================
-   PROGRESS
+   PROGRESS — FIVE STEPS
    ============================================ */
 
 .register-progress {
@@ -67,7 +69,7 @@
     align-items: center;
     justify-content: space-between;
     margin-bottom: 30px;
-    padding: 0 10px;
+    padding: 0 6px;
 }
 
 .progress-step {
@@ -77,11 +79,12 @@
     gap: 6px;
     flex: 1;
     position: relative;
+    min-width: 0;
 }
 
 .progress-step .step-number {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     border-radius: var(--radius-full);
     background: var(--gray-200);
     color: var(--gray-500);
@@ -89,8 +92,9 @@
     align-items: center;
     justify-content: center;
     font-weight: var(--font-weight-bold);
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-xs);
     transition: all var(--transition-base);
+    flex-shrink: 0;
 }
 
 .progress-step.active .step-number {
@@ -105,11 +109,16 @@
 }
 
 .progress-step .step-label {
-    font-size: var(--font-size-xs);
+    font-size: 10px;
     color: var(--gray-400);
     text-align: center;
     font-weight: var(--font-weight-medium);
     transition: color var(--transition-base);
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
 }
 
 .progress-step.active .step-label,
@@ -121,9 +130,10 @@
     flex: 1;
     height: 2px;
     background: var(--gray-200);
-    margin: 0 4px;
+    margin: 0 3px;
     position: relative;
-    top: -12px;
+    top: -14px;
+    min-width: 8px;
 }
 
 .progress-line.completed {
@@ -396,7 +406,7 @@
 }
 
 /* ============================================
-   STEP ACTIONS — mirrors customer register
+   STEP ACTIONS
    ============================================ */
 
 .step-actions {
@@ -715,32 +725,8 @@
 }
 
 /* ============================================
-   FILE UPLOAD — PAIRED ON STEP 4
+   UPLOAD DROPZONE (shared by both blocks)
    ============================================ */
-
-.upload-pair {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-    margin-bottom: 20px;
-}
-
-.upload-pair-item {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-}
-
-.upload-pair-item .form-label {
-    text-align: center;
-    display: block;
-    margin-bottom: 8px;
-}
-
-.upload-pair-item .form-hint {
-    text-align: center;
-    margin-top: 8px;
-}
 
 .upload-dropzone {
     position: relative;
@@ -885,7 +871,128 @@
 }
 
 /* ============================================
-   RESPONSIVE — TABLET
+   STEP 4 — TWO-COLUMN UPLOAD GRID
+   Photo left, license right. Collapses to one
+   column at ≤ 768px.
+   ============================================ */
+
+.upload-block-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
+    align-items: stretch;
+}
+
+.upload-block {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    background: var(--white);
+    overflow: hidden;
+    min-width: 0;
+    height: 100%;
+}
+
+.upload-block-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--gray-200);
+    flex-shrink: 0;
+}
+
+.upload-block-number {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: var(--font-size-sm);
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.upload-block-heading {
+    min-width: 0;
+    flex: 1;
+}
+
+.upload-block-title {
+    margin: 0 0 2px 0;
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.3;
+}
+
+.upload-block-subtitle {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    line-height: 1.4;
+}
+
+.upload-block-body {
+    padding: 14px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+
+/* Dropzone inside a two-column block: shorter than the 170px
+   default so the pair stays balanced. */
+.upload-block-body .upload-dropzone {
+    height: 180px;
+    flex-shrink: 0;
+}
+
+.upload-block-body .form-error {
+    margin-top: 8px;
+}
+
+.upload-guidelines {
+    list-style: none;
+    padding: 0;
+    margin: 12px 0 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.upload-guidelines li {
+    position: relative;
+    padding-left: 18px;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    line-height: 1.5;
+}
+
+.upload-guidelines li::before {
+    content: '✓';
+    position: absolute;
+    left: 0;
+    top: 0;
+    color: var(--primary);
+    font-weight: 700;
+}
+
+/* Full-width row of license issue/expiry dates, under the pair */
+.upload-block-dates {
+    margin-top: 0;
+    margin-bottom: 20px;
+}
+
+/* ============================================
+   RESPONSIVE — TABLET (≤ 768px)
    ============================================ */
 
 @media (max-width: 768px) {
@@ -923,23 +1030,24 @@
     }
 
     .register-progress {
-        padding: 0 4px;
-        gap: 4px;
+        padding: 0 2px;
+        gap: 2px;
         margin-bottom: 22px;
     }
 
     .progress-step .step-number {
-        width: 30px;
-        height: 30px;
-        font-size: var(--font-size-xs);
+        width: 26px;
+        height: 26px;
+        font-size: 10px;
     }
 
     .progress-step .step-label {
-        font-size: 9px;
+        font-size: 8px;
     }
 
     .progress-line {
-        top: -10px;
+        top: -12px;
+        margin: 0 2px;
     }
 
     .review-label {
@@ -951,18 +1059,19 @@
         font-size: var(--font-size-xs);
     }
 
-    .upload-pair {
+    /* Upload grid collapses to one column */
+    .upload-block-grid {
         grid-template-columns: 1fr;
         gap: 16px;
     }
 
-    .upload-dropzone {
-        height: 160px;
+    .upload-block-body .upload-dropzone {
+        height: 170px;
     }
 }
 
 /* ============================================
-   RESPONSIVE — MOBILE
+   RESPONSIVE — MOBILE (≤ 480px)
    ============================================ */
 
 @media (max-width: 480px) {
@@ -1017,14 +1126,26 @@
         min-height: 38px;
     }
 
+    .register-progress {
+        padding: 0;
+        gap: 0;
+        margin-bottom: 18px;
+    }
+
     .progress-step .step-number {
-        width: 26px;
-        height: 26px;
-        font-size: 10px;
+        width: 22px;
+        height: 22px;
+        font-size: 9px;
     }
 
     .progress-step .step-label {
-        font-size: 8px;
+        font-size: 7px;
+    }
+
+    .progress-line {
+        top: -10px;
+        margin: 0 1px;
+        min-width: 4px;
     }
 
     .review-section {
@@ -1091,6 +1212,33 @@
         font-size: var(--font-size-xs);
     }
 
+    .upload-block-header {
+        padding: 12px 14px;
+        gap: 10px;
+    }
+
+    .upload-block-number {
+        width: 24px;
+        height: 24px;
+        font-size: var(--font-size-xs);
+    }
+
+    .upload-block-title {
+        font-size: var(--font-size-sm);
+    }
+
+    .upload-block-subtitle {
+        font-size: 10px;
+    }
+
+    .upload-block-body {
+        padding: 12px 14px 14px;
+    }
+
+    .upload-block-body .upload-dropzone {
+        height: 160px;
+    }
+
     .upload-dropzone {
         height: 140px;
         padding: 12px;
@@ -1121,10 +1269,15 @@
         top: 6px;
         right: 6px;
     }
+
+    .upload-guidelines li {
+        font-size: 10px;
+        padding-left: 14px;
+    }
 }
 
 /* ============================================
-   VERY SMALL PHONES
+   VERY SMALL PHONES (≤ 375px)
    ============================================ */
 
 @media (max-width: 375px) {
@@ -1158,13 +1311,21 @@
     }
 
     .progress-step .step-label {
-        font-size: 7px;
+        font-size: 6px;
     }
 
     .progress-step .step-number {
-        width: 24px;
-        height: 24px;
-        font-size: 9px;
+        width: 20px;
+        height: 20px;
+        font-size: 8px;
+    }
+
+    .progress-line {
+        min-width: 3px;
+    }
+
+    .upload-block-body .upload-dropzone {
+        height: 140px;
     }
 
     .upload-dropzone {
@@ -1177,6 +1338,14 @@
     }
 
     .upload-hint-text {
+        font-size: 9px;
+    }
+
+    .upload-block-title {
+        font-size: var(--font-size-xs);
+    }
+
+    .upload-block-subtitle {
         font-size: 9px;
     }
 }

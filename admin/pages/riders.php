@@ -1,10 +1,14 @@
 <?php
 /**
- * FitPal Admin — Rider Verification Queue
- * Compact layout with contextual bulk actions.
+ * FitPal Admin — Riders List
+ *
+ * Paginated rider list with verification tabs. Row actions trigger
+ * the confirm modal, not window.confirm(). The detail modal has two
+ * tabs: Information and Documents. Documents uses its own 5-per-page
+ * pagination so profile picture and license photos are readable.
  *
  * @package FitPal
- * @version 4.1 — Replaced inline SVGs with shared icon assets.
+ * @version 2.0
  */
 
 declare(strict_types=1);
@@ -21,428 +25,675 @@ if (empty($_SESSION['administrator_id'])) {
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../backend/database/admin-queries.php';
 
-// ---- Filter params ----
-$allowedStatuses = ['pending', 'verified', 'denied', 'suspended'];
-$statusFilter = isset($_GET['status']) ? strtolower(trim((string)$_GET['status'])) : '';
-if (!in_array($statusFilter, $allowedStatuses, true)) {
-    $statusFilter = '';
+$adminId = (int)$_SESSION['administrator_id'];
+
+$page    = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+$search  = isset($_GET['search']) ? trim((string)$_GET['search']) : '';
+$status  = isset($_GET['status']) ? (string)$_GET['status'] : 'all';
+$openId  = isset($_GET['open']) ? (int)$_GET['open'] : 0;
+$docPage = isset($_GET['doc_page']) ? max(1, (int)$_GET['doc_page']) : 1;
+$perPage = 5;
+
+$allowedStatuses = ['all', 'pending', 'verified', 'denied', 'suspended'];
+if (!in_array($status, $allowedStatuses, true)) {
+    $status = 'all';
 }
 
-$search  = isset($_GET['q'])    ? trim((string)$_GET['q'])    : '';
-$page    = isset($_GET['page']) ? max(1, (int)$_GET['page'])  : 1;
-$perPage = 20;
-$offset  = ($page - 1) * $perPage;
+$counts = getRiderCountsByStatus($database_connection);
+$data   = getRidersPaginated($database_connection, $page, $perPage, $search, $status);
+$rows   = $data['rows'];
+$pagination = $data;
 
-// ---- Fetch ----
-$riders       = [];
-$totalRecords = 0;
-$totalPages   = 1;
-$riderCounts  = ['total' => 0, 'pending' => 0, 'verified' => 0, 'denied' => 0, 'suspended' => 0];
+// Detail modal loads
+$openRider = null;
+$openAddress = null;
+$openContacts = [];
+$openDocuments = [];
+$openDeliveries = [];
 
-try {
-    $allCounts   = getVerificationCounts($database_connection);
-    $riderCounts = $allCounts['riders'];
-
-    $totalRecords = countRidersForVerification($database_connection, $statusFilter ?: null);
-    $totalPages   = max(1, (int)ceil($totalRecords / $perPage));
-    if ($page > $totalPages) {
-        $page   = $totalPages;
-        $offset = ($page - 1) * $perPage;
+if ($openId > 0) {
+    $openRider = getRiderDetails($database_connection, $openId);
+    if ($openRider) {
+        $openAddress    = getRiderAddress($database_connection, $openId);
+        $openContacts   = getRiderEmergencyContacts($database_connection, $openId);
+        $openDocuments  = getRiderDocuments($database_connection, $openId);
+        $openDeliveries = getRiderRecentDeliveries($database_connection, $openId, 5);
     }
-
-    $riders = getRidersForVerification(
-        $database_connection,
-        $statusFilter ?: null,
-        $perPage,
-        $offset
-    );
-} catch (PDOException $e) {
-    error_log('Admin riders list error: ' . $e->getMessage());
 }
 
-$csrfToken = $_SESSION['csrf_token'] ?? '';
-
-/* -----------------------------------------------------------------
- * URL BUILDER
- * ----------------------------------------------------------------- */
-function ridersUrl(array $overrides = []): string
-{
-    $params = array_merge([
-        'status' => $_GET['status'] ?? '',
-        'q'      => $_GET['q']      ?? '',
-        'page'   => $_GET['page']   ?? '',
-    ], $overrides);
-    $params = array_filter($params, fn($v) => $v !== '' && $v !== null);
-    return 'riders.php' . ($params ? '?' . http_build_query($params) : '');
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
+$csrfToken = $_SESSION['csrf_token'];
 
-/* -----------------------------------------------------------------
- * VIEW HELPERS
- * ----------------------------------------------------------------- */
-function riderStatusPillClass(string $status): string
+/**
+ * Build a query string preserving filters.
+ */
+function buildRiderUrl(array $overrides = []): string
 {
-    return match ($status) {
-        'pending'   => 'pill-pending',
-        'verified'  => 'pill-verified',
-        'denied'    => 'pill-denied',
-        'suspended' => 'pill-suspended',
-        default     => 'pill-neutral',
-    };
-}
-
-function formatExactDate(?string $datetime): string
-{
-    if ($datetime === null || $datetime === '') return '—';
-    $ts = strtotime($datetime);
-    return $ts !== false ? date('m/d/Y h:i A', $ts) : $datetime;
-}
-
-function vehicleShort(?string $type, ?string $plate): string
-{
-    $type = $type !== null && $type !== '' ? ucfirst($type) : '—';
-    if ($plate !== null && $plate !== '') {
-        return $type . ' · ' . $plate;
+    $params = [
+        'page'     => $_GET['page']     ?? 1,
+        'search'   => $_GET['search']   ?? '',
+        'status'   => $_GET['status']   ?? 'all',
+        'doc_page' => $_GET['doc_page'] ?? 1,
+    ];
+    foreach ($overrides as $k => $v) {
+        if ($v === null || $v === '') {
+            unset($params[$k]);
+        } else {
+            $params[$k] = $v;
+        }
     }
-    return $type;
+    return '?' . http_build_query($params);
 }
 
-function riderInitials(string $first, string $last): string
+/**
+ * A rider's media URL: strip the trailing 'shared/' from $assetBase
+ * to get the project root, then append the DB-relative path.
+ */
+function riderMediaUrl(string $assetBase, string $relPath): string
 {
-    $a = $first !== '' ? strtoupper(substr($first, 0, 1)) : '';
-    $b = $last  !== '' ? strtoupper(substr($last, 0, 1))  : '';
-    return $a . $b ?: '?';
+    if ($relPath === '') return '';
+    $projectRoot = preg_replace('#shared/$#', '', $assetBase);
+    return (is_string($projectRoot) ? $projectRoot : '') . $relPath;
 }
-
-// Determine bulk action button labels based on active tab
-$bulkActions = [];
-if ($statusFilter === 'pending') {
-    $bulkActions = [
-        ['label' => 'Approve Selected', 'status' => 'verified', 'class' => 'bulk-btn-approve', 'icon' => 'verified-fill.svg'],
-        ['label' => 'Deny Selected',    'status' => 'denied',   'class' => 'bulk-btn-deny', 'icon' => 'cancel.svg']
-    ];
-} elseif ($statusFilter === 'verified') {
-    $bulkActions = [
-        ['label' => 'Suspend Selected', 'status' => 'suspended', 'class' => 'bulk-btn-deny', 'icon' => 'cancel.svg']
-    ];
-} elseif ($statusFilter === 'denied' || $statusFilter === 'suspended') {
-    $bulkActions = [
-        ['label' => 'Reinstate Selected', 'status' => 'pending', 'class' => 'bulk-btn-approve', 'icon' => 'update.svg']
-    ];
-}
-$showBulkBar = !empty($bulkActions);
 ?>
 
-<link rel="stylesheet" href="../assets/css/admin-tables.css">
+<div class="content admin-list-page">
+    <div class="container">
 
-<div class="content admin-page">
+        <header class="admin-page-header">
+            <div class="admin-page-header-left">
+                <h1 class="heading-2">Rider <span>Management</span></h1>
+                <p class="text-muted">Review rider applications and manage accounts.</p>
+            </div>
+            <div class="admin-page-header-actions">
+                <a href="dashboard.php" class="btn btn-outline btn-sm">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt="" class="btn-icon"
+                        width="16" height="16" style="filter: none;">
+                    <span>Dashboard</span>
+                </a>
+            </div>
+        </header>
 
-    <header class="admin-page-header">
-        <div class="admin-page-header-left">
-            <h1 class="admin-page-title">Delivery Riders</h1>
-            <span class="admin-page-count">
-                <?php echo number_format($riderCounts['total']); ?> total
-                <?php if ($riderCounts['pending'] > 0): ?>
-                <span class="count-dot"></span>
-                <span class="count-pending">
-                    <?php echo $riderCounts['pending']; ?> pending
-                </span>
-                <?php endif; ?>
-            </span>
+        <?php if (!empty($_SESSION['admin_success'])): ?>
+        <div class="alert alert-success" role="alert">
+            <?php echo htmlspecialchars($_SESSION['admin_success'], ENT_QUOTES, 'UTF-8'); ?>
+            <?php unset($_SESSION['admin_success']); ?>
         </div>
-    </header>
+        <?php endif; ?>
 
-    <?php if (isset($_SESSION['admin_success'])): ?>
-    <div class="admin-flash admin-flash-success" role="alert">
-        <span><?php echo htmlspecialchars($_SESSION['admin_success'], ENT_QUOTES, 'UTF-8'); ?></span>
-        <button type="button" class="flash-close" onclick="this.parentElement.remove()"
-            aria-label="Dismiss">&times;</button>
-    </div>
-    <?php unset($_SESSION['admin_success']); ?>
-    <?php endif; ?>
+        <?php if (!empty($_SESSION['admin_error'])): ?>
+        <div class="alert alert-danger" role="alert">
+            <?php echo htmlspecialchars($_SESSION['admin_error'], ENT_QUOTES, 'UTF-8'); ?>
+            <?php unset($_SESSION['admin_error']); ?>
+        </div>
+        <?php endif; ?>
 
-    <?php if (isset($_SESSION['admin_error'])): ?>
-    <div class="admin-flash admin-flash-error" role="alert">
-        <span><?php echo htmlspecialchars($_SESSION['admin_error'], ENT_QUOTES, 'UTF-8'); ?></span>
-        <button type="button" class="flash-close" onclick="this.parentElement.remove()"
-            aria-label="Dismiss">&times;</button>
-    </div>
-    <?php unset($_SESSION['admin_error']); ?>
-    <?php endif; ?>
+        <!-- FILTER BAR -->
+        <div class="admin-filter-bar">
+            <form method="GET" action="" class="admin-search-form">
+                <input type="hidden" name="status"
+                    value="<?php echo htmlspecialchars($status, ENT_QUOTES, 'UTF-8'); ?>">
+                <input type="text" name="search" class="admin-search-input"
+                    placeholder="Search by name, email, or username…"
+                    value="<?php echo htmlspecialchars($search, ENT_QUOTES, 'UTF-8'); ?>">
+                <button type="submit" class="admin-search-btn">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt="" class="btn-icon"
+                        width="14" height="14">
+                    <span>Search</span>
+                </button>
+            </form>
 
-    <div class="admin-surface">
-
-        <div class="admin-toolbar">
-            <nav class="toolbar-tabs" aria-label="Filter by status">
-                <a href="<?php echo htmlspecialchars(ridersUrl(['status' => '', 'page' => '']), ENT_QUOTES, 'UTF-8'); ?>"
-                    class="toolbar-tab <?php echo $statusFilter === '' ? 'active' : ''; ?>">
-                    All <span class="tab-num"><?php echo $riderCounts['total']; ?></span>
+            <nav class="admin-filter-tabs" aria-label="Rider verification filter">
+                <a href="<?php echo htmlspecialchars(buildRiderUrl(['status' => 'all', 'page' => 1]), ENT_QUOTES, 'UTF-8'); ?>"
+                    class="admin-filter-tab <?php echo $status === 'all' ? 'active' : ''; ?>">
+                    All <span class="filter-count"><?php echo number_format($counts['all']); ?></span>
                 </a>
-                <a href="<?php echo htmlspecialchars(ridersUrl(['status' => 'pending', 'page' => '']), ENT_QUOTES, 'UTF-8'); ?>"
-                    class="toolbar-tab <?php echo $statusFilter === 'pending' ? 'active' : ''; ?>">
-                    Pending <span class="tab-num tab-num-warn"><?php echo $riderCounts['pending']; ?></span>
+                <a href="<?php echo htmlspecialchars(buildRiderUrl(['status' => 'pending', 'page' => 1]), ENT_QUOTES, 'UTF-8'); ?>"
+                    class="admin-filter-tab <?php echo $status === 'pending' ? 'active' : ''; ?>">
+                    Pending <span class="filter-count"><?php echo number_format($counts['pending']); ?></span>
                 </a>
-                <a href="<?php echo htmlspecialchars(ridersUrl(['status' => 'verified', 'page' => '']), ENT_QUOTES, 'UTF-8'); ?>"
-                    class="toolbar-tab <?php echo $statusFilter === 'verified' ? 'active' : ''; ?>">
-                    Verified <span class="tab-num"><?php echo $riderCounts['verified']; ?></span>
+                <a href="<?php echo htmlspecialchars(buildRiderUrl(['status' => 'verified', 'page' => 1]), ENT_QUOTES, 'UTF-8'); ?>"
+                    class="admin-filter-tab <?php echo $status === 'verified' ? 'active' : ''; ?>">
+                    Verified <span class="filter-count"><?php echo number_format($counts['verified']); ?></span>
                 </a>
-                <a href="<?php echo htmlspecialchars(ridersUrl(['status' => 'denied', 'page' => '']), ENT_QUOTES, 'UTF-8'); ?>"
-                    class="toolbar-tab <?php echo $statusFilter === 'denied' ? 'active' : ''; ?>">
-                    Denied <span class="tab-num"><?php echo $riderCounts['denied']; ?></span>
+                <a href="<?php echo htmlspecialchars(buildRiderUrl(['status' => 'denied', 'page' => 1]), ENT_QUOTES, 'UTF-8'); ?>"
+                    class="admin-filter-tab <?php echo $status === 'denied' ? 'active' : ''; ?>">
+                    Denied <span class="filter-count"><?php echo number_format($counts['denied']); ?></span>
                 </a>
-                <a href="<?php echo htmlspecialchars(ridersUrl(['status' => 'suspended', 'page' => '']), ENT_QUOTES, 'UTF-8'); ?>"
-                    class="toolbar-tab <?php echo $statusFilter === 'suspended' ? 'active' : ''; ?>">
-                    Suspended <span class="tab-num"><?php echo $riderCounts['suspended']; ?></span>
+                <a href="<?php echo htmlspecialchars(buildRiderUrl(['status' => 'suspended', 'page' => 1]), ENT_QUOTES, 'UTF-8'); ?>"
+                    class="admin-filter-tab <?php echo $status === 'suspended' ? 'active' : ''; ?>">
+                    Suspended <span class="filter-count"><?php echo number_format($counts['suspended']); ?></span>
                 </a>
             </nav>
+        </div>
 
-            <div class="toolbar-controls">
-                <form method="GET" action="riders.php" class="toolbar-search">
-                    <?php if ($statusFilter !== ''): ?>
-                    <input type="hidden" name="status"
-                        value="<?php echo htmlspecialchars($statusFilter, ENT_QUOTES, 'UTF-8'); ?>">
+        <!-- TABLE -->
+        <div class="admin-table-card">
+            <?php if (empty($rows)): ?>
+            <div class="admin-table-empty">
+                <div class="admin-table-empty-icon" aria-hidden="true">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt=""
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/order.svg'">
+                </div>
+                <p class="admin-table-empty-title">No riders found</p>
+                <p class="admin-table-empty-text">
+                    <?php if ($search !== ''): ?>
+                    No results for "<?php echo htmlspecialchars($search, ENT_QUOTES, 'UTF-8'); ?>".
+                    <?php else: ?>
+                    Try a different filter.
                     <?php endif; ?>
-                    <div class="search-input-wrap">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/search-line.svg" alt=""
-                            class="search-input-icon" width="14" height="14">
-                        <input type="text" name="q"
-                            value="<?php echo htmlspecialchars($search, ENT_QUOTES, 'UTF-8'); ?>"
-                            placeholder="Search riders, emails, plates…" class="search-input">
-                        <?php if ($search !== ''): ?>
-                        <a href="<?php echo htmlspecialchars(ridersUrl(['q' => '', 'page' => '']), ENT_QUOTES, 'UTF-8'); ?>"
-                            class="search-clear" aria-label="Clear search">&times;</a>
+                </p>
+            </div>
+            <?php else: ?>
+            <div class="admin-table-riders">
+                <?php foreach ($rows as $r):
+                    $rid = (int)$r['delivery_rider_id'];
+                    $name = adminName($r);
+                    $initial = adminInitial($r);
+                    $verification = (string)($r['verification_status'] ?? 'pending');
+                    $isActive = (int)$r['is_active'] === 1;
+                    $pic = (string)($r['profile_picture'] ?? '');
+                    $picUrl = $pic !== '' ? riderMediaUrl($assetBase, $pic) : '';
+                ?>
+                <div class="admin-table-row">
+                    <div class="admin-cell-avatar">
+                        <?php if ($picUrl !== ''): ?>
+                        <img src="<?php echo htmlspecialchars($picUrl, ENT_QUOTES, 'UTF-8'); ?>" alt=""
+                            onerror="this.onerror=null; this.style.display='none'; this.parentNode.textContent='<?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>';">
+                        <?php else: ?>
+                        <?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>
                         <?php endif; ?>
                     </div>
-                </form>
+
+                    <div class="admin-cell-body">
+                        <p class="admin-cell-title"><?php echo htmlspecialchars($name, ENT_QUOTES, 'UTF-8'); ?></p>
+                        <p class="admin-cell-subtitle">
+                            <?php echo htmlspecialchars((string)$r['email'], ENT_QUOTES, 'UTF-8'); ?>
+                        </p>
+                        <div class="admin-cell-meta">
+                            <span class="admin-cell-meta-item">
+                                <?php echo htmlspecialchars(ucfirst((string)($r['vehicle_type'] ?? '—')), ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                            <span class="admin-cell-meta-item">
+                                <?php echo htmlspecialchars((string)($r['vehicle_plate'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="admin-cell-body">
+                        <div class="admin-cell-meta">
+                            <span class="badge <?php echo adminVerificationBadgeClass($verification); ?>">
+                                <?php echo adminVerificationLabel($verification); ?>
+                            </span>
+                            <span class="badge <?php echo $isActive ? 'badge-success' : 'badge-secondary'; ?>">
+                                <?php echo $isActive ? 'Active' : 'Inactive'; ?>
+                            </span>
+                        </div>
+                        <div class="admin-cell-meta">
+                            <span class="admin-cell-meta-item">
+                                Rating: <?php echo number_format((float)($r['average_rating'] ?? 0), 1); ?>
+                            </span>
+                            <span class="admin-cell-meta-item">
+                                <?php echo number_format((int)($r['total_deliveries'] ?? 0)); ?> deliveries
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="admin-cell-actions">
+                        <button type="button" class="btn btn-outline btn-sm"
+                            onclick="window.location.href='<?php echo htmlspecialchars(buildRiderUrl(['open' => $rid, 'doc_page' => 1]), ENT_QUOTES, 'UTF-8'); ?>'">
+                            <img src="<?php echo $assetBase; ?>assets/images/icons/pages-line.svg" alt=""
+                                class="btn-icon" width="14" height="14" style="filter:none;">
+                            <span>View Details</span>
+                        </button>
+                    </div>
+                </div>
+                <?php endforeach; ?>
             </div>
+
+            <!-- PAGINATION -->
+            <?php if ($pagination['totalPages'] > 1): ?>
+            <nav class="admin-pagination" aria-label="Rider pagination">
+                <span class="admin-pagination-info">
+                    Showing page <?php echo $pagination['page']; ?> of <?php echo $pagination['totalPages']; ?>
+                    (<?php echo number_format($pagination['total']); ?> total)
+                </span>
+                <ul class="admin-pagination-list">
+                    <?php if ($pagination['page'] > 1): ?>
+                    <li>
+                        <a href="<?php echo htmlspecialchars(buildRiderUrl(['page' => $pagination['page'] - 1, 'open' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="admin-pagination-link">Previous</a>
+                    </li>
+                    <?php else: ?>
+                    <li><span class="admin-pagination-link disabled">Previous</span></li>
+                    <?php endif; ?>
+
+                    <?php
+                    $maxVisible = 5;
+                    $start = max(1, $pagination['page'] - (int)floor($maxVisible / 2));
+                    $end   = min($pagination['totalPages'], $start + $maxVisible - 1);
+                    if ($end - $start + 1 < $maxVisible) {
+                        $start = max(1, $end - $maxVisible + 1);
+                    }
+                    if ($start > 1): ?>
+                    <li>
+                        <a href="<?php echo htmlspecialchars(buildRiderUrl(['page' => 1, 'open' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="admin-pagination-link">1</a>
+                    </li>
+                    <?php if ($start > 2): ?>
+                    <li><span class="admin-pagination-ellipsis">…</span></li>
+                    <?php endif; endif; ?>
+
+                    <?php for ($i = $start; $i <= $end; $i++): ?>
+                    <li>
+                        <?php if ($i === $pagination['page']): ?>
+                        <span class="admin-pagination-link active"><?php echo $i; ?></span>
+                        <?php else: ?>
+                        <a href="<?php echo htmlspecialchars(buildRiderUrl(['page' => $i, 'open' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="admin-pagination-link"><?php echo $i; ?></a>
+                        <?php endif; ?>
+                    </li>
+                    <?php endfor; ?>
+
+                    <?php if ($end < $pagination['totalPages']): ?>
+                    <?php if ($end < $pagination['totalPages'] - 1): ?>
+                    <li><span class="admin-pagination-ellipsis">…</span></li>
+                    <?php endif; ?>
+                    <li>
+                        <a href="<?php echo htmlspecialchars(buildRiderUrl(['page' => $pagination['totalPages'], 'open' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="admin-pagination-link"><?php echo $pagination['totalPages']; ?></a>
+                    </li>
+                    <?php endif; ?>
+
+                    <?php if ($pagination['page'] < $pagination['totalPages']): ?>
+                    <li>
+                        <a href="<?php echo htmlspecialchars(buildRiderUrl(['page' => $pagination['page'] + 1, 'open' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                            class="admin-pagination-link">Next</a>
+                    </li>
+                    <?php else: ?>
+                    <li><span class="admin-pagination-link disabled">Next</span></li>
+                    <?php endif; ?>
+                </ul>
+            </nav>
+            <?php endif; ?>
+            <?php endif; ?>
         </div>
-
-        <?php if (empty($riders)): ?>
-        <div class="admin-empty-state">
-            <div class="empty-state-icon">
-                <img src="<?php echo $assetBase; ?>assets/images/icons/people-team.svg" alt="" width="32" height="32">
-            </div>
-            <p class="empty-state-title">
-                <?php echo $statusFilter === '' ? 'No riders yet' : 'No ' . htmlspecialchars($statusFilter, ENT_QUOTES, 'UTF-8') . ' riders'; ?>
-            </p>
-            <p class="empty-state-text">
-                <?php if ($search !== ''): ?>
-                No results for "<?php echo htmlspecialchars($search, ENT_QUOTES, 'UTF-8'); ?>".
-                <?php else: ?>
-                Nothing to review in this queue.
-                <?php endif; ?>
-            </p>
-        </div>
-        <?php else: ?>
-
-        <div class="admin-table-wrap">
-            <table class="admin-table" id="ridersTable">
-                <thead>
-                    <tr>
-                        <th class="col-name">Rider</th>
-                        <th class="col-submitted">Submitted</th>
-                        <th class="col-status">Status</th>
-                        <th class="col-actions">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($riders as $rider):
-                        $riderId    = (int)$rider['delivery_rider_id'];
-                        $statusRaw  = (string)($rider['verification_status'] ?? '');
-                        $hasProfile = $statusRaw !== '';
-                        $status     = $hasProfile ? $statusRaw : 'pending';
-                        $fullName   = trim(($rider['first_name'] ?? '') . ' ' . ($rider['last_name'] ?? ''));
-                    ?>
-                    <tr data-row-id="<?php echo $riderId; ?>"
-                        data-status="<?php echo htmlspecialchars($status, ENT_QUOTES, 'UTF-8'); ?>">
-
-                        <td class="col-name">
-                            <span
-                                class="row-primary"><?php echo htmlspecialchars($fullName ?: 'Unnamed Rider', ENT_QUOTES, 'UTF-8'); ?></span>
-                            <span class="row-secondary">
-                                <?php echo htmlspecialchars($rider['email'] ?? 'No email', ENT_QUOTES, 'UTF-8'); ?>
-                                &middot; ID #<?php echo $riderId; ?>
-                            </span>
-                        </td>
-
-                        <td class="col-submitted">
-                            <span class="row-secondary">
-                                <?php echo htmlspecialchars(formatExactDate($rider['date_created'] ?? null), ENT_QUOTES, 'UTF-8'); ?>
-                            </span>
-                        </td>
-
-                        <td class="col-status">
-                            <?php if (!$hasProfile): ?>
-                            <span class="status-pill pill-neutral">No Profile</span>
-                            <?php else: ?>
-                            <span class="status-pill <?php echo riderStatusPillClass($status); ?>">
-                                <?php echo htmlspecialchars(formatVerificationStatus($status), ENT_QUOTES, 'UTF-8'); ?>
-                            </span>
-                            <?php endif; ?>
-                        </td>
-
-                        <td class="col-actions">
-                            <div class="actions-dropdown">
-                                <button type="button" class="actions-trigger" aria-label="More actions">
-                                    <img src="<?php echo $assetBase; ?>assets/images/icons/more-vertical-line.svg"
-                                        alt="">
-                                </button>
-                                <div class="actions-menu">
-                                    <button type="button" class="action-item view-details-btn"
-                                        data-id="<?php echo $riderId; ?>"
-                                        data-name="<?php echo htmlspecialchars($fullName, ENT_QUOTES, 'UTF-8'); ?>"
-                                        data-email="<?php echo htmlspecialchars($rider['email'] ?? 'N/A', ENT_QUOTES, 'UTF-8'); ?>"
-                                        data-phone="<?php echo htmlspecialchars($rider['contact_number'] ?? 'N/A', ENT_QUOTES, 'UTF-8'); ?>"
-                                        data-vehicle="<?php echo htmlspecialchars(vehicleShort($rider['vehicle_type'] ?? null, $rider['vehicle_plate'] ?? null), ENT_QUOTES, 'UTF-8'); ?>"
-                                        data-city="<?php echo htmlspecialchars($rider['base_city'] ?? 'N/A', ENT_QUOTES, 'UTF-8'); ?>"
-                                        data-submitted="<?php echo htmlspecialchars(formatExactDate($rider['date_created'] ?? null), ENT_QUOTES, 'UTF-8'); ?>">
-                                        <img src="<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg"
-                                            alt="" width="14" height="14">
-                                        View Details
-                                    </button>
-
-                                    <?php if ($hasProfile): ?>
-                                    <?php if ($status === 'pending'): ?>
-                                    <button type="button" class="action-item" data-action="verify_rider"
-                                        data-id="<?php echo $riderId; ?>" data-status="verified"
-                                        data-name="<?php echo htmlspecialchars($fullName, ENT_QUOTES, 'UTF-8'); ?>">
-                                        <img src="<?php echo $assetBase; ?>assets/images/icons/verified-fill.svg" alt=""
-                                            width="14" height="14">
-                                        Approve
-                                    </button>
-                                    <button type="button" class="action-item text-danger" data-action="verify_rider"
-                                        data-id="<?php echo $riderId; ?>" data-status="denied"
-                                        data-name="<?php echo htmlspecialchars($fullName, ENT_QUOTES, 'UTF-8'); ?>">
-                                        <img src="<?php echo $assetBase; ?>assets/images/icons/cancel.svg" alt=""
-                                            width="14" height="14">
-                                        Deny
-                                    </button>
-                                    <?php elseif ($status === 'verified'): ?>
-                                    <button type="button" class="action-item text-danger" data-action="verify_rider"
-                                        data-id="<?php echo $riderId; ?>" data-status="suspended"
-                                        data-name="<?php echo htmlspecialchars($fullName, ENT_QUOTES, 'UTF-8'); ?>">
-                                        <img src="<?php echo $assetBase; ?>assets/images/icons/cancel.svg" alt=""
-                                            width="14" height="14">
-                                        Suspend
-                                    </button>
-                                    <?php elseif ($status === 'denied' || $status === 'suspended'): ?>
-                                    <button type="button" class="action-item" data-action="verify_rider"
-                                        data-id="<?php echo $riderId; ?>" data-status="pending"
-                                        data-name="<?php echo htmlspecialchars($fullName, ENT_QUOTES, 'UTF-8'); ?>">
-                                        <img src="<?php echo $assetBase; ?>assets/images/icons/update.svg" alt=""
-                                            width="14" height="14">
-                                        Reinstate
-                                    </button>
-                                    <?php endif; ?>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-        <?php endif; ?>
-    </div>
-
-    <?php if ($totalPages > 1): ?>
-    <nav class="admin-pagination" aria-label="Pagination">
-        <?php if ($page > 1): ?>
-        <a href="<?php echo htmlspecialchars(ridersUrl(['page' => $page - 1]), ENT_QUOTES, 'UTF-8'); ?>"
-            class="page-link">← Prev</a>
-        <?php else: ?>
-        <span class="page-link page-link-disabled">← Prev</span>
-        <?php endif; ?>
-
-        <span class="page-info">
-            Page <strong><?php echo $page; ?></strong> of <?php echo $totalPages; ?>
-            <span class="page-info-muted">(<?php echo number_format($totalRecords); ?> records)</span>
-        </span>
-
-        <?php if ($page < $totalPages): ?>
-        <a href="<?php echo htmlspecialchars(ridersUrl(['page' => $page + 1]), ENT_QUOTES, 'UTF-8'); ?>"
-            class="page-link">Next →</a>
-        <?php else: ?>
-        <span class="page-link page-link-disabled">Next →</span>
-        <?php endif; ?>
-    </nav>
-    <?php endif; ?>
-
-</div>
-
-<!-- BULK ACTION BAR (Only rendered if on a specific tab) -->
-<?php if ($showBulkBar): ?>
-<div class="bulk-bar" id="bulkBar">
-    <span class="bulk-count"><strong id="bulkCount">0</strong> selected</span>
-    <div class="bulk-actions">
-        <?php foreach ($bulkActions as $action): ?>
-        <button type="button" class="bulk-btn <?php echo $action['class']; ?>"
-            data-bulk-status="<?php echo $action['status']; ?>">
-            <img src="<?php echo $assetBase; ?>assets/images/icons/<?php echo $action['icon']; ?>" alt="" width="14"
-                height="14" style="filter: brightness(0) invert(1);">
-            <?php echo htmlspecialchars($action['label'], ENT_QUOTES, 'UTF-8'); ?>
-        </button>
-        <?php endforeach; ?>
-        <button type="button" class="bulk-btn bulk-btn-clear" id="bulkClear">Clear</button>
     </div>
 </div>
-<?php endif; ?>
 
-<!-- HIDDEN FORMS & MODALS -->
-<form id="verifyForm" method="POST" action="../backend/handlers/admin-handler.php" hidden>
-    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
-    <input type="hidden" name="action" value="verify_rider">
-    <input type="hidden" name="rider_id" id="verifyRiderId" value="">
-    <input type="hidden" name="status" id="verifyStatus" value="">
-</form>
-
-<!-- View Details Modal -->
-<div class="admin-modal" id="detailsModal">
-    <div class="admin-modal-overlay" onclick="closeDetailsModal()"></div>
-    <div class="admin-modal-content">
+<!-- ============================================
+     RIDER DETAILS MODAL
+     ============================================ -->
+<div class="admin-modal <?php echo $openRider ? 'is-open' : ''; ?>" id="riderDetailsModal"
+    aria-hidden="<?php echo $openRider ? 'false' : 'true'; ?>" role="dialog">
+    <div class="admin-modal-backdrop"
+        onclick="window.location.href='<?php echo htmlspecialchars(buildRiderUrl(['open' => null, 'doc_page' => null]), ENT_QUOTES, 'UTF-8'); ?>'">
+    </div>
+    <div class="admin-modal-panel admin-modal-panel-wide" role="document">
         <div class="admin-modal-header">
-            <h3 class="admin-modal-title">Rider Details</h3>
-            <button type="button" class="admin-modal-close" onclick="closeDetailsModal()">&times;</button>
+            <div class="admin-modal-header-left">
+                <p class="admin-modal-title">
+                    <?php echo $openRider
+                        ? htmlspecialchars(adminName($openRider), ENT_QUOTES, 'UTF-8')
+                        : 'Rider Details'; ?>
+                </p>
+                <p class="admin-modal-subtitle">
+                    <?php echo $openRider
+                        ? htmlspecialchars((string)$openRider['email'], ENT_QUOTES, 'UTF-8')
+                        : 'Select a rider to review their application.'; ?>
+                </p>
+            </div>
+            <a href="<?php echo htmlspecialchars(buildRiderUrl(['open' => null, 'doc_page' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                class="admin-modal-close" aria-label="Close">&times;</a>
         </div>
-        <div class="admin-modal-body">
-            <div class="detail-row">
-                <span class="detail-label">Full Name</span>
-                <span class="detail-value" id="modalRiderName">—</span>
-            </div>
-            <div class="detail-row">
-                <span class="detail-label">Email</span>
-                <span class="detail-value" id="modalRiderEmail">—</span>
-            </div>
-            <div class="detail-row">
-                <span class="detail-label">Phone</span>
-                <span class="detail-value" id="modalRiderPhone">—</span>
-            </div>
-            <div class="detail-row">
-                <span class="detail-label">Vehicle</span>
-                <span class="detail-value" id="modalRiderVehicle">—</span>
-            </div>
-            <div class="detail-row">
-                <span class="detail-label">Base Area</span>
-                <span class="detail-value" id="modalRiderCity">—</span>
-            </div>
-            <div class="detail-row">
-                <span class="detail-label">Submitted</span>
-                <span class="detail-value" id="modalRiderSubmitted">—</span>
-            </div>
+
+        <?php if (!$openRider): ?>
+        <div class="admin-modal-panel-body">
+            <p class="admin-detail-value admin-detail-value-muted">No rider selected.</p>
         </div>
+        <?php else: ?>
+
+        <?php
+        $openVerification = (string)($openRider['verification_status'] ?? 'pending');
+        $openIsActive = (int)$openRider['is_active'] === 1;
+
+        // Documents tab pagination: 5 per page.
+        $docsPerPage = 5;
+        $totalDocs = count($openDocuments);
+        $totalDocPages = max(1, (int)ceil($totalDocs / $docsPerPage));
+        if ($docPage > $totalDocPages) $docPage = $totalDocPages;
+        $docOffset = ($docPage - 1) * $docsPerPage;
+        $visibleDocs = array_slice($openDocuments, $docOffset, $docsPerPage);
+        ?>
+
+        <div class="admin-modal-tabs">
+            <button type="button" class="admin-modal-tab active" data-tab-target="rider-panel-info">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/file-user-line.svg" alt="" width="14" height="14"
+                    style="filter:none;">
+                <span>Information</span>
+            </button>
+            <button type="button" class="admin-modal-tab" data-tab-target="rider-panel-documents">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/file-image-line.svg" alt="" width="14"
+                    height="14" style="filter:none;">
+                <span>Documents</span>
+                <span class="tab-count"><?php echo $totalDocs; ?></span>
+            </button>
+            <button type="button" class="admin-modal-tab" data-tab-target="rider-panel-deliveries">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt="" width="14" height="14"
+                    style="filter:none;">
+                <span>Deliveries</span>
+                <span class="tab-count"><?php echo count($openDeliveries); ?></span>
+            </button>
+        </div>
+
+        <div class="admin-modal-panel-body">
+
+            <!-- TAB: INFORMATION -->
+            <div class="admin-modal-tab-panel active" id="rider-panel-info">
+                <div class="admin-detail-grid">
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Full Name</span>
+                        <span
+                            class="admin-detail-value"><?php echo htmlspecialchars(adminName($openRider), ENT_QUOTES, 'UTF-8'); ?></span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Username</span>
+                        <span class="admin-detail-value">
+                            @<?php echo htmlspecialchars((string)($openRider['username'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Email</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars((string)$openRider['email'], ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Contact</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars((string)($openRider['contact_number'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Gender</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars((string)($openRider['gender'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Birthdate</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars(formatAdminDateShort((string)($openRider['birthdate'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Joined</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars(formatAdminDate((string)($openRider['date_created'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Verification</span>
+                        <span class="admin-detail-value">
+                            <span class="badge <?php echo adminVerificationBadgeClass($openVerification); ?>">
+                                <?php echo adminVerificationLabel($openVerification); ?>
+                            </span>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Account</span>
+                        <span class="admin-detail-value">
+                            <span class="badge <?php echo $openIsActive ? 'badge-success' : 'badge-secondary'; ?>">
+                                <?php echo $openIsActive ? 'Active' : 'Inactive'; ?>
+                            </span>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Wallet Balance</span>
+                        <span class="admin-detail-value">
+                            <?php echo formatAdminCurrency((float)($openRider['balance'] ?? 0)); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Vehicle</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars(ucfirst((string)($openRider['vehicle_type'] ?? '—')), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Plate</span>
+                        <span class="admin-detail-value">
+                            <?php echo htmlspecialchars((string)($openRider['vehicle_plate'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Average Rating</span>
+                        <span class="admin-detail-value">
+                            <?php echo number_format((float)($openRider['average_rating'] ?? 0), 1); ?> / 5.0
+                        </span>
+                    </div>
+                    <div class="admin-detail-item">
+                        <span class="admin-detail-label">Total Deliveries</span>
+                        <span class="admin-detail-value">
+                            <?php echo number_format((int)($openRider['total_deliveries'] ?? 0)); ?>
+                        </span>
+                    </div>
+                </div>
+
+                <h3 class="admin-section-heading">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="" width="14"
+                        height="14" style="filter:none;">
+                    Primary Address
+                </h3>
+                <?php if ($openAddress): ?>
+                <div class="admin-address-card">
+                    <p class="admin-address-text">
+                        <?php echo htmlspecialchars(formatRiderAddress($openAddress), ENT_QUOTES, 'UTF-8'); ?>
+                    </p>
+                </div>
+                <?php else: ?>
+                <p class="admin-detail-value admin-detail-value-muted">No address on file.</p>
+                <?php endif; ?>
+
+                <h3 class="admin-section-heading">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg" alt="" width="14"
+                        height="14" style="filter:none;">
+                    Emergency Contacts
+                    <span class="section-count"><?php echo count($openContacts); ?></span>
+                </h3>
+
+                <?php if (empty($openContacts)): ?>
+                <p class="admin-detail-value admin-detail-value-muted">No emergency contacts on file.</p>
+                <?php else: ?>
+                <?php foreach ($openContacts as $idx => $c): ?>
+                <div class="admin-contact-card">
+                    <div class="admin-contact-header">
+                        <p class="admin-contact-name">
+                            <?php echo htmlspecialchars(adminName($c), ENT_QUOTES, 'UTF-8'); ?>
+                        </p>
+                        <?php if ($idx === 0): ?>
+                        <span class="admin-contact-badge">Primary</span>
+                        <?php endif; ?>
+                        <span class="admin-contact-badge" style="background: rgba(23,162,184,0.12); color: #0c5460;">
+                            <?php echo htmlspecialchars((string)($c['relationship'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+                    <div class="admin-contact-body">
+                        <span><strong>Phone:</strong>
+                            <?php echo htmlspecialchars((string)$c['contact_number'], ENT_QUOTES, 'UTF-8'); ?></span>
+                        <?php if (!empty($c['address'])): ?>
+                        <span><strong>Address:</strong>
+                            <?php echo htmlspecialchars((string)$c['address'], ENT_QUOTES, 'UTF-8'); ?></span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+
+            <!-- TAB: DOCUMENTS -->
+            <div class="admin-modal-tab-panel" id="rider-panel-documents">
+                <?php if ($totalDocs === 0): ?>
+                <div class="admin-doc-empty">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/file-image-line.svg" alt="">
+                    <span>No documents on file.</span>
+                </div>
+                <?php else: ?>
+
+                <?php if (!empty($openRider['profile_picture'])): ?>
+                <div class="admin-doc-block">
+                    <div class="admin-doc-head">
+                        <p class="admin-doc-title">Formal Photo</p>
+                        <div class="admin-doc-meta">
+                            <span>Uploaded by rider</span>
+                        </div>
+                    </div>
+                    <div class="admin-doc-image">
+                        <img src="<?php echo htmlspecialchars(riderMediaUrl($assetBase, (string)$openRider['profile_picture']), ENT_QUOTES, 'UTF-8'); ?>"
+                            alt="Rider formal photo"
+                            onerror="this.onerror=null; this.parentNode.innerHTML='<div class=&quot;admin-doc-empty&quot;><span>Image could not be loaded.</span></div>';">
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <?php foreach ($visibleDocs as $doc): ?>
+                <div class="admin-doc-block">
+                    <div class="admin-doc-head">
+                        <p class="admin-doc-title">Driver's License</p>
+                        <div class="admin-doc-meta">
+                            <span>Issued:
+                                <?php echo htmlspecialchars(formatAdminDateShort((string)($doc['issue_date'] ?? '')), ENT_QUOTES, 'UTF-8'); ?></span>
+                            <span>Expires:
+                                <?php echo htmlspecialchars(formatAdminDateShort((string)($doc['expiry_date'] ?? '')), ENT_QUOTES, 'UTF-8'); ?></span>
+                        </div>
+                    </div>
+                    <div class="admin-doc-image">
+                        <img src="<?php echo htmlspecialchars(riderMediaUrl($assetBase, (string)$doc['drivers_license']), ENT_QUOTES, 'UTF-8'); ?>"
+                            alt="Driver's license"
+                            onerror="this.onerror=null; this.parentNode.innerHTML='<div class=&quot;admin-doc-empty&quot;><span>Image could not be loaded.</span></div>';">
+                    </div>
+                </div>
+                <?php endforeach; ?>
+
+                <?php if ($totalDocPages > 1): ?>
+                <nav class="admin-doc-pagination" aria-label="Document pagination">
+                    <ul class="admin-pagination-list">
+                        <?php if ($docPage > 1): ?>
+                        <li>
+                            <a href="<?php echo htmlspecialchars(buildRiderUrl(['doc_page' => $docPage - 1, 'open' => $openId]), ENT_QUOTES, 'UTF-8'); ?>"
+                                class="admin-pagination-link">Previous</a>
+                        </li>
+                        <?php else: ?>
+                        <li><span class="admin-pagination-link disabled">Previous</span></li>
+                        <?php endif; ?>
+
+                        <?php for ($i = 1; $i <= $totalDocPages; $i++): ?>
+                        <li>
+                            <?php if ($i === $docPage): ?>
+                            <span class="admin-pagination-link active"><?php echo $i; ?></span>
+                            <?php else: ?>
+                            <a href="<?php echo htmlspecialchars(buildRiderUrl(['doc_page' => $i, 'open' => $openId]), ENT_QUOTES, 'UTF-8'); ?>"
+                                class="admin-pagination-link"><?php echo $i; ?></a>
+                            <?php endif; ?>
+                        </li>
+                        <?php endfor; ?>
+
+                        <?php if ($docPage < $totalDocPages): ?>
+                        <li>
+                            <a href="<?php echo htmlspecialchars(buildRiderUrl(['doc_page' => $docPage + 1, 'open' => $openId]), ENT_QUOTES, 'UTF-8'); ?>"
+                                class="admin-pagination-link">Next</a>
+                        </li>
+                        <?php else: ?>
+                        <li><span class="admin-pagination-link disabled">Next</span></li>
+                        <?php endif; ?>
+                    </ul>
+                </nav>
+                <?php endif; ?>
+
+                <?php endif; ?>
+            </div>
+
+            <!-- TAB: DELIVERIES -->
+            <div class="admin-modal-tab-panel" id="rider-panel-deliveries">
+                <?php if (empty($openDeliveries)): ?>
+                <div class="admin-doc-empty">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt="">
+                    <span>No deliveries on record.</span>
+                </div>
+                <?php else: ?>
+                <div class="admin-orders-list">
+                    <?php foreach ($openDeliveries as $d): ?>
+                    <div class="admin-order-row">
+                        <div class="admin-order-id-block">
+                            <span class="admin-order-id">Order #<?php echo (int)$d['order_id']; ?></span>
+                            <span class="admin-order-customer">
+                                <?php echo htmlspecialchars((string)($d['customer_name'] ?? 'Customer'), ENT_QUOTES, 'UTF-8'); ?>
+                                &middot;
+                                <?php echo htmlspecialchars(formatAdminDate((string)($d['delivered_at'] ?? $d['order_date'])), ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                        </div>
+                        <span class="badge <?php echo adminOrderStatusBadgeClass((string)$d['order_status']); ?>">
+                            <?php echo adminOrderStatusLabel((string)$d['order_status']); ?>
+                        </span>
+                        <span class="admin-order-total">
+                            <?php echo formatAdminCurrency((float)$d['order_total']); ?>
+                        </span>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
+            </div>
+
+        </div>
+
         <div class="admin-modal-footer">
-            <button type="button" class="btn btn-primary" onclick="closeDetailsModal()">Close</button>
+            <form method="POST" action="../backend/handlers/admin-handler.php" style="display:inline;">
+                <input type="hidden" name="csrf_token"
+                    value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                <input type="hidden" name="action" value="set_rider_verification">
+                <input type="hidden" name="rider_id" value="<?php echo (int)$openRider['delivery_rider_id']; ?>">
+                <input type="hidden" name="status" value="verified">
+                <input type="hidden" name="redirect_to" value="riders.php">
+                <button type="submit" class="btn btn-primary btn-sm"
+                    <?php echo $openVerification === 'verified' ? 'disabled' : ''; ?>>
+                    Approve
+                </button>
+            </form>
+
+            <form method="POST" action="../backend/handlers/admin-handler.php" style="display:inline;">
+                <input type="hidden" name="csrf_token"
+                    value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                <input type="hidden" name="action" value="set_rider_verification">
+                <input type="hidden" name="rider_id" value="<?php echo (int)$openRider['delivery_rider_id']; ?>">
+                <input type="hidden" name="status" value="denied">
+                <input type="hidden" name="redirect_to" value="riders.php">
+                <button type="submit" class="btn btn-danger btn-sm"
+                    <?php echo $openVerification === 'denied' ? 'disabled' : ''; ?>>
+                    Deny
+                </button>
+            </form>
+
+            <form method="POST" action="../backend/handlers/admin-handler.php" style="display:inline;">
+                <input type="hidden" name="csrf_token"
+                    value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                <input type="hidden" name="action" value="toggle_rider">
+                <input type="hidden" name="rider_id" value="<?php echo (int)$openRider['delivery_rider_id']; ?>">
+                <input type="hidden" name="activate" value="<?php echo $openIsActive ? '0' : '1'; ?>">
+                <input type="hidden" name="redirect_to" value="riders.php">
+                <button type="submit" class="btn btn-outline btn-sm">
+                    <?php echo $openIsActive ? 'Deactivate' : 'Activate'; ?>
+                </button>
+            </form>
+
+            <a href="<?php echo htmlspecialchars(buildRiderUrl(['open' => null, 'doc_page' => null]), ENT_QUOTES, 'UTF-8'); ?>"
+                class="btn btn-outline btn-sm">Close</a>
         </div>
+
+        <?php endif; ?>
     </div>
 </div>
 
-<script>
-window.FITPAL_ADMIN_RIDERS = {
-    csrfToken: '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>',
-    handlerUrl: '../backend/handlers/admin-handler.php',
-    showBulkBar: <?php echo $showBulkBar ? 'true' : 'false'; ?>
-};
-</script>
-<script src="../assets/ui/js/riders.js" defer></script>
-
+<script src="../assets/ui/js/dashboard.js" defer></script>
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>

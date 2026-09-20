@@ -1,21 +1,28 @@
 /**
  * FitPal Rider Sign-In Styles
  *
- * Foodpanda-style auth card rendered inside the standard FitPal
- * page shell. All icons come from shared/assets/images/icons/.
+ * Layout map:
+ *   - Mobile (≤ 768px): single column, tight vertical rhythm. Hero
+ *     band is compact so the form fits above the fold on a phone.
+ *   - Tablet & desktop (≥ 769px): two-column grid. Hero occupies
+ *     the left column, content occupies the right column, and the
+ *     version footer spans both beneath them.
  *
- * Changes in this version:
- *   - Illustration is now clipped and centered inside a fixed-height
- *     band so it never overflows the card's top corners.
- *   - Region indicator is static: Philippines only.
- *   - Password field has a visibility toggle (eye icon).
+ * Hero band uses a solid light-grey background. The illustration is
+ * contained (not cropped) and padded so it never touches the edges.
+ *
+ * All icons come from shared/assets/images/icons/.
  *
  * @package FitPal
- * @version 6.0 — Illustration fits the card; bleed-through removed.
+ * @version 8.1 — Mobile vertical rhythm tightened. Hero band reduced
+ *                from 180px to 110px. Content padding, title size,
+ *                form-group spacing, and divider margins all
+ *                compacted for phones. Desktop/tablet layout is
+ *                unchanged from v8.0.
  */
 
 /* ============================================
-   CONTENT WRAPPER
+   PAGE WRAPPER
    ============================================ */
 
 .rider-auth-content-wrap {
@@ -25,7 +32,7 @@
     width: 100%;
     padding: 0;
     min-height: calc(100vh - 70px);
-    background: linear-gradient(135deg, var(--gray-50) 0%, var(--white) 100%);
+    background: linear-gradient(160deg, var(--gray-50) 0%, var(--white) 60%);
 }
 
 .rider-auth-page {
@@ -33,136 +40,140 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 28px 16px;
+    padding: 40px 20px;
     box-sizing: border-box;
     width: 100%;
 }
 
 /* ============================================
    AUTH CARD
+   Mobile-first: single column, natural DOM order.
    ============================================ */
 
 .rider-auth-card {
     width: 100%;
-    max-width: 420px;
+    max-width: 460px;
     background: var(--white);
     border-radius: var(--radius-xl);
-    /*
-     * overflow: hidden is what clips the illustration cleanly to the
-     * card's rounded top corners. Without it the image renders as a
-     * hard-edged rectangle that breaks the card's shape.
-     */
     overflow: hidden;
-    box-shadow: var(--shadow-lg);
+    box-shadow:
+        0 1px 2px rgba(5, 10, 4, 0.04),
+        0 12px 40px rgba(5, 10, 4, 0.10);
     border: 1px solid var(--gray-200);
-    display: flex;
-    flex-direction: column;
+
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-areas:
+        "hero"
+        "content"
+        "footer";
 }
+
+.rider-hero         { grid-area: hero; }
+.rider-auth-content { grid-area: content; }
+.rider-version      { grid-area: footer; }
 
 /* ============================================
-   ILLUSTRATION — fitted band at the top of the card
+   HERO BAND
+   Solid light-grey background, illustration contained.
+   Mobile default: compact.
    ============================================ */
 
-.rider-illustration {
+.rider-hero {
     position: relative;
     width: 100%;
-    height: 160px;
+    height: 150px;
     flex-shrink: 0;
-    background: var(--gray-50);
+    background: var(--gray-100);
     overflow: hidden;
     line-height: 0;
-    /*
-     * The card already declares overflow: hidden, but we repeat it
-     * here so the image is clipped even if the card rule is ever
-     * relaxed. Two independent clips, one purpose.
-     */
+    border-bottom: 1px solid var(--gray-200);
 }
 
-.rider-illustration img {
+.rider-hero img {
     display: block;
     width: 100%;
     height: 100%;
-    /*
-     * `contain` shows the entire illustration, scaled down to fit
-     * inside the band without cropping. If you prefer a "fill the
-     * band edge to edge" look, swap this for `cover`. Either way
-     * the band's fixed height and the card's overflow: hidden
-     * guarantee the image never spills past the card corners.
-     */
     object-fit: contain;
     object-position: center center;
-    /*
-     * Padding keeps the illustration from touching the band edges.
-     * Drop the vertical padding if you want the artwork to bleed to
-     * the top of the card.
-     */
-    padding: 16px 24px 0 24px;
+    padding: 16px 20px;
     box-sizing: border-box;
 }
 
 /* ============================================
    CONTENT AREA
+   Mobile default: tighter padding.
    ============================================ */
 
 .rider-auth-content {
-    padding: 20px 24px 20px 24px;
+    padding: 20px 20px 16px 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+.rider-auth-header {
+    margin-bottom: 14px;
 }
 
 .rider-auth-title {
-    margin: 0 0 20px 0;
+    margin: 0 0 4px 0;
     font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    line-height: 1.3;
+    font-weight: 700;
+    line-height: 1.15;
     color: var(--text);
+    letter-spacing: -0.02em;
 }
 
 .rider-auth-title span {
     color: var(--primary);
 }
 
+.rider-auth-subtitle {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    line-height: 1.45;
+}
+
 /* ============================================
-   REGION INDICATOR (static, Philippines only)
+   REGION STRIP
    ============================================ */
 
-.rider-country-selector {
+.rider-region-strip {
     display: flex;
     align-items: center;
-    gap: 12px;
-    height: 52px;
-    padding: 0 16px;
-    margin-bottom: 16px;
-    border: 1.5px solid var(--gray-200);
+    gap: 8px;
+    padding: 8px 12px;
+    margin-bottom: 14px;
     border-radius: var(--radius-base);
-    background: var(--gray-50);
-    box-sizing: border-box;
-    cursor: default;
-    user-select: none;
+    background: rgba(89, 193, 74, 0.06);
+    border: 1px solid rgba(89, 193, 74, 0.18);
+    font-size: var(--font-size-xs);
+    line-height: 1.4;
 }
 
-.rider-country-icon {
-    width: 18px;
-    height: 18px;
+.rider-region-icon {
+    width: 14px;
+    height: 14px;
     display: block;
     flex-shrink: 0;
-    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
 }
 
-.rider-country-name {
-    flex: 1;
-    min-width: 0;
-    font-size: var(--font-size-base);
-    font-weight: var(--font-weight-semibold);
-    color: var(--text);
+.rider-region-text {
+    color: var(--gray-600);
+    font-weight: 500;
 }
 
-.rider-chevron-icon {
-    width: 18px;
-    height: 18px;
-    display: block;
-    flex-shrink: 0;
-    opacity: 0.85;
-    pointer-events: none;
-    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+.rider-region-value {
+    margin-left: auto;
+    color: var(--primary-dark);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-size: 10px;
 }
 
 /* ============================================
@@ -170,13 +181,22 @@
    ============================================ */
 
 .rider-form-group {
-    margin-bottom: 16px;
+    margin-bottom: 14px;
+}
+
+.rider-form-label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--gray-600);
+    letter-spacing: 0.2px;
 }
 
 .rider-form-control {
     width: 100%;
-    height: 52px;
-    padding: 0 16px;
+    height: 48px;
+    padding: 0 14px;
     border: 1.5px solid var(--gray-300);
     border-radius: var(--radius-base);
     font-size: var(--font-size-base);
@@ -184,21 +204,44 @@
     color: var(--text);
     background: var(--white);
     box-sizing: border-box;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
 .rider-form-control::placeholder {
     color: var(--gray-400);
 }
 
+.rider-form-control:hover {
+    border-color: var(--gray-400);
+}
+
 .rider-form-control:focus {
     outline: none;
     border-color: var(--primary);
     box-shadow: 0 0 0 4px rgba(89, 193, 74, 0.15);
+    background: var(--white);
 }
 
 .rider-form-control.is-error {
     border-color: var(--danger);
+    background: #fff8f8;
+}
+
+.rider-form-control.is-error:focus {
+    box-shadow: 0 0 0 4px rgba(220, 53, 69, 0.12);
+}
+
+.rider-form-error {
+    margin: 4px 0 0 0;
+    padding: 0;
+    font-size: var(--font-size-xs);
+    color: var(--danger);
+    line-height: 1.4;
+    min-height: 0;
+}
+
+.rider-form-error:empty {
+    display: none;
 }
 
 /* ============================================
@@ -211,19 +254,19 @@
 }
 
 .rider-password-wrapper .rider-form-control {
-    padding-right: 52px;
+    padding-right: 46px;
 }
 
 .rider-password-toggle {
     position: absolute;
-    right: 10px;
+    right: 8px;
     top: 50%;
     transform: translateY(-50%);
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     padding: 0;
     border: none;
     border-radius: var(--radius-base);
@@ -246,8 +289,8 @@
 
 .rider-password-toggle img {
     display: block;
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     pointer-events: none;
 }
 
@@ -260,39 +303,78 @@
     align-items: center;
     justify-content: center;
     width: 100%;
-    height: 52px;
-    padding: 0 20px;
+    height: 48px;
+    padding: 0 18px;
     border-radius: var(--radius-full);
-    font-size: var(--font-size-base);
-    font-weight: var(--font-weight-bold);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
     font-family: inherit;
     text-decoration: none;
     cursor: pointer;
-    border: none;
+    border: 1.5px solid transparent;
     box-sizing: border-box;
-    transition: background-color 0.15s ease, transform 0.1s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease,
+                color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
 }
 
 .rider-btn:active {
-    transform: scale(0.98);
+    transform: scale(0.985);
 }
 
-.rider-btn-dark {
+.rider-btn-primary {
     background: var(--text);
     color: var(--white);
-    margin-bottom: 12px;
+    border-color: var(--text);
+    margin-bottom: 0;
+    box-shadow: 0 2px 8px rgba(5, 10, 4, 0.15);
 }
 
-.rider-btn-dark:hover {
+.rider-btn-primary:hover {
     background: var(--black);
+    border-color: var(--black);
+    box-shadow: 0 4px 14px rgba(5, 10, 4, 0.22);
 }
 
-.rider-btn-light {
-    background: var(--gray-100);
+.rider-btn-primary:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.rider-btn-secondary {
+    background: transparent;
     color: var(--text);
+    border-color: var(--gray-300);
 }
 
-.rider-btn-light:hover {
+.rider-btn-secondary:hover {
+    background: var(--gray-50);
+    border-color: var(--gray-400);
+}
+
+/* ============================================
+   DIVIDER
+   Mobile default: compact, no full-row height.
+   ============================================ */
+
+.rider-auth-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 14px 0 10px 0;
+    font-size: 10px;
+    color: var(--gray-400);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 600;
+}
+
+.rider-auth-divider::before,
+.rider-auth-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
     background: var(--gray-200);
 }
 
@@ -301,11 +383,11 @@
    ============================================ */
 
 .rider-alert {
-    padding: 12px 16px;
+    padding: 10px 12px;
     border-radius: var(--radius-base);
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-xs);
     line-height: 1.5;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
     border: 1px solid transparent;
 }
 
@@ -323,13 +405,16 @@
 
 /* ============================================
    VERSION FOOTER
+   Mobile default: compact.
    ============================================ */
 
 .rider-version {
     text-align: center;
-    padding: 0 24px 20px 24px;
-    font-size: var(--font-size-xs);
+    padding: 10px 20px 12px 20px;
+    font-size: 10px;
     color: var(--gray-400);
+    border-top: 1px solid var(--gray-100);
+    background: var(--gray-50);
 }
 
 /* ============================================
@@ -349,88 +434,265 @@
 }
 
 /* ============================================
-   RESPONSIVE — TABLET
+   SMALL PHONE (≤ 480px)
+   Hero shrinks further. Content padding stays.
    ============================================ */
 
-@media (max-width: 768px) {
-    .rider-auth-page {
-        padding: 20px 12px;
-    }
-
-    .rider-auth-card {
-        border-radius: var(--radius-lg);
-    }
-
-    .rider-illustration {
-        height: 140px;
-    }
-
-    .rider-illustration img {
-        padding: 12px 20px 0 20px;
-    }
-
-    .rider-auth-content {
-        padding: 18px 18px 16px 18px;
-    }
-
-    .rider-auth-title {
-        font-size: var(--font-size-xl);
-        margin-bottom: 18px;
-    }
-
-    .rider-country-selector,
-    .rider-form-control,
-    .rider-btn {
-        height: 48px;
-        font-size: var(--font-size-sm);
-    }
-
-    .rider-country-icon,
-    .rider-chevron-icon {
-        width: 16px;
-        height: 16px;
-    }
-
-    .rider-password-toggle {
-        width: 32px;
-        height: 32px;
-        right: 8px;
-    }
-
-    .rider-password-toggle img {
-        width: 18px;
-        height: 18px;
-    }
-
-    .rider-password-wrapper .rider-form-control {
-        padding-right: 46px;
-    }
-}
-
-/* ============================================
-   RESPONSIVE — SMALL MOBILE
-   ============================================ */
-
-@media (max-width: 400px) {
+@media (max-width: 480px) {
     .rider-auth-page {
         padding: 12px 8px;
     }
 
-    .rider-illustration {
-        height: 120px;
+    .rider-auth-card {
+        border-radius: var(--radius-base);
     }
 
-    .rider-illustration img {
-        padding: 10px 16px 0 16px;
+    .rider-hero {
+        height: 110px;
+    }
+
+    .rider-hero img {
+        padding: 12px 16px;
+    }
+
+    .rider-auth-content {
+        padding: 18px 16px 14px 16px;
+    }
+
+    .rider-auth-title {
+        font-size: var(--font-size-xl);
+    }
+
+    .rider-auth-subtitle {
+        font-size: var(--font-size-xs);
+    }
+
+    .rider-region-strip {
+        padding: 7px 10px;
+        margin-bottom: 12px;
+    }
+
+    .rider-form-group {
+        margin-bottom: 12px;
+    }
+
+    .rider-form-control,
+    .rider-btn {
+        height: 44px;
+        font-size: var(--font-size-sm);
+    }
+
+    .rider-form-label {
+        font-size: 11px;
+    }
+
+    .rider-password-wrapper .rider-form-control {
+        padding-right: 42px;
+    }
+
+    .rider-password-toggle {
+        width: 30px;
+        height: 30px;
+        right: 7px;
+    }
+
+    .rider-password-toggle img {
+        width: 16px;
+        height: 16px;
+    }
+
+    .rider-auth-divider {
+        margin: 12px 0 8px 0;
+        font-size: 9px;
+    }
+
+    .rider-version {
+        padding: 8px 16px 10px 16px;
+    }
+}
+
+/* ============================================
+   VERY SMALL PHONE (≤ 360px)
+   Hero shrinks again. Everything else tightens once more.
+   ============================================ */
+
+@media (max-width: 360px) {
+    .rider-auth-page {
+        padding: 10px 6px;
+    }
+
+    .rider-hero {
+        height: 96px;
+    }
+
+    .rider-hero img {
+        padding: 10px 12px;
     }
 
     .rider-auth-content {
         padding: 16px 14px 12px 14px;
     }
 
-    .rider-country-selector,
+    .rider-auth-title {
+        font-size: var(--font-size-lg);
+    }
+
+    .rider-region-strip {
+        padding: 6px 10px;
+        margin-bottom: 10px;
+    }
+
+    .rider-form-group {
+        margin-bottom: 10px;
+    }
+
     .rider-form-control,
     .rider-btn {
-        height: 44px;
+        height: 42px;
+        font-size: var(--font-size-sm);
+    }
+
+    .rider-form-label {
+        font-size: 10px;
+    }
+
+    .rider-auth-divider {
+        margin: 10px 0 8px 0;
+    }
+}
+
+/* ============================================
+   TWO-COLUMN LAYOUT — TABLET & DESKTOP (≥ 769px)
+   Hero on the left, content on the right.
+   Footer spans both columns.
+   ============================================ */
+
+@media (min-width: 769px) {
+    .rider-auth-page {
+        padding: 48px 32px;
+    }
+
+    .rider-auth-card {
+        max-width: 820px;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        grid-template-areas:
+            "hero    content"
+            "footer  footer";
+    }
+
+    /* Hero fills the left column, edge to edge. */
+    .rider-hero {
+        height: 100%;
+        min-height: 520px;
+        border-bottom: none;
+        border-right: 1px solid var(--gray-200);
+    }
+
+    .rider-hero img {
+        padding: 32px 28px;
+    }
+
+    /* Content column: restore comfortable spacing. */
+    .rider-auth-content {
+        padding: 40px 36px 32px 36px;
+        justify-content: center;
+    }
+
+    .rider-auth-header {
+        margin-bottom: 20px;
+    }
+
+    .rider-auth-title {
+        font-size: 2rem;
+    }
+
+    .rider-auth-subtitle {
+        font-size: var(--font-size-sm);
+    }
+
+    .rider-region-strip {
+        padding: 10px 14px;
+        margin-bottom: 20px;
+        gap: 10px;
+    }
+
+    .rider-region-icon {
+        width: 16px;
+        height: 16px;
+    }
+
+    .rider-form-group {
+        margin-bottom: 18px;
+    }
+
+    .rider-form-label {
+        margin-bottom: 6px;
+    }
+
+    .rider-form-control,
+    .rider-btn {
+        height: 52px;
+        font-size: var(--font-size-base);
+    }
+
+    .rider-password-wrapper .rider-form-control {
+        padding-right: 52px;
+    }
+
+    .rider-password-toggle {
+        width: 36px;
+        height: 36px;
+        right: 10px;
+    }
+
+    .rider-password-toggle img {
+        width: 20px;
+        height: 20px;
+    }
+
+    .rider-auth-divider {
+        margin: 22px 0 16px 0;
+        font-size: var(--font-size-xs);
+        gap: 12px;
+    }
+
+    .rider-version {
+        padding: 14px 24px 18px 24px;
+        font-size: var(--font-size-xs);
+    }
+}
+
+/* ============================================
+   LARGE DESKTOP (≥ 1100px)
+   Slightly wider card and more generous hero padding.
+   ============================================ */
+
+@media (min-width: 1100px) {
+    .rider-auth-card {
+        max-width: 900px;
+    }
+
+    .rider-hero {
+        min-height: 560px;
+    }
+
+    .rider-hero img {
+        padding: 40px 32px;
+    }
+
+    .rider-auth-content {
+        padding: 48px 44px 40px 44px;
+    }
+}
+
+/* ============================================
+   REDUCED MOTION
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    .rider-btn,
+    .rider-form-control,
+    .rider-password-toggle {
+        transition: none !important;
     }
 }
