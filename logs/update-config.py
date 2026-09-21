@@ -168,7 +168,7 @@ def main() -> int:
 
     # Quick stats
     count = content.count('    "/')
-    print(f"✓ Wrote {count} file entries to {output_path.name}")
+    print(f"Wrote {count} file entries to {output_path.name}")
     return 0
 
 

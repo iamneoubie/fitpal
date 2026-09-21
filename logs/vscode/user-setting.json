@@ -1,0 +1,297 @@
+{
+
+  // UNDO / REDO / AUTO SAVE
+  "files.autoSave": "off",
+  "files.hotExit": "onExitAndWindowClose",
+  "editor.formatOnSave": true,
+
+
+  // FILE OPERATIONS — NO CONFIRMATIONS / NO TRUST PROMPTS
+  "explorer.confirmDelete": false,
+  "explorer.confirmDragAndDrop": false,
+  "explorer.confirmPasteNative": false,
+  "files.confirmDelete": false,
+  "files.confirmTrash": false,
+  "files.enableTrash": true,
+  "window.confirmBeforeClose": "never",
+  "security.workspace.trust.enabled": false,
+
+
+  // `NOTIF`ICATIONS / UPDATES / TELEMETRY — SILENT
+  "notifications.toasts": false,
+  "workbench.silentNotifications": true,
+  "workbench.tips.enabled": false,
+  "extensions.ignoreRecommendations": true,
+  "extensions.showRecommendationsOnlyOnDemand": true,
+  "extensions.autoCheckUpdates": false,
+  "extensions.autoUpdate": false,
+  "update.mode": "none",
+  "telemetry.telemetryLevel": "off",
+
+
+  // GIT — DISABLED
+  "git.enabled": false,
+  "git.autofetch": false,
+  "git.enableSmartCommit": false,
+  "git.decorations.enabled": false,
+  "scm.diffDecorations": "none",
+  "scm.alwaysShowActions": false,
+
+
+  // AI / COPILOT / CHAT — DISABLED
+  "chat.disableAIFeatures": true,
+  "github.copilot.enable": false,
+  "github.copilot.editor.enableAutoCompletions": false,
+  "github.copilot.editor.enableCodeActions": false,
+  "github.copilot.editor.enableTerminalChat": false,
+  "github.copilot.chat.enable": false,
+  "github.copilot.inlineChat.enable": false,
+
+
+  // OTHER EXTENSIONS — SILENT / DISABLED
+  "tabnine.experimental.disableNotifications": true,
+  "tabnine.experimental.editor.hideOnStart": true,
+  "liveServer.settings.donotShowInfoMsg": true,
+  "liveServer.settings.donotVerifyTags": true,
+  "intellicode.enable": false,
+
+
+  // WINDOW & WORKBENCH LAYOUT
+  "window.title": "${profileName} - ${folderName}",
+  "window.menuBarVisibility": "compact",
+  "window.commandCenter": false,
+  "window.restoreFullscreen": true,
+  "window.newWindowDimensions": "fullscreen",
+  "workbench.activityBar.location": "top",
+  "workbench.activityBar.compact": true,
+  "workbench.sideBar.location": "right",
+  "workbench.editor.closeOnFileDelete": true,
+  "workbench.startupEditor": "none",
+  "workbench.settings.useSplitJSON": false,
+  "workbench.editor.enablePreview": false,
+  "workbench.quickInput.position": "center",
+
+
+  // TREE & NAVIGATION
+  "workbench.tree.enableStickyScroll": false,
+  "workbench.tree.renderIndentGuides": "none",
+  "workbench.tree.indent": 20,
+  "breadcrumbs.enabled": true,
+  "breadcrumbs.filePath": "on",
+  "breadcrumbs.symbolPath": "off",
+
+
+  // THEME & COLORS
+  "workbench.colorTheme": "Catppuccin Mocha",
+  "workbench.iconTheme": "material-icon-theme",
+  "workbench.colorCustomizations": {
+    "[Vira*]": {
+      "statusBar.debuggingBackground": "#80CBC433",
+      "statusBar.debuggingForeground": "#80CBC4",
+      "button.background": "#80CBC4",
+      "button.hoverBackground": "#80CBC4cc",
+      "button.foreground": "#000000",
+      "extensionButton.separator": "#80CBC433",
+      "extensionButton.background": "#80CBC414",
+      "extensionButton.foreground": "#80CBC4",
+      "extensionButton.hoverBackground": "#80CBC433",
+      "extensionButton.prominentForeground": "#80CBC4",
+      "extensionButton.prominentBackground": "#80CBC414",
+      "extensionButton.prominentHoverBackground": "#80CBC433",
+      "activityBarBadge.background": "#80CBC4",
+      "activityBarBadge.foreground": "#000000",
+      "activityBar.activeBorder": "#80CBC4",
+      "activityBarTop.activeBorder": "#80CBC4",
+      "list.inactiveSelectionIconForeground": "#80CBC4",
+      "list.activeSelectionForeground": "#80CBC4",
+      "list.inactiveSelectionForeground": "#80CBC4",
+      "list.highlightForeground": "#80CBC4",
+      "list.activeSelectionIconForeground": "#80CBC4",
+      "sash.hoverBorder": "#80CBC480",
+      "scrollbarSlider.activeBackground": "#80CBC480",
+      "editorSuggestWidget.highlightForeground": "#80CBC4",
+      "editor.findMatchBorder": "#80CBC4",
+      "editorWidget.resizeBorder": "#80CBC4",
+      "editorWidget.border": "#80CBC4",
+      "textLink.foreground": "#80CBC4",
+      "progressBar.background": "#80CBC4",
+      "pickerGroup.foreground": "#80CBC4",
+      "tab.activeBorder": "#80CBC4",
+      "tab.activeBorderTop": "#80CBC400",
+      "tab.unfocusedActiveBorder": "#80CBC4",
+      "tab.unfocusedActiveBorderTop": "#80CBC400",
+      "tab.activeModifiedBorder": "#80CBC400",
+      "notificationLink.foreground": "#80CBC4",
+      "chat.slashCommandForeground": "#80CBC4",
+      "chat.avatarForeground": "#80CBC4",
+      "settings.modifiedItemIndicator": "#80CBC4",
+      "panelTitle.activeBorder": "#80CBC4",
+      "breadcrumb.activeSelectionForeground": "#80CBC4",
+      "menu.selectionForeground": "#80CBC4",
+      "menubar.selectionForeground": "#80CBC4",
+      "selection.background": "#80CBC440",
+      "statusBarItem.remoteBackground": "#80CBC414",
+      "statusBarItem.remoteHoverBackground": "#80CBC4",
+      "statusBarItem.remoteForeground": "#80CBC4",
+      "statusBarItem.remoteHoverForeground": "#000000",
+      "notebook.inactiveFocusedCellBorder": "#80CBC480",
+      "toolbar.activeBackground": "#80CBC426"
+    }
+  },
+
+
+  // EDITOR
+  "editor.cursorBlinking": "smooth",
+  "editor.cursorSmoothCaretAnimation": "on",
+  "editor.minimap.scale": 1,
+  "editor.codeLens": false,
+  "editor.stickyScroll.enabled": false,
+
+
+  // EXPLORER
+  "explorer.compactFolders": false,
+  "explorer.decorations.badges": false,
+  "explorer.openEditors.enabled": false,
+  "explorer.autoReveal": "focusNoScroll",
+  "explorer.autoRevealExclude": {
+    "**/node_modules": true,
+    "**/bower_components": true
+  },
+
+
+  // SEARCH
+  "search.searchOnType": false,
+
+
+  // TERMINAL
+  "terminal.integrated.defaultProfile.windows": "Git Bash",
+  "terminal.integrated.gpuAcceleration": "on",
+  "terminal.integrated.stickyScroll.enabled": false,
+  "terminal.integrated.shellIntegration.decorationsEnabled": "never",
+  "terminal.integrated.suggest.enabled": false,
+
+
+  // SUGGESTIONS — SNIPPETS ONLY (NO AI, NO INTELLISENSE)
+  "editor.inlineSuggest.enabled": false,
+  "editor.quickSuggestions": {
+    "other": true,
+    "comments": false,
+    "strings": false
+  },
+  "editor.quickSuggestionsDelay": 10,
+  "editor.suggestOnTriggerCharacters": true,
+  "editor.parameterHints.enabled": false,
+  "editor.acceptSuggestionOnEnter": "on",
+  "editor.acceptSuggestionOnCommitCharacter": true,
+  "editor.wordBasedSuggestions": "off",
+  "editor.suggest.snippetsPreventQuickSuggestions": false,
+  "editor.snippetSuggestions": "top",
+  "editor.suggest.showStatusBar": false,
+  "editor.suggest.showSnippets": true,
+  "editor.suggest.showFiles": true,
+  "editor.suggest.showFolders": true,
+  "editor.suggest.showWords": false,
+  "editor.suggest.preview": false,
+  "editor.suggest.showIcons": false,
+
+
+  // EMMET
+  "emmet.triggerExpansionOnTab": true,
+  "emmet.showExpandedAbbreviation": "always",
+
+
+  // LANGUAGE-SPECIFIC
+  "[markdown]": {
+    "editor.quickSuggestions": {
+      "other": true,
+      "comments": false,
+      "strings": false
+    },
+    "editor.snippetSuggestions": "top"
+  },
+  "json.validate.enable": false,
+
+
+  // PHP
+  "php.validate.executablePath": "D:\\Application Program\\Xampp\\php\\php.exe",
+  "phpserver.ip": "127.0.0.1",
+  "phpserver.phpPath": "D:\\Application Program\\Xampp\\php\\php.exe",
+
+
+  // CODE RUNNER
+  "code-runner.showRunIconInEditorTitleMenu": true,
+  "code-runner.runInTerminal": true,
+  "code-runner.ignoreSelection": true,
+  "code-runner.clearPreviousOutput": true,
+  "code-runner.temporaryFileName": "",
+  "code-runner.executorMap": {
+    "python": "clear && cd \"$(dirname \"$file\")\" && python3 -u \"$fileName\"",
+    "java": "clear && cd \"$(dirname \"$file\")\" && mkdir -p javac-build/classes && rm -rf javac-build/classes/* && javac -d javac-build/classes \"$fileName\" && java -cp javac-build/classes \"$fileNameWithoutExt\"",
+    "c": "clear && cd \"$(dirname \"$file\")\" && mkdir -p gcc-build/bin && rm -rf gcc-build/bin/* && gcc \"$fileName\" -o \"gcc-build/bin/$fileNameWithoutExt\" && ./\"gcc-build/bin/$fileNameWithoutExt\"",
+    "cpp": "clear && cd \"$(dirname \"$file\")\" && mkdir -p g++-build/bin && rm -rf g++-build/bin/* && g++ \"$fileName\" -o \"g++-build/bin/$fileNameWithoutExt\" && ./\"g++-build/bin/$fileNameWithoutExt\"",
+    "csharp": "clear && SOURCE_DIR=\"$(dirname \"$file\")\" && SOURCE_FILE=\"$fileName\" && BASENAME=\"$(basename \"$SOURCE_FILE\" .cs)\" && cd \"$SOURCE_DIR\" && if [ ! -d dotnet-runner ]; then dotnet new console -n dotnet-runner > /dev/null && sed -i 's|<OutputType>Exe</OutputType>|<OutputType>Exe</OutputType><BaseOutputPath>bin/</BaseOutputPath><BaseIntermediateOutputPath>obj/</BaseIntermediateOutputPath><OutputPath>bin/debug/</OutputPath><IntermediateOutputPath>obj/debug/</IntermediateOutputPath>|' dotnet-runner/dotnet-runner.csproj; fi && rm -rf dotnet-runner/bin dotnet-runner/obj && rm -f dotnet-runner/*.cs && cp \"$SOURCE_FILE\" \"dotnet-runner/${BASENAME}.cs\" && (cd dotnet-runner && dotnet run --file \"${BASENAME}.cs\" 2>&1 | grep -v 'MSB3539\\|MSB[0-9]\\+')"
+  },
+
+
+  // DATABASE CLIENT
+  "database-client.completionTriggerKey": [" ", "@", "."],
+  "database-client.telemetry.usesOnlineServices": false,
+  "database-client.openResultsAsVertically": false,
+  "database-client.splitEditorWhenQuery": false,
+  "database-client.showSecurity": false,
+  "database-client.saveConnectionExpandedState": false,
+  "database-client.autoPagingSQL": false,
+  "database-client.rememberSQLVariables": false,
+  "database-client.bindConnectionByActiveMark": false,
+  "database-client.highlightSQLBlock": false,
+  "database-client.enableSQLVariable": false,
+  "database-client.enableEditorCodeLens": false,
+
+
+  // FUN / VISUAL EXTENSIONS
+  "powermode.enabled": true,
+  "powermode.combo.location": "off",
+  "powermode.explosions.backgroundMode": "image",
+  "powermode.explosions.size": 10,
+  "powermode.explosions.maxExplosions": 3,
+  "powermode.shake.enabled": false,
+  "vscode-pets.petSize": "medium",
+  "vscode-pets.petColor": "orange",
+  "vscode-pets.theme": "autumn",
+  "vscode-pets.throwBallWithMouse": true,
+  "vscode-pets.disableEffects": true,
+
+
+  // DOCUMENT VIEWER
+  "documentViewer.enableMd": false,
+
+
+  // WORKBENCH EDITOR ASSOCIATIONS
+  "workbench.editorAssociations": {
+    "*.copilotmd": "vscode.markdown.preview.editor",
+    "*.md": "default",
+    "*.csv": "syncfusion-csv-viewer",
+    "*.tsv": "syncfusion-csv-viewer",
+    "*.xlsx": "syncfusion-excel-viewer",
+    "*.xls": "syncfusion-excel-viewer",
+    "*.xltx": "syncfusion-excel-viewer",
+    "*.xlt": "syncfusion-excel-viewer",
+    "*.docx": "syncfusion-word-viewer",
+    "*.doc": "syncfusion-word-viewer",
+    "*.dot": "syncfusion-word-viewer",
+    "*.dotx": "syncfusion-word-viewer",
+    "*.rtf": "syncfusion-word-viewer",
+    "*.pdf": "syncfusion-pdf-viewer"
+  },
+
+
+  // SETTINGS UI
+  "workbench.settings.showAISearchToggle": false,
+  "codesnap.transparentBackground": true,
+
+  "vscode_custom_css.imports": [
+    "file:///C:/Users/Admin/Documents/VS%20Code%20Profile/custom-vscode.css",
+    "file:///C:/Users/Admin/Documents/VS%20Code%20Profile/custom-vscode-script.js"
+  ],
+  "workbench.statusBar.visible": false
+}

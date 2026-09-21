@@ -142,6 +142,7 @@ filesToCheck = [
     "/restaurant/backend/database/restaurant-queries.php",
 
     # ===== restaurant/backend/handlers =====
+    "/restaurant/backend/handlers/branch-lookup-handler.php",
     "/restaurant/backend/handlers/profile-handler.php",
     "/restaurant/backend/handlers/sign-in-handler.php",
     "/restaurant/backend/handlers/sign-out-handler.php",

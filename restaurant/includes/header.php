@@ -18,9 +18,12 @@
  *    (desktop and mobile) is a <button> carrying data-logout-trigger
  *    so logout.js can intercept it and show the confirmation modal.
  *
+ * 5. The Kitchen link is shown only to role ∈ {manager, staff, kitchen}.
+ *    Owner and partner accounts see Dashboard and Profile only — the
+ *    kitchen page is an operational surface for branch staff.
+ *
  * @package FitPal
- * @version 3.0 — Avatar + greeting link to profile. Logout uses the
- *                confirmation modal. Modal markup lives in the header.
+ * @version 3.1 — Adds the Kitchen nav link for branch staff roles.
  */
 
 declare(strict_types=1);
@@ -55,6 +58,8 @@ $businessName    = $isLoggedIn ? (string)($_SESSION['business_name']   ?? '') : 
 $restaurantRole  = $isLoggedIn ? (string)($_SESSION['restaurant_role'] ?? '') : '';
 $restaurantScope = $isLoggedIn ? (string)($_SESSION['restaurant_scope'] ?? 'owner') : '';
 
+$showKitchenLink = $isLoggedIn && in_array($restaurantRole, ['manager', 'staff', 'kitchen'], true);
+
 $accountInitial = '';
 if ($accountName !== '') {
     $accountInitial = strtoupper(substr($accountName, 0, 1));
@@ -67,6 +72,7 @@ $pageCssMap = [
     'sign-up.php'   => 'sign-up.css',
     'dashboard.php' => 'dashboard.css',
     'profile.php'   => 'profile.css',
+    'kitchen.php'   => 'orders.css',
 ];
 
 $pageCssFile = $pageCssMap[$currentPage] ?? '';
@@ -126,6 +132,14 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
                             Dashboard
                         </a>
                     </li>
+                    <?php if ($showKitchenLink): ?>
+                    <li class="nav-item">
+                        <a href="kitchen.php"
+                            class="nav-link <?php echo ($currentPage === 'kitchen.php') ? 'active' : ''; ?>">
+                            Kitchen
+                        </a>
+                    </li>
+                    <?php endif; ?>
                     <li class="nav-item">
                         <a href="profile.php"
                             class="nav-link <?php echo ($currentPage === 'profile.php') ? 'active' : ''; ?>">
@@ -203,6 +217,12 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
                 <a href="dashboard.php"
                     class="mobile-nav-link <?php echo ($currentPage === 'dashboard.php') ? 'active' : ''; ?>">Dashboard</a>
             </li>
+            <?php if ($showKitchenLink): ?>
+            <li class="mobile-nav-item">
+                <a href="kitchen.php"
+                    class="mobile-nav-link <?php echo ($currentPage === 'kitchen.php') ? 'active' : ''; ?>">Kitchen</a>
+            </li>
+            <?php endif; ?>
             <li class="mobile-nav-item">
                 <a href="profile.php"
                     class="mobile-nav-link <?php echo ($currentPage === 'profile.php') ? 'active' : ''; ?>">Profile</a>
@@ -232,9 +252,6 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
         </ul>
     </nav>
 
-    <!-- ============================================
-         LOGOUT CONFIRMATION MODAL
-         ============================================ -->
     <div class="logout-modal" id="logoutModal" style="display: none;" role="dialog" aria-modal="true"
         aria-labelledby="logoutModalTitle">
         <div class="logout-modal-overlay" data-logout-cancel></div>
@@ -244,7 +261,7 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
                     onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/information-fill.svg'">
             </div>
             <p class="logout-modal-title" id="logoutModalTitle">Sign out?</p>
-            <p class="logout-modal-text">ou'll need to sign in again to access your account.</p>
+            <p class="logout-modal-text">You'll need to sign in again to access your account.</p>
             <div class="logout-modal-actions">
                 <button type="button" class="logout-btn-cancel" data-logout-cancel>Cancel</button>
                 <a href="../backend/handlers/sign-out-handler.php" class="logout-btn-confirm">

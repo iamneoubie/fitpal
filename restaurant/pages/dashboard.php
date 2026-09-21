@@ -13,8 +13,17 @@
  * makes sign-out work: after sign-out, the key is gone and the
  * dashboard becomes unreachable.
  *
+ * Kitchen link
+ * ------------
+ * For branch-scoped accounts (manager / staff / kitchen), the Total
+ * Orders stat tile and the Active Orders hint link into kitchen.php
+ * so staff can move from a summary into the working list in one
+ * click. Owner accounts do not see a kitchen link — the kitchen page
+ * is an operational surface for branch staff only.
+ *
  * @package FitPal
- * @version 1.0
+ * @version 1.1 — Total Orders tile and Active Orders hint link to
+ *                kitchen.php for branch accounts.
  */
 
 declare(strict_types=1);
@@ -41,21 +50,23 @@ $branchCode    = (string)($_SESSION['restaurant_branch_code'] ?? '');
 $accountName   = (string)($_SESSION['user_name'] ?? '');
 $firstName     = $accountName !== '' ? explode(' ', trim($accountName))[0] : 'Account';
 
+$isBranchScope = ($scope === 'branch' && $branchId > 0);
+
 /* --------------------------------------------------------------
  * LOAD DATA
  * -------------------------------------------------------------- */
 
-$stats         = [];
-$weeklyRevenue = [];
-$chartScale    = ['ceiling' => 1000.0, 'step' => 250.0, 'gridlines' => []];
-$chartCeiling  = 1000.0;
-$barHeights    = [];
-$today         = date('Y-m-d');
+$stats          = [];
+$weeklyRevenue  = [];
+$chartScale     = ['ceiling' => 1000.0, 'step' => 250.0, 'gridlines' => []];
+$chartCeiling   = 1000.0;
+$barHeights     = [];
+$today          = date('Y-m-d');
 $branchOverview = [];
 $topProducts    = [];
 
 try {
-    if ($scope === 'branch' && $branchId > 0) {
+    if ($isBranchScope) {
         $stats         = getBranchDashboardStats($database_connection, $branchId);
         $weeklyRevenue = getBranchWeeklyRevenue($database_connection, $branchId, 7);
         $topProducts   = getBranchTopProducts($database_connection, $branchId, 5);
@@ -99,7 +110,7 @@ function dashFormatCurrency(float|string|null $amount): string
                     Welcome back, <span><?php echo htmlspecialchars($firstName, ENT_QUOTES, 'UTF-8'); ?></span>
                 </h1>
                 <p class="text-muted">
-                    <?php if ($scope === 'branch'): ?>
+                    <?php if ($isBranchScope): ?>
                     You are signed in to
                     <strong><?php echo htmlspecialchars($branchName !== '' ? $branchName : 'Branch', ENT_QUOTES, 'UTF-8'); ?></strong>
                     <?php if ($branchCode !== ''): ?>
@@ -114,8 +125,8 @@ function dashFormatCurrency(float|string|null $amount): string
                 </p>
             </div>
             <div class="restaurant-dashboard-actions">
-                <span class="badge badge-<?php echo $scope === 'branch' ? 'info' : 'success'; ?>">
-                    <?php echo $scope === 'branch' ? 'Branch' : 'Owner'; ?>
+                <span class="badge badge-<?php echo $isBranchScope ? 'info' : 'success'; ?>">
+                    <?php echo $isBranchScope ? 'Branch' : 'Owner'; ?>
                 </span>
             </div>
         </header>
@@ -130,8 +141,10 @@ function dashFormatCurrency(float|string|null $amount): string
         <!-- STAT CARDS -->
         <section class="restaurant-stats-grid" aria-label="Summary">
 
-            <?php if ($scope === 'branch'): ?>
-            <div class="restaurant-stat-card">
+            <?php if ($isBranchScope): ?>
+
+            <!-- Total Orders — links to the kitchen list for branch accounts -->
+            <a href="kitchen.php" class="restaurant-stat-card">
                 <div class="restaurant-stat-info">
                     <p class="restaurant-stat-number">
                         <?php echo number_format((int)($stats['total_orders'] ?? 0)); ?>
@@ -143,16 +156,20 @@ function dashFormatCurrency(float|string|null $amount): string
                     </p>
                     <?php endif; ?>
                 </div>
-            </div>
+            </a>
 
-            <div class="restaurant-stat-card">
+            <!-- Active Orders — links to the kitchen list -->
+            <a href="kitchen.php" class="restaurant-stat-card">
                 <div class="restaurant-stat-info">
                     <p class="restaurant-stat-number">
                         <?php echo number_format((int)($stats['active_orders'] ?? 0)); ?>
                     </p>
                     <p class="restaurant-stat-label">Active Orders</p>
+                    <p class="restaurant-stat-hint">
+                        Open the kitchen
+                    </p>
                 </div>
-            </div>
+            </a>
 
             <div class="restaurant-stat-card">
                 <div class="restaurant-stat-info">
@@ -176,6 +193,7 @@ function dashFormatCurrency(float|string|null $amount): string
             </div>
 
             <?php else: ?>
+
             <div class="restaurant-stat-card">
                 <div class="restaurant-stat-info">
                     <p class="restaurant-stat-number">
@@ -219,6 +237,7 @@ function dashFormatCurrency(float|string|null $amount): string
                     </p>
                 </div>
             </div>
+
             <?php endif; ?>
         </section>
 
@@ -301,7 +320,7 @@ function dashFormatCurrency(float|string|null $amount): string
         </section>
 
         <!-- OWNER: BRANCH OVERVIEW -->
-        <?php if ($scope !== 'branch'): ?>
+        <?php if (!$isBranchScope): ?>
         <section class="restaurant-card" aria-labelledby="branches-title">
             <div class="restaurant-card-header">
                 <h2 class="heading-5" id="branches-title">Branches</h2>
@@ -345,7 +364,7 @@ function dashFormatCurrency(float|string|null $amount): string
         <?php endif; ?>
 
         <!-- BRANCH: TOP PRODUCTS -->
-        <?php if ($scope === 'branch'): ?>
+        <?php if ($isBranchScope): ?>
         <section class="restaurant-card" aria-labelledby="top-products-title">
             <div class="restaurant-card-header">
                 <h2 class="heading-5" id="top-products-title">Top Products</h2>
