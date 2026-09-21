@@ -14,9 +14,11 @@
  *     functions. The handler that calls them owns all validation.
  *
  * @package FitPal
- * @version 1.1 — Adds the three write functions used by the kitchen
- *                handler: setOrderPreparing, setOrderCancelledByRestaurant,
- *                assignRiderToOrder.
+ * @version 1.2 — getAvailableRidersForBranch() excludes riders who
+ *                already have an active delivery. assignRiderToOrder()
+ *                no longer rolls back on a no-op UPDATE, so rider
+ *                availability is always updated when the order is
+ *                eligible.
  */
 
 declare(strict_types=1);
@@ -158,12 +160,25 @@ function getKitchenOrderItems(PDO $db, int $orderId, int $branchId): array
 }
 
 /**
- * Fetch verified, available riders for a given branch's city.
+ * Fetch verified, available riders for a given branch.
  *
- * Riders are not branch-scoped in the schema. This query filters by
- * verification status and availability, then prefers riders whose
- * default address city matches the branch's city so the kitchen
- * sees the closest riders first.
+ * A rider is eligible for assignment only when ALL of the following
+ * hold:
+ *
+ *   1. delivery_rider.is_active = 1
+ *   2. delivery_rider_profile.verification_status = 'verified'
+ *   3. delivery_rider_profile.is_available = 1
+ *   4. The rider is NOT attached to any order whose status is
+ *      'preparing' or 'delivering'. A rider can remain flagged
+ *      is_available = 1 in the profile while mid-delivery if the
+ *      previous assignment never flipped it back. This filter
+ *      makes the restaurant view authoritative regardless of that
+ *      stale flag.
+ *
+ * Riders are ordered so that riders whose default address city
+ * matches the branch's city appear first, then by rating, then by
+ * fewest completed deliveries. That ordering is presentation only —
+ * it does not widen the eligibility set.
  *
  * @param PDO $db
  * @param int $branchId
@@ -191,6 +206,7 @@ function getAvailableRidersForBranch(PDO $db, int $branchId): array
             drp.vehicle_plate,
             drp.average_rating,
             drp.total_deliveries,
+            drp.is_available AS is_online,
             (
                 SELECT ra.city
                   FROM delivery_rider_address ra
@@ -203,6 +219,12 @@ function getAvailableRidersForBranch(PDO $db, int $branchId): array
          WHERE dr.is_active = 1
            AND drp.verification_status = 'verified'
            AND drp.is_available = 1
+           AND NOT EXISTS (
+                SELECT 1
+                  FROM orders o2
+                 WHERE o2.delivery_rider_id = dr.delivery_rider_id
+                   AND o2.order_status IN ('preparing','delivering')
+           )
          ORDER BY
             CASE WHEN (
                 SELECT ra.city
@@ -314,6 +336,32 @@ function getKitchenOrderOwnership(PDO $db, int $orderId, int $branchId): array|f
             : null,
         'branch_id'         => (int)$row['branch_id'],
     ];
+}
+
+/**
+ * Return true if the given rider is currently attached to an order
+ * whose status is 'preparing' or 'delivering'. Used by the handler
+ * as a final eligibility check immediately before assignment.
+ *
+ * @param PDO $db
+ * @param int $riderId
+ * @return bool
+ */
+function riderHasActiveDelivery(PDO $db, int $riderId): bool
+{
+    if ($riderId <= 0) {
+        return false;
+    }
+
+    $stmt = $db->prepare(
+        "SELECT 1
+           FROM orders
+          WHERE delivery_rider_id = :rider_id
+            AND order_status IN ('preparing','delivering')
+          LIMIT 1"
+    );
+    $stmt->execute([':rider_id' => $riderId]);
+    return $stmt->fetchColumn() !== false;
 }
 
 /**
@@ -512,28 +560,47 @@ function setOrderCancelledByRestaurant(PDO $db, int $orderId, int $branchId): bo
 }
 
 /**
- * Assign a rider to an order. Does not change the order status.
+ * Assign a rider to an order.
  *
- * The kitchen assigns a rider first, then presses "Mark Ready" to
- * move the order to 'delivering'. Keeping the two actions separate
- * means the kitchen can queue a rider while the food is still
- * being prepared.
+ * Does not change the order status. The kitchen assigns a rider
+ * first, then presses "Mark Ready" to move the order to
+ * 'delivering'.
  *
- * Scoped by branch so a branch account cannot assign a rider to
- * another branch's order. Also flips the rider's is_available flag
- * to 0 so they drop off the available list.
+ * Read the current order state first, then update, then flip the
+ * rider to unavailable. The read-first pattern is what avoids the
+ * previous bug: MySQL's rowCount() returns 0 for a no-op UPDATE
+ * (assigning the same rider twice), and the previous code treated
+ * that as a failure and rolled back the entire transaction,
+ * including the rider-availability update. This version only
+ * returns false when the order is genuinely not assignable.
  *
  * @param PDO $db
  * @param int $orderId
  * @param int $branchId
  * @param int $riderId
- * @return bool  True if the order row was updated.
+ * @return bool  True if the assignment ran, false otherwise.
  */
 function assignRiderToOrder(PDO $db, int $orderId, int $branchId, int $riderId): bool
 {
+    if ($orderId <= 0 || $branchId <= 0 || $riderId <= 0) {
+        return false;
+    }
+
     $db->beginTransaction();
 
     try {
+        $current = getKitchenOrderOwnership($db, $orderId, $branchId);
+
+        if ($current === false) {
+            $db->rollBack();
+            return false;
+        }
+
+        if (!in_array($current['order_status'], ['pending', 'preparing'], true)) {
+            $db->rollBack();
+            return false;
+        }
+
         $orderStmt = $db->prepare(
             "UPDATE orders o
              JOIN queue_item qi ON qi.order_id = o.order_id
@@ -541,20 +608,13 @@ function assignRiderToOrder(PDO $db, int $orderId, int $branchId, int $riderId):
                     o.updated_at        = NOW()
               WHERE o.order_id = :order_id
                 AND qi.branch_id = :branch_id
-                AND o.order_status IN ('pending','preparing')
-                AND (o.delivery_rider_id IS NULL OR o.delivery_rider_id <> :rider_id_check)"
+                AND o.order_status IN ('pending','preparing')"
         );
         $orderStmt->execute([
-            ':rider_id'       => $riderId,
-            ':order_id'       => $orderId,
-            ':branch_id'      => $branchId,
-            ':rider_id_check' => $riderId,
+            ':rider_id'  => $riderId,
+            ':order_id'  => $orderId,
+            ':branch_id' => $branchId,
         ]);
-
-        if ($orderStmt->rowCount() === 0) {
-            $db->rollBack();
-            return false;
-        }
 
         $riderStmt = $db->prepare(
             "UPDATE delivery_rider_profile

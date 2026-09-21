@@ -20,7 +20,9 @@
  * failures return 403.
  *
  * @package FitPal
- * @version 1.0
+ * @version 1.1 — handleAssignRider() checks riderHasActiveDelivery()
+ *                as the final eligibility gate before delegating to
+ *                assignRiderToOrder().
  */
 
 declare(strict_types=1);
@@ -222,7 +224,18 @@ function handleAssignRider(PDO $db, int $orderId, int $branchId): never
         exit;
     }
 
-    $available = getAvailableRidersForBranch($db, $branchId);
+    // Final eligibility gate. The dropdown is filtered by the same
+    // rules, but a stale tab could submit a rider who has since
+    // gone offline or taken another delivery.
+    if (riderHasActiveDelivery($db, $riderId)) {
+        echo json_encode([
+            'status'  => 'error',
+            'message' => 'That rider is currently on another delivery.',
+        ]);
+        exit;
+    }
+
+    $available  = getAvailableRidersForBranch($db, $branchId);
     $riderFound = false;
     $riderName  = '';
 
@@ -237,7 +250,7 @@ function handleAssignRider(PDO $db, int $orderId, int $branchId): never
     if (!$riderFound) {
         echo json_encode([
             'status'  => 'error',
-            'message' => 'That rider is no longer available.',
+            'message' => 'That rider is not currently available.',
         ]);
         exit;
     }
@@ -253,11 +266,11 @@ function handleAssignRider(PDO $db, int $orderId, int $branchId): never
     }
 
     echo json_encode([
-        'status'      => 'success',
-        'message'     => 'Rider ' . $riderName . ' assigned.',
-        'order_id'    => $orderId,
-        'rider_id'    => $riderId,
-        'rider_name'  => $riderName,
+        'status'     => 'success',
+        'message'    => 'Rider ' . $riderName . ' assigned.',
+        'order_id'   => $orderId,
+        'rider_id'   => $riderId,
+        'rider_name' => $riderName,
     ]);
     exit;
 }

@@ -575,6 +575,7 @@ CREATE TABLE orders (
         order_status IN (
             'pending',
             'preparing',
+            'rider_pending',
             'delivering',
             'delivered',
             'cancelled',
