@@ -1,0 +1,1131 @@
+/**
+ * FitPal Customer Order Tracking Page Styles
+ * Version 1.2
+ *
+ * Covers: progress timeline, status card, rider card, restaurant card,
+ * order summary, and the chat modal (Customer side).
+ *
+ * v1.2 changes:
+ *   - Chat bubbles now have a fixed min-width so short messages
+ *     render as rectangles instead of collapsing to text width.
+ *     width: fit-content lets them grow with content up to max-width.
+ *
+ * v1.1 changes:
+ *   - Chat bubbles now use a proper speech shape: fully rounded on
+ *     three corners and small radius on the tail corner.
+ *   - Modal header spacing corrected so the subtitle does not
+ *     collide with the close button.
+ *
+ * @package FitPal
+ * @version 1.2
+ */
+
+/* Reserve the viewport scrollbar gutter so modals do not reflow the page. */
+html {
+    scrollbar-gutter: stable;
+}
+
+/* ============================================
+   CONTENT WRAPPER
+   ============================================ */
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+    background: var(--gray-50);
+}
+
+.tracking-page {
+    padding: 24px 0 60px 0;
+}
+
+.tracking-page .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 16px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* ============================================
+   PAGE HEADER
+   ============================================ */
+
+.page-title-header {
+    margin-bottom: 24px;
+}
+
+.page-title-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.page-title-header h1 {
+    font-size: var(--font-size-2xl);
+    font-weight: 700;
+    color: var(--text);
+    margin: 0;
+    text-align: right;
+}
+
+.page-title-header .back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #ffffff;
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    font-family: inherit;
+    padding: 10px 18px;
+    border-radius: var(--radius-base);
+    transition: none;
+    background: #1a1a1a;
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.page-title-header .back-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.page-title-header .back-btn-icon {
+    width: 20px;
+    height: 20px;
+    display: block;
+    flex-shrink: 0;
+    filter: brightness(0) invert(1);
+}
+
+/* ============================================
+   ALERTS
+   ============================================ */
+
+.alert {
+    padding: 12px 18px;
+    border-radius: var(--radius-base);
+    margin-bottom: 20px;
+    border: 1px solid transparent;
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+}
+
+.alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+
+.alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+.alert-info {
+    color: #0c5460;
+    background-color: #d1ecf1;
+    border-color: #bee5eb;
+}
+
+/* ============================================
+   STATUS SUMMARY CARD
+   ============================================ */
+
+.tracking-status-card {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.tracking-status-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-width: 0;
+    flex: 1;
+}
+
+.tracking-status-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-full);
+    background: rgba(89, 193, 74, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 14px;
+}
+
+.tracking-status-icon img {
+    width: 100%;
+    height: 100%;
+    max-width: 28px;
+    max-height: 28px;
+    object-fit: contain;
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.tracking-status-info {
+    min-width: 0;
+    flex: 1;
+}
+
+.tracking-status-label {
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 0 2px 0;
+}
+
+.tracking-status-title {
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    color: var(--text);
+    margin: 0 0 2px 0;
+    line-height: 1.3;
+}
+
+.tracking-status-description {
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    margin: 0;
+    line-height: 1.5;
+}
+
+.tracking-status-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.tracking-order-id {
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: var(--text);
+    margin: 0;
+}
+
+.tracking-order-date {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    margin: 0;
+}
+
+/* ============================================
+   BADGES
+   ============================================ */
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 12px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    min-height: 24px;
+    box-sizing: border-box;
+}
+
+.badge-warning   { background: #fff3cd; color: #856404; }
+.badge-info      { background: #d1ecf1; color: #0c5460; }
+.badge-primary   { background: #cce5ff; color: #004085; }
+.badge-success   { background: #d4edda; color: #155724; }
+.badge-danger    { background: #f8d7da; color: #721c24; }
+.badge-secondary { background: var(--gray-200); color: var(--gray-600); }
+
+/* ============================================
+   PROGRESS TIMELINE
+   ============================================ */
+
+.tracking-timeline-card {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+.tracking-timeline-heading {
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 20px 0;
+}
+
+.tracking-timeline {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 4px;
+    position: relative;
+}
+
+.tracking-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    position: relative;
+    text-align: center;
+    min-width: 0;
+}
+
+.tracking-step-dot {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-full);
+    background: var(--gray-100);
+    border: 2px solid var(--gray-200);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 2;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.tracking-step-dot img {
+    width: 18px;
+    height: 18px;
+    display: block;
+    object-fit: contain;
+    opacity: 0.5;
+    transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
+.tracking-step.done .tracking-step-dot {
+    background: var(--primary);
+    border-color: var(--primary);
+}
+
+.tracking-step.done .tracking-step-dot img {
+    opacity: 1;
+    filter: brightness(0) invert(1);
+}
+
+.tracking-step.current .tracking-step-dot {
+    background: var(--primary);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 5px rgba(89, 193, 74, 0.2);
+}
+
+.tracking-step.current .tracking-step-dot img {
+    opacity: 1;
+    filter: brightness(0) invert(1);
+}
+
+.tracking-step-label {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--gray-500);
+    margin: 10px 0 0 0;
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+.tracking-step.done .tracking-step-label,
+.tracking-step.current .tracking-step-label {
+    color: var(--primary-dark);
+}
+
+.tracking-step-connector {
+    position: absolute;
+    top: 20px;
+    left: calc(50% + 20px);
+    right: calc(-50% + 20px);
+    height: 2px;
+    background: var(--gray-200);
+    z-index: 1;
+}
+
+.tracking-step:last-child .tracking-step-connector {
+    display: none;
+}
+
+.tracking-step.done .tracking-step-connector {
+    background: var(--primary);
+}
+
+/* ============================================
+   TWO-COLUMN ROW
+   ============================================ */
+
+.tracking-row {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+}
+
+.tracking-card {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+.tracking-card .card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--gray-100);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--gray-50);
+    gap: 12px;
+}
+
+.tracking-card .card-header .heading-5 {
+    margin: 0;
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--text);
+}
+
+.tracking-card .card-body {
+    padding: 20px;
+}
+
+/* ============================================
+   RIDER CARD
+   ============================================ */
+
+.rider-info {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.rider-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-full);
+    background: var(--primary);
+    color: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: 700;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.rider-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.rider-details {
+    min-width: 0;
+    flex: 1;
+}
+
+.rider-name {
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 2px 0;
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+.rider-meta {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    margin: 0;
+    line-height: 1.5;
+}
+
+.rider-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+}
+
+.rider-actions .btn {
+    flex: 1;
+    min-width: 0;
+    justify-content: center;
+    padding: 10px 14px;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    border-radius: var(--radius-base);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none;
+    cursor: pointer;
+    border: 2px solid transparent;
+}
+
+.rider-actions .btn .btn-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+}
+
+.rider-actions .btn-chat {
+    background: var(--primary);
+    color: var(--white);
+    border-color: var(--primary);
+}
+
+.rider-actions .btn-chat .btn-icon {
+    filter: brightness(0) invert(1);
+}
+
+.rider-actions .btn-call {
+    background: #1a1a1a;
+    color: var(--white);
+    border-color: #1a1a1a;
+}
+
+.rider-actions .btn-call .btn-icon {
+    filter: brightness(0) invert(1);
+}
+
+.rider-placeholder {
+    text-align: center;
+    padding: 20px 12px;
+    color: var(--gray-500);
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+}
+
+.rider-placeholder-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 12px;
+    border-radius: var(--radius-full);
+    background: var(--gray-100);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px;
+}
+
+.rider-placeholder-icon img {
+    width: 100%;
+    height: 100%;
+    max-width: 28px;
+    max-height: 28px;
+    object-fit: contain;
+    opacity: 0.5;
+}
+
+/* ============================================
+   RESTAURANT CARD
+   ============================================ */
+
+.restaurant-info {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.restaurant-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-base);
+    background: rgba(89, 193, 74, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 12px;
+}
+
+.restaurant-avatar img {
+    width: 100%;
+    height: 100%;
+    max-width: 28px;
+    max-height: 28px;
+    object-fit: contain;
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.restaurant-details {
+    min-width: 0;
+    flex: 1;
+}
+
+.restaurant-name {
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 2px 0;
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+.restaurant-branch {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    margin: 0;
+    line-height: 1.5;
+}
+
+.restaurant-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+}
+
+.restaurant-actions .btn {
+    flex: 1;
+    min-width: 0;
+    justify-content: center;
+    padding: 10px 14px;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    border-radius: var(--radius-base);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none;
+    cursor: pointer;
+    border: 2px solid transparent;
+}
+
+.restaurant-actions .btn .btn-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+    filter: brightness(0) invert(1);
+}
+
+.restaurant-actions .btn-chat {
+    background: var(--primary);
+    color: var(--white);
+    border-color: var(--primary);
+}
+
+.restaurant-actions .btn-chat .btn-icon {
+    filter: brightness(0) invert(1);
+}
+
+/* ============================================
+   ORDER SUMMARY (right column)
+   ============================================ */
+
+.summary-order-id {
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    color: var(--text);
+    margin: 0 0 12px 0;
+}
+
+.summary-items {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 16px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.summary-item {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed var(--gray-100);
+    font-size: var(--font-size-sm);
+    color: var(--gray-700);
+}
+
+.summary-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.summary-item-name {
+    flex: 1;
+    min-width: 0;
+    word-break: break-word;
+    line-height: 1.4;
+}
+
+.summary-item-qty {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    margin-left: 4px;
+}
+
+.summary-item-price {
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+}
+
+.summary-totals {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 12px;
+    border-top: 1px solid var(--gray-200);
+}
+
+.summary-total-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+}
+
+.summary-total-row.grand {
+    margin-top: 6px;
+    padding-top: 10px;
+    border-top: 2px solid var(--gray-200);
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.summary-address {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--gray-200);
+}
+
+.summary-address-label {
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 0 4px 0;
+}
+
+.summary-address-text {
+    font-size: var(--font-size-sm);
+    color: var(--gray-700);
+    margin: 0;
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+/* ============================================
+   CHAT MODAL (Customer side)
+   ============================================ */
+
+.customer-chat-modal-content {
+    width: 500px;
+    max-width: calc(100vw - 40px);
+    height: 600px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+    border-radius: var(--radius-xl);
+}
+
+.customer-chat-modal-content .modal-header {
+    padding: 16px 20px;
+    margin: 0;
+    border-bottom: 1px solid var(--gray-200);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.customer-chat-modal-content .modal-title {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    margin: 0;
+    line-height: 1.3;
+}
+
+.customer-chat-modal-content .modal-subtitle {
+    margin: 2px 0 0 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    font-weight: var(--font-weight-normal);
+    line-height: 1.3;
+}
+
+.customer-chat-modal-content .modal-close {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    line-height: 1;
+    color: var(--gray-400);
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: var(--radius-full);
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease;
+}
+
+.customer-chat-modal-content .modal-close:hover {
+    color: var(--text);
+    background: var(--gray-100);
+}
+
+.customer-chat-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--gray-200);
+    background: var(--gray-50);
+    flex-shrink: 0;
+}
+
+.customer-chat-tab {
+    flex: 1;
+    padding: 12px 16px;
+    background: none;
+    border: none;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--gray-600);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-bottom: 2px solid transparent;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    font-family: inherit;
+}
+
+.customer-chat-tab:hover {
+    background: var(--gray-100);
+    color: var(--text);
+}
+
+.customer-chat-tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+    background: var(--white);
+}
+
+.customer-chat-tab-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+    opacity: 0.6;
+}
+
+.customer-chat-tab.active .customer-chat-tab-icon {
+    opacity: 1;
+    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.customer-chat-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: var(--gray-50);
+}
+
+.customer-chat-loading,
+.customer-chat-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--gray-400);
+    font-size: var(--font-size-sm);
+    text-align: center;
+    padding: 20px;
+}
+
+.customer-chat-message {
+    width: fit-content;
+    min-width: 180px;
+    max-width: 78%;
+    padding: 10px 14px;
+    font-size: var(--font-size-sm);
+    line-height: 1.45;
+    word-wrap: break-word;
+    position: relative;
+    box-shadow: 0 1px 2px rgba(5, 10, 4, 0.04);
+    box-sizing: border-box;
+}
+
+.customer-chat-message-sent {
+    align-self: flex-end;
+    background: var(--primary);
+    color: var(--white);
+    border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-lg);
+}
+
+.customer-chat-message-received {
+    align-self: flex-start;
+    background: var(--white);
+    color: var(--text);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-sm);
+}
+
+.customer-chat-message-sender {
+    display: block;
+    font-size: 10px;
+    font-weight: var(--font-weight-bold);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 3px;
+    opacity: 0.75;
+}
+
+.customer-chat-message-time {
+    display: block;
+    font-size: 10px;
+    margin-top: 5px;
+    opacity: 0.7;
+}
+
+.customer-chat-form {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--gray-200);
+    background: var(--white);
+    flex-shrink: 0;
+    align-items: center;
+}
+
+.customer-chat-input {
+    flex: 1;
+    min-width: 0;
+    padding: 11px 16px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-sm);
+    font-family: inherit;
+    background: var(--white);
+    color: var(--text);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    resize: none;
+    line-height: 1.4;
+}
+
+.customer-chat-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
+}
+
+.customer-chat-send {
+    width: 42px;
+    height: 42px;
+    border-radius: var(--radius-full);
+    border: none;
+    background: var(--primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.customer-chat-send:hover {
+    background: var(--primary-dark);
+}
+
+.customer-chat-send:active {
+    transform: scale(0.95);
+}
+
+.customer-chat-send:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.customer-chat-send img {
+    width: 18px;
+    height: 18px;
+    display: block;
+    filter: brightness(0) invert(1);
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 992px) {
+    .tracking-row {
+        grid-template-columns: 1fr;
+    }
+
+    .tracking-status-right {
+        align-items: flex-start;
+    }
+}
+
+@media (max-width: 768px) {
+    .tracking-page {
+        padding: 16px 0 40px 0;
+    }
+
+    .page-title-header h1 {
+        font-size: var(--font-size-xl);
+    }
+
+    .tracking-status-card {
+        padding: 16px;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .tracking-status-left {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .tracking-timeline-card {
+        padding: 16px;
+    }
+
+    .tracking-step-dot {
+        width: 34px;
+        height: 34px;
+    }
+
+    .tracking-step-dot img {
+        width: 15px;
+        height: 15px;
+    }
+
+    .tracking-step-connector {
+        top: 17px;
+        left: calc(50% + 17px);
+        right: calc(-50% + 17px);
+    }
+
+    .tracking-step-label {
+        font-size: 10px;
+    }
+
+    .customer-chat-modal-content {
+        height: 90vh;
+    }
+}
+
+@media (max-width: 480px) {
+    .tracking-page .container {
+        padding: 0 12px;
+    }
+
+    .tracking-timeline {
+        gap: 0;
+    }
+
+    .tracking-step-dot {
+        width: 28px;
+        height: 28px;
+    }
+
+    .tracking-step-dot img {
+        width: 13px;
+        height: 13px;
+    }
+
+    .tracking-step-connector {
+        top: 14px;
+        left: calc(50% + 14px);
+        right: calc(-50% + 14px);
+    }
+
+    .tracking-step-label {
+        font-size: 9px;
+    }
+
+    .tracking-card .card-body {
+        padding: 14px;
+    }
+
+    .rider-actions,
+    .restaurant-actions {
+        flex-direction: column;
+    }
+
+    .rider-actions .btn,
+    .restaurant-actions .btn {
+        width: 100%;
+    }
+
+    .customer-chat-modal-content {
+        width: 100%;
+        max-width: 100%;
+        height: 100vh;
+        max-height: 100vh;
+        border-radius: 0;
+    }
+
+    .customer-chat-body {
+        padding: 14px 16px;
+    }
+
+    .customer-chat-message {
+        min-width: 140px;
+        max-width: 85%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tracking-step-dot,
+    .tracking-step-dot img,
+    .customer-chat-tab,
+    .customer-chat-send {
+        transition: none !important;
+    }
+}
