@@ -7,7 +7,7 @@
 # To select all files
 # *.extension
 # folder/another_folder/*
-logs/output
+/logs/output
 *env
 *txt
 /shared/uploads/*
