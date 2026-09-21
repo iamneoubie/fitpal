@@ -4,10 +4,11 @@
  *
  * Actions:
  *   toggle_availability, update_profile, upload_picture,
- *   picked_up, delivered, request_withdrawal
+ *   accept_order, picked_up, delivered, request_withdrawal
  *
  * @package FitPal
- * @version 2.1 — No closing PHP tag (prevents accidental output).
+ * @version 3.0 — Adds accept_order so a rider must explicitly claim
+ *                an order before it is assigned to them.
  */
 
 declare(strict_types=1);
@@ -16,7 +17,6 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Buffer output — prevents any stray whitespace from being sent early.
 ob_start();
 
 header('Content-Type: application/json; charset=utf-8');
@@ -52,6 +52,9 @@ try {
             break;
         case 'upload_picture':
             $response = handleUploadPicture($database_connection, $riderId);
+            break;
+        case 'accept_order':
+            $response = handleAcceptOrder($database_connection, $riderId);
             break;
         case 'picked_up':
             $response = handlePickedUp($database_connection, $riderId);
@@ -134,8 +137,6 @@ function handleUploadPicture(PDO $db, int $riderId): array
 
     $ext = $allowed[$mime];
 
-    // Project root is fitpal/. Handlers live at fitpal/rider/backend/handlers/.
-    // So project root is __DIR__ . '/../../..'
     $projectRoot = realpath(__DIR__ . '/../../..');
     if ($projectRoot === false) {
         return ['status' => 'error', 'message' => 'Upload path unavailable.'];
@@ -175,6 +176,52 @@ function handleUploadPicture(PDO $db, int $riderId): array
     ];
 }
 
+/**
+ * Accept an unassigned order.
+ *
+ * Eligibility gate: verified, online, and fewer than two active orders.
+ * The active-order cap mirrors the before_order_rider_assign trigger,
+ * checked here so the rider gets a clean message rather than a
+ * DB-level SIGNAL.
+ */
+function handleAcceptOrder(PDO $db, int $riderId): array
+{
+    $orderId = (int)($_POST['order_id'] ?? 0);
+    if ($orderId <= 0) {
+        return ['status' => 'error', 'message' => 'Invalid order.'];
+    }
+
+    $profile = getRiderProfile($db, $riderId);
+    if (!$profile || (string)($profile['verification_status'] ?? '') !== 'verified') {
+        return ['status' => 'error', 'message' => 'Your account must be verified before accepting orders.'];
+    }
+
+    if ((int)($profile['is_available'] ?? 0) !== 1) {
+        return ['status' => 'error', 'message' => 'Go online first to accept orders.'];
+    }
+
+    if (hasActiveOrder($db, $riderId) >= 2) {
+        return [
+            'status'  => 'error',
+            'message' => 'You already have the maximum number of active orders. Complete one before accepting another.',
+        ];
+    }
+
+    $accepted = acceptOrder($db, $riderId, $orderId);
+
+    if (!$accepted) {
+        return [
+            'status'  => 'error',
+            'message' => 'This order is no longer available. It may have been taken by another rider.',
+        ];
+    }
+
+    return [
+        'status'  => 'success',
+        'message' => 'Order accepted. Head to the restaurant for pickup.',
+    ];
+}
+
 function handlePickedUp(PDO $db, int $riderId): array
 {
     $orderId = (int)($_POST['order_id'] ?? 0);
@@ -186,7 +233,7 @@ function handlePickedUp(PDO $db, int $riderId): array
         "SELECT 1 FROM orders
          WHERE order_id = :order_id
            AND delivery_rider_id = :rider_id
-           AND order_status = 'preparing'
+           AND order_status IN ('preparing', 'pending')
          LIMIT 1"
     );
     $check->execute([':order_id' => $orderId, ':rider_id' => $riderId]);

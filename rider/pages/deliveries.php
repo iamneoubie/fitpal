@@ -2,11 +2,18 @@
 /**
  * FitPal Rider Deliveries Page
  *
- * Active deliveries + delivery history + customer/kitchen chat.
+ * Pending assignments (unclaimed orders) + active deliveries +
+ * delivery history + customer/kitchen chat.
+ *
+ * Availability rule
+ * -----------------
+ * Only verified, online riders with fewer than two active orders
+ * can accept a pending assignment. The handler enforces this; the
+ * page only renders the button.
  *
  * @package FitPal
- * @version 1.1 — Icons use shared asset paths; chat modal for both
- *                customer and kitchen conversations.
+ * @version 2.0 — Adds Pending Assignments section so orders are
+ *                claimed explicitly by the rider.
  */
 
 declare(strict_types=1);
@@ -25,10 +32,11 @@ require_once __DIR__ . '/../backend/database/rider-queries.php';
 
 $riderId = (int)$_SESSION['delivery_rider_id'];
 
-$profile          = getRiderProfile($database_connection, $riderId) ?: [];
-$activeDeliveries = getRiderActiveDeliveries($database_connection, $riderId);
-$deliveryHistory  = getRiderDeliveryHistory($database_connection, $riderId, 10);
-$counts           = getRiderDeliveryCounts($database_connection, $riderId);
+$profile            = getRiderProfile($database_connection, $riderId) ?: [];
+$pendingAssignments = getPendingAssignments($database_connection, $riderId);
+$activeDeliveries   = getRiderActiveDeliveries($database_connection, $riderId);
+$deliveryHistory    = getRiderDeliveryHistory($database_connection, $riderId, 10);
+$counts             = getRiderDeliveryCounts($database_connection, $riderId);
 
 $available  = (int)($profile['is_available'] ?? 0) === 1;
 $status     = (string)($profile['verification_status'] ?? 'pending');
@@ -71,7 +79,6 @@ function getDeliveryStatusLabel(string $status): string
     };
 }
 
-// Now that we've done all the DB work, include the header (which outputs HTML).
 require_once __DIR__ . '/../includes/header.php';
 ?>
 
@@ -81,7 +88,7 @@ require_once __DIR__ . '/../includes/header.php';
         <header class="rider-page-header">
             <div>
                 <h1 class="heading-2">My <span>Deliveries</span></h1>
-                <p class="text-muted">Manage active deliveries and view your history</p>
+                <p class="text-muted">Accept new orders, manage active deliveries, and view your history</p>
             </div>
             <div class="rider-page-actions">
                 <span class="badge <?php echo $available ? 'badge-success' : 'badge-secondary'; ?>">
@@ -106,6 +113,10 @@ require_once __DIR__ . '/../includes/header.php';
 
         <section class="rider-delivery-stats">
             <div class="rider-delivery-stat">
+                <span class="rider-delivery-stat-number"><?php echo count($pendingAssignments); ?></span>
+                <span class="rider-delivery-stat-label">Pending</span>
+            </div>
+            <div class="rider-delivery-stat">
                 <span class="rider-delivery-stat-number"><?php echo $counts['active']; ?></span>
                 <span class="rider-delivery-stat-label">Active</span>
             </div>
@@ -114,13 +125,132 @@ require_once __DIR__ . '/../includes/header.php';
                 <span class="rider-delivery-stat-label">Today</span>
             </div>
             <div class="rider-delivery-stat">
-                <span class="rider-delivery-stat-number"><?php echo $counts['week']; ?></span>
-                <span class="rider-delivery-stat-label">This Week</span>
-            </div>
-            <div class="rider-delivery-stat">
                 <span class="rider-delivery-stat-number"><?php echo $counts['total']; ?></span>
                 <span class="rider-delivery-stat-label">All Time</span>
             </div>
+        </section>
+
+        <section class="rider-card">
+            <div class="rider-card-header">
+                <h2 class="heading-5">
+                    Pending Assignments
+                    <?php if (count($pendingAssignments) > 0): ?>
+                    <span class="badge badge-warning"><?php echo count($pendingAssignments); ?></span>
+                    <?php endif; ?>
+                </h2>
+            </div>
+
+            <?php if (empty($pendingAssignments)): ?>
+            <div class="rider-empty-state">
+                <div class="rider-empty-icon">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/package.svg" alt="No pending assignments"
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/order.svg'">
+                </div>
+                <p class="rider-empty-title">No pending assignments</p>
+                <p class="rider-empty-text">
+                    <?php if (!$isVerified): ?>
+                    Your account is pending verification. You'll see assignments once verified.
+                    <?php elseif (!$available): ?>
+                    You're offline. Go online from the dashboard to see incoming orders.
+                    <?php else: ?>
+                    New orders will appear here for you to accept.
+                    <?php endif; ?>
+                </p>
+            </div>
+            <?php else: ?>
+            <div class="rider-active-deliveries">
+                <?php foreach ($pendingAssignments as $pending):
+                    $orderId        = (int)$pending['order_id'];
+                    $customerName   = (string)$pending['customer_name'];
+                    $destination    = (string)$pending['destination_address'];
+                    $orderDate      = (string)$pending['order_date'];
+                    $branchName     = (string)($pending['branch_name'] ?? '');
+                    $restaurantName = (string)($pending['restaurant_name'] ?? '');
+                    $itemCount      = (int)($pending['item_count'] ?? 0);
+                    $orderTotal     = (float)($pending['order_total'] ?? 0);
+
+                    $canAccept = $isVerified && $available;
+                ?>
+                <div class="rider-active-delivery-card" data-order-id="<?php echo $orderId; ?>">
+                    <div class="rider-active-delivery-header">
+                        <div>
+                            <p class="rider-active-delivery-order">Order #<?php echo $orderId; ?></p>
+                            <p class="rider-active-delivery-date">
+                                <?php echo formatRiderDate($orderDate); ?>
+                            </p>
+                        </div>
+                        <span class="badge badge-warning">Awaiting Acceptance</span>
+                    </div>
+
+                    <div class="rider-active-delivery-body">
+                        <div class="rider-delivery-stop">
+                            <div class="rider-delivery-stop-icon rider-delivery-stop-icon-pickup">
+                                <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt="Pickup"
+                                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/community-general.svg'">
+                            </div>
+                            <div class="rider-delivery-stop-info">
+                                <p class="rider-delivery-stop-label">Pickup</p>
+                                <p class="rider-delivery-stop-name">
+                                    <?php echo htmlspecialchars($restaurantName, ENT_QUOTES, 'UTF-8'); ?>
+                                </p>
+                                <p class="rider-delivery-stop-address">
+                                    <?php echo htmlspecialchars($branchName, ENT_QUOTES, 'UTF-8'); ?>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="rider-delivery-connector" aria-hidden="true"></div>
+
+                        <div class="rider-delivery-stop">
+                            <div class="rider-delivery-stop-icon rider-delivery-stop-icon-dropoff">
+                                <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="Dropoff">
+                            </div>
+                            <div class="rider-delivery-stop-info">
+                                <p class="rider-delivery-stop-label">Drop-off</p>
+                                <p class="rider-delivery-stop-name">
+                                    <?php echo htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8'); ?>
+                                </p>
+                                <p class="rider-delivery-stop-address">
+                                    <?php echo htmlspecialchars(truncateText($destination, 60), ENT_QUOTES, 'UTF-8'); ?>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="rider-active-delivery-meta">
+                        <div class="rider-active-delivery-meta-item">
+                            <span class="rider-active-delivery-meta-label">Items</span>
+                            <span class="rider-active-delivery-meta-value"><?php echo $itemCount; ?></span>
+                        </div>
+                        <div class="rider-active-delivery-meta-item">
+                            <span class="rider-active-delivery-meta-label">Order Total</span>
+                            <span
+                                class="rider-active-delivery-meta-value"><?php echo formatRiderCurrency($orderTotal); ?></span>
+                        </div>
+                        <div class="rider-active-delivery-meta-item">
+                            <span class="rider-active-delivery-meta-label">Your Earning</span>
+                            <span class="rider-active-delivery-meta-value rider-active-delivery-meta-value-highlight">
+                                <?php echo formatRiderCurrency(50.00); ?>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="rider-active-delivery-actions">
+                        <?php if ($canAccept): ?>
+                        <button type="button" class="btn btn-primary btn-sm delivery-status-btn"
+                            data-order-id="<?php echo $orderId; ?>" data-action="accept_order">
+                            Accept Order
+                        </button>
+                        <?php else: ?>
+                        <span class="btn btn-sm btn-disabled" aria-disabled="true">
+                            <?php echo !$isVerified ? 'Awaiting Verification' : 'Go Online to Accept'; ?>
+                        </span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
         </section>
 
         <section class="rider-card">
@@ -141,17 +271,8 @@ require_once __DIR__ . '/../includes/header.php';
                 </div>
                 <p class="rider-empty-title">No active deliveries</p>
                 <p class="rider-empty-text">
-                    <?php if (!$isVerified): ?>
-                    Your account is pending verification. You'll receive delivery requests once verified.
-                    <?php elseif (!$available): ?>
-                    You're offline. Go online from the dashboard to receive delivery requests.
-                    <?php else: ?>
-                    You're online. New delivery requests will appear here.
-                    <?php endif; ?>
+                    Accept a pending assignment to start a delivery.
                 </p>
-                <?php if ($available && $isVerified): ?>
-                <a href="dashboard.php" class="btn btn-outline btn-sm">Back to Dashboard</a>
-                <?php endif; ?>
             </div>
             <?php else: ?>
             <div class="rider-active-deliveries">
@@ -169,9 +290,9 @@ require_once __DIR__ . '/../includes/header.php';
                     $riderEarning   = 50.00;
 
                     $nextAction = match ($orderStatus) {
-                        'preparing'  => ['label' => 'Picked Up', 'action' => 'picked_up', 'class' => 'btn-primary'],
-                        'delivering' => ['label' => 'Mark Delivered', 'action' => 'delivered', 'class' => 'btn-primary'],
-                        default      => null,
+                        'preparing', 'pending' => ['label' => 'Picked Up', 'action' => 'picked_up', 'class' => 'btn-primary'],
+                        'delivering'           => ['label' => 'Mark Delivered', 'action' => 'delivered', 'class' => 'btn-primary'],
+                        default                => null,
                     };
                 ?>
                 <div class="rider-active-delivery-card" data-order-id="<?php echo $orderId; ?>">
@@ -336,7 +457,6 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 </div>
 
-<!-- Chat Modal -->
 <div id="riderChatModal" class="modal" style="display: none;">
     <div class="modal-overlay"></div>
     <div class="modal-content rider-chat-modal-content">

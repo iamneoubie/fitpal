@@ -10,9 +10,9 @@
  * No $_POST, no header(), no echo.
  *
  * @package FitPal
- * @version 3.0 — KYC revision: address label dropped; adds
- *                insertRiderEmergencyContact and insertRiderDocument
- *                for the registration handler.
+ * @version 4.0 — Adds getPendingAssignments, hasActiveOrder,
+ *                and acceptOrder so riders must explicitly claim
+ *                an order before it is assigned to them.
  */
 
 declare(strict_types=1);
@@ -122,28 +122,89 @@ function updateRiderContact(PDO $db, int $riderId, string $contactNumber): bool
 }
 
 // ============================================
-// REGISTRATION WRITES
+// ORDER ASSIGNMENT (explicit rider acceptance)
 // ============================================
 
 /**
- * Insert a rider's emergency contact row.
+ * Return orders that are ready to be claimed by a rider.
  *
- * The schema treats the earliest-created row (lowest
- * emergency_contact_id) as the primary contact, so no is_primary
- * flag is needed here.
- *
- * @param PDO   $db
- * @param int   $riderId
- * @param array{
- *     first_name: string,
- *     middle_name: string,
- *     last_name: string,
- *     contact_number: string,
- *     relationship: string,
- *     address: string
- * } $data
- * @return int  New emergency_contact_id
+ * Read-only. No side effects.
  */
+function getPendingAssignments(PDO $db, int $riderId, int $limit = 20): array
+{
+    $stmt = $db->prepare(
+        "SELECT
+            o.order_id,
+            o.order_status,
+            o.order_date,
+            o.destination_address,
+            CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
+            c.contact_number AS customer_contact,
+            rb.branch_name,
+            r.business_name AS restaurant_name,
+            COUNT(DISTINCT qi.queue_item_id) AS item_count,
+            COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0) AS order_total
+         FROM orders o
+         JOIN customer c ON o.customer_id = c.customer_id
+         LEFT JOIN queue_item qi ON o.order_id = qi.order_id
+         LEFT JOIN restaurant_branch rb ON qi.branch_id = rb.restaurant_branch_id
+         LEFT JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
+         WHERE o.delivery_rider_id IS NULL
+           AND o.order_status IN ('pending', 'preparing')
+         GROUP BY o.order_id
+         ORDER BY o.order_date ASC
+         LIMIT :limit"
+    );
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Count the rider's active orders. Used to enforce the cap before
+ * attempting an accept, so the rider sees a clean message instead of
+ * a DB-level trigger SIGNAL.
+ */
+function hasActiveOrder(PDO $db, int $riderId): int
+{
+    $stmt = $db->prepare(
+        "SELECT COUNT(*)
+         FROM orders
+         WHERE delivery_rider_id = :rider_id
+           AND order_status IN ('preparing', 'delivering')"
+    );
+    $stmt->execute([':rider_id' => $riderId]);
+    return (int)$stmt->fetchColumn();
+}
+
+/**
+ * Atomically assign an unassigned order to this rider.
+ *
+ * Returns true only if the row was still unassigned and in a
+ * deliverable state. This is the single write path that sets
+ * orders.delivery_rider_id.
+ */
+function acceptOrder(PDO $db, int $riderId, int $orderId): bool
+{
+    $stmt = $db->prepare(
+        "UPDATE orders
+            SET delivery_rider_id = :rider_id,
+                updated_at = NOW()
+          WHERE order_id = :order_id
+            AND delivery_rider_id IS NULL
+            AND order_status IN ('pending', 'preparing')"
+    );
+    $stmt->execute([
+        ':rider_id'  => $riderId,
+        ':order_id'  => $orderId,
+    ]);
+    return $stmt->rowCount() === 1;
+}
+
+// ============================================
+// REGISTRATION WRITES
+// ============================================
+
 function insertRiderEmergencyContact(PDO $db, int $riderId, array $data): int
 {
     $stmt = $db->prepare(
@@ -167,21 +228,6 @@ function insertRiderEmergencyContact(PDO $db, int $riderId, array $data): int
     return (int)$db->lastInsertId();
 }
 
-/**
- * Insert a rider's driver's license document row.
- *
- * delivery_rider_document.drivers_license is NOT NULL. The caller
- * must have already moved the uploaded file and produced a path.
- *
- * @param PDO   $db
- * @param int   $riderId
- * @param array{
- *     drivers_license: string,
- *     issue_date: string,
- *     expiry_date: string
- * } $data
- * @return int  New document_id
- */
 function insertRiderDocument(PDO $db, int $riderId, array $data): int
 {
     $stmt = $db->prepare(

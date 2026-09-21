@@ -2,7 +2,9 @@
  * FitPal Rider Deliveries Page Styles
  *
  * @package FitPal
- * @version 1.0
+ * @version 1.1 — Adds .btn-disabled so pending assignment cards can
+ *                show a non-interactive placeholder when the rider is
+ *                offline or unverified.
  */
 
 /* ============================================
@@ -292,6 +294,30 @@
 
 .rider-active-delivery-actions .btn-primary .btn-icon {
     filter: brightness(0) invert(1);
+}
+
+/* --------------------------------------------------------------
+   Disabled action slot
+   Replaces the Accept button on a pending assignment card when
+   the rider is offline or unverified. Sized and aligned to match
+   the live button so the card does not reflow when eligibility
+   changes between page loads.
+   -------------------------------------------------------------- */
+.rider-active-delivery-actions .btn-disabled {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    min-width: 120px;
+    padding: 8px 16px;
+    border: none;
+    border-radius: var(--radius-base);
+    background: var(--gray-100);
+    color: var(--gray-400);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    cursor: not-allowed;
+    pointer-events: none;
 }
 
 /* ============================================
@@ -667,7 +693,8 @@
         flex-direction: column;
     }
 
-    .rider-active-delivery-actions .btn {
+    .rider-active-delivery-actions .btn,
+    .rider-active-delivery-actions .btn-disabled {
         min-width: 100%;
     }
 

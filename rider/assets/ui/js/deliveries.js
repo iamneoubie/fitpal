@@ -2,13 +2,15 @@
  * FitPal Rider Deliveries JavaScript
  *
  * Handles:
- *   - Delivery status updates (picked up / delivered)
+ *   - Delivery status updates (accept / picked up / delivered)
  *   - Chat modal open/close
  *   - Chat tab switching
  *   - Message loading and sending
  *
  * @package FitPal
- * @version 1.0
+ * @version 2.0 — Adds confirm copy for accept_order. All three
+ *                actions (accept_order, picked_up, delivered) post
+ *                to rider-handler.php through the same click handler.
  */
 
 (function () {
@@ -18,7 +20,6 @@
 
         var CFG = window.FITPAL_RIDER_DELIVERIES || {};
         var CSRF_TOKEN = CFG.csrfToken || '';
-        var ASSET_BASE = CFG.assetBase || '../../shared/';
 
         // ============================================
         // DELIVERY STATUS UPDATES
@@ -32,9 +33,14 @@
 
                 if (orderId <= 0 || action === '') return;
 
-                var confirmMessage = action === 'delivered'
-                    ? 'Confirm that this order has been delivered to the customer?'
-                    : 'Confirm that you have picked up this order from the restaurant?';
+                var confirmMessage;
+                if (action === 'accept_order') {
+                    confirmMessage = 'Accept this delivery? You will be responsible for picking it up and delivering it to the customer.';
+                } else if (action === 'delivered') {
+                    confirmMessage = 'Confirm that this order has been delivered to the customer?';
+                } else {
+                    confirmMessage = 'Confirm that you have picked up this order from the restaurant?';
+                }
 
                 if (!window.confirm(confirmMessage)) return;
 
@@ -106,12 +112,10 @@
                     customerName + ' / ' + restaurantName;
             }
 
-            // Reset tabs
             chatTabs.forEach(function (tab) {
                 tab.classList.toggle('active', tab.dataset.recipient === 'customer');
             });
 
-            // Reset known message IDs for this order
             knownMessageIds = {};
 
             document.body.style.overflow = 'hidden';
@@ -140,7 +144,6 @@
             currentOrderId = 0;
         }
 
-        // Bind chat buttons
         document.querySelectorAll('.delivery-chat-btn').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 var orderId = parseInt(this.dataset.orderId, 10) || 0;
@@ -180,7 +183,6 @@
                     t.classList.toggle('active', t === tab);
                 });
 
-                // Clear and reload messages for the new conversation
                 knownMessageIds = {};
                 loadMessages();
             });
@@ -300,7 +302,6 @@
             if (knownMessageIds[msgId]) return;
             knownMessageIds[msgId] = true;
 
-            // Remove "empty" state if present
             var empty = chatMessages.querySelector('.rider-chat-empty');
             if (empty) empty.remove();
 

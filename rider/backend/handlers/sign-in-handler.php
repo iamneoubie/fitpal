@@ -6,11 +6,13 @@
  * Contains no SQL — all data access goes through rider-queries.php.
  *
  * ---------------------------------------------------------------------
- * REDIRECT TARGETS
+ * AVAILABILITY POLICY
  * ---------------------------------------------------------------------
- * This file lives at fitpal/rider/backend/handlers/. Relative paths:
- *   ../../pages/sign-in.php    → fitpal/rider/pages/sign-in.php
- *   ../../pages/dashboard.php  → fitpal/rider/pages/dashboard.php
+ * Every successful sign-in forces is_available = 0. A rider must
+ * explicitly toggle availability after logging in. This prevents the
+ * rider from inheriting an "online" flag from a previous session and
+ * matches the expectation that a rider only receives assignments
+ * after opting in.
  * ---------------------------------------------------------------------
  *
  * ---------------------------------------------------------------------
@@ -23,8 +25,7 @@
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 1.3 — Uses distinct placeholders via rider-queries; adds
- *                dev bypass for plaintext seed passwords.
+ * @version 2.0 — Forces is_available = 0 on successful sign-in.
  */
 
 declare(strict_types=1);
@@ -80,9 +81,6 @@ try {
     $passwordValid = password_verify($password, (string)$rider['password']);
 
     // ---- DEVELOPMENT-ONLY BYPASS ----
-    // Remove before any non-local deployment.
-    // Accepts a stored plaintext value against the submitted password
-    // so the seed-data demo login works out of the box.
     if (!$passwordValid && hash_equals((string)$rider['password'], $password)) {
         $passwordValid = true;
     }
@@ -97,13 +95,18 @@ try {
     // ===== LOGIN SUCCESSFUL =====
     session_regenerate_id(true);
 
-    $_SESSION['delivery_rider_id'] = (int)$rider['delivery_rider_id'];
+    $riderId = (int)$rider['delivery_rider_id'];
+
+    $_SESSION['delivery_rider_id'] = $riderId;
     $_SESSION['user_role']         = 'rider';
     $_SESSION['user_name']         = trim(
         ($rider['first_name'] ?? '') . ' ' . ($rider['last_name'] ?? '')
     );
     $_SESSION['user_email']        = (string)($rider['email'] ?? '');
     $_SESSION['created']           = time();
+
+    // Explicit opt-in required: force offline on every fresh sign-in.
+    setRiderAvailability($database_connection, $riderId, 0);
 
     unset($_SESSION['csrf_token']);
 
