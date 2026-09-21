@@ -3,10 +3,17 @@
  * FitPal Restaurant Kitchen Order Handler
  *
  * Actions:
- *   start_preparing  — pending → preparing
- *   cancel_order     — pending → cancelled (cancelled_by = 'restaurant')
- *   assign_rider     — set delivery_rider_id without changing status
- *   mark_delivering  — preparing → delivering (requires an assigned rider)
+ *   start_preparing   — pending → preparing
+ *   cancel_order      — pending → cancelled (cancelled_by = 'restaurant')
+ *   assign_rider      — first-time rider assignment; moves to rider_pending
+ *   reassign_rider    — replace an existing rider; stays in rider_pending
+ *
+ * Handoff model
+ * -------------
+ * The kitchen does NOT mark an order delivered, in-transit, or paid.
+ * Assigning a rider moves the order to 'rider_pending' and hands
+ * control to the rider. The rider confirms in their own portal, at
+ * which point the order becomes 'delivering' and later 'delivered'.
  *
  * All actions:
  *   - require a signed-in restaurant account
@@ -20,9 +27,14 @@
  * failures return 403.
  *
  * @package FitPal
- * @version 1.1 — handleAssignRider() checks riderHasActiveDelivery()
- *                as the final eligibility gate before delegating to
- *                assignRiderToOrder().
+ * @version 2.0 — Introduces the rider_pending handoff:
+ *                  - Removes mark_delivering.
+ *                  - assign_rider no longer flips the rider's
+ *                    availability.
+ *                  - reassign_rider accepts rider_pending orders.
+ *                  - Rider availability checks exclude the order
+ *                    being edited so the current rider is not
+ *                    filtered out during a reassignment.
  */
 
 declare(strict_types=1);
@@ -113,8 +125,8 @@ try {
             handleAssignRider($database_connection, $orderId, $branchId);
             break;
 
-        case 'mark_delivering':
-            handleMarkDelivering($database_connection, $orderId, $branchId);
+        case 'reassign_rider':
+            handleReassignRider($database_connection, $orderId, $branchId);
             break;
 
         default:
@@ -224,10 +236,16 @@ function handleAssignRider(PDO $db, int $orderId, int $branchId): never
         exit;
     }
 
-    // Final eligibility gate. The dropdown is filtered by the same
-    // rules, but a stale tab could submit a rider who has since
-    // gone offline or taken another delivery.
-    if (riderHasActiveDelivery($db, $riderId)) {
+    if ($order['delivery_rider_id'] !== null) {
+        echo json_encode([
+            'status'  => 'error',
+            'message' => 'This order already has a rider. Use Reassign to change it.',
+            'field'   => 'already_assigned',
+        ]);
+        exit;
+    }
+
+    if (riderHasActiveDelivery($db, $riderId, $orderId)) {
         echo json_encode([
             'status'  => 'error',
             'message' => 'That rider is currently on another delivery.',
@@ -235,7 +253,7 @@ function handleAssignRider(PDO $db, int $orderId, int $branchId): never
         exit;
     }
 
-    $available  = getAvailableRidersForBranch($db, $branchId);
+    $available  = getAvailableRidersForBranch($db, $branchId, $orderId);
     $riderFound = false;
     $riderName  = '';
 
@@ -266,56 +284,109 @@ function handleAssignRider(PDO $db, int $orderId, int $branchId): never
     }
 
     echo json_encode([
-        'status'     => 'success',
-        'message'    => 'Rider ' . $riderName . ' assigned.',
-        'order_id'   => $orderId,
-        'rider_id'   => $riderId,
-        'rider_name' => $riderName,
+        'status'       => 'success',
+        'message'      => 'Rider ' . $riderName . ' notified. Waiting for their confirmation.',
+        'order_id'     => $orderId,
+        'order_status' => 'rider_pending',
+        'rider_id'     => $riderId,
+        'rider_name'   => $riderName,
     ]);
     exit;
 }
 
-function handleMarkDelivering(PDO $db, int $orderId, int $branchId): never
+function handleReassignRider(PDO $db, int $orderId, int $branchId): never
 {
+    $newRiderId = (int)($_POST['rider_id'] ?? 0);
+
+    if ($newRiderId <= 0) {
+        echo json_encode(['status' => 'error', 'message' => 'Please select a rider.']);
+        exit;
+    }
+
     $order = requireOwnedOrder($db, $orderId, $branchId);
 
-    if ($order['order_status'] !== 'preparing') {
+    if (!in_array($order['order_status'], ['pending', 'preparing', 'rider_pending'], true)) {
         echo json_encode([
             'status'  => 'error',
-            'message' => 'Only orders that are being prepared can be handed off.',
+            'message' => 'This order can no longer be reassigned.',
         ]);
         exit;
     }
 
-    if (empty($order['delivery_rider_id'])) {
+    if ($order['delivery_rider_id'] === null) {
         echo json_encode([
             'status'  => 'error',
-            'message' => 'Assign a rider before marking this order ready.',
+            'message' => 'This order does not have a rider to reassign.',
+            'field'   => 'not_assigned',
         ]);
         exit;
     }
 
-    $updated = setOrderDelivering($db, $orderId, $branchId);
-
-    if (!$updated) {
+    if ($order['delivery_rider_id'] === $newRiderId) {
         echo json_encode([
             'status'  => 'error',
-            'message' => 'Could not hand off the order. It may have already been processed.',
+            'message' => 'That rider is already assigned to this order.',
         ]);
         exit;
     }
+
+    if (riderHasActiveDelivery($db, $newRiderId, $orderId)) {
+        echo json_encode([
+            'status'  => 'error',
+            'message' => 'That rider is currently on another delivery.',
+        ]);
+        exit;
+    }
+
+    $available  = getAvailableRidersForBranch($db, $branchId, $orderId);
+    $riderFound = false;
+    $riderName  = '';
+
+    foreach ($available as $rider) {
+        if ((int)$rider['delivery_rider_id'] === $newRiderId) {
+            $riderFound = true;
+            $riderName  = trim($rider['first_name'] . ' ' . $rider['last_name']);
+            break;
+        }
+    }
+
+    if (!$riderFound) {
+        echo json_encode([
+            'status'  => 'error',
+            'message' => 'That rider is not currently available.',
+        ]);
+        exit;
+    }
+
+    $result = reassignRiderToOrder($db, $orderId, $branchId, $newRiderId);
+
+    if ($result === false) {
+        echo json_encode([
+            'status'  => 'error',
+            'message' => 'Could not reassign the rider. The order may have changed.',
+        ]);
+        exit;
+    }
+
+    $previousRiderName = riderNameById($db, (int)$result['previous_rider_id']);
 
     echo json_encode([
-        'status'       => 'success',
-        'message'      => 'Order handed off to the rider.',
-        'order_id'     => $orderId,
-        'order_status' => 'delivering',
+        'status'              => 'success',
+        'message'             => 'Order reassigned from '
+                                    . ($previousRiderName !== '' ? $previousRiderName : 'the previous rider')
+                                    . ' to ' . $riderName . '.',
+        'order_id'            => $orderId,
+        'order_status'        => 'rider_pending',
+        'previous_rider_id'   => (int)$result['previous_rider_id'],
+        'previous_rider_name' => $previousRiderName,
+        'rider_id'            => $newRiderId,
+        'rider_name'          => $riderName,
     ]);
     exit;
 }
 
 /* --------------------------------------------------------------
- * GUARDS
+ * GUARDS AND HELPERS
  * -------------------------------------------------------------- */
 
 /**
@@ -342,4 +413,39 @@ function requireOwnedOrder(PDO $db, int $orderId, int $branchId): array
     }
 
     return $order;
+}
+
+/**
+ * Resolve a rider's display name for the reassignment response.
+ *
+ * This is a formatting helper, not a query. It exists only to name
+ * the previous rider in the confirmation message. Failures are
+ * silent and return an empty string — the reassignment itself has
+ * already succeeded by this point, so a name lookup failure must
+ * not surface as an error to the kitchen.
+ */
+function riderNameById(PDO $db, int $riderId): string
+{
+    if ($riderId <= 0) {
+        return '';
+    }
+
+    try {
+        $stmt = $db->prepare(
+            "SELECT first_name, last_name
+               FROM delivery_rider
+              WHERE delivery_rider_id = :rider_id
+              LIMIT 1"
+        );
+        $stmt->execute([':rider_id' => $riderId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$row) {
+            return '';
+        }
+
+        return trim((string)$row['first_name'] . ' ' . (string)$row['last_name']);
+    } catch (Throwable $e) {
+        return '';
+    }
 }

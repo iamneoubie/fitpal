@@ -8,10 +8,21 @@
  *
  * No $_POST, no header(), no echo.
  *
+ * Revenue recognition policy
+ * --------------------------
+ * Revenue is recognised only when an order reaches order_status =
+ * 'delivered'. Orders that are still pending, preparing, awaiting a
+ * rider, or in transit are operational counts, not revenue. Every
+ * revenue reader in this file filters on 'delivered' for that reason.
+ *
  * @package FitPal
- * @version 4.0 — Adds searchRestaurantsByName and
- *                searchBranchesByRestaurant for the two-phase
- *                branch sign-in comboboxes.
+ * @version 5.0 — Fixes revenue recognition:
+ *                  - getOwnerDashboardStats, getOwnerWeeklyRevenue,
+ *                    getOwnerBranchOverview, getBranchDashboardStats,
+ *                    and getBranchWeeklyRevenue now filter on
+ *                    'delivered' only.
+ *                  - Operational counts (total_orders, active_orders,
+ *                    etc.) are unchanged.
  */
 
 declare(strict_types=1);
@@ -537,7 +548,7 @@ function getOwnerDashboardStats(PDO $db, int $restaurantId): array
             COUNT(DISTINCT o.order_id) AS total_orders,
             SUM(CASE WHEN DATE(o.order_date) = CURDATE() THEN 1 ELSE 0 END) AS orders_today,
             SUM(CASE WHEN o.order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) THEN 1 ELSE 0 END) AS orders_this_week,
-            SUM(CASE WHEN o.order_status IN ('pending','preparing','delivering') THEN 1 ELSE 0 END) AS active_orders,
+            SUM(CASE WHEN o.order_status IN ('pending','preparing','rider_pending','delivering') THEN 1 ELSE 0 END) AS active_orders,
             SUM(CASE WHEN o.order_status = 'delivered' THEN 1 ELSE 0 END) AS delivered_orders
          FROM orders o
          JOIN queue_item qi ON qi.order_id = o.order_id
@@ -557,18 +568,18 @@ function getOwnerDashboardStats(PDO $db, int $restaurantId): array
         "SELECT
             COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0) AS gross_revenue,
             COALESCE(SUM(CASE
-                WHEN o.order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+                WHEN o.delivered_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
                 THEN qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
                 ELSE 0 END), 0) AS revenue_this_week,
             COALESCE(SUM(CASE
-                WHEN DATE(o.order_date) = CURDATE()
+                WHEN DATE(o.delivered_at) = CURDATE()
                 THEN qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
                 ELSE 0 END), 0) AS revenue_today
          FROM orders o
          JOIN queue_item qi ON qi.order_id = o.order_id
          JOIN restaurant_branch rb ON qi.branch_id = rb.restaurant_branch_id
          WHERE rb.restaurant_id = :rid
-           AND o.order_status NOT IN ('cancelled', 'refunded')"
+           AND o.order_status = 'delivered'"
     );
     $revRow->execute([':rid' => $restaurantId]);
     $rev = $revRow->fetch(PDO::FETCH_ASSOC) ?: [];
@@ -589,16 +600,16 @@ function getOwnerWeeklyRevenue(PDO $db, int $restaurantId, int $days = 7): array
 {
     $stmt = $db->prepare(
         "SELECT
-            DATE(o.order_date) AS day,
+            DATE(o.delivered_at) AS day,
             COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0) AS amount,
             COUNT(DISTINCT o.order_id) AS orders
          FROM orders o
          JOIN queue_item qi ON qi.order_id = o.order_id
          JOIN restaurant_branch rb ON qi.branch_id = rb.restaurant_branch_id
          WHERE rb.restaurant_id = :rid
-           AND o.order_status NOT IN ('cancelled', 'refunded')
-           AND o.order_date >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
-         GROUP BY DATE(o.order_date)
+           AND o.order_status = 'delivered'
+           AND o.delivered_at >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
+         GROUP BY DATE(o.delivered_at)
          ORDER BY day ASC"
     );
     $stmt->bindValue(':rid', $restaurantId, PDO::PARAM_INT);
@@ -649,7 +660,7 @@ function getOwnerBranchOverview(PDO $db, int $restaurantId): array
                FROM queue_item qi
                JOIN orders o ON o.order_id = qi.order_id
               WHERE qi.branch_id = rb.restaurant_branch_id
-                AND o.order_status NOT IN ('cancelled','refunded')) AS revenue
+                AND o.order_status = 'delivered') AS revenue
          FROM restaurant_branch rb
          WHERE rb.restaurant_id = :rid
          ORDER BY rb.is_active DESC, rb.branch_name ASC"
@@ -690,7 +701,7 @@ function getBranchDashboardStats(PDO $db, int $branchId): array
             COUNT(DISTINCT o.order_id) AS total_orders,
             SUM(CASE WHEN DATE(o.order_date) = CURDATE() THEN 1 ELSE 0 END) AS orders_today,
             SUM(CASE WHEN o.order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) THEN 1 ELSE 0 END) AS orders_this_week,
-            SUM(CASE WHEN o.order_status IN ('pending','preparing','delivering') THEN 1 ELSE 0 END) AS active_orders,
+            SUM(CASE WHEN o.order_status IN ('pending','preparing','rider_pending','delivering') THEN 1 ELSE 0 END) AS active_orders,
             SUM(CASE WHEN o.order_status = 'delivered' THEN 1 ELSE 0 END) AS delivered_orders
          FROM orders o
          JOIN queue_item qi ON qi.order_id = o.order_id
@@ -709,17 +720,17 @@ function getBranchDashboardStats(PDO $db, int $branchId): array
         "SELECT
             COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0) AS gross_revenue,
             COALESCE(SUM(CASE
-                WHEN o.order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+                WHEN o.delivered_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
                 THEN qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
                 ELSE 0 END), 0) AS revenue_this_week,
             COALESCE(SUM(CASE
-                WHEN DATE(o.order_date) = CURDATE()
+                WHEN DATE(o.delivered_at) = CURDATE()
                 THEN qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
                 ELSE 0 END), 0) AS revenue_today
          FROM orders o
          JOIN queue_item qi ON qi.order_id = o.order_id
          WHERE qi.branch_id = :bid
-           AND o.order_status NOT IN ('cancelled','refunded')"
+           AND o.order_status = 'delivered'"
     );
     $revRow->execute([':bid' => $branchId]);
     $rev = $revRow->fetch(PDO::FETCH_ASSOC) ?: [];
@@ -740,15 +751,15 @@ function getBranchWeeklyRevenue(PDO $db, int $branchId, int $days = 7): array
 {
     $stmt = $db->prepare(
         "SELECT
-            DATE(o.order_date) AS day,
+            DATE(o.delivered_at) AS day,
             COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0) AS amount,
             COUNT(DISTINCT o.order_id) AS orders
          FROM orders o
          JOIN queue_item qi ON qi.order_id = o.order_id
          WHERE qi.branch_id = :bid
-           AND o.order_status NOT IN ('cancelled','refunded')
-           AND o.order_date >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
-         GROUP BY DATE(o.order_date)
+           AND o.order_status = 'delivered'
+           AND o.delivered_at >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
+         GROUP BY DATE(o.delivered_at)
          ORDER BY day ASC"
     );
     $stmt->bindValue(':bid', $branchId, PDO::PARAM_INT);
@@ -870,7 +881,8 @@ function searchRestaurantsByName(PDO $db, string $query, int $limit = 8): array
                 r.cuisine_type,
                 MIN(rb.city) AS city
              FROM restaurant r
-             LEFT JOIN restaurant_branch rb                    ON rb.restaurant_id = r.restaurant_id
+             LEFT JOIN restaurant_branch rb
+                    ON rb.restaurant_id = r.restaurant_id
                    AND rb.is_active = 1
              WHERE r.is_active = 1
                AND r.verification_status = 'verified'

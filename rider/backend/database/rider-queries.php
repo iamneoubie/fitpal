@@ -9,10 +9,23 @@
  *
  * No $_POST, no header(), no echo.
  *
+ * Assignment model
+ * ----------------
+ * The kitchen assigns a rider, which moves an order to
+ * 'rider_pending' and sets orders.delivery_rider_id. The rider then
+ * accepts (moves to 'delivering', locks is_available = 0) or
+ * declines (returns the order to 'preparing', clears the rider).
+ * This file is the only place those two transitions are written.
+ *
  * @package FitPal
- * @version 4.0 — Adds getPendingAssignments, hasActiveOrder,
- *                and acceptOrder so riders must explicitly claim
- *                an order before it is assigned to them.
+ * @version 5.0 — Rider accept/decline for the rider_pending handoff:
+ *                  - getAssignedOrders replaces getPendingAssignments.
+ *                  - acceptOrder requires rider_pending AND the
+ *                    caller being the assigned rider.
+ *                  - declineOrder returns the order to 'preparing'.
+ *                  - hasActiveOrder counts rider_pending too.
+ *                  - setRiderAvailability refuses while the rider
+ *                    has an order in 'delivering'.
  */
 
 declare(strict_types=1);
@@ -93,8 +106,31 @@ function isRiderActive(PDO $db, int $riderId): bool
 // AVAILABILITY
 // ============================================
 
+/**
+ * Flip a rider's availability.
+ *
+ * A rider cannot be switched to offline while they have an order in
+ * 'delivering' — they must finish the run first. Switching to online
+ * is always allowed.
+ *
+ * Returns true when the write was performed, false when the rule
+ * refused it.
+ */
 function setRiderAvailability(PDO $db, int $riderId, int $isAvailable): bool
 {
+    if ($isAvailable === 0) {
+        $busyStmt = $db->prepare(
+            "SELECT 1 FROM orders
+              WHERE delivery_rider_id = :rider_id
+                AND order_status = 'delivering'
+              LIMIT 1"
+        );
+        $busyStmt->execute([':rider_id' => $riderId]);
+        if ($busyStmt->fetchColumn() !== false) {
+            return false;
+        }
+    }
+
     $stmt = $db->prepare(
         "UPDATE delivery_rider_profile
             SET is_available = :is_available
@@ -122,15 +158,22 @@ function updateRiderContact(PDO $db, int $riderId, string $contactNumber): bool
 }
 
 // ============================================
-// ORDER ASSIGNMENT (explicit rider acceptance)
+// ASSIGNED ORDERS (kitchen handoff)
 // ============================================
 
 /**
- * Return orders that are ready to be claimed by a rider.
+ * Orders the kitchen has assigned to this rider that are waiting on
+ * an accept/decline decision.
  *
- * Read-only. No side effects.
+ * Only orders in 'rider_pending' whose delivery_rider_id matches the
+ * caller are returned. Read-only. No side effects.
+ *
+ * @param PDO $db
+ * @param int $riderId
+ * @param int $limit
+ * @return array<int, array<string, mixed>>
  */
-function getPendingAssignments(PDO $db, int $riderId, int $limit = 20): array
+function getAssignedOrders(PDO $db, int $riderId, int $limit = 20): array
 {
     $stmt = $db->prepare(
         "SELECT
@@ -149,21 +192,25 @@ function getPendingAssignments(PDO $db, int $riderId, int $limit = 20): array
          LEFT JOIN queue_item qi ON o.order_id = qi.order_id
          LEFT JOIN restaurant_branch rb ON qi.branch_id = rb.restaurant_branch_id
          LEFT JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
-         WHERE o.delivery_rider_id IS NULL
-           AND o.order_status IN ('pending', 'preparing')
+         WHERE o.delivery_rider_id = :rider_id
+           AND o.order_status = 'rider_pending'
          GROUP BY o.order_id
          ORDER BY o.order_date ASC
          LIMIT :limit"
     );
+    $stmt->bindValue(':rider_id', $riderId, PDO::PARAM_INT);
     $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
     $stmt->execute();
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 /**
- * Count the rider's active orders. Used to enforce the cap before
- * attempting an accept, so the rider sees a clean message instead of
- * a DB-level trigger SIGNAL.
+ * Count how many orders this rider is already committed to.
+ *
+ * Counts orders that are in an active delivery state or waiting on
+ * this rider's decision. Used to enforce the rider's cap before an
+ * accept, so the rider gets a clean message instead of a DB-level
+ * trigger SIGNAL.
  */
 function hasActiveOrder(PDO $db, int $riderId): int
 {
@@ -171,33 +218,80 @@ function hasActiveOrder(PDO $db, int $riderId): int
         "SELECT COUNT(*)
          FROM orders
          WHERE delivery_rider_id = :rider_id
-           AND order_status IN ('preparing', 'delivering')"
+           AND order_status IN ('rider_pending', 'delivering')"
     );
     $stmt->execute([':rider_id' => $riderId]);
     return (int)$stmt->fetchColumn();
 }
 
 /**
- * Atomically assign an unassigned order to this rider.
+ * Accept the kitchen's assignment.
  *
- * Returns true only if the row was still unassigned and in a
- * deliverable state. This is the single write path that sets
- * orders.delivery_rider_id.
+ * Only succeeds when the order is in 'rider_pending' AND the caller
+ * is the assigned rider. On success, the order moves to 'delivering'
+ * and the rider's is_available flips to 0. Both writes are on
+ * separate rows of the same transaction that the handler opens.
+ *
+ * Returns true when the transition ran, false otherwise.
  */
 function acceptOrder(PDO $db, int $riderId, int $orderId): bool
 {
+    $orderStmt = $db->prepare(
+        "UPDATE orders
+            SET order_status = 'delivering',
+                updated_at   = NOW()
+          WHERE order_id = :order_id
+            AND delivery_rider_id = :rider_id
+            AND order_status = 'rider_pending'"
+    );
+    $orderStmt->execute([
+        ':order_id'  => $orderId,
+        ':rider_id'  => $riderId,
+    ]);
+
+    if ($orderStmt->rowCount() !== 1) {
+        return false;
+    }
+
+    $riderStmt = $db->prepare(
+        "UPDATE delivery_rider_profile
+            SET is_available = 0
+          WHERE delivery_rider_id = :rider_id
+            AND is_available = 1"
+    );
+    $riderStmt->execute([':rider_id' => $riderId]);
+
+    return true;
+}
+
+/**
+ * Decline the kitchen's assignment.
+ *
+ * Returns the order to 'preparing' and clears delivery_rider_id so
+ * it reappears in the kitchen's Preparing tab for a new assignment.
+ *
+ * Only succeeds when the order is in 'rider_pending' AND the caller
+ * is the assigned rider. The rider's is_available is not touched:
+ * they were never marked unavailable for a pending request.
+ *
+ * Returns true when the transition ran, false otherwise.
+ */
+function declineOrder(PDO $db, int $riderId, int $orderId): bool
+{
     $stmt = $db->prepare(
         "UPDATE orders
-            SET delivery_rider_id = :rider_id,
-                updated_at = NOW()
+            SET order_status      = 'preparing',
+                delivery_rider_id = NULL,
+                updated_at        = NOW()
           WHERE order_id = :order_id
-            AND delivery_rider_id IS NULL
-            AND order_status IN ('pending', 'preparing')"
+            AND delivery_rider_id = :rider_id
+            AND order_status = 'rider_pending'"
     );
     $stmt->execute([
-        ':rider_id'  => $riderId,
-        ':order_id'  => $orderId,
+        ':order_id' => $orderId,
+        ':rider_id' => $riderId,
     ]);
+
     return $stmt->rowCount() === 1;
 }
 
@@ -503,7 +597,7 @@ function getRiderActiveDeliveries(PDO $db, int $riderId): array
          LEFT JOIN restaurant_branch rb ON qi.branch_id = rb.restaurant_branch_id
          LEFT JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
          WHERE o.delivery_rider_id = :rider_id
-           AND o.order_status IN ('preparing', 'delivering')
+           AND o.order_status = 'delivering'
          GROUP BY o.order_id
          ORDER BY o.order_date ASC"
     );
@@ -543,7 +637,7 @@ function getRiderDeliveryCounts(PDO $db, int $riderId): array
 {
     $stmt = $db->prepare(
         "SELECT
-            SUM(CASE WHEN order_status IN ('preparing','delivering') THEN 1 ELSE 0 END) AS active,
+            SUM(CASE WHEN order_status IN ('rider_pending','delivering') THEN 1 ELSE 0 END) AS active,
             SUM(CASE WHEN order_status = 'delivered'
                       AND DATE(delivered_at) = CURDATE() THEN 1 ELSE 0 END) AS today,
             SUM(CASE WHEN order_status = 'delivered'

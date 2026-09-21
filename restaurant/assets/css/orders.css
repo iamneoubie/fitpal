@@ -10,7 +10,11 @@
  *   - Every <textarea> rule includes resize: none.
  *
  * @package FitPal
- * @version 1.0
+ * @version 2.0 — Adds the Waiting on Rider and Out for Delivery
+ *                tab/card variants plus a muted style for closed
+ *                orders rendered under the Recent tab. Adds the
+ *                awaiting-confirmation badge slot for the rider
+ *                block. Mark Ready styles from v1.1 are removed.
  */
 
 /* ============================================
@@ -103,7 +107,7 @@
 
 .kitchen-summary-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 16px;
     margin-bottom: 20px;
 }
@@ -219,7 +223,7 @@
     width: 100%;
     border-collapse: collapse;
     font-size: var(--font-size-sm);
-    min-width: 640px;
+    min-width: 760px;
 }
 
 .kitchen-branch-table thead {
@@ -367,6 +371,30 @@
 .kitchen-order-card.is-updating {
     opacity: 0.6;
     pointer-events: none;
+}
+
+/* Closed orders: muted card body, lighter border. */
+.kitchen-order-card-completed {
+    border-color: var(--gray-100);
+    background: var(--gray-50);
+}
+
+.kitchen-order-card-completed .kitchen-order-header {
+    background: transparent;
+    border-bottom-color: var(--gray-100);
+}
+
+.kitchen-order-card-completed .kitchen-order-body {
+    opacity: 0.85;
+}
+
+.kitchen-order-card-completed .kitchen-item {
+    background: transparent;
+}
+
+.kitchen-order-card-completed .kitchen-order-total {
+    background: transparent;
+    border-color: var(--gray-200);
 }
 
 /* --- Header --- */
@@ -626,6 +654,14 @@
     font-style: italic;
 }
 
+/* Awaiting-confirmation badge on rider_pending cards. */
+.kitchen-rider-awaiting {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+}
+
 /* --- Footer actions --- */
 
 .kitchen-order-actions {
@@ -636,6 +672,10 @@
     padding: 12px 20px;
     background: var(--gray-50);
     border-top: 1px solid var(--gray-200);
+}
+
+.kitchen-order-card-completed .kitchen-order-actions {
+    display: none;
 }
 
 .kitchen-action-btn {
@@ -854,6 +894,29 @@
     flex-shrink: 0;
 }
 
+/* --- Reassignment note inside the rider modal --- */
+
+.kitchen-rider-modal-note {
+    margin: 0 0 14px 0;
+    padding: 10px 14px;
+    border-radius: var(--radius-base);
+    background: rgba(255, 193, 7, 0.12);
+    border-left: 3px solid var(--warning);
+    color: #856404;
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+.kitchen-rider-modal-note[hidden] {
+    display: none;
+}
+
+.kitchen-rider-modal-note strong {
+    color: #6b4c00;
+    font-weight: 700;
+}
+
 /* ============================================
    CONFIRM MODAL
    ============================================ */
@@ -925,7 +988,7 @@
 
 @media (max-width: 992px) {
     .kitchen-summary-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
     .kitchen-revenue-grid {

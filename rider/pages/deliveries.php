@@ -2,18 +2,44 @@
 /**
  * FitPal Rider Deliveries Page
  *
- * Pending assignments (unclaimed orders) + active deliveries +
- * delivery history + customer/kitchen chat.
+ * Sections:
+ *   1. Assigned to You  — orders the kitchen has handed to this
+ *                          rider and that are waiting on an
+ *                          accept / decline decision.
+ *   2. Active           — orders in transit (rider accepted).
+ *   3. History          — recently closed deliveries.
  *
- * Availability rule
- * -----------------
- * Only verified, online riders with fewer than two active orders
- * can accept a pending assignment. The handler enforces this; the
- * page only renders the button.
+ * Confirmation model
+ * ------------------
+ * Delivery actions open a styled confirm modal. The copy is authored
+ * on each button via data-confirm-* attributes so the JS never
+ * carries text. The modal carries two attributes:
+ *   - data-variant: "primary" or "danger" (drives button colour)
+ *   - data-icon:    "accept" | "decline" | "delivered"
+ *                   (drives which SVG is visible)
+ *
+ * Icon rule
+ * ---------
+ * Every icon file referenced below exists under
+ * shared/assets/images/icons/. The three confirm-modal icons are:
+ *   accept    -> verified-fill.svg
+ *   decline   -> close-circle-fill.svg
+ *   delivered -> verified-badge-fill.svg
+ *
+ * Button rules
+ * ------------
+ *   - Positive / confirm → primary (green / white)
+ *   - Neutral             → black background / white text
+ *   - Negative            → danger (red / white)
+ * No transparent or outlined buttons are used on this page.
  *
  * @package FitPal
- * @version 2.0 — Adds Pending Assignments section so orders are
- *                claimed explicitly by the rider.
+ * @version 3.4 — Icon sources verified against the project tree:
+ *                  - check-circle-fill.svg removed (does not exist).
+ *                  - send-plane-fill.svg removed (does not exist).
+ *                  - accept slot now uses verified-fill.svg.
+ *                  - delivered slot now uses verified-badge-fill.svg.
+ *                  - chat send now uses arrow-right-s-line.svg.
  */
 
 declare(strict_types=1);
@@ -32,11 +58,11 @@ require_once __DIR__ . '/../backend/database/rider-queries.php';
 
 $riderId = (int)$_SESSION['delivery_rider_id'];
 
-$profile            = getRiderProfile($database_connection, $riderId) ?: [];
-$pendingAssignments = getPendingAssignments($database_connection, $riderId);
-$activeDeliveries   = getRiderActiveDeliveries($database_connection, $riderId);
-$deliveryHistory    = getRiderDeliveryHistory($database_connection, $riderId, 10);
-$counts             = getRiderDeliveryCounts($database_connection, $riderId);
+$profile          = getRiderProfile($database_connection, $riderId) ?: [];
+$assignedOrders   = getAssignedOrders($database_connection, $riderId);
+$activeDeliveries = getRiderActiveDeliveries($database_connection, $riderId);
+$deliveryHistory  = getRiderDeliveryHistory($database_connection, $riderId, 10);
+$counts           = getRiderDeliveryCounts($database_connection, $riderId);
 
 $available  = (int)($profile['is_available'] ?? 0) === 1;
 $status     = (string)($profile['verification_status'] ?? 'pending');
@@ -56,26 +82,28 @@ function formatRiderDate(string $date): string
 function getDeliveryStatusClass(string $status): string
 {
     return match ($status) {
-        'pending'    => 'badge-warning',
-        'preparing'  => 'badge-info',
-        'delivering' => 'badge-primary',
-        'delivered'  => 'badge-success',
-        'cancelled'  => 'badge-danger',
-        'refunded'   => 'badge-secondary',
-        default      => 'badge-secondary',
+        'pending'       => 'badge-warning',
+        'preparing'     => 'badge-info',
+        'rider_pending' => 'badge-primary',
+        'delivering'    => 'badge-primary',
+        'delivered'     => 'badge-success',
+        'cancelled'     => 'badge-danger',
+        'refunded'      => 'badge-secondary',
+        default         => 'badge-secondary',
     };
 }
 
 function getDeliveryStatusLabel(string $status): string
 {
     return match ($status) {
-        'pending'    => 'Pending',
-        'preparing'  => 'Preparing',
-        'delivering' => 'In Transit',
-        'delivered'  => 'Delivered',
-        'cancelled'  => 'Cancelled',
-        'refunded'   => 'Refunded',
-        default      => ucfirst($status),
+        'pending'       => 'Pending',
+        'preparing'     => 'Preparing',
+        'rider_pending' => 'Awaiting Your Confirmation',
+        'delivering'    => 'In Transit',
+        'delivered'     => 'Delivered',
+        'cancelled'     => 'Cancelled',
+        'refunded'      => 'Refunded',
+        default         => ucfirst($status),
     };
 }
 
@@ -88,7 +116,7 @@ require_once __DIR__ . '/../includes/header.php';
         <header class="rider-page-header">
             <div>
                 <h1 class="heading-2">My <span>Deliveries</span></h1>
-                <p class="text-muted">Accept new orders, manage active deliveries, and view your history</p>
+                <p class="text-muted">Confirm assignments, manage active deliveries, and view your history</p>
             </div>
             <div class="rider-page-actions">
                 <span class="badge <?php echo $available ? 'badge-success' : 'badge-secondary'; ?>">
@@ -113,8 +141,8 @@ require_once __DIR__ . '/../includes/header.php';
 
         <section class="rider-delivery-stats">
             <div class="rider-delivery-stat">
-                <span class="rider-delivery-stat-number"><?php echo count($pendingAssignments); ?></span>
-                <span class="rider-delivery-stat-label">Pending</span>
+                <span class="rider-delivery-stat-number"><?php echo count($assignedOrders); ?></span>
+                <span class="rider-delivery-stat-label">Awaiting You</span>
             </div>
             <div class="rider-delivery-stat">
                 <span class="rider-delivery-stat-number"><?php echo $counts['active']; ?></span>
@@ -130,36 +158,39 @@ require_once __DIR__ . '/../includes/header.php';
             </div>
         </section>
 
+        <!-- ============================================================
+             ASSIGNED TO YOU
+             ============================================================ -->
         <section class="rider-card">
             <div class="rider-card-header">
                 <h2 class="heading-5">
-                    Pending Assignments
-                    <?php if (count($pendingAssignments) > 0): ?>
-                    <span class="badge badge-warning"><?php echo count($pendingAssignments); ?></span>
+                    Assigned to You
+                    <?php if (count($assignedOrders) > 0): ?>
+                    <span class="badge badge-warning"><?php echo count($assignedOrders); ?></span>
                     <?php endif; ?>
                 </h2>
             </div>
 
-            <?php if (empty($pendingAssignments)): ?>
+            <?php if (empty($assignedOrders)): ?>
             <div class="rider-empty-state">
                 <div class="rider-empty-icon">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/package.svg" alt="No pending assignments"
                         onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/order.svg'">
                 </div>
-                <p class="rider-empty-title">No pending assignments</p>
+                <p class="rider-empty-title">No assignments yet</p>
                 <p class="rider-empty-text">
                     <?php if (!$isVerified): ?>
-                    Your account is pending verification. You'll see assignments once verified.
+                    Your account is pending verification. Assignments will appear once you're verified.
                     <?php elseif (!$available): ?>
-                    You're offline. Go online from the dashboard to see incoming orders.
+                    You're offline. Go online from the dashboard so the kitchen can assign you orders.
                     <?php else: ?>
-                    New orders will appear here for you to accept.
+                    When the kitchen assigns you an order, it will appear here for you to accept or decline.
                     <?php endif; ?>
                 </p>
             </div>
             <?php else: ?>
             <div class="rider-active-deliveries">
-                <?php foreach ($pendingAssignments as $pending):
+                <?php foreach ($assignedOrders as $pending):
                     $orderId        = (int)$pending['order_id'];
                     $customerName   = (string)$pending['customer_name'];
                     $destination    = (string)$pending['destination_address'];
@@ -169,7 +200,13 @@ require_once __DIR__ . '/../includes/header.php';
                     $itemCount      = (int)($pending['item_count'] ?? 0);
                     $orderTotal     = (float)($pending['order_total'] ?? 0);
 
-                    $canAccept = $isVerified && $available;
+                    $canDecide = $isVerified && $available;
+
+                    $acceptTitle = 'Accept this assignment?';
+                    $acceptBody  = 'You\'ll be responsible for picking up this order and delivering it to the customer. You won\'t be able to go offline until the delivery is complete.';
+
+                    $declineTitle = 'Decline this assignment?';
+                    $declineBody  = 'The kitchen will choose another rider for this order. This cannot be undone.';
                 ?>
                 <div class="rider-active-delivery-card" data-order-id="<?php echo $orderId; ?>">
                     <div class="rider-active-delivery-header">
@@ -179,7 +216,7 @@ require_once __DIR__ . '/../includes/header.php';
                                 <?php echo formatRiderDate($orderDate); ?>
                             </p>
                         </div>
-                        <span class="badge badge-warning">Awaiting Acceptance</span>
+                        <span class="badge badge-warning">Awaiting Your Confirmation</span>
                     </div>
 
                     <div class="rider-active-delivery-body">
@@ -236,14 +273,24 @@ require_once __DIR__ . '/../includes/header.php';
                     </div>
 
                     <div class="rider-active-delivery-actions">
-                        <?php if ($canAccept): ?>
+                        <?php if ($canDecide): ?>
+                        <button type="button" class="btn btn-danger btn-sm delivery-status-btn"
+                            data-order-id="<?php echo $orderId; ?>" data-action="decline_assignment"
+                            data-confirm-title="<?php echo htmlspecialchars($declineTitle, ENT_QUOTES, 'UTF-8'); ?>"
+                            data-confirm-message="<?php echo htmlspecialchars($declineBody, ENT_QUOTES, 'UTF-8'); ?>"
+                            data-confirm-label="Decline" data-confirm-variant="danger" data-confirm-icon="decline">
+                            Decline
+                        </button>
                         <button type="button" class="btn btn-primary btn-sm delivery-status-btn"
-                            data-order-id="<?php echo $orderId; ?>" data-action="accept_order">
-                            Accept Order
+                            data-order-id="<?php echo $orderId; ?>" data-action="accept_assignment"
+                            data-confirm-title="<?php echo htmlspecialchars($acceptTitle, ENT_QUOTES, 'UTF-8'); ?>"
+                            data-confirm-message="<?php echo htmlspecialchars($acceptBody, ENT_QUOTES, 'UTF-8'); ?>"
+                            data-confirm-label="Accept" data-confirm-variant="primary" data-confirm-icon="accept">
+                            Accept Assignment
                         </button>
                         <?php else: ?>
                         <span class="btn btn-sm btn-disabled" aria-disabled="true">
-                            <?php echo !$isVerified ? 'Awaiting Verification' : 'Go Online to Accept'; ?>
+                            <?php echo !$isVerified ? 'Awaiting Verification' : 'Go Online to Decide'; ?>
                         </span>
                         <?php endif; ?>
                     </div>
@@ -253,6 +300,9 @@ require_once __DIR__ . '/../includes/header.php';
             <?php endif; ?>
         </section>
 
+        <!-- ============================================================
+             ACTIVE DELIVERIES
+             ============================================================ -->
         <section class="rider-card">
             <div class="rider-card-header">
                 <h2 class="heading-5">
@@ -271,7 +321,7 @@ require_once __DIR__ . '/../includes/header.php';
                 </div>
                 <p class="rider-empty-title">No active deliveries</p>
                 <p class="rider-empty-text">
-                    Accept a pending assignment to start a delivery.
+                    Accept an assignment above to start a delivery.
                 </p>
             </div>
             <?php else: ?>
@@ -289,11 +339,8 @@ require_once __DIR__ . '/../includes/header.php';
                     $orderTotal     = (float)($delivery['order_total'] ?? 0);
                     $riderEarning   = 50.00;
 
-                    $nextAction = match ($orderStatus) {
-                        'preparing', 'pending' => ['label' => 'Picked Up', 'action' => 'picked_up', 'class' => 'btn-primary'],
-                        'delivering'           => ['label' => 'Mark Delivered', 'action' => 'delivered', 'class' => 'btn-primary'],
-                        default                => null,
-                    };
+                    $deliveredTitle = 'Mark as delivered?';
+                    $deliveredBody  = 'This closes the order and recognises the earning on your account.';
                 ?>
                 <div class="rider-active-delivery-card" data-order-id="<?php echo $orderId; ?>">
                     <div class="rider-active-delivery-header">
@@ -364,7 +411,7 @@ require_once __DIR__ . '/../includes/header.php';
                     <div class="rider-active-delivery-actions">
                         <?php if ($customerPhone !== ''): ?>
                         <a href="tel:<?php echo htmlspecialchars($customerPhone, ENT_QUOTES, 'UTF-8'); ?>"
-                            class="btn btn-outline btn-sm">
+                            class="btn btn-neutral btn-sm">
                             <img src="<?php echo $assetBase; ?>assets/images/icons/phone-fill.svg" alt=""
                                 class="btn-icon" width="16" height="16"
                                 onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg'">
@@ -372,7 +419,7 @@ require_once __DIR__ . '/../includes/header.php';
                         </a>
                         <?php endif; ?>
 
-                        <button type="button" class="btn btn-outline btn-sm delivery-chat-btn"
+                        <button type="button" class="btn btn-neutral btn-sm delivery-chat-btn"
                             data-order-id="<?php echo $orderId; ?>"
                             data-customer-name="<?php echo htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8'); ?>"
                             data-restaurant-name="<?php echo htmlspecialchars($restaurantName, ENT_QUOTES, 'UTF-8'); ?>">
@@ -382,12 +429,14 @@ require_once __DIR__ . '/../includes/header.php';
                             <span>Message</span>
                         </button>
 
-                        <?php if ($nextAction !== null): ?>
-                        <button type="button" class="btn <?php echo $nextAction['class']; ?> btn-sm delivery-status-btn"
-                            data-order-id="<?php echo $orderId; ?>" data-action="<?php echo $nextAction['action']; ?>">
-                            <?php echo htmlspecialchars($nextAction['label'], ENT_QUOTES, 'UTF-8'); ?>
+                        <button type="button" class="btn btn-primary btn-sm delivery-status-btn"
+                            data-order-id="<?php echo $orderId; ?>" data-action="delivered"
+                            data-confirm-title="<?php echo htmlspecialchars($deliveredTitle, ENT_QUOTES, 'UTF-8'); ?>"
+                            data-confirm-message="<?php echo htmlspecialchars($deliveredBody, ENT_QUOTES, 'UTF-8'); ?>"
+                            data-confirm-label="Mark Delivered" data-confirm-variant="primary"
+                            data-confirm-icon="delivered">
+                            Mark Delivered
                         </button>
-                        <?php endif; ?>
                     </div>
                 </div>
                 <?php endforeach; ?>
@@ -395,6 +444,9 @@ require_once __DIR__ . '/../includes/header.php';
             <?php endif; ?>
         </section>
 
+        <!-- ============================================================
+             DELIVERY HISTORY
+             ============================================================ -->
         <section class="rider-card">
             <div class="rider-card-header">
                 <h2 class="heading-5">Delivery History</h2>
@@ -422,8 +474,8 @@ require_once __DIR__ . '/../includes/header.php';
                     <div
                         class="rider-history-icon <?php echo $orderStatus === 'delivered' ? 'rider-history-icon-success' : 'rider-history-icon-neutral'; ?>">
                         <?php if ($orderStatus === 'delivered'): ?>
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/check-circle-fill.svg" alt="Delivered"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/verified-fill.svg'">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/verified-fill.svg" alt="Delivered"
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/verified-badge-fill.svg'">
                         <?php else: ?>
                         <img src="<?php echo $assetBase; ?>assets/images/icons/close-circle-fill.svg" alt="Cancelled"
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/cancel.svg'">
@@ -457,6 +509,9 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 </div>
 
+<!-- ============================================================
+     CHAT MODAL
+     ============================================================ -->
 <div id="riderChatModal" class="modal" style="display: none;">
     <div class="modal-overlay"></div>
     <div class="modal-content rider-chat-modal-content">
@@ -491,10 +546,40 @@ require_once __DIR__ . '/../includes/header.php';
             <input type="text" id="riderChatInput" class="rider-chat-input" placeholder="Type your message…"
                 maxlength="500" autocomplete="off" required>
             <button type="submit" class="rider-chat-send" aria-label="Send message">
-                <img src="<?php echo $assetBase; ?>assets/images/icons/send-plane-fill.svg" alt="Send"
-                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/arrow-right-s-line.svg'">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-right-s-line.svg" alt="Send"
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/arrow-right-long-line.svg'">
             </button>
         </form>
+    </div>
+</div>
+
+<!-- ============================================================
+     CONFIRM MODAL
+     Icon-led card. Three icons are rendered inside the icon
+     circle; CSS shows only the one matching the modal's
+     data-icon attribute. The confirm button's colour follows the
+     modal's data-variant.
+     ============================================================ -->
+<div class="rider-confirm-modal" id="riderConfirmModal" style="display: none;" data-variant="primary" data-icon="accept"
+    role="dialog" aria-modal="true" aria-labelledby="riderConfirmTitle">
+    <div class="rider-confirm-overlay" data-close-confirm></div>
+    <div class="rider-confirm-content">
+        <div class="rider-confirm-icon" aria-hidden="true">
+            <img src="<?php echo $assetBase; ?>assets/images/icons/verified-fill.svg" alt=""
+                class="rider-confirm-icon-accept">
+            <img src="<?php echo $assetBase; ?>assets/images/icons/close-circle-fill.svg" alt=""
+                class="rider-confirm-icon-decline">
+            <img src="<?php echo $assetBase; ?>assets/images/icons/verified-badge-fill.svg" alt=""
+                class="rider-confirm-icon-delivered">
+        </div>
+
+        <p class="rider-confirm-title" id="riderConfirmTitle">Confirm</p>
+        <p class="rider-confirm-text" id="riderConfirmMessage"></p>
+
+        <div class="rider-confirm-footer">
+            <button type="button" class="btn btn-neutral" data-close-confirm>Cancel</button>
+            <button type="button" class="rider-confirm-btn" id="riderConfirmBtn">Confirm</button>
+        </div>
     </div>
 </div>
 

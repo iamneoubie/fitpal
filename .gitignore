@@ -7,8 +7,10 @@
 # To select all files
 # *.extension
 # folder/another_folder/*
-/logs/content-fetcher-configuration
+logs/content-fetcher-configuration/
 /logs/output
 *env
 *txt
 /shared/uploads/*
+logs/content-fetcher-configuration/all_path.py
+logs/content-fetcher-configuration/all_path.py

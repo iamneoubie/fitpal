@@ -5,35 +5,44 @@
  * Two views, chosen by the signed-in account's scope:
  *
  *   Branch view (manager / staff / kitchen)
- *     - Live list of pending and preparing orders for the branch.
- *     - Actions: Start Preparing, Cancel, Assign Rider, Mark Ready.
+ *     - Tabs for New, Preparing, Waiting on Rider, Out for Delivery,
+ *       and Recent (delivered / cancelled / refunded).
+ *     - Actions: Start Preparing, Cancel, Assign Rider,
+ *       Reassign Rider.
+ *     - An order NEVER disappears when its status changes; it slides
+ *       into the correct tab.
  *
  *   Owner view (owner / partner)
- *     - Read-only summary across all branches. Counts and revenue.
- *     - No action buttons. The owner only needs analytics here.
+ *     - Read-only summary across all branches.
+ *     - Counts include rider_pending and delivering buckets.
+ *     - No action buttons.
  *
  * Access control:
  *   - Unauthenticated visitors are redirected to sign-in.
  *   - Any account that is not manager / staff / kitchen / owner /
  *     partner is redirected to the dashboard.
- *   - The owner view is rendered for owner / partner; every other
- *     permitted role gets the branch view.
  *
  * ---------------------------------------------------------------------
  * SCOPE RULES APPLIED
  * ---------------------------------------------------------------------
  *  - No inline CSS. orders.css is loaded via the header's
- *    $pageCssMap.
+ *    $pageCssMap and re-linked at the top of this page.
  *  - No inline JS. orders.js is loaded at the bottom of the page.
  *    Config is passed to JS via data-* attributes on #kitchenPage.
  *  - No SQL. All data comes from
  *    restaurant/backend/database/order-queries.php.
  *  - No view helpers. Formatting is done inline where needed.
+ *  - Icons reference only files present under
+ *    shared/assets/images/icons/.
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 1.1 — Removes the "Done Today" tab from the branch view.
- *                The kitchen list is pending + preparing only.
+ * @version 2.0 — Introduces the rider_pending handoff:
+ *                  - Adds Waiting on Rider and Out for Delivery tabs.
+ *                  - Adds a Recent tab so closed orders stay visible.
+ *                  - Removes the Mark Ready button.
+ *                  - Branch view loads five status buckets in one
+ *                    request.
  */
 
 declare(strict_types=1);
@@ -54,8 +63,8 @@ $branchId        = !empty($_SESSION['restaurant_branch_id'])
     ? (int)$_SESSION['restaurant_branch_id']
     : 0;
 
-$isOwner         = in_array($accountRole, ['owner', 'partner'], true);
-$isBranchStaff   = in_array($accountRole, ['manager', 'staff', 'kitchen'], true);
+$isOwner       = in_array($accountRole, ['owner', 'partner'], true);
+$isBranchStaff = in_array($accountRole, ['manager', 'staff', 'kitchen'], true);
 
 if (!$isOwner && !$isBranchStaff) {
     header('Location: dashboard.php');
@@ -79,8 +88,16 @@ require_once __DIR__ . '/../backend/database/order-queries.php';
  * LOAD DATA FOR THE ACTIVE VIEW
  * -------------------------------------------------------------- */
 
-$kitchenOrders   = [];
-$kitchenCounts   = ['pending' => 0, 'preparing' => 0, 'delivering' => 0, 'delivered_today' => 0];
+$activeOrders    = [];
+$completedOrders = [];
+$kitchenCounts   = [
+    'pending'         => 0,
+    'preparing'       => 0,
+    'rider_pending'   => 0,
+    'delivering'      => 0,
+    'delivered_today' => 0,
+    'cancelled_today' => 0,
+];
 $availableRiders = [];
 $ownerSummary    = null;
 $ownerBranchRows = [];
@@ -99,15 +116,28 @@ if ($isOwner) {
 } else {
 
     try {
-        $kitchenOrders = getBranchKitchenOrders(
+        $activeOrders = getBranchKitchenOrders(
             $database_connection,
             $branchId,
-            ['pending', 'preparing']
+            ['pending', 'preparing', 'rider_pending', 'delivering']
         );
-        $kitchenCounts   = getKitchenOrderCounts($database_connection, $branchId);
-        $availableRiders = getAvailableRidersForBranch($database_connection, $branchId);
 
-        foreach ($kitchenOrders as &$order) {
+        $completedOrders = getBranchCompletedOrders($database_connection, $branchId, 30);
+
+        $kitchenCounts = getKitchenOrderCounts($database_connection, $branchId);
+
+        $availableRiders = getAvailableRidersForBranch($database_connection, $branchId, 0);
+
+        foreach ($activeOrders as &$order) {
+            $order['items'] = getKitchenOrderItems(
+                $database_connection,
+                (int)$order['order_id'],
+                $branchId
+            );
+        }
+        unset($order);
+
+        foreach ($completedOrders as &$order) {
             $order['items'] = getKitchenOrderItems(
                 $database_connection,
                 (int)$order['order_id'],
@@ -134,7 +164,7 @@ $csrfToken = (string)$_SESSION['csrf_token'];
 /* --------------------------------------------------------------
  * PAGE LOCALS
  *
- * Only formatting. No DB access, no session writes.
+ * Formatting only. No DB access, no session writes.
  * -------------------------------------------------------------- */
 
 function kitchenMoney(float|string|null $amount): string
@@ -145,26 +175,28 @@ function kitchenMoney(float|string|null $amount): string
 function kitchenStatusLabel(string $status): string
 {
     return match ($status) {
-        'pending'    => 'New',
-        'preparing'  => 'Preparing',
-        'delivering' => 'Handed Off',
-        'delivered'  => 'Delivered',
-        'cancelled'  => 'Cancelled',
-        'refunded'   => 'Refunded',
-        default      => ucfirst($status),
+        'pending'       => 'New',
+        'preparing'     => 'Preparing',
+        'rider_pending' => 'Waiting on Rider',
+        'delivering'    => 'Out for Delivery',
+        'delivered'     => 'Delivered',
+        'cancelled'     => 'Cancelled',
+        'refunded'      => 'Refunded',
+        default         => ucfirst($status),
     };
 }
 
 function kitchenStatusBadge(string $status): string
 {
     return match ($status) {
-        'pending'    => 'badge-warning',
-        'preparing'  => 'badge-info',
-        'delivering' => 'badge-primary',
-        'delivered'  => 'badge-success',
-        'cancelled'  => 'badge-danger',
-        'refunded'   => 'badge-secondary',
-        default      => 'badge-secondary',
+        'pending'       => 'badge-warning',
+        'preparing'     => 'badge-info',
+        'rider_pending' => 'badge-primary',
+        'delivering'    => 'badge-primary',
+        'delivered'     => 'badge-success',
+        'cancelled'     => 'badge-danger',
+        'refunded'      => 'badge-secondary',
+        default         => 'badge-secondary',
     };
 }
 
@@ -231,9 +263,15 @@ function kitchenDate(string $date): string
             </div>
             <div class="kitchen-summary-tile">
                 <span class="kitchen-summary-count">
+                    <?php echo (int)($ownerSummary['rider_pending'] ?? 0); ?>
+                </span>
+                <span class="kitchen-summary-label">Waiting on Rider</span>
+            </div>
+            <div class="kitchen-summary-tile">
+                <span class="kitchen-summary-count">
                     <?php echo (int)($ownerSummary['delivering'] ?? 0); ?>
                 </span>
-                <span class="kitchen-summary-label">Delivering</span>
+                <span class="kitchen-summary-label">Out for Delivery</span>
             </div>
             <div class="kitchen-summary-tile">
                 <span class="kitchen-summary-count">
@@ -282,6 +320,7 @@ function kitchenDate(string $date): string
                             <th scope="col">Branch</th>
                             <th scope="col" class="is-numeric">Pending</th>
                             <th scope="col" class="is-numeric">Preparing</th>
+                            <th scope="col" class="is-numeric">Waiting</th>
                             <th scope="col" class="is-numeric">Delivering</th>
                             <th scope="col" class="is-numeric">Revenue (7d)</th>
                         </tr>
@@ -299,6 +338,7 @@ function kitchenDate(string $date): string
                             </td>
                             <td class="is-numeric"><?php echo (int)$row['pending']; ?></td>
                             <td class="is-numeric"><?php echo (int)$row['preparing']; ?></td>
+                            <td class="is-numeric"><?php echo (int)$row['rider_pending']; ?></td>
                             <td class="is-numeric"><?php echo (int)$row['delivering']; ?></td>
                             <td class="is-numeric"><?php echo kitchenMoney($row['revenue_7d']); ?></td>
                         </tr>
@@ -320,26 +360,38 @@ function kitchenDate(string $date): string
                 Preparing
                 <span class="kitchen-tab-count"><?php echo (int)$kitchenCounts['preparing']; ?></span>
             </button>
-            <button type="button" class="kitchen-tab" data-filter="all" role="tab" aria-selected="false">
-                All Active
+            <button type="button" class="kitchen-tab" data-filter="rider_pending" role="tab" aria-selected="false">
+                Waiting on Rider
+                <span class="kitchen-tab-count"><?php echo (int)$kitchenCounts['rider_pending']; ?></span>
+            </button>
+            <button type="button" class="kitchen-tab" data-filter="delivering" role="tab" aria-selected="false">
+                Out for Delivery
+                <span class="kitchen-tab-count"><?php echo (int)$kitchenCounts['delivering']; ?></span>
+            </button>
+            <button type="button" class="kitchen-tab" data-filter="recent" role="tab" aria-selected="false">
+                Recent
                 <span class="kitchen-tab-count">
-                    <?php echo (int)$kitchenCounts['pending'] + (int)$kitchenCounts['preparing']; ?>
+                    <?php echo (int)$kitchenCounts['delivered_today'] + (int)$kitchenCounts['cancelled_today']; ?>
                 </span>
             </button>
         </div>
 
         <section class="kitchen-orders" id="kitchenOrderList" aria-label="Incoming orders">
 
-            <?php if (empty($kitchenOrders)): ?>
+            <?php if (empty($activeOrders) && empty($completedOrders)): ?>
             <div class="kitchen-empty-state">
-                <p class="kitchen-empty-title">No active orders</p>
+                <p class="kitchen-empty-title">No orders yet</p>
                 <p class="kitchen-empty-text">
                     New orders will appear here as soon as they are placed.
                 </p>
             </div>
-            <?php else: ?>
+            <?php endif; ?>
 
-            <?php foreach ($kitchenOrders as $order):
+            <?php
+            /* ============================================================
+               ACTIVE ORDERS
+               ============================================================ */
+            foreach ($activeOrders as $order):
                 $orderId      = (int)$order['order_id'];
                 $orderStatus  = (string)$order['order_status'];
                 $items        = $order['items'] ?? [];
@@ -360,10 +412,12 @@ function kitchenDate(string $date): string
                     (string)($order['rider_last_name'] ?? '')
                 );
 
-                $canStartPreparing  = ($orderStatus === 'pending');
-                $canCancel          = ($orderStatus === 'pending');
-                $canAssignRider     = in_array($orderStatus, ['pending', 'preparing'], true);
-                $canMarkDelivering  = ($orderStatus === 'preparing' && $assignedRiderId > 0);
+                $canStartPreparing = ($orderStatus === 'pending');
+                $canCancel         = in_array($orderStatus, ['pending', 'preparing'], true);
+                $canAssignRider    = in_array($orderStatus, ['pending', 'preparing'], true)
+                                        && $assignedRiderId === 0;
+                $canReassignRider  = in_array($orderStatus, ['pending', 'preparing', 'rider_pending'], true)
+                                        && $assignedRiderId > 0;
             ?>
             <article class="kitchen-order-card" data-order-id="<?php echo $orderId; ?>"
                 data-order-status="<?php echo htmlspecialchars($orderStatus, ENT_QUOTES, 'UTF-8'); ?>">
@@ -476,6 +530,11 @@ function kitchenDate(string $date): string
                             <span class="kitchen-rider-assigned">
                                 <?php echo htmlspecialchars($assignedRiderName !== '' ? $assignedRiderName : ('#' . $assignedRiderId), ENT_QUOTES, 'UTF-8'); ?>
                             </span>
+                            <?php if ($orderStatus === 'rider_pending'): ?>
+                            <span class="kitchen-rider-awaiting">
+                                <span class="badge badge-warning">Awaiting confirmation</span>
+                            </span>
+                            <?php endif; ?>
                             <?php else: ?>
                             <span class="kitchen-rider-unassigned">Not assigned</span>
                             <?php endif; ?>
@@ -493,8 +552,17 @@ function kitchenDate(string $date): string
 
                     <?php if ($canAssignRider): ?>
                     <button type="button" class="btn btn-outline btn-sm kitchen-action-btn" data-action="assign_rider"
-                        data-order-id="<?php echo $orderId; ?>" data-toggle-modal="rider-modal">
+                        data-order-id="<?php echo $orderId; ?>" data-reassign="0" data-toggle-modal="rider-modal">
                         Assign Rider
+                    </button>
+                    <?php endif; ?>
+
+                    <?php if ($canReassignRider): ?>
+                    <button type="button" class="btn btn-outline btn-sm kitchen-action-btn" data-action="reassign_rider"
+                        data-order-id="<?php echo $orderId; ?>" data-reassign="1"
+                        data-current-rider="<?php echo htmlspecialchars($assignedRiderName !== '' ? $assignedRiderName : ('#' . $assignedRiderId), ENT_QUOTES, 'UTF-8'); ?>"
+                        data-toggle-modal="rider-modal">
+                        Reassign Rider
                     </button>
                     <?php endif; ?>
 
@@ -503,22 +571,127 @@ function kitchenDate(string $date): string
                         data-action="start_preparing" data-order-id="<?php echo $orderId; ?>">
                         Start Preparing
                     </button>
-                    <?php elseif ($canMarkDelivering): ?>
-                    <button type="button" class="btn btn-primary btn-sm kitchen-action-btn"
-                        data-action="mark_delivering" data-order-id="<?php echo $orderId; ?>">
-                        Mark Ready
-                    </button>
-                    <?php elseif ($orderStatus === 'preparing'): ?>
-                    <button type="button" class="btn btn-primary btn-sm kitchen-action-btn" disabled
-                        title="Assign a rider first">
-                        Mark Ready
-                    </button>
                     <?php endif; ?>
                 </footer>
             </article>
             <?php endforeach; ?>
 
-            <?php endif; ?>
+            <?php
+            /* ============================================================
+               RECENT (CLOSED) ORDERS
+               Rendered as read-only cards. Hidden by default; shown
+               when the Recent tab is selected.
+               ============================================================ */
+            foreach ($completedOrders as $order):
+                $orderId      = (int)$order['order_id'];
+                $orderStatus  = (string)$order['order_status'];
+                $items        = $order['items'] ?? [];
+                $itemCount    = (int)($order['item_count'] ?? 0);
+                $subtotal     = (float)($order['subtotal'] ?? 0);
+                $customerName = trim(
+                    (string)($order['customer_first_name'] ?? '') . ' ' .
+                    (string)($order['customer_last_name'] ?? '')
+                );
+                if ($customerName === '') {
+                    $customerName = 'Customer';
+                }
+                $assignedRiderName = trim(
+                    (string)($order['rider_first_name'] ?? '') . ' ' .
+                    (string)($order['rider_last_name'] ?? '')
+                );
+
+                $closedAt = '';
+                if ($orderStatus === 'delivered' && !empty($order['delivered_at'])) {
+                    $closedAt = (string)$order['delivered_at'];
+                } elseif (!empty($order['updated_at'])) {
+                    $closedAt = (string)$order['updated_at'];
+                } elseif (!empty($order['order_date'])) {
+                    $closedAt = (string)$order['order_date'];
+                }
+            ?>
+            <article class="kitchen-order-card kitchen-order-card-completed is-hidden"
+                data-order-id="<?php echo $orderId; ?>"
+                data-order-status="<?php echo htmlspecialchars($orderStatus, ENT_QUOTES, 'UTF-8'); ?>">
+
+                <header class="kitchen-order-header">
+                    <div class="kitchen-order-header-left">
+                        <span class="kitchen-order-id">#<?php echo $orderId; ?></span>
+                        <span class="kitchen-order-date">
+                            <?php echo $closedAt !== '' ? kitchenDate($closedAt) : ''; ?>
+                        </span>
+                    </div>
+                    <div class="kitchen-order-header-right">
+                        <span class="badge <?php echo kitchenStatusBadge($orderStatus); ?>">
+                            <?php echo kitchenStatusLabel($orderStatus); ?>
+                        </span>
+                    </div>
+                </header>
+
+                <div class="kitchen-order-body">
+
+                    <div class="kitchen-order-meta">
+                        <div class="kitchen-meta-block">
+                            <span class="kitchen-meta-label">Customer</span>
+                            <span
+                                class="kitchen-meta-value"><?php echo htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8'); ?></span>
+                        </div>
+                        <div class="kitchen-meta-block">
+                            <span class="kitchen-meta-label">Contact</span>
+                            <span class="kitchen-meta-value">
+                                <?php echo htmlspecialchars((string)($order['customer_contact'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                        </div>
+                        <div class="kitchen-meta-block kitchen-meta-block-wide">
+                            <span class="kitchen-meta-label">Deliver To</span>
+                            <span class="kitchen-meta-value">
+                                <?php echo htmlspecialchars((string)($order['destination_address'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="kitchen-order-items">
+                        <p class="kitchen-items-heading">
+                            <?php echo $itemCount; ?> item<?php echo $itemCount === 1 ? '' : 's'; ?>
+                        </p>
+                        <ul class="kitchen-item-list">
+                            <?php foreach ($items as $item):
+                                $itemQty  = (int)($item['quantity'] ?? 0);
+                                $itemName = (string)($item['product_name'] ?? 'Item');
+                            ?>
+                            <li class="kitchen-item">
+                                <div class="kitchen-item-line">
+                                    <span class="kitchen-item-qty"><?php echo $itemQty; ?>&times;</span>
+                                    <span
+                                        class="kitchen-item-name"><?php echo htmlspecialchars($itemName, ENT_QUOTES, 'UTF-8'); ?></span>
+                                </div>
+                            </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+
+                    <div class="kitchen-order-side">
+                        <div class="kitchen-order-total">
+                            <span class="kitchen-order-total-label">Subtotal</span>
+                            <span class="kitchen-order-total-value">
+                                <?php echo kitchenMoney($subtotal); ?>
+                            </span>
+                        </div>
+
+                        <div class="kitchen-order-rider">
+                            <span class="kitchen-meta-label">Rider</span>
+                            <?php if ($assignedRiderName !== ''): ?>
+                            <span class="kitchen-rider-assigned">
+                                <?php echo htmlspecialchars($assignedRiderName, ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                            <?php else: ?>
+                            <span class="kitchen-rider-unassigned">—</span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+            </article>
+            <?php endforeach; ?>
+
         </section>
 
         <div class="kitchen-modal" id="riderModal" style="display:none;" role="dialog" aria-modal="true"
@@ -533,6 +706,11 @@ function kitchenDate(string $date): string
 
                 <div class="kitchen-modal-body">
                     <input type="hidden" id="riderModalOrderId" value="">
+                    <input type="hidden" id="riderModalAction" value="assign_rider">
+
+                    <p class="kitchen-rider-modal-note" id="riderModalNote" hidden>
+                        Currently assigned: <strong id="riderModalCurrentRider"></strong>
+                    </p>
 
                     <?php if (empty($availableRiders)): ?>
                     <div class="kitchen-empty-state">

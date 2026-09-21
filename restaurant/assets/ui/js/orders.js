@@ -2,23 +2,27 @@
  * FitPal Restaurant Kitchen JavaScript
  *
  * Handles:
- *   - Tab filtering (pending / preparing / all) — client-side hide
- *   - Order action buttons: start_preparing, cancel_order,
- *     mark_delivering
- *   - Assign-rider modal: open, choose a rider, submit
+ *   - Tab filtering (pending / preparing / rider_pending / delivering
+ *     / recent) — client-side hide
+ *   - Order action buttons: start_preparing, cancel_order
+ *   - Assign Rider and Reassign Rider through a single modal
  *   - Generic confirm modal for destructive actions
  *
- * No CSS is defined here. No DOM classes are invented here. The
- * page's already-rendered state is the only source of visuals.
- * Errors are surfaced with window.alert; success reloads the page
- * so the server re-renders counts, tabs, and cards.
+ * No CSS is defined here. No DOM classes are invented here. The page's
+ * already-rendered state is the only source of visuals. Errors are
+ * surfaced with window.alert; success reloads the page so the server
+ * re-renders counts, tabs, and cards.
  *
  * The owner view does not run any interactive path: the page sets
  * data-scope="owner", and initialize() returns early.
  *
  * @package FitPal
- * @version 1.1 — Toast removed. No new CSS classes. Errors use
- *                window.alert. Success reloads.
+ * @version 2.0 — Aligns with the rider_pending handoff:
+ *                  - Adds rider_pending, delivering, and recent to
+ *                    the filter set.
+ *                  - Removes mark_delivering from the dispatch.
+ *                  - Cancel copy notes that assigned orders are out
+ *                    of the kitchen's hands.
  */
 
 (function () {
@@ -41,14 +45,18 @@
         /* ============================================
            DOM REFERENCES
            ============================================ */
-        var tabs           = document.querySelectorAll('.kitchen-tab');
-        var orderList      = document.getElementById('kitchenOrderList');
-        var riderModal     = document.getElementById('riderModal');
-        var riderListEl    = document.getElementById('riderList');
-        var riderOrderIdEl = document.getElementById('riderModalOrderId');
-        var confirmModal   = document.getElementById('confirmModal');
-        var confirmMsgEl   = document.getElementById('confirmModalMessage');
-        var confirmBtn     = document.getElementById('confirmModalBtn');
+        var tabs             = document.querySelectorAll('.kitchen-tab');
+        var orderList        = document.getElementById('kitchenOrderList');
+        var riderModal       = document.getElementById('riderModal');
+        var riderListEl      = document.getElementById('riderList');
+        var riderOrderIdEl   = document.getElementById('riderModalOrderId');
+        var riderActionEl    = document.getElementById('riderModalAction');
+        var riderNoteEl      = document.getElementById('riderModalNote');
+        var riderCurrentEl   = document.getElementById('riderModalCurrentRider');
+        var riderTitleEl     = document.getElementById('riderModalTitle');
+        var confirmModal     = document.getElementById('confirmModal');
+        var confirmMsgEl     = document.getElementById('confirmModalMessage');
+        var confirmBtn       = document.getElementById('confirmModalBtn');
 
         var pendingAction = null; // { orderId, action }
         var isSubmitting  = false;
@@ -56,6 +64,8 @@
         /* ============================================
            TAB FILTERING
            ============================================ */
+        var CLOSED_STATUSES = ['delivered', 'cancelled', 'refunded'];
+
         function applyFilter(filter) {
             if (!orderList) return;
 
@@ -64,8 +74,8 @@
                 var status = card.dataset.orderStatus || '';
                 var show;
 
-                if (filter === 'all') {
-                    show = (status === 'pending' || status === 'preparing');
+                if (filter === 'recent') {
+                    show = CLOSED_STATUSES.indexOf(status) !== -1;
                 } else {
                     show = (status === filter);
                 }
@@ -141,8 +151,10 @@
                 var orderId = parseInt(btn.dataset.orderId, 10) || 0;
                 if (orderId <= 0) return;
 
-                if (action === 'assign_rider') {
-                    openRiderModal(orderId);
+                if (action === 'assign_rider' || action === 'reassign_rider') {
+                    var isReassign   = btn.dataset.reassign === '1';
+                    var currentRider = btn.dataset.currentRider || '';
+                    openRiderModal(orderId, isReassign ? 'reassign_rider' : 'assign_rider', currentRider);
                     return;
                 }
 
@@ -150,18 +162,13 @@
                     askConfirm(
                         orderId,
                         'cancel_order',
-                        'Cancel this order? The customer will be notified and the order cannot be restored.'
+                        'Cancel this order? The customer will be notified. Once a rider is assigned, the kitchen can no longer cancel.'
                     );
                     return;
                 }
 
                 if (action === 'start_preparing') {
                     submitAction(orderId, 'start_preparing', {});
-                    return;
-                }
-
-                if (action === 'mark_delivering') {
-                    submitAction(orderId, 'mark_delivering', {});
                     return;
                 }
             });
@@ -190,10 +197,30 @@
         }
 
         /* ============================================
-           RIDER MODAL
+           RIDER MODAL — assign and reassign share one modal
            ============================================ */
-        function openRiderModal(orderId) {
+        function openRiderModal(orderId, actionName, currentRiderName) {
             if (riderOrderIdEl) riderOrderIdEl.value = String(orderId);
+            if (riderActionEl)  riderActionEl.value  = actionName;
+
+            var isReassign = (actionName === 'reassign_rider');
+
+            if (riderTitleEl) {
+                riderTitleEl.textContent = isReassign
+                    ? 'Reassign Rider'
+                    : 'Assign a Rider';
+            }
+
+            if (riderNoteEl && riderCurrentEl) {
+                if (isReassign && currentRiderName !== '') {
+                    riderCurrentEl.textContent = currentRiderName;
+                    riderNoteEl.hidden = false;
+                } else {
+                    riderCurrentEl.textContent = '';
+                    riderNoteEl.hidden = true;
+                }
+            }
+
             openModal(riderModal);
         }
 
@@ -207,13 +234,16 @@
                     riderOrderIdEl ? riderOrderIdEl.value : '0',
                     10
                 ) || 0;
+                var actionName = riderActionEl
+                    ? riderActionEl.value
+                    : 'assign_rider';
 
                 if (riderId <= 0 || orderId <= 0) return;
 
                 option.disabled = true;
                 closeModal(riderModal);
 
-                submitAction(orderId, 'assign_rider', { rider_id: riderId });
+                submitAction(orderId, actionName, { rider_id: riderId });
             });
         }
 

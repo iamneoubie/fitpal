@@ -13,12 +13,28 @@
  *   - Status transitions and rider assignment live here as write
  *     functions. The handler that calls them owns all validation.
  *
+ * Assignment model
+ * ----------------
+ * Assigning a rider does NOT immediately move the order to
+ * 'delivering'. The kitchen sets the rider on the order and moves it
+ * to 'rider_pending'. The rider confirms in their own portal, at
+ * which point the order becomes 'delivering' and the rider's
+ * is_available flips to 0. Declining returns the order to
+ * 'preparing' with no rider attached.
+ *
  * @package FitPal
- * @version 1.2 — getAvailableRidersForBranch() excludes riders who
- *                already have an active delivery. assignRiderToOrder()
- *                no longer rolls back on a no-op UPDATE, so rider
- *                availability is always updated when the order is
- *                eligible.
+ * @version 2.0 — Introduces the rider_pending handoff:
+ *                  - getBranchKitchenOrders accepts any status list.
+ *                  - getBranchCompletedOrders reads the closed bucket.
+ *                  - assignRiderToOrder sets rider_pending and leaves
+ *                    the rider available.
+ *                  - reassignRiderToOrder applies the same model.
+ *                  - releaseRiderFromOrder is the only place that
+ *                    flips is_available back to 1.
+ *                  - setOrderDelivering is removed; the rider accept
+ *                    path owns that transition.
+ *                  - riderHasActiveDelivery treats rider_pending as
+ *                    busy.
  */
 
 declare(strict_types=1);
@@ -29,11 +45,6 @@ declare(strict_types=1);
 
 /**
  * Fetch the kitchen list for a single branch.
- *
- * One row per order, filtered to the given statuses. Each row carries
- * the customer name, destination address, item count, computed
- * subtotal, and the assigned rider (if any). The caller is expected
- * to call getKitchenOrderItems() per order for the item detail.
  *
  * @param PDO           $db
  * @param int           $branchId
@@ -81,9 +92,64 @@ function getBranchKitchenOrders(PDO $db, int $branchId, array $statuses = ['pend
 }
 
 /**
- * Fetch the items of a single order, scoped to a branch, with their
- * customizations. The branch scoping prevents an order from leaking
- * across branches when a multi-branch order exists.
+ * Fetch closed orders for a branch — delivered, cancelled, or
+ * refunded. Limited to orders whose closing timestamp is recent,
+ * so the page stays fast even on a large database.
+ *
+ * Ordering prioritises delivered_at for delivered rows and falls
+ * back to order_date for rows that were never delivered.
+ *
+ * @param PDO $db
+ * @param int $branchId
+ * @param int $limit
+ * @return array<int, array<string, mixed>>
+ */
+function getBranchCompletedOrders(PDO $db, int $branchId, int $limit = 30): array
+{
+    if ($branchId <= 0) {
+        return [];
+    }
+
+    $stmt = $db->prepare(
+        "SELECT
+            o.order_id,
+            o.order_status,
+            o.payment_method,
+            o.destination_address,
+            o.order_date,
+            o.delivered_at,
+            o.updated_at,
+            o.delivery_rider_id,
+            c.customer_id,
+            c.first_name  AS customer_first_name,
+            c.last_name   AS customer_last_name,
+            c.contact_number AS customer_contact,
+            dr.first_name AS rider_first_name,
+            dr.last_name  AS rider_last_name,
+            COALESCE(SUM(qi.queue_quantity), 0) AS item_count,
+            COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0) AS subtotal
+         FROM orders o
+         JOIN customer c ON o.customer_id = c.customer_id
+         LEFT JOIN delivery_rider dr ON o.delivery_rider_id = dr.delivery_rider_id
+         JOIN queue_item qi ON o.order_id = qi.order_id
+         WHERE qi.branch_id = :branch_id
+           AND o.order_status IN ('delivered','cancelled','refunded')
+         GROUP BY o.order_id
+         ORDER BY
+            CASE
+                WHEN o.order_status = 'delivered' THEN COALESCE(o.delivered_at, o.order_date)
+                ELSE COALESCE(o.updated_at, o.order_date)
+            END DESC
+         LIMIT :limit"
+    );
+    $stmt->bindValue(':branch_id', $branchId, PDO::PARAM_INT);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Fetch the items of a single order, scoped to a branch.
  *
  * @param PDO $db
  * @param int $orderId
@@ -162,29 +228,21 @@ function getKitchenOrderItems(PDO $db, int $orderId, int $branchId): array
 /**
  * Fetch verified, available riders for a given branch.
  *
- * A rider is eligible for assignment only when ALL of the following
- * hold:
- *
+ * A rider is eligible only when ALL of the following hold:
  *   1. delivery_rider.is_active = 1
  *   2. delivery_rider_profile.verification_status = 'verified'
  *   3. delivery_rider_profile.is_available = 1
- *   4. The rider is NOT attached to any order whose status is
- *      'preparing' or 'delivering'. A rider can remain flagged
- *      is_available = 1 in the profile while mid-delivery if the
- *      previous assignment never flipped it back. This filter
- *      makes the restaurant view authoritative regardless of that
- *      stale flag.
- *
- * Riders are ordered so that riders whose default address city
- * matches the branch's city appear first, then by rating, then by
- * fewest completed deliveries. That ordering is presentation only —
- * it does not widen the eligibility set.
+ *   4. The rider is NOT already attached to another order that is
+ *      busy — meaning an order in 'preparing', 'rider_pending', or
+ *      'delivering'. The current order under edit is excluded so a
+ *      reassignment does not filter out the rider already on it.
  *
  * @param PDO $db
  * @param int $branchId
+ * @param int $excludeOrderId  Order whose current rider should be ignored.
  * @return array<int, array<string, mixed>>
  */
-function getAvailableRidersForBranch(PDO $db, int $branchId): array
+function getAvailableRidersForBranch(PDO $db, int $branchId, int $excludeOrderId = 0): array
 {
     if ($branchId <= 0) {
         return [];
@@ -218,12 +276,21 @@ function getAvailableRidersForBranch(PDO $db, int $branchId): array
          JOIN delivery_rider_profile drp ON dr.delivery_rider_id = drp.delivery_rider_id
          WHERE dr.is_active = 1
            AND drp.verification_status = 'verified'
-           AND drp.is_available = 1
+           AND (
+                drp.is_available = 1
+                OR dr.delivery_rider_id IN (
+                    SELECT o3.delivery_rider_id
+                      FROM orders o3
+                     WHERE o3.order_id = :exclude_order_id
+                       AND o3.delivery_rider_id IS NOT NULL
+                )
+           )
            AND NOT EXISTS (
                 SELECT 1
                   FROM orders o2
                  WHERE o2.delivery_rider_id = dr.delivery_rider_id
-                   AND o2.order_status IN ('preparing','delivering')
+                   AND o2.order_status IN ('preparing','rider_pending','delivering')
+                   AND o2.order_id <> :exclude_order_id_2
            )
          ORDER BY
             CASE WHEN (
@@ -237,7 +304,11 @@ function getAvailableRidersForBranch(PDO $db, int $branchId): array
             drp.total_deliveries ASC
          LIMIT 30"
     );
-    $stmt->execute([':branch_city' => $branchCity]);
+    $stmt->execute([
+        ':branch_city'        => $branchCity,
+        ':exclude_order_id'   => $excludeOrderId,
+        ':exclude_order_id_2' => $excludeOrderId,
+    ]);
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
@@ -246,15 +317,24 @@ function getAvailableRidersForBranch(PDO $db, int $branchId): array
  *
  * @param PDO $db
  * @param int $branchId
- * @return array{pending:int, preparing:int, delivering:int, delivered_today:int}
+ * @return array{
+ *     pending:int,
+ *     preparing:int,
+ *     rider_pending:int,
+ *     delivering:int,
+ *     delivered_today:int,
+ *     cancelled_today:int
+ * }
  */
 function getKitchenOrderCounts(PDO $db, int $branchId): array
 {
     $empty = [
         'pending'         => 0,
         'preparing'       => 0,
+        'rider_pending'   => 0,
         'delivering'      => 0,
         'delivered_today' => 0,
+        'cancelled_today' => 0,
     ];
 
     if ($branchId <= 0) {
@@ -263,15 +343,21 @@ function getKitchenOrderCounts(PDO $db, int $branchId): array
 
     $stmt = $db->prepare(
         "SELECT
-            SUM(CASE WHEN o.order_status = 'pending'    THEN 1 ELSE 0 END) AS pending,
-            SUM(CASE WHEN o.order_status = 'preparing'  THEN 1 ELSE 0 END) AS preparing,
-            SUM(CASE WHEN o.order_status = 'delivering' THEN 1 ELSE 0 END) AS delivering,
+            SUM(CASE WHEN o.order_status = 'pending'       THEN 1 ELSE 0 END) AS pending,
+            SUM(CASE WHEN o.order_status = 'preparing'     THEN 1 ELSE 0 END) AS preparing,
+            SUM(CASE WHEN o.order_status = 'rider_pending' THEN 1 ELSE 0 END) AS rider_pending,
+            SUM(CASE WHEN o.order_status = 'delivering'    THEN 1 ELSE 0 END) AS delivering,
             SUM(CASE WHEN o.order_status = 'delivered'
-                      AND DATE(o.delivered_at) = CURDATE() THEN 1 ELSE 0 END) AS delivered_today
+                      AND DATE(o.delivered_at) = CURDATE() THEN 1 ELSE 0 END) AS delivered_today,
+            SUM(CASE WHEN o.order_status = 'cancelled'
+                      AND DATE(o.updated_at) = CURDATE() THEN 1 ELSE 0 END) AS cancelled_today
          FROM orders o
          JOIN queue_item qi ON o.order_id = qi.order_id
          WHERE qi.branch_id = :branch_id
-           AND o.order_status IN ('pending','preparing','delivering','delivered')"
+           AND o.order_status IN (
+                'pending','preparing','rider_pending',
+                'delivering','delivered','cancelled'
+           )"
     );
     $stmt->execute([':branch_id' => $branchId]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -281,19 +367,17 @@ function getKitchenOrderCounts(PDO $db, int $branchId): array
     }
 
     return [
-        'pending'         => (int)($row['pending'] ?? 0),
-        'preparing'       => (int)($row['preparing'] ?? 0),
-        'delivering'      => (int)($row['delivering'] ?? 0),
+        'pending'         => (int)($row['pending']         ?? 0),
+        'preparing'       => (int)($row['preparing']       ?? 0),
+        'rider_pending'   => (int)($row['rider_pending']   ?? 0),
+        'delivering'      => (int)($row['delivering']      ?? 0),
         'delivered_today' => (int)($row['delivered_today'] ?? 0),
+        'cancelled_today' => (int)($row['cancelled_today'] ?? 0),
     ];
 }
 
 /**
  * Fetch the ownership and current state of an order for a branch.
- *
- * Returns false if the order does not exist or contains no items in
- * the given branch. Used by the kitchen handler before any write, so
- * a branch account cannot mutate another branch's order.
  *
  * @param PDO $db
  * @param int $orderId
@@ -339,15 +423,19 @@ function getKitchenOrderOwnership(PDO $db, int $orderId, int $branchId): array|f
 }
 
 /**
- * Return true if the given rider is currently attached to an order
- * whose status is 'preparing' or 'delivering'. Used by the handler
- * as a final eligibility check immediately before assignment.
+ * Return true if the given rider is attached to an active delivery,
+ * excluding the order being reassigned.
+ *
+ * rider_pending counts as busy: the rider has an outstanding request
+ * they have not yet accepted or declined, and should not be offered
+ * a second one.
  *
  * @param PDO $db
  * @param int $riderId
+ * @param int $excludeOrderId
  * @return bool
  */
-function riderHasActiveDelivery(PDO $db, int $riderId): bool
+function riderHasActiveDelivery(PDO $db, int $riderId, int $excludeOrderId = 0): bool
 {
     if ($riderId <= 0) {
         return false;
@@ -357,25 +445,30 @@ function riderHasActiveDelivery(PDO $db, int $riderId): bool
         "SELECT 1
            FROM orders
           WHERE delivery_rider_id = :rider_id
-            AND order_status IN ('preparing','delivering')
+            AND order_status IN ('preparing','rider_pending','delivering')
+            AND order_id <> :exclude_order_id
           LIMIT 1"
     );
-    $stmt->execute([':rider_id' => $riderId]);
+    $stmt->execute([
+        ':rider_id'         => $riderId,
+        ':exclude_order_id' => $excludeOrderId,
+    ]);
     return $stmt->fetchColumn() !== false;
 }
 
 /**
- * Summary for the owner kitchen view. Aggregates across every branch
- * of a restaurant: order counts per status and revenue windows.
+ * Summary for the owner kitchen view.
  *
- * Revenue is derived from queue_item (queue_quantity × COALESCE(final_price, unit_price)),
- * matching the totals policy in the schema.
+ * Revenue is recognised only on delivered orders. Orders that are
+ * still in flight (pending through delivering) are counted in the
+ * live buckets, not in revenue.
  *
  * @param PDO $db
  * @param int $restaurantId
  * @return array{
  *     pending:int,
  *     preparing:int,
+ *     rider_pending:int,
  *     delivering:int,
  *     delivered_today:int,
  *     revenue_today:float,
@@ -388,6 +481,7 @@ function getOwnerKitchenSummary(PDO $db, int $restaurantId): array
     $empty = [
         'pending'         => 0,
         'preparing'       => 0,
+        'rider_pending'   => 0,
         'delivering'      => 0,
         'delivered_today' => 0,
         'revenue_today'   => 0.0,
@@ -401,9 +495,10 @@ function getOwnerKitchenSummary(PDO $db, int $restaurantId): array
 
     $stmt = $db->prepare(
         "SELECT
-            SUM(CASE WHEN o.order_status = 'pending'    THEN 1 ELSE 0 END) AS pending,
-            SUM(CASE WHEN o.order_status = 'preparing'  THEN 1 ELSE 0 END) AS preparing,
-            SUM(CASE WHEN o.order_status = 'delivering' THEN 1 ELSE 0 END) AS delivering,
+            SUM(CASE WHEN o.order_status = 'pending'       THEN 1 ELSE 0 END) AS pending,
+            SUM(CASE WHEN o.order_status = 'preparing'     THEN 1 ELSE 0 END) AS preparing,
+            SUM(CASE WHEN o.order_status = 'rider_pending' THEN 1 ELSE 0 END) AS rider_pending,
+            SUM(CASE WHEN o.order_status = 'delivering'    THEN 1 ELSE 0 END) AS delivering,
             SUM(CASE WHEN o.order_status = 'delivered'
                       AND DATE(o.delivered_at) = CURDATE() THEN 1 ELSE 0 END) AS delivered_today,
 
@@ -438,18 +533,22 @@ function getOwnerKitchenSummary(PDO $db, int $restaurantId): array
     }
 
     return [
-        'pending'         => (int)($row['pending'] ?? 0),
-        'preparing'       => (int)($row['preparing'] ?? 0),
-        'delivering'      => (int)($row['delivering'] ?? 0),
+        'pending'         => (int)($row['pending']         ?? 0),
+        'preparing'       => (int)($row['preparing']       ?? 0),
+        'rider_pending'   => (int)($row['rider_pending']   ?? 0),
+        'delivering'      => (int)($row['delivering']      ?? 0),
         'delivered_today' => (int)($row['delivered_today'] ?? 0),
         'revenue_today'   => (float)($row['revenue_today'] ?? 0),
-        'revenue_7d'      => (float)($row['revenue_7d'] ?? 0),
-        'revenue_30d'     => (float)($row['revenue_30d'] ?? 0),
+        'revenue_7d'      => (float)($row['revenue_7d']    ?? 0),
+        'revenue_30d'     => (float)($row['revenue_30d']   ?? 0),
     ];
 }
 
 /**
  * Per-branch breakdown for the owner kitchen view.
+ *
+ * Revenue in this breakdown also uses delivered-only recognition so
+ * it matches the summary card above and the branch dashboard.
  *
  * @param PDO $db
  * @param int $restaurantId
@@ -468,9 +567,10 @@ function getOwnerBranchBreakdown(PDO $db, int $restaurantId): array
             rb.branch_code,
             rb.city,
             rb.is_active,
-            COALESCE(SUM(CASE WHEN o.order_status = 'pending'   THEN 1 ELSE 0 END), 0) AS pending,
-            COALESCE(SUM(CASE WHEN o.order_status = 'preparing' THEN 1 ELSE 0 END), 0) AS preparing,
-            COALESCE(SUM(CASE WHEN o.order_status = 'delivering' THEN 1 ELSE 0 END), 0) AS delivering,
+            COALESCE(SUM(CASE WHEN o.order_status = 'pending'       THEN 1 ELSE 0 END), 0) AS pending,
+            COALESCE(SUM(CASE WHEN o.order_status = 'preparing'     THEN 1 ELSE 0 END), 0) AS preparing,
+            COALESCE(SUM(CASE WHEN o.order_status = 'rider_pending' THEN 1 ELSE 0 END), 0) AS rider_pending,
+            COALESCE(SUM(CASE WHEN o.order_status = 'delivering'    THEN 1 ELSE 0 END), 0) AS delivering,
             COALESCE(SUM(CASE
                 WHEN o.order_status = 'delivered'
                  AND o.delivered_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
@@ -489,20 +589,10 @@ function getOwnerBranchBreakdown(PDO $db, int $restaurantId): array
 
 /* =============================================================
  * WRITES
- *
- * Every write is a single UPDATE. State-transition guards live in
- * the WHERE clause so the update is a no-op if the current status
- * does not match what the handler expected. The handler has already
- * verified ownership and state; the WHERE clause is the last line
- * of defense against a race.
  * ============================================================= */
 
 /**
  * Move an order from 'pending' to 'preparing'.
- *
- * Returns true if a row was updated. Returns false if the order was
- * not in 'pending' at the time of the update, which the handler
- * should surface as "already processed."
  *
  * @param PDO $db
  * @param int $orderId
@@ -530,15 +620,13 @@ function setOrderPreparing(PDO $db, int $orderId, int $branchId): bool
 /**
  * Cancel an order on behalf of the restaurant.
  *
- * Only allowed while the order is 'pending'. Once a restaurant has
- * started preparing, cancellation is no longer offered by the
- * kitchen — the customer's cancel flow and the admin flow own that
- * case.
+ * Allowed while the order is still pending or being prepared. Once a
+ * rider has been requested the order is out of the kitchen's hands.
  *
  * @param PDO $db
  * @param int $orderId
  * @param int $branchId
- * @return bool  True if a row was updated.
+ * @return bool
  */
 function setOrderCancelledByRestaurant(PDO $db, int $orderId, int $branchId): bool
 {
@@ -550,7 +638,7 @@ function setOrderCancelledByRestaurant(PDO $db, int $orderId, int $branchId): bo
                 o.updated_at   = NOW()
           WHERE o.order_id = :order_id
             AND qi.branch_id = :branch_id
-            AND o.order_status = 'pending'"
+            AND o.order_status IN ('pending','preparing')"
     );
     $stmt->execute([
         ':order_id'  => $orderId,
@@ -560,25 +648,21 @@ function setOrderCancelledByRestaurant(PDO $db, int $orderId, int $branchId): bo
 }
 
 /**
- * Assign a rider to an order.
+ * Attach a rider to an order and move it to 'rider_pending'.
  *
- * Does not change the order status. The kitchen assigns a rider
- * first, then presses "Mark Ready" to move the order to
- * 'delivering'.
+ * The rider's is_available flag is left untouched. They are only
+ * marked unavailable once they accept the request in their own
+ * portal, so the kitchen cannot accidentally tie up a rider who has
+ * not agreed to the job.
  *
- * Read the current order state first, then update, then flip the
- * rider to unavailable. The read-first pattern is what avoids the
- * previous bug: MySQL's rowCount() returns 0 for a no-op UPDATE
- * (assigning the same rider twice), and the previous code treated
- * that as a failure and rolled back the entire transaction,
- * including the rider-availability update. This version only
- * returns false when the order is genuinely not assignable.
+ * The order's delivery_rider_id must currently be NULL and the order
+ * must be in 'pending' or 'preparing'.
  *
  * @param PDO $db
  * @param int $orderId
  * @param int $branchId
  * @param int $riderId
- * @return bool  True if the assignment ran, false otherwise.
+ * @return bool
  */
 function assignRiderToOrder(PDO $db, int $orderId, int $branchId, int $riderId): bool
 {
@@ -601,14 +685,21 @@ function assignRiderToOrder(PDO $db, int $orderId, int $branchId, int $riderId):
             return false;
         }
 
+        if ($current['delivery_rider_id'] !== null) {
+            $db->rollBack();
+            return false;
+        }
+
         $orderStmt = $db->prepare(
             "UPDATE orders o
              JOIN queue_item qi ON qi.order_id = o.order_id
                 SET o.delivery_rider_id = :rider_id,
+                    o.order_status      = 'rider_pending',
                     o.updated_at        = NOW()
               WHERE o.order_id = :order_id
                 AND qi.branch_id = :branch_id
-                AND o.order_status IN ('pending','preparing')"
+                AND o.order_status IN ('pending','preparing')
+                AND o.delivery_rider_id IS NULL"
         );
         $orderStmt->execute([
             ':rider_id'  => $riderId,
@@ -616,13 +707,10 @@ function assignRiderToOrder(PDO $db, int $orderId, int $branchId, int $riderId):
             ':branch_id' => $branchId,
         ]);
 
-        $riderStmt = $db->prepare(
-            "UPDATE delivery_rider_profile
-                SET is_available = 0
-              WHERE delivery_rider_id = :rider_id
-                AND is_available = 1"
-        );
-        $riderStmt->execute([':rider_id' => $riderId]);
+        if ($orderStmt->rowCount() === 0) {
+            $db->rollBack();
+            return false;
+        }
 
         $db->commit();
         return true;
@@ -636,29 +724,126 @@ function assignRiderToOrder(PDO $db, int $orderId, int $branchId, int $riderId):
 }
 
 /**
- * Move an order from 'preparing' to 'delivering'. Requires that a
- * rider has already been assigned.
+ * Reassign an order from its current rider to a new rider.
+ *
+ * The order must currently be attached to a rider and in
+ * 'pending', 'preparing', or 'rider_pending'. Releasing the previous
+ * rider restores their availability only if they are not attached to
+ * any other active order. The new rider stays available until they
+ * accept.
  *
  * @param PDO $db
  * @param int $orderId
  * @param int $branchId
- * @return bool  True if a row was updated.
+ * @param int $newRiderId
+ * @return array{previous_rider_id:int, new_rider_id:int}|false
+ *         Returns false if the order is not in a reassignable state
+ *         or already has the same rider.
  */
-function setOrderDelivering(PDO $db, int $orderId, int $branchId): bool
+function reassignRiderToOrder(PDO $db, int $orderId, int $branchId, int $newRiderId): array|false
 {
+    if ($orderId <= 0 || $branchId <= 0 || $newRiderId <= 0) {
+        return false;
+    }
+
+    $db->beginTransaction();
+
+    try {
+        $current = getKitchenOrderOwnership($db, $orderId, $branchId);
+
+        if ($current === false) {
+            $db->rollBack();
+            return false;
+        }
+
+        if (!in_array($current['order_status'], ['pending', 'preparing', 'rider_pending'], true)) {
+            $db->rollBack();
+            return false;
+        }
+
+        $previousRiderId = $current['delivery_rider_id'];
+
+        if ($previousRiderId === null) {
+            $db->rollBack();
+            return false;
+        }
+
+        if ($previousRiderId === $newRiderId) {
+            $db->rollBack();
+            return false;
+        }
+
+        $orderStmt = $db->prepare(
+            "UPDATE orders o
+             JOIN queue_item qi ON qi.order_id = o.order_id
+                SET o.delivery_rider_id = :new_rider_id,
+                    o.order_status      = 'rider_pending',
+                    o.updated_at        = NOW()
+              WHERE o.order_id = :order_id
+                AND qi.branch_id = :branch_id
+                AND o.order_status IN ('pending','preparing','rider_pending')
+                AND o.delivery_rider_id = :previous_rider_id"
+        );
+        $orderStmt->execute([
+            ':new_rider_id'      => $newRiderId,
+            ':order_id'          => $orderId,
+            ':branch_id'         => $branchId,
+            ':previous_rider_id' => $previousRiderId,
+        ]);
+
+        if ($orderStmt->rowCount() === 0) {
+            $db->rollBack();
+            return false;
+        }
+
+        releaseRiderFromOrder($db, $previousRiderId, $orderId);
+
+        $db->commit();
+
+        return [
+            'previous_rider_id' => $previousRiderId,
+            'new_rider_id'      => $newRiderId,
+        ];
+
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
+    }
+}
+
+/**
+ * Release a rider from an assignment, flipping is_available back to
+ * 1 only when the rider has no other active delivery.
+ *
+ * The excludeOrderId is the order the rider is being released from;
+ * it is excluded from the active-delivery check so the rider is not
+ * counted as busy on the order they are being removed from.
+ *
+ * Designed to be called inside an open transaction. It does not open
+ * or commit one of its own.
+ *
+ * @param PDO $db
+ * @param int $riderId
+ * @param int $excludeOrderId
+ * @return void
+ */
+function releaseRiderFromOrder(PDO $db, int $riderId, int $excludeOrderId = 0): void
+{
+    if ($riderId <= 0) {
+        return;
+    }
+
+    if (riderHasActiveDelivery($db, $riderId, $excludeOrderId)) {
+        return;
+    }
+
     $stmt = $db->prepare(
-        "UPDATE orders o
-         JOIN queue_item qi ON qi.order_id = o.order_id
-            SET o.order_status = 'delivering',
-                o.updated_at   = NOW()
-          WHERE o.order_id = :order_id
-            AND qi.branch_id = :branch_id
-            AND o.order_status = 'preparing'
-            AND o.delivery_rider_id IS NOT NULL"
+        "UPDATE delivery_rider_profile
+            SET is_available = 1
+          WHERE delivery_rider_id = :rider_id
+            AND is_available = 0"
     );
-    $stmt->execute([
-        ':order_id'  => $orderId,
-        ':branch_id' => $branchId,
-    ]);
-    return $stmt->rowCount() > 0;
+    $stmt->execute([':rider_id' => $riderId]);
 }

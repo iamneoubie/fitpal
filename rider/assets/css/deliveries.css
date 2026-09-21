@@ -2,10 +2,83 @@
  * FitPal Rider Deliveries Page Styles
  *
  * @package FitPal
- * @version 1.1 — Adds .btn-disabled so pending assignment cards can
- *                show a non-interactive placeholder when the rider is
- *                offline or unverified.
+ * @version 3.4 — .btn-neutral and .btn-danger are now global on this
+ *                page instead of scoped to .rider-deliveries-page.
+ *                This makes them reach the confirm modal, which
+ *                lives outside the page wrapper. Cancel renders
+ *                black-on-white as the button rules require.
+ *                Icon file paths were already corrected in the
+ *                page markup; no CSS change was needed for them.
+ *                Every textarea rule still sets resize: none.
  */
+
+/* ============================================
+   BUTTON VARIANTS
+   Neutral (black / white) and Danger (red / white).
+   Not scoped to the page wrapper so they reach the modal too.
+   ============================================ */
+
+.btn-neutral {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    font-family: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    border: 2px solid #1a1a1a;
+    background: #1a1a1a;
+    color: #ffffff;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    box-sizing: border-box;
+}
+
+.btn-neutral:hover,
+.btn-neutral:focus {
+    background: #000000;
+    border-color: #000000;
+    color: #ffffff;
+}
+
+.btn-neutral:focus-visible {
+    outline: 2px solid #1a1a1a;
+    outline-offset: 2px;
+}
+
+.btn-danger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    font-family: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    border: 2px solid var(--danger);
+    background: var(--danger);
+    color: #ffffff;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    box-sizing: border-box;
+}
+
+.btn-danger:hover,
+.btn-danger:focus {
+    background: #b91c1c;
+    border-color: #b91c1c;
+    color: #ffffff;
+}
+
+.btn-danger:focus-visible {
+    outline: 2px solid var(--danger);
+    outline-offset: 2px;
+}
 
 /* ============================================
    CONTENT WRAPPER
@@ -108,7 +181,7 @@
 }
 
 /* ============================================
-   ACTIVE DELIVERIES
+   ACTIVE / ASSIGNED DELIVERIES
    ============================================ */
 
 .rider-active-deliveries {
@@ -288,20 +361,23 @@
     flex-shrink: 0;
 }
 
-.rider-active-delivery-actions .btn-outline .btn-icon {
-    filter: brightness(0) saturate(100%) invert(30%) sepia(8%) saturate(800%) hue-rotate(50deg) brightness(95%) contrast(95%);
+/* Icons on neutral (black) buttons are inverted to white. */
+.rider-active-delivery-actions .btn-neutral .btn-icon {
+    filter: brightness(0) invert(1);
 }
 
+/* Icons on danger (red) buttons are inverted to white. */
+.rider-active-delivery-actions .btn-danger .btn-icon {
+    filter: brightness(0) invert(1);
+}
+
+/* Icons on primary (green) buttons are inverted to white. */
 .rider-active-delivery-actions .btn-primary .btn-icon {
     filter: brightness(0) invert(1);
 }
 
 /* --------------------------------------------------------------
    Disabled action slot
-   Replaces the Accept button on a pending assignment card when
-   the rider is offline or unverified. Sized and aligned to match
-   the live button so the card does not reflow when eligibility
-   changes between page loads.
    -------------------------------------------------------------- */
 .rider-active-delivery-actions .btn-disabled {
     display: inline-flex;
@@ -463,6 +539,30 @@
     margin: 0 0 12px 0;
     max-width: 340px;
     line-height: 1.5;
+}
+
+/* ============================================
+   TEXTAREA
+   ============================================ */
+
+.rider-deliveries-page textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius-base);
+    font-family: inherit;
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+    color: var(--text);
+    background: var(--white);
+    box-sizing: border-box;
+    resize: none;
+}
+
+.rider-deliveries-page textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
 }
 
 /* ============================================
@@ -672,6 +772,182 @@
 }
 
 /* ============================================
+   CONFIRM MODAL
+   Icon-led card. Three icons are stacked in the icon circle; CSS
+   shows only the one matching the modal's data-icon. The confirm
+   button's colour follows the modal's data-variant.
+   ============================================ */
+
+.rider-confirm-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.rider-confirm-modal.is-open {
+    opacity: 1;
+}
+
+.rider-confirm-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(5, 10, 4, 0.6);
+    cursor: pointer;
+}
+
+.rider-confirm-content {
+    position: relative;
+    background: var(--white);
+    border-radius: var(--radius-xl);
+    padding: 32px 24px 24px;
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    box-shadow: var(--shadow-xl);
+    transform: scale(0.95) translateY(-10px);
+    opacity: 0;
+    transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s ease;
+    box-sizing: border-box;
+}
+
+.rider-confirm-modal.is-open .rider-confirm-content {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+}
+
+/* Icon circle: 64 px, tinted by variant. */
+.rider-confirm-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 0 16px 0;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s ease;
+}
+
+.rider-confirm-modal[data-variant="primary"] .rider-confirm-icon {
+    background: rgba(89, 193, 74, 0.12);
+}
+
+.rider-confirm-modal[data-variant="danger"] .rider-confirm-icon {
+    background: rgba(220, 53, 69, 0.12);
+}
+
+/* Only one of the three icons is visible at a time. */
+.rider-confirm-icon img {
+    width: 28px;
+    height: 28px;
+    display: none;
+}
+
+.rider-confirm-modal[data-icon="accept"] .rider-confirm-icon-accept {
+    display: block;
+    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.rider-confirm-modal[data-icon="decline"] .rider-confirm-icon-decline {
+    display: block;
+    filter: brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(600%) hue-rotate(330deg) brightness(90%) contrast(85%);
+}
+
+.rider-confirm-modal[data-icon="delivered"] .rider-confirm-icon-delivered {
+    display: block;
+    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.rider-confirm-title {
+    margin: 0 0 8px 0;
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-bold);
+    color: var(--text);
+    line-height: 1.3;
+    text-align: center;
+}
+
+.rider-confirm-text {
+    margin: 0 0 24px 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    line-height: 1.6;
+    text-align: center;
+    max-width: 340px;
+}
+
+.rider-confirm-footer {
+    display: flex;
+    gap: 12px;
+    width: 100%;
+}
+
+.rider-confirm-footer .btn,
+.rider-confirm-footer .btn-neutral,
+.rider-confirm-footer .rider-confirm-btn {
+    flex: 1;
+    min-width: 0;
+    justify-content: center;
+    min-height: 46px;
+    padding: 12px 20px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    font-family: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    box-sizing: border-box;
+    border: 2px solid transparent;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+/* Confirm button — stable class, colour from the modal's variant. */
+.rider-confirm-modal[data-variant="primary"] .rider-confirm-btn {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #ffffff;
+}
+
+.rider-confirm-modal[data-variant="primary"] .rider-confirm-btn:hover,
+.rider-confirm-modal[data-variant="primary"] .rider-confirm-btn:focus {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+    color: #ffffff;
+}
+
+.rider-confirm-modal[data-variant="danger"] .rider-confirm-btn {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #ffffff;
+}
+
+.rider-confirm-modal[data-variant="danger"] .rider-confirm-btn:hover,
+.rider-confirm-modal[data-variant="danger"] .rider-confirm-btn:focus {
+    background: #b91c1c;
+    border-color: #b91c1c;
+    color: #ffffff;
+}
+
+.rider-confirm-modal[data-variant="primary"] .rider-confirm-btn:focus-visible,
+.rider-confirm-modal[data-variant="danger"] .rider-confirm-btn:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+}
+
+/* ============================================
    RESPONSIVE
    ============================================ */
 
@@ -765,5 +1041,31 @@
         height: 100vh;
         max-height: 100vh;
         border-radius: 0;
+    }
+
+    .rider-confirm-content {
+        padding: 24px 18px 18px;
+        max-width: calc(100vw - 24px);
+    }
+
+    .rider-confirm-footer {
+        flex-direction: column-reverse;
+    }
+
+    .rider-confirm-footer .btn,
+    .rider-confirm-footer .btn-neutral,
+    .rider-confirm-footer .rider-confirm-btn {
+        width: 100%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rider-confirm-modal,
+    .rider-confirm-content,
+    .rider-confirm-icon,
+    .rider-active-delivery-card,
+    .rider-chat-send,
+    .rider-chat-tab {
+        transition: none !important;
     }
 }

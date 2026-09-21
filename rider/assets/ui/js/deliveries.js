@@ -2,15 +2,33 @@
  * FitPal Rider Deliveries JavaScript
  *
  * Handles:
- *   - Delivery status updates (accept / picked up / delivered)
+ *   - Delivery status updates (accept_assignment / decline_assignment
+ *     / delivered) through a styled confirm modal
  *   - Chat modal open/close
  *   - Chat tab switching
  *   - Message loading and sending
  *
+ * Confirm flow
+ * ------------
+ * Every .delivery-status-btn carries its own copy and presentation
+ * hints in data-confirm-* attributes:
+ *
+ *   data-confirm-title     — the modal heading
+ *   data-confirm-message   — the modal body
+ *   data-confirm-label     — the confirm button label
+ *   data-confirm-variant   — "primary" or "danger"
+ *   data-confirm-icon      — "accept" | "decline" | "delivered"
+ *
+ * The click handler copies those onto #riderConfirmModal as
+ * data-variant and data-icon. CSS reads the modal attributes and
+ * picks the correct icon and button colour. The JS never swaps
+ * classes on the button itself, so the button is never without a
+ * valid style between frames.
+ *
  * @package FitPal
- * @version 2.0 — Adds confirm copy for accept_order. All three
- *                actions (accept_order, picked_up, delivered) post
- *                to rider-handler.php through the same click handler.
+ * @version 4.2 — Adds data-icon to the confirm modal. Confirms the
+ *                variant and icon via modal attributes, not button
+ *                classes.
  */
 
 (function () {
@@ -22,6 +40,73 @@
         var CSRF_TOKEN = CFG.csrfToken || '';
 
         // ============================================
+        // CONFIRM MODAL
+        // ============================================
+        var confirmModal = document.getElementById('riderConfirmModal');
+        var confirmTitleEl = document.getElementById('riderConfirmTitle');
+        var confirmMessageEl = document.getElementById('riderConfirmMessage');
+        var confirmBtn = document.getElementById('riderConfirmBtn');
+
+        // Callback stored while the modal is open. Null when closed.
+        var pendingConfirm = null;
+
+        function openConfirmModal(opts) {
+            if (!confirmModal || !confirmBtn) return;
+
+            if (confirmTitleEl)   confirmTitleEl.textContent   = opts.title   || 'Confirm';
+            if (confirmMessageEl) confirmMessageEl.textContent = opts.message || '';
+
+            confirmBtn.textContent = opts.label || 'Confirm';
+
+            // Presentation is expressed entirely on the modal. CSS
+            // reads these two attributes to pick the icon and the
+            // confirm button colour.
+            confirmModal.dataset.variant = opts.variant === 'danger' ? 'danger' : 'primary';
+            confirmModal.dataset.icon    = opts.icon || 'accept';
+
+            pendingConfirm = typeof opts.onConfirm === 'function' ? opts.onConfirm : null;
+
+            document.body.style.overflow = 'hidden';
+            confirmModal.style.display = 'flex';
+            void confirmModal.offsetWidth;
+            confirmModal.classList.add('is-open');
+
+            setTimeout(function () { confirmBtn.focus(); }, 80);
+        }
+
+        function closeConfirmModal() {
+            if (!confirmModal) return;
+
+            confirmModal.classList.remove('is-open');
+            setTimeout(function () {
+                if (!confirmModal.classList.contains('is-open')) {
+                    confirmModal.style.display = 'none';
+                    document.body.style.overflow = '';
+                    // Reset so a later open that forgets to set these
+                    // does not inherit a prior decline state.
+                    confirmModal.dataset.variant = 'primary';
+                    confirmModal.dataset.icon    = 'accept';
+                }
+            }, 220);
+
+            pendingConfirm = null;
+        }
+
+        if (confirmModal) {
+            confirmModal.querySelectorAll('[data-close-confirm]').forEach(function (el) {
+                el.addEventListener('click', closeConfirmModal);
+            });
+        }
+
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', function () {
+                var fn = pendingConfirm;
+                closeConfirmModal();
+                if (typeof fn === 'function') fn();
+            });
+        }
+
+        // ============================================
         // DELIVERY STATUS UPDATES
         // ============================================
         var statusButtons = document.querySelectorAll('.delivery-status-btn');
@@ -29,57 +114,67 @@
         statusButtons.forEach(function (btn) {
             btn.addEventListener('click', function () {
                 var orderId = parseInt(this.dataset.orderId, 10) || 0;
-                var action = this.dataset.action || '';
+                var action  = this.dataset.action || '';
 
                 if (orderId <= 0 || action === '') return;
 
-                var confirmMessage;
-                if (action === 'accept_order') {
-                    confirmMessage = 'Accept this delivery? You will be responsible for picking it up and delivering it to the customer.';
-                } else if (action === 'delivered') {
-                    confirmMessage = 'Confirm that this order has been delivered to the customer?';
-                } else {
-                    confirmMessage = 'Confirm that you have picked up this order from the restaurant?';
-                }
+                var title   = this.dataset.confirmTitle   || 'Confirm this action?';
+                var message = this.dataset.confirmMessage || '';
+                var label   = this.dataset.confirmLabel   || 'Confirm';
+                var variant = this.dataset.confirmVariant || 'primary';
+                var icon    = this.dataset.confirmIcon    || 'accept';
 
-                if (!window.confirm(confirmMessage)) return;
+                var clickedButton = this;
 
-                this.disabled = true;
-                var originalText = this.textContent;
-                this.textContent = 'Updating…';
-
-                var body = new URLSearchParams();
-                body.append('csrf_token', CSRF_TOKEN);
-                body.append('action', action);
-                body.append('order_id', String(orderId));
-
-                fetch('../backend/handlers/rider-handler.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: body.toString(),
-                    credentials: 'same-origin'
-                })
-                    .then(function (res) { return res.json(); })
-                    .then(function (data) {
-                        if (data && data.status === 'success') {
-                            showToast(data.message || 'Delivery updated', 'success');
-                            setTimeout(function () { window.location.reload(); }, 800);
-                        } else {
-                            showToast((data && data.message) || 'Could not update delivery', 'error');
-                            btn.disabled = false;
-                            btn.textContent = originalText;
-                        }
-                    })
-                    .catch(function () {
-                        showToast('Network error. Please try again.', 'error');
-                        btn.disabled = false;
-                        btn.textContent = originalText;
-                    });
+                openConfirmModal({
+                    title:   title,
+                    message: message,
+                    label:   label,
+                    variant: variant,
+                    icon:    icon,
+                    onConfirm: function () {
+                        submitDeliveryAction(clickedButton, orderId, action);
+                    }
+                });
             });
         });
+
+        function submitDeliveryAction(btn, orderId, action) {
+            btn.disabled = true;
+            var originalText = btn.textContent;
+            btn.textContent = 'Updating…';
+
+            var body = new URLSearchParams();
+            body.append('csrf_token', CSRF_TOKEN);
+            body.append('action', action);
+            body.append('order_id', String(orderId));
+
+            fetch('../backend/handlers/rider-handler.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: body.toString(),
+                credentials: 'same-origin'
+            })
+                .then(function (res) { return res.json(); })
+                .then(function (data) {
+                    if (data && data.status === 'success') {
+                        showToast(data.message || 'Delivery updated', 'success');
+                        setTimeout(function () { window.location.reload(); }, 800);
+                    } else {
+                        showToast((data && data.message) || 'Could not update delivery', 'error');
+                        btn.disabled = false;
+                        btn.textContent = originalText;
+                    }
+                })
+                .catch(function () {
+                    showToast('Network error. Please try again.', 'error');
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                });
+        }
 
         // ============================================
         // CHAT MODAL
@@ -162,8 +257,17 @@
             });
         }
 
+        // Escape closes the confirm modal first if open, otherwise the
+        // chat modal. Prevents both from closing on a single press.
         document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape' && chatModal && chatModal.classList.contains('active')) {
+            if (e.key !== 'Escape') return;
+
+            if (confirmModal && confirmModal.classList.contains('is-open')) {
+                closeConfirmModal();
+                return;
+            }
+
+            if (chatModal && chatModal.classList.contains('active')) {
                 closeChatModal();
             }
         });

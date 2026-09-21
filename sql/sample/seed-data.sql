@@ -1,8 +1,8 @@
 -- =====================================================
 -- FitPal Seed Data
--- Version 5.4
+-- Version 5.5
 --
--- ALIGNED WITH: fitpal_food_delivery schema v5.3
+-- ALIGNED WITH: fitpal_food_delivery schema v1.1.0
 --   - customer_address is a CHILD of customer
 --   - delivery_rider_address is a CHILD of delivery_rider
 --   - product_composition has NO max_quantity_per_item
@@ -12,53 +12,50 @@
 --   - delivery_rider_document (drivers_license path + issue_date + expiry_date)
 --   - restaurant_permit (file_path + original_name + display_order)
 --
--- v5.4 changes
+-- v5.5 changes
 -- ------------
+--   * ALL financial_account balances set to 0.00 (customer wallet,
+--     restaurant branches, riders). No seeded money.
+--   * ALL delivery_rider_profile.is_available set to 0 for every
+--     rider (Carlos, Miguel, Andrei). Riders must toggle themselves
+--     available after sign-in.
+--   * V11 verification extended to surface is_available alongside
+--     profile_picture so the zero-availability state is visible
+--     from the seed output.
+--   * V15 and V16 added to catch seeded money and pre-available
+--     riders respectively.
+--
+-- v5.4 changes (retained)
+-- -----------------------
 --   + Section 4.5: restaurant_permit rows for all three seeded
---     restaurants. Three permits each, display_order 0..2, matching
---     the 0-based index the registration handler produces.
+--     restaurants. Three permits each, display_order 0..2.
 --   + Permit file_path values use the SAME prefix the handler
---     writes ('shared/uploads/restaurant-permits/...') so admin
---     review screens resolve seeded data identically to real data.
+--     writes ('shared/uploads/restaurant-permits/...').
 --   + Permit original_name is never NULL (schema NOT NULL).
 --   + Verification queries V12–V14 added at the end.
 --
 -- PREREQUISITE
 -- ------------
--- Four SVG placeholder files must exist on disk before this seed
--- is meaningful for admin review screens:
---
+-- Four SVG placeholder files must exist on disk:
 --   shared/uploads/restaurant-permits/placeholder-dti.svg
 --   shared/uploads/restaurant-permits/placeholder-mayors-permit.svg
 --   shared/uploads/restaurant-permits/placeholder-sanitary.svg
 --   shared/uploads/restaurant-permits/placeholder-business.svg
---
--- The SQL below cannot create files. See the SVG definitions after
--- the seed for their contents.
+-- Plus one rider license placeholder:
+--   uploads/riders/documents/placeholder-license.svg
 --
 -- PRINCIPLES
 --   1. Every account gets at least one address row.
---   2. All FK variables are captured immediately after
---      their parent INSERT via LAST_INSERT_ID(), never
---      derived by MAX() - offset arithmetic.
---   3. Passwords are stored as PLAINTEXT for the demo. The
---      sign-in handler's dev bypass accepts plaintext against
---      the stored column value, so login works out of the box.
---      DO NOT use this approach in production.
---   4. dietary_information.calories for customizable
---      products is DERIVED at the end (Section 9).
---   5. Every choice group has exactly one is_required = 1
---      row (the default), alternatives are is_required = 0.
---   6. Every rider gets one emergency contact and one
---      delivery_rider_document row. profile_picture stays NULL;
---      drivers_license points to a shared SVG placeholder at
---      'uploads/riders/documents/placeholder-license.svg'.
---      The app overwrites this path when a rider uploads a real
---      license.
---   7. Every restaurant gets three permit rows pointing at
---      shared SVG placeholders under shared/uploads/. The path
---      prefix matches what sign-up-handler.php writes so seeded
---      data and real data are indistinguishable to the read side.
+--   2. All FK variables captured via LAST_INSERT_ID().
+--   3. Passwords stored as PLAINTEXT for the demo. DO NOT use
+--      in production.
+--   4. dietary_information.calories for customizable products
+--      is DERIVED at the end (Section 9).
+--   5. Every choice group has exactly one is_required = 1 row.
+--   6. Every rider gets one emergency contact + one license
+--      document row. profile_picture stays NULL.
+--   7. Every restaurant gets three permit rows.
+--   8. (v5.5) NO seeded money. NO rider pre-marked available.
 -- =====================================================
 
 USE fitpal_food_delivery;
@@ -66,12 +63,12 @@ USE fitpal_food_delivery;
 START TRANSACTION;
 
 -- =====================================================
--- 1. FINANCIAL ACCOUNTS
+-- 1. FINANCIAL ACCOUNTS  (all zero balances)
 -- =====================================================
 -- 1 customer account
 INSERT INTO
     financial_account (balance, account_type)
-VALUES (1000.00, 'customer');
+VALUES (0.00, 'customer');
 
 SET @customer_financial_id = LAST_INSERT_ID();
 
@@ -375,7 +372,6 @@ VALUES (
     );
 
 -- Green Bowl Cafe permits (3 rows, display_order 0..2)
--- Path prefix matches sign-up-handler.php's storePermitFile() output.
 INSERT INTO
     restaurant_permit (
         restaurant_id,
@@ -745,16 +741,11 @@ VALUES (
 -- -----------------------------------------------------
 -- 4.4 Delivery riders (3) + profiles + addresses
 --     + emergency contacts + license documents
--- -----------------------------------------------------
--- NOTE on drivers_license path:
---   Schema enforces NOT NULL. This seed uses a shared SVG
---   placeholder at 'uploads/riders/documents/placeholder-license.svg'.
---   The app overwrites this path when a rider uploads a real license.
 --
--- NOTE on expiry_date:
---   Set 10 years from today using DATE_ADD(CURDATE(), INTERVAL 10 YEAR).
+--     v5.5: ALL riders seeded with is_available = 0.
+-- -----------------------------------------------------
 
--- Rider 1: Motorcycle, verified, available
+-- Rider 1: Motorcycle, verified, NOT available
 INSERT INTO
     delivery_rider (
         first_name,
@@ -808,7 +799,7 @@ VALUES (
         CURRENT_TIMESTAMP,
         4.8,
         0,
-        1
+        0
     );
 
 INSERT INTO
@@ -873,7 +864,7 @@ VALUES (
         DATE_ADD(CURDATE(), INTERVAL 10 YEAR)
     );
 
--- Rider 2: Car, verified, available
+-- Rider 2: Car, verified, NOT available
 INSERT INTO
     delivery_rider (
         first_name,
@@ -927,7 +918,7 @@ VALUES (
         CURRENT_TIMESTAMP,
         4.6,
         0,
-        1
+        0
     );
 
 INSERT INTO
@@ -992,7 +983,7 @@ VALUES (
         DATE_ADD(CURDATE(), INTERVAL 10 YEAR)
     );
 
--- Rider 3: Bicycle, pending, not available
+-- Rider 3: Bicycle, pending, NOT available
 INSERT INTO
     delivery_rider (
         first_name,
@@ -4881,7 +4872,7 @@ COMMIT;
 -- =====================================================
 -- VERIFICATION
 -- =====================================================
-SELECT '=== Seed data loaded ===' AS status;
+SELECT '=== Seed data loaded (v5.5) ===' AS status;
 
 -- V1. Every customizable product's default price modifiers sum to 0.
 SELECT
@@ -5029,8 +5020,9 @@ FROM
     LEFT JOIN delivery_rider_document drd ON drd.delivery_rider_id = dr.delivery_rider_id
 ORDER BY dr.delivery_rider_id;
 
--- V11. Rider profile picture paths are NULL (photo not uploaded).
-SELECT dr.delivery_rider_id, dr.email, drp.profile_picture
+-- V11. Rider profile picture paths are NULL AND is_available = 0.
+--      (v5.5: extended to surface availability.)
+SELECT dr.delivery_rider_id, dr.email, drp.profile_picture, drp.is_available, drp.verification_status
 FROM
     delivery_rider dr
     JOIN delivery_rider_profile drp ON drp.delivery_rider_id = dr.delivery_rider_id
@@ -5075,3 +5067,21 @@ GROUP BY
     rp.restaurant_id
 HAVING
     order_state <> 'ok';
+
+-- V15. Every financial account balance is 0.00.
+--      Catches accidental seeded money.
+SELECT
+    financial_account_id,
+    account_type,
+    balance
+FROM financial_account
+WHERE
+    balance <> 0.00;
+
+-- V16. No rider is marked available after seeding.
+SELECT dr.delivery_rider_id, dr.email, drp.is_available
+FROM
+    delivery_rider dr
+    JOIN delivery_rider_profile drp ON drp.delivery_rider_id = dr.delivery_rider_id
+WHERE
+    drp.is_available <> 0;

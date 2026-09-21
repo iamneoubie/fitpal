@@ -4,11 +4,24 @@
  *
  * Actions:
  *   toggle_availability, update_profile, upload_picture,
- *   accept_order, picked_up, delivered, request_withdrawal
+ *   accept_assignment, decline_assignment, delivered,
+ *   request_withdrawal
+ *
+ * Assignment model
+ * ----------------
+ * The kitchen assigns a rider, moving the order to 'rider_pending'.
+ * The rider accepts (order → 'delivering', rider locked) or declines
+ * (order → 'preparing', rider freed). This handler is the only entry
+ * point for those transitions.
  *
  * @package FitPal
- * @version 3.0 — Adds accept_order so a rider must explicitly claim
- *                an order before it is assigned to them.
+ * @version 4.0 — Aligns with the rider_pending handoff:
+ *                  - Adds accept_assignment and decline_assignment.
+ *                  - Removes picked_up; acceptance is the handoff.
+ *                  - delivered now requires the caller to be the
+ *                    assigned rider on a 'delivering' order.
+ *                  - toggle_availability returns an error when the
+ *                    rider has an active delivery.
  */
 
 declare(strict_types=1);
@@ -47,21 +60,28 @@ try {
         case 'toggle_availability':
             $response = handleToggleAvailability($database_connection, $riderId);
             break;
+
         case 'update_profile':
             $response = handleUpdateProfile($database_connection, $riderId);
             break;
+
         case 'upload_picture':
             $response = handleUploadPicture($database_connection, $riderId);
             break;
-        case 'accept_order':
-            $response = handleAcceptOrder($database_connection, $riderId);
+
+        case 'accept_assignment':
+        case 'accept_order': // legacy alias, remove after one release
+            $response = handleAcceptAssignment($database_connection, $riderId);
             break;
-        case 'picked_up':
-            $response = handlePickedUp($database_connection, $riderId);
+
+        case 'decline_assignment':
+            $response = handleDeclineAssignment($database_connection, $riderId);
             break;
+
         case 'delivered':
             $response = handleDelivered($database_connection, $riderId);
             break;
+
         case 'request_withdrawal':
             $response = handleWithdrawal($database_connection, $riderId);
             break;
@@ -84,7 +104,14 @@ function handleToggleAvailability(PDO $db, int $riderId): array
 {
     $isAvailable = (int)($_POST['is_available'] ?? 0) === 1 ? 1 : 0;
 
-    setRiderAvailability($db, $riderId, $isAvailable);
+    $applied = setRiderAvailability($db, $riderId, $isAvailable);
+
+    if (!$applied) {
+        return [
+            'status'  => 'error',
+            'message' => 'You cannot go offline while you have an active delivery.',
+        ];
+    }
 
     return [
         'status'       => 'success',
@@ -177,14 +204,14 @@ function handleUploadPicture(PDO $db, int $riderId): array
 }
 
 /**
- * Accept an unassigned order.
+ * Accept the kitchen's assignment.
  *
- * Eligibility gate: verified, online, and fewer than two active orders.
- * The active-order cap mirrors the before_order_rider_assign trigger,
- * checked here so the rider gets a clean message rather than a
- * DB-level SIGNAL.
+ * Eligibility gate: verified, online, fewer than two committed
+ * orders, and the order is actually sitting in rider_pending with
+ * this rider's id on it. acceptOrder() performs the state change and
+ * locks the rider.
  */
-function handleAcceptOrder(PDO $db, int $riderId): array
+function handleAcceptAssignment(PDO $db, int $riderId): array
 {
     $orderId = (int)($_POST['order_id'] ?? 0);
     if ($orderId <= 0) {
@@ -212,47 +239,50 @@ function handleAcceptOrder(PDO $db, int $riderId): array
     if (!$accepted) {
         return [
             'status'  => 'error',
-            'message' => 'This order is no longer available. It may have been taken by another rider.',
+            'message' => 'This assignment is no longer available. The kitchen may have reassigned or cancelled it.',
         ];
     }
 
     return [
         'status'  => 'success',
-        'message' => 'Order accepted. Head to the restaurant for pickup.',
+        'message' => 'Assignment accepted. Head to the restaurant for pickup.',
     ];
 }
 
-function handlePickedUp(PDO $db, int $riderId): array
+/**
+ * Decline the kitchen's assignment.
+ *
+ * Returns the order to the kitchen's Preparing tab with no rider
+ * attached. The rider's availability is untouched.
+ */
+function handleDeclineAssignment(PDO $db, int $riderId): array
 {
     $orderId = (int)($_POST['order_id'] ?? 0);
     if ($orderId <= 0) {
         return ['status' => 'error', 'message' => 'Invalid order.'];
     }
 
-    $check = $db->prepare(
-        "SELECT 1 FROM orders
-         WHERE order_id = :order_id
-           AND delivery_rider_id = :rider_id
-           AND order_status IN ('preparing', 'pending')
-         LIMIT 1"
-    );
-    $check->execute([':order_id' => $orderId, ':rider_id' => $riderId]);
-    if ($check->fetchColumn() === false) {
-        return ['status' => 'error', 'message' => 'Order not eligible for pickup.'];
+    $declined = declineOrder($db, $riderId, $orderId);
+
+    if (!$declined) {
+        return [
+            'status'  => 'error',
+            'message' => 'This assignment is no longer available to decline.',
+        ];
     }
 
-    $update = $db->prepare(
-        "UPDATE orders
-            SET order_status = 'delivering',
-                updated_at = NOW()
-          WHERE order_id = :order_id
-            AND delivery_rider_id = :rider_id"
-    );
-    $update->execute([':order_id' => $orderId, ':rider_id' => $riderId]);
-
-    return ['status' => 'success', 'message' => 'Order picked up. Head to the customer now!'];
+    return [
+        'status'  => 'success',
+        'message' => 'Assignment declined. The kitchen will choose another rider.',
+    ];
 }
 
+/**
+ * Mark a delivering order as delivered.
+ *
+ * Only succeeds when the order is in 'delivering' and the caller is
+ * the assigned rider.
+ */
 function handleDelivered(PDO $db, int $riderId): array
 {
     $orderId = (int)($_POST['order_id'] ?? 0);
@@ -276,11 +306,16 @@ function handleDelivered(PDO $db, int $riderId): array
         "UPDATE orders
             SET order_status = 'delivered',
                 delivered_at = NOW(),
-                updated_at = NOW()
+                updated_at   = NOW()
           WHERE order_id = :order_id
-            AND delivery_rider_id = :rider_id"
+            AND delivery_rider_id = :rider_id
+            AND order_status = 'delivering'"
     );
     $update->execute([':order_id' => $orderId, ':rider_id' => $riderId]);
+
+    if ($update->rowCount() === 0) {
+        return ['status' => 'error', 'message' => 'Could not complete the delivery. Please try again.'];
+    }
 
     return ['status' => 'success', 'message' => 'Delivery marked as complete!'];
 }
