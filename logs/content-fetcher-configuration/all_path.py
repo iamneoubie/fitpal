@@ -125,6 +125,7 @@ filesToCheck = [
     # ===== restaurant/assets/css =====
     "/restaurant/assets/css/dashboard.css",
     "/restaurant/assets/css/header.css",
+    "/restaurant/assets/css/orders.css",
     "/restaurant/assets/css/profile.css",
     "/restaurant/assets/css/sign-in.css",
     "/restaurant/assets/css/sign-up.css",
@@ -133,16 +134,19 @@ filesToCheck = [
     "/restaurant/assets/ui/js/dashboard.js",
     "/restaurant/assets/ui/js/header.js",
     "/restaurant/assets/ui/js/logout.js",
+    "/restaurant/assets/ui/js/order.js",
     "/restaurant/assets/ui/js/profile.js",
     "/restaurant/assets/ui/js/sign-in.js",
     "/restaurant/assets/ui/js/sign-up.js",
 
     # ===== restaurant/backend/database =====
+    "/restaurant/backend/database/order-queries.php",
     "/restaurant/backend/database/restaurant-connect.php",
     "/restaurant/backend/database/restaurant-queries.php",
 
     # ===== restaurant/backend/handlers =====
     "/restaurant/backend/handlers/branch-lookup-handler.php",
+    "/restaurant/backend/handlers/order-handler.php",
     "/restaurant/backend/handlers/profile-handler.php",
     "/restaurant/backend/handlers/sign-in-handler.php",
     "/restaurant/backend/handlers/sign-out-handler.php",
@@ -153,6 +157,7 @@ filesToCheck = [
 
     # ===== restaurant/pages =====
     "/restaurant/pages/dashboard.php",
+    "/restaurant/pages/kitchen.php",
     "/restaurant/pages/profile.php",
     "/restaurant/pages/sign-in.php",
     "/restaurant/pages/sign-up.php",

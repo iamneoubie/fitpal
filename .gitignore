@@ -7,6 +7,7 @@
 # To select all files
 # *.extension
 # folder/another_folder/*
+/logs/content-fetcher-configuration
 /logs/output
 *env
 *txt
