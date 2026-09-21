@@ -134,7 +134,7 @@ filesToCheck = [
     "/restaurant/assets/ui/js/dashboard.js",
     "/restaurant/assets/ui/js/header.js",
     "/restaurant/assets/ui/js/logout.js",
-    "/restaurant/assets/ui/js/order.js",
+    "/restaurant/assets/ui/js/orders.js",
     "/restaurant/assets/ui/js/profile.js",
     "/restaurant/assets/ui/js/sign-in.js",
     "/restaurant/assets/ui/js/sign-up.js",
