@@ -1,0 +1,746 @@
+/**
+ * FitPal Admin Profile Page Styles
+ *
+ * Layout map:
+ *   .profile-page
+ *     .container
+ *       .page-title-header
+ *       .profile-header-card        (avatar + name + role + last login)
+ *       .profile-tabs               (Personal Information | Security)
+ *       .profile-tab-content
+ *         .profile-card
+ *           .profile-card-header / .profile-card-body
+ *           form rows + actions
+ *
+ * Container alignment: .profile-page .container matches
+ * .admin-list-page .container and .header-container exactly —
+ * max-width: 1200px, padding: 0 16px, margin: 0 auto. Cards stretch
+ * the full container width so their left edge lines up with the
+ * logo in the header. No inner max-width is applied to any card.
+ *
+ * @package FitPal
+ * @version 2.0 — Container aligned to 1200px / 16px padding to match
+ *                admin-tables.css and header.css. Removed the inner
+ *                760px reading-width constraint on cards.
+ */
+
+/* ============================================
+   SCROLLBAR HYGIENE
+   ============================================ */
+
+html {
+    scrollbar-gutter: stable;
+}
+
+/* ============================================
+   CONTENT WRAPPER
+   ============================================ */
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+}
+
+.profile-page {
+    background: var(--gray-50);
+    padding: 24px 0 48px 0;
+    flex: 1;
+}
+
+.profile-page .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 16px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* ============================================
+   PAGE TITLE HEADER
+   ============================================ */
+
+.page-title-header {
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--primary);
+}
+
+.page-title-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.page-title-header .heading-2 {
+    margin: 0 0 4px 0;
+    font-size: var(--font-size-3xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--text);
+    line-height: 1.2;
+}
+
+.page-title-header .heading-2 span {
+    color: var(--primary);
+}
+
+.page-title-header .text-muted {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    line-height: 1.5;
+}
+
+.page-title-header .back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    background: #1a1a1a;
+    color: #ffffff;
+    border: none;
+    border-radius: var(--radius-base);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    font-family: inherit;
+    text-decoration: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.page-title-header .back-btn:hover {
+    background: #000000;
+}
+
+.page-title-header .back-btn-icon {
+    width: 18px;
+    height: 18px;
+    display: block;
+    flex-shrink: 0;
+    filter: brightness(0) invert(1);
+}
+
+/* ============================================
+   ALERTS
+   ============================================ */
+
+.alert {
+    padding: 12px 18px;
+    border-radius: var(--radius-base);
+    margin-bottom: 20px;
+    border: 1px solid transparent;
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+}
+
+.alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+
+.alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+/* ============================================
+   PROFILE HEADER CARD
+   ============================================ */
+
+.profile-header-card {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: 24px 28px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    box-sizing: border-box;
+}
+
+.profile-avatar-large {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    font-weight: 700;
+    flex-shrink: 0;
+    text-transform: uppercase;
+    line-height: 1;
+    user-select: none;
+}
+
+.profile-header-info {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+}
+
+.profile-name {
+    margin: 0;
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--text);
+    line-height: 1.2;
+    word-break: break-word;
+}
+
+.profile-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.profile-role-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 12px;
+    border-radius: var(--radius-full);
+    background: rgba(89, 193, 74, 0.12);
+    color: var(--primary-dark);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    line-height: 1.4;
+}
+
+.profile-email {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    word-break: break-all;
+}
+
+.profile-last-login {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-400);
+}
+
+/* ============================================
+   TABS
+   ============================================ */
+
+.profile-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    padding: 4px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-sm);
+    box-sizing: border-box;
+}
+
+.profile-tab {
+    flex: 1;
+    padding: 12px 20px;
+    border: none;
+    border-radius: var(--radius-base);
+    background: transparent;
+    color: var(--gray-600);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    font-family: inherit;
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.15s ease, color 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.profile-tab:hover {
+    background: var(--gray-50);
+}
+
+.profile-tab.active {
+    background: var(--primary);
+    color: var(--white);
+}
+
+.profile-tab-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+    filter: brightness(0) saturate(100%)
+            invert(40%) sepia(8%) saturate(800%)
+            hue-rotate(50deg) brightness(95%) contrast(95%);
+    transition: filter 0.15s ease;
+}
+
+.profile-tab.active .profile-tab-icon {
+    filter: brightness(0) invert(1);
+}
+
+/* ============================================
+   TAB CONTENT
+   ============================================ */
+
+.profile-tab-content {
+    display: none;
+}
+
+.profile-tab-content.active {
+    display: block;
+    animation: profileFadeIn 0.2s ease;
+}
+
+@keyframes profileFadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================
+   PROFILE CARD
+   ============================================ */
+
+.profile-card {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.profile-card-header {
+    padding: 16px 22px;
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--gray-200);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.profile-card-header h2 {
+    margin: 0;
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+}
+
+.profile-card-header .heading-hint {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    font-weight: var(--font-weight-normal);
+}
+
+.profile-card-body {
+    padding: 22px;
+}
+
+/* ============================================
+   FORM ROWS
+   ============================================ */
+
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    margin-bottom: 18px;
+}
+
+.form-row:last-of-type {
+    margin-bottom: 0;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.form-group-full {
+    grid-column: 1 / -1;
+}
+
+.field-label {
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    color: var(--gray-600);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.field-optional {
+    font-weight: 400;
+    color: var(--gray-400);
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 11px;
+    margin-left: 4px;
+}
+
+.form-control {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px solid var(--gray-300);
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-family: inherit;
+    color: var(--text);
+    background: var(--white);
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.form-control::placeholder {
+    color: var(--gray-400);
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
+}
+
+.form-control:disabled {
+    background: var(--gray-50);
+    color: var(--gray-500);
+    cursor: not-allowed;
+    border-color: var(--gray-200);
+}
+
+.form-control.is-error {
+    border-color: var(--danger);
+    background: #fff8f8;
+}
+
+.form-control.is-error:focus {
+    box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.15);
+}
+
+.form-hint {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    line-height: 1.4;
+    margin: 0;
+}
+
+.form-error {
+    font-size: var(--font-size-xs);
+    color: var(--danger);
+    line-height: 1.4;
+    margin: 0;
+    min-height: 0;
+}
+
+.form-error:empty {
+    display: none;
+}
+
+/* ============================================
+   PASSWORD FIELD WITH TOGGLE
+   ============================================ */
+
+.password-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.password-wrapper .form-control {
+    padding-right: 46px;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-base);
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.password-toggle:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.password-toggle:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    opacity: 1;
+}
+
+.password-toggle img {
+    width: 18px;
+    height: 18px;
+    display: block;
+    pointer-events: none;
+}
+
+/* ============================================
+   PASSWORD STRENGTH LIST
+   ============================================ */
+
+.password-rules {
+    list-style: none;
+    padding: 0;
+    margin: 6px 0 0 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px 12px;
+}
+
+.password-rule {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    line-height: 1.4;
+    transition: color 0.15s ease;
+}
+
+.password-rule-icon {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--gray-300);
+    flex-shrink: 0;
+    position: relative;
+    transition: background 0.15s ease;
+}
+
+.password-rule.is-met {
+    color: var(--primary-dark);
+}
+
+.password-rule.is-met .password-rule-icon {
+    background: var(--primary);
+}
+
+.password-rule.is-met .password-rule-icon::after {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 1px;
+    width: 3px;
+    height: 6px;
+    border: solid var(--white);
+    border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg);
+}
+
+/* ============================================
+   FORM ACTIONS
+   ============================================ */
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid var(--gray-100);
+}
+
+.form-actions .btn {
+    min-width: 160px;
+    justify-content: center;
+}
+
+/* ============================================
+   RESPONSIVE — TABLET (≤ 768px)
+   ============================================ */
+
+@media (max-width: 768px) {
+    .profile-page {
+        padding: 16px 0 32px 0;
+    }
+
+    .page-title-header .heading-2 {
+        font-size: var(--font-size-2xl);
+    }
+
+    .page-title-header .back-btn {
+        padding: 8px 14px;
+        font-size: var(--font-size-xs);
+    }
+
+    .page-title-header .back-btn-icon {
+        width: 16px;
+        height: 16px;
+    }
+
+    .profile-header-card {
+        padding: 20px;
+        gap: 16px;
+    }
+
+    .profile-avatar-large {
+        width: 60px;
+        height: 60px;
+        font-size: 22px;
+    }
+
+    .profile-name {
+        font-size: var(--font-size-xl);
+    }
+
+    .profile-tabs {
+        flex-direction: row;
+    }
+
+    .profile-tab {
+        padding: 10px 12px;
+        font-size: var(--font-size-xs);
+    }
+
+    .profile-tab-icon {
+        width: 14px;
+        height: 14px;
+    }
+
+    .profile-card-header {
+        padding: 14px 18px;
+    }
+
+    .profile-card-header h2 {
+        font-size: var(--font-size-sm);
+    }
+
+    .profile-card-body {
+        padding: 18px;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+        gap: 14px;
+        margin-bottom: 14px;
+    }
+
+    .form-actions {
+        flex-direction: column-reverse;
+        gap: 8px;
+        margin-top: 18px;
+        padding-top: 16px;
+    }
+
+    .form-actions .btn {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .password-rules {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ============================================
+   RESPONSIVE — MOBILE (≤ 480px)
+   ============================================ */
+
+@media (max-width: 480px) {
+    .profile-page .container {
+        padding: 0 12px;
+    }
+
+    .page-title-header .heading-2 {
+        font-size: var(--font-size-xl);
+    }
+
+    .profile-header-card {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 18px;
+        text-align: left;
+    }
+
+    .profile-avatar-large {
+        width: 56px;
+        height: 56px;
+        font-size: 20px;
+    }
+
+    .profile-name {
+        font-size: var(--font-size-lg);
+    }
+
+    .profile-card-header {
+        padding: 12px 16px;
+    }
+
+    .profile-card-body {
+        padding: 16px 14px;
+    }
+
+    .form-control {
+        padding: 9px 12px;
+        font-size: var(--font-size-xs);
+    }
+
+    .field-label {
+        font-size: 10px;
+    }
+
+    .password-wrapper .form-control {
+        padding-right: 42px;
+    }
+
+    .password-toggle {
+        width: 30px;
+        height: 30px;
+        right: 7px;
+    }
+
+    .password-toggle img {
+        width: 16px;
+        height: 16px;
+    }
+}
+
+/* ============================================
+   REDUCED MOTION
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    .profile-tab,
+    .profile-tab-content,
+    .form-control,
+    .password-toggle,
+    .password-rule,
+    .password-rule-icon,
+    .page-title-header .back-btn {
+        transition: none !important;
+        animation: none !important;
+    }
+}

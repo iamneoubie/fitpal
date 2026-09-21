@@ -1,0 +1,867 @@
+/**
+ * FitPal Restaurant Sign-In Styles
+ *
+ * Two-phase branch flow with combobox suggestions, phase transition,
+ * branch summary strip, and phase actions.
+ *
+ * Phase 2 button layout:
+ *   > 768px : Back and Sign In each take 50% width, side by side.
+ *   <= 768px: stacked vertically, each 100% width.
+ *
+ * Back button is black with white text.
+ *
+ * @package FitPal
+ * @version 2.2 — Back button restyled black/white. Full fluid
+ *                responsiveness pass across all breakpoints.
+ */
+
+/* ============================================
+   RESET / SAFETY
+   ============================================ */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+}
+
+button,
+input,
+select,
+textarea {
+    font-family: inherit;
+    font-size: 100%;
+}
+
+/* ============================================
+   CONTENT WRAPPER
+   ============================================ */
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+}
+
+.sign-in-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(16px, 4vw, 40px) clamp(12px, 3vw, 24px);
+    background: linear-gradient(135deg, var(--gray-50) 0%, var(--white) 100%);
+    flex: 1;
+    min-height: calc(100vh - 70px);
+}
+
+.sign-in-page .container {
+    width: 100%;
+    max-width: 440px;
+    margin: 0 auto;
+    padding: 0;
+}
+
+.sign-in-card {
+    background: var(--white);
+    border-radius: clamp(14px, 3vw, 20px);
+    padding: clamp(22px, 5vw, 40px) clamp(18px, 4.5vw, 36px);
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--gray-200);
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.sign-in-header {
+    text-align: center;
+    margin-bottom: clamp(16px, 3vw, 24px);
+}
+
+.sign-in-header .heading-2 {
+    margin: 0 0 6px 0;
+    color: var(--text);
+    font-size: clamp(1.5rem, 5vw, 2rem);
+    line-height: 1.2;
+    word-wrap: break-word;
+}
+
+.sign-in-header .heading-2 span {
+    color: var(--primary);
+}
+
+.sign-in-header .text-muted {
+    color: var(--gray-500);
+    font-size: clamp(0.85rem, 2.5vw, 1rem);
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* ============================================
+   SIGN-IN TABS
+   ============================================ */
+
+.sign-in-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    background: var(--gray-100);
+    border-radius: var(--radius-base);
+    padding: 4px;
+    margin-bottom: clamp(18px, 3vw, 24px);
+}
+
+.sign-in-tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: clamp(10px, 2.5vw, 14px) clamp(10px, 2vw, 16px);
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--gray-600);
+    font-size: clamp(0.8rem, 2.3vw, 0.9rem);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.sign-in-tab:hover {
+    color: var(--text);
+}
+
+.sign-in-tab.active {
+    background: var(--white);
+    color: var(--primary);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.sign-in-tab-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+    opacity: 0.6;
+}
+
+.sign-in-tab.active .sign-in-tab-icon {
+    opacity: 1;
+    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+/* ============================================
+   TAB PANELS
+   ============================================ */
+
+.sign-in-panel {
+    display: none;
+}
+
+.sign-in-panel.active {
+    display: block;
+    animation: signInFadeIn 0.2s ease;
+}
+
+@keyframes signInFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================
+   FORM
+   ============================================ */
+
+.sign-in-form .form-group {
+    margin-bottom: clamp(14px, 2.5vw, 20px);
+}
+
+.sign-in-form .form-label {
+    display: block;
+    font-weight: var(--font-weight-semibold);
+    color: var(--gray-700);
+    margin-bottom: 6px;
+    font-size: clamp(0.8rem, 2.2vw, 0.9rem);
+    line-height: 1.3;
+}
+
+.sign-in-form .form-control {
+    display: block;
+    width: 100%;
+    padding: clamp(11px, 2.5vw, 14px) clamp(12px, 2.5vw, 16px);
+    border: 2px solid var(--gray-300);
+    border-radius: var(--radius-base);
+    font-size: clamp(0.9rem, 2.4vw, 1rem);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    background-color: var(--white);
+    min-height: 48px;
+    color: var(--text);
+    -webkit-appearance: none;
+    appearance: none;
+    box-sizing: border-box;
+}
+
+.sign-in-form .form-control:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(89, 193, 74, 0.15);
+}
+
+.sign-in-form .form-control.error {
+    border-color: var(--danger);
+}
+
+.sign-in-form .form-control.error:focus {
+    box-shadow: 0 0 0 4px rgba(220, 53, 69, 0.15);
+}
+
+.sign-in-form .form-control::placeholder {
+    color: var(--gray-400);
+    font-size: inherit;
+}
+
+.sign-in-form .form-error {
+    color: var(--danger);
+    font-size: clamp(0.75rem, 2vw, 0.85rem);
+    margin-top: 6px;
+    display: none;
+    font-weight: var(--font-weight-medium);
+    line-height: 1.4;
+    word-wrap: break-word;
+}
+
+/* ============================================
+   PASSWORD TOGGLE
+   ============================================ */
+
+.password-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.password-wrapper .form-control {
+    padding-right: clamp(42px, 10vw, 56px);
+}
+
+.password-toggle {
+    position: absolute;
+    right: clamp(8px, 2vw, 14px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.5;
+    transition: opacity var(--transition-fast);
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
+}
+
+.password-toggle:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.password-toggle img {
+    width: clamp(18px, 4.5vw, 24px);
+    height: clamp(18px, 4.5vw, 24px);
+    display: block;
+}
+
+.password-toggle:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* ============================================
+   ALERTS
+   ============================================ */
+
+.alert {
+    padding: clamp(11px, 2.5vw, 14px) clamp(12px, 2.5vw, 16px);
+    border-radius: var(--radius-base);
+    margin-bottom: clamp(14px, 2.5vw, 20px);
+    border: 2px solid transparent;
+    font-size: clamp(0.8rem, 2.3vw, 0.9rem);
+    line-height: 1.5;
+    word-wrap: break-word;
+}
+
+.alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+.alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+
+/* ============================================
+   BUTTON
+   ============================================ */
+
+.sign-in-form .btn {
+    margin-top: 4px;
+    padding: clamp(12px, 3vw, 16px) clamp(16px, 3vw, 20px);
+    font-size: clamp(0.9rem, 2.4vw, 1rem);
+    font-weight: var(--font-weight-bold);
+    min-height: 48px;
+    width: 100%;
+    border-radius: var(--radius-base);
+    letter-spacing: 0.3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-sizing: border-box;
+}
+
+.sign-in-form .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.sign-in-form .btn:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* ============================================
+   FOOTER
+   ============================================ */
+
+.sign-in-footer {
+    margin-top: clamp(18px, 3vw, 24px);
+    text-align: center;
+}
+
+.sign-in-footer .text-muted {
+    font-size: clamp(0.8rem, 2.3vw, 0.9rem);
+    color: var(--gray-500);
+    margin: 10px 0 0 0;
+    line-height: 1.5;
+    word-wrap: break-word;
+}
+
+.sign-in-footer .text-muted a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: var(--font-weight-semibold);
+}
+
+.sign-in-footer .text-muted a:hover {
+    color: var(--primary-dark);
+    text-decoration: underline;
+}
+
+/* ============================================
+   BRANCH TWO-PHASE FLOW
+   ============================================ */
+
+.branch-phase {
+    animation: signInFadeIn 0.2s ease;
+}
+
+.branch-phase[hidden] {
+    display: none;
+}
+
+.branch-phase-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: clamp(0.8rem, 2.3vw, 0.9rem);
+    font-weight: var(--font-weight-semibold);
+    color: var(--gray-600);
+    margin: 0 0 clamp(12px, 2.5vw, 16px) 0;
+    line-height: 1.3;
+}
+
+.branch-phase-step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: var(--white);
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+/* ----- Combobox ----- */
+
+.combo {
+    position: relative;
+    width: 100%;
+}
+
+.combo .combo-input {
+    padding-right: clamp(38px, 9vw, 44px);
+    cursor: text;
+}
+
+.combo .combo-input:disabled {
+    background: var(--gray-100);
+    cursor: not-allowed;
+    color: var(--gray-500);
+}
+
+.combo-clear {
+    position: absolute;
+    right: clamp(8px, 2vw, 12px);
+    top: 50%;
+    transform: translateY(-50%);
+    width: clamp(20px, 5vw, 24px);
+    height: clamp(20px, 5vw, 24px);
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: var(--gray-200);
+    color: var(--gray-600);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, color 0.15s ease;
+    flex-shrink: 0;
+}
+
+.combo-clear:hover {
+    background: var(--gray-300);
+    color: var(--text);
+}
+
+.combo-clear[hidden] {
+    display: none;
+}
+
+.combo-list {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 30;
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    max-height: min(260px, 40vh);
+    overflow-y: auto;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14);
+    box-sizing: border-box;
+}
+
+.combo-list[hidden] {
+    display: none;
+}
+
+.combo-option {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: clamp(8px, 2vw, 10px) clamp(10px, 2vw, 12px);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.1s ease;
+    word-wrap: break-word;
+}
+
+.combo-option:hover,
+.combo-option.is-highlighted {
+    background: rgba(89, 193, 74, 0.1);
+}
+
+.combo-option-name {
+    font-size: clamp(0.8rem, 2.3vw, 0.9rem);
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.3;
+    word-wrap: break-word;
+}
+
+.combo-option-meta {
+    font-size: clamp(0.68rem, 1.9vw, 0.72rem);
+    color: var(--gray-500);
+    line-height: 1.3;
+    word-wrap: break-word;
+}
+
+.combo-empty {
+    padding: clamp(10px, 2.5vw, 14px) clamp(10px, 2vw, 12px);
+    font-size: clamp(0.8rem, 2.3vw, 0.9rem);
+    color: var(--gray-500);
+    text-align: center;
+    line-height: 1.4;
+}
+
+/* ----- Phase 2: chosen-branch summary ----- */
+
+.branch-summary {
+    display: flex;
+    align-items: center;
+    gap: clamp(8px, 2vw, 12px);
+    padding: clamp(10px, 2.2vw, 14px) clamp(12px, 2.5vw, 16px);
+    margin-bottom: clamp(14px, 2.5vw, 20px);
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    flex-wrap: nowrap;
+    min-width: 0;
+}
+
+.branch-summary-icon {
+    width: clamp(32px, 8vw, 40px);
+    height: clamp(32px, 8vw, 40px);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(89, 193, 74, 0.12);
+    border-radius: var(--radius-base);
+}
+
+.branch-summary-icon img {
+    width: clamp(16px, 4vw, 20px);
+    height: clamp(16px, 4vw, 20px);
+    display: block;
+    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.branch-summary-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.branch-summary-name {
+    font-size: clamp(0.82rem, 2.3vw, 0.9rem);
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.branch-summary-code {
+    font-size: clamp(0.7rem, 1.9vw, 0.78rem);
+    color: var(--gray-500);
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.branch-summary-change {
+    flex-shrink: 0;
+    padding: clamp(5px, 1.5vw, 7px) clamp(10px, 2.5vw, 14px);
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius-sm);
+    background: var(--white);
+    color: var(--gray-700);
+    font-size: clamp(0.7rem, 1.9vw, 0.78rem);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    white-space: nowrap;
+}
+
+.branch-summary-change:hover {
+    background: var(--gray-100);
+    border-color: var(--gray-400);
+}
+
+/* ----- Phase 2: back / submit row -----
+   Desktop and tablet: 50 / 50 split, side by side.
+   Mobile: stacked full-width via the media query below.
+   Back button: black background, white text.
+*/
+
+.branch-phase-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(8px, 2vw, 12px);
+    margin-top: 4px;
+    width: 100%;
+}
+
+.branch-phase-actions .btn {
+    width: 100%;
+    min-width: 0;
+    min-height: clamp(46px, 6vw, 54px);
+    padding: clamp(11px, 2.5vw, 14px) clamp(12px, 2.5vw, 16px);
+    font-size: clamp(0.9rem, 2.4vw, 1rem);
+    font-weight: var(--font-weight-bold);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-base);
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
+
+.branch-phase-actions .btn-outline {
+    background: #1a1a1a;
+    color: #ffffff;
+    border: 2px solid #1a1a1a;
+}
+
+.branch-phase-actions .btn-outline:hover {
+    background: #000000;
+    border-color: #000000;
+    color: #ffffff;
+}
+
+.branch-phase-actions .btn-outline:focus-visible {
+    outline: 2px solid #1a1a1a;
+    outline-offset: 2px;
+}
+
+.branch-phase-actions .btn-primary {
+    background: var(--primary);
+    color: var(--white);
+    border: 2px solid var(--primary);
+}
+
+.branch-phase-actions .btn-primary:hover {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+}
+
+.branch-phase-actions .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+#branchPhase1Next:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ============================================
+   RESPONSIVE — TABLET AND MOBILE (<= 768px)
+   Stack the two action buttons full-width.
+   ============================================ */
+
+@media (max-width: 768px) {
+    .branch-phase-actions {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .branch-phase-actions .btn {
+        width: 100%;
+    }
+}
+
+/* ============================================
+   RESPONSIVE — SMALL TABLET (<= 600px)
+   ============================================ */
+
+@media (max-width: 600px) {
+    .sign-in-page .container {
+        max-width: 100%;
+    }
+
+    .sign-in-tab {
+        padding: 10px 12px;
+    }
+
+    .branch-summary {
+        flex-wrap: wrap;
+    }
+
+    .branch-summary-change {
+        margin-left: auto;
+    }
+}
+
+/* ============================================
+   RESPONSIVE — MOBILE (<= 480px)
+   ============================================ */
+
+@media (max-width: 480px) {
+    .sign-in-page {
+        padding: 12px 10px;
+    }
+
+    .sign-in-card {
+        border-radius: var(--radius-lg);
+        padding: 22px 16px;
+    }
+
+    .sign-in-header {
+        margin-bottom: 18px;
+    }
+
+    .sign-in-tabs {
+        margin-bottom: 18px;
+    }
+
+    .sign-in-tab span {
+        font-size: 0.82rem;
+    }
+
+    .branch-summary {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .branch-summary-change {
+        width: 100%;
+        text-align: center;
+        margin-left: 0;
+    }
+
+    .branch-summary-text {
+        flex-basis: calc(100% - 56px);
+    }
+}
+
+/* ============================================
+   RESPONSIVE — VERY SMALL PHONE (<= 374px)
+   ============================================ */
+
+@media (max-width: 374px) {
+    .sign-in-page {
+        padding: 10px 8px;
+    }
+
+    .sign-in-card {
+        padding: 18px 14px;
+        border-radius: var(--radius-base);
+    }
+
+    .sign-in-header .heading-2 {
+        font-size: 1.4rem;
+    }
+
+    .sign-in-header .text-muted {
+        font-size: 0.8rem;
+    }
+
+    .sign-in-tab {
+        padding: 9px 8px;
+        gap: 6px;
+    }
+
+    .sign-in-tab-icon {
+        width: 14px;
+        height: 14px;
+    }
+
+    .sign-in-tab span {
+        font-size: 0.76rem;
+    }
+
+    .sign-in-form .form-control {
+        padding: 10px 12px;
+        font-size: 0.85rem;
+    }
+
+    .password-wrapper .form-control {
+        padding-right: 40px;
+    }
+
+    .password-toggle img {
+        width: 18px;
+        height: 18px;
+    }
+
+    .branch-phase-actions .btn {
+        padding: 10px 12px;
+        font-size: 0.85rem;
+        min-height: 44px;
+    }
+}
+
+/* ============================================
+   RESPONSIVE — LARGER TABLET / DESKTOP (>= 768px)
+   ============================================ */
+
+@media (min-width: 768px) {
+    .sign-in-page .container {
+        max-width: 480px;
+    }
+
+    .sign-in-card {
+        padding: 40px 36px;
+    }
+
+    .sign-in-header .heading-2 {
+        font-size: 2rem;
+    }
+
+    .sign-in-form .form-control {
+        min-height: 52px;
+    }
+
+    .sign-in-form .btn {
+        min-height: 52px;
+    }
+}
+
+/* ============================================
+   RESPONSIVE — LARGE DESKTOP (>= 1024px)
+   ============================================ */
+
+@media (min-width: 1024px) {
+    .sign-in-page .container {
+        max-width: 500px;
+    }
+
+    .sign-in-card {
+        padding: 44px 40px;
+    }
+}
+
+/* ============================================
+   SCREEN READER ONLY
+   ============================================ */
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}

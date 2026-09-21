@@ -1,0 +1,413 @@
+/**
+ * FitPal About Page Styles
+ * Content spans full width with proper padding.
+ */
+
+/* ============================================
+   CONTENT WRAPPER - Full width
+   ============================================ */
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+}
+
+/* ============================================
+   ABOUT HERO - Full width
+   ============================================ */
+
+.about-hero {
+    padding: var(--spacing-8) var(--spacing-4);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: var(--white);
+    text-align: center;
+    width: 100%;
+}
+
+.about-hero-content {
+    max-width: 700px;
+    margin: 0 auto;
+}
+
+.about-hero-title {
+    font-size: var(--font-size-4xl);
+    font-weight: 700;
+    color: var(--white);
+    margin-bottom: var(--spacing-3);
+}
+
+.about-hero-title span {
+    color: var(--secondary);
+}
+
+.about-hero-subtitle {
+    font-size: var(--font-size-xl);
+    color: rgba(255, 255, 255, 0.9);
+    line-height: 1.6;
+}
+
+/* ============================================
+   MISSION SECTION - Full width
+   ============================================ */
+
+.mission-section {
+    padding: var(--spacing-10) var(--spacing-4);
+    background-color: var(--white);
+    width: 100%;
+}
+
+.mission-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-8);
+    align-items: center;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.mission-title {
+    font-size: var(--font-size-3xl);
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: var(--spacing-2);
+}
+
+.mission-title span {
+    color: var(--primary);
+}
+
+.mission-description {
+    color: var(--gray-600);
+    font-size: var(--font-size-base);
+    line-height: 1.8;
+    margin-bottom: var(--spacing-3);
+}
+
+.mission-image {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.mission-image img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* ============================================
+   OFFER SECTION - Full width
+   ============================================ */
+
+.offer-section {
+    padding: var(--spacing-10) var(--spacing-4);
+    background-color: var(--gray-50);
+    width: 100%;
+}
+
+.offer-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-6);
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.offer-card {
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-6);
+    text-align: center;
+    border: 1px solid var(--gray-200);
+    transition: all var(--transition-base);
+}
+
+.offer-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-4px);
+    border-color: var(--primary);
+}
+
+.offer-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto var(--spacing-4);
+    background-color: rgba(89, 193, 74, 0.1);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-base);
+}
+
+.offer-card:hover .offer-icon {
+    background-color: var(--primary);
+}
+
+.offer-icon img {
+    width: 28px;
+    height: 28px;
+    transition: filter var(--transition-base);
+}
+
+.offer-card:hover .offer-icon img {
+    filter: brightness(0) saturate(100%) invert(100%);
+}
+
+.offer-card .heading-6 {
+    margin-bottom: var(--spacing-2);
+    color: var(--text);
+}
+
+.offer-card p {
+    color: var(--gray-500);
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+    margin: 0;
+}
+
+/* ============================================
+   TEAM SECTION - Full width
+   ============================================ */
+
+.team-section {
+    padding: var(--spacing-10) var(--spacing-4);
+    background-color: var(--white);
+    width: 100%;
+}
+
+.team-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-6);
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.team-card {
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    border: 1px solid var(--gray-200);
+    transition: all var(--transition-base);
+}
+
+.team-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-4px);
+}
+
+.team-image {
+    width: 100%;
+    height: 200px;
+    overflow: hidden;
+    background-color: var(--gray-100);
+}
+
+.team-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform var(--transition-base);
+}
+
+.team-card:hover .team-image img {
+    transform: scale(1.05);
+}
+
+.team-info {
+    padding: var(--spacing-4);
+}
+
+.team-info .heading-5 {
+    margin: 0 0 var(--spacing-1) 0;
+}
+
+.team-role {
+    color: var(--primary);
+    font-weight: 500;
+    font-size: var(--font-size-sm);
+    margin: 0 0 var(--spacing-2) 0;
+}
+
+.team-bio {
+    color: var(--gray-500);
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+    margin: 0 0 var(--spacing-3) 0;
+}
+
+.team-email {
+    display: inline-block;
+    font-size: var(--font-size-xs);
+    color: var(--primary);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+
+.team-email:hover {
+    color: var(--primary-dark);
+    text-decoration: underline;
+}
+
+/* ============================================
+   CTA SECTION - Full width
+   ============================================ */
+
+.about-cta {
+    padding: var(--spacing-10) var(--spacing-4);
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: var(--white);
+    text-align: center;
+    width: 100%;
+}
+
+.about-cta-content {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.about-cta-content .heading-2 {
+    color: var(--white);
+    margin-bottom: var(--spacing-3);
+}
+
+.about-cta-description {
+    font-size: var(--font-size-lg);
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: var(--spacing-6);
+}
+
+.about-cta-actions {
+    display: flex;
+    justify-content: center;
+    gap: var(--spacing-3);
+    flex-wrap: wrap;
+}
+
+.about-cta .btn-primary {
+    background-color: var(--white);
+    color: var(--primary);
+    border-color: var(--white);
+}
+
+.about-cta .btn-primary:hover {
+    background-color: var(--gray-50);
+    border-color: var(--gray-50);
+}
+
+.about-cta .btn-outline {
+    background-color: transparent;
+    color: var(--white);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.about-cta .btn-outline:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: var(--white);
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 992px) {
+    .mission-grid {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-6);
+    }
+
+    .mission-image {
+        order: -1;
+    }
+
+    .mission-image img {
+        max-width: 60%;
+    }
+
+    .offer-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .team-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .about-hero {
+        padding: var(--spacing-6) var(--spacing-3);
+    }
+
+    .about-hero-title {
+        font-size: var(--font-size-3xl);
+    }
+
+    .about-hero-subtitle {
+        font-size: var(--font-size-base);
+    }
+
+    .section-title {
+        font-size: var(--font-size-2xl);
+    }
+
+    .mission-section,
+    .offer-section,
+    .team-section,
+    .about-cta {
+        padding: var(--spacing-8) var(--spacing-3);
+    }
+
+    .offer-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .team-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .team-card {
+        max-width: 400px;
+        margin: 0 auto;
+    }
+
+    .about-cta-content .heading-2 {
+        font-size: var(--font-size-2xl);
+    }
+
+    .about-cta-actions {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .about-cta-actions .btn {
+        width: 100%;
+        max-width: 300px;
+    }
+}
+
+@media (max-width: 576px) {
+    .about-hero-title {
+        font-size: var(--font-size-2xl);
+    }
+
+    .team-image {
+        height: 160px;
+    }
+
+    .mission-image img {
+        max-width: 80%;
+    }
+
+    .about-hero,
+    .mission-section,
+    .offer-section,
+    .team-section,
+    .about-cta {
+        padding-left: var(--spacing-2);
+        padding-right: var(--spacing-2);
+    }
+}

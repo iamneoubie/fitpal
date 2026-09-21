@@ -1,0 +1,876 @@
+/**
+ * FitPal Menu Product Card Styles
+ * Version 3.5 — Two icon buttons (cart + order) fit at every breakpoint.
+ *
+ * @package FitPal
+ * @version 3.5
+ */
+
+/* ============================================
+   PRODUCT GRID
+   ============================================ */
+
+.product-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    align-items: stretch;
+}
+
+/* ============================================
+   PRODUCT CARD
+   ============================================ */
+
+.product-card {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 440px;
+    max-width: 100%;
+    padding: 16px;
+    background: var(--white);
+    border: 1px solid var(--gray-100);
+    border-radius: var(--radius-base);
+    transition:
+        box-shadow 0.2s ease,
+        transform 0.2s ease,
+        border-color 0.2s ease;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+/* ============================================
+   PRODUCT IMAGE
+   ============================================ */
+
+.product-image-link {
+    display: block;
+    width: 100%;
+    flex-shrink: 0;
+    text-decoration: none;
+}
+
+.product-image {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    margin-bottom: 10px;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: var(--gray-100);
+    flex-shrink: 0;
+}
+
+.product-image img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* ============================================
+   PRODUCT INFO
+   ============================================ */
+
+.product-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    gap: 4px;
+}
+
+.product-name-link {
+    text-decoration: none;
+    display: block;
+}
+
+/* Product name: 2 lines max, ellipsis on overflow */
+.product-info .heading-6 {
+    margin: 0;
+    min-width: 0;
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1.3;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    height: 44px;
+    flex-shrink: 0;
+}
+
+/* ============================================
+   PRODUCT DESCRIPTION - 2 lines max
+   ============================================ */
+
+.product-description {
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+    height: 34px;
+    font-size: 14px;
+    line-height: 1.4;
+    color: var(--gray-600);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 0;
+    word-break: break-word;
+}
+
+/* ============================================
+   PRODUCT META
+   ============================================ */
+
+.product-meta {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 34px;
+    margin-top: 2px;
+    flex-shrink: 0;
+    gap: 10px;
+}
+
+.product-price {
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--text);
+    white-space: nowrap;
+}
+
+.product-calories {
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--gray-600);
+    white-space: nowrap;
+}
+
+/* ============================================
+   DIETARY TAGS
+   ============================================ */
+
+.product-tags-section {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    flex-shrink: 0;
+    margin-top: 4px;
+    height: 90px;
+}
+
+.tags-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--gray-600);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+    display: block;
+    height: 13px;
+    line-height: 13px;
+    margin-bottom: 3px;
+}
+
+.product-tags {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-auto-rows: 22px;
+    gap: 4px;
+    width: 100%;
+    align-content: start;
+    flex-shrink: 0;
+}
+
+.product-tags .tag {
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 2px 6px;
+    border-radius: var(--radius-full);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.product-tags .tag.dietary-tag {
+    color: var(--primary);
+    font-weight: 600;
+    background-color: rgba(89, 193, 74, 0.08);
+}
+
+/* ============================================
+   ALLERGENS
+   ============================================ */
+
+.product-allergens-section {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    flex-shrink: 0;
+    margin-top: 0;
+    height: 90px;
+}
+
+.allergen-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--gray-600);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+    display: block;
+    height: 13px;
+    line-height: 13px;
+    margin-bottom: 3px;
+}
+
+.product-allergens-tags {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-auto-rows: 22px;
+    gap: 4px;
+    width: 100%;
+    align-content: start;
+    flex-shrink: 0;
+}
+
+.product-allergens-tags .tag {
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 2px 6px;
+    border-radius: var(--radius-full);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.product-allergens-tags .tag.allergen-tag {
+    color: #dc2626;
+    background: #fee2e2;
+}
+
+.product-allergens-tags .tag-none {
+    grid-column: 1 / -1;
+    height: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    color: var(--gray-500);
+    background: var(--gray-100);
+}
+
+/* ============================================
+   PRODUCT ACTIONS
+   ============================================ */
+
+.product-actions {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    margin-top: auto;
+    flex-shrink: 0;
+    border-top: 1px solid var(--gray-100);
+    box-sizing: border-box;
+    min-height: 48px;
+    justify-content: center;
+    padding: 6px 0;
+}
+
+.product-actions .action-row {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    min-height: 32px;
+    gap: 6px;
+    padding: 0;
+}
+
+/* ============================================
+   QUANTITY CONTROL
+   ============================================ */
+
+.quantity-control {
+    display: flex;
+    align-items: center;
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 100%;
+    max-height: 32px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.qty-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 100%;
+    min-height: 28px;
+    flex-shrink: 0;
+    border: none;
+    background: var(--gray-100);
+    cursor: pointer;
+    transition: background var(--transition-fast);
+    padding: 0;
+}
+
+.qty-btn:active {
+    background: var(--gray-300);
+}
+
+.qty-btn-icon {
+    width: 12px;
+    height: 12px;
+    display: block;
+    flex-shrink: 0;
+    opacity: 0.75;
+    filter: brightness(0) saturate(100%)
+            invert(8%) sepia(8%) saturate(1000%)
+            hue-rotate(50deg) brightness(95%) contrast(95%);
+    pointer-events: none;
+}
+
+.qty-input {
+    width: 100%;
+    height: 100%;
+    min-height: 28px;
+    min-width: 26px;
+    flex: 1 1 auto;
+    border: none;
+    background: var(--white);
+    text-align: center;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.qty-input:focus {
+    outline: none;
+}
+
+.qty-input::-webkit-inner-spin-button,
+.qty-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* ============================================
+   ADD BUTTONS — cart + order, same footprint
+   ============================================ */
+
+.add-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 32px;
+    width: 32px;
+    height: 100%;
+    min-height: 28px;
+    max-height: 32px;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--white);
+    cursor: pointer;
+    transition: background var(--transition-fast), transform var(--transition-fast);
+}
+
+.add-btn:active {
+    transform: scale(0.95);
+}
+
+.add-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background: var(--gray-100);
+}
+
+.add-btn img {
+    display: block;
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    filter: brightness(0) invert(1);
+    pointer-events: none;
+}
+
+.add-to-cart-btn {
+    background: #1a1a1a;
+}
+
+.add-to-cart-btn:hover {
+    background: #000000;
+}
+
+.add-to-order-btn {
+    background: var(--primary);
+}
+
+.add-to-order-btn:hover {
+    background: var(--primary-dark);
+}
+
+.add-btn.added {
+    background: var(--success);
+}
+
+/* ============================================
+   LOGIN / OUT OF STOCK
+   ============================================ */
+
+.product-actions .btn-outline,
+.product-actions .btn-disabled {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 32px;
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.product-actions .btn-outline {
+    border: 2px solid var(--gray-300);
+    background: transparent;
+    color: var(--gray-600);
+}
+
+.product-actions .btn-disabled {
+    border: none;
+    background: var(--gray-100);
+    color: var(--gray-400);
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* ============================================
+   RESPONSIVE — DESKTOP (4 columns)
+   ============================================ */
+
+@media (min-width: 1025px) {
+    .product-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 16px;
+    }
+
+    .product-card {
+        min-height: 460px;
+        padding: 18px;
+    }
+
+    .product-info .heading-6 {
+        font-size: 17px;
+        height: 44px;
+    }
+
+    .product-description {
+        font-size: 14px;
+        height: 34px;
+    }
+
+    .product-price { font-size: 18px; }
+    .product-calories { font-size: 14px; }
+    .product-meta { height: 34px; }
+
+    .tags-label,
+    .allergen-label {
+        font-size: 10px;
+        height: 13px;
+        line-height: 13px;
+        margin-bottom: 3px;
+    }
+
+    .product-tags-section,
+    .product-allergens-section { height: 90px; }
+
+    .product-tags,
+    .product-allergens-tags {
+        gap: 4px;
+        grid-auto-rows: 22px;
+    }
+
+    .product-tags .tag,
+    .product-allergens-tags .tag {
+        height: 100%;
+        font-size: 10px;
+        padding: 2px 6px;
+    }
+
+    .product-allergens-tags .tag-none {
+        height: 100%;
+        font-size: 10px;
+    }
+
+    .product-actions { min-height: 48px; padding-top: 10px; }
+    .product-actions .action-row { min-height: 32px; }
+
+    .quantity-control { max-height: 32px; }
+
+    .qty-btn { width: 30px; min-height: 28px; }
+    .qty-btn-icon { width: 13px; height: 13px; }
+    .qty-input { min-height: 28px; font-size: 14px; min-width: 28px; }
+
+    .add-btn {
+        flex: 0 0 32px;
+        width: 32px;
+        min-height: 28px;
+        max-height: 32px;
+    }
+    .add-btn img { width: 15px; height: 15px; }
+
+    .product-actions .btn-outline,
+    .product-actions .btn-disabled { height: 32px; font-size: 13px; }
+}
+
+/* ============================================
+   RESPONSIVE — LARGE DESKTOP
+   ============================================ */
+
+@media (min-width: 1400px) {
+    .product-grid {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 18px;
+    }
+}
+
+@media (min-width: 1700px) {
+    .product-grid {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 20px;
+    }
+}
+
+/* ============================================
+   RESPONSIVE — TABLET LANDSCAPE (3 columns)
+   ============================================ */
+
+@media (max-width: 1024px) and (min-width: 821px) {
+    .product-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+    }
+
+    .product-card { min-height: 440px; padding: 14px; }
+
+    .product-info .heading-6 { font-size: 16px; height: 42px; }
+    .product-description { font-size: 13px; height: 32px; }
+    .product-price { font-size: 17px; }
+    .product-calories { font-size: 13px; }
+    .product-meta { height: 32px; }
+
+    .tags-label,
+    .allergen-label {
+        font-size: 9px;
+        height: 12px;
+        line-height: 12px;
+        margin-bottom: 2px;
+    }
+
+    .product-tags-section,
+    .product-allergens-section { height: 80px; }
+
+    .product-tags,
+    .product-allergens-tags {
+        gap: 3px;
+        grid-auto-rows: 20px;
+    }
+
+    .product-tags .tag,
+    .product-allergens-tags .tag {
+        height: 100%;
+        font-size: 9px;
+        padding: 1px 5px;
+    }
+
+    .product-allergens-tags .tag-none {
+        height: 100%;
+        font-size: 9px;
+    }
+
+    .product-actions { min-height: 44px; padding-top: 8px; }
+    .product-actions .action-row { min-height: 28px; gap: 5px; }
+
+    .quantity-control { max-height: 28px; }
+
+    .qty-btn { width: 26px; min-height: 24px; }
+    .qty-btn-icon { width: 11px; height: 11px; }
+    .qty-input { min-height: 24px; font-size: 13px; min-width: 22px; }
+
+    .add-btn {
+        flex: 0 0 28px;
+        width: 28px;
+        min-height: 24px;
+        max-height: 28px;
+    }
+    .add-btn img { width: 13px; height: 13px; }
+
+    .product-actions .btn-outline,
+    .product-actions .btn-disabled { height: 28px; font-size: 12px; }
+}
+
+/* ============================================
+   RESPONSIVE — TABLET PORTRAIT (2 columns)
+   ============================================ */
+
+@media (max-width: 820px) and (min-width: 481px) {
+    .product-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .product-card { min-height: 430px; padding: 14px; }
+
+    .product-info .heading-6 { font-size: 16px; height: 42px; }
+    .product-description { font-size: 13px; height: 32px; }
+    .product-price { font-size: 17px; }
+    .product-calories { font-size: 13px; }
+    .product-meta { height: 32px; }
+
+    .tags-label,
+    .allergen-label {
+        font-size: 9px;
+        height: 12px;
+        line-height: 12px;
+        margin-bottom: 2px;
+    }
+
+    .product-tags-section,
+    .product-allergens-section { height: 80px; }
+
+    .product-tags,
+    .product-allergens-tags {
+        gap: 3px;
+        grid-auto-rows: 20px;
+    }
+
+    .product-tags .tag,
+    .product-allergens-tags .tag {
+        height: 100%;
+        font-size: 9px;
+        padding: 1px 5px;
+    }
+
+    .product-allergens-tags .tag-none {
+        height: 100%;
+        font-size: 9px;
+    }
+
+    .product-actions { min-height: 44px; padding-top: 8px; }
+    .product-actions .action-row { min-height: 28px; gap: 5px; }
+
+    .quantity-control { max-height: 28px; }
+
+    .qty-btn { width: 26px; min-height: 24px; }
+    .qty-btn-icon { width: 11px; height: 11px; }
+    .qty-input { min-height: 24px; font-size: 13px; min-width: 22px; }
+
+    .add-btn {
+        flex: 0 0 28px;
+        width: 28px;
+        min-height: 24px;
+        max-height: 28px;
+    }
+    .add-btn img { width: 13px; height: 13px; }
+
+    .product-actions .btn-outline,
+    .product-actions .btn-disabled { height: 28px; font-size: 12px; }
+}
+
+/* ============================================
+   RESPONSIVE — MOBILE (2 columns)
+   ============================================ */
+
+@media (max-width: 480px) {
+    .product-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .product-card {
+        min-height: 410px;
+        padding: 12px;
+        border-radius: var(--radius-sm);
+    }
+
+    .product-image {
+        margin-bottom: 8px;
+        border-radius: var(--radius-sm);
+    }
+
+    .product-info { gap: 3px; }
+
+    .product-info .heading-6 { font-size: 15px; height: 38px; }
+
+    .product-description {
+        font-size: 12px;
+        line-height: 1.4;
+        height: 30px;
+    }
+
+    .product-meta { height: 30px; gap: 6px; margin-top: 2px; }
+    .product-price { font-size: 16px; }
+    .product-calories { font-size: 12px; }
+
+    .tags-label,
+    .allergen-label {
+        font-size: 8px;
+        height: 11px;
+        line-height: 11px;
+        margin-bottom: 2px;
+    }
+
+    .product-tags-section,
+    .product-allergens-section { height: 73px; }
+
+    .product-tags,
+    .product-allergens-tags {
+        gap: 3px;
+        grid-auto-rows: 18px;
+    }
+
+    .product-tags .tag,
+    .product-allergens-tags .tag {
+        height: 100%;
+        font-size: 8px;
+        padding: 1px 4px;
+        border-radius: 10px;
+    }
+
+    .product-allergens-tags .tag-none {
+        height: 100%;
+        font-size: 8px;
+        border-radius: 10px;
+    }
+
+    .product-actions { padding-top: 8px; min-height: 44px; }
+    .product-actions .action-row { gap: 4px; min-height: 28px; }
+
+    .quantity-control { max-height: 28px; }
+
+    .qty-btn { width: 24px; min-height: 24px; }
+    .qty-btn-icon { width: 10px; height: 10px; }
+    .qty-input { min-height: 24px; font-size: 13px; min-width: 20px; }
+
+    .add-btn {
+        flex: 0 0 26px;
+        width: 26px;
+        min-height: 24px;
+        max-height: 28px;
+    }
+    .add-btn img { width: 12px; height: 12px; }
+
+    .product-actions .btn-outline,
+    .product-actions .btn-disabled { height: 28px; font-size: 12px; }
+}
+
+/* ============================================
+   RESPONSIVE — VERY SMALL MOBILE
+   ============================================ */
+
+@media (max-width: 360px) {
+    .product-grid { gap: 8px; }
+
+    .product-card {
+        min-height: 380px;
+        padding: 10px;
+        border-radius: var(--radius-sm);
+    }
+
+    .product-info .heading-6 { font-size: 14px; height: 36px; }
+    .product-description { font-size: 11px; height: 26px; }
+    .product-meta { height: 28px; gap: 4px; }
+    .product-price { font-size: 15px; }
+    .product-calories { font-size: 11px; }
+
+    .tags-label,
+    .allergen-label {
+        font-size: 8px;
+        height: 10px;
+        line-height: 10px;
+        margin-bottom: 2px;
+    }
+
+    .product-tags-section,
+    .product-allergens-section { height: 64px; }
+
+    .product-tags,
+    .product-allergens-tags {
+        gap: 2px;
+        grid-auto-rows: 16px;
+    }
+
+    .product-tags .tag,
+    .product-allergens-tags .tag {
+        height: 100%;
+        font-size: 7px;
+        padding: 1px 3px;
+        border-radius: 8px;
+    }
+
+    .product-allergens-tags .tag-none {
+        height: 100%;
+        font-size: 7px;
+        border-radius: 8px;
+    }
+
+    .product-actions { padding-top: 6px; min-height: 40px; }
+    .product-actions .action-row { min-height: 24px; gap: 3px; }
+
+    .quantity-control { max-height: 24px; }
+
+    .qty-btn { width: 22px; min-height: 20px; }
+    .qty-btn-icon { width: 9px; height: 9px; }
+    .qty-input { min-height: 20px; font-size: 12px; min-width: 18px; }
+
+    .add-btn {
+        flex: 0 0 24px;
+        width: 24px;
+        min-height: 20px;
+        max-height: 24px;
+    }
+    .add-btn img { width: 11px; height: 11px; }
+
+    .product-actions .btn-outline,
+    .product-actions .btn-disabled { height: 24px; font-size: 11px; }
+}

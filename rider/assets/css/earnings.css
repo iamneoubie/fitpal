@@ -1,0 +1,682 @@
+/**
+ * FitPal Rider Earnings Page Styles
+ *
+ * @package FitPal
+ * @version 1.0
+ */
+
+/* ============================================
+   CONTENT WRAPPER
+   ============================================ */
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+}
+
+.rider-earnings-page {
+    background: var(--gray-50);
+    padding: 24px 0 40px 0;
+    flex: 1;
+}
+
+.rider-earnings-page .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 16px;
+    width: 100%;
+}
+
+/* ============================================
+   PAGE HEADER
+   ============================================ */
+
+.rider-page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.rider-page-header .heading-2 {
+    margin: 0 0 4px 0;
+    font-size: var(--font-size-3xl);
+    line-height: 1.2;
+}
+
+.rider-page-header .heading-2 span {
+    color: var(--primary);
+}
+
+.rider-page-header .text-muted {
+    color: var(--gray-500);
+    margin: 0;
+    font-size: var(--font-size-sm);
+}
+
+.rider-page-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.rider-page-actions .btn-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+    filter: brightness(0) invert(1);
+}
+
+/* ============================================
+   BALANCE HERO
+   ============================================ */
+
+.rider-balance-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #ffffff;
+    border-radius: var(--radius-lg);
+    padding: 28px 32px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-lg);
+    flex-wrap: wrap;
+}
+
+.rider-balance-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.rider-balance-label {
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.85);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+
+.rider-balance-amount {
+    font-size: 2.5rem;
+    font-weight: 700;
+    line-height: 1.1;
+    color: #ffffff;
+    letter-spacing: -1px;
+}
+
+.rider-balance-note {
+    font-size: var(--font-size-xs);
+    color: rgba(255, 255, 255, 0.75);
+    margin-top: 4px;
+}
+
+.rider-balance-right {
+    flex-shrink: 0;
+}
+
+.rider-balance-card .btn-primary {
+    background: #ffffff;
+    color: var(--primary-dark);
+    border: none;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.rider-balance-card .btn-primary:hover {
+    background: #f0f4f0;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.rider-balance-card .btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* ============================================
+   EARNINGS STATS
+   ============================================ */
+
+.rider-earnings-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.rider-earnings-stat {
+    background: var(--white);
+    border: 1px solid var(--gray-100);
+    border-radius: var(--radius-lg);
+    padding: 18px 20px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.rider-earnings-stat-label {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: var(--font-weight-semibold);
+}
+
+.rider-earnings-stat-value {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--text);
+    line-height: 1.2;
+}
+
+.rider-earnings-stat-hint {
+    font-size: var(--font-size-xs);
+    color: var(--gray-400);
+}
+
+/* ============================================
+   CHART
+   ============================================ */
+
+.rider-chart-body {
+    padding: 20px;
+}
+
+.rider-weekly-chart {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px;
+    height: 220px;
+    position: relative;
+}
+
+.rider-chart-y-axis {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding: 0 4px 22px 0;
+    font-size: 11px;
+    color: var(--gray-400);
+    font-weight: var(--font-weight-medium);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.rider-chart-plot {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.rider-chart-gridline {
+    position: absolute;
+    left: 0;
+    right: 0;
+    border-top: 1px dashed var(--gray-100);
+    height: 0;
+}
+
+.rider-chart-plot .rider-chart-gridline {
+    bottom: 22px;
+}
+
+.rider-chart-plot .rider-chart-gridline:nth-child(1) {
+    top: 0;
+    bottom: auto;
+}
+
+.rider-chart-plot .rider-chart-gridline:nth-child(2) {
+    top: 25%;
+}
+
+.rider-chart-plot .rider-chart-gridline:nth-child(3) {
+    top: 50%;
+}
+
+.rider-chart-plot .rider-chart-gridline:nth-child(4) {
+    top: 75%;
+}
+
+.rider-chart-plot .rider-chart-gridline:nth-child(5) {
+    top: auto;
+    bottom: 22px;
+}
+
+.rider-chart-columns {
+    flex: 1;
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    padding-bottom: 22px;
+    position: relative;
+    z-index: 1;
+    min-height: 0;
+}
+
+.rider-chart-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.rider-chart-bar-track {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    min-height: 0;
+}
+
+.rider-chart-bar {
+    width: 60%;
+    max-width: 42px;
+    min-height: 4px;
+    background: linear-gradient(180deg, var(--secondary) 0%, var(--primary) 100%);
+    border-radius: 6px 6px 3px 3px;
+}
+
+.rider-chart-bar.is-empty {
+    background: var(--gray-200);
+}
+
+.rider-chart-bar.is-today {
+    background: linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%);
+    box-shadow: 0 2px 8px rgba(89, 193, 74, 0.25);
+}
+
+.rider-chart-label {
+    font-size: 11px;
+    font-weight: var(--font-weight-semibold);
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    line-height: 1;
+}
+
+.rider-chart-label.is-today {
+    color: var(--primary);
+}
+
+/* ============================================
+   TRANSACTIONS
+   ============================================ */
+
+.rider-txn-count {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    background: var(--gray-100);
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    font-weight: 600;
+}
+
+.rider-txn-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.rider-txn-row {
+    display: grid;
+    grid-template-columns: 44px 1fr auto;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--gray-100);
+}
+
+.rider-txn-row:last-child {
+    border-bottom: none;
+}
+
+.rider-txn-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.rider-txn-icon.credit {
+    background: rgba(89, 193, 74, 0.12);
+}
+
+.rider-txn-icon.debit {
+    background: rgba(220, 53, 69, 0.1);
+}
+
+.rider-txn-icon img {
+    width: 20px;
+    height: 20px;
+    display: block;
+}
+
+.rider-txn-icon.credit img {
+    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.rider-txn-icon.debit img {
+    filter: brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(600%) hue-rotate(330deg) brightness(90%) contrast(85%);
+}
+
+.rider-txn-info {
+    min-width: 0;
+}
+
+.rider-txn-title {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+    margin: 0 0 2px 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.rider-txn-order {
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    color: var(--gray-500);
+    background: var(--gray-100);
+    padding: 1px 8px;
+    border-radius: var(--radius-full);
+}
+
+.rider-txn-desc {
+    font-size: var(--font-size-xs);
+    color: var(--gray-600);
+    margin: 0 0 2px 0;
+    word-break: break-word;
+}
+
+.rider-txn-date {
+    font-size: var(--font-size-xs);
+    color: var(--gray-400);
+    margin: 0;
+}
+
+.rider-txn-amount-col {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.rider-txn-amount {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-bold);
+    white-space: nowrap;
+}
+
+.rider-txn-amount.credit {
+    color: var(--primary-dark);
+}
+
+.rider-txn-amount.debit {
+    color: var(--danger);
+}
+
+.rider-txn-status {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+}
+
+.rider-txn-status.pending {
+    color: #856404;
+    background: #fff3cd;
+}
+
+.rider-txn-status.failed {
+    color: #721c24;
+    background: #f8d7da;
+}
+
+/* ============================================
+   PAGINATION
+   ============================================ */
+
+.rider-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--gray-100);
+}
+
+.rider-pagination-link {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 16px;
+    border-radius: var(--radius-base);
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    color: var(--gray-700);
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    transition: all 0.15s ease;
+}
+
+.rider-pagination-link:hover:not(.disabled) {
+    background: var(--gray-50);
+    border-color: var(--gray-300);
+}
+
+.rider-pagination-link.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.rider-pagination-info {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+}
+
+/* ============================================
+   EMPTY STATE
+   ============================================ */
+
+.rider-empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.rider-empty-icon {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 14px;
+    background: var(--gray-100);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px;
+}
+
+.rider-empty-icon img {
+    width: 100%;
+    height: 100%;
+    max-width: 32px;
+    max-height: 32px;
+    object-fit: contain;
+    opacity: 0.4;
+}
+
+.rider-empty-title {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+    margin: 0 0 6px 0;
+}
+
+.rider-empty-text {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    margin: 0;
+    max-width: 320px;
+}
+
+/* ============================================
+   WITHDRAWAL MODAL
+   ============================================ */
+
+.rider-withdraw-modal {
+    width: 420px;
+    max-width: calc(100vw - 40px);
+}
+
+.rider-withdraw-note {
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    margin: 0 0 16px 0;
+}
+
+.rider-withdraw-note strong {
+    color: var(--text);
+    font-weight: 700;
+}
+
+.rider-withdraw-hint {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    margin: 6px 0 0 0;
+}
+
+.rider-withdraw-error {
+    font-size: var(--font-size-xs);
+    color: var(--danger);
+    margin: 6px 0 0 0;
+    min-height: 16px;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 992px) {
+    .rider-earnings-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .rider-earnings-page {
+        padding: 16px 0 32px 0;
+    }
+
+    .rider-page-header .heading-2 {
+        font-size: var(--font-size-2xl);
+    }
+
+    .rider-balance-card {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 22px;
+    }
+
+    .rider-balance-right {
+        width: 100%;
+    }
+
+    .rider-balance-card .btn {
+        width: 100%;
+    }
+
+    .rider-balance-amount {
+        font-size: 2rem;
+    }
+
+    .rider-weekly-chart {
+        height: 180px;
+    }
+
+    .rider-txn-row {
+        grid-template-columns: 40px 1fr auto;
+        gap: 12px;
+        padding: 14px 16px;
+    }
+
+    .rider-txn-icon {
+        width: 40px;
+        height: 40px;
+    }
+
+    .rider-txn-amount {
+        font-size: var(--font-size-sm);
+    }
+}
+
+@media (max-width: 480px) {
+    .rider-earnings-stats {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+
+    .rider-earnings-stat {
+        padding: 14px;
+    }
+
+    .rider-earnings-stat-value {
+        font-size: var(--font-size-base);
+    }
+
+    .rider-txn-row {
+        grid-template-columns: 36px 1fr;
+        grid-template-areas:
+            "icon info"
+            "meta meta";
+        row-gap: 6px;
+        padding: 12px 14px;
+    }
+
+    .rider-txn-icon {
+        grid-area: icon;
+        width: 36px;
+        height: 36px;
+    }
+
+    .rider-txn-info {
+        grid-area: info;
+    }
+
+    .rider-txn-amount-col {
+        grid-area: meta;
+        flex-direction: row;
+        justify-content: space-between;
+        width: 100%;
+        align-items: center;
+    }
+}

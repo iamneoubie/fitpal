@@ -1,0 +1,305 @@
+/**
+ * FitPal Terms & Conditions Page Styles
+ * Content spans full width with proper padding.
+ */
+
+/* ============================================
+   CONTENT WRAPPER - Full width
+   ============================================ */
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+}
+
+/* ============================================
+   HERO SECTION - Full width
+   ============================================ */
+
+.terms-hero {
+    padding: var(--spacing-10) 0 var(--spacing-6) 0;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: var(--white);
+    text-align: center;
+    width: 100%;
+    padding-left: var(--spacing-4);
+    padding-right: var(--spacing-4);
+}
+
+.terms-hero-content {
+    max-width: 700px;
+    margin: 0 auto;
+}
+
+.terms-hero-title {
+    font-size: var(--font-size-3xl);
+    font-weight: 700;
+    color: var(--white);
+    margin-bottom: var(--spacing-2);
+}
+
+.terms-hero-title span {
+    color: var(--secondary);
+}
+
+.terms-hero-subtitle {
+    font-size: var(--font-size-base);
+    color: rgba(255, 255, 255, 0.8);
+    margin: 0;
+}
+
+/* ============================================
+   TERMS CONTENT - Full width
+   ============================================ */
+
+.terms-section {
+    padding: var(--spacing-8) 0 var(--spacing-12) 0;
+    background-color: var(--white);
+    width: 100%;
+    padding-left: var(--spacing-4);
+    padding-right: var(--spacing-4);
+}
+
+.terms-content {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+/* ============================================
+   DISCLAIMER
+   ============================================ */
+
+.terms-disclaimer {
+    background-color: #fff3cd;
+    border-left: 4px solid #ffc107;
+    padding: var(--spacing-4) var(--spacing-5);
+    border-radius: var(--radius-base);
+    margin-bottom: var(--spacing-8);
+}
+
+.terms-disclaimer-text {
+    font-size: var(--font-size-base);
+    color: #856404;
+    margin: 0;
+    line-height: 1.6;
+}
+
+.terms-disclaimer-text strong {
+    color: #856404;
+}
+
+/* ============================================
+   TERMS BLOCKS
+   ============================================ */
+
+.terms-block {
+    margin-bottom: var(--spacing-6);
+    padding-bottom: var(--spacing-6);
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.terms-block:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.terms-block-title {
+    font-size: var(--font-size-xl);
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 var(--spacing-2) 0;
+    padding-top: var(--spacing-2);
+    scroll-margin-top: 80px;
+}
+
+.terms-block-text {
+    font-size: var(--font-size-base);
+    color: var(--gray-600);
+    line-height: 1.7;
+    margin: 0 0 var(--spacing-2) 0;
+}
+
+.terms-block-list {
+    list-style: none;
+    padding: 0;
+    margin: var(--spacing-2) 0 0 0;
+}
+
+.terms-block-list li {
+    position: relative;
+    padding-left: var(--spacing-5);
+    font-size: var(--font-size-base);
+    color: var(--gray-600);
+    line-height: 1.7;
+    margin-bottom: var(--spacing-1);
+}
+
+.terms-block-list li::before {
+    content: '•';
+    position: absolute;
+    left: 0;
+    color: var(--primary);
+    font-weight: bold;
+}
+
+.terms-block-list li strong {
+    color: var(--text);
+}
+
+.terms-block-note {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    background-color: var(--gray-50);
+    padding: var(--spacing-2) var(--spacing-3);
+    border-radius: var(--radius-base);
+    margin: var(--spacing-2) 0 0 0;
+    border-left: 3px solid var(--primary);
+}
+
+/* ============================================
+   AGREEMENT SECTION - Full width
+   ============================================ */
+
+.terms-agreement {
+    padding: var(--spacing-8) 0 var(--spacing-12) 0;
+    background-color: var(--gray-50);
+    width: 100%;
+    padding-left: var(--spacing-4);
+    padding-right: var(--spacing-4);
+}
+
+.terms-agreement-box {
+    max-width: 800px;
+    margin: 0 auto;
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-8);
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--gray-200);
+    text-align: center;
+}
+
+.terms-agreement-text {
+    font-size: var(--font-size-base);
+    color: var(--gray-700);
+    line-height: 1.8;
+    margin-bottom: var(--spacing-6);
+}
+
+.terms-agreement-text strong {
+    color: var(--text);
+}
+
+.terms-agreement-actions {
+    display: flex;
+    justify-content: center;
+    gap: var(--spacing-4);
+    flex-wrap: wrap;
+}
+
+.terms-agreement-actions .btn {
+    min-width: 180px;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 768px) {
+    .terms-hero {
+        padding: var(--spacing-6) 0 var(--spacing-4) 0;
+        padding-left: var(--spacing-3);
+        padding-right: var(--spacing-3);
+    }
+
+    .terms-hero-title {
+        font-size: var(--font-size-2xl);
+    }
+
+    .terms-hero-subtitle {
+        font-size: var(--font-size-sm);
+    }
+
+    .terms-section {
+        padding: var(--spacing-6) 0 var(--spacing-8) 0;
+        padding-left: var(--spacing-3);
+        padding-right: var(--spacing-3);
+    }
+
+    .terms-block-title {
+        font-size: var(--font-size-lg);
+        scroll-margin-top: 70px;
+    }
+
+    .terms-block-text {
+        font-size: var(--font-size-sm);
+    }
+
+    .terms-block-list li {
+        font-size: var(--font-size-sm);
+    }
+
+    .terms-disclaimer {
+        padding: var(--spacing-3) var(--spacing-4);
+    }
+
+    .terms-disclaimer-text {
+        font-size: var(--font-size-sm);
+    }
+
+    .terms-agreement {
+        padding: var(--spacing-6) 0 var(--spacing-8) 0;
+        padding-left: var(--spacing-3);
+        padding-right: var(--spacing-3);
+    }
+
+    .terms-agreement-box {
+        padding: var(--spacing-4);
+    }
+
+    .terms-agreement-text {
+        font-size: var(--font-size-sm);
+    }
+
+    .terms-agreement-actions {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .terms-agreement-actions .btn {
+        width: 100%;
+        max-width: 300px;
+    }
+}
+
+@media (max-width: 576px) {
+    .terms-hero-title {
+        font-size: var(--font-size-xl);
+    }
+
+    .terms-block-title {
+        font-size: var(--font-size-base);
+        scroll-margin-top: 65px;
+    }
+
+    .terms-block {
+        padding-bottom: var(--spacing-4);
+        margin-bottom: var(--spacing-4);
+    }
+
+    .terms-agreement-box {
+        padding: var(--spacing-3);
+    }
+
+    .terms-hero,
+    .terms-section,
+    .terms-agreement {
+        padding-left: var(--spacing-2);
+        padding-right: var(--spacing-2);
+    }
+}
