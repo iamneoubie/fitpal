@@ -1,7 +1,21 @@
-rider bug automatically online status in restaurant.
-rider bug auto accept the booking without confirmation.
+restaurant cant send to rider double book with same person
 
-restaurant bug once order is placed when the product is in the all active when mark as ready to deliver it vanised but have a record in the analytics.
+rider after getting or finnishing the order automatically offline 
 
-restaurant bug when the order is ready for pick up and a rider is already assign, the record of that order is vanish no history and retaurant cant track when the order is already delivered 
+customer bug when cod payment after a successful delivered the status of cod payment is still pending
 
+rider already have rating but no order 
+
+rider balance no ammount after an online payment succeed
+
+customer sign up bug 
+
+
+
+Warning: require_once(C:\Users\Chris\Documents\GitHub\fitpal\customer\pages/../includes/csrf_token.php): Failed to open stream: No such file or directory in C:\Users\Chris\Documents\GitHub\fitpal\customer\pages\sign-up.php on line 42
+
+Fatal error: Uncaught Error: Failed opening required 'C:\Users\Chris\Documents\GitHub\fitpal\customer\pages/../includes/csrf_token.php' (include_path='D:\Application Program\Xampp\php\PEAR') in C:\Users\Chris\Documents\GitHub\fitpal\customer\pages\sign-up.php:42 Stack trace: #0 {main} thrown in C:\Users\Chris\Documents\GitHub\fitpal\customer\pages\sign-up.php on line 42
+
+
+
+when u creat a new resto / sign up no branch pop up when u log in 
