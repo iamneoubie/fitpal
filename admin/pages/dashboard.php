@@ -10,9 +10,17 @@
  * style attribute ever appears in the markup.
  *
  * @package FitPal
- * @version 4.2 — Removed the last inline style attribute. Chart bar
- *                heights now travel as data-bar-height and are
- *                applied by dashboard.js.
+ * @version 4.4 — Version bump to match the CSRF consolidation in
+ *                header.php v5.0 and includes/admin-csrf-token.php
+ *                v1.0. No functional change: this page already reads
+ *                $csrfToken from header.php and never generated the
+ *                token itself. (4.3: Removed the local CSRF block
+ *                that wrote to the shared 'csrf_token' session key.
+ *                The admin role's token is now generated in
+ *                header.php under 'admin_csrf_token' and exposed as
+ *                $csrfToken. The shared key was a collision hazard:
+ *                the customer/rider/restaurant roles run on the same
+ *                PHP session and can rotate or delete it.)
  */
 
 declare(strict_types=1);
@@ -56,10 +64,7 @@ $pendingRiders = $pendingRidersData['rows'];
 
 $recentActivity = getRecentVerificationActivity($database_connection, 6);
 
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-$csrfToken = $_SESSION['csrf_token'];
+// $csrfToken is provided by header.php (admin_csrf_token).
 ?>
 
 <div class="content admin-dashboard-page">

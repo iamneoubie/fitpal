@@ -2,19 +2,36 @@
 /**
  * FitPal Admin Header
  *
- * Admin-specific header with conditional navigation based on login
- * status. Mirrors customer/includes/header.php and
- * rider/includes/header.php so all four roles stay consistent in
- * behavior, asset resolution, and CSS load order.
+ * Renders the admin chrome (nav, user block, logout modal) and
+ * bootstraps the admin role's request-scoped needs:
  *
- * Logout uses a confirmation modal, matching the customer, rider,
- * and restaurant headers. The logout buttons carry
- * data-logout-trigger so logout.js intercepts the click and opens
- * #logoutModal.
+ *   - Starts or resumes the PHP session.
+ *   - Requires includes/admin-csrf-token.php and, for authenticated
+ *     pages, calls getAdminCsrfToken() to expose $csrfToken. The
+ *     helper stores the token under 'admin_csrf_token' — never the
+ *     shared 'csrf_token' key — because all FitPal roles run on the
+ *     same PHP session and a shared key would let one role's success
+ *     path delete another role's already-rendered token.
+ *   - Requires the shared PDO connection via admin-connect.php.
+ *   - Computes $assetBase and $pageCssPath for the current page.
+ *   - Loads the signed-in administrator's display name, initial, and
+ *     role when a session is present.
+ *
+ * The $csrfToken initialization is guarded with !isset() so a caller
+ * that sets the variable before including this file (sign-in.php
+ * does exactly that) is not clobbered with an empty default.
+ * Authenticated pages do not set it first; the header assigns it
+ * from getAdminCsrfToken() inside the logged-in branch.
  *
  * @package FitPal
- * @version 4.0 — Logout confirmation modal added. $pageCssMap still
- *                points each list page at its own stylesheet.
+ * @version 5.1 — Rewrote the docblock to describe only current
+ *                behavior. The historical narrative about the old
+ *                inline generation block and the shared csrf_token
+ *                key now lives in includes/admin-csrf-token.php,
+ *                where it explains why the per-role key exists.
+ *                No code change: the helper require, the guarded
+ *                $csrfToken init, and the authenticated
+ *                getAdminCsrfToken() call are unchanged from v5.0.
  */
 
 declare(strict_types=1);
@@ -26,10 +43,19 @@ if (session_status() === PHP_SESSION_NONE) {
 
 if (!isset($_SESSION['created'])) {
     $_SESSION['created'] = time();
-} elseif (time() - $_SESSION['created'] > 1800) {
+} elseif (time() - $_SESSION['created'] > 1800 && !empty($_SESSION['administrator_id'])) {
     session_regenerate_id(true);
     $_SESSION['created'] = time();
 }
+
+// ===== CSRF TOKEN (admin role) =====
+//
+// Single source of truth for the admin role's CSRF token. The helper
+// generates it on first use and stores it under 'admin_csrf_token' —
+// never the shared 'csrf_token' key. sign-in.php deliberately requires
+// this same file before including the header, because its form must
+// render even when the header's authenticated branch is not taken.
+require_once __DIR__ . '/admin-csrf-token.php';
 
 // ===== DATABASE =====
 require_once __DIR__ . '/../backend/database/admin-connect.php';
@@ -52,8 +78,18 @@ $adminName    = '';
 $adminInitial = '';
 $adminRole    = '';
 
+// Do not overwrite a value the caller may have already set. On the
+// sign-in page, sign-in.php assigns $csrfToken before including this
+// file; the header must not clobber it with an empty default.
+if (!isset($csrfToken)) {
+    $csrfToken = '';
+}
+
 if (!empty($_SESSION['administrator_id'])) {
     $isLoggedIn = true;
+
+    $csrfToken = getAdminCsrfToken();
+
     try {
         $stmt = $database_connection->prepare(
             "SELECT a.first_name, a.last_name, ap.role

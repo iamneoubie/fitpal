@@ -27,14 +27,26 @@
  * failures return 403.
  *
  * @package FitPal
- * @version 2.0 — Introduces the rider_pending handoff:
- *                  - Removes mark_delivering.
- *                  - assign_rider no longer flips the rider's
- *                    availability.
- *                  - reassign_rider accepts rider_pending orders.
- *                  - Rider availability checks exclude the order
- *                    being edited so the current rider is not
- *                    filtered out during a reassignment.
+ * @version 3.0 — CSRF validation now compares against the restaurant
+ *                role's own session key, restaurant_csrf_token,
+ *                instead of the shared csrf_token. Requires
+ *                includes/restaurant-csrf-token.php so the handler
+ *                owns its CSRF bootstrap rather than depending on
+ *                the page that rendered the form having already
+ *                called getRestaurantCsrfToken(). Uses isset() on
+ *                both keys before hash_equals() so an unset session
+ *                key can never be coerced to an empty string and
+ *                pass validation against an empty POST value. On
+ *                mismatch, rotates the restaurant token before
+ *                returning the JSON error. Only the restaurant's own
+ *                key is touched; the shared csrf_token key and every
+ *                other role's token are left alone.
+ *
+ *                (2.0: Introduces the rider_pending handoff —
+ *                removes mark_delivering, assign_rider no longer
+ *                flips the rider's availability, reassign_rider
+ *                accepts rider_pending orders, rider availability
+ *                checks exclude the order being edited.)
  */
 
 declare(strict_types=1);
@@ -91,10 +103,19 @@ if ($branchId <= 0) {
  * CSRF
  * -------------------------------------------------------------- */
 
+require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
+require_once __DIR__ . '/../database/order-queries.php';
+require_once __DIR__ . '/../../includes/restaurant-csrf-token.php';
+
 if (
-    !isset($_POST['csrf_token']) ||
-    !hash_equals((string)($_SESSION['csrf_token'] ?? ''), (string)$_POST['csrf_token'])
+    !isset($_POST['csrf_token'], $_SESSION['restaurant_csrf_token']) ||
+    !hash_equals((string)$_SESSION['restaurant_csrf_token'], (string)$_POST['csrf_token'])
 ) {
+    // Rotate the restaurant's own token so the next render generates
+    // a fresh one. Only the restaurant's key is cleared — never the
+    // shared 'csrf_token' key.
+    unset($_SESSION['restaurant_csrf_token']);
+
     http_response_code(403);
     echo json_encode(['status' => 'error', 'message' => 'Security validation failed']);
     exit;
@@ -103,9 +124,6 @@ if (
 /* --------------------------------------------------------------
  * ROUTING
  * -------------------------------------------------------------- */
-
-require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
-require_once __DIR__ . '/../database/order-queries.php';
 
 $action  = (string)($_POST['action'] ?? '');
 $orderId = (int)($_POST['order_id'] ?? 0);

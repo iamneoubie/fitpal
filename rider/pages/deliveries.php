@@ -34,12 +34,18 @@
  * No transparent or outlined buttons are used on this page.
  *
  * @package FitPal
- * @version 3.4 — Icon sources verified against the project tree:
- *                  - check-circle-fill.svg removed (does not exist).
- *                  - send-plane-fill.svg removed (does not exist).
- *                  - accept slot now uses verified-fill.svg.
- *                  - delivered slot now uses verified-badge-fill.svg.
- *                  - chat send now uses arrow-right-s-line.svg.
+ * @version 3.6 — Corrected the docblock reference from
+ *                includes/csrf-token.php to
+ *                includes/rider-csrf-token.php, which is the file the
+ *                header actually requires. No code change. (3.5:
+ *                Removed the local CSRF block that wrote to the
+ *                shared 'csrf_token' session key. The rider role's
+ *                token is now generated in includes/header.php via
+ *                includes/rider-csrf-token.php under
+ *                'rider_csrf_token' and exposed as $csrfToken, so
+ *                both the FITPAL_RIDER_DELIVERIES inline config and
+ *                the delivery-status buttons carry the rider-scoped
+ *                value.)
  */
 
 declare(strict_types=1);
@@ -68,10 +74,7 @@ $available  = (int)($profile['is_available'] ?? 0) === 1;
 $status     = (string)($profile['verification_status'] ?? 'pending');
 $isVerified = $status === 'verified';
 
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-$csrfToken = $_SESSION['csrf_token'];
+// $csrfToken is provided by header.php (rider_csrf_token).
 
 function formatRiderDate(string $date): string
 {

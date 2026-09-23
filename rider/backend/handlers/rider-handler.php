@@ -15,13 +15,24 @@
  * point for those transitions.
  *
  * @package FitPal
- * @version 4.0 — Aligns with the rider_pending handoff:
- *                  - Adds accept_assignment and decline_assignment.
- *                  - Removes picked_up; acceptance is the handoff.
- *                  - delivered now requires the caller to be the
- *                    assigned rider on a 'delivering' order.
- *                  - toggle_availability returns an error when the
- *                    rider has an active delivery.
+ * @version 4.1 — CSRF validation now compares against the rider
+ *                role's own session key, rider_csrf_token, instead of
+ *                the shared csrf_token. Requires
+ *                includes/rider-csrf-token.php so the handler owns
+ *                its CSRF bootstrap rather than depending on the
+ *                page that rendered the form having already called
+ *                getRiderCsrfToken(). On mismatch, rotates the token
+ *                before returning the JSON error so a reload
+ *                generates a fresh one instead of re-emitting the
+ *                stale value. Only the rider's own key is touched;
+ *                the shared csrf_token key and every other role's
+ *                token are left alone.
+ *
+ *                (4.0: Aligns with the rider_pending handoff —
+ *                adds accept_assignment and decline_assignment,
+ *                removes picked_up, tightens delivered, and makes
+ *                toggle_availability refuse while a delivery is
+ *                active.)
  */
 
 declare(strict_types=1);
@@ -44,7 +55,26 @@ if (empty($_SESSION['delivery_rider_id'])) {
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/rider-queries.php';
 
-if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'] ?? '', (string)$_POST['csrf_token'])) {
+// Own the rider role's CSRF bootstrap. The helper is idempotent and
+// stores the token under 'rider_csrf_token' — never the shared
+// 'csrf_token' key. Requiring it here means this handler does not
+// depend on the page that rendered the form having already generated
+// the token, and it gives the mismatch branch below a key it can
+// rotate.
+require_once __DIR__ . '/../../includes/rider-csrf-token.php';
+
+if (
+    !isset($_POST['csrf_token'], $_SESSION['rider_csrf_token']) ||
+    !hash_equals((string)$_SESSION['rider_csrf_token'], (string)$_POST['csrf_token'])
+) {
+    // Rotate the rider's own token so the next render generates a
+    // fresh one. Without this the key stays set, getRiderCsrfToken()
+    // returns the same stale value, and the client is stuck
+    // re-submitting a token the handler has already rejected.
+    // Only the rider's key is cleared — never the shared
+    // 'csrf_token' key.
+    unset($_SESSION['rider_csrf_token']);
+
     ob_end_clean();
     echo json_encode(['status' => 'error', 'message' => 'Security validation failed']);
     exit;

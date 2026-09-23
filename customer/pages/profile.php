@@ -21,7 +21,11 @@
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 4.0
+ * @version 4.2 — Bootstraps window.FITPAL_CSRF_TOKEN so profile.js has
+ *                a reliable token source instead of querying the DOM
+ *                for the first input[name="csrf_token"]. The token is
+ *                still the customer role's own key, customer_csrf_token,
+ *                inherited from header.php. No shared-key usage.
  */
 
 declare(strict_types=1);
@@ -60,15 +64,13 @@ require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../backend/database/customer-queries.php';
 require_once __DIR__ . '/../backend/database/address-queries.php';
 
+// $csrfToken is provided by header.php (via includes/csrf_token.php),
+// stored under the customer role's own session key 'customer_csrf_token'.
+
 $customerId = (int)$_SESSION['customer_id'];
 
 $profileData = getCustomerProfile($database_connection, $customerId) ?: null;
 $addresses   = getCustomerAddresses($database_connection, $customerId);
-
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-$csrfToken = $_SESSION['csrf_token'];
 
 $hasAddresses = !empty($addresses);
 $fullName     = trim(($profileData['first_name'] ?? '') . ' ' . ($profileData['last_name'] ?? ''));
@@ -399,5 +401,8 @@ $balance      = (float)($profileData['balance'] ?? 0);
     </div>
 </div>
 
+<script>
+window.FITPAL_CSRF_TOKEN = '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>';
+</script>
 <script src="../assets/ui/js/profile.js" defer></script>
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>

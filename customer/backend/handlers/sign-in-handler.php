@@ -3,7 +3,12 @@
  * FitPal Customer Sign-In Handler
  *
  * @package FitPal
- * @version 2.0
+ * @version 2.1 — Validates against customer_csrf_token (own key)
+ *                instead of the shared csrf_token, so a sign-in by
+ *                another role in the same browser session can no
+ *                longer delete/rotate the token this form relied on.
+ *                Only unsets its own token key on success. See
+ *                sign-in.php v1.2 for the full explanation.
  */
 
 declare(strict_types=1);
@@ -21,8 +26,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-if (!isset($_POST['csrf_token'], $_SESSION['csrf_token']) ||
-    !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+if (!isset($_POST['csrf_token'], $_SESSION['customer_csrf_token']) ||
+    !hash_equals($_SESSION['customer_csrf_token'], $_POST['csrf_token'])) {
     $_SESSION['login_error'] = 'Security validation failed. Please try again.';
     header('Location: ../../pages/sign-in.php');
     exit;
@@ -143,7 +148,7 @@ try {
     // ============================================================
     // END DEVELOPMENT-ONLY BLOCK
     // ============================================================
-    
+
     if (!$isPasswordValid) {
         $_SESSION['login_error'] = 'Invalid email/username or password.';
         header('Location: ../../pages/sign-in.php');
@@ -159,7 +164,10 @@ try {
     $_SESSION['user_username']  = $customer['username'];
     $_SESSION['created']        = time();
 
-    unset($_SESSION['csrf_token']);
+    // Only clear customer's own token. Do not touch the shared
+    // 'csrf_token' key or any other role's token — another role in
+    // this same browser session may still be relying on it.
+    unset($_SESSION['customer_csrf_token']);
 
     header('Location: ../../pages/dashboard.php');
     exit;

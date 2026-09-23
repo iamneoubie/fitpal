@@ -3,7 +3,9 @@
  * FitPal Customer Registration Handler
  *
  * @package FitPal
- * @version 2.0
+ * @version 2.1 — Validates against customer_csrf_token (own key)
+ *                instead of the shared csrf_token, matching the
+ *                sign-in handler and the customer sign-up.php form.
  */
 
 declare(strict_types=1);
@@ -27,7 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     respondError('Invalid request method.');
 }
 
-if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== ($_SESSION['csrf_token'] ?? '')) {
+if (!isset($_POST['csrf_token']) ||
+    !hash_equals((string)($_SESSION['customer_csrf_token'] ?? ''), (string)$_POST['csrf_token'])) {
     respondError('Security validation failed. Please refresh the page and try again.');
 }
 
@@ -171,7 +174,11 @@ try {
 
     $database_connection->commit();
 
-    $_SESSION = [];
+    // Do NOT wipe the whole session — other roles may be signed in on
+    // this same browser session. Only the customer CSRF token becomes
+    // stale after a successful registration, so clear just that.
+    unset($_SESSION['customer_csrf_token']);
+
     $_SESSION['registration_success'] = 'Account created successfully! Please sign in.';
 
     echo json_encode([

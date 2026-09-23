@@ -27,7 +27,9 @@
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 7.1 — Address helpers now live in address-queries.php.
+ * @version 7.2 — CSRF token now inherited from header.php; local
+ *                generation removed. (7.1: address helpers now live
+ *                in address-queries.php.)
  */
 
 declare(strict_types=1);
@@ -185,11 +187,12 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
 
 // ---------------------------------------------------------------
 // CSRF
+//
+// Provided by header.php (via includes/csrf_token.php), stored
+// under the customer role's own session key 'customer_csrf_token'.
+// Do not regenerate here — the header is the single bootstrap point
+// for authenticated customer pages.
 // ---------------------------------------------------------------
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-$csrfToken = $_SESSION['csrf_token'];
 
 require_once __DIR__ . '/../includes/header.php';
 ?>

@@ -9,11 +9,20 @@
  * Behavior comes from restaurants.js.
  *
  * @package FitPal
- * @version 3.1 — Removed inline onerror from empty-state icon and
- *                inline onclick from modal backdrop. Icon fallback
- *                travels as data-fallback-src; backdrop close URL
- *                travels as data-close-url. Both consumed by
- *                restaurants.js.
+ * @version 3.4 — Version bump to match the CSRF consolidation in
+ *                header.php v5.0 and includes/admin-csrf-token.php
+ *                v1.0. No functional change: this page already reads
+ *                $csrfToken from header.php and never generated the
+ *                token itself. (3.3: Added data-csrf-token to the
+ *                top-level .admin-list-page container so
+ *                restaurants.js can read the admin-scoped CSRF token
+ *                from the DOM instead of the
+ *                window.FITPAL_ADMIN_RESTAURANTS global that no page
+ *                ever emitted. Mirrors the data-asset-base pattern
+ *                used by profile.php for profile.js. No inline JS
+ *                added; the token travels as a data attribute, and
+ *                the POST field name in the modal footer forms is
+ *                unchanged.)
  */
 
 declare(strict_types=1);
@@ -60,10 +69,7 @@ if ($openId > 0) {
     }
 }
 
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-$csrfToken = $_SESSION['csrf_token'];
+// $csrfToken is provided by header.php (admin_csrf_token).
 
 function buildRestaurantUrl(array $overrides = []): string
 {
@@ -83,7 +89,7 @@ function buildRestaurantUrl(array $overrides = []): string
 }
 ?>
 
-<div class="content admin-list-page">
+<div class="content admin-list-page" data-csrf-token="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
     <div class="container">
 
         <header class="admin-page-header">

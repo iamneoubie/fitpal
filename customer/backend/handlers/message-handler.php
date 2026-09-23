@@ -22,9 +22,10 @@
  * request dispatch at load time.
  *
  * @package FitPal
- * @version 1.1 — Explicit join in resolveRecipientId.
+ * @version 1.2 — Validates against customer_csrf_token; explicit empty
+ *                guards on both sides. (1.1: explicit join in
+ *                resolveRecipientId.)
  */
-
 declare(strict_types=1);
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -44,8 +45,15 @@ $customerId = (int)$_SESSION['customer_id'];
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/tracking-queries.php';
 
-$csrfToken = $_POST['csrf_token'] ?? '';
-if (empty($csrfToken) || !hash_equals($_SESSION['csrf_token'] ?? '', $csrfToken)) {
+// Per-role CSRF check. The customer role validates against its own
+// session key, 'customer_csrf_token', never the shared 'csrf_token'.
+// Another role in the same browser session could have unset or
+// rotated the shared key on its own sign-in, which would otherwise
+// invalidate the token this request was issued under. See general.md.
+$givenToken = (string)($_POST['csrf_token'] ?? '');
+$sessToken  = (string)($_SESSION['customer_csrf_token'] ?? '');
+
+if ($sessToken === '' || $givenToken === '' || !hash_equals($sessToken, $givenToken)) {
     http_response_code(403);
     echo json_encode(['status' => 'error', 'message' => 'Security validation failed']);
     exit;

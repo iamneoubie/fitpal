@@ -14,7 +14,9 @@
  * There is no cart table involved anywhere in this flow.
  *
  * @package FitPal
- * @version 8.0 — Queue-authoritative; cart system deleted.
+ * @version 8.1 — Validates against customer_csrf_token with hash_equals;
+ *                rejects empty tokens explicitly. (8.0: queue-
+ *                authoritative; cart system deleted.)
  */
 
 declare(strict_types=1);
@@ -34,7 +36,17 @@ require_once __DIR__ . '/../database/address-queries.php';
 require_once __DIR__ . '/../database/order-queries.php';
 
 // ---- CSRF ----
-if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== ($_SESSION['csrf_token'] ?? '')) {
+//
+// Per-role CSRF check. The customer role validates against its own
+// session key, 'customer_csrf_token', never the shared 'csrf_token'.
+// Another role in the same browser session could have unset or
+// rotated the shared key on its own sign-in, which would otherwise
+// invalidate the token this checkout form was issued under. See
+// general.md.
+$givenToken = (string)($_POST['csrf_token'] ?? '');
+$sessToken  = (string)($_SESSION['customer_csrf_token'] ?? '');
+
+if ($sessToken === '' || $givenToken === '' || !hash_equals($sessToken, $givenToken)) {
     $_SESSION['order_error'] = 'Security validation failed. Please try again.';
     header('Location: ../../pages/checkout.php');
     exit;

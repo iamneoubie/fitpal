@@ -10,9 +10,18 @@
  * Behavior comes from customers.js.
  *
  * @package FitPal
- * @version 3.1 — Removed inline onerror from empty-state icon and
- *                inline onclick from modal backdrop. Backdrop now
- *                carries data-close-url consumed by customers.js.
+ * @version 3.3 — Version bump to match the CSRF consolidation in
+ *                header.php v5.0 and includes/admin-csrf-token.php
+ *                v1.0. No functional change: this page already reads
+ *                $csrfToken from header.php and never generated the
+ *                token itself. (3.2: Removed the local CSRF block
+ *                that wrote to the shared 'csrf_token' session key.
+ *                The admin role's token is now generated in
+ *                header.php under 'admin_csrf_token' and exposed as
+ *                $csrfToken, so the modal footer form's hidden field
+ *                now carries the admin-scoped value. The form field
+ *                name stays 'csrf_token'; admin-handler.php
+ *                validates against the matching session key.)
  */
 
 declare(strict_types=1);
@@ -58,10 +67,7 @@ if ($openId > 0) {
     }
 }
 
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-$csrfToken = $_SESSION['csrf_token'];
+// $csrfToken is provided by header.php (admin_csrf_token).
 
 function buildCustomerUrl(array $overrides = []): string
 {

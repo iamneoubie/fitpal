@@ -15,7 +15,9 @@
  * this handler never writes to financial_account.balance directly.
  *
  * @package FitPal
- * @version 1.2 — Adds get_balance for background refresh.
+ * @version 1.3 — Validates against customer_csrf_token with hash_equals;
+ *                rejects empty tokens explicitly. (1.2: adds
+ *                get_balance for background refresh.)
  */
 
 declare(strict_types=1);
@@ -35,7 +37,15 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/wallet-queries.php';
 
-if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== ($_SESSION['csrf_token'] ?? '')) {
+// Per-role CSRF check. The customer role validates against its own
+// session key, 'customer_csrf_token', never the shared 'csrf_token'.
+// Another role in the same browser session could have unset or
+// rotated the shared key on its own sign-in, which would otherwise
+// invalidate the token this request was issued under. See general.md.
+$givenToken = (string)($_POST['csrf_token'] ?? '');
+$sessToken  = (string)($_SESSION['customer_csrf_token'] ?? '');
+
+if ($sessToken === '' || $givenToken === '' || !hash_equals($sessToken, $givenToken)) {
     echo json_encode(['status' => 'error', 'message' => 'Security validation failed']);
     exit;
 }

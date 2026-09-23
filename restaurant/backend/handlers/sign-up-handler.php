@@ -10,7 +10,36 @@
  *   5. restaurant_permit × 1..5     (permit photos)
  *
  * @package FitPal
- * @version 1.1
+ * @version 2.0 — Owns its own CSRF bootstrap and rotates the
+ *                restaurant token on mismatch.
+ *
+ *                require_once on includes/restaurant-csrf-token.php
+ *                makes this handler the authoritative reader of
+ *                'restaurant_csrf_token' rather than an incidental
+ *                one that only worked because the page which
+ *                rendered the form had already called
+ *                getRestaurantCsrfToken().
+ *
+ *                On the CSRF-mismatch branch the restaurant's token
+ *                is now unset before responding. Without that
+ *                rotation, getRestaurantCsrfToken() on the next
+ *                render of sign-up.php saw the key still set and
+ *                returned the same stale value, so a user who hit a
+ *                mismatch was stuck re-submitting the dead token
+ *                until the session was cleared manually.
+ *
+ *                Uses isset() on both keys before hash_equals() so an
+ *                unset session key can never be coerced to an empty
+ *                string and pass validation against an empty POST
+ *                value.
+ *
+ *                Only the restaurant's own key is touched. The shared
+ *                'csrf_token' key is never read, written, or cleared
+ *                by this file.
+ *
+ *                (1.2: Validated against restaurant_csrf_token (own
+ *                key) instead of the shared csrf_token, matching the
+ *                sign-in handler and the restaurant sign-up.php form.)
  */
 
 declare(strict_types=1);
@@ -21,6 +50,11 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/restaurant-queries.php';
+
+// Own the restaurant role's CSRF bootstrap. The helper is idempotent
+// and stores the token under 'restaurant_csrf_token' — never the
+// shared 'csrf_token' key.
+require_once __DIR__ . '/../../includes/restaurant-csrf-token.php';
 
 header('Content-Type: application/json');
 
@@ -95,9 +129,14 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 if (
-    !isset($_POST['csrf_token']) ||
-    !hash_equals((string)($_SESSION['csrf_token'] ?? ''), (string)$_POST['csrf_token'])
+    !isset($_POST['csrf_token'], $_SESSION['restaurant_csrf_token']) ||
+    !hash_equals((string)$_SESSION['restaurant_csrf_token'], (string)$_POST['csrf_token'])
 ) {
+    // Rotate the restaurant's own token so the next render generates
+    // a fresh one. Only the restaurant's key is cleared — never the
+    // shared 'csrf_token' key.
+    unset($_SESSION['restaurant_csrf_token']);
+
     respondError('Security validation failed. Please refresh the page and try again.');
 }
 
@@ -321,6 +360,11 @@ try {
     }
 
     $database_connection->commit();
+
+    // Only clear restaurant's own token. Do not touch the shared
+    // 'csrf_token' key or any other role's token — another role in
+    // this same browser session may still be relying on it.
+    unset($_SESSION['restaurant_csrf_token']);
 
     $_SESSION['registration_success'] =
         'Restaurant application submitted with ' . count($permitFiles) . ' permit(s). ' .

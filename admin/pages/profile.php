@@ -17,10 +17,19 @@
  * attribute on the .profile-page container.
  *
  * @package FitPal
- * @version 3.1 — Removed the inline <script> that defined
- *                window.FITPAL_ADMIN_PROFILE. The same value now
- *                travels on .profile-page as data-asset-base and is
- *                read by profile.js.
+ * @version 3.3 — Version bump to match the CSRF consolidation in
+ *                header.php v5.0 and includes/admin-csrf-token.php
+ *                v1.0. No functional change: this page already reads
+ *                $csrfToken from header.php and never generated the
+ *                token itself. (3.2: Removed the local CSRF block
+ *                that wrote to the shared 'csrf_token' session key.
+ *                The admin role's token is now generated in
+ *                header.php under 'admin_csrf_token' and exposed as
+ *                $csrfToken, so both forms — Personal Information
+ *                and Change Password — now carry the admin-scoped
+ *                value. Form field name stays 'csrf_token';
+ *                admin-handler.php validates against the matching
+ *                session key.)
  */
 
 declare(strict_types=1);
@@ -45,10 +54,7 @@ $initial  = adminInitial($profile);
 $roleLabel = adminRoleLabel((string)($profile['role'] ?? 'support'));
 $lastLogin = formatAdminDate((string)($profile['last_login'] ?? ''));
 
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-$csrfToken = $_SESSION['csrf_token'];
+// $csrfToken is provided by header.php (admin_csrf_token).
 ?>
 
 <div class="content profile-page" data-asset-base="<?php echo htmlspecialchars($assetBase, ENT_QUOTES, 'UTF-8'); ?>">

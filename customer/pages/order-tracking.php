@@ -16,7 +16,8 @@
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 1.0
+ * @version 1.1 — CSRF token now inherited from header.php; local
+ *                generation removed.
  */
 
 declare(strict_types=1);
@@ -79,12 +80,6 @@ $orderTotal   = $totals ? (float)$totals['total']        : 0.0;
 $unreadRestaurant = countUnreadOrderMessages($database_connection, $orderId, 'restaurant_account');
 $unreadRider      = countUnreadOrderMessages($database_connection, $orderId, 'delivery_rider');
 
-// CSRF
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-$csrfToken = $_SESSION['csrf_token'];
-
 /**
  * Format a peso amount for display on this page.
  */
@@ -94,6 +89,9 @@ function trackFmt(float|string|null $amount): string
 }
 
 require_once __DIR__ . '/../includes/header.php';
+
+// $csrfToken is provided by header.php (via includes/csrf_token.php),
+// stored under the customer role's own session key 'customer_csrf_token'.
 ?>
 
 <link rel="stylesheet" href="../assets/css/order-tracking.css">

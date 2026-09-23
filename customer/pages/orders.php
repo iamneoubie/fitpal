@@ -9,9 +9,10 @@
  * from the orders table.
  *
  * @package FitPal
- * @version 3.2 — Expand icon uses shared arrow-drop-down icon (no inline SVG).
+ * @version 3.3 — CSRF token now inherited from header.php; local
+ *                generation removed. (3.2: expand icon uses shared
+ *                arrow-drop-down icon, no inline SVG.)
  */
-
 declare(strict_types=1);
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -90,10 +91,10 @@ try {
 // ============================================
 // CSRF
 // ============================================
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-$csrfToken = $_SESSION['csrf_token'];
+// Provided by header.php (via includes/csrf_token.php), stored under
+// the customer role's own session key 'customer_csrf_token'. The
+// header is required near the top of this file, so $csrfToken is
+// already populated here.
 
 // ============================================
 // HELPERS

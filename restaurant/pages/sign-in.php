@@ -14,7 +14,24 @@
  * `password`, `role_scope=branch`.
  *
  * @package FitPal
- * @version 2.0 — Branch tab split into two phases with comboboxes.
+ * @version 3.0 — Dropped the page-local CSRF bootstrap. The
+ *                restaurant role's token is now assigned
+ *                unconditionally by includes/header.php via
+ *                restaurant-csrf-token.php, so this page no longer
+ *                generates $_SESSION['restaurant_csrf_token']
+ *                inline. It simply includes the header and reads
+ *                $csrfToken from it. Behavior is unchanged: the
+ *                form's POST field stays named csrf_token, and
+ *                sign-in-handler.php still validates against
+ *                $_SESSION['restaurant_csrf_token'].
+ *
+ *                (2.1: Uses its own session key, restaurant_csrf_token,
+ *                instead of the shared csrf_token. The restaurant,
+ *                customer, and rider roles all run on the same PHP
+ *                session (same cookie), so a single shared csrf_token
+ *                meant that a successful sign-in by one role unset
+ *                the token another role's already-rendered form was
+ *                relying on.)
  */
 
 declare(strict_types=1);
@@ -28,14 +45,18 @@ if (!empty($_SESSION['restaurant_account_id'])) {
     exit;
 }
 
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
+// Never let the browser or bfcache serve a stale copy of this form.
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+
+// Pin the session's "created" marker to now so header.php's 30-minute
+// rotation check can never fire while the sign-in form is on screen.
+$_SESSION['created'] = time();
 
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../backend/database/restaurant-queries.php';
 
-// $assetBase provided by header.php
+// $assetBase and $csrfToken are provided by header.php.
 
 $errorMessage   = $_SESSION['login_error'] ?? '';
 $successMessage = $_SESSION['registration_success'] ?? '';
@@ -101,7 +122,7 @@ unset($_SESSION['login_scope']);
                     id="signInFormOwner" novalidate>
 
                     <input type="hidden" name="csrf_token"
-                        value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
+                        value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                     <input type="hidden" name="role_scope" value="owner">
 
                     <div class="form-group">
@@ -212,7 +233,7 @@ unset($_SESSION['login_scope']);
                         id="signInFormBranch" novalidate>
 
                         <input type="hidden" name="csrf_token"
-                            value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
+                            value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                         <input type="hidden" name="role_scope" value="branch">
                         <input type="hidden" name="branch_code" id="branch_code_submit" value="">
 

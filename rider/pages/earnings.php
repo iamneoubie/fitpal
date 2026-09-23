@@ -2,8 +2,27 @@
 /**
  * FitPal Rider Earnings Page
  *
+ * Shows:
+ *   - Available balance and a hero withdraw button
+ *   - Four-stat strip (Today / This Week / This Month / All Time)
+ *   - Earnings chart for the last 7 days
+ *   - Transaction history with pagination
+ *   - Withdrawal modal, submitted via earnings.js to rider-handler.php
+ *
+ * All SQL lives in rider-queries.php. This page contains no SQL.
+ *
  * @package FitPal
- * @version 1.0
+ * @version 1.2 — Corrected the docblock reference from
+ *                includes/csrf-token.php to
+ *                includes/rider-csrf-token.php, which is the file the
+ *                header actually requires. No code change. (1.1:
+ *                Removed the local CSRF block that wrote to the
+ *                shared 'csrf_token' session key. The rider role's
+ *                token is now generated in includes/header.php via
+ *                includes/rider-csrf-token.php under
+ *                'rider_csrf_token' and exposed as $csrfToken, so the
+ *                FITPAL_RIDER_EARNINGS inline config carries the
+ *                rider-scoped value.)
  */
 
 declare(strict_types=1);
@@ -41,10 +60,7 @@ $weekEarnings  = (float)($stats['week_earnings'] ?? 0);
 $monthEarnings = (float)($stats['month_earnings'] ?? 0);
 $totalEarnings = (float)($stats['total_earnings'] ?? 0);
 
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-$csrfToken = $_SESSION['csrf_token'];
+// $csrfToken is provided by header.php (rider_csrf_token).
 
 $chartCeiling = $chartScale['ceiling'];
 $today = date('Y-m-d');

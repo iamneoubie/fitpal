@@ -4,7 +4,8 @@
  * Version 3.4 — Customization panel lives inside the details column.
  *
  * @package FitPal
- * @version 3.4
+ * @version 3.5 - CSRF token now inherited from header.php; local
+ *                generation removed.
  */
 
 declare(strict_types=1);
@@ -79,12 +80,10 @@ function buildCartPageUrl(int $page): string
     return '?page=' . max(1, $page);
 }
 
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-$csrfToken = $_SESSION['csrf_token'];
-
 require_once __DIR__ . '/../includes/header.php';
+
+// $csrfToken is provided by header.php (via includes/csrf_token.php),
+// stored under the customer role's own session key 'customer_csrf_token'.
 ?>
 
 <link rel="stylesheet" href="../assets/css/cart.css">

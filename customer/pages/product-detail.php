@@ -1,12 +1,11 @@
 <?php
 /**
  * FitPal Product Detail Page
- * Version 9.2 — Quantity stepper uses shared add/subtract icons.
+ * Version 9.3 — CSRF token now inherited from header.php.
  *
  * @package FitPal
- * @version 9.2
+ * @version 9.3
  */
-
 declare(strict_types=1);
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -45,15 +44,14 @@ $relatedProducts = getRelatedProducts(
 
 require_once __DIR__ . '/../includes/header.php';
 
-$isLoggedIn = isset($_SESSION['customer_id']) && !empty($_SESSION['customer_id']);
+// $csrfToken is provided by header.php (via includes/csrf_token.php),
+// stored under the customer role's own session key 'customer_csrf_token'.
 
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-$csrfToken = $_SESSION['csrf_token'];
+$isLoggedIn = isset($_SESSION['customer_id']) && !empty($_SESSION['customer_id']);
 
 $dietaryTags = $product['dietary_tags'] !== '' ? explode(',', $product['dietary_tags']) : [];
 $allergens   = $product['allergens']    !== '' ? explode(',', $product['allergens'])    : [];
+
 
 $basePrice = (float)$product['base_price'];
 $inStock   = (int)$product['stock'] > 0 && (int)$product['is_active'] === 1;

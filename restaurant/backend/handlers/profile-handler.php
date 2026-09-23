@@ -11,7 +11,18 @@
  * Responds with JSON.
  *
  * @package FitPal
- * @version 1.0
+ * @version 2.0 — CSRF validation now compares against the restaurant
+ *                role's own session key, restaurant_csrf_token,
+ *                instead of the shared csrf_token. Requires
+ *                includes/restaurant-csrf-token.php so the handler
+ *                owns its CSRF bootstrap. Uses isset() on both keys
+ *                before hash_equals() so an unset session key can
+ *                never be coerced to an empty string and pass
+ *                validation against an empty POST value. On
+ *                mismatch, rotates the restaurant token before
+ *                returning the JSON error. Only the restaurant's own
+ *                key is touched; the shared csrf_token key and every
+ *                other role's token are left alone.
  */
 
 declare(strict_types=1);
@@ -30,11 +41,17 @@ if (empty($_SESSION['restaurant_account_id'])) {
 
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/restaurant-queries.php';
+require_once __DIR__ . '/../../includes/restaurant-csrf-token.php';
 
 if (
-    !isset($_POST['csrf_token']) ||
-    !hash_equals((string)($_SESSION['csrf_token'] ?? ''), (string)$_POST['csrf_token'])
+    !isset($_POST['csrf_token'], $_SESSION['restaurant_csrf_token']) ||
+    !hash_equals((string)$_SESSION['restaurant_csrf_token'], (string)$_POST['csrf_token'])
 ) {
+    // Rotate the restaurant's own token so the next render generates
+    // a fresh one. Only the restaurant's key is cleared — never the
+    // shared 'csrf_token' key.
+    unset($_SESSION['restaurant_csrf_token']);
+
     echo json_encode(['status' => 'error', 'message' => 'Security validation failed']);
     exit;
 }

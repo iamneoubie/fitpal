@@ -25,7 +25,34 @@
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 2.0 — Forces is_available = 0 on successful sign-in.
+ * @version 2.2 — Owns its own CSRF bootstrap and rotates the rider
+ *                token on mismatch.
+ *
+ *                require_once on includes/rider-csrf-token.php makes
+ *                this handler the authoritative reader of
+ *                'rider_csrf_token' rather than an incidental one
+ *                that only worked because the page which rendered
+ *                the form had already called getRiderCsrfToken().
+ *
+ *                On the CSRF-mismatch branch the rider's token is
+ *                now unset before redirecting, mirroring
+ *                admin/sign-in-handler.php v1.5. Without that
+ *                rotation, getRiderCsrfToken() on the next render of
+ *                sign-in.php saw the key still set and returned the
+ *                same stale value, so a user who hit a mismatch was
+ *                stuck re-submitting the dead token until the
+ *                session was cleared manually.
+ *
+ *                Only the rider's own key is touched. The shared
+ *                'csrf_token' key is never read, written, or cleared
+ *                by this file — other roles in the same PHP session
+ *                may still depend on it.
+ *
+ *                (2.1: Validates against rider_csrf_token (own key)
+ *                instead of the shared csrf_token, so a sign-in by
+ *                another role in the same browser session can no
+ *                longer delete/rotate the token this form relied on.
+ *                Only unsets its own token key on success.)
  */
 
 declare(strict_types=1);
@@ -37,6 +64,11 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/rider-queries.php';
 
+// Own the rider role's CSRF bootstrap. The helper is idempotent and
+// stores the token under 'rider_csrf_token' — never the shared
+// 'csrf_token' key.
+require_once __DIR__ . '/../../includes/rider-csrf-token.php';
+
 // ===== REQUEST METHOD =====
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     $_SESSION['login_error'] = 'Invalid request method.';
@@ -46,9 +78,16 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 // ===== CSRF =====
 if (
-    !isset($_POST['csrf_token'], $_SESSION['csrf_token']) ||
-    !hash_equals((string)$_SESSION['csrf_token'], (string)$_POST['csrf_token'])
+    !isset($_POST['csrf_token'], $_SESSION['rider_csrf_token']) ||
+    !hash_equals((string)$_SESSION['rider_csrf_token'], (string)$_POST['csrf_token'])
 ) {
+    // Rotate the rider's own token so the next render of sign-in.php
+    // generates a fresh one. Without this the key stays set,
+    // getRiderCsrfToken() returns the same stale value, and the user
+    // is stuck in a validation loop. Only the rider's key is cleared
+    // — never the shared 'csrf_token' key.
+    unset($_SESSION['rider_csrf_token']);
+
     $_SESSION['login_error'] = 'Security validation failed. Please try again.';
     header('Location: ../../pages/sign-in.php');
     exit;
@@ -108,7 +147,10 @@ try {
     // Explicit opt-in required: force offline on every fresh sign-in.
     setRiderAvailability($database_connection, $riderId, 0);
 
-    unset($_SESSION['csrf_token']);
+    // Only clear rider's own token. Do not touch the shared
+    // 'csrf_token' key or any other role's token — another role in
+    // this same browser session may still be relying on it.
+    unset($_SESSION['rider_csrf_token']);
 
     header('Location: ../../pages/dashboard.php');
     exit;

@@ -11,11 +11,20 @@
  * comes from riders.js.
  *
  * @package FitPal
- * @version 3.2 — Modal tab icons swapped to existing assets that
- *                better match their panels: riding-fill.svg for the
- *                Information tab, id-card-line.svg for the Documents
- *                tab. Deliveries tab keeps order.svg. No structural
- *                change to the modal.
+ * @version 3.5 — Version bump to match the CSRF consolidation in
+ *                header.php v5.0 and includes/admin-csrf-token.php
+ *                v1.0. No functional change: this page already reads
+ *                $csrfToken from header.php and never generated the
+ *                token itself. (3.4: Added data-csrf-token to the
+ *                top-level .admin-list-page container so riders.js
+ *                can read the admin-scoped CSRF token from the DOM
+ *                instead of the window.FITPAL_ADMIN_RIDERS global
+ *                that no page ever emitted. Mirrors the
+ *                restaurants.js pattern established in
+ *                restaurants.php v3.3 and profile.php's
+ *                data-asset-base contract. No inline JS added; the
+ *                token travels as a data attribute, and the POST
+ *                field name in the modal footer forms is unchanged.)
  */
 
 declare(strict_types=1);
@@ -67,10 +76,7 @@ if ($openId > 0) {
     }
 }
 
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-$csrfToken = $_SESSION['csrf_token'];
+// $csrfToken is provided by header.php (admin_csrf_token).
 
 function buildRiderUrl(array $overrides = []): string
 {
@@ -98,7 +104,7 @@ function riderMediaUrl(string $assetBase, string $relPath): string
 }
 ?>
 
-<div class="content admin-list-page">
+<div class="content admin-list-page" data-csrf-token="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
     <div class="container">
 
         <header class="admin-page-header">

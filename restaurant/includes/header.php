@@ -4,8 +4,10 @@
  *
  * Contract
  * --------
- * 1. The header NEVER writes to $_SESSION. Only the sign-in handler
- *    and the sign-out handler may do that.
+ * 1. The header NEVER writes to $_SESSION except through the
+ *    restaurant CSRF helper, which owns the role-scoped token key
+ *    'restaurant_csrf_token'. Only the sign-in handler and the
+ *    sign-out handler may write other session values.
  *
  * 2. The header NEVER queries the DB to re-validate a session. If
  *    $_SESSION['restaurant_account_id'] is missing, the user is
@@ -13,17 +15,30 @@
  *
  * 3. $assetBase is computed here so pages never compute it twice.
  *
- * 4. The desktop avatar circle links to profile.php. The mobile
+ * 4. $csrfToken is assigned here on every request, authenticated or
+ *    not, so no restaurant page needs to generate or fetch the token
+ *    itself. The token is stored under 'restaurant_csrf_token' — never
+ *    the shared 'csrf_token' key — because all FitPal roles run on the
+ *    same PHP session and a shared key would let one role's success
+ *    path delete another role's already-rendered token.
+ *
+ * 5. The desktop avatar circle links to profile.php. The mobile
  *    greeting block also links to profile.php. The logout button
  *    (desktop and mobile) is a <button> carrying data-logout-trigger
  *    so logout.js can intercept it and show the confirmation modal.
  *
- * 5. The Kitchen link is shown only to role ∈ {manager, staff, kitchen}.
+ * 6. The Kitchen link is shown only to role ∈ {manager, staff, kitchen}.
  *    Owner and partner accounts see Dashboard and Profile only — the
  *    kitchen page is an operational surface for branch staff.
  *
  * @package FitPal
- * @version 3.1 — Adds the Kitchen nav link for branch staff roles.
+ * @version 4.0 — Adds restaurant-csrf-token.php and assigns
+ *                $csrfToken unconditionally so no restaurant page
+ *                needs to bootstrap CSRF itself. Removes the
+ *                duplicated inline token generation that existed in
+ *                sign-in.php, sign-up.php, profile.php, and
+ *                kitchen.php. (3.1: Adds the Kitchen nav link for
+ *                branch staff roles.)
  */
 
 declare(strict_types=1);
@@ -40,6 +55,13 @@ if (!isset($_SESSION['created'])) {
 }
 
 require_once __DIR__ . '/../backend/database/restaurant-connect.php';
+
+// ===== CSRF TOKEN (restaurant role) =====
+//
+// Single source of truth for the restaurant role's CSRF token. The
+// helper generates it on first use and stores it under
+// 'restaurant_csrf_token' — never the shared 'csrf_token' key.
+require_once __DIR__ . '/restaurant-csrf-token.php';
 
 function getRestaurantAssetBase(): string
 {
@@ -64,6 +86,10 @@ $accountInitial = '';
 if ($accountName !== '') {
     $accountInitial = strtoupper(substr($accountName, 0, 1));
 }
+
+// Always expose a restaurant-scoped token so any form rendered below
+// can carry it, regardless of whether the visitor is authenticated.
+$csrfToken = getRestaurantCsrfToken();
 
 $currentPage = basename($_SERVER['PHP_SELF']);
 

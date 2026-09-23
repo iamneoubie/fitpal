@@ -7,8 +7,21 @@
  * (customer, admin, restaurant) remain intact.
  *
  * @package FitPal
- * @version 1.1 — File renamed from sign-out-handlers.php to match
- *                customer convention and the header.php link.
+ * @version 1.2 — Reads the rider role's own CSRF key, rider_csrf_token,
+ *                instead of the shared csrf_token. The comparison is
+ *                still non-fatal (matching the original intent: a
+ *                stale CSRF token must never block a sign-out), but
+ *                it now inspects the correct session key. Also unsets
+ *                rider_csrf_token and $_SESSION['created'] as part of
+ *                the sign-out so the next sign-in page renders a
+ *                fresh rider-scoped token and re-pins the session's
+ *                rotation marker. The shared csrf_token key and every
+ *                other role's token are deliberately left alone —
+ *                another role in the same browser session may still
+ *                have forms open that depend on them.
+ *
+ *                (1.1: File renamed from sign-out-handlers.php to
+ *                match customer convention and the header.php link.)
  */
 
 declare(strict_types=1);
@@ -19,8 +32,12 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 // ===== CSRF VALIDATION (optional, non-fatal) =====
+// Read the rider's own key, not the shared csrf_token. A mismatch is
+// logged but never blocks the sign-out: the user asked to leave, and
+// refusing to sign them out over a stale form field would be worse
+// than the alternative.
 $token         = $_POST['csrf_token'] ?? $_GET['csrf_token'] ?? '';
-$expectedToken = $_SESSION['csrf_token'] ?? '';
+$expectedToken = $_SESSION['rider_csrf_token'] ?? '';
 
 if ($token !== '' && $expectedToken !== '' && !hash_equals($expectedToken, $token)) {
     error_log('Rider sign-out: invalid CSRF token attempt');
@@ -31,7 +48,9 @@ unset(
     $_SESSION['delivery_rider_id'],
     $_SESSION['user_role'],
     $_SESSION['user_name'],
-    $_SESSION['user_email']
+    $_SESSION['user_email'],
+    $_SESSION['rider_csrf_token'],
+    $_SESSION['created']
 );
 
 // Do NOT unset these as they may belong to other roles:

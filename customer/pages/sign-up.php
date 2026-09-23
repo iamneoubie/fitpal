@@ -5,7 +5,23 @@
  * Multi-step registration with dietary preferences, allergies, and fitness goals.
  *
  * @package FitPal
- * @version 1.5
+ * @version 1.7 — Now requires includes/csrf_token.php and calls
+ *                getCustomerCsrfToken() instead of duplicating the
+ *                generation block inline. This makes the customer
+ *                role's CSRF bootstrap a single source of truth:
+ *                header.php and this file both route through the
+ *                same helper, which writes only to the role's own
+ *                session key, customer_csrf_token. The form's POST
+ *                field stays named csrf_token; only the storage key
+ *                is role-specific. Also bootstraps
+ *                window.FITPAL_CSRF_TOKEN for consistency with
+ *                sign-in.php, profile.php, cart.php, and menu.php.
+ *
+ *                (1.6: Own session key, customer_csrf_token, for
+ *                the registration form so a sign-in by another role
+ *                in the same browser session cannot invalidate the
+ *                token this form was rendered with. Matches the
+ *                sign-in.php v1.2 pattern.)
  */
 
 declare(strict_types=1);
@@ -20,9 +36,11 @@ if (isset($_SESSION['customer_id']) && !empty($_SESSION['customer_id'])) {
     exit;
 }
 
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
+// Single source of truth for the customer role's CSRF token. The
+// helper generates it on first use and stores it under
+// 'customer_csrf_token' — never the shared 'csrf_token' key.
+require_once __DIR__ . '/../includes/csrf_token.php';
+$csrfToken = getCustomerCsrfToken();
 
 require_once __DIR__ . '/../includes/header.php';
 
@@ -109,7 +127,7 @@ unset($_SESSION['registration_error']);
                 novalidate>
 
                 <input type="hidden" name="csrf_token"
-                    value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
+                    value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="current_step" id="currentStep" value="1">
 
                 <!-- STEP 1: Personal Information -->
@@ -393,6 +411,9 @@ unset($_SESSION['registration_error']);
     </div>
 </div>
 
+<script>
+window.FITPAL_CSRF_TOKEN = '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>';
+</script>
 <script src="../assets/ui/js/sign-up.js" defer></script>
 
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>

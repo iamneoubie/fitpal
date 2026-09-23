@@ -17,8 +17,9 @@
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 3.0 — Local walletFmt() removed; uses formatCurrency() from
- *                customer-queries.php.
+ * @version 3.1 — CSRF token now inherited from header.php; local
+ *                generation removed. (3.0: local walletFmt() removed;
+ *                uses formatCurrency() from customer-queries.php.)
  */
 
 declare(strict_types=1);
@@ -157,12 +158,10 @@ if ($page > $totalPages) {
     $transactions = getWalletTransactions($database_connection, $customerId, $perPage, $offset);
 }
 
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-$csrfToken = $_SESSION['csrf_token'];
-
 require_once __DIR__ . '/../includes/header.php';
+
+// $csrfToken is provided by header.php (via includes/csrf_token.php),
+// stored under the customer role's own session key 'customer_csrf_token'.
 ?>
 
 <div class="content wallet-page" id="walletPage">

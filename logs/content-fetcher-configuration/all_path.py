@@ -1,5 +1,6 @@
 filesToCheck = [
     # ===== File Structure =====
+    "/logs/instructions/general.md",
     "/logs/output/project_structure.md",
     "/sql/database.sql",
     "/sql/sample/seed-data.sql",
@@ -55,6 +56,8 @@ filesToCheck = [
     "/customer/assets/css/menu-filter.css",
     "/customer/assets/css/menu-product.css",
     "/customer/assets/css/menu.css",
+    "/customer/assets/css/order-receipt.css",
+    "/customer/assets/css/order-tracking.css",
     "/customer/assets/css/orders.css",
     "/customer/assets/css/product-detail.css",
     "/customer/assets/css/profile.css",
@@ -70,6 +73,7 @@ filesToCheck = [
     "/customer/assets/ui/js/header.js",
     "/customer/assets/ui/js/logout.js",
     "/customer/assets/ui/js/menu.js",
+    "/customer/assets/ui/js/order-tracking.js",
     "/customer/assets/ui/js/orders.js",
     "/customer/assets/ui/js/product-detail.js",
     "/customer/assets/ui/js/profile.js",
@@ -91,6 +95,7 @@ filesToCheck = [
     "/customer/backend/database/product-queries.php",
     "/customer/backend/database/queue-queries.php",
     "/customer/backend/database/rider-queries.php",
+    "/customer/backend/database/tracking-queries.php",
     "/customer/backend/database/wallet-queries.php",
 
     # ===== customer/backend/handlers =====
@@ -99,6 +104,7 @@ filesToCheck = [
     "/customer/backend/handlers/checkout-handler.php",
     "/customer/backend/handlers/feedback-handler.php",
     "/customer/backend/handlers/get-branch-handler.php",
+    "/customer/backend/handlers/message-handler.php",
     "/customer/backend/handlers/order-handler.php",
     "/customer/backend/handlers/place-order-handler.php",
     "/customer/backend/handlers/queue-handler.php",
@@ -108,6 +114,7 @@ filesToCheck = [
     "/customer/backend/handlers/wallet-handler.php",
 
     # ===== customer/includes =====
+    "/customer/includes/csrf_token.php",
     "/customer/includes/header.php",
 
     # ===== customer/pages =====
@@ -115,6 +122,8 @@ filesToCheck = [
     "/customer/pages/checkout.php",
     "/customer/pages/dashboard.php",
     "/customer/pages/menu.php",
+    "/customer/pages/order-receipt.php",
+    "/customer/pages/order-tracking.php",
     "/customer/pages/orders.php",
     "/customer/pages/product-detail.php",
     "/customer/pages/profile.php",

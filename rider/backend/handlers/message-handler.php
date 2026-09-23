@@ -7,7 +7,19 @@
  *   send_message  → send a message to customer or kitchen
  *
  * @package FitPal
- * @version 1.0
+ * @version 1.1 — CSRF validation now compares against the rider
+ *                role's own session key, rider_csrf_token, instead of
+ *                the shared csrf_token. Requires
+ *                includes/rider-csrf-token.php so the handler owns
+ *                its CSRF bootstrap. Uses isset() on both keys
+ *                before hash_equals() so an unset session key can
+ *                never be coerced to an empty string and pass
+ *                validation against an empty POST value. On
+ *                mismatch, rotates the rider token before returning
+ *                the JSON error, mirroring rider-handler.php v4.1
+ *                and the admin handlers. Only the rider's own key is
+ *                touched; the shared csrf_token key and every other
+ *                role's token are left alone.
  */
 
 declare(strict_types=1);
@@ -29,7 +41,20 @@ if (empty($_SESSION['delivery_rider_id'])) {
 
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 
-if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'] ?? '', (string)$_POST['csrf_token'])) {
+// Own the rider role's CSRF bootstrap. The helper is idempotent and
+// stores the token under 'rider_csrf_token' — never the shared
+// 'csrf_token' key.
+require_once __DIR__ . '/../../includes/rider-csrf-token.php';
+
+if (
+    !isset($_POST['csrf_token'], $_SESSION['rider_csrf_token']) ||
+    !hash_equals((string)$_SESSION['rider_csrf_token'], (string)$_POST['csrf_token'])
+) {
+    // Rotate the rider's own token so the next render generates a
+    // fresh one. Only the rider's key is cleared — never the shared
+    // 'csrf_token' key.
+    unset($_SESSION['rider_csrf_token']);
+
     ob_end_clean();
     echo json_encode(['status' => 'error', 'message' => 'Security validation failed']);
     exit;

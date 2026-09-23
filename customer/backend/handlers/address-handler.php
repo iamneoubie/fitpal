@@ -12,9 +12,10 @@
  * failures return a non-200 status (401).
  *
  * @package FitPal
- * @version 2.3 — Explicit termination on every branch; catch Throwable.
+ * @version 2.4 — Validates against customer_csrf_token with hash_equals;
+ *                rejects empty tokens explicitly. (2.3: explicit
+ *                termination on every branch; catch Throwable.)
  */
-
 declare(strict_types=1);
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -32,7 +33,15 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/address-queries.php';
 
-if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== ($_SESSION['csrf_token'] ?? '')) {
+// Per-role CSRF check. The customer role validates against its own
+// session key, 'customer_csrf_token', never the shared 'csrf_token'.
+// Another role in the same browser session could have unset or
+// rotated the shared key on its own sign-in, which would otherwise
+// invalidate this form's token. See general.md.
+$givenToken = (string)($_POST['csrf_token'] ?? '');
+$sessToken  = (string)($_SESSION['customer_csrf_token'] ?? '');
+
+if ($sessToken === '' || $givenToken === '' || !hash_equals($sessToken, $givenToken)) {
     echo json_encode(['status' => 'error', 'message' => 'Security validation failed']);
     exit;
 }

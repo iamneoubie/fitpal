@@ -37,12 +37,16 @@
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 2.0 — Introduces the rider_pending handoff:
- *                  - Adds Waiting on Rider and Out for Delivery tabs.
- *                  - Adds a Recent tab so closed orders stay visible.
- *                  - Removes the Mark Ready button.
- *                  - Branch view loads five status buckets in one
- *                    request.
+ * @version 3.0 — Removed the local CSRF block that wrote to the
+ *                shared 'csrf_token' session key. The restaurant
+ *                role's token is now generated in includes/header.php
+ *                via includes/restaurant-csrf-token.php under
+ *                'restaurant_csrf_token' and exposed as $csrfToken.
+ *
+ *                (2.0: Introduces the rider_pending handoff — adds
+ *                Waiting on Rider and Out for Delivery tabs, adds a
+ *                Recent tab so closed orders stay visible, removes
+ *                the Mark Ready button.)
  */
 
 declare(strict_types=1);
@@ -83,6 +87,8 @@ if ($isBranchStaff && ($restaurantScope !== 'branch' || $branchId <= 0)) {
 
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../backend/database/order-queries.php';
+
+// $assetBase and $csrfToken are provided by header.php.
 
 /* --------------------------------------------------------------
  * LOAD DATA FOR THE ACTIVE VIEW
@@ -151,15 +157,6 @@ if ($isOwner) {
         $loadError = 'Could not load the order list. Please try again.';
     }
 }
-
-/* --------------------------------------------------------------
- * CSRF
- * -------------------------------------------------------------- */
-
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-$csrfToken = (string)$_SESSION['csrf_token'];
 
 /* --------------------------------------------------------------
  * PAGE LOCALS

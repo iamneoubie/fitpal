@@ -17,10 +17,26 @@
  * this file would fail with the "headers already sent" warning.
  *
  * @package FitPal
- * @version 6.1 — Hero band now uses a solid grey background with the
- *                illustration contained (not cropped). Removed the
- *                unused .rider-hero-overlay element. DOM contract
- *                with sign-in.js and sign-in-handler.php unchanged.
+ * @version 6.4 — Dropped the page-local CSRF bootstrap. The rider
+ *                role's token is now assigned unconditionally by
+ *                includes/header.php via rider-csrf-token.php, so
+ *                this page no longer requires the helper or assigns
+ *                $csrfToken itself. It simply includes the header and
+ *                reads $csrfToken from it. Behavior is unchanged:
+ *                the form's POST field stays named csrf_token, and
+ *                sign-in-handler.php still validates against
+ *                $_SESSION['rider_csrf_token'].
+ *
+ *                (6.3: Replaced the inline rider_csrf_token
+ *                generation block with a require_once on the helper.
+ *                6.2: Uses its own session key, rider_csrf_token,
+ *                instead of the shared csrf_token. The rider,
+ *                customer, and restaurant roles all run on the same
+ *                PHP session (same cookie), so a single shared
+ *                csrf_token meant a successful sign-in by one role
+ *                unset the token another role's already-rendered
+ *                form was relying on. Splitting the key per role
+ *                removes the collision entirely.)
  */
 
 declare(strict_types=1);
@@ -36,13 +52,16 @@ if (!empty($_SESSION['delivery_rider_id'])) {
     exit;
 }
 
-// ===== HEADER (starts DB, renders <head> + <header>) =====
-require_once __DIR__ . '/../includes/header.php';
+// Never let the browser or bfcache serve a stale copy of this form.
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
 
-// ===== CSRF =====
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
+// Pin the session's "created" marker to now so header.php's 30-minute
+// rotation check can never fire while the sign-in form is on screen.
+$_SESSION['created'] = time();
+
+// ===== HEADER (starts DB, assigns $csrfToken, renders <head> + <header>) =====
+require_once __DIR__ . '/../includes/header.php';
 
 // ===== FLASH MESSAGES =====
 $errorMessage = $_SESSION['login_error'] ?? '';
@@ -102,7 +121,7 @@ $identifierValue = htmlspecialchars((string)($_POST['identifier'] ?? ''), ENT_QU
                 <form method="POST" action="../backend/handlers/sign-in-handler.php" id="riderSignInForm" novalidate>
 
                     <input type="hidden" name="csrf_token"
-                        value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
+                        value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
 
                     <div class="rider-form-group">
                         <label for="identifier" class="rider-form-label">Email or username</label>

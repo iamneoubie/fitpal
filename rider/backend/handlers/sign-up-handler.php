@@ -21,10 +21,24 @@
  * Responds with JSON. The rider is NOT logged in after registration.
  *
  * @package FitPal
- * @version 3.3 — Upload validation failures now return the specific
- *                field name (`profile_picture` or `drivers_license`)
- *                instead of the generic `upload`, so the client can
- *                route each error to the correct inline slot.
+ * @version 3.5 — Owns its own CSRF bootstrap. Requires
+ *                includes/rider-csrf-token.php so the handler does
+ *                not depend on the page that rendered the form
+ *                having already called getRiderCsrfToken(). Tightens
+ *                the CSRF guard to isset() on both keys before
+ *                hash_equals() so an unset session key can never be
+ *                coerced to an empty string and pass validation
+ *                against an empty POST value. On mismatch, rotates
+ *                the rider token before returning the JSON error,
+ *                mirroring rider-handler.php v4.1 and
+ *                sign-in-handler.php v2.2. Only the rider's own key
+ *                is touched; the shared csrf_token key and every
+ *                other role's token are left alone.
+ *
+ *                (3.4: Validates against rider_csrf_token (own key)
+ *                instead of the shared csrf_token, matching the
+ *                sign-in handler and the rider sign-up.php form.
+ *                Only unsets its own token key on success.)
  */
 
 declare(strict_types=1);
@@ -35,6 +49,11 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/rider-queries.php';
+
+// Own the rider role's CSRF bootstrap. The helper is idempotent and
+// stores the token under 'rider_csrf_token' — never the shared
+// 'csrf_token' key.
+require_once __DIR__ . '/../../includes/rider-csrf-token.php';
 
 header('Content-Type: application/json');
 
@@ -138,9 +157,14 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 if (
-    !isset($_POST['csrf_token']) ||
-    !hash_equals((string)($_SESSION['csrf_token'] ?? ''), (string)$_POST['csrf_token'])
+    !isset($_POST['csrf_token'], $_SESSION['rider_csrf_token']) ||
+    !hash_equals((string)$_SESSION['rider_csrf_token'], (string)$_POST['csrf_token'])
 ) {
+    // Rotate the rider's own token so the next render generates a
+    // fresh one. Only the rider's key is cleared — never the shared
+    // 'csrf_token' key.
+    unset($_SESSION['rider_csrf_token']);
+
     respondError('Security validation failed. Please refresh the page and try again.');
 }
 
@@ -522,6 +546,11 @@ try {
     ];
 
     $database_connection->commit();
+
+    // Only clear rider's own token. Do not touch the shared
+    // 'csrf_token' key or any other role's token — another role in
+    // this same browser session may still be relying on it.
+    unset($_SESSION['rider_csrf_token']);
 
     $_SESSION['registration_success'] = 'Rider application submitted. Please sign in to continue.';
 

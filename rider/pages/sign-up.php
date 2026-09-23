@@ -29,9 +29,20 @@
  *   - 32px / 24px card padding
  *
  * @package FitPal
- * @version 6.1 — License issue date and expiry date are now required
- *                on Step 4 (markup) and validated on the client and
- *                server. Both previously accepted empty values.
+ * @version 6.3 — Dropped the page-local CSRF bootstrap. The rider
+ *                role's token is now assigned unconditionally by
+ *                includes/header.php via rider-csrf-token.php, so
+ *                this page no longer generates $_SESSION
+ *                ['rider_csrf_token'] inline. It simply includes
+ *                the header and reads $csrfToken from it. Behavior
+ *                is unchanged: the form's POST field stays named
+ *                csrf_token, and sign-up-handler.php still validates
+ *                against $_SESSION['rider_csrf_token'].
+ *
+ *                (6.2: Uses its own session key, rider_csrf_token,
+ *                for the registration form so a sign-in by another
+ *                role in the same browser session cannot invalidate
+ *                the token this form was rendered with.)
  */
 
 declare(strict_types=1);
@@ -45,10 +56,7 @@ if (!empty($_SESSION['delivery_rider_id'])) {
     exit;
 }
 
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-
+// ===== HEADER (starts DB, assigns $csrfToken, renders <head> + <header>) =====
 require_once __DIR__ . '/../includes/header.php';
 
 $errorMessage = $_SESSION['rider_registration_error'] ?? '';
@@ -124,7 +132,7 @@ $relationshipOptions = [
                 enctype="multipart/form-data" novalidate autocomplete="on">
 
                 <input type="hidden" name="csrf_token"
-                    value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
+                    value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="current_step" id="currentStep" value="1">
 
                 <!-- ============================================================

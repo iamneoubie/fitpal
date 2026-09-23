@@ -12,7 +12,13 @@
  * request.
  *
  * @package FitPal
- * @version 1.0
+ * @version 2.0 — Removed the local CSRF block that wrote to the
+ *                shared 'csrf_token' session key. The restaurant
+ *                role's token is now generated in includes/header.php
+ *                via includes/restaurant-csrf-token.php under
+ *                'restaurant_csrf_token' and exposed as $csrfToken.
+ *                The FITPAL_RESTAURANT_PROFILE inline config and the
+ *                hidden form fields now carry the role-scoped value.
  */
 
 declare(strict_types=1);
@@ -28,6 +34,8 @@ if (empty($_SESSION['restaurant_account_id'])) {
 
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../backend/database/restaurant-queries.php';
+
+// $assetBase and $csrfToken are provided by header.php.
 
 $accountId = (int)$_SESSION['restaurant_account_id'];
 $profile = getRestaurantAccountProfile($database_connection, $accountId) ?: [];
@@ -71,11 +79,6 @@ $verificationLabel = match ($verification) {
 
 $branchId  = !empty($profile['branch_id']) ? (int)$profile['branch_id'] : 0;
 $hasBranch = $branchId > 0 && !empty($profile['branch_name']);
-
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-$csrfToken = $_SESSION['csrf_token'];
 
 function formatRestaurantAddress(array $p): string
 {

@@ -2,19 +2,41 @@
 /**
  * FitPal Rider Header
  *
- * Rider-specific header with conditional navigation based on login
- * status. Mirrors customer/includes/header.php and
- * restaurant/includes/header.php so all roles stay consistent.
+ * Renders the rider chrome (nav, user block, logout modal) and
+ * bootstraps the rider role's request-scoped needs:
+ *
+ *   - Starts or resumes the PHP session.
+ *   - Requires includes/rider-csrf-token.php and assigns $csrfToken
+ *     on every request, authenticated or not. The helper stores the
+ *     token under 'rider_csrf_token' — never the shared 'csrf_token'
+ *     key — because all FitPal roles run on the same PHP session and
+ *     a shared key would let one role's success path delete another
+ *     role's already-rendered token.
+ *   - Requires the shared PDO connection via rider-connect.php.
+ *   - Computes $assetBase and $pageCssPath for the current page.
+ *   - Loads the signed-in rider's display name, initial, and
+ *     verification status when a session is present.
+ *
+ * Token assignment is unconditional. Earlier revisions only assigned
+ * $csrfToken inside the authenticated branch, which forced
+ * sign-in.php and sign-up.php to require the helper and assign the
+ * variable themselves before including the header. That contract is
+ * easy to forget and duplicated logic in three files. Assigning it
+ * here — the same way every page must already include this file —
+ * makes the header the single CSRF bootstrap point for the rider
+ * role.
  *
  * Rider users do NOT have a cart, so there is no cart badge and no
  * cart-count query here. The nav reflects rider-only surfaces:
  * Dashboard, Deliveries, Earnings, and Profile.
  *
  * @package FitPal
- * @version 1.4 — Adds logout confirmation modal (mirrors the
- *                restaurant header). Desktop avatar and mobile
- *                greeting link to profile.php. Logout triggers use
- *                data-logout-trigger so logout.js can intercept.
+ * @version 1.6 — Assigns $csrfToken on both branches so anonymous
+ *                pages (sign-in.php, sign-up.php) no longer need to
+ *                require the helper or set the variable themselves.
+ *                This removes the duplicated bootstrap that existed
+ *                in sign-in.php, sign-up.php, and header.php. All
+ *                other behavior is unchanged from v1.5.
  */
 
 declare(strict_types=1);
@@ -30,6 +52,13 @@ if (!isset($_SESSION['created'])) {
     session_regenerate_id(true);
     $_SESSION['created'] = time();
 }
+
+// ===== CSRF TOKEN (rider role) =====
+//
+// Single source of truth for the rider role's CSRF token. The helper
+// generates it on first use and stores it under 'rider_csrf_token' —
+// never the shared 'csrf_token' key.
+require_once __DIR__ . '/rider-csrf-token.php';
 
 // ===== DATABASE =====
 require_once __DIR__ . '/../backend/database/rider-connect.php';
@@ -56,8 +85,13 @@ $riderName    = '';
 $riderInitial = '';
 $riderStatus  = '';
 
+// Always expose a rider-scoped token so any form rendered below can
+// carry it, regardless of whether the visitor is authenticated.
+$csrfToken = getRiderCsrfToken();
+
 if (!empty($_SESSION['delivery_rider_id'])) {
     $isLoggedIn = true;
+
     try {
         $stmt = $database_connection->prepare(
             "SELECT dr.first_name, dr.last_name,

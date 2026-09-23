@@ -28,8 +28,9 @@
  * (queueEnrich, getProductForQueue) live in queue-queries.php.
  *
  * @package FitPal
- * @version 5.0 — queueEnrich moved to queue-queries.php; handler is
- *                now SQL-free.
+ * @version 5.1 — CSRF validation reads customer_csrf_token instead of
+ *                the shared csrf_token. (5.0: queueEnrich moved to
+ *                queue-queries.php; handler is now SQL-free.)
  */
 
 declare(strict_types=1);
@@ -70,8 +71,14 @@ if ($action === '' && ($input['queue_action'] ?? '') === 'queue') {
 
 $requiresCsrf = !in_array($action, ['get', ''], true);
 if ($requiresCsrf) {
+    // Per-role CSRF check. The customer role validates against its
+    // own session key, 'customer_csrf_token', never the shared
+    // 'csrf_token'. Another role in the same browser session could
+    // have unset or rotated the shared key on its own sign-in, which
+    // would otherwise invalidate the token this request was issued
+    // under. See general.md.
     $given = (string)($input['csrf_token'] ?? '');
-    $sess  = (string)($_SESSION['csrf_token'] ?? '');
+    $sess  = (string)($_SESSION['customer_csrf_token'] ?? '');
     if ($sess === '' || $given === '' || !hash_equals($sess, $given)) {
         if ($isAjax) {
             header('Content-Type: application/json; charset=utf-8');

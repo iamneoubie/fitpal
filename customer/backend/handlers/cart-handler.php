@@ -21,9 +21,9 @@
  * (e.g. getCartCustomizationBreakdown) live in cart-queries.php.
  *
  * @package FitPal
- * @version 6.1
+ * @version 6.2 — CSRF validation reads customer_csrf_token instead of
+ *                the shared csrf_token.
  */
-
 declare(strict_types=1);
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -75,8 +75,13 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
 
 $customerId = (int)$_SESSION['customer_id'];
 
+// Per-role CSRF check. The customer role validates against its own
+// session key, 'customer_csrf_token', never the shared 'csrf_token'.
+// Another role in the same browser session could have unset or
+// rotated the shared key on its own sign-in, which would otherwise
+// invalidate the token this request was issued under. See general.md.
 $givenToken = (string)($_POST['csrf_token'] ?? '');
-$sessToken  = (string)($_SESSION['csrf_token'] ?? '');
+$sessToken  = (string)($_SESSION['customer_csrf_token'] ?? '');
 
 if ($sessToken === '' || $givenToken === '' || !hash_equals($sessToken, $givenToken)) {
     cartFail('Security validation failed. Please try again.', $isAjax);

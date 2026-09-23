@@ -1,8 +1,31 @@
 -- =====================================================
--- DATABASE: fitpal_food_delivery v.1.1.0
+-- DATABASE: fitpal_food_delivery v.1.1.1
 -- Dietary Meal Ordering and Restaurant Nutrition Analytics System
 -- WITH FULL CUSTOMIZABLE MEAL SUPPORT
 -- ACID Compliant with Proper Constraints
+--
+-- v1.1.1 changes
+-- --------------
+--   ~ before_transaction_insert now guards its balance check
+--     behind NEW.status = 'completed'. Previously the check ran
+--     on every payment and withdrawal row, including pending
+--     COD and Online payment rows that were never going to
+--     touch the wallet balance. With the v5.5 seed (all wallet
+--     balances at 0.00), the first COD or Online order for a
+--     customer threw 'Insufficient balance' at the transaction
+--     insert, which rolled back the entire order creation.
+--
+--     The corrected trigger only rejects a payment/withdrawal
+--     when it is being inserted as 'completed'. Pending rows
+--     pass through cleanly. When the application later flips a
+--     pending row to 'completed' via UPDATE, that path is
+--     covered by after_transaction_update_status, which is the
+--     correct place to enforce the wallet balance at the moment
+--     funds actually move.
+--
+--     No tables, columns, indexes, or other triggers were
+--     changed. This is a behavior fix inside an existing
+--     trigger body only.
 --
 -- v1.1.0 changes
 -- --------------
@@ -885,7 +908,14 @@ BEGIN
     END IF;
 END$$
 
--- Lock balance row before inserting transaction
+-- Lock balance row before inserting transaction.
+--
+-- The balance check runs ONLY when the incoming row is being
+-- inserted as 'completed'. A pending row (COD or Online payment
+-- that has not yet been confirmed) is bookkeeping only and must
+-- not be blocked by a wallet balance it will never touch. The
+-- moment a pending row is flipped to 'completed' via UPDATE is
+-- handled by after_transaction_update_status.
 CREATE TRIGGER before_transaction_insert
 BEFORE INSERT ON transaction
 FOR EACH ROW
@@ -901,8 +931,10 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Financial account not found';
     END IF;
 
-    IF NEW.transaction_type IN ('payment','withdrawal')
-       AND NEW.amount > current_balance THEN
+    IF NEW.status = 'completed'
+       AND NEW.transaction_type IN ('payment','withdrawal')
+       AND NEW.amount > current_balance
+    THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Insufficient balance';
     END IF;
 END$$
@@ -971,7 +1003,8 @@ BEGIN
            AND order_status IN ('preparing','delivering')
            AND order_id <> NEW.order_id;
 
-        IF active_orders > 2 THEN            SIGNAL SQLSTATE '45000'
+        IF active_orders > 2 THEN
+            SIGNAL SQLSTATE '45000'
             SET MESSAGE_TEXT = 'Rider already has too many active orders';
         END IF;
     END IF;

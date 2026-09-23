@@ -18,9 +18,18 @@
  * is required before any code that depends on it.
  *
  * @package FitPal
- * @version 3.1 — Profile page logout now goes through the shared
- *                confirmation modal. The button carries
- *                data-logout-trigger so logout.js intercepts it.
+ * @version 3.3 — Corrected the docblock reference from
+ *                includes/csrf-token.php to
+ *                includes/rider-csrf-token.php, which is the file the
+ *                header actually requires. No code change. (3.2:
+ *                Removed the local CSRF block that wrote to the
+ *                shared 'csrf_token' session key. The rider role's
+ *                token is now generated in includes/header.php via
+ *                includes/rider-csrf-token.php under
+ *                'rider_csrf_token' and exposed as $csrfToken, so the
+ *                FITPAL_RIDER_PROFILE inline config and the hidden
+ *                form field on the edit form both carry the
+ *                rider-scoped value.)
  */
 
 declare(strict_types=1);
@@ -99,10 +108,7 @@ if ($profilePic !== '' && is_string($assetBase) && $assetBase !== '') {
     $profilePicUrl = $projectRootUrl . $profilePic;
 }
 
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-$csrfToken = $_SESSION['csrf_token'];
+// $csrfToken is provided by header.php (rider_csrf_token).
 
 /**
  * "Joined March 2026" style caption. Returns an em-dash if the

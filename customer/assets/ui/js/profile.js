@@ -1,8 +1,11 @@
 /**
  * FitPal Customer Profile JavaScript
- * Version 3.2 — Scroll lock applied before the modal is shown and
- *                released after it is hidden, mirroring the cart,
- *                orders, and wallet pages.
+ * Version 3.3 — Prefer window.FITPAL_CSRF_TOKEN over the DOM query
+ *                when resolving the customer role's CSRF token. The
+ *                page now bootstraps that global from $csrfToken,
+ *                which comes from header.php (via includes/csrf_token.php)
+ *                and is the customer role's own session key,
+ *                customer_csrf_token — never the shared csrf_token.
  *
  * - Tabs, profile edit mode
  * - Multi-step address modal (add / edit)
@@ -13,7 +16,7 @@
  * - Field-level input filters ported from sign-up.js
  *
  * @package FitPal
- * @version 3.2
+ * @version 3.3
  */
 
 (function() {
@@ -74,6 +77,35 @@
         var deleteAddressId  = null;
         var currentModalStep = 1;
         var totalModalSteps  = 3;
+
+        // ============================================
+        // CSRF TOKEN RESOLUTION
+        //
+        // Priority:
+        //   1. window.FITPAL_CSRF_TOKEN — bootstrapped by profile.php
+        //      from $csrfToken (customer role's own session key,
+        //      customer_csrf_token, set via header.php).
+        //   2. The address form's own hidden csrf_token input.
+        //   3. The first csrf_token input on the page.
+        //
+        // This never reads the shared csrf_token session key — the
+        // customer role is not allowed to touch it. See general.md.
+        // ============================================
+        function resolveCsrfToken() {
+            if (typeof window.FITPAL_CSRF_TOKEN === 'string' && window.FITPAL_CSRF_TOKEN !== '') {
+                return window.FITPAL_CSRF_TOKEN;
+            }
+
+            if (addressForm) {
+                var formInput = addressForm.querySelector('input[name="csrf_token"]');
+                if (formInput && formInput.value) {
+                    return formInput.value;
+                }
+            }
+
+            var fallback = document.querySelector('input[name="csrf_token"]');
+            return fallback ? fallback.value : '';
+        }
 
         // ============================================
         // BODY SCROLL LOCK
@@ -517,8 +549,7 @@
                 if (!deleteAddressId) return;
 
                 var formData = new FormData();
-                var csrfToken = document.querySelector('input[name="csrf_token"]');
-                formData.append('csrf_token', csrfToken ? csrfToken.value : '');
+                formData.append('csrf_token', resolveCsrfToken());
                 formData.append('action', 'delete_address');
                 formData.append('address_id', deleteAddressId);
 
@@ -637,12 +668,21 @@
 
             var iconFile = type === 'success' ? 'verified-fill.svg' : 'file-warning-fill.svg';
 
-            notification.innerHTML =
-                '<span class="notification-icon">' +
-                    '<img src="../../shared/assets/images/icons/' + iconFile + '" alt="' + type + '">' +
-                '</span>' +
-                '<span class="notification-message">' + message + '</span>';
+            var iconSpan = document.createElement('span');
+            iconSpan.className = 'notification-icon';
 
+            var iconImg = document.createElement('img');
+            iconImg.src = '../../shared/assets/images/icons/' + iconFile;
+            iconImg.alt = type;
+
+            iconSpan.appendChild(iconImg);
+
+            var messageSpan = document.createElement('span');
+            messageSpan.className = 'notification-message';
+            messageSpan.textContent = message;
+
+            notification.appendChild(iconSpan);
+            notification.appendChild(messageSpan);
             document.body.appendChild(notification);
 
             setTimeout(function() {
