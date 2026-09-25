@@ -11,20 +11,23 @@
  * comes from riders.js.
  *
  * @package FitPal
- * @version 3.5 — Version bump to match the CSRF consolidation in
- *                header.php v5.0 and includes/admin-csrf-token.php
- *                v1.0. No functional change: this page already reads
- *                $csrfToken from header.php and never generated the
- *                token itself. (3.4: Added data-csrf-token to the
- *                top-level .admin-list-page container so riders.js
- *                can read the admin-scoped CSRF token from the DOM
- *                instead of the window.FITPAL_ADMIN_RIDERS global
- *                that no page ever emitted. Mirrors the
- *                restaurants.js pattern established in
- *                restaurants.php v3.3 and profile.php's
- *                data-asset-base contract. No inline JS added; the
- *                token travels as a data attribute, and the POST
- *                field name in the modal footer forms is unchanged.)
+ * @version 3.6 — Removed the data-csrf-token attribute from the
+ *                top-level .admin-list-page container. It was added
+ *                in v3.4 so riders.js could read the admin-scoped
+ *                CSRF token from the DOM, but riders.js v3.0 was
+ *                rewritten to do no such thing — the docblock on
+ *                the JS file explicitly states the page renders no
+ *                bulk-selection UI and performs no client-side
+ *                fetch. All mutations are plain form POSTs whose
+ *                footer forms already carry the token as a hidden
+ *                csrf_token field. The attribute therefore leaked
+ *                the token into HTML source for no consumer.
+ *                Removing it closes the leak and drops the
+ *                misleading contract. (3.5: Version bump to match
+ *                the CSRF consolidation in header.php v5.0 and
+ *                includes/admin-csrf-token.php v1.0. No functional
+ *                change: this page already reads $csrfToken from
+ *                header.php and never generated the token itself.)
  */
 
 declare(strict_types=1);
@@ -104,7 +107,7 @@ function riderMediaUrl(string $assetBase, string $relPath): string
 }
 ?>
 
-<div class="content admin-list-page" data-csrf-token="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+<div class="content admin-list-page">
     <div class="container">
 
         <header class="admin-page-header">

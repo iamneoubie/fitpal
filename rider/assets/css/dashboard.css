@@ -2,23 +2,60 @@
  * FitPal Rider Dashboard Styles
  *
  * Layout:
- *   - Greeting header with verification badge + availability toggle
- *   - Four stat cards (wallet, deliveries, rating, today's earnings)
- *   - Two-column row: weekly chart (left) + performance card (right)
- *   - Recent deliveries list
+ *   - Greeting header
+ *   - Four stat cards
+ *   - Current Work strip
+ *   - Two-column row: weekly chart | info card
  *   - Verification warning (only when not verified)
  *
- * Uses shared global CSS variables from global.css.
+ * Right column is now an info card
+ * --------------------------------
+ * The right column used to be a Performance card with two rate
+ * bars (Acceptance Rate, Completion Rate) and a vehicle block.
+ * That mixed order metrics with identity data. The card now reads
+ * top to bottom:
+ *
+ *   .rider-info-card
+ *     .rider-info-body
+ *       .rider-info-identity       name / email / contact
+ *       .rider-info-vehicle        section label + tile
+ *       .rider-info-meta           status / availability / totals
+ *
+ * The rate bars, their labels, and the old
+ * .rider-performance-* selectors are gone. Any shared class name
+ * that survives (.rider-card, .rider-card-header, .rider-card-link)
+ * is unchanged.
+ *
+ * Vehicle icon
+ * ------------
+ * The vehicle tile uses the same treatment as every other icon
+ * tile on this page: a soft rgba(89,193,74,0.12) background with
+ * a green-tinted glyph. The glyph is therefore a green vehicle
+ * silhouette on a light green chip — legible at every viewport.
+ *
+ * Current Work strip
+ * ------------------
+ * The strip is a single card whose tint and icon are driven by a
+ * data-driven class: .rider-work-card-active, -assigned, -clear,
+ * -offline, -blocked.
  *
  * @package FitPal
- * @version 4.0 — Performance card rebuilt. The vehicle block now has
- *                a proper icon rule (single, no mask), a grey-tinted
- *                info tile, and a meta list (status / availability /
- *                deliveries / rating) that fills the vertical space
- *                the row's stretch was already reserving. The old
- *                .rider-performance-vehicle-icon mask rule and the
- *                two stray .rider-performance-vehicle-icon-box /
- *                -img blocks at the bottom of the file are gone.
+ * @version 7.0 — Right column rebuilt as an info card. Removed
+ *                every .rider-performance-* rule (body, item,
+ *                header, label, value, bar, bar-fill, hint,
+ *                vehicle, vehicle-*, availability). Added
+ *                .rider-info-* rules for the identity list, the
+ *                vehicle tile, and the status meta list. Left
+ *                column, stat grid, Current Work strip,
+ *                verification warning, badges, and every
+ *                responsive breakpoint below are unchanged from
+ *                v6.1.
+ *
+ *                (6.1: vehicle icon tile restyled; duplicate rule
+ *                removed. 6.0: Recent Deliveries removed, Current
+ *                Work strip added. 5.0: dashboard-actions block
+ *                removed. 4.0: performance card rebuilt.
+ *                3.0: initial dashboard grid.)
  */
 
 /* ============================================
@@ -52,17 +89,11 @@
    ============================================ */
 
 .rider-dashboard-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
     margin-bottom: 24px;
-    flex-wrap: wrap;
-    gap: 16px;
 }
 
 .rider-dashboard-greeting {
-    flex: 1;
-    min-width: 0;
+    max-width: 720px;
 }
 
 .rider-dashboard-greeting .heading-2 {
@@ -79,44 +110,7 @@
     color: var(--gray-500);
     margin: 0;
     font-size: var(--font-size-sm);
-    max-width: 560px;
     line-height: 1.5;
-}
-
-.rider-dashboard-actions {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-shrink: 0;
-    flex-wrap: wrap;
-}
-
-.rider-dashboard-actions .btn-icon {
-    width: 16px;
-    height: 16px;
-    display: block;
-    flex-shrink: 0;
-    filter: brightness(0) invert(1);
-}
-
-.rider-dashboard-actions .btn-outline .btn-icon,
-.rider-dashboard-actions .btn[disabled] .btn-icon {
-    filter: brightness(0) saturate(100%)
-            invert(20%) sepia(8%) saturate(800%)
-            hue-rotate(50deg) brightness(95%) contrast(95%);
-}
-
-.rider-dashboard-actions .btn[disabled] {
-    opacity: 1;
-    cursor: not-allowed;
-    background: var(--gray-100);
-    color: var(--gray-500);
-    border-color: var(--gray-200);
-    box-shadow: none;
-}
-
-.rider-dashboard-actions .btn[disabled] span {
-    color: var(--gray-500);
 }
 
 /* ============================================
@@ -314,11 +308,222 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
 }
 
 /* ============================================
+   CURRENT WORK STRIP
+   ============================================ */
+
+.rider-work-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    padding: 18px 22px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-sm);
+    flex-wrap: wrap;
+    min-width: 0;
+    border-left: 4px solid var(--gray-300);
+}
+
+/* ---- Variant tints ---- */
+
+.rider-work-card-active {
+    border-left-color: var(--primary);
+    background: linear-gradient(90deg, rgba(89, 193, 74, 0.06) 0%, var(--white) 40%);
+}
+
+.rider-work-card-assigned {
+    border-left-color: var(--warning);
+    background: linear-gradient(90deg, rgba(255, 193, 7, 0.08) 0%, var(--white) 40%);
+}
+
+.rider-work-card-clear {
+    border-left-color: var(--secondary);
+}
+
+.rider-work-card-offline {
+    border-left-color: var(--gray-400);
+}
+
+.rider-work-card-blocked {
+    border-left-color: var(--danger);
+    background: linear-gradient(90deg, rgba(220, 53, 69, 0.06) 0%, var(--white) 40%);
+}
+
+/* ---- Icon ---- */
+
+.rider-work-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 11px;
+    box-sizing: border-box;
+    background: var(--gray-100);
+}
+
+.rider-work-icon img {
+    width: 100%;
+    height: 100%;
+    max-width: 22px;
+    max-height: 22px;
+    display: block;
+    object-fit: contain;
+}
+
+/* Per-variant icon tint */
+
+.rider-work-card-active .rider-work-icon {
+    background: rgba(89, 193, 74, 0.14);
+}
+
+.rider-work-card-active .rider-work-icon img {
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.rider-work-card-assigned .rider-work-icon {
+    background: rgba(255, 193, 7, 0.16);
+}
+
+.rider-work-card-assigned .rider-work-icon img {
+    filter: brightness(0) saturate(100%)
+            invert(70%) sepia(90%) saturate(1000%)
+            hue-rotate(0deg) brightness(95%) contrast(90%);
+}
+
+.rider-work-card-clear .rider-work-icon {
+    background: rgba(23, 162, 184, 0.12);
+}
+
+.rider-work-card-clear .rider-work-icon img {
+    filter: brightness(0) saturate(100%)
+            invert(52%) sepia(70%) saturate(600%)
+            hue-rotate(160deg) brightness(92%) contrast(85%);
+}
+
+.rider-work-card-offline .rider-work-icon {
+    background: var(--gray-100);
+}
+
+.rider-work-card-offline .rider-work-icon img {
+    filter: brightness(0) saturate(100%)
+            invert(60%) sepia(0%) saturate(0%)
+            brightness(90%) contrast(85%);
+}
+
+.rider-work-card-blocked .rider-work-icon {
+    background: rgba(220, 53, 69, 0.12);
+}
+
+.rider-work-card-blocked .rider-work-icon img {
+    filter: brightness(0) saturate(100%)
+            invert(40%) sepia(90%) saturate(600%)
+            hue-rotate(330deg) brightness(90%) contrast(85%);
+}
+
+/* ---- Body ---- */
+
+.rider-work-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.rider-work-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    line-height: 1.2;
+}
+
+.rider-work-card-active .rider-work-label {
+    color: var(--primary-dark);
+}
+
+.rider-work-card-assigned .rider-work-label {
+    color: #856404;
+}
+
+.rider-work-card-blocked .rider-work-label {
+    color: var(--danger);
+}
+
+.rider-work-title {
+    margin: 0;
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+.rider-work-text {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-600);
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+/* ---- CTA ---- */
+
+.rider-work-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 18px;
+    border-radius: var(--radius-base);
+    background: #1a1a1a;
+    color: #ffffff;
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background 0.15s ease, transform 0.1s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.rider-work-cta:hover,
+.rider-work-cta:focus {
+    background: #000000;
+    color: #ffffff;
+}
+
+.rider-work-cta:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.rider-work-cta:active {
+    transform: scale(0.98);
+}
+
+.rider-work-cta-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+    filter: brightness(0) invert(1);
+    transition: transform 0.15s ease;
+}
+
+.rider-work-cta:hover .rider-work-cta-icon {
+    transform: translateX(2px);
+}
+
+/* ============================================
    TWO-COLUMN ROW
-   The row is the height authority. Both cards
-   stretch to match the tallest sibling because
-   grid applies align-items: stretch to its
-   direct children.
    ============================================ */
 
 .rider-dashboard-row {
@@ -332,8 +537,6 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
     grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
 }
 
-/* Each grid item is a .rider-card. Give it height: 100% so it
-   visibly fills the row's stretched cell even with overflow: hidden. */
 .rider-dashboard-row > .rider-card {
     height: 100%;
     margin-bottom: 0;
@@ -366,6 +569,7 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
     border-bottom: 1px solid var(--gray-100);
     background: var(--gray-50);
     flex-shrink: 0;
+    gap: 12px;
 }
 
 .rider-card-header .heading-5 {
@@ -593,10 +797,14 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
 }
 
 /* ============================================
-   PERFORMANCE CARD
+   INFO CARD (right column)
+   Three stacked sections inside one card:
+     .rider-info-identity    name / email / contact
+     .rider-info-vehicle     section label + tile
+     .rider-info-meta        status / availability / totals
    ============================================ */
 
-.rider-performance-body {
+.rider-info-body {
     padding: 20px;
     display: flex;
     flex-direction: column;
@@ -605,73 +813,72 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
     min-height: 0;
 }
 
-.rider-performance-item {
+/* ---- Identity ---- */
+
+.rider-info-identity {
+    margin: 0;
+    padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
 }
 
-.rider-performance-header {
+.rider-info-row {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--gray-100);
+    min-height: 30px;
 }
 
-.rider-performance-label {
-    font-size: var(--font-size-sm);
-    color: var(--gray-600);
-    font-weight: var(--font-weight-medium);
+.rider-info-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
 }
 
-.rider-performance-value {
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-bold);
-    color: var(--text);
+.rider-info-row:first-child {
+    padding-top: 0;
 }
 
-.rider-performance-bar {
-    height: 8px;
-    background: var(--gray-100);
-    border-radius: var(--radius-full);
-    overflow: hidden;
+.rider-info-row dt {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+    min-width: 68px;
 }
 
-.rider-performance-bar-fill {
-    height: 100%;
-    background: linear-gradient(90deg, var(--primary) 0%, var(--primary-dark) 100%);
-    border-radius: var(--radius-full);
-    transition: width 0.5s ease;
-}
-
-.rider-performance-bar-fill-success {
-    background: linear-gradient(90deg, var(--secondary) 0%, var(--primary) 100%);
-}
-
-.rider-performance-hint {
-    font-size: 11px;
-    color: var(--gray-400);
+.rider-info-row dd {
     margin: 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+    text-align: right;
+    min-width: 0;
+    word-break: break-word;
 }
 
-/* ---- Vehicle block ---- */
+/* ---- Vehicle ---- */
 
-.rider-performance-vehicle {
-    margin-top: auto;
+.rider-info-vehicle {
     padding-top: 16px;
     border-top: 1px solid var(--gray-100);
 }
 
-.rider-performance-vehicle-label {
-    font-size: 11px;
+.rider-info-section-label {
+    font-size: 10px;
+    font-weight: 700;
     color: var(--gray-500);
-    font-weight: var(--font-weight-semibold);
     text-transform: uppercase;
-    letter-spacing: 0.4px;
+    letter-spacing: 0.6px;
     display: block;
     margin-bottom: 10px;
 }
 
-.rider-performance-vehicle-info {
+.rider-info-vehicle-tile {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -681,26 +888,30 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
     border-radius: var(--radius-base);
 }
 
-/* Single rule for the vehicle icon. The tint makes the stroke
-   glyph white against the primary green box. */
-.rider-performance-vehicle-icon {
+/* Vehicle icon tile.
+   Same treatment as every other icon tile on this page: a soft
+   tinted background with a green-tinted glyph. */
+.rider-info-vehicle-icon {
     width: 36px;
     height: 36px;
     flex-shrink: 0;
     display: block;
-    background-color: var(--primary);
+    background: rgba(89, 193, 74, 0.12);
     border-radius: var(--radius-base);
-    padding: 7px;
+    padding: 8px;
     box-sizing: border-box;
-    filter: brightness(0) invert(1);
+    object-fit: contain;
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
 }
 
-.rider-performance-vehicle-details {
+.rider-info-vehicle-details {
     min-width: 0;
     flex: 1;
 }
 
-.rider-performance-vehicle-name {
+.rider-info-vehicle-name {
     margin: 0;
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
@@ -710,22 +921,23 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
     white-space: nowrap;
 }
 
-.rider-performance-vehicle-plate {
+.rider-info-vehicle-plate {
     margin: 2px 0 0 0;
     font-size: var(--font-size-xs);
     color: var(--gray-500);
 }
 
-/* ---- Vehicle meta list ---- */
+/* ---- Status meta ---- */
 
-.rider-performance-vehicle-meta {
-    margin: 14px 0 0 0;
-    padding: 0;
+.rider-info-meta {
+    margin: 0;
+    padding: 16px 0 0 0;
+    border-top: 1px solid var(--gray-100);
     display: flex;
     flex-direction: column;
 }
 
-.rider-performance-vehicle-meta-row {
+.rider-info-meta-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -736,18 +948,18 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
     min-height: 32px;
 }
 
-.rider-performance-vehicle-meta-row:last-child {
+.rider-info-meta-row:last-child {
     border-bottom: none;
     padding-bottom: 0;
 }
 
-.rider-performance-vehicle-meta-row dt {
+.rider-info-meta-row dt {
     color: var(--gray-500);
     font-weight: var(--font-weight-medium);
     flex-shrink: 0;
 }
 
-.rider-performance-vehicle-meta-row dd {
+.rider-info-meta-row dd {
     margin: 0;
     color: var(--text);
     font-weight: var(--font-weight-semibold);
@@ -755,14 +967,14 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
     min-width: 0;
 }
 
-.rider-performance-vehicle-availability {
+.rider-info-availability {
     display: inline-flex;
     align-items: center;
     gap: 6px;
     font-weight: var(--font-weight-semibold);
 }
 
-.rider-performance-vehicle-availability::before {
+.rider-info-availability::before {
     content: '';
     width: 8px;
     height: 8px;
@@ -770,164 +982,21 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
     display: inline-block;
 }
 
-.rider-performance-vehicle-availability.is-online {
+.rider-info-availability.is-online {
     color: var(--primary-dark);
 }
 
-.rider-performance-vehicle-availability.is-online::before {
+.rider-info-availability.is-online::before {
     background: var(--primary);
     box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.2);
 }
 
-.rider-performance-vehicle-availability.is-offline {
+.rider-info-availability.is-offline {
     color: var(--gray-500);
 }
 
-.rider-performance-vehicle-availability.is-offline::before {
+.rider-info-availability.is-offline::before {
     background: var(--gray-400);
-}
-
-/* ============================================
-   RECENT DELIVERIES
-   ============================================ */
-
-.rider-deliveries-card {
-    margin-top: 0;
-}
-
-.rider-deliveries-list {
-    display: flex;
-    flex-direction: column;
-}
-
-.rider-delivery-row {
-    display: grid;
-    grid-template-columns: 40px 1fr auto;
-    align-items: center;
-    gap: 16px;
-    padding: 14px 20px;
-    border-bottom: 1px solid var(--gray-100);
-    transition: background 0.15s ease;
-}
-
-.rider-delivery-row:last-child {
-    border-bottom: none;
-}
-
-.rider-delivery-row:hover {
-    background: var(--gray-50);
-}
-
-.rider-delivery-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: var(--radius-full);
-    background: rgba(89, 193, 74, 0.1);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.rider-delivery-icon img {
-    width: 20px;
-    height: 20px;
-    display: block;
-    filter: brightness(0) saturate(100%)
-            invert(48%) sepia(70%) saturate(450%)
-            hue-rotate(75deg) brightness(95%) contrast(85%);
-}
-
-.rider-delivery-info {
-    min-width: 0;
-}
-
-.rider-delivery-order {
-    margin: 0 0 2px 0;
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    color: var(--text);
-}
-
-.rider-delivery-customer {
-    margin: 0 0 2px 0;
-    font-size: var(--font-size-xs);
-    color: var(--gray-600);
-}
-
-.rider-delivery-address {
-    margin: 0;
-    font-size: var(--font-size-xs);
-    color: var(--gray-400);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.rider-delivery-meta {
-    text-align: right;
-    flex-shrink: 0;
-}
-
-.rider-delivery-time {
-    margin: 0 0 2px 0;
-    font-size: var(--font-size-xs);
-    color: var(--gray-500);
-}
-
-.rider-delivery-earning {
-    margin: 0;
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-bold);
-    color: var(--primary);
-}
-
-/* ============================================
-   EMPTY STATE
-   ============================================ */
-
-.rider-empty-state {
-    text-align: center;
-    padding: 40px 20px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-}
-
-.rider-empty-icon {
-    width: 64px;
-    height: 64px;
-    margin-bottom: 14px;
-    background: var(--gray-100);
-    border-radius: var(--radius-full);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 14px;
-}
-
-.rider-empty-icon img {
-    width: 100%;
-    height: 100%;
-    max-width: 32px;
-    max-height: 32px;
-    object-fit: contain;
-    opacity: 0.4;
-}
-
-.rider-empty-title {
-    font-size: var(--font-size-base);
-    font-weight: var(--font-weight-semibold);
-    color: var(--text);
-    margin: 0 0 6px 0;
-}
-
-.rider-empty-text {
-    font-size: var(--font-size-sm);
-    color: var(--gray-500);
-    margin: 0;
-    max-width: 320px;
-    line-height: 1.5;
 }
 
 /* ============================================
@@ -937,7 +1006,7 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
 .rider-card-warning {
     border-color: #ffe8a1;
     background: #fffdf5;
-    margin-top: 24px;
+    margin-top: 0;
 }
 
 .rider-warning-body {
@@ -1044,18 +1113,8 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
         padding: 16px 0 32px 0;
     }
 
-    .rider-dashboard-header {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
     .rider-dashboard-greeting .heading-2 {
         font-size: var(--font-size-2xl);
-    }
-
-    .rider-dashboard-actions {
-        justify-content: flex-start;
-        width: 100%;
     }
 
     .rider-weekly-chart {
@@ -1088,35 +1147,14 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
         border-bottom: none;
     }
 
-    .rider-delivery-row {
-        grid-template-columns: 36px 1fr;
-        grid-template-areas:
-            "icon info"
-            "icon meta";
-        row-gap: 4px;
-        padding: 12px 16px;
+    /* Current Work strip: CTA moves to its own row below the body */
+    .rider-work-card {
+        padding: 16px 18px;
     }
 
-    .rider-delivery-icon {
-        grid-area: icon;
-        width: 36px;
-        height: 36px;
-    }
-
-    .rider-delivery-info {
-        grid-area: info;
-    }
-
-    .rider-delivery-meta {
-        grid-area: meta;
-        text-align: left;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-
-    .rider-delivery-time {
-        margin: 0;
+    .rider-work-cta {
+        width: 100%;
+        justify-content: center;
     }
 }
 
@@ -1160,18 +1198,64 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
         display: none;
     }
 
+    /* Current Work strip: full stack */
+    .rider-work-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 16px;
+    }
+
+    .rider-work-icon {
+        width: 40px;
+        height: 40px;
+        padding: 9px;
+    }
+
+    .rider-work-icon img {
+        max-width: 20px;
+        max-height: 20px;
+    }
+
+    .rider-work-title {
+        font-size: var(--font-size-sm);
+    }
+
+    .rider-work-cta {
+        width: 100%;
+        justify-content: center;
+    }
+
     .rider-chart-body {
         padding: 16px;
     }
 
-    .rider-performance-body {
+    .rider-info-body {
         padding: 16px;
         gap: 16px;
     }
 
-    .rider-performance-vehicle-meta-row {
+    .rider-info-meta-row {
         padding: 6px 0;
         min-height: 28px;
+    }
+
+    .rider-info-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        padding: 6px 0;
+        min-height: 0;
+    }
+
+    .rider-info-row dt {
+        min-width: 0;
+        font-size: 9px;
+    }
+
+    .rider-info-row dd {
+        text-align: left;
+        font-size: var(--font-size-xs);
     }
 
     .rider-card-header {
@@ -1201,10 +1285,10 @@ a.rider-stat-card:hover .rider-stat-arrow-img {
     .rider-stat-card,
     .rider-stat-arrow,
     .rider-stat-arrow-img,
+    .rider-work-cta,
+    .rider-work-cta-icon,
     .rider-chart-bar,
-    .rider-chart-tooltip,
-    .rider-performance-bar-fill,
-    .rider-delivery-row {
+    .rider-chart-tooltip {
         transition: none !important;
     }
 }

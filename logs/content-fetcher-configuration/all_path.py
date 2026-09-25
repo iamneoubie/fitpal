@@ -38,6 +38,7 @@ filesToCheck = [
     "/admin/backend/handlers/sign-out-handler.php",
 
     # ===== admin/includes =====
+    "/admin/includes/admin-csrf-token.php",
     "/admin/includes/header.php",
 
     # ===== admin/pages =====
@@ -114,7 +115,7 @@ filesToCheck = [
     "/customer/backend/handlers/wallet-handler.php",
 
     # ===== customer/includes =====
-    "/customer/includes/csrf_token.php",
+    "/customer/includes/customer-csrf-token.php",
     "/customer/includes/header.php",
 
     # ===== customer/pages =====
@@ -142,6 +143,7 @@ filesToCheck = [
     # ===== restaurant/assets/ui/js =====
     "/restaurant/assets/ui/js/dashboard.js",
     "/restaurant/assets/ui/js/header.js",
+    "/restaurant/assets/ui/js/kitchen-realtime.js",
     "/restaurant/assets/ui/js/logout.js",
     "/restaurant/assets/ui/js/orders.js",
     "/restaurant/assets/ui/js/profile.js",
@@ -149,12 +151,14 @@ filesToCheck = [
     "/restaurant/assets/ui/js/sign-up.js",
 
     # ===== restaurant/backend/database =====
+    "/restaurant/backend/database/chat-queries.php",
     "/restaurant/backend/database/order-queries.php",
     "/restaurant/backend/database/restaurant-connect.php",
     "/restaurant/backend/database/restaurant-queries.php",
 
     # ===== restaurant/backend/handlers =====
     "/restaurant/backend/handlers/branch-lookup-handler.php",
+    "/restaurant/backend/handlers/chat-handler.php",
     "/restaurant/backend/handlers/order-handler.php",
     "/restaurant/backend/handlers/profile-handler.php",
     "/restaurant/backend/handlers/sign-in-handler.php",
@@ -162,7 +166,9 @@ filesToCheck = [
     "/restaurant/backend/handlers/sign-up-handler.php",
 
     # ===== restaurant/includes =====
+    "/restaurant/includes/chat-modal.php",
     "/restaurant/includes/header.php",
+    "/restaurant/includes/restaurant-csrf-token.php",
 
     # ===== restaurant/pages =====
     "/restaurant/pages/dashboard.php",
@@ -172,7 +178,7 @@ filesToCheck = [
     "/restaurant/pages/sign-up.php",
 
     # ===== rider/assets/css =====
-    "/rider/assets/css/admin-tables.css",
+    "/rider/assets/css/assignment-panel.css",
     "/rider/assets/css/dashboard.css",
     "/rider/assets/css/deliveries.css",
     "/rider/assets/css/earnings.css",
@@ -182,21 +188,24 @@ filesToCheck = [
     "/rider/assets/css/sign-up.css",
 
     # ===== rider/assets/ui/js =====
+    "/rider/assets/ui/js/assignment-panel.js",
     "/rider/assets/ui/js/dashboard.js",
     "/rider/assets/ui/js/deliveries.js",
     "/rider/assets/ui/js/earnings.js",
     "/rider/assets/ui/js/header.js",
     "/rider/assets/ui/js/logout.js",
     "/rider/assets/ui/js/profile.js",
+    "/rider/assets/ui/js/rider-chat-modal.js",
     "/rider/assets/ui/js/sign-in.js",
     "/rider/assets/ui/js/sign-up.js",
 
     # ===== rider/backend/database =====
+    "/rider/backend/database/assignment-queries.php",
     "/rider/backend/database/rider-connect.php",
     "/rider/backend/database/rider-queries.php",
 
     # ===== rider/backend/handlers =====
-    "/rider/backend/handlers/admin-handler.php",
+    "/rider/backend/handlers/assignment-handler.php",
     "/rider/backend/handlers/message-handler.php",
     "/rider/backend/handlers/rider-handler.php",
     "/rider/backend/handlers/sign-in-handler.php",
@@ -204,7 +213,10 @@ filesToCheck = [
     "/rider/backend/handlers/sign-up-handler.php",
 
     # ===== rider/includes =====
+    "/rider/includes/assignment-panel.php",
     "/rider/includes/header.php",
+    "/rider/includes/rider-chat-modal.php",
+    "/rider/includes/rider-csrf-token.php",
 
     # ===== rider/pages =====
     "/rider/pages/dashboard.php",

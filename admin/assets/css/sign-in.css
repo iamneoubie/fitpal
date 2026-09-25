@@ -5,7 +5,25 @@
  * comfortable touch targets. Uses global CSS variables.
  *
  * @package FitPal
- * @version 2.0
+ * @version 2.1 — The INVALID FIELD STATE block is now scoped to
+ *                .sign-in-form, matching the .error rules that
+ *                already existed higher in the file, and its focus
+ *                ring matches those rules exactly (4px, not 3px).
+ *
+ *                Previously the appended block used bare
+ *                .form-control selectors and declared a 3px focus
+ *                ring. Because it appears later in the file with
+ *                equal specificity, it overrode the existing
+ *                .sign-in-form .form-control.error:focus rule and
+ *                shrank the invalid-state ring from 4px to 3px —
+ *                a silent regression on .error even though the
+ *                block's stated purpose was to alias, not change,
+ *                that styling. It also broke the file's convention
+ *                of scoping every form rule to .sign-in-form,
+ *                leaving the invalid state free to leak onto any
+ *                future .form-control rendered on this page.
+ *
+ *                No other rule was changed. (2.0: Current baseline.)
  */
 
 .content {
@@ -246,4 +264,37 @@
     .sign-in-header .heading-2 { font-size: var(--font-size-3xl); }
     .sign-in-form .form-control { height: 52px; }
     .sign-in-form .btn { height: 52px; }
+}
+
+/* ============================================
+ * INVALID FIELD STATE
+ *
+ * .is-error is the canonical class across admin
+ * JS (profile.js has always used it; sign-in.js
+ * was migrated to it in v1.1).
+ *
+ * The selectors are scoped to .sign-in-form to
+ * match the .error rules higher in this file, so
+ * the invalid state cannot leak onto a future
+ * .form-control rendered on this page outside
+ * the sign-in form.
+ *
+ * The declarations mirror
+ * .sign-in-form .form-control.error and
+ * .sign-in-form .form-control.error:focus
+ * exactly — border-color: var(--danger) and a
+ * 4px focus ring — so an input styled by
+ * .is-error renders identically to one styled
+ * by .error. Delete the .error half of these
+ * selectors once nothing references it.
+ * ============================================ */
+.sign-in-form .form-control.is-error,
+.sign-in-form .form-control.error {
+    border-color: var(--danger);
+}
+
+.sign-in-form .form-control.is-error:focus,
+.sign-in-form .form-control.error:focus {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 4px rgba(220, 53, 69, 0.15);
 }

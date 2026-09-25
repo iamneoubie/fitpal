@@ -7,8 +7,45 @@
  * (admin, restaurant, rider) that may be active in the same browser.
  *
  * @package FitPal
- * @version 1.1 — Validates against customer_csrf_token; unsets its own
- *                token on sign-out; hardens redirect whitelist.
+ * @version 1.3 — The unset list now targets the customer role's own
+ *                namespaced keys after the sign-in handler was
+ *                migrated to the {role}_ prefix convention in v2.2.
+ *
+ *                Removed from the unset list:
+ *                    user_role     — no longer written by customer sign-in
+ *                    user_name     — replaced by customer_name
+ *                    user_email    — replaced by customer_email
+ *                    user_username — replaced by customer_username
+ *
+ *                Added to the unset list:
+ *                    customer_role     — new customer-scoped role key
+ *                    customer_name     — new customer-scoped display key
+ *                    customer_email    — new customer-scoped contact key
+ *                    customer_username — new customer-scoped username key
+ *
+ *                Previously this handler unset the generic user_* keys
+ *                alongside customer_id and customer_csrf_token. Those
+ *                generic keys were also written by the admin, rider,
+ *                and restaurant roles — all sharing the same PHP
+ *                session — so a customer signing out could wipe an
+ *                admin's user_name and leave any admin page that read
+ *                that key rendering a blank greeting. Removing them
+ *                from this handler's unset list closes that
+ *                reverse-direction collision.
+ *
+ *                The shared 'csrf_token' key is still deliberately
+ *                left alone. The customer role never read or wrote
+ *                it; touching it here would risk breaking another
+ *                role whose form is already rendered in this same
+ *                browser session.
+ *
+ *                (1.2: Validated against customer_csrf_token — the
+ *                customer role's own key — and unset it on the way
+ *                out so the next customer sign-in generates a fresh
+ *                one.
+ *                1.1: Hardened the redirect whitelist so the
+ *                redirect target cannot become an open redirect.
+ *                1.0: Initial version.)
  */
 
 declare(strict_types=1);
@@ -35,10 +72,10 @@ if ($token !== '' && $expectedToken !== '' && !hash_equals($expectedToken, $toke
 
 // ===== CLEAR ONLY CUSTOMER SESSION DATA =====
 unset($_SESSION['customer_id']);
-unset($_SESSION['user_role']);
-unset($_SESSION['user_name']);
-unset($_SESSION['user_email']);
-unset($_SESSION['user_username']);
+unset($_SESSION['customer_role']);
+unset($_SESSION['customer_name']);
+unset($_SESSION['customer_email']);
+unset($_SESSION['customer_username']);
 
 // The customer's own CSRF token is retired with the session it
 // belonged to. Do NOT touch the shared 'csrf_token' key, and do NOT
@@ -48,6 +85,9 @@ unset($_SESSION['customer_csrf_token']);
 
 // Do NOT unset these as they may belong to other roles:
 // - $_SESSION['administrator_id']
+// - $_SESSION['admin_role']
+// - $_SESSION['admin_name']
+// - $_SESSION['admin_email']
 // - $_SESSION['restaurant_id']
 // - $_SESSION['delivery_rider_id']
 

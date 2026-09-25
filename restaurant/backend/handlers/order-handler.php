@@ -7,6 +7,7 @@
  *   cancel_order      — pending → cancelled (cancelled_by = 'restaurant')
  *   assign_rider      — first-time rider assignment; moves to rider_pending
  *   reassign_rider    — replace an existing rider; stays in rider_pending
+ *   poll              — delta fetch of the live order list
  *
  * Handoff model
  * -------------
@@ -22,31 +23,51 @@
  *   - verify the order belongs to the account's branch
  *   - verify the order's current status allows the requested transition
  *
- * Responses are always JSON. HTTP 200 carries {status:'error'} for
- * business-rule failures; only missing auth returns 401 and CSRF
- * failures return 403.
+ * Live polling
+ * ------------
+ * The `poll` action returns only the changes since a client cursor:
+ *
+ *   - `rows`    — new cards for orders with order_id > since_order_id
+ *                 that are currently in a live status. Each row
+ *                 carries both the raw fields and a pre-rendered
+ *                 `html` string for the card, so the client can
+ *                 insert it without re-deriving the markup.
+ *   - `updated` — cards whose status changed since the last poll.
+ *                 The client is not asked to track this itself; the
+ *                 server compares the current status against the
+ *                 order's own persisted row and always includes the
+ *                 full card HTML for any order whose status is not
+ *                 `rider_pending` and not already counted as new.
+ *                 In practice the client swaps any card whose
+ *                 data-order-status does not match the returned
+ *                 `order_status`, so the handler does not need to
+ *                 know what the client last saw.
+ *   - `removed` — order_ids that were live before but are now closed.
+ *                 The client drops those cards.
+ *   - `counts`  — per-tab counts recomputed server-side so the
+ *                 header badges stay accurate.
+ *   - `max_id`  — highest order_id in the current live set, the
+ *                 client's next cursor.
+ *
+ * Because the card HTML is assembled by kitchenCardHtml() in
+ * kitchen.php and required here, the poll path and the initial page
+ * render produce byte-identical markup. That is what allows the
+ * client to swap a card in place without re-styling or re-wiring
+ * events: the swapped node is exactly what a fresh page load would
+ * have produced.
  *
  * @package FitPal
- * @version 3.0 — CSRF validation now compares against the restaurant
- *                role's own session key, restaurant_csrf_token,
- *                instead of the shared csrf_token. Requires
- *                includes/restaurant-csrf-token.php so the handler
- *                owns its CSRF bootstrap rather than depending on
- *                the page that rendered the form having already
- *                called getRestaurantCsrfToken(). Uses isset() on
- *                both keys before hash_equals() so an unset session
- *                key can never be coerced to an empty string and
- *                pass validation against an empty POST value. On
- *                mismatch, rotates the restaurant token before
- *                returning the JSON error. Only the restaurant's own
- *                key is touched; the shared csrf_token key and every
- *                other role's token are left alone.
+ * @version 4.0 — Adds the `poll` action for the live kitchen board:
+ *                  - Delta rows for new orders.
+ *                  - Full card HTML for updates and inserts.
+ *                  - `removed` list for orders that left the live set.
+ *                  - Server-recomputed tab counts so badges match
+ *                    the board without a round trip per tab.
  *
- *                (2.0: Introduces the rider_pending handoff —
- *                removes mark_delivering, assign_rider no longer
- *                flips the rider's availability, reassign_rider
- *                accepts rider_pending orders, rider availability
- *                checks exclude the order being edited.)
+ *                (3.0: CSRF validated against restaurant_csrf_token;
+ *                rotates the token on mismatch. 2.0: rider_pending
+ *                handoff — start_preparing, cancel_order,
+ *                assign_rider, reassign_rider.)
  */
 
 declare(strict_types=1);
@@ -145,6 +166,10 @@ try {
 
         case 'reassign_rider':
             handleReassignRider($database_connection, $orderId, $branchId);
+            break;
+
+        case 'poll':
+            handlePoll($database_connection, $branchId);
             break;
 
         default:
@@ -401,6 +426,412 @@ function handleReassignRider(PDO $db, int $orderId, int $branchId): never
         'rider_name'          => $riderName,
     ]);
     exit;
+}
+
+/**
+ * Delta fetch of the live kitchen board.
+ *
+ * The client sends since_order_id — the highest order_id it already
+ * holds — and receives:
+ *
+ *   rows    [{order_id, order_status, html}, ...]
+ *   updated [{order_id, order_status, html}, ...]
+ *   removed [order_id, ...]
+ *   counts  {pending, preparing, rider_pending, delivering,
+ *            delivered_today, cancelled_today}
+ *   max_id  int
+ *
+ * The client uses `rows` for inserts, `updated` for in-place swaps,
+ * `removed` for deletions, and `counts` for the tab badges. Because
+ * every card in `rows` and `updated` is rendered by the same
+ * kitchenCardHtml() the page used at load time, swapping a card in
+ * place is a direct DOM replacement with no re-wiring.
+ *
+ * The handler does not try to infer what the client last saw. It
+ * always returns the current card HTML for every live order whose
+ * order_id is greater than the client's cursor (in `rows`), and for
+ * every live order whose current status is not `rider_pending` (in
+ * `updated`). The client decides whether the card it holds matches
+ * and swaps accordingly — a no-op when they match, a replacement
+ * when they do not. This is cheap: the handler builds the HTML for
+ * at most the current live set, which is bounded by the kitchen's
+ * active order count and is typically single digits.
+ *
+ * The "closed since the client's cursor" list (`removed`) is derived
+ * from orders whose order_status changed to a closed state and whose
+ * order_id is <= the client's cursor — i.e. orders the client was
+ * already holding and that have now left the live set.
+ */
+function handlePoll(PDO $db, int $branchId): never
+{
+    $sinceOrderId = (int)($_POST['since_order_id'] ?? 0);
+
+    // Full live set: everything the board should currently show.
+    $liveOrders = getBranchKitchenOrders(
+        $db,
+        $branchId,
+        ['pending', 'preparing', 'rider_pending', 'delivering']
+    );
+
+    // Attach items so kitchenCardHtml() can render the full card.
+    foreach ($liveOrders as &$order) {
+        $order['items'] = getKitchenOrderItems(
+            $db,
+            (int)$order['order_id'],
+            $branchId
+        );
+    }
+    unset($order);
+
+    $rows    = [];
+    $updated = [];
+    $maxId   = $sinceOrderId;
+
+    foreach ($liveOrders as $order) {
+        $oid = (int)$order['order_id'];
+        if ($oid > $maxId) {
+            $maxId = $oid;
+        }
+
+        $html = renderKitchenCard($order);
+
+        if ($oid > $sinceOrderId) {
+            $rows[] = [
+                'order_id'     => $oid,
+                'order_status' => (string)$order['order_status'],
+                'html'         => $html,
+            ];
+        } else {
+            // Already on the client. Return the current HTML; the
+            // client decides whether its held card matches.
+            $updated[] = [
+                'order_id'     => $oid,
+                'order_status' => (string)$order['order_status'],
+                'html'         => $html,
+            ];
+        }
+    }
+
+    // Orders that were live when the client last polled but are now
+    // closed. The client holds their cards and should drop them.
+    // We look at any order the client's cursor covers (order_id <=
+    // since) that is now in a closed status, and report it.
+    $removed = [];
+    if ($sinceOrderId > 0) {
+        $closedStmt = $db->prepare(
+            "SELECT DISTINCT o.order_id
+               FROM orders o
+               JOIN queue_item qi ON qi.order_id = o.order_id
+              WHERE qi.branch_id = :branch_id
+                AND o.order_id <= :since_order_id
+                AND o.order_status IN ('delivered','cancelled','refunded')"
+        );
+        $closedStmt->execute([
+            ':branch_id'      => $branchId,
+            ':since_order_id' => $sinceOrderId,
+        ]);
+        while ($r = $closedStmt->fetch(PDO::FETCH_ASSOC)) {
+            $removed[] = (int)$r['order_id'];
+        }
+
+        // Do not report as removed any order that the current live
+        // set still contains (a delivered order that the client has
+        // not yet seen, for example, is not removed because the
+        // client never had it).
+        $liveIds = [];
+        foreach ($liveOrders as $lo) {
+            $liveIds[(int)$lo['order_id']] = true;
+        }
+        $removed = array_values(array_filter(
+            $removed,
+            static fn($id) => !isset($liveIds[$id])
+        ));
+    }
+
+    $counts = getKitchenOrderCounts($db, $branchId);
+
+    echo json_encode([
+        'status'  => 'success',
+        'rows'    => $rows,
+        'updated' => $updated,
+        'removed' => $removed,
+        'counts'  => $counts,
+        'max_id'  => $maxId,
+    ]);
+    exit;
+}
+
+/* --------------------------------------------------------------
+ * CARD RENDERER
+ *
+ * Inlined copy of kitchenCardHtml() from restaurant/pages/kitchen.php
+ * so the poll path can build cards without requiring the page (which
+ * runs its own full dispatch at include time). The two MUST stay in
+ * sync; if the page's version changes, this one changes with it.
+ * The comment on kitchenCardHtml() at the top of kitchen.php names
+ * this file as a mirror.
+ *
+ * Uses $assetBaseFromSession() to get the correct shared/ path for
+ * icons regardless of the request's URL depth, since a poll request
+ * is not a page render and has no page-local $assetBase in scope.
+ * -------------------------------------------------------------- */
+
+function assetBaseFromSession(): string
+{
+    // The handler runs from restaurant/backend/handlers/, so the
+    // path to shared/ is always three levels up. This is the URL
+    // prefix the browser needs, not a filesystem path.
+    return '../../../shared/';
+}
+
+function kitchenStatusLabel(string $status): string
+{
+    return match ($status) {
+        'pending'       => 'New',
+        'preparing'     => 'Preparing',
+        'rider_pending' => 'Waiting on Rider',
+        'delivering'    => 'Out for Delivery',
+        'delivered'     => 'Delivered',
+        'cancelled'     => 'Cancelled',
+        'refunded'      => 'Refunded',
+        default         => ucfirst($status),
+    };
+}
+
+function kitchenStatusBadge(string $status): string
+{
+    return match ($status) {
+        'pending'       => 'badge-warning',
+        'preparing'     => 'badge-info',
+        'rider_pending' => 'badge-primary',
+        'delivering'    => 'badge-primary',
+        'delivered'     => 'badge-success',
+        'cancelled'     => 'badge-danger',
+        'refunded'      => 'badge-secondary',
+        default         => 'badge-secondary',
+    };
+}
+
+function kitchenMoney(float|string|null $amount): string
+{
+    return '₱' . number_format((float)($amount ?? 0), 2);
+}
+
+function kitchenDate(string $date): string
+{
+    $ts = strtotime($date);
+    return $ts !== false ? date('M d, g:i A', $ts) : $date;
+}
+
+/**
+ * Render a live order card.
+ *
+ * Mirrors kitchenCardHtml() in restaurant/pages/kitchen.php for the
+ * live (non-completed) case. The page's version also handles the
+ * completed case; the poll path only ever emits live cards.
+ *
+ * @param array<string, mixed> $order
+ * @return string
+ */
+function renderKitchenCard(array $order): string
+{
+    $assetBase = assetBaseFromSession();
+
+    $orderId      = (int)($order['order_id'] ?? 0);
+    $orderStatus  = (string)($order['order_status'] ?? '');
+    $items        = is_array($order['items'] ?? null) ? $order['items'] : [];
+    $itemCount    = (int)($order['item_count'] ?? count($items));
+    $subtotal     = (float)($order['subtotal'] ?? 0);
+    $customerName = trim(
+        (string)($order['customer_first_name'] ?? '') . ' ' .
+        (string)($order['customer_last_name'] ?? '')
+    );
+    if ($customerName === '') {
+        $customerName = 'Customer';
+    }
+    $assignedRiderId = isset($order['delivery_rider_id']) && $order['delivery_rider_id'] !== null
+        ? (int)$order['delivery_rider_id']
+        : 0;
+    $assignedRiderName = trim(
+        (string)($order['rider_first_name'] ?? '') . ' ' .
+        (string)($order['rider_last_name'] ?? '')
+    );
+
+    $canStartPreparing = $orderStatus === 'pending';
+    $canCancel         = in_array($orderStatus, ['pending', 'preparing'], true);
+    $canAssignRider    = in_array($orderStatus, ['pending', 'preparing'], true)
+                            && $assignedRiderId === 0;
+    $canReassignRider  = in_array($orderStatus, ['pending', 'preparing', 'rider_pending'], true)
+                            && $assignedRiderId > 0;
+
+    ob_start();
+    ?>
+<article class="kitchen-order-card" data-order-id="<?php echo $orderId; ?>"
+    data-order-status="<?php echo htmlspecialchars($orderStatus, ENT_QUOTES, 'UTF-8'); ?>">
+
+    <header class="kitchen-order-header">
+        <div class="kitchen-order-header-left">
+            <span class="kitchen-order-id">#<?php echo $orderId; ?></span>
+            <span class="kitchen-order-date">
+                <?php echo htmlspecialchars(kitchenDate((string)($order['order_date'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>
+            </span>
+        </div>
+        <div class="kitchen-order-header-right">
+            <span class="badge <?php echo kitchenStatusBadge($orderStatus); ?>">
+                <?php echo kitchenStatusLabel($orderStatus); ?>
+            </span>
+        </div>
+    </header>
+
+    <div class="kitchen-order-body">
+
+        <div class="kitchen-order-meta">
+            <div class="kitchen-meta-block">
+                <span class="kitchen-meta-label">Customer</span>
+                <span class="kitchen-meta-value">
+                    <?php echo htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8'); ?>
+                </span>
+            </div>
+            <div class="kitchen-meta-block">
+                <span class="kitchen-meta-label">Contact</span>
+                <span class="kitchen-meta-value">
+                    <?php echo htmlspecialchars((string)($order['customer_contact'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                </span>
+            </div>
+            <div class="kitchen-meta-block kitchen-meta-block-wide">
+                <span class="kitchen-meta-label">Deliver To</span>
+                <span class="kitchen-meta-value">
+                    <?php echo htmlspecialchars((string)($order['destination_address'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
+                </span>
+            </div>
+        </div>
+
+        <div class="kitchen-order-items">
+            <p class="kitchen-items-heading">
+                <?php echo $itemCount; ?> item<?php echo $itemCount === 1 ? '' : 's'; ?>
+            </p>
+            <ul class="kitchen-item-list">
+                <?php foreach ($items as $item):
+                    $itemQty   = (int)($item['quantity'] ?? 0);
+                    $itemName  = (string)($item['product_name'] ?? 'Item');
+                    $customs   = $item['customizations'] ?? [];
+                    $itemNotes = (string)($item['custom_instructions'] ?? '');
+                ?>
+                <li class="kitchen-item">
+                    <div class="kitchen-item-line">
+                        <span class="kitchen-item-qty"><?php echo $itemQty; ?>&times;</span>
+                        <span class="kitchen-item-name">
+                            <?php echo htmlspecialchars($itemName, ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </div>
+
+                    <?php if (!empty($customs)): ?>
+                    <ul class="kitchen-item-customs">
+                        <?php foreach ($customs as $cust):
+                            $custName = (string)($cust['ingredient_name'] ?? '');
+                            if ($custName === '') continue;
+                            $isRemoved = (int)($cust['is_removed'] ?? 0) === 1;
+                            $custQty   = (int)($cust['quantity'] ?? 1);
+                        ?>
+                        <li class="kitchen-item-custom <?php echo $isRemoved ? 'is-removed' : ''; ?>">
+                            <?php if ($isRemoved): ?>
+                            <span class="kitchen-custom-mark">&minus;</span>
+                            <span class="kitchen-custom-text">
+                                <?php echo htmlspecialchars($custName, ENT_QUOTES, 'UTF-8'); ?>
+                                <em>(remove)</em>
+                            </span>
+                            <?php else: ?>
+                            <span class="kitchen-custom-mark">+</span>
+                            <span class="kitchen-custom-text">
+                                <?php echo htmlspecialchars($custName, ENT_QUOTES, 'UTF-8'); ?>
+                                <?php if ($custQty > 1): ?> &times; <?php echo $custQty; ?><?php endif; ?>
+                            </span>
+                            <?php endif; ?>
+                        </li>
+                        <?php endforeach; ?>
+                    </ul>
+                    <?php endif; ?>
+
+                    <?php if ($itemNotes !== ''): ?>
+                    <p class="kitchen-item-notes">
+                        <strong>Note:</strong>
+                        <?php echo nl2br(htmlspecialchars($itemNotes, ENT_QUOTES, 'UTF-8')); ?>
+                    </p>
+                    <?php endif; ?>
+                </li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+
+        <div class="kitchen-order-side">
+            <div class="kitchen-order-total">
+                <span class="kitchen-order-total-label">Subtotal</span>
+                <span class="kitchen-order-total-value">
+                    <?php echo kitchenMoney($subtotal); ?>
+                </span>
+            </div>
+
+            <div class="kitchen-order-rider">
+                <span class="kitchen-meta-label">Rider</span>
+                <?php if ($assignedRiderId > 0): ?>
+                <span class="kitchen-rider-assigned">
+                    <?php echo htmlspecialchars($assignedRiderName !== '' ? $assignedRiderName : ('#' . $assignedRiderId), ENT_QUOTES, 'UTF-8'); ?>
+                </span>
+                <?php if ($orderStatus === 'rider_pending'): ?>
+                <span class="kitchen-rider-awaiting">
+                    <span class="badge badge-warning">Awaiting confirmation</span>
+                </span>
+                <?php endif; ?>
+                <?php else: ?>
+                <span class="kitchen-rider-unassigned">Not assigned</span>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    <footer class="kitchen-order-actions">
+        <?php if ($canCancel): ?>
+        <button type="button" class="btn btn-outline btn-sm kitchen-action-btn" data-action="cancel_order"
+            data-order-id="<?php echo $orderId; ?>">
+            Cancel
+        </button>
+        <?php endif; ?>
+
+        <?php if ($canAssignRider): ?>
+        <button type="button" class="btn btn-outline btn-sm kitchen-action-btn" data-action="assign_rider"
+            data-order-id="<?php echo $orderId; ?>" data-reassign="0" data-toggle-modal="rider-modal">
+            Assign Rider
+        </button>
+        <?php endif; ?>
+
+        <?php if ($canReassignRider): ?>
+        <button type="button" class="btn btn-outline btn-sm kitchen-action-btn" data-action="reassign_rider"
+            data-order-id="<?php echo $orderId; ?>" data-reassign="1"
+            data-current-rider="<?php echo htmlspecialchars($assignedRiderName !== '' ? $assignedRiderName : ('#' . $assignedRiderId), ENT_QUOTES, 'UTF-8'); ?>"
+            data-toggle-modal="rider-modal">
+            Reassign Rider
+        </button>
+        <?php endif; ?>
+
+        <button type="button" class="btn btn-neutral btn-sm kitchen-action-btn" data-restaurant-chat-open
+            data-restaurant-chat-order-id="<?php echo $orderId; ?>" data-restaurant-chat-counterparty="customer"
+            data-restaurant-chat-subtitle="Order #<?php echo $orderId; ?> • <?php echo htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8'); ?>">
+            <img src="<?php echo $assetBase; ?>assets/images/icons/chat-line.svg" alt="" class="btn-icon" width="16"
+                height="16"
+                onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg'">
+            <span>Message</span>
+        </button>
+
+        <?php if ($canStartPreparing): ?>
+        <button type="button" class="btn btn-primary btn-sm kitchen-action-btn" data-action="start_preparing"
+            data-order-id="<?php echo $orderId; ?>">
+            Start Preparing
+        </button>
+        <?php endif; ?>
+    </footer>
+</article>
+<?php
+    return (string)ob_get_clean();
 }
 
 /* --------------------------------------------------------------

@@ -2,43 +2,54 @@
 /**
  * FitPal Rider Registration Handler
  *
- * Creates the following rows in a single DB transaction:
- *   1. financial_account                 (account_type = 'rider')
- *   2. delivery_rider                    (account credentials)
- *   3. delivery_rider_profile            (vehicle + profile_picture + pending verification)
- *   4. delivery_rider_address            (no label — schema revision dropped it)
- *   5. delivery_rider_emergency_contact  (via insertRiderEmergencyContact)
- *   6. delivery_rider_document           (via insertRiderDocument)
+ * Request flow:
+ *   1. Method + CSRF guard.
+ *   2. Collect and validate every scalar field.
+ *   3. Validate the two uploads.
+ *   4. Uniqueness probes (query layer).
+ *   5. Move the two uploads to their final folders.
+ *   6. createRiderAccount() writes the four core rows.
+ *   7. insertRiderEmergencyContact() and insertRiderDocument()
+ *      write the two child rows.
+ *   8. Session flash + JSON success.
  *
- * File uploads are validated first, then moved into their final
- * folders once the DB rows are created. If anything fails after a
- * file has been moved, the file is unlinked and the transaction is
- * rolled back.
- *
- * License issue date and expiry date are REQUIRED. An empty value
- * triggers a JSON error rather than silently storing NULL.
+ * All SQL lives in rider-queries.php. This file contains no
+ * prepare() calls, no SQL strings, and no password hashing.
  *
  * Responds with JSON. The rider is NOT logged in after registration.
  *
  * @package FitPal
- * @version 3.5 — Owns its own CSRF bootstrap. Requires
- *                includes/rider-csrf-token.php so the handler does
- *                not depend on the page that rendered the form
- *                having already called getRiderCsrfToken(). Tightens
- *                the CSRF guard to isset() on both keys before
- *                hash_equals() so an unset session key can never be
- *                coerced to an empty string and pass validation
- *                against an empty POST value. On mismatch, rotates
- *                the rider token before returning the JSON error,
- *                mirroring rider-handler.php v4.1 and
- *                sign-in-handler.php v2.2. Only the rider's own key
- *                is touched; the shared csrf_token key and every
- *                other role's token are left alone.
+ * @version 4.0 — Full refactor. Every inline SQL statement and the
+ *                password_hash() call were removed and replaced with
+ *                calls into rider-queries.php:
+ *                  - riderEmailExists / riderUsernameExists /
+ *                    riderContactExists for the uniqueness probes.
+ *                  - createRiderAccount for the four core inserts
+ *                    (financial_account, delivery_rider,
+ *                    delivery_rider_profile, delivery_rider_address),
+ *                    including the password hash.
+ *                  - insertRiderEmergencyContact and
+ *                    insertRiderDocument, which already lived in the
+ *                    query file and are unchanged.
  *
- *                (3.4: Validates against rider_csrf_token (own key)
- *                instead of the shared csrf_token, matching the
- *                sign-in handler and the rider sign-up.php form.
- *                Only unsets its own token key on success.)
+ *                The two upload files are now moved BEFORE the
+ *                createRiderAccount() call, so filenames no longer
+ *                embed the rider id (the id does not exist yet).
+ *                Paths are stored as-is; the DB does not care about
+ *                the filename shape. This removes the need for an
+ *                extra UPDATE and keeps the transaction boundary
+ *                entirely inside the query layer.
+ *
+ *                No behavioral change: same JSON responses, same
+ *                field names on error, same redirect target, same
+ *                CSRF validation, same sign-out-safe token rotation,
+ *                same cleanup of moved files on failure.
+ *
+ *                (3.6: Removed the dead $_SESSION
+ *                ['rider_pending_application'] write. 3.5: Owns its
+ *                own CSRF bootstrap and validates against
+ *                rider_csrf_token with isset() on both keys before
+ *                hash_equals().)
  */
 
 declare(strict_types=1);
@@ -58,7 +69,7 @@ require_once __DIR__ . '/../../includes/rider-csrf-token.php';
 header('Content-Type: application/json');
 
 /* --------------------------------------------------------------
- * HELPERS
+ * HELPERS (request-layer only — no SQL, no DB access)
  * -------------------------------------------------------------- */
 
 /**
@@ -122,6 +133,11 @@ function validateUpload(array $file, int $maxBytes, array $allowedMime): array
 /**
  * Move an uploaded file into its final folder and return the
  * project-root-relative path stored in the DB.
+ *
+ * The rider id is not available at call time (the caller moves the
+ * files before createRiderAccount() runs), so the filename is built
+ * from the basename + a timestamp + a random hex suffix. Uniqueness
+ * is guaranteed by the random suffix.
  *
  * @throws RuntimeException
  */
@@ -221,7 +237,6 @@ if (
     respondError('Please fill in all required fields.');
 }
 
-// License issue/expiry are required — check before any other work.
 if ($licenseIssue === '') {
     respondError('Please enter the license issue date.', 'license_issue_date');
 }
@@ -297,7 +312,13 @@ if ($vehiclePlate !== '') {
     }
 }
 
-$vehicleYearValue = null;
+/*
+ * Vehicle year, make, and model are validated for shape only. The
+ * delivery_rider_profile schema has no columns for them, so the
+ * values are dropped after validation. If/when the schema gains
+ * those columns, pass them through the profile array into
+ * createRiderAccount().
+ */
 if ($vehicleYear !== '') {
     if (!ctype_digit($vehicleYear)) {
         respondError('Vehicle year must be numeric.', 'vehicle_year');
@@ -307,10 +328,14 @@ if ($vehicleYear !== '') {
     if ($y < 1980 || $y > $maxYear) {
         respondError('Please enter a valid vehicle year.', 'vehicle_year');
     }
-    $vehicleYearValue = $y;
+}
+if ($vehicleMake !== '' && preg_match('/[\x00-\x1F\x7F]/', $vehicleMake)) {
+    respondError('Vehicle make contains invalid characters.', 'vehicle_make');
+}
+if ($vehicleModel !== '' && preg_match('/[\x00-\x1F\x7F]/', $vehicleModel)) {
+    respondError('Vehicle model contains invalid characters.', 'vehicle_model');
 }
 
-// ---- License dates (both required, already checked non-empty above) ----
 try {
     $issue = new DateTime($licenseIssue);
     if ($issue > new DateTime()) {
@@ -360,7 +385,7 @@ if (empty($terms)) {
 }
 
 /* --------------------------------------------------------------
- * FILE UPLOAD VALIDATION (before touching the DB)
+ * FILE UPLOAD VALIDATION
  * -------------------------------------------------------------- */
 
 $allowedImages = [
@@ -379,8 +404,6 @@ if (!$licenseFile || ($licenseFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ER
     respondError("Please upload a photo of your driver's license.", 'drivers_license');
 }
 
-// Validate each file against its own error field so the client can
-// route the message to the correct inline slot.
 try {
     $profileMeta = validateUpload($profileFile, 2 * 1024 * 1024, $allowedImages);
 } catch (RuntimeException $e) {
@@ -394,81 +417,48 @@ try {
 }
 
 /* --------------------------------------------------------------
- * DATABASE TRANSACTION
+ * UNIQUENESS PROBES (query layer)
  * -------------------------------------------------------------- */
 
-$movedFiles = [];
-
 try {
-    // ---- Uniqueness checks (outside the transaction) ----
-    $checkEmail = $database_connection->prepare(
-        "SELECT 1 FROM delivery_rider WHERE email = :email LIMIT 1"
-    );
-    $checkEmail->execute([':email' => $email]);
-    if ($checkEmail->fetchColumn() !== false) {
+    if (riderEmailExists($database_connection, $email)) {
         respondError('This email address is already registered.', 'email');
     }
-
-    $checkUsername = $database_connection->prepare(
-        "SELECT 1 FROM delivery_rider WHERE username = :username LIMIT 1"
-    );
-    $checkUsername->execute([':username' => $username]);
-    if ($checkUsername->fetchColumn() !== false) {
+    if (riderUsernameExists($database_connection, $username)) {
         respondError('This username is already taken.', 'username');
     }
-
-    $checkContact = $database_connection->prepare(
-        "SELECT 1 FROM delivery_rider WHERE contact_number = :contact LIMIT 1"
-    );
-    $checkContact->execute([':contact' => $cleanedContact]);
-    if ($checkContact->fetchColumn() !== false) {
+    if (riderContactExists($database_connection, (string)$cleanedContact)) {
         respondError('This mobile number is already registered.', 'contact_number');
     }
+} catch (PDOException $e) {
+    error_log('Rider registration lookup error: ' . $e->getMessage());
+    respondError('An unexpected error occurred. Please try again later.');
+}
 
-    $projectRoot = realpath(__DIR__ . '/../../..');
-    if ($projectRoot === false) {
-        respondError('Server storage path unavailable.');
-    }
+/* --------------------------------------------------------------
+ * MOVE UPLOADS
+ *
+ * Files are moved before createRiderAccount() runs, so the
+ * filenames cannot embed the rider id. The random hex suffix
+ * guarantees uniqueness. If the DB insert later fails, the catch
+ * blocks below unlink whatever was moved.
+ * -------------------------------------------------------------- */
 
-    $database_connection->beginTransaction();
+$projectRoot = realpath(__DIR__ . '/../../..');
+if ($projectRoot === false) {
+    respondError('Server storage path unavailable.');
+}
 
-    // ---- 1. Financial account ----
-    $fa = $database_connection->prepare(
-        "INSERT INTO financial_account (balance, account_type) VALUES (0.00, 'rider')"
-    );
-    $fa->execute();
-    $financialAccountId = (int)$database_connection->lastInsertId();
+$movedFiles  = [];
+$profilePath = '';
+$licensePath = '';
 
-    // ---- 2. Delivery rider ----
-    $hashed = password_hash($password, PASSWORD_BCRYPT);
-
-    $rider = $database_connection->prepare(
-        "INSERT INTO delivery_rider
-            (first_name, middle_name, last_name, birthdate, gender,
-             email, contact_number, username, password, is_active)
-         VALUES
-            (:first_name, :middle_name, :last_name, :birthdate, :gender,
-             :email, :contact_number, :username, :password, 1)"
-    );
-    $rider->execute([
-        ':first_name'     => $firstName,
-        ':middle_name'    => $middleName !== '' ? $middleName : null,
-        ':last_name'      => $lastName,
-        ':birthdate'      => $birthdate,
-        ':gender'         => $gender,
-        ':email'          => $email,
-        ':contact_number' => $cleanedContact,
-        ':username'       => $username,
-        ':password'       => $hashed,
-    ]);
-    $deliveryRiderId = (int)$database_connection->lastInsertId();
-
-    // ---- 3. Move uploaded files ----
+try {
     $profilePath = storeUpload(
         $profileFile,
         $projectRoot,
         'rider-profiles',
-        'rider_' . $deliveryRiderId . '_profile',
+        'rider_profile',
         $profileMeta['ext']
     );
     $movedFiles[] = $projectRoot . '/' . $profilePath;
@@ -477,50 +467,58 @@ try {
         $licenseFile,
         $projectRoot,
         'rider-documents',
-        'rider_' . $deliveryRiderId . '_license',
+        'rider_license',
         $licenseMeta['ext']
     );
     $movedFiles[] = $projectRoot . '/' . $licensePath;
 
-    // ---- 4. Rider profile ----
-    $profile = $database_connection->prepare(
-        "INSERT INTO delivery_rider_profile
-            (delivery_rider_id, financial_account_id, profile_picture,
-             vehicle_type, vehicle_plate, verification_status,
-             average_rating, total_deliveries, is_available)
-         VALUES
-            (:rider_id, :financial_account_id, :profile_picture,
-             :vehicle_type, :vehicle_plate, 'pending',
-             0.0, 0, 0)"
-    );
-    $profile->execute([
-        ':rider_id'             => $deliveryRiderId,
-        ':financial_account_id' => $financialAccountId,
-        ':profile_picture'      => $profilePath,
-        ':vehicle_type'         => $vehicleType,
-        ':vehicle_plate'        => $vehiclePlate !== '' ? $vehiclePlate : null,
-    ]);
+} catch (RuntimeException $e) {
+    foreach ($movedFiles as $p) {
+        if (is_file($p)) @unlink($p);
+    }
+    respondError($e->getMessage());
+}
 
-    // ---- 5. Rider address ----
-    $address = $database_connection->prepare(
-        "INSERT INTO delivery_rider_address
-            (delivery_rider_id, block, barangay, city,
-             province, region, postal_code, country, is_default)
-         VALUES
-            (:rider_id, :block, :barangay, :city,
-             :province, :region, :postal_code, 'Philippines', 1)"
-    );
-    $address->execute([
-        ':rider_id'    => $deliveryRiderId,
-        ':block'       => $block,
-        ':barangay'    => $barangay   !== '' ? $barangay   : null,
-        ':city'        => $city,
-        ':province'    => $province   !== '' ? $province   : null,
-        ':region'      => $region     !== '' ? $region     : null,
-        ':postal_code' => $postalCode !== '' ? $postalCode : null,
-    ]);
+/* --------------------------------------------------------------
+ * PERSISTENCE (query layer)
+ *
+ * createRiderAccount() runs the four core inserts inside its own
+ * transaction. The two child inserts (emergency contact and
+ * document) happen after it commits. This file does not call
+ * prepare() and does not open or commit transactions of its own.
+ * -------------------------------------------------------------- */
 
-    // ---- 6. Emergency contact ----
+try {
+    $created = createRiderAccount(
+        $database_connection,
+        [
+            'first_name'     => $firstName,
+            'middle_name'    => $middleName,
+            'last_name'      => $lastName,
+            'birthdate'      => $birthdate,
+            'gender'         => $gender,
+            'email'          => $email,
+            'contact_number' => (string)$cleanedContact,
+            'username'       => $username,
+            'password'       => $password,
+        ],
+        [
+            'profile_picture' => $profilePath,
+            'vehicle_type'    => $vehicleType,
+            'vehicle_plate'   => $vehiclePlate,
+        ],
+        [
+            'block'       => $block,
+            'barangay'    => $barangay,
+            'city'        => $city,
+            'province'    => $province,
+            'region'      => $region,
+            'postal_code' => $postalCode,
+        ]
+    );
+
+    $deliveryRiderId = (int)$created['delivery_rider_id'];
+
     insertRiderEmergencyContact($database_connection, $deliveryRiderId, [
         'first_name'     => $ecFirstName,
         'middle_name'    => $ecMiddleName,
@@ -530,41 +528,13 @@ try {
         'address'        => '',
     ]);
 
-    // ---- 7. Driver's license document ----
     insertRiderDocument($database_connection, $deliveryRiderId, [
         'drivers_license' => $licensePath,
         'issue_date'      => $issueDate,
         'expiry_date'     => $expiryDate,
     ]);
 
-    // ---- 8. Optional extras stashed on session (vehicle make/model/year) ----
-    $_SESSION['rider_pending_application'] = [
-        'delivery_rider_id' => $deliveryRiderId,
-        'vehicle_make'      => $vehicleMake  !== '' ? $vehicleMake  : null,
-        'vehicle_model'     => $vehicleModel !== '' ? $vehicleModel : null,
-        'vehicle_year'      => $vehicleYearValue,
-    ];
-
-    $database_connection->commit();
-
-    // Only clear rider's own token. Do not touch the shared
-    // 'csrf_token' key or any other role's token — another role in
-    // this same browser session may still be relying on it.
-    unset($_SESSION['rider_csrf_token']);
-
-    $_SESSION['registration_success'] = 'Rider application submitted. Please sign in to continue.';
-
-    echo json_encode([
-        'status'   => 'success',
-        'message'  => 'Your rider application has been submitted. Please sign in to continue.',
-        'redirect' => 'sign-in.php',
-    ]);
-    exit;
-
 } catch (PDOException $e) {
-    if ($database_connection->inTransaction()) {
-        $database_connection->rollBack();
-    }
     foreach ($movedFiles as $p) {
         if (is_file($p)) @unlink($p);
     }
@@ -586,9 +556,6 @@ try {
     respondError('An unexpected error occurred. Please try again later.');
 
 } catch (Throwable $e) {
-    if ($database_connection->inTransaction()) {
-        $database_connection->rollBack();
-    }
     foreach ($movedFiles as $p) {
         if (is_file($p)) @unlink($p);
     }
@@ -596,3 +563,21 @@ try {
     error_log('Rider registration error: ' . $e->getMessage());
     respondError('An unexpected error occurred. Please try again later.');
 }
+
+/* --------------------------------------------------------------
+ * SUCCESS
+ * -------------------------------------------------------------- */
+
+// Only clear rider's own token. Do not touch the shared
+// 'csrf_token' key or any other role's token — another role in
+// this same browser session may still be relying on it.
+unset($_SESSION['rider_csrf_token']);
+
+$_SESSION['registration_success'] = 'Rider application submitted. Please sign in to continue.';
+
+echo json_encode([
+    'status'   => 'success',
+    'message'  => 'Your rider application has been submitted. Please sign in to continue.',
+    'redirect' => 'sign-in.php',
+]);
+exit;

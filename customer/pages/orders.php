@@ -8,10 +8,39 @@
  * Totals are computed from queue_item + the fee schedule — never read
  * from the orders table.
  *
+ * Button visibility by status
+ * ---------------------------
+ *   pending        → Track, Cancel
+ *   preparing      → Track
+ *   rider_pending  → Track
+ *   delivering     → Track
+ *   delivered      → View Receipt, Reorder
+ *   cancelled      → Reorder
+ *   refunded       → Reorder
+ *
+ * The customer can cancel only while the order is still in 'pending'
+ * — that is, before the kitchen has accepted it. The moment the
+ * kitchen flips the order to 'preparing', ingredients are committed
+ * and the order is locked from the customer's side. Track remains
+ * available for every live status so the customer can follow the
+ * order from placement to delivery.
+ *
  * @package FitPal
- * @version 3.3 — CSRF token now inherited from header.php; local
- *                generation removed. (3.2: expand icon uses shared
- *                arrow-drop-down icon, no inline SVG.)
+ * @version 3.5 — Cancel restricted to 'pending' only. Once the
+ *                kitchen accepts an order ('preparing'), the button
+ *                disappears and the order is locked from the
+ *                customer's side. The customer-facing Cancel button
+ *                and the server-side guards in
+ *                order-handler.php::handleCancelOrder() and
+ *                order-queries.php::cancelOrderAsCustomer() were
+ *                updated together — a Cancel button without the
+ *                matching server guard would look live but fail.
+ *
+ *                (3.4: Track Order available from 'pending' onward;
+ *                Cancel extended to 'rider_pending'. 3.3: CSRF token
+ *                inherited from header.php; local generation removed.
+ *                3.2: expand icon uses shared arrow-drop-down icon,
+ *                no inline SVG.)
  */
 declare(strict_types=1);
 
@@ -284,8 +313,16 @@ $hasOrders = !empty($orders);
                 $totalAmt   = (float)$order['total_amount'];
                 $orderDate  = $order['order_date'];
 
-                $canCancel  = in_array($status, ['pending', 'preparing'], true);
-                $canTrack   = ($status === 'delivering');
+                // The customer can follow any live order.
+                $canTrack = in_array($status, ['pending', 'preparing', 'rider_pending', 'delivering'], true);
+
+                // The customer can cancel only while the order is
+                // still waiting for the kitchen to accept it. Once the
+                // kitchen flips the order to 'preparing', ingredients
+                // are being used and the order is locked. The customer
+                // must go through support to stop it from that point on.
+                $canCancel = ($status === 'pending');
+
                 $canReview  = ($status === 'delivered');
                 $canReorder = in_array($status, ['delivered', 'cancelled', 'refunded'], true);
 

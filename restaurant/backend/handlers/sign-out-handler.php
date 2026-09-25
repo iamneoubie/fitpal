@@ -11,7 +11,16 @@
  * are preserved.
  *
  * @package FitPal
- * @version 1.2 — Explicit cookie expiry + no-cache headers.
+ * @version 1.3 — Drops the shared-key cleanup block entirely.
+ *                Restaurant now writes and reads only its own
+ *                role-scoped session keys, so there is no shared
+ *                'user_name', 'user_email', or 'user_role' for this
+ *                handler to worry about. Adds 'restaurant_name' to
+ *                the restaurant key list so the header's display
+ *                name is cleared on sign-out like every other
+ *                restaurant-scoped value.
+ *
+ *                (1.2: Explicit cookie expiry + no-cache headers.)
  */
 
 declare(strict_types=1);
@@ -36,6 +45,7 @@ $restaurantKeys = [
     'restaurant_branch_name',
     'restaurant_scope',
     'restaurant_role',
+    'restaurant_name',
     'business_name',
     'login_scope',
     'login_error',
@@ -45,27 +55,6 @@ $restaurantKeys = [
 
 foreach ($restaurantKeys as $key) {
     unset($_SESSION[$key]);
-}
-
-/* --------------------------------------------------------------
- * USER METADATA IS ONLY REMOVED IF NO OTHER ROLE OWNS IT
- *
- * If the same browser is also signed in as customer / rider / admin,
- * the shared user_role / user_name / user_email keys may be in use by
- * that other role. Only clear them when no other role session exists.
- * -------------------------------------------------------------- */
-
-$otherRoleStillActive =
-    !empty($_SESSION['customer_id']) ||
-    !empty($_SESSION['delivery_rider_id']) ||
-    !empty($_SESSION['administrator_id']);
-
-if (!$otherRoleStillActive) {
-    unset(
-        $_SESSION['user_role'],
-        $_SESSION['user_name'],
-        $_SESSION['user_email']
-    );
 }
 
 /* --------------------------------------------------------------

@@ -11,8 +11,19 @@
  * scrollbar when the logout modal opens does not shift the page.
  *
  * @package FitPal
- * @version 2.1 - scrollbar-gutter: stable added so the logout modal
- *                does not reflow the page behind it.
+ * @version 2.3 - Logout modal buttons now split the row exactly
+ *                50/50 on desktop/tablet. The confirm button is
+ *                wrapped in a <form> so the customer role's CSRF
+ *                token rides in a POST body, but that form was
+ *                acting as a layout box between the flex container
+ *                and the button — so .logout-btn-confirm never got
+ *                the same flex share as .logout-btn-cancel. The
+ *                form now uses display: contents, which removes it
+ *                from the box tree entirely: its button becomes a
+ *                direct flex child of .logout-modal-actions and
+ *                both buttons carry flex: 1 1 0 for a true even
+ *                split. The mobile breakpoint still stacks them
+ *                full-width via column-reverse.
  */
 
 /* Reserve the scrollbar gutter permanently. With this in place, the
@@ -596,14 +607,47 @@ html {
     line-height: 1.6;
 }
 
+/* ------------------------------------------------------------
+   Logout action row
+   ------------------------------------------------------------
+   Markup shape:
+
+       .logout-modal-actions (flex row, gap 12px)
+       ├── button.logout-btn-cancel
+       └── form.logout-form          <-- CSRF carrier, POST body
+           └── button.logout-btn-confirm
+
+   The <form> exists only so the customer role's CSRF token can
+   travel in a POST request body — it is not a layout element.
+   Left as a normal block it becomes the flex child instead of
+   the button, shrink-wraps to the button's intrinsic width, and
+   the row never splits 50/50 (the earlier bug).
+
+   display: contents removes the form's box from the tree
+   entirely, so .logout-btn-confirm becomes a direct flex child
+   of .logout-modal-actions alongside .logout-btn-cancel. Both
+   buttons then carry flex: 1 1 0 and split the row exactly in
+   half, gap included.
+   ------------------------------------------------------------ */
 .logout-modal-actions {
     display: flex;
     gap: 12px;
+    align-items: stretch;
+}
+
+.logout-modal-actions .logout-form {
+    /* The form is a CSRF carrier, not a layout box. Removing it
+       from the box tree promotes the confirm button to a direct
+       flex child of .logout-modal-actions. Form submission and
+       DOM structure are unchanged. */
+    display: contents;
 }
 
 .logout-btn-cancel,
 .logout-btn-confirm {
-    flex: 1;
+    flex: 1 1 0;
+    min-width: 0;
+    width: 100%;
     padding: 12px 20px;
     border-radius: var(--radius-base);
     font-size: var(--font-size-sm);
@@ -653,6 +697,7 @@ html {
 
     .logout-btn-cancel,
     .logout-btn-confirm {
+        flex: 0 0 auto;
         width: 100%;
     }
 }

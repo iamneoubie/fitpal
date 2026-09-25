@@ -797,7 +797,7 @@ VALUES (
         'verified',
         @admin_id,
         CURRENT_TIMESTAMP,
-        4.8,
+        0.0,
         0,
         0
     );
@@ -916,7 +916,7 @@ VALUES (
         'verified',
         @admin_id,
         CURRENT_TIMESTAMP,
-        4.6,
+        0.0,
         0,
         0
     );

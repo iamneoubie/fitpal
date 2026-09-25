@@ -3,12 +3,52 @@
  * FitPal Customer Sign-In Handler
  *
  * @package FitPal
- * @version 2.1 — Validates against customer_csrf_token (own key)
- *                instead of the shared csrf_token, so a sign-in by
- *                another role in the same browser session can no
- *                longer delete/rotate the token this form relied on.
- *                Only unsets its own token key on success. See
- *                sign-in.php v1.2 for the full explanation.
+ * @version 2.2 — Migrated the customer role's session display keys
+ *                to the {role}_ prefix convention so they can no
+ *                longer collide with the admin, rider, or restaurant
+ *                roles in the same PHP session.
+ *
+ *                Previously this handler wrote:
+ *                    $_SESSION['user_role']     = 'customer';
+ *                    $_SESSION['user_name']     = '<full name>';
+ *                    $_SESSION['user_email']    = '<email>';
+ *                    $_SESSION['user_username'] = '<username>';
+ *
+ *                All four are generic key names. Because FitPal runs
+ *                every role on the same PHP session (same cookie), a
+ *                customer sign-in overwrote the admin's user_name,
+ *                user_email, and user_role, and vice versa. The
+ *                visible symptom was the customer dashboard greeting
+ *                rendering "Welcome back, Admin User" while the
+ *                profile card, orders, and wallet — all fetched by
+ *                customer_id from the database — stayed correct.
+ *                The admin-side write path was closed in
+ *                admin/backend/handlers/sign-in-handler.php v1.6.
+ *                This revision closes the customer-side write path
+ *                so the reverse collision is also impossible.
+ *
+ *                The keys this handler now writes:
+ *                    customer_id       (unchanged, already namespaced)
+ *                    customer_role     (replaces user_role)
+ *                    customer_name     (replaces user_name)
+ *                    customer_email    (replaces user_email)
+ *                    customer_username (replaces user_username)
+ *                    customer_csrf_token is cleared on success, as
+ *                    before — the customer role's own CSRF key.
+ *
+ *                The shared 'csrf_token' key is still never touched.
+ *                Only customer_csrf_token is unset on the success
+ *                path.
+ *
+ *                (2.1: Validated against customer_csrf_token — the
+ *                customer role's own key — instead of the shared
+ *                csrf_token, so a sign-in by another role in the
+ *                same browser session could no longer delete the
+ *                token this form relied on.
+ *                2.0: Added the development-only plaintext-hash
+ *                bypass so the seeded plaintext passwords in
+ *                sql/sample/seed-data.sql could authenticate during
+ *                local development.)
  */
 
 declare(strict_types=1);
@@ -157,12 +197,12 @@ try {
 
     session_regenerate_id(true);
 
-    $_SESSION['customer_id']    = (int)$customer['customer_id'];
-    $_SESSION['user_role']      = 'customer';
-    $_SESSION['user_name']      = trim($customer['first_name'] . ' ' . $customer['last_name']);
-    $_SESSION['user_email']     = $customer['email'];
-    $_SESSION['user_username']  = $customer['username'];
-    $_SESSION['created']        = time();
+    $_SESSION['customer_id']       = (int)$customer['customer_id'];
+    $_SESSION['customer_role']     = 'customer';
+    $_SESSION['customer_name']     = trim($customer['first_name'] . ' ' . $customer['last_name']);
+    $_SESSION['customer_email']    = $customer['email'];
+    $_SESSION['customer_username'] = $customer['username'];
+    $_SESSION['created']           = time();
 
     // Only clear customer's own token. Do not touch the shared
     // 'csrf_token' key or any other role's token — another role in

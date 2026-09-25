@@ -1,0 +1,1628 @@
+/**
+ * FitPal Rider Assignment Panel Styles
+ *
+ * Covers:
+ *   - The bottom-anchored panel wrapper (collapsed bar + expanded
+ *     body, chevron toggle, count badge, availability button).
+ *   - The assignment list rows: a three-band layout where the top
+ *     band holds the order number, status badge, and the per-row
+ *     action buttons on the same line; the meta band collapses by
+ *     default and expands via a small chevron.
+ *   - The offline and ineligible hint blocks.
+ *   - The empty state.
+ *   - The assignment notification modal.
+ *   - The availability modal (Go Online / Go Offline / Blocked).
+ *   - The chat modal (shared with rider-chat-modal.php).
+ *
+ * Design tokens
+ * -------------
+ * Uses only the CSS variables defined in shared/assets/css/global.css.
+ * No hard-coded colors beyond the overlays and the two confirm-tint
+ * pairs that already existed in the previous revision. No external
+ * fonts, no box shadows invented here.
+ *
+ * Textareas
+ * ---------
+ * Every textarea on this page sets resize: none, matching the
+ * general.md rule.
+ *
+ * Wrapper visibility contract
+ * ---------------------------
+ * The wrapper is permanently in its visible transform. It never
+ * slides off-screen. The only element that moves is
+ * .assignment-panel-inner, which .assignment-panel.closed pushes
+ * down by calc(100% - 56px) so exactly the header bar remains on
+ * screen.
+ *
+ * Availability pill contract
+ * --------------------------
+ * The pill is a real <button>. It carries two label spans:
+ *   - .assignment-panel-status-text    the base state label
+ *   - .assignment-panel-status-action  the action label
+ *
+ * CSS shows exactly one at a time:
+ *   - default / not hovered / not focused → base label
+ *   - :hover or :focus-visible            → action label
+ *
+ * The width of the pill is allowed to change between the two
+ * labels. The swap is instantaneous (display: none / inline), so
+ * there is no fade or slide that would fight the state change.
+ *
+ * The action text itself is written by JS on every poll, because
+ * the copy depends on BOTH the online flag and whether the rider
+ * has a live assignment. CSS only decides which span is visible.
+ *
+ * @package FitPal
+ * @version 7.0 — The availability pill is now a real <button>. Adds
+ *                the button reset, the hover/focus label swap, and
+ *                the availability modal rules. The modal carries
+ *                data-variant and data-icon attributes and follows
+ *                the same pattern the confirm modal on
+ *                rider/pages/deliveries.php already uses: CSS picks
+ *                the icon and the confirm button colour from those
+ *                attributes. No change to the wrapper, the header,
+ *                the toggle chevron, the panel body, the row
+ *                layout, the empty state, the notification modal,
+ *                the chat modal, or any responsive breakpoint.
+ *
+ *                (6.0: wrapper permanently visible. 5.0:
+ *                notification modal fix. 4.0: click-to-navigate on
+ *                .assignment-row-top. 3.0: three-zone header grid.)
+ */
+
+/* ============================================================
+   PANEL WRAPPER
+
+   Permanently visible. The wrapper never slides off-screen. Its
+   inline display is set to 'block' once by assignment-panel.js in
+   init() and never touched again; the CSS below owns every other
+   property.
+   ============================================================ */
+
+.assignment-panel-wrapper {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 900;
+    display: block;
+    pointer-events: auto;
+    transform: translateY(0);
+    overflow: visible;
+}
+
+.assignment-panel {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 16px;
+    width: 100%;
+    background: transparent;
+    pointer-events: none;
+}
+
+.assignment-panel-inner {
+    background: var(--white);
+    border-top: 2px solid var(--primary);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: auto;
+    overflow: hidden;
+}
+
+.assignment-panel.closed .assignment-panel-inner {
+    transform: translateY(calc(100% - 56px));
+}
+
+.assignment-panel.open .assignment-panel-inner {
+    transform: translateY(0);
+}
+
+/* ============================================================
+   PANEL HEADER — three-zone grid
+   [ title (left) ]  [ availability (middle) ]  [ count + chevron (right) ]
+   ============================================================ */
+
+.assignment-panel-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    padding: 10px 20px;
+    background: var(--white);
+    border-bottom: 1px solid var(--gray-100);
+    flex-shrink: 0;
+    min-height: 56px;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.assignment-panel-header:hover {
+    background: var(--gray-50);
+}
+
+/* ---- LEFT — title ---- */
+
+.assignment-panel-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: var(--text);
+    min-width: 0;
+    justify-self: start;
+}
+
+.assignment-panel-title-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.assignment-panel-title-icon {
+    width: 18px;
+    height: 18px;
+    display: block;
+    flex-shrink: 0;
+    opacity: 0.75;
+}
+
+/* ============================================================
+   AVAILABILITY BUTTON
+
+   Was a <div role="status">. Now a real <button>. The rules below
+   reset the browser's default button chrome and then re-apply the
+   pill's visual state so nothing about the resting appearance
+   changes.
+   ============================================================ */
+
+.assignment-panel-status {
+    /* Button reset */
+    appearance: none;
+    -webkit-appearance: none;
+    margin: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    cursor: pointer;
+    text-align: center;
+    text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
+    box-sizing: border-box;
+
+    /* Pill layout — identical to the previous revision */
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: var(--radius-full);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    line-height: 1;
+    white-space: nowrap;
+    flex-shrink: 0;
+    justify-self: center;
+    transition: background 0.2s ease, color 0.2s ease, box-shadow 0.15s ease;
+}
+
+.assignment-panel-status:focus {
+    outline: none;
+}
+
+.assignment-panel-status:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.assignment-panel-status:active {
+    transform: scale(0.97);
+}
+
+/* ---- Dot ---- */
+
+.assignment-panel-status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* ---- Label swap ----
+   Exactly one span is visible at a time:
+     not hovered / not focused → base state label
+     :hover or :focus-visible  → action label
+   The width of the pill is allowed to change between them, which
+   is what makes the hover affordance readable. */
+
+.assignment-panel-status-text,
+.assignment-panel-status-action {
+    display: none;
+    white-space: nowrap;
+}
+
+.assignment-panel-status-text {
+    display: inline;
+}
+
+.assignment-panel-status:hover .assignment-panel-status-text,
+.assignment-panel-status:focus-visible .assignment-panel-status-text {
+    display: none;
+}
+
+.assignment-panel-status:hover .assignment-panel-status-action,
+.assignment-panel-status:focus-visible .assignment-panel-status-action {
+    display: inline;
+}
+
+/* ---- State: online ---- */
+
+.assignment-panel-status.is-online {
+    background: rgba(89, 193, 74, 0.12);
+    color: var(--primary-dark);
+}
+
+.assignment-panel-status.is-online:hover,
+.assignment-panel-status.is-online:focus-visible {
+    background: rgba(89, 193, 74, 0.20);
+}
+
+.assignment-panel-status.is-online .assignment-panel-status-dot {
+    background: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.22);
+    animation: assignmentStatusPulse 2s ease-in-out infinite;
+}
+
+/* ---- State: offline ---- */
+
+.assignment-panel-status.is-offline {
+    background: var(--gray-100);
+    color: var(--gray-500);
+}
+
+.assignment-panel-status.is-offline:hover,
+.assignment-panel-status.is-offline:focus-visible {
+    background: var(--gray-200);
+    color: var(--gray-700);
+}
+
+.assignment-panel-status.is-offline .assignment-panel-status-dot {
+    background: var(--gray-400);
+    box-shadow: none;
+}
+
+@keyframes assignmentStatusPulse {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.22); }
+    50%      { box-shadow: 0 0 0 5px rgba(89, 193, 74, 0.10); }
+}
+
+/* ---- RIGHT — count + chevron ---- */
+
+.assignment-panel-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-self: end;
+    flex-shrink: 0;
+}
+
+.assignment-count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 24px;
+    padding: 0 8px;
+    border-radius: var(--radius-full);
+    background: var(--primary);
+    color: var(--white);
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.assignment-panel-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: var(--radius-base);
+    cursor: pointer;
+    color: var(--gray-400);
+    flex-shrink: 0;
+    transition: transform 0.35s ease, background 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.assignment-panel-toggle:hover {
+    background: var(--gray-100);
+}
+
+.assignment-panel.open .assignment-panel-toggle {
+    transform: rotate(180deg);
+}
+
+.assignment-panel-toggle-icon {
+    width: 20px;
+    height: 20px;
+    display: block;
+    flex-shrink: 0;
+    opacity: 0.6;
+    filter: brightness(0) saturate(100%)
+            invert(60%) sepia(0%) saturate(0%)
+            brightness(95%) contrast(90%);
+    transition: filter 0.15s ease, opacity 0.15s ease;
+}
+
+.assignment-panel-toggle:hover .assignment-panel-toggle-icon {
+    opacity: 1;
+    filter: brightness(0) saturate(100%)
+            invert(30%) sepia(0%) saturate(0%)
+            brightness(90%) contrast(95%);
+}
+
+/* ============================================================
+   PANEL BODY
+   ============================================================ */
+
+.assignment-panel-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--gray-50);
+    min-height: 0;
+}
+
+.assignment-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px 16px;
+    background: var(--gray-50);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 55vh;
+    min-height: 0;
+}
+
+.assignment-list::-webkit-scrollbar { width: 5px; }
+.assignment-list::-webkit-scrollbar-track {
+    background: var(--gray-100);
+    border-radius: 3px;
+}
+.assignment-list::-webkit-scrollbar-thumb {
+    background: var(--gray-300);
+    border-radius: 3px;
+}
+
+/* ============================================================
+   HINTS
+   ============================================================ */
+
+.assignment-offline-hint,
+.assignment-ineligible-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 14px;
+    margin: 12px 16px 0;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-xs);
+    line-height: 1.5;
+    box-sizing: border-box;
+}
+
+.assignment-offline-hint {
+    background: #fff9e6;
+    border-left: 3px solid var(--warning);
+    color: #856404;
+}
+
+.assignment-ineligible-hint {
+    background: rgba(220, 53, 69, 0.06);
+    border-left: 3px solid var(--danger);
+    color: #721c24;
+}
+
+.assignment-offline-hint[hidden],
+.assignment-ineligible-hint[hidden] { display: none; }
+
+.assignment-offline-hint img,
+.assignment-ineligible-hint img {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+    margin-top: 1px;
+    opacity: 0.85;
+}
+
+/* ============================================================
+   ASSIGNMENT ROW — three-band layout
+   ============================================================ */
+
+.assignment-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    box-shadow: var(--shadow-sm);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    min-width: 0;
+}
+
+.assignment-row:hover {
+    border-color: var(--gray-300);
+    box-shadow: var(--shadow-md);
+}
+
+.assignment-row.is-new {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
+}
+
+.assignment-row-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    min-width: 0;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    margin: -4px -6px 0;
+    padding: 4px 6px;
+    transition: background 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.assignment-row-top:hover {
+    background: var(--gray-50);
+}
+
+.assignment-row-top:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    background: var(--gray-50);
+}
+
+.assignment-row-order {
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+}
+
+.assignment-row-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    line-height: 1;
+    min-height: 22px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.assignment-row-status.badge-warning { background: #fff3cd; color: #856404; }
+.assignment-row-status.badge-primary { background: #cce5ff; color: #004085; }
+
+.assignment-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.assignment-row-meta {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px 16px;
+    overflow: hidden;
+    max-height: 240px;
+    opacity: 1;
+    transition: max-height 0.25s ease, opacity 0.2s ease, margin 0.25s ease;
+    margin-top: 0;
+}
+
+.assignment-row.is-collapsed .assignment-row-meta {
+    display: none;
+}
+
+.assignment-row-summary {
+    display: none;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    line-height: 1.4;
+    min-width: 0;
+    word-break: break-word;
+}
+
+.assignment-row.is-collapsed .assignment-row-summary {
+    display: block;
+}
+
+.assignment-row-line {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: var(--font-size-xs);
+    color: var(--gray-600);
+    min-width: 0;
+}
+
+.assignment-row-line .label {
+    flex-shrink: 0;
+    font-weight: 600;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-size: 10px;
+    min-width: 68px;
+}
+
+.assignment-row-line .value {
+    flex: 1;
+    min-width: 0;
+    color: var(--text);
+    word-break: break-word;
+}
+
+.assignment-row-total {
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+
+.assignment-row-expand {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    align-self: flex-start;
+    padding: 2px 6px;
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--gray-500);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.assignment-row-expand:hover,
+.assignment-row-expand:focus-visible {
+    background: var(--gray-100);
+    color: var(--text);
+    outline: none;
+}
+
+.assignment-row-expand-icon {
+    width: 12px;
+    height: 12px;
+    display: block;
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+    opacity: 0.7;
+}
+
+.assignment-row.is-collapsed .assignment-row-expand-icon {
+    transform: rotate(0deg);
+}
+
+.assignment-row:not(.is-collapsed) .assignment-row-expand-icon {
+    transform: rotate(180deg);
+}
+
+/* ============================================================
+   ICON-ONLY ACTION BUTTON
+   ============================================================ */
+
+.assignment-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: var(--radius-base);
+    border: 2px solid transparent;
+    cursor: pointer;
+    text-decoration: none;
+    box-sizing: border-box;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.assignment-action-btn:active {
+    transform: scale(0.94);
+}
+
+.assignment-action-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+}
+
+.assignment-action-btn.is-primary {
+    background: var(--primary);
+    border-color: var(--primary);
+}
+.assignment-action-btn.is-primary .assignment-action-icon {
+    filter: brightness(0) invert(1);
+}
+.assignment-action-btn.is-primary:hover,
+.assignment-action-btn.is-primary:focus {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+}
+
+.assignment-action-btn.is-neutral {
+    background: #1a1a1a;
+    border-color: #1a1a1a;
+}
+.assignment-action-btn.is-neutral .assignment-action-icon {
+    filter: brightness(0) invert(1);
+}
+.assignment-action-btn.is-neutral:hover,
+.assignment-action-btn.is-neutral:focus {
+    background: #000000;
+    border-color: #000000;
+}
+
+.assignment-action-btn.is-danger {
+    background: var(--danger);
+    border-color: var(--danger);
+}
+.assignment-action-btn.is-danger .assignment-action-icon {
+    filter: brightness(0) invert(1);
+}
+.assignment-action-btn.is-danger:hover,
+.assignment-action-btn.is-danger:focus {
+    background: #b91c1c;
+    border-color: #b91c1c;
+}
+
+.assignment-action-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* ============================================================
+   EMPTY STATE
+   ============================================================ */
+
+.assignment-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 40px 24px;
+    background: var(--gray-50);
+}
+
+.assignment-empty-state[hidden] { display: none; }
+
+.assignment-empty-icon {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 12px;
+    background: var(--gray-100);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+}
+
+.assignment-empty-icon img {
+    width: 100%;
+    height: 100%;
+    max-width: 32px;
+    max-height: 32px;
+    object-fit: contain;
+    opacity: 0.4;
+}
+
+.assignment-empty-title {
+    margin: 0 0 4px 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text);
+}
+
+.assignment-empty-text {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    max-width: 320px;
+    line-height: 1.5;
+}
+
+/* ============================================================
+   ASSIGNMENT NOTIFICATION MODAL
+   ============================================================ */
+
+.assignment-notify-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    box-sizing: border-box;
+}
+
+.assignment-notify-modal.active {
+    opacity: 1;
+}
+
+.assignment-notify-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(5, 10, 4, 0.6);
+    cursor: pointer;
+}
+
+.assignment-notify-modal .assignment-notify-content {
+    position: relative;
+    z-index: 1;
+    background: var(--white);
+    border-radius: var(--radius-xl);
+    padding: 28px 24px 22px;
+    width: 100%;
+    max-width: 440px;
+    text-align: center;
+    box-shadow: var(--shadow-xl);
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transform: scale(0.95) translateY(-10px);
+    opacity: 0;
+    transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s ease;
+}
+
+.assignment-notify-modal.active .assignment-notify-content {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+}
+
+.assignment-notify-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 14px;
+    background: rgba(89, 193, 74, 0.12);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.assignment-notify-icon img {
+    width: 28px;
+    height: 28px;
+    display: block;
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.assignment-notify-kicker {
+    margin: 0 0 4px 0;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--primary);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+
+.assignment-notify-title {
+    margin: 0 0 6px 0;
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.3;
+}
+
+.assignment-notify-text {
+    margin: 0 0 18px 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    line-height: 1.5;
+    max-width: 320px;
+}
+
+.assignment-notify-meta {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 12px 14px;
+    margin: 0 0 20px 0;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    text-align: left;
+}
+
+.assignment-notify-meta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--gray-100);
+    min-height: 30px;
+}
+
+.assignment-notify-meta-row:last-child { border-bottom: none; padding-bottom: 0; }
+.assignment-notify-meta-row:first-child { padding-top: 0; }
+
+.assignment-notify-meta-row dt {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+    min-width: 78px;
+}
+
+.assignment-notify-meta-row dd {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--text);
+    font-weight: 600;
+    text-align: right;
+    min-width: 0;
+    word-break: break-word;
+}
+
+.assignment-notify-actions {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+.assignment-notify-btn {
+    flex: 1;
+    min-width: 0;
+    padding: 12px 18px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    border: 2px solid transparent;
+    min-height: 46px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.assignment-notify-btn:active { transform: scale(0.98); }
+.assignment-notify-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+.assignment-notify-btn-decline {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #ffffff;
+}
+.assignment-notify-btn-decline:hover,
+.assignment-notify-btn-decline:focus {
+    background: #b91c1c;
+    border-color: #b91c1c;
+}
+
+.assignment-notify-btn-accept {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #ffffff;
+}
+.assignment-notify-btn-accept:hover,
+.assignment-notify-btn-accept:focus {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+}
+
+.assignment-notify-dismiss {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 12px;
+    background: none;
+    border: none;
+    color: var(--gray-500);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    transition: color 0.15s ease;
+}
+
+.assignment-notify-dismiss:hover,
+.assignment-notify-dismiss:focus { color: var(--text); }
+
+/* ============================================================
+   AVAILABILITY MODAL
+
+   Sibling of the notification modal. Same fixed-position
+   full-viewport centering pattern. The three shapes are expressed
+   entirely by the wrapper's data-variant and data-icon attributes:
+
+     data-variant="primary" data-icon="online"   → Go Online
+     data-variant="danger"  data-icon="offline"  → Go Offline
+     data-variant="neutral" data-icon="blocked"  → Blocked
+
+   The three SVGs are pre-rendered in the icon circle; only the one
+   whose class matches data-icon is shown. The confirm button's
+   colour follows data-variant. The Cancel button is hidden in the
+   blocked shape.
+   ============================================================ */
+
+.assignment-availability-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    box-sizing: border-box;
+}
+
+.assignment-availability-modal.active {
+    opacity: 1;
+}
+
+.assignment-availability-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(5, 10, 4, 0.6);
+    cursor: pointer;
+}
+
+.assignment-availability-content {
+    position: relative;
+    z-index: 1;
+    background: var(--white);
+    border-radius: var(--radius-xl);
+    padding: 28px 24px 22px;
+    width: 100%;
+    max-width: 440px;
+    text-align: center;
+    box-shadow: var(--shadow-xl);
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transform: scale(0.95) translateY(-10px);
+    opacity: 0;
+    transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s ease;
+}
+
+.assignment-availability-modal.active .assignment-availability-content {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+}
+
+/* ---- Icon circle ----
+   The circle's tint follows the modal's variant. The visible icon
+   inside follows data-icon. Only one of the three is shown. */
+
+.assignment-availability-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 14px;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s ease;
+}
+
+.assignment-availability-modal[data-variant="primary"] .assignment-availability-icon {
+    background: rgba(89, 193, 74, 0.12);
+}
+
+.assignment-availability-modal[data-variant="danger"] .assignment-availability-icon {
+    background: rgba(220, 53, 69, 0.12);
+}
+
+.assignment-availability-modal[data-variant="neutral"] .assignment-availability-icon {
+    background: rgba(255, 193, 7, 0.15);
+}
+
+.assignment-availability-icon img {
+    width: 28px;
+    height: 28px;
+    display: none;
+}
+
+/* Online icon: primary green tint */
+
+.assignment-availability-modal[data-icon="online"] .assignment-availability-icon-online {
+    display: block;
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+/* Offline icon: danger red tint */
+
+.assignment-availability-modal[data-icon="offline"] .assignment-availability-icon-offline {
+    display: block;
+    filter: brightness(0) saturate(100%)
+            invert(40%) sepia(90%) saturate(600%)
+            hue-rotate(330deg) brightness(90%) contrast(85%);
+}
+
+/* Blocked icon: warning amber tint */
+
+.assignment-availability-modal[data-icon="blocked"] .assignment-availability-icon-blocked {
+    display: block;
+    filter: brightness(0) saturate(100%)
+            invert(70%) sepia(90%) saturate(1000%)
+            hue-rotate(0deg) brightness(95%) contrast(90%);
+}
+
+/* ---- Title + body ---- */
+
+.assignment-availability-title {
+    margin: 0 0 6px 0;
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.3;
+    text-align: center;
+}
+
+.assignment-availability-text {
+    margin: 0 0 22px 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    line-height: 1.6;
+    text-align: center;
+    max-width: 340px;
+}
+
+/* ---- Footer ---- */
+
+.assignment-availability-actions {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+}
+
+.assignment-availability-btn {
+    flex: 1;
+    min-width: 0;
+    padding: 12px 18px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    border: 2px solid transparent;
+    min-height: 46px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.assignment-availability-btn:active { transform: scale(0.98); }
+.assignment-availability-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+.assignment-availability-btn:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+}
+
+/* Cancel button — neutral black on white, matching the general.md
+   rule for a neutral button. */
+
+.assignment-availability-btn-cancel {
+    background: #1a1a1a;
+    border-color: #1a1a1a;
+    color: #ffffff;
+}
+
+.assignment-availability-btn-cancel:hover,
+.assignment-availability-btn-cancel:focus {
+    background: #000000;
+    border-color: #000000;
+}
+
+/* Cancel is hidden in the blocked shape. When hidden, the confirm
+   button takes the full row. */
+
+.assignment-availability-btn-cancel[hidden] {
+    display: none;
+}
+
+/* Confirm button colour follows the modal's variant. */
+
+.assignment-availability-modal[data-variant="primary"] .assignment-availability-btn-confirm {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: #ffffff;
+}
+
+.assignment-availability-modal[data-variant="primary"] .assignment-availability-btn-confirm:hover,
+.assignment-availability-modal[data-variant="primary"] .assignment-availability-btn-confirm:focus {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+}
+
+.assignment-availability-modal[data-variant="danger"] .assignment-availability-btn-confirm {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #ffffff;
+}
+
+.assignment-availability-modal[data-variant="danger"] .assignment-availability-btn-confirm:hover,
+.assignment-availability-modal[data-variant="danger"] .assignment-availability-btn-confirm:focus {
+    background: #b91c1c;
+    border-color: #b91c1c;
+}
+
+.assignment-availability-modal[data-variant="neutral"] .assignment-availability-btn-confirm {
+    background: #1a1a1a;
+    border-color: #1a1a1a;
+    color: #ffffff;
+}
+
+.assignment-availability-modal[data-variant="neutral"] .assignment-availability-btn-confirm:hover,
+.assignment-availability-modal[data-variant="neutral"] .assignment-availability-btn-confirm:focus {
+    background: #000000;
+    border-color: #000000;
+}
+
+/* ============================================================
+   CHAT MODAL
+   ============================================================ */
+
+.rider-chat-modal-content {
+    width: 500px;
+    max-width: calc(100vw - 40px);
+    height: 600px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+}
+
+.rider-chat-modal-content .modal-header {
+    padding: 16px 20px;
+    margin: 0;
+    border-bottom: 1px solid var(--gray-200);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.rider-chat-modal-content .modal-title {
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    margin: 0;
+}
+
+.rider-chat-modal-content .modal-subtitle {
+    margin: 2px 0 0 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    font-weight: var(--font-weight-normal);
+}
+
+.rider-chat-modal-content .modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    line-height: 1;
+    color: var(--gray-400);
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-base);
+    flex-shrink: 0;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.rider-chat-modal-content .modal-close:hover {
+    background: var(--gray-100);
+    color: var(--text);
+}
+
+.rider-chat-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--gray-200);
+    background: var(--gray-50);
+    flex-shrink: 0;
+}
+
+.rider-chat-tab {
+    flex: 1;
+    padding: 12px 16px;
+    background: none;
+    border: none;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--gray-600);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s ease;
+    font-family: inherit;
+}
+
+.rider-chat-tab:hover {
+    background: var(--gray-100);
+    color: var(--text);
+}
+
+.rider-chat-tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+    background: var(--white);
+}
+
+.rider-chat-tab-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+    opacity: 0.6;
+}
+
+.rider-chat-tab.active .rider-chat-tab-icon {
+    opacity: 1;
+    filter: brightness(0) saturate(100%) invert(48%) sepia(70%)
+            saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.rider-chat-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--gray-50);
+    min-height: 0;
+}
+
+.rider-chat-loading,
+.rider-chat-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--gray-400);
+    font-size: var(--font-size-sm);
+    text-align: center;
+    padding: 20px;
+}
+
+.rider-chat-message {
+    max-width: 75%;
+    padding: 10px 14px;
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+    word-wrap: break-word;
+    position: relative;
+}
+
+.rider-chat-message-sent {
+    align-self: flex-end;
+    background: var(--primary);
+    color: var(--white);
+    border-bottom-right-radius: var(--radius-sm);
+}
+
+.rider-chat-message-received {
+    align-self: flex-start;
+    background: var(--white);
+    color: var(--text);
+    border: 1px solid var(--gray-200);
+    border-bottom-left-radius: var(--radius-sm);
+}
+
+.rider-chat-message-sender {
+    display: block;
+    font-size: 10px;
+    font-weight: var(--font-weight-bold);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 2px;
+    opacity: 0.75;
+}
+
+.rider-chat-message-time {
+    display: block;
+    font-size: 10px;
+    margin-top: 4px;
+    opacity: 0.7;
+}
+
+.rider-chat-form {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--gray-200);
+    background: var(--white);
+    flex-shrink: 0;
+}
+
+.rider-chat-input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-sm);
+    font-family: inherit;
+    background: var(--white);
+    color: var(--text);
+    transition: border-color 0.15s ease;
+    resize: none;
+}
+
+.rider-chat-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
+}
+
+.rider-chat-send {
+    width: 42px;
+    height: 42px;
+    border-radius: var(--radius-full);
+    border: none;
+    background: var(--primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.rider-chat-send:hover {
+    background: var(--primary-dark);
+}
+
+.rider-chat-send:active {
+    transform: scale(0.95);
+}
+
+.rider-chat-send:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.rider-chat-send img {
+    width: 18px;
+    height: 18px;
+    display: block;
+    filter: brightness(0) invert(1);
+}
+
+/* ============================================================
+   RESPONSIVE — TABLET (≤ 768px)
+   ============================================================ */
+
+@media (max-width: 768px) {
+    .assignment-list { padding: 10px 12px 14px; max-height: 50vh; }
+    .assignment-row { padding: 10px 12px; gap: 6px; }
+    .assignment-action-btn { width: 34px; height: 34px; }
+    .assignment-action-icon { width: 15px; height: 15px; }
+    .rider-chat-modal-content { height: 90vh; }
+    .assignment-row-meta { grid-template-columns: 1fr; }
+}
+
+/* ============================================================
+   RESPONSIVE — MOBILE (≤ 480px)
+   ============================================================ */
+
+@media (max-width: 480px) {
+    .assignment-panel { padding: 0 12px; }
+    .assignment-panel-inner { border-radius: var(--radius-base) var(--radius-base) 0 0; }
+
+    .assignment-panel-header {
+        padding: 10px 14px;
+        min-height: 52px;
+        gap: 8px;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+    }
+
+    .assignment-panel-title { gap: 8px; font-size: var(--font-size-sm); }
+    .assignment-panel-title-icon { width: 16px; height: 16px; }
+
+    .assignment-panel-status { font-size: 10px; padding: 3px 8px; }
+
+    .assignment-count-badge {
+        min-width: 22px;
+        height: 22px;
+        padding: 0 7px;
+        font-size: 11px;
+    }
+
+    .assignment-row-top { gap: 8px; }
+    .assignment-row-order { font-size: var(--font-size-sm); }
+    .assignment-row-status { font-size: 10px; padding: 3px 8px; min-height: 20px; }
+
+    .assignment-row-actions {
+        margin-left: auto;
+        gap: 4px;
+    }
+
+    .assignment-action-btn { width: 32px; height: 32px; }
+    .assignment-action-icon { width: 14px; height: 14px; }
+
+    .assignment-list { max-height: 42vh; padding: 10px 10px 12px; }
+
+    .assignment-notify-modal,
+    .assignment-availability-modal {
+        padding: 12px;
+    }
+
+    .assignment-notify-content,
+    .assignment-availability-content {
+        padding: 24px 18px 18px;
+        border-radius: var(--radius-lg);
+        max-width: calc(100vw - 24px);
+    }
+
+    .assignment-notify-icon,
+    .assignment-availability-icon {
+        width: 54px;
+        height: 54px;
+        margin-bottom: 12px;
+    }
+
+    .assignment-notify-icon img,
+    .assignment-availability-icon img {
+        width: 24px;
+        height: 24px;
+    }
+
+    .assignment-notify-title,
+    .assignment-availability-title {
+        font-size: var(--font-size-base);
+    }
+
+    .assignment-notify-text,
+    .assignment-availability-text {
+        font-size: var(--font-size-xs);
+        margin-bottom: 14px;
+    }
+
+    .assignment-notify-meta { padding: 10px 12px; margin-bottom: 16px; }
+
+    .assignment-notify-meta-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        padding: 5px 0;
+        min-height: 0;
+    }
+
+    .assignment-notify-meta-row dt { min-width: 0; font-size: 9px; }
+    .assignment-notify-meta-row dd { text-align: left; font-size: var(--font-size-xs); }
+
+    .assignment-notify-actions { flex-direction: column-reverse; gap: 8px; }
+    .assignment-notify-btn { width: 100%; min-height: 44px; font-size: var(--font-size-sm); }
+
+    .assignment-availability-actions { flex-direction: column-reverse; gap: 8px; }
+
+    .assignment-availability-btn {
+        width: 100%;
+        min-height: 44px;
+        font-size: var(--font-size-sm);
+    }
+
+    .rider-chat-modal-content {
+        width: 100%;
+        max-width: 100%;
+        height: 100vh;
+        max-height: 100vh;
+        border-radius: 0;
+    }
+}
+
+/* ============================================================
+   VERY SMALL MOBILE (≤ 360px)
+   ============================================================ */
+
+@media (max-width: 360px) {
+    .assignment-panel-header { padding: 10px 12px; min-height: 48px; }
+    .assignment-panel-status .assignment-panel-status-text,
+    .assignment-panel-status .assignment-panel-status-action {
+        font-size: 9px;
+    }
+    .assignment-row { padding: 10px 10px; }
+
+    .assignment-action-btn { width: 30px; height: 30px; }
+    .assignment-action-icon { width: 13px; height: 13px; }
+}
+
+/* ============================================================
+   REDUCED MOTION
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    .assignment-panel-wrapper,
+    .assignment-panel-inner,
+    .assignment-panel-toggle,
+    .assignment-panel-toggle-icon,
+    .assignment-panel-status,
+    .assignment-panel-status-dot,
+    .assignment-row,
+    .assignment-row-top,
+    .assignment-row-meta,
+    .assignment-row-expand,
+    .assignment-row-expand-icon,
+    .assignment-action-btn,
+    .assignment-notify-modal,
+    .assignment-notify-modal .assignment-notify-content,
+    .assignment-notify-btn,
+    .assignment-availability-modal,
+    .assignment-availability-content,
+    .assignment-availability-icon,
+    .assignment-availability-btn,
+    .rider-chat-send,
+    .rider-chat-tab {
+        transition: none !important;
+        animation: none !important;
+    }
+}

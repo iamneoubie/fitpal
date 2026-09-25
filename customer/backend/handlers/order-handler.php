@@ -5,16 +5,21 @@
  * Handles customer-initiated order actions.
  *
  * Actions:
- *   cancel_order      → cancel a pending/preparing order. Issues a
- *                       refund when the original payment method was
- *                       Wallet or Online and a payment was recorded.
- *                       COD orders are cancelled with no refund.
- *                       Legacy orders (no payment on record) cancel
- *                       cleanly with no refund.
+ *   cancel_order      → cancel a 'pending' order. Issues a refund when
+ *                       the original payment method was Wallet or
+ *                       Online and a payment was recorded. COD orders
+ *                       are cancelled with no refund. Legacy orders
+ *                       (no payment on record) cancel cleanly with no
+ *                       refund.
  *   get_order_details → return an order as JSON
  *   reorder           → rebuild the session order queue from a past
  *                       order, validating each product against the
  *                       current database state.
+ *
+ * Only 'pending' orders are cancellable. The moment the kitchen
+ * accepts the order and moves it to 'preparing', ingredients are
+ * committed and the order is locked from the customer's side. The
+ * customer must go through support to stop it from that point on.
  *
  * This handler contains NO SQL. All data access goes through
  * customer/backend/database/order-queries.php.
@@ -24,8 +29,13 @@
  * (e.g. buildReorderLine) live in order-queries.php.
  *
  * @package FitPal
- * @version 5.1 — Validates against customer_csrf_token; explicit empty
- *                guards on both sides. (5.0: raw SQL moved to
+ * @version 5.2 — Cancel restricted to 'pending' only. The cancellable
+ *                status list and its guard are updated together with
+ *                the matching button visibility in orders.php and the
+ *                WHERE clause in order-queries.php::cancelOrderAsCustomer().
+ *
+ *                (5.1: Validates against customer_csrf_token; explicit
+ *                empty guards on both sides. 5.0: raw SQL moved to
  *                order-queries.php; buildReorderLine relocated;
  *                Throwable caught.)
  */
@@ -108,6 +118,11 @@ try {
 /**
  * Cancel an order (customer-initiated).
  *
+ * Only 'pending' orders are cancellable. The moment the kitchen
+ * accepts the order and moves it to 'preparing', the customer loses
+ * the ability to cancel — ingredients are committed at that point
+ * and the order is locked from the customer's side.
+ *
  * Wallet and Online orders move to 'refunded'. A refund transaction
  * is issued when a payment was on record; legacy orders with no
  * recorded payment cancel cleanly with no refund.
@@ -130,11 +145,13 @@ function handleCancelOrder(PDO $db, int $customerId): void
         return;
     }
 
-    $cancellableStatuses = ['pending', 'preparing'];
-    if (!in_array($order['order_status'], $cancellableStatuses, true)) {
+    // Only 'pending' orders are cancellable by the customer. Once the
+    // kitchen flips the order to 'preparing', ingredients are committed
+    // and the order is locked. The customer must go through support.
+    if ($order['order_status'] !== 'pending') {
         echo json_encode([
             'status'  => 'error',
-            'message' => 'This order cannot be cancelled at this stage',
+            'message' => 'This order has already been accepted by the kitchen and can no longer be cancelled. Please contact support if you need help.',
         ]);
         return;
     }

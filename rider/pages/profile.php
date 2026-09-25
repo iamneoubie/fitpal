@@ -394,19 +394,6 @@ $plateLabel   = $plate !== '' ? $plate : 'No plate recorded';
                 </div>
             </div>
         </div>
-
-        <!-- ============================================
-             LOGOUT
-             ============================================ -->
-        <div class="logout-wrap">
-            <button type="button" class="btn btn-cancel logout-btn" data-logout-trigger>
-                <img src="<?php echo $assetBase; ?>assets/images/icons/logoutsvg.svg" alt="" class="btn-icon" width="16"
-                    height="16"
-                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/cancel.svg'">
-                <span>Sign Out</span>
-            </button>
-        </div>
-
     </div>
 </div>
 

@@ -15,8 +15,30 @@
  * admin-queries.php.
  *
  * @package FitPal
- * @version 2.2 — Owns its own CSRF bootstrap and rotates the admin
- *                token on mismatch.
+ * @version 2.3 — CSRF-mismatch redirect now honors the whitelisted
+ *                redirect_to destination instead of hardcoding
+ *                dashboard.php.
+ *
+ *                Previously a CSRF mismatch on the profile page's
+ *                Personal Information or Change Password form
+ *                bounced the admin to dashboard.php, not back to
+ *                profile.php. The flash still rendered (dashboard
+ *                displays admin_error), so the failure was not
+ *                silent, but the user was dropped on the wrong page
+ *                and had to navigate back manually to retry.
+ *
+ *                The fix reorders the handler: the redirect_to
+ *                whitelist is resolved BEFORE the CSRF check, so
+ *                the mismatch branch can redirect to the same
+ *                whitelisted destination a successful submit would
+ *                have used. Resolution still runs first because the
+ *                whitelist is what keeps an attacker-supplied
+ *                redirect_to from steering the mismatch redirect to
+ *                an off-site URL — that guarantee is unchanged; only
+ *                the ordering relative to the CSRF check moved.
+ *
+ *                (2.2: Owns its own CSRF bootstrap and rotates the
+ *                admin token on mismatch.
  *
  *                require_once on includes/admin-csrf-token.php makes
  *                this handler the authoritative reader of
@@ -24,8 +46,8 @@
  *                that only worked because the page which rendered
  *                the form had already called getAdminCsrfToken().
  *
- *                On the CSRF-mismatch branch the token is now
- *                unset before redirecting, mirroring
+ *                On the CSRF-mismatch branch the token is unset
+ *                before redirecting, mirroring
  *                sign-in-handler.php v1.5. Without that rotation,
  *                getAdminCsrfToken() on the next render of
  *                dashboard.php saw the key still set and returned
@@ -39,7 +61,7 @@
  *                by this file — other roles in the same PHP session
  *                may still depend on it.
  *
- *                (2.1: CSRF validation switched from the shared
+ *                2.1: CSRF validation switched from the shared
  *                'csrf_token' key to admin's own 'admin_csrf_token',
  *                so a customer/rider/restaurant sign-in running
  *                unset($_SESSION['csrf_token']) can no longer delete
@@ -75,6 +97,23 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+// Resolve the redirect destination BEFORE the CSRF check so the
+// mismatch branch below can honor the same whitelisted page the
+// successful path would have used. Running the whitelist first is
+// what keeps an attacker-supplied redirect_to from steering either
+// branch to an off-site URL — the ordering change does not weaken
+// that guarantee, because the whitelist still runs on every request.
+$redirect = (string)($_POST['redirect_to'] ?? 'dashboard.php');
+
+$allowedRedirects = [
+    'dashboard.php', 'customers.php', 'riders.php', 'restaurants.php', 'profile.php',
+];
+if (!in_array($redirect, $allowedRedirects, true)) {
+    $redirect = 'dashboard.php';
+}
+
+$redirectUrl = '../../pages/' . $redirect;
+
 if (!isset($_POST['csrf_token'], $_SESSION['admin_csrf_token'])
     || !hash_equals((string)$_SESSION['admin_csrf_token'], (string)$_POST['csrf_token'])) {
     // Rotate admin's own token so the next render generates a fresh
@@ -86,23 +125,12 @@ if (!isset($_POST['csrf_token'], $_SESSION['admin_csrf_token'])
     unset($_SESSION['admin_csrf_token']);
 
     $_SESSION['admin_error'] = 'Security validation failed. Please try again.';
-    header('Location: ../../pages/dashboard.php');
+    header('Location: ' . $redirectUrl);
     exit;
 }
 
 $adminId = (int)$_SESSION['administrator_id'];
 $action  = (string)($_POST['action'] ?? '');
-$redirect = (string)($_POST['redirect_to'] ?? 'dashboard.php');
-
-// Whitelist redirect destinations so the field cannot be abused.
-$allowedRedirects = [
-    'dashboard.php', 'customers.php', 'riders.php', 'restaurants.php', 'profile.php',
-];
-if (!in_array($redirect, $allowedRedirects, true)) {
-    $redirect = 'dashboard.php';
-}
-
-$redirectUrl = '../../pages/' . $redirect;
 
 try {
     switch ($action) {

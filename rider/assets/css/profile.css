@@ -4,6 +4,24 @@
  * Mirrors customer/assets/css/profile.css so both roles feel like the
  * same product. Every class below is emitted by rider/pages/profile.php.
  *
+ * SCOPE
+ * -----
+ * Every rule except the fixed-position .rider-toast block is scoped
+ * to .profile-page. This is the page's outer wrapper class as
+ * rendered by rider/pages/profile.php (<div class="content
+ * profile-page">). Scoping is required because several of the class
+ * names this file styles also exist in the shared rider header and
+ * the mobile nav — most importantly .logout-btn (the header's logout
+ * button) and .btn-icon (inside the mobile nav). Without the scope,
+ * this stylesheet reached into the header and restyled the header's
+ * logout button with the profile page's wide black-on-white variant,
+ * which is why the header appeared "broken" and the logout button
+ * looked oversized.
+ *
+ * The .rider-toast block is deliberately unscoped: profile.js
+ * appends the toast to document.body, outside .profile-page, so it
+ * must be reachable from the document root.
+ *
  * Layout map:
  *   .profile-page
  *     .container
@@ -20,15 +38,21 @@
  * shared logout.js intercepts it before navigation.
  *
  * @package FitPal
- * @version 3.2 — Adds logout button styles matching the confirmation
- *                modal flow.
+ * @version 3.3 — Every rule except the toast is now scoped to
+ *                .profile-page. This fixes the class-name collisions
+ *                with the shared rider header and mobile nav that
+ *                were reaching outside the page and breaking the
+ *                header layout and the header's logout button size.
+ *                No visual change to the profile page itself.
+ *
+ *                (3.2: Added the page-side logout button styles.)
  */
 
 /* ============================================
    CONTENT WRAPPER
    ============================================ */
 
-.content {
+.profile-page.content {
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -56,13 +80,13 @@
    PAGE TITLE HEADER
    ============================================ */
 
-.page-title-header {
+.profile-page .page-title-header {
     margin-bottom: 24px;
     padding-bottom: 16px;
     border-bottom: 2px solid var(--primary);
 }
 
-.page-title-header-top {
+.profile-page .page-title-header-top {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -70,7 +94,7 @@
     flex-wrap: wrap;
 }
 
-.page-title-header h1 {
+.profile-page .page-title-header h1 {
     margin: 0;
     font-size: var(--font-size-2xl);
     font-weight: var(--font-weight-bold);
@@ -79,7 +103,7 @@
     line-height: 1.2;
 }
 
-.back-btn {
+.profile-page .back-btn {
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -98,11 +122,11 @@
     cursor: pointer;
 }
 
-.back-btn:active {
+.profile-page .back-btn:active {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.back-btn-icon {
+.profile-page .back-btn-icon {
     width: 20px;
     height: 20px;
     display: block;
@@ -114,7 +138,7 @@
    ALERTS
    ============================================ */
 
-.alert {
+.profile-page .alert {
     padding: 12px 16px;
     border-radius: var(--radius-base);
     margin-bottom: 16px;
@@ -123,13 +147,13 @@
     line-height: 1.5;
 }
 
-.alert-success {
+.profile-page .alert-success {
     color: #155724;
     background-color: #d4edda;
     border-color: #c3e6cb;
 }
 
-.alert-danger {
+.profile-page .alert-danger {
     color: #721c24;
     background-color: #f8d7da;
     border-color: #f5c6cb;
@@ -139,7 +163,7 @@
    PROFILE HEADER CARD
    ============================================ */
 
-.profile-header-card {
+.profile-page .profile-header-card {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -153,22 +177,22 @@
     box-shadow: var(--shadow-sm);
 }
 
-.profile-header-left {
+.profile-page .profile-header-left {
     display: flex;
     align-items: center;
     gap: 16px;
     min-width: 0;
 }
 
-.profile-avatar-wrap {
+.profile-page .profile-avatar-wrap {
     position: relative;
     width: 64px;
     height: 64px;
     flex-shrink: 0;
 }
 
-.profile-avatar-image,
-.profile-avatar-placeholder {
+.profile-page .profile-avatar-image,
+.profile-page .profile-avatar-placeholder {
     width: 64px;
     height: 64px;
     border-radius: 50%;
@@ -178,7 +202,7 @@
     object-fit: cover;
 }
 
-.profile-avatar-placeholder {
+.profile-page .profile-avatar-placeholder {
     background: var(--primary);
     color: var(--white);
     font-size: 24px;
@@ -187,7 +211,7 @@
     line-height: 1;
 }
 
-.profile-avatar-edit {
+.profile-page .profile-avatar-edit {
     position: absolute;
     right: -2px;
     bottom: -2px;
@@ -204,29 +228,29 @@
     transition: transform 0.15s ease, background 0.15s ease;
 }
 
-.profile-avatar-edit:hover {
+.profile-page .profile-avatar-edit:hover {
     background: var(--primary);
     transform: scale(1.06);
 }
 
-.profile-avatar-edit img {
+.profile-page .profile-avatar-edit img {
     width: 12px;
     height: 12px;
     display: block;
 }
 
-.profile-avatar-edit:hover img {
+.profile-page .profile-avatar-edit:hover img {
     filter: brightness(0) invert(1);
 }
 
-.profile-name-role {
+.profile-page .profile-name-role {
     display: flex;
     flex-direction: column;
     gap: 4px;
     min-width: 0;
 }
 
-.profile-full-name {
+.profile-page .profile-full-name {
     margin: 0;
     font-size: var(--font-size-xl);
     font-weight: 700;
@@ -237,12 +261,12 @@
     white-space: nowrap;
 }
 
-.profile-role-badge {
+.profile-page .profile-role-badge {
     font-size: var(--font-size-sm);
     color: var(--gray-500);
 }
 
-.profile-meta-line {
+.profile-page .profile-meta-line {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -250,12 +274,12 @@
     margin-top: 2px;
 }
 
-.profile-joined {
+.profile-page .profile-joined {
     font-size: var(--font-size-xs);
     color: var(--gray-500);
 }
 
-.profile-header-right {
+.profile-page .profile-header-right {
     display: flex;
     align-items: center;
     gap: 20px;
@@ -263,21 +287,21 @@
     flex-wrap: wrap;
 }
 
-.profile-stat {
+.profile-page .profile-stat {
     display: flex;
     flex-direction: column;
     align-items: center;
     min-width: 64px;
 }
 
-.profile-stat-value {
+.profile-page .profile-stat-value {
     font-size: var(--font-size-xl);
     font-weight: 700;
     color: var(--text);
     line-height: 1.2;
 }
 
-.profile-stat-label {
+.profile-page .profile-stat-label {
     font-size: var(--font-size-xs);
     color: var(--gray-500);
     text-transform: uppercase;
@@ -285,7 +309,7 @@
     font-weight: 600;
 }
 
-.btn-edit {
+.profile-page .btn-edit {
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -301,11 +325,11 @@
     transition: background 0.15s ease;
 }
 
-.btn-edit:hover {
+.profile-page .btn-edit:hover {
     background: var(--primary-dark);
 }
 
-.btn-edit .btn-icon {
+.profile-page .btn-edit .btn-icon {
     width: 16px;
     height: 16px;
     display: block;
@@ -316,7 +340,7 @@
    TABS
    ============================================ */
 
-.profile-tabs {
+.profile-page .profile-tabs {
     display: flex;
     gap: 4px;
     background: var(--white);
@@ -327,7 +351,7 @@
     box-shadow: var(--shadow-sm);
 }
 
-.profile-tab {
+.profile-page .profile-tab {
     flex: 1;
     padding: 12px 20px;
     border: none;
@@ -342,11 +366,11 @@
     transition: background 0.15s ease, color 0.15s ease;
 }
 
-.profile-tab:hover {
+.profile-page .profile-tab:hover {
     background: var(--gray-50);
 }
 
-.profile-tab.active {
+.profile-page .profile-tab.active {
     background: var(--primary);
     color: var(--white);
 }
@@ -355,11 +379,11 @@
    TAB CONTENT
    ============================================ */
 
-.profile-tab-content {
+.profile-page .profile-tab-content {
     display: none;
 }
 
-.profile-tab-content.active {
+.profile-page .profile-tab-content.active {
     display: block;
 }
 
@@ -367,7 +391,7 @@
    PROFILE CARD
    ============================================ */
 
-.profile-card {
+.profile-page .profile-card {
     background: var(--white);
     border: 1px solid var(--gray-200);
     border-radius: var(--radius-lg);
@@ -376,7 +400,7 @@
     margin-bottom: 24px;
 }
 
-.profile-card .card-header {
+.profile-page .profile-card .card-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -387,14 +411,14 @@
     flex-wrap: wrap;
 }
 
-.profile-card .card-header h3 {
+.profile-page .profile-card .card-header h3 {
     margin: 0;
     font-size: var(--font-size-base);
     font-weight: 600;
     color: var(--text);
 }
 
-.profile-card .card-body {
+.profile-page .profile-card .card-body {
     padding: 20px;
 }
 
@@ -402,18 +426,18 @@
    FORM
    ============================================ */
 
-.form-row {
+.profile-page .form-row {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
 }
 
-.form-group {
+.profile-page .form-group {
     margin-bottom: 16px;
     min-width: 0;
 }
 
-.field-label {
+.profile-page .field-label {
     display: block;
     font-size: var(--font-size-xs);
     font-weight: 600;
@@ -423,7 +447,7 @@
     margin-bottom: 6px;
 }
 
-.form-control {
+.profile-page .form-control {
     width: 100%;
     padding: 10px 12px;
     border: 1px solid var(--gray-300);
@@ -436,20 +460,20 @@
     transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
-.form-control:disabled {
+.profile-page .form-control:disabled {
     background: var(--gray-50);
     color: var(--gray-600);
     cursor: not-allowed;
     border-color: var(--gray-200);
 }
 
-.form-control:not(:disabled):focus {
+.profile-page .form-control:not(:disabled):focus {
     outline: none;
     border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
 }
 
-.profile-actions {
+.profile-page .profile-actions {
     display: flex;
     gap: 12px;
     margin-top: 20px;
@@ -458,7 +482,7 @@
     justify-content: flex-end;
 }
 
-.profile-actions .btn {
+.profile-page .profile-actions .btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -474,34 +498,34 @@
     transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-.profile-actions .btn-cancel {
+.profile-page .profile-actions .btn-cancel {
     background: #1a1a1a;
     color: #ffffff;
     border-color: #1a1a1a;
 }
 
-.profile-actions .btn-cancel:hover {
+.profile-page .profile-actions .btn-cancel:hover {
     background: #000000;
     border-color: #000000;
 }
 
-.profile-actions .btn-primary {
+.profile-page .profile-actions .btn-primary {
     background: var(--primary);
     color: var(--white);
     border-color: var(--primary);
 }
 
-.profile-actions .btn-primary:hover {
+.profile-page .profile-actions .btn-primary:hover {
     background: var(--primary-dark);
     border-color: var(--primary-dark);
 }
 
-.profile-actions .btn-primary:disabled {
+.profile-page .profile-actions .btn-primary:disabled {
     opacity: 0.6;
     cursor: not-allowed;
 }
 
-.profile-actions.is-hidden {
+.profile-page .profile-actions.is-hidden {
     display: none;
 }
 
@@ -509,7 +533,7 @@
    INFO GRID (Vehicle tab)
    ============================================ */
 
-.info-grid {
+.profile-page .info-grid {
     display: flex;
     flex-direction: column;
     gap: 0;
@@ -519,7 +543,7 @@
     margin-bottom: 16px;
 }
 
-.info-row {
+.profile-page .info-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -529,11 +553,11 @@
     border-bottom: 1px solid var(--gray-100);
 }
 
-.info-row:last-child {
+.profile-page .info-row:last-child {
     border-bottom: none;
 }
 
-.info-label {
+.profile-page .info-label {
     font-size: var(--font-size-xs);
     font-weight: 600;
     color: var(--gray-500);
@@ -542,7 +566,7 @@
     flex-shrink: 0;
 }
 
-.info-value {
+.profile-page .info-value {
     font-size: var(--font-size-sm);
     font-weight: 500;
     color: var(--text);
@@ -551,7 +575,7 @@
     min-width: 0;
 }
 
-.info-note {
+.profile-page .info-note {
     margin: 0;
     font-size: var(--font-size-xs);
     color: var(--gray-500);
@@ -566,7 +590,7 @@
    ADDRESS ITEM
    ============================================ */
 
-.address-item {
+.profile-page .address-item {
     padding: 14px 16px;
     border: 1px solid var(--gray-200);
     border-radius: var(--radius-base);
@@ -574,12 +598,12 @@
     background: var(--white);
 }
 
-.address-item.default {
+.profile-page .address-item.default {
     border-color: var(--primary);
     background: var(--gray-50);
 }
 
-.address-item-header {
+.profile-page .address-item-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -588,20 +612,20 @@
     gap: 8px;
 }
 
-.address-item-label {
+.profile-page .address-item-label {
     display: flex;
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
 }
 
-.address-label {
+.profile-page .address-label {
     font-size: var(--font-size-sm);
     font-weight: 600;
     color: var(--text);
 }
 
-.address-item-body p {
+.profile-page .address-item-body p {
     margin: 0;
     font-size: var(--font-size-sm);
     color: var(--gray-600);
@@ -613,7 +637,7 @@
    BADGES
    ============================================ */
 
-.badge {
+.profile-page .badge {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -625,27 +649,27 @@
     white-space: nowrap;
 }
 
-.badge-success {
+.profile-page .badge-success {
     background: #d4edda;
     color: #155724;
 }
 
-.badge-warning {
+.profile-page .badge-warning {
     background: #fff3cd;
     color: #856404;
 }
 
-.badge-danger {
+.profile-page .badge-danger {
     background: #f8d7da;
     color: #721c24;
 }
 
-.badge-secondary {
+.profile-page .badge-secondary {
     background: var(--gray-200);
     color: var(--gray-600);
 }
 
-.badge-primary {
+.profile-page .badge-primary {
     background: var(--primary);
     color: var(--white);
 }
@@ -654,7 +678,7 @@
    EMPTY STATE
    ============================================ */
 
-.empty-state {
+.profile-page .empty-state {
     text-align: center;
     padding: 40px 20px;
     display: flex;
@@ -663,7 +687,7 @@
     gap: 6px;
 }
 
-.empty-icon {
+.profile-page .empty-icon {
     width: 64px;
     height: 64px;
     margin-bottom: 10px;
@@ -675,7 +699,7 @@
     padding: 16px;
 }
 
-.empty-icon img {
+.profile-page .empty-icon img {
     width: 100%;
     height: 100%;
     max-width: 32px;
@@ -684,14 +708,14 @@
     opacity: 0.5;
 }
 
-.empty-title {
+.profile-page .empty-title {
     margin: 0;
     font-size: var(--font-size-base);
     font-weight: 600;
     color: var(--text);
 }
 
-.empty-text {
+.profile-page .empty-text {
     margin: 0;
     font-size: var(--font-size-sm);
     color: var(--gray-500);
@@ -699,15 +723,19 @@
 
 /* ============================================
    LOGOUT
+   Scoped so it does not reach the header's
+   .logout-btn. The header's logout button lives
+   outside .profile-page and keeps its own
+   compact outline style.
    ============================================ */
 
-.logout-wrap {
+.profile-page .logout-wrap {
     display: flex;
     justify-content: flex-end;
     margin-top: 8px;
 }
 
-.logout-btn {
+.profile-page .logout-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -726,12 +754,12 @@
     min-width: 160px;
 }
 
-.logout-btn:hover {
+.profile-page .logout-btn:hover {
     background: #000000;
     border-color: #000000;
 }
 
-.logout-btn .btn-icon {
+.profile-page .logout-btn .btn-icon {
     width: 16px;
     height: 16px;
     display: block;
@@ -739,7 +767,7 @@
 }
 
 /* ============================================
-   TOAST
+   TOAST (unscoped — appended to document.body)
    ============================================ */
 
 .rider-toast {
@@ -808,109 +836,109 @@
         padding: 16px 0 32px 0;
     }
 
-    .page-title-header h1 {
+    .profile-page .page-title-header h1 {
         font-size: var(--font-size-xl);
     }
 
-    .page-title-header-top {
+    .profile-page .page-title-header-top {
         gap: 12px;
     }
 
-    .back-btn {
+    .profile-page .back-btn {
         padding: 8px 14px;
         font-size: var(--font-size-xs);
     }
 
-    .back-btn-icon {
+    .profile-page .back-btn-icon {
         width: 16px;
         height: 16px;
     }
 
-    .profile-header-card {
+    .profile-page .profile-header-card {
         flex-direction: column;
         align-items: stretch;
         padding: 20px;
     }
 
-    .profile-header-left {
+    .profile-page .profile-header-left {
         justify-content: center;
         flex-direction: column;
         text-align: center;
     }
 
-    .profile-name-role {
+    .profile-page .profile-name-role {
         align-items: center;
         text-align: center;
     }
 
-    .profile-full-name {
+    .profile-page .profile-full-name {
         white-space: normal;
     }
 
-    .profile-meta-line {
+    .profile-page .profile-meta-line {
         justify-content: center;
     }
 
-    .profile-header-right {
+    .profile-page .profile-header-right {
         justify-content: center;
         width: 100%;
     }
 
-    .profile-header-right .btn-edit {
+    .profile-page .profile-header-right .btn-edit {
         width: 100%;
         justify-content: center;
     }
 
-    .profile-tabs {
+    .profile-page .profile-tabs {
         flex-direction: column;
         gap: 4px;
         padding: 4px;
     }
 
-    .profile-tab {
+    .profile-page .profile-tab {
         padding: 10px 16px;
         font-size: var(--font-size-xs);
     }
 
-    .profile-card .card-body {
+    .profile-page .profile-card .card-body {
         padding: 16px;
     }
 
-    .form-row {
+    .profile-page .form-row {
         grid-template-columns: 1fr;
         gap: 0;
     }
 
-    .profile-actions {
+    .profile-page .profile-actions {
         flex-direction: column-reverse;
     }
 
-    .profile-actions .btn {
+    .profile-page .profile-actions .btn {
         width: 100%;
         min-width: 0;
     }
 
-    .info-row {
+    .profile-page .info-row {
         flex-direction: column;
         align-items: flex-start;
         gap: 4px;
     }
 
-    .info-value {
+    .profile-page .info-value {
         text-align: left;
     }
 
-    .address-item-header {
+    .profile-page .address-item-header {
         flex-direction: column;
         align-items: flex-start;
         gap: 8px;
     }
 
-    .logout-wrap {
+    .profile-page .logout-wrap {
         justify-content: stretch;
     }
 
-    .logout-btn {
+    .profile-page .logout-btn {
         width: 100%;
         justify-content: center;
         min-width: 0;
@@ -926,86 +954,86 @@
         padding: 0 12px;
     }
 
-    .page-title-header h1 {
+    .profile-page .page-title-header h1 {
         font-size: var(--font-size-lg);
     }
 
-    .back-btn {
+    .profile-page .back-btn {
         padding: 8px 12px;
         font-size: var(--font-size-xs);
     }
 
-    .profile-avatar-wrap,
-    .profile-avatar-image,
-    .profile-avatar-placeholder {
+    .profile-page .profile-avatar-wrap,
+    .profile-page .profile-avatar-image,
+    .profile-page .profile-avatar-placeholder {
         width: 56px;
         height: 56px;
     }
 
-    .profile-avatar-placeholder {
+    .profile-page .profile-avatar-placeholder {
         font-size: 20px;
     }
 
-    .profile-avatar-edit {
+    .profile-page .profile-avatar-edit {
         width: 22px;
         height: 22px;
     }
 
-    .profile-avatar-edit img {
+    .profile-page .profile-avatar-edit img {
         width: 10px;
         height: 10px;
     }
 
-    .profile-full-name {
+    .profile-page .profile-full-name {
         font-size: var(--font-size-lg);
     }
 
-    .profile-role-badge {
+    .profile-page .profile-role-badge {
         font-size: var(--font-size-xs);
     }
 
-    .profile-stat-value {
+    .profile-page .profile-stat-value {
         font-size: var(--font-size-base);
     }
 
-    .profile-stat-label {
+    .profile-page .profile-stat-label {
         font-size: 10px;
     }
 
-    .profile-card .card-header {
+    .profile-page .profile-card .card-header {
         padding: 12px 16px;
     }
 
-    .profile-card .card-header h3 {
+    .profile-page .profile-card .card-header h3 {
         font-size: var(--font-size-sm);
     }
 
-    .profile-card .card-body {
+    .profile-page .profile-card .card-body {
         padding: 14px;
     }
 
-    .form-control {
+    .profile-page .form-control {
         font-size: var(--font-size-sm);
         padding: 10px 12px;
     }
 
-    .field-label {
+    .profile-page .field-label {
         font-size: 10px;
     }
 
-    .info-row {
+    .profile-page .info-row {
         padding: 10px 12px;
     }
 
-    .info-value {
+    .profile-page .info-value {
         font-size: var(--font-size-xs);
     }
 
-    .address-item {
+    .profile-page .address-item {
         padding: 12px 14px;
     }
 
-    .address-item-body p {
+    .profile-page .address-item-body p {
         font-size: var(--font-size-xs);
     }
 
@@ -1022,13 +1050,12 @@
    ============================================ */
 
 @media (prefers-reduced-motion: reduce) {
-
-    .profile-tab,
-    .btn-edit,
-    .logout-btn,
-    .back-btn,
-    .profile-avatar-edit,
-    .profile-actions .btn,
+    .profile-page .profile-tab,
+    .profile-page .btn-edit,
+    .profile-page .logout-btn,
+    .profile-page .back-btn,
+    .profile-page .profile-avatar-edit,
+    .profile-page .profile-actions .btn,
     .rider-toast {
         transition: none !important;
         animation: none !important;

@@ -1,9 +1,78 @@
 /**
  * FitPal Rider Earnings Page Styles
  *
+ * Structure mirrors customer/assets/css/wallet.css so both roles
+ * feel like the same product.
+ *
+ * Layout
+ * ------
+ * Page title header (back-left / title-right), three filter tabs
+ * (Overview / Chart / Transactions), one active panel per tab.
+ * Only the .active panel runs the fade-in keyframe.
+ *
+ * Withdrawal modal
+ * ----------------
+ * The modal uses the shared .modal > .modal-content skeleton, the
+ * shared .modal-body, and the shared .modal-footer, exactly as the
+ * customer wallet recharge modal does.
+ *
+ * Cascade strategy
+ * ----------------
+ * The shared modal rules live in wallet.css, which the shared
+ * header loads for the customer wallet reference. To guarantee the
+ * rider modal always wins, every modal-related rule in this file is
+ * scoped with the compound selector `.modal.rider-withdraw-modal`
+ * (specificity 0,2,0 on the root and 0,3,0 on descendants). This
+ * beats any single-class rule the shared sheet can produce, so the
+ * rules land without needing !important.
+ *
+ * Locked contract (matches the customer recharge modal exactly):
+ *   - 420px width, 24px gutter on header + body + footer.
+ *   - ONE lead-in paragraph (.rider-withdraw-note).
+ *   - Amount input locked to the 16px / 44px prefix+padding pair.
+ *   - 16 → 8 → 12 → 4 spacing rhythm, no jumps.
+ *   - Error slot always reserves 16px min-height, margin 0 0 12px 0
+ *     (same as .wallet-amount-error).
+ *   - Quick buttons use natural height, no min-height override.
+ *   - Footer buttons equal width (flex: 1) and equal height.
+ *   - Cancel is solid black + white text (neutral).
+ *   - Confirm is primary green + white text.
+ *   - Modal header title uses plain block display, no inline-flex.
+ *
  * @package FitPal
- * @version 1.0
+ * @version 5.0 — Modal block consolidated into a single
+ *                  `.modal.rider-withdraw-modal` section. Every
+ *                  value realigned to the customer wallet recharge
+ *                  modal reference:
+ *                    - footer .btn flex: 1 (was 1 1 0)
+ *                    - error slot always reserves min-height: 16px,
+ *                      margin: 0 0 12px 0 (was collapse-to-zero)
+ *                    - quick buttons natural height (was min-height
+ *                      44px)
+ *                    - modal-title plain block (was inline-flex)
+ *                    - modal-close padding 0 var(--spacing-2)
+ *                    - amount prefix uses flex align (removed
+ *                      top:50% / translateY)
+ *                    - amount input removed appearance and
+ *                      background transition
+ *                    - removed ::placeholder rule
+ *                    - added html { scrollbar-gutter: stable }
+ *                  Removed the duplicate second modal block that
+ *                  used `.rider-withdraw-modal` alone.
+ *
+ *                (4.4: cascade-locked modal block. 4.3: modal
+ *                width and prefix alignment. 4.2: modal width and
+ *                prefix alignment. 4.1: modal structure aligned.
+ *                4.0: shared classes. 3.0: tabs. 2.4: page-owned
+ *                body/footer. 2.0: tabs added. 1.0: initial.)
  */
+
+/* Reserve the scrollbar gutter permanently. When the body scrollbar
+   is hidden by a modal scroll lock, this keeps the viewport's usable
+   width unchanged, so nothing reflows. */
+html {
+    scrollbar-gutter: stable;
+}
 
 /* ============================================
    CONTENT WRAPPER
@@ -29,54 +98,196 @@
     margin: 0 auto;
     padding: 0 16px;
     width: 100%;
+    box-sizing: border-box;
 }
 
 /* ============================================
-   PAGE HEADER
+   PAGE TITLE HEADER
    ============================================ */
 
-.rider-page-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
+.page-title-header {
     margin-bottom: 24px;
-    flex-wrap: wrap;
-    gap: 16px;
 }
 
-.rider-page-header .heading-2 {
-    margin: 0 0 4px 0;
-    font-size: var(--font-size-3xl);
+.page-title-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.page-title-header h1 {
+    font-size: var(--font-size-2xl);
+    font-weight: 700;
+    color: var(--text);
+    margin: 0;
+    text-align: right;
     line-height: 1.2;
 }
 
-.rider-page-header .heading-2 span {
-    color: var(--primary);
-}
-
-.rider-page-header .text-muted {
-    color: var(--gray-500);
-    margin: 0;
-    font-size: var(--font-size-sm);
-}
-
-.rider-page-actions {
-    display: flex;
+.page-title-header .back-btn {
+    display: inline-flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
+    color: #ffffff;
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    font-family: inherit;
+    padding: 10px 18px;
+    border-radius: var(--radius-base);
+    background: #1a1a1a;
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    cursor: pointer;
+    white-space: nowrap;
     flex-shrink: 0;
 }
 
-.rider-page-actions .btn-icon {
-    width: 16px;
-    height: 16px;
+.page-title-header .back-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.page-title-header .back-btn-icon {
+    width: 20px;
+    height: 20px;
     display: block;
     flex-shrink: 0;
     filter: brightness(0) invert(1);
 }
 
 /* ============================================
-   BALANCE HERO
+   ALERTS
+   ============================================ */
+
+.alert {
+    padding: 12px 18px;
+    border-radius: var(--radius-base);
+    margin-bottom: 20px;
+    border: 1px solid transparent;
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+}
+
+.alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+
+.alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+/* ============================================
+   TAB BAR
+   ============================================ */
+
+.rider-earnings-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    padding: 4px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-sm);
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+}
+
+.rider-earnings-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.rider-earnings-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    padding: 10px 18px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--gray-600);
+    text-decoration: none;
+    text-align: center;
+    white-space: nowrap;
+    transition: background 0.15s ease, color 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.rider-earnings-tab:hover {
+    background: var(--gray-50);
+    color: var(--text);
+}
+
+.rider-earnings-tab:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.rider-earnings-tab.active {
+    background: var(--primary);
+    color: var(--white);
+}
+
+.rider-earnings-tab-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+    opacity: 0.7;
+    filter: brightness(0) saturate(100%)
+            invert(45%) sepia(8%) saturate(800%)
+            hue-rotate(50deg) brightness(95%) contrast(90%);
+    transition: opacity 0.15s ease, filter 0.15s ease;
+}
+
+.rider-earnings-tab:hover .rider-earnings-tab-icon {
+    opacity: 1;
+    filter: brightness(0) saturate(100%)
+            invert(20%) sepia(8%) saturate(800%)
+            hue-rotate(50deg) brightness(95%) contrast(95%);
+}
+
+.rider-earnings-tab.active .rider-earnings-tab-icon {
+    opacity: 1;
+    filter: brightness(0) invert(1);
+}
+
+/* ============================================
+   PANELS
+   ============================================ */
+
+.rider-earnings-panel {
+    display: block;
+}
+
+.rider-earnings-panel.active {
+    animation: riderEarningsPanelIn 180ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes riderEarningsPanelIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================
+   OVERVIEW — BALANCE HERO
    ============================================ */
 
 .rider-balance-card {
@@ -144,17 +355,18 @@
     opacity: 0.6;
     cursor: not-allowed;
     transform: none;
+    background: rgba(255, 255, 255, 0.7);
+    color: rgba(5, 10, 4, 0.5);
 }
 
 /* ============================================
-   EARNINGS STATS
+   OVERVIEW — STAT TILES
    ============================================ */
 
 .rider-earnings-stats {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 16px;
-    margin-bottom: 24px;
 }
 
 .rider-earnings-stat {
@@ -166,6 +378,7 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
+    min-width: 0;
 }
 
 .rider-earnings-stat-label {
@@ -181,6 +394,9 @@
     font-weight: var(--font-weight-bold);
     color: var(--text);
     line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .rider-earnings-stat-hint {
@@ -189,7 +405,41 @@
 }
 
 /* ============================================
-   CHART
+   CARD SHELL
+   ============================================ */
+
+.rider-card {
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--gray-100);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.rider-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--gray-100);
+    background: var(--gray-50);
+    flex-shrink: 0;
+    gap: 12px;
+}
+
+.rider-card-header .heading-5 {
+    margin: 0;
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* ============================================
+   CHART PANEL
    ============================================ */
 
 .rider-chart-body {
@@ -200,7 +450,7 @@
     display: grid;
     grid-template-columns: auto 1fr;
     gap: 10px;
-    height: 220px;
+    height: 240px;
     position: relative;
 }
 
@@ -216,6 +466,10 @@
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
     line-height: 1;
+}
+
+.rider-chart-y-label {
+    white-space: nowrap;
 }
 
 .rider-chart-plot {
@@ -237,24 +491,16 @@
     bottom: 22px;
 }
 
-.rider-chart-plot .rider-chart-gridline:nth-child(1) {
+.rider-chart-plot .rider-chart-gridline:first-child {
     top: 0;
     bottom: auto;
 }
 
-.rider-chart-plot .rider-chart-gridline:nth-child(2) {
-    top: 25%;
-}
-
-.rider-chart-plot .rider-chart-gridline:nth-child(3) {
-    top: 50%;
-}
-
-.rider-chart-plot .rider-chart-gridline:nth-child(4) {
-    top: 75%;
-}
-
-.rider-chart-plot .rider-chart-gridline:nth-child(5) {
+.rider-chart-plot .rider-chart-gridline:nth-child(2) { top: 20%; }
+.rider-chart-plot .rider-chart-gridline:nth-child(3) { top: 40%; }
+.rider-chart-plot .rider-chart-gridline:nth-child(4) { top: 60%; }
+.rider-chart-plot .rider-chart-gridline:nth-child(5) { top: 80%; }
+.rider-chart-plot .rider-chart-gridline:last-child {
     top: auto;
     bottom: 22px;
 }
@@ -295,6 +541,7 @@
     min-height: 4px;
     background: linear-gradient(180deg, var(--secondary) 0%, var(--primary) 100%);
     border-radius: 6px 6px 3px 3px;
+    transition: filter 0.15s ease, box-shadow 0.15s ease;
 }
 
 .rider-chart-bar.is-empty {
@@ -320,7 +567,7 @@
 }
 
 /* ============================================
-   TRANSACTIONS
+   TRANSACTIONS PANEL
    ============================================ */
 
 .rider-txn-count {
@@ -375,11 +622,15 @@
 }
 
 .rider-txn-icon.credit img {
-    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
 }
 
 .rider-txn-icon.debit img {
-    filter: brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(600%) hue-rotate(330deg) brightness(90%) contrast(85%);
+    filter: brightness(0) saturate(100%)
+            invert(40%) sepia(90%) saturate(600%)
+            hue-rotate(330deg) brightness(90%) contrast(85%);
 }
 
 .rider-txn-info {
@@ -547,58 +798,306 @@
     color: var(--gray-500);
     margin: 0;
     max-width: 320px;
+    line-height: 1.5;
 }
 
 /* ============================================
    WITHDRAWAL MODAL
+   Scoped with the compound selector
+   `.modal.rider-withdraw-modal` so no shared
+   single-class rule from wallet.css can out-
+   cascade this block. Cascade contract:
+     420px width, 24px gutter on header + body + footer.
+   Values aligned 1:1 with the customer wallet
+   recharge modal (.wallet-modal-content and friends).
    ============================================ */
 
-.rider-withdraw-modal {
+/* ---- Root: width + max-width locked ---- */
+
+.modal.rider-withdraw-modal.modal-content,
+.rider-withdraw-modal .modal-content {
     width: 420px;
     max-width: calc(100vw - 40px);
 }
 
-.rider-withdraw-note {
+/* ---- Header: 24px gutter, title locked to --font-size-lg ---- */
+
+.modal.rider-withdraw-modal .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--gray-200);
+    flex-shrink: 0;
+}
+
+.modal.rider-withdraw-modal .modal-title {
+    margin: 0;
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    color: var(--text);
+}
+
+.modal.rider-withdraw-modal .modal-header .modal-title svg {
+    width: 20px;
+    height: 20px;
+    display: block;
+    flex-shrink: 0;
+    color: var(--primary);
+}
+
+.modal.rider-withdraw-modal .modal-close {
+    font-size: var(--font-size-2xl);
+    line-height: 1;
+    color: var(--gray-400);
+    padding: 0 var(--spacing-2);
+    cursor: pointer;
+    background: none;
+    border: none;
+    transition: color 0.15s ease;
+}
+
+.modal.rider-withdraw-modal .modal-close:hover {
+    color: var(--text);
+}
+
+/* ---- Body: 24px gutter, 20px vertical ---- */
+
+.modal.rider-withdraw-modal .modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+}
+
+/* ---- Footer: 24px gutter, equal buttons, neutral + primary ---- */
+
+.modal.rider-withdraw-modal .modal-footer {
+    display: flex;
+    gap: 12px;
+    padding: 16px 24px;
+    border-top: 1px solid var(--gray-200);
+    flex-shrink: 0;
+}
+
+.modal.rider-withdraw-modal .modal-footer .btn {
+    flex: 1;
+    padding: 12px 20px;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    border-radius: var(--radius-base);
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s ease;
+}
+
+.modal.rider-withdraw-modal .modal-footer .btn-secondary {
+    background: var(--black, #1a1a1a);
+    color: var(--white);
+}
+
+.modal.rider-withdraw-modal .modal-footer .btn-secondary:hover {
+    background: #000;
+    opacity: 0.9;
+}
+
+.modal.rider-withdraw-modal .modal-footer .btn-primary {
+    background: var(--primary);
+    color: var(--white);
+}
+
+.modal.rider-withdraw-modal .modal-footer .btn-primary:hover {
+    background: var(--primary-dark);
+}
+
+.modal.rider-withdraw-modal .modal-footer .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* ---- Lead-in note (single paragraph, no second hint) ---- */
+
+.modal.rider-withdraw-modal .rider-withdraw-note {
     font-size: var(--font-size-sm);
     color: var(--gray-600);
+    line-height: 1.6;
     margin: 0 0 16px 0;
 }
 
-.rider-withdraw-note strong {
+.modal.rider-withdraw-modal .rider-withdraw-note strong {
     color: var(--text);
+    font-weight: 600;
+}
+
+/* ---- Amount input with ₱ prefix (16px / 44px pair) ---- */
+
+.modal.rider-withdraw-modal .rider-withdraw-amount-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.modal.rider-withdraw-modal .rider-withdraw-amount-prefix {
+    position: absolute;
+    left: 16px;
+    font-size: var(--font-size-xl);
     font-weight: 700;
-}
-
-.rider-withdraw-hint {
-    font-size: var(--font-size-xs);
     color: var(--gray-500);
-    margin: 6px 0 0 0;
+    pointer-events: none;
+    user-select: none;
 }
 
-.rider-withdraw-error {
+.modal.rider-withdraw-modal .rider-withdraw-amount-input {
+    width: 100%;
+    padding: 14px 16px 14px 44px;
+    font-size: var(--font-size-2xl);
+    font-weight: 700;
+    color: var(--text);
+    background: var(--gray-50);
+    border: 2px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    font-family: inherit;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.modal.rider-withdraw-modal .rider-withdraw-amount-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: var(--white);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
+}
+
+.modal.rider-withdraw-modal .rider-withdraw-amount-input::-webkit-outer-spin-button,
+.modal.rider-withdraw-modal .rider-withdraw-amount-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* ---- Inline error: always reserves 16px, margin 0 0 12px 0 ---- */
+
+.modal.rider-withdraw-modal .rider-withdraw-error {
     font-size: var(--font-size-xs);
     color: var(--danger);
-    margin: 6px 0 0 0;
+    margin: 0 0 12px 0;
     min-height: 16px;
 }
 
+/* ---- Quick amounts: 4-col grid, flush with input, natural height ---- */
+
+.modal.rider-withdraw-modal .rider-withdraw-quick {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.modal.rider-withdraw-modal .rider-withdraw-quick-btn {
+    padding: 10px 8px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text);
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s ease;
+}
+
+.modal.rider-withdraw-modal .rider-withdraw-quick-btn:hover {
+    background: var(--gray-100);
+    border-color: var(--primary);
+    color: var(--primary-dark);
+}
+
+.modal.rider-withdraw-modal .rider-withdraw-quick-btn:active {
+    transform: scale(0.97);
+}
+
 /* ============================================
-   RESPONSIVE
+   TOAST — class-based, no inline styles from JS
+   ============================================ */
+
+.rider-toast {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    padding: 12px 20px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    z-index: 9999;
+    max-width: 360px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    transform: translateX(120%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.rider-toast.is-visible {
+    transform: translateX(0);
+}
+
+.rider-toast.success {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.rider-toast.error {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.rider-toast.info {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+/* ============================================
+   RESPONSIVE — TABLET (≤ 992px)
    ============================================ */
 
 @media (max-width: 992px) {
     .rider-earnings-stats {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
+
+/* ============================================
+   RESPONSIVE — TABLET PORTRAIT (≤ 768px)
+   ============================================ */
 
 @media (max-width: 768px) {
     .rider-earnings-page {
         padding: 16px 0 32px 0;
     }
 
-    .rider-page-header .heading-2 {
-        font-size: var(--font-size-2xl);
+    .page-title-header h1 {
+        font-size: var(--font-size-xl);
+    }
+
+    .page-title-header .back-btn {
+        padding: 8px 14px;
+        font-size: var(--font-size-xs);
+    }
+
+    .page-title-header .back-btn-icon {
+        width: 16px;
+        height: 16px;
+    }
+
+    .rider-earnings-tab {
+        padding: 10px 14px;
+        font-size: var(--font-size-xs);
+    }
+
+    .rider-earnings-tab-icon {
+        width: 14px;
+        height: 14px;
     }
 
     .rider-balance-card {
@@ -620,7 +1119,7 @@
     }
 
     .rider-weekly-chart {
-        height: 180px;
+        height: 200px;
     }
 
     .rider-txn-row {
@@ -639,7 +1138,44 @@
     }
 }
 
+/* ============================================
+   RESPONSIVE — MOBILE (≤ 480px)
+   ============================================ */
+
 @media (max-width: 480px) {
+    .rider-earnings-page .container {
+        padding: 0 12px;
+    }
+
+    .page-title-header h1 {
+        font-size: var(--font-size-lg);
+    }
+
+    .page-title-header-top {
+        gap: 10px;
+    }
+
+    .page-title-header .back-btn {
+        padding: 8px 12px;
+        font-size: var(--font-size-xs);
+    }
+
+    .rider-earnings-tabs {
+        padding: 3px;
+    }
+
+    .rider-earnings-tab {
+        flex-direction: column;
+        gap: 4px;
+        padding: 8px 10px;
+        font-size: 11px;
+    }
+
+    .rider-earnings-tab-icon {
+        width: 16px;
+        height: 16px;
+    }
+
     .rider-earnings-stats {
         grid-template-columns: 1fr 1fr;
         gap: 10px;
@@ -651,6 +1187,30 @@
 
     .rider-earnings-stat-value {
         font-size: var(--font-size-base);
+    }
+
+    .rider-balance-card {
+        padding: 20px;
+    }
+
+    .rider-balance-amount {
+        font-size: 1.75rem;
+    }
+
+    .rider-weekly-chart {
+        height: 170px;
+    }
+
+    .rider-chart-y-axis {
+        font-size: 10px;
+    }
+
+    .rider-chart-label {
+        font-size: 10px;
+    }
+
+    .rider-chart-columns {
+        gap: 6px;
     }
 
     .rider-txn-row {
@@ -678,5 +1238,65 @@
         justify-content: space-between;
         width: 100%;
         align-items: center;
+    }
+
+    /* ---- Withdrawal modal on mobile ---- */
+
+    .modal.rider-withdraw-modal.modal-content,
+    .rider-withdraw-modal .modal-content {
+        width: 100%;
+        max-width: calc(100vw - 24px);
+    }
+
+    .modal.rider-withdraw-modal .modal-header {
+        padding: 14px 16px;
+    }
+
+    .modal.rider-withdraw-modal .modal-body {
+        padding: 16px;
+    }
+
+    .modal.rider-withdraw-modal .modal-footer {
+        flex-direction: column;
+        padding: 12px 16px;
+    }
+
+    .modal.rider-withdraw-modal .modal-footer .btn {
+        width: 100%;
+    }
+
+    .modal.rider-withdraw-modal .rider-withdraw-amount-input {
+        font-size: var(--font-size-xl);
+        padding: 12px 14px 12px 40px;
+    }
+
+    .modal.rider-withdraw-modal .rider-withdraw-amount-prefix {
+        left: 14px;
+        font-size: var(--font-size-lg);
+    }
+
+    .modal.rider-withdraw-modal .rider-withdraw-quick {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* ============================================
+   REDUCED MOTION
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    .rider-earnings-panel.active {
+        animation: none !important;
+    }
+
+    .rider-earnings-tab,
+    .rider-earnings-tab-icon,
+    .rider-balance-card .btn-primary,
+    .rider-chart-bar,
+    .rider-pagination-link,
+    .modal.rider-withdraw-modal .rider-withdraw-quick-btn,
+    .modal.rider-withdraw-modal .rider-withdraw-amount-input,
+    .rider-toast {
+        transition: none !important;
     }
 }

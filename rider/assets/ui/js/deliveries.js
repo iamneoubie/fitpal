@@ -1,12 +1,27 @@
 /**
  * FitPal Rider Deliveries JavaScript
  *
- * Handles:
- *   - Delivery status updates (accept_assignment / decline_assignment
- *     / delivered) through a styled confirm modal
- *   - Chat modal open/close
- *   - Chat tab switching
- *   - Message loading and sending
+ * Scope
+ * -----
+ * This file drives ONLY the delivery-status confirm modal on the
+ * deliveries page:
+ *
+ *   - Accept Assignment   → confirm → rider-handler.php (accept_assignment)
+ *   - Decline Assignment  → confirm → rider-handler.php (decline_assignment)
+ *   - Mark Delivered      → confirm → rider-handler.php (delivered)
+ *
+ * Everything chat-related (open/close/tabs/send/read/delta poll)
+ * is owned by rider/assets/ui/js/rider-chat-modal.js and is loaded
+ * once per authenticated rider page by the shared include. This
+ * file does not reference #riderChatModal, its tabs, its input, or
+ * its handler at all.
+ *
+ * Tab behaviour
+ * -------------
+ * The three tabs on this page are real anchors (?tab=active|assigned|
+ * history). Clicking one performs a server-side render of the target
+ * tab, so no client-side tab switching is needed here. The panel
+ * enter animation is a pure CSS concern; this file has no role in it.
  *
  * Confirm flow
  * ------------
@@ -25,10 +40,25 @@
  * classes on the button itself, so the button is never without a
  * valid style between frames.
  *
+ * The confirm button is disabled while a request is in flight so a
+ * double-click cannot fire two accept/decline/delivered POSTs.
+ *
  * @package FitPal
- * @version 4.2 — Adds data-icon to the confirm modal. Confirms the
- *                variant and icon via modal attributes, not button
- *                classes.
+ * @version 5.1 — No structural change. The revision to the page
+ *                (three tabs, Active as default) does not touch the
+ *                confirm-modal flow. The file is re-output here to
+ *                confirm that the confirm handler still binds to
+ *                .delivery-status-btn across all tabs — the
+ *                delegated scan happens once on DOMContentLoaded
+ *                and the buttons exist in the DOM regardless of
+ *                which tab is active (only one panel renders at a
+ *                time, but each panel's buttons are inside that
+ *                panel's markup, so a full page load re-scans).
+ *
+ *                (5.0: chat handling removed; shared
+ *                rider-chat-modal.js owns every chat behaviour.
+ *                4.2: data-icon added. 4.1: confirm modal button
+ *                colour driven by modal attributes.)
  */
 
 (function () {
@@ -42,10 +72,10 @@
         // ============================================
         // CONFIRM MODAL
         // ============================================
-        var confirmModal = document.getElementById('riderConfirmModal');
-        var confirmTitleEl = document.getElementById('riderConfirmTitle');
+        var confirmModal     = document.getElementById('riderConfirmModal');
+        var confirmTitleEl   = document.getElementById('riderConfirmTitle');
         var confirmMessageEl = document.getElementById('riderConfirmMessage');
-        var confirmBtn = document.getElementById('riderConfirmBtn');
+        var confirmBtn       = document.getElementById('riderConfirmBtn');
 
         // Callback stored while the modal is open. Null when closed.
         var pendingConfirm = null;
@@ -57,6 +87,7 @@
             if (confirmMessageEl) confirmMessageEl.textContent = opts.message || '';
 
             confirmBtn.textContent = opts.label || 'Confirm';
+            confirmBtn.disabled    = false;
 
             // Presentation is expressed entirely on the modal. CSS
             // reads these two attributes to pick the icon and the
@@ -82,8 +113,6 @@
                 if (!confirmModal.classList.contains('is-open')) {
                     confirmModal.style.display = 'none';
                     document.body.style.overflow = '';
-                    // Reset so a later open that forgets to set these
-                    // does not inherit a prior decline state.
                     confirmModal.dataset.variant = 'primary';
                     confirmModal.dataset.icon    = 'accept';
                 }
@@ -101,8 +130,23 @@
         if (confirmBtn) {
             confirmBtn.addEventListener('click', function () {
                 var fn = pendingConfirm;
-                closeConfirmModal();
-                if (typeof fn === 'function') fn();
+                if (typeof fn !== 'function') {
+                    closeConfirmModal();
+                    return;
+                }
+
+                // Keep the modal open while the request runs so the
+                // rider sees the button reflect the in-flight state.
+                // The callback closes it on completion.
+                confirmBtn.disabled    = true;
+                confirmBtn.textContent = 'Processing…';
+
+                fn(function done() {
+                    closeConfirmModal();
+                }, function failed() {
+                    confirmBtn.disabled    = false;
+                    confirmBtn.textContent = confirmBtn.dataset.originalLabel || 'Confirm';
+                });
             });
         }
 
@@ -132,16 +176,17 @@
                     label:   label,
                     variant: variant,
                     icon:    icon,
-                    onConfirm: function () {
-                        submitDeliveryAction(clickedButton, orderId, action);
+                    onConfirm: function (done, failed) {
+                        submitDeliveryAction(clickedButton, orderId, action, done, failed);
                     }
                 });
             });
         });
 
-        function submitDeliveryAction(btn, orderId, action) {
-            btn.disabled = true;
+        function submitDeliveryAction(btn, orderId, action, done, failed) {
             var originalText = btn.textContent;
+
+            btn.disabled    = true;
             btn.textContent = 'Updating…';
 
             var body = new URLSearchParams();
@@ -162,327 +207,31 @@
                 .then(function (data) {
                     if (data && data.status === 'success') {
                         showToast(data.message || 'Delivery updated', 'success');
-                        setTimeout(function () { window.location.reload(); }, 800);
-                    } else {
-                        showToast((data && data.message) || 'Could not update delivery', 'error');
-                        btn.disabled = false;
-                        btn.textContent = originalText;
+                        // Close the modal first so the page behind it
+                        // is not covered while we reload.
+                        if (typeof done === 'function') done();
+                        setTimeout(function () { window.location.reload(); }, 700);
+                        return;
                     }
-                })
-                .catch(function () {
-                    showToast('Network error. Please try again.', 'error');
-                    btn.disabled = false;
+
+                    btn.disabled    = false;
                     btn.textContent = originalText;
-                });
-        }
 
-        // ============================================
-        // CHAT MODAL
-        // ============================================
-        var chatModal = document.getElementById('riderChatModal');
-        var chatClose = document.getElementById('riderChatClose');
-        var chatSubtitle = document.getElementById('riderChatSubtitle');
-        var chatMessages = document.getElementById('riderChatMessages');
-        var chatForm = document.getElementById('riderChatForm');
-        var chatInput = document.getElementById('riderChatInput');
-        var chatOrderIdInput = document.getElementById('riderChatOrderId');
-        var chatRecipientInput = document.getElementById('riderChatRecipient');
-        var chatTabs = document.querySelectorAll('.rider-chat-tab');
-
-        var currentOrderId = 0;
-        var currentRecipient = 'customer';
-        var pollTimer = null;
-        var knownMessageIds = {};
-
-        function openChatModal(orderId, customerName, restaurantName) {
-            if (!chatModal) return;
-
-            currentOrderId = orderId;
-            currentRecipient = 'customer';
-
-            if (chatOrderIdInput) chatOrderIdInput.value = String(orderId);
-            if (chatRecipientInput) chatRecipientInput.value = 'customer';
-            if (chatSubtitle) {
-                chatSubtitle.textContent = 'Order #' + orderId + ' — ' +
-                    customerName + ' / ' + restaurantName;
-            }
-
-            chatTabs.forEach(function (tab) {
-                tab.classList.toggle('active', tab.dataset.recipient === 'customer');
-            });
-
-            knownMessageIds = {};
-
-            document.body.style.overflow = 'hidden';
-            chatModal.style.display = 'flex';
-            void chatModal.offsetWidth;
-            chatModal.classList.add('active');
-
-            loadMessages();
-            startPolling();
-
-            setTimeout(function () { if (chatInput) chatInput.focus(); }, 100);
-        }
-
-        function closeChatModal() {
-            if (!chatModal) return;
-
-            chatModal.classList.remove('active');
-            setTimeout(function () {
-                if (!chatModal.classList.contains('active')) {
-                    chatModal.style.display = 'none';
-                    document.body.style.overflow = '';
-                }
-            }, 200);
-
-            stopPolling();
-            currentOrderId = 0;
-        }
-
-        document.querySelectorAll('.delivery-chat-btn').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                var orderId = parseInt(this.dataset.orderId, 10) || 0;
-                var customerName = this.dataset.customerName || 'Customer';
-                var restaurantName = this.dataset.restaurantName || 'Restaurant';
-                if (orderId > 0) openChatModal(orderId, customerName, restaurantName);
-            });
-        });
-
-        if (chatClose) chatClose.addEventListener('click', closeChatModal);
-        if (chatModal) {
-            chatModal.addEventListener('click', function (e) {
-                if (e.target === chatModal || e.target.classList.contains('modal-overlay')) {
-                    closeChatModal();
-                }
-            });
-        }
-
-        // Escape closes the confirm modal first if open, otherwise the
-        // chat modal. Prevents both from closing on a single press.
-        document.addEventListener('keydown', function (e) {
-            if (e.key !== 'Escape') return;
-
-            if (confirmModal && confirmModal.classList.contains('is-open')) {
-                closeConfirmModal();
-                return;
-            }
-
-            if (chatModal && chatModal.classList.contains('active')) {
-                closeChatModal();
-            }
-        });
-
-        // ============================================
-        // CHAT TABS
-        // ============================================
-        chatTabs.forEach(function (tab) {
-            tab.addEventListener('click', function () {
-                var recipient = this.dataset.recipient || 'customer';
-                if (recipient === currentRecipient) return;
-
-                currentRecipient = recipient;
-                if (chatRecipientInput) chatRecipientInput.value = recipient;
-
-                chatTabs.forEach(function (t) {
-                    t.classList.toggle('active', t === tab);
-                });
-
-                knownMessageIds = {};
-                loadMessages();
-            });
-        });
-
-        // ============================================
-        // CHAT FORM SUBMIT
-        // ============================================
-        if (chatForm) {
-            chatForm.addEventListener('submit', function (e) {
-                e.preventDefault();
-
-                var message = (chatInput.value || '').trim();
-                if (message === '' || currentOrderId <= 0) return;
-
-                chatInput.value = '';
-                chatInput.disabled = true;
-
-                var body = new URLSearchParams();
-                body.append('csrf_token', CSRF_TOKEN);
-                body.append('action', 'send_message');
-                body.append('order_id', String(currentOrderId));
-                body.append('recipient_type', currentRecipient);
-                body.append('content', message);
-
-                fetch('../backend/handlers/message-handler.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: body.toString(),
-                    credentials: 'same-origin'
-                })
-                    .then(function (res) { return res.json(); })
-                    .then(function (data) {
-                        chatInput.disabled = false;
-                        if (data && data.status === 'success') {
-                            if (data.message_data) {
-                                appendMessage(data.message_data);
-                            } else {
-                                loadMessages();
-                            }
-                            chatInput.focus();
-                        } else {
-                            showToast((data && data.message) || 'Could not send message', 'error');
-                            chatInput.value = message;
-                        }
-                    })
-                    .catch(function () {
-                        chatInput.disabled = false;
-                        showToast('Network error. Please try again.', 'error');
-                        chatInput.value = message;
-                    });
-            });
-        }
-
-        // ============================================
-        // MESSAGE LOADING
-        // ============================================
-        function loadMessages() {
-            if (currentOrderId <= 0 || !chatMessages) return;
-
-            var body = new URLSearchParams();
-            body.append('csrf_token', CSRF_TOKEN);
-            body.append('action', 'get_messages');
-            body.append('order_id', String(currentOrderId));
-            body.append('with_type', currentRecipient);
-
-            fetch('../backend/handlers/message-handler.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: body.toString(),
-                credentials: 'same-origin'
-            })
-                .then(function (res) { return res.json(); })
-                .then(function (data) {
-                    if (data && data.status === 'success') {
-                        renderMessages(data.messages || []);
-                    } else {
-                        renderEmpty('Could not load messages.');
-                    }
+                    showToast((data && data.message) || 'Could not update delivery', 'error');
+                    if (typeof failed === 'function') failed();
                 })
                 .catch(function () {
-                    renderEmpty('Network error.');
+                    btn.disabled    = false;
+                    btn.textContent = originalText;
+
+                    showToast('Network error. Please try again.', 'error');
+                    if (typeof failed === 'function') failed();
                 });
         }
 
-        function renderMessages(messages) {
-            if (!chatMessages) return;
-
-            if (messages.length === 0) {
-                renderEmpty('No messages yet. Start the conversation.');
-                return;
-            }
-
-            chatMessages.innerHTML = '';
-            messages.forEach(function (msg) {
-                appendMessage(msg, true);
-            });
-
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-
-        function renderEmpty(text) {
-            if (!chatMessages) return;
-            chatMessages.innerHTML = '<div class="rider-chat-empty">' + escapeHtml(text) + '</div>';
-        }
-
-        function appendMessage(msg, skipScroll) {
-            if (!chatMessages || !msg) return;
-
-            var msgId = msg.message_id || (Date.now() + Math.random());
-            if (knownMessageIds[msgId]) return;
-            knownMessageIds[msgId] = true;
-
-            var empty = chatMessages.querySelector('.rider-chat-empty');
-            if (empty) empty.remove();
-
-            var isSent = msg.is_sent === true ||
-                (msg.sender_type === 'delivery_rider' && msg.is_own === true) ||
-                msg.is_own === true;
-
-            var div = document.createElement('div');
-            div.className = 'rider-chat-message ' + (isSent ? 'rider-chat-message-sent' : 'rider-chat-message-received');
-
-            var senderLabel = '';
-            if (!isSent) {
-                senderLabel = msg.sender_label || formatSenderType(msg.sender_type);
-            }
-
-            var timeStr = formatMessageTime(msg.created_at);
-
-            var html = '';
-            if (senderLabel) {
-                html += '<span class="rider-chat-message-sender">' + escapeHtml(senderLabel) + '</span>';
-            }
-            html += '<span class="rider-chat-message-text">' + escapeHtml(msg.content || '') + '</span>';
-            html += '<span class="rider-chat-message-time">' + escapeHtml(timeStr) + '</span>';
-
-            div.innerHTML = html;
-            chatMessages.appendChild(div);
-
-            if (!skipScroll) {
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-            }
-        }
-
-        function formatSenderType(type) {
-            return ({
-                'customer': 'Customer',
-                'restaurant_account': 'Kitchen',
-                'delivery_rider': 'You',
-                'administrator': 'Support',
-                'system': 'System'
-            })[type] || 'User';
-        }
-
-        function formatMessageTime(dateStr) {
-            if (!dateStr) return '';
-            var ts = new Date(dateStr.replace(' ', 'T'));
-            if (isNaN(ts.getTime())) return dateStr;
-            return ts.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-        }
-
         // ============================================
-        // POLLING
+        // TOAST
         // ============================================
-        function startPolling() {
-            stopPolling();
-            pollTimer = setInterval(function () {
-                if (currentOrderId > 0 && chatModal && chatModal.classList.contains('active')) {
-                    loadMessages();
-                }
-            }, 8000);
-        }
-
-        function stopPolling() {
-            if (pollTimer) {
-                clearInterval(pollTimer);
-                pollTimer = null;
-            }
-        }
-
-        // ============================================
-        // HELPERS
-        // ============================================
-        function escapeHtml(text) {
-            var div = document.createElement('div');
-            div.textContent = String(text == null ? '' : text);
-            return div.innerHTML;
-        }
-
         function showToast(message, type) {
             var toast = document.getElementById('riderToast');
             if (!toast) {
@@ -501,13 +250,13 @@
 
             var palette = {
                 success: ['#d1fae5', '#065f46'],
-                error: ['#fee2e2', '#991b1b'],
-                info: ['#dbeafe', '#1e40af']
+                error:   ['#fee2e2', '#991b1b'],
+                info:    ['#dbeafe', '#1e40af']
             };
             var colors = palette[type] || palette.info;
             toast.style.background = colors[0];
-            toast.style.color = colors[1];
-            toast.textContent = message;
+            toast.style.color      = colors[1];
+            toast.textContent      = message;
 
             void toast.offsetWidth;
             toast.style.transform = 'translateX(0)';
@@ -517,5 +266,16 @@
                 toast.style.transform = 'translateX(120%)';
             }, 2800);
         }
+
+        // ============================================
+        // KEYBOARD
+        // ============================================
+        document.addEventListener('keydown', function (e) {
+            if (e.key !== 'Escape') return;
+            if (confirmModal && confirmModal.classList.contains('is-open')) {
+                closeConfirmModal();
+            }
+        });
+
     });
 })();

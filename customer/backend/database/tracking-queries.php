@@ -24,7 +24,18 @@
  * No $_POST, no header(), no echo.
  *
  * @package FitPal
- * @version 1.1 — Distinct placeholders in getOrderMessages.
+ * @version 1.2 — Adds the two chat-gating helpers the handler needs:
+ *                  - riderHasAcceptedOrder() — true only when the
+ *                    order is actually in transit or already
+ *                    delivered with a rider attached. Used to gate
+ *                    the customer's ability to message the rider.
+ *                  - getOrderMessagesSince() — delta fetch for the
+ *                    polling path. Returns only rows whose message_id
+ *                    is strictly greater than the client's last known
+ *                    id, so an idle poll transfers nothing and the
+ *                    client never re-renders the whole list.
+ *
+ *                (1.1: Distinct placeholders in getOrderMessages.)
  */
 
 declare(strict_types=1);
@@ -152,7 +163,79 @@ function getTrackingOrderTotals(PDO $db, int $orderId): array|false
 }
 
 /* ---------------------------------------------------------------
- * MESSAGES
+ * CHAT GATING
+ * --------------------------------------------------------------- */
+
+/**
+ * True when the assigned rider has actually accepted the order —
+ * meaning the order is in 'delivering' or 'delivered' AND a rider
+ * is attached.
+ *
+ * Why this exists:
+ *   The kitchen sets orders.delivery_rider_id the moment it assigns
+ *   a rider, but the rider may still decline. During 'rider_pending'
+ *   the customer should not be able to start a conversation with
+ *   someone who may walk away. Only once the rider has accepted
+ *   (order_status = 'delivering' or 'delivered') does messaging the
+ *   rider become meaningful.
+ *
+ * @param PDO $db
+ * @param int $orderId
+ * @return bool
+ */
+function riderHasAcceptedOrder(PDO $db, int $orderId): bool
+{
+    if ($orderId <= 0) {
+        return false;
+    }
+
+    $stmt = $db->prepare(
+        "SELECT 1
+           FROM orders
+          WHERE order_id = :order_id
+            AND delivery_rider_id IS NOT NULL
+            AND order_status IN ('delivering', 'delivered')
+          LIMIT 1"
+    );
+    $stmt->execute([':order_id' => $orderId]);
+    return $stmt->fetchColumn() !== false;
+}
+
+/**
+ * True when the order is in a state that still permits messages to
+ * the kitchen. Cancelled and refunded orders are closed: the kitchen
+ * has no reason to keep talking to the customer and the customer has
+ * no reason to keep talking to the kitchen. Everything else — from
+ * 'pending' through 'delivered' — is open for kitchen messaging.
+ *
+ * @param PDO $db
+ * @param int $orderId
+ * @return bool
+ */
+function orderAllowsKitchenMessaging(PDO $db, int $orderId): bool
+{
+    if ($orderId <= 0) {
+        return false;
+    }
+
+    $stmt = $db->prepare(
+        "SELECT order_status
+           FROM orders
+          WHERE order_id = :order_id
+          LIMIT 1"
+    );
+    $stmt->execute([':order_id' => $orderId]);
+    $status = $stmt->fetchColumn();
+
+    if ($status === false) {
+        return false;
+    }
+
+    return !in_array((string)$status, ['cancelled', 'refunded'], true);
+}
+
+/* ---------------------------------------------------------------
+ * MESSAGES — FULL LOAD
  * --------------------------------------------------------------- */
 
 /**
@@ -163,6 +246,10 @@ function getTrackingOrderTotals(PDO $db, int $orderId): array|false
  *
  * Uses distinct placeholder names for the same value because native
  * PDO prepares reject a repeated named placeholder.
+ *
+ * This function returns the full conversation and is only used for
+ * the initial load when the chat modal is first opened. Subsequent
+ * polls use getOrderMessagesSince().
  *
  * @param PDO $db
  * @param int $orderId
@@ -203,6 +290,78 @@ function getOrderMessages(
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
+/* ---------------------------------------------------------------
+ * MESSAGES — DELTA FETCH
+ * --------------------------------------------------------------- */
+
+/**
+ * Fetch only the messages for a channel whose message_id is strictly
+ * greater than $sinceId.
+ *
+ * This is the polling path. The client sends the highest message_id
+ * it already holds; the handler returns only rows that came after
+ * it. An idle conversation with no new messages returns an empty
+ * array after a single indexed lookup on message_id — no GROUP BY,
+ * no JOIN, no full-table scan. That is what keeps the 5-second poll
+ * cheap enough to run while the modal is open without the tab
+ * competing with the rest of the page for query time.
+ *
+ * When $sinceId is 0 the function returns the whole conversation,
+ * which is why the initial fetch can also route through this
+ * function and get a full list in one call. The two code paths
+ * share the same SELECT shape so message JSON is identical either
+ * way.
+ *
+ * Distinct placeholder names because native PDO prepares reject a
+ * repeated named placeholder.
+ *
+ * @param PDO $db
+ * @param int $orderId
+ * @param int $customerId
+ * @param string $recipientType
+ * @param int $sinceId  Last message_id the client already holds.
+ * @return array<int, array<string, mixed>>
+ */
+function getOrderMessagesSince(
+    PDO $db,
+    int $orderId,
+    int $customerId,
+    string $recipientType,
+    int $sinceId
+): array {
+    $stmt = $db->prepare(
+        "SELECT
+            m.message_id,
+            m.sender_type,
+            m.sender_id,
+            m.recipient_type,
+            m.recipient_id,
+            m.message_type,
+            m.content,
+            m.is_read,
+            m.created_at
+         FROM message m
+         WHERE m.order_id = :order_id
+           AND m.message_id > :since_id
+           AND (
+                (m.sender_type = 'customer' AND m.recipient_type = :channel_a)
+             OR (m.sender_type = :channel_b AND m.recipient_type = 'customer')
+           )
+         ORDER BY m.message_id ASC"
+    );
+    $stmt->execute([
+        ':order_id'  => $orderId,
+        ':since_id'  => $sinceId,
+        ':channel_a' => $recipientType,
+        ':channel_b' => $recipientType,
+    ]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/* ---------------------------------------------------------------
+ * MESSAGES — WRITES AND READS
+ * --------------------------------------------------------------- */
+
 /**
  * Insert a message from the customer to a counterparty.
  *
@@ -238,6 +397,42 @@ function createOrderMessage(
         ':content'        => $content,
     ]);
     return (int)$db->lastInsertId();
+}
+
+/**
+ * Fetch a single message by ID, scoped to the order.
+ *
+ * Used by the send path so the appended node on the client matches
+ * exactly what a subsequent delta fetch would have returned.
+ *
+ * @param PDO $db
+ * @param int $messageId
+ * @param int $orderId
+ * @return array<string, mixed>|false
+ */
+function getMessageById(PDO $db, int $messageId, int $orderId): array|false
+{
+    $stmt = $db->prepare(
+        "SELECT
+            message_id,
+            sender_type,
+            sender_id,
+            recipient_type,
+            recipient_id,
+            message_type,
+            content,
+            is_read,
+            created_at
+         FROM message
+         WHERE message_id = :message_id
+           AND order_id = :order_id
+         LIMIT 1"
+    );
+    $stmt->execute([
+        ':message_id' => $messageId,
+        ':order_id'   => $orderId,
+    ]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
 /**

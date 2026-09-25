@@ -6,16 +6,41 @@
  * (customer, rider, restaurant) remain intact.
  *
  * @package FitPal
- * @version 1.1 — Now also clears admin_csrf_token, the admin role's
- *                own CSRF key. Previously the token survived sign-out
- *                and would be inherited by whichever admin signed in
- *                next on the same browser. Clearing it here means the
- *                next sign-in generates a fresh token via sign-in.php,
- *                matching the "logout clears the role's own auth
- *                state" contract. The shared 'csrf_token' key is
- *                deliberately left alone — other roles in the same
- *                browser session may still have forms open that
- *                depend on it.
+ * @version 1.2 — The unset list now targets admin's own namespaced
+ *                keys after the sign-in handler was migrated to the
+ *                {role}_ prefix convention in v1.6.
+ *
+ *                Removed from the unset list:
+ *                    user_role   — no longer written by admin sign-in
+ *                    user_name   — replaced by admin_name
+ *                    user_email  — replaced by admin_email
+ *
+ *                Added to the unset list:
+ *                    admin_name  — new admin-scoped display key
+ *                    admin_email — new admin-scoped contact key
+ *
+ *                Previously this handler unset the generic user_*
+ *                trio along with administrator_id, admin_role, and
+ *                admin_csrf_token. Because those three generic keys
+ *                were also written and read by the customer, rider,
+ *                and restaurant roles — all sharing the same PHP
+ *                session — an admin signing out wiped the customer's
+ *                $_SESSION['user_name'] and left the customer
+ *                dashboard greeting empty until the next customer
+ *                page reload re-derived it. Removing them from this
+ *                handler's unset list closes that reverse-direction
+ *                collision.
+ *
+ *                The shared 'csrf_token' key is still deliberately
+ *                left alone. Admin never read it and never wrote it;
+ *                touching it here would risk breaking another role
+ *                whose form is already rendered in this same browser
+ *                session.
+ *
+ *                (1.1: Added admin_csrf_token to the unset list so
+ *                the next admin sign-in generates a fresh token via
+ *                sign-in.php instead of inheriting the previous
+ *                administrator's token.)
  */
 
 declare(strict_types=1);
@@ -26,10 +51,9 @@ if (session_status() === PHP_SESSION_NONE) {
 
 unset(
     $_SESSION['administrator_id'],
-    $_SESSION['user_role'],
-    $_SESSION['user_name'],
-    $_SESSION['user_email'],
     $_SESSION['admin_role'],
+    $_SESSION['admin_name'],
+    $_SESSION['admin_email'],
     $_SESSION['admin_csrf_token']
 );
 

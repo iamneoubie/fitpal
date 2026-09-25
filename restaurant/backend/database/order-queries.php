@@ -18,23 +18,42 @@
  * Assigning a rider does NOT immediately move the order to
  * 'delivering'. The kitchen sets the rider on the order and moves it
  * to 'rider_pending'. The rider confirms in their own portal, at
- * which point the order becomes 'delivering' and the rider's
- * is_available flips to 0. Declining returns the order to
- * 'preparing' with no rider attached.
+ * which point the order becomes 'delivering'. Declining returns the
+ * order to 'preparing' with no rider attached.
+ *
+ * Availability vs. assignment
+ * ---------------------------
+ * `delivery_rider_profile.is_available` is the rider's OWN toggle.
+ * It is set at sign-in (forced offline), toggled by the rider from
+ * the dashboard, and cleared on sign-out. The kitchen NEVER writes
+ * it. A rider who is online stays online across every delivery they
+ * accept — the "one active delivery per rider" rule is enforced by
+ * the locking busy-check inside assignRiderToOrder(), not by
+ * flipping is_available behind the rider's back.
  *
  * @package FitPal
- * @version 2.0 — Introduces the rider_pending handoff:
- *                  - getBranchKitchenOrders accepts any status list.
- *                  - getBranchCompletedOrders reads the closed bucket.
- *                  - assignRiderToOrder sets rider_pending and leaves
- *                    the rider available.
- *                  - reassignRiderToOrder applies the same model.
- *                  - releaseRiderFromOrder is the only place that
- *                    flips is_available back to 1.
- *                  - setOrderDelivering is removed; the rider accept
- *                    path owns that transition.
- *                  - riderHasActiveDelivery treats rider_pending as
- *                    busy.
+ * @version 3.0 — Fixes the double-booking race:
+ *                  - assignRiderToOrder() and reassignRiderToOrder()
+ *                    now lock the target rider's profile row
+ *                    (FOR UPDATE) and re-check the rider's active
+ *                    workload inside the transaction. The handler's
+ *                    pre-check in getAvailableRidersForBranch() is
+ *                    advisory only.
+ *                  - The availability flag is no longer touched by
+ *                    any kitchen-side write. acceptOrder() on the
+ *                    rider side no longer flips is_available either.
+ *                  - releaseRiderFromOrder() is now a no-op on the
+ *                    availability column; it exists only as a
+ *                    forward-compatible hook for any future cleanup
+ *                    the reassign path might need.
+ *
+ *                (2.0: Introduced the rider_pending handoff —
+ *                getBranchKitchenOrders accepts any status list;
+ *                getBranchCompletedOrders reads the closed bucket;
+ *                assignRiderToOrder sets rider_pending and leaves
+ *                the rider available; setOrderDelivering removed;
+ *                riderHasActiveDelivery treats rider_pending as
+ *                busy.)
  */
 
 declare(strict_types=1);
@@ -227,6 +246,13 @@ function getKitchenOrderItems(PDO $db, int $orderId, int $branchId): array
 
 /**
  * Fetch verified, available riders for a given branch.
+ *
+ * This is an ADVISORY list for the rider-selection modal. It is not
+ * the authoritative guard against double-booking — two kitchen tabs
+ * loading this list at the same moment will both see the same free
+ * rider. The real guard is inside assignRiderToOrder(), which locks
+ * the rider's profile row and re-checks their workload before it
+ * commits.
  *
  * A rider is eligible only when ALL of the following hold:
  *   1. delivery_rider.is_active = 1
@@ -650,13 +676,31 @@ function setOrderCancelledByRestaurant(PDO $db, int $orderId, int $branchId): bo
 /**
  * Attach a rider to an order and move it to 'rider_pending'.
  *
- * The rider's is_available flag is left untouched. They are only
- * marked unavailable once they accept the request in their own
- * portal, so the kitchen cannot accidentally tie up a rider who has
- * not agreed to the job.
+ * Double-booking guard
+ * --------------------
+ * This is the AUTHORITATIVE check against assigning one rider to two
+ * orders at the same time. It runs in three steps, all inside one
+ * transaction:
  *
- * The order's delivery_rider_id must currently be NULL and the order
- * must be in 'pending' or 'preparing'.
+ *   1. Re-read the order's ownership and state, and require it to be
+ *      'pending' or 'preparing' with delivery_rider_id NULL.
+ *   2. Lock the target rider's profile row with FOR UPDATE. Any
+ *      concurrent assignRiderToOrder() targeting the same rider
+ *      blocks here until the current transaction commits or rolls
+ *      back.
+ *   3. Under that lock, re-check whether the rider has any OTHER
+ *      order in 'preparing', 'rider_pending', or 'delivering'. The
+ *      current order is excluded. If a busy row is found, roll back
+ *      and return false.
+ *
+ * The handler's pre-check via getAvailableRidersForBranch() is only
+ * there to shape the modal. Two kitchen tabs can both pass that
+ * check and still race — step 2 above is what stops the second one.
+ *
+ * The rider's `is_available` flag is NEVER touched here. Availability
+ * is the rider's own toggle; the "one active delivery at a time"
+ * rule is enforced by the busy-check, not by locking the rider
+ * offline.
  *
  * @param PDO $db
  * @param int $orderId
@@ -673,6 +717,7 @@ function assignRiderToOrder(PDO $db, int $orderId, int $branchId, int $riderId):
     $db->beginTransaction();
 
     try {
+        // ---- 1. Order ownership + current state ----
         $current = getKitchenOrderOwnership($db, $orderId, $branchId);
 
         if ($current === false) {
@@ -690,6 +735,41 @@ function assignRiderToOrder(PDO $db, int $orderId, int $branchId, int $riderId):
             return false;
         }
 
+        // ---- 2. Lock the target rider's profile row ----
+        $riderLock = $db->prepare(
+            "SELECT delivery_rider_id
+               FROM delivery_rider_profile
+              WHERE delivery_rider_id = :rider_id
+              LIMIT 1
+              FOR UPDATE"
+        );
+        $riderLock->execute([':rider_id' => $riderId]);
+
+        if ($riderLock->fetchColumn() === false) {
+            $db->rollBack();
+            return false;
+        }
+
+        // ---- 3. Re-check workload under the lock ----
+        $busy = $db->prepare(
+            "SELECT 1
+               FROM orders
+              WHERE delivery_rider_id = :rider_id
+                AND order_status IN ('preparing','rider_pending','delivering')
+                AND order_id <> :order_id
+              LIMIT 1"
+        );
+        $busy->execute([
+            ':rider_id' => $riderId,
+            ':order_id' => $orderId,
+        ]);
+
+        if ($busy->fetchColumn() !== false) {
+            $db->rollBack();
+            return false;
+        }
+
+        // ---- 4. Write ----
         $orderStmt = $db->prepare(
             "UPDATE orders o
              JOIN queue_item qi ON qi.order_id = o.order_id
@@ -726,11 +806,20 @@ function assignRiderToOrder(PDO $db, int $orderId, int $branchId, int $riderId):
 /**
  * Reassign an order from its current rider to a new rider.
  *
- * The order must currently be attached to a rider and in
- * 'pending', 'preparing', or 'rider_pending'. Releasing the previous
- * rider restores their availability only if they are not attached to
- * any other active order. The new rider stays available until they
- * accept.
+ * Double-booking guard
+ * --------------------
+ * Same pattern as assignRiderToOrder(). The order must currently be
+ * attached to a rider and in 'pending', 'preparing', or
+ * 'rider_pending'. Both the previous rider's and the new rider's
+ * profile rows are locked FOR UPDATE (in ascending id order, to
+ * avoid deadlock between two concurrent reassignments that touch
+ * the same pair). Under the lock, the new rider's workload is
+ * re-checked and the write only proceeds if they have no other
+ * active order.
+ *
+ * The old rider is released via releaseRiderFromOrder(), which in
+ * this version does not touch is_available — it exists only as a
+ * forward-compatible hook.
  *
  * @param PDO $db
  * @param int $orderId
@@ -749,6 +838,7 @@ function reassignRiderToOrder(PDO $db, int $orderId, int $branchId, int $newRide
     $db->beginTransaction();
 
     try {
+        // ---- 1. Order ownership + current state ----
         $current = getKitchenOrderOwnership($db, $orderId, $branchId);
 
         if ($current === false) {
@@ -773,6 +863,46 @@ function reassignRiderToOrder(PDO $db, int $orderId, int $branchId, int $newRide
             return false;
         }
 
+        // ---- 2. Lock both rider profile rows in ascending id order ----
+        $lockIds = [$previousRiderId, $newRiderId];
+        sort($lockIds, SORT_NUMERIC);
+
+        $lockStmt = $db->prepare(
+            "SELECT delivery_rider_id
+               FROM delivery_rider_profile
+              WHERE delivery_rider_id = :rider_id
+              LIMIT 1
+              FOR UPDATE"
+        );
+
+        foreach ($lockIds as $lockId) {
+            $lockStmt->execute([':rider_id' => $lockId]);
+            if ($lockStmt->fetchColumn() === false) {
+                $db->rollBack();
+                return false;
+            }
+        }
+
+        // ---- 3. Re-check the NEW rider's workload under the lock ----
+        $busy = $db->prepare(
+            "SELECT 1
+               FROM orders
+              WHERE delivery_rider_id = :rider_id
+                AND order_status IN ('preparing','rider_pending','delivering')
+                AND order_id <> :order_id
+              LIMIT 1"
+        );
+        $busy->execute([
+            ':rider_id' => $newRiderId,
+            ':order_id' => $orderId,
+        ]);
+
+        if ($busy->fetchColumn() !== false) {
+            $db->rollBack();
+            return false;
+        }
+
+        // ---- 4. Write ----
         $orderStmt = $db->prepare(
             "UPDATE orders o
              JOIN queue_item qi ON qi.order_id = o.order_id
@@ -814,15 +944,18 @@ function reassignRiderToOrder(PDO $db, int $orderId, int $branchId, int $newRide
 }
 
 /**
- * Release a rider from an assignment, flipping is_available back to
- * 1 only when the rider has no other active delivery.
+ * Release a rider from an assignment.
  *
- * The excludeOrderId is the order the rider is being released from;
- * it is excluded from the active-delivery check so the rider is not
- * counted as busy on the order they are being removed from.
+ * In this version, availability is not touched. `is_available` is
+ * the rider's own toggle and must not be flipped by the kitchen —
+ * the "one active delivery" rule is enforced at assignment time by
+ * the locking busy-check, so there is no state to reset here.
  *
- * Designed to be called inside an open transaction. It does not open
- * or commit one of its own.
+ * The function is kept as a stub so that the call site in
+ * reassignRiderToOrder() stays meaningful if future cleanup logic
+ * (e.g. a cooldown timestamp, a notification trigger) needs a single
+ * place to hang off the release path. It is designed to be called
+ * inside an open transaction.
  *
  * @param PDO $db
  * @param int $riderId
@@ -831,19 +964,5 @@ function reassignRiderToOrder(PDO $db, int $orderId, int $branchId, int $newRide
  */
 function releaseRiderFromOrder(PDO $db, int $riderId, int $excludeOrderId = 0): void
 {
-    if ($riderId <= 0) {
-        return;
-    }
-
-    if (riderHasActiveDelivery($db, $riderId, $excludeOrderId)) {
-        return;
-    }
-
-    $stmt = $db->prepare(
-        "UPDATE delivery_rider_profile
-            SET is_available = 1
-          WHERE delivery_rider_id = :rider_id
-            AND is_available = 0"
-    );
-    $stmt->execute([':rider_id' => $riderId]);
+    // Intentionally empty. See docblock.
 }

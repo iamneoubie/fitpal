@@ -10,32 +10,73 @@
  * Assignment model
  * ----------------
  * The kitchen assigns a rider, moving the order to 'rider_pending'.
- * The rider accepts (order → 'delivering', rider locked) or declines
- * (order → 'preparing', rider freed). This handler is the only entry
- * point for those transitions.
+ * The rider accepts (order → 'delivering') or declines (order →
+ * 'preparing', rider freed). This handler is the only entry point for
+ * those transitions.
+ *
+ * Availability model
+ * ------------------
+ * toggle_availability is the ONLY action in this file that writes
+ * delivery_rider_profile.is_available. accept_assignment and
+ * delivered deliberately do NOT touch it: a rider who was online when
+ * they accepted an order stays online when they finish it. The
+ * "one active delivery per rider" rule is enforced at assignment
+ * time by the kitchen's order-queries.php::assignRiderToOrder(), not
+ * by flipping this flag.
+ *
+ * Payout model
+ * ------------
+ * delivered runs inside a single transaction that (a) flips the
+ * order to 'delivered' and (b) credits the rider's financial_account
+ * via creditRiderForDelivery() from rider-queries.php. If either
+ * write fails, both roll back. creditRiderForDelivery() is
+ * idempotent per order, so a retry after a transient failure cannot
+ * double-pay.
  *
  * @package FitPal
- * @version 4.1 — CSRF validation now compares against the rider
- *                role's own session key, rider_csrf_token, instead of
- *                the shared csrf_token. Requires
- *                includes/rider-csrf-token.php so the handler owns
- *                its CSRF bootstrap rather than depending on the
- *                page that rendered the form having already called
- *                getRiderCsrfToken(). On mismatch, rotates the token
- *                before returning the JSON error so a reload
- *                generates a fresh one instead of re-emitting the
- *                stale value. Only the rider's own key is touched;
- *                the shared csrf_token key and every other role's
- *                token are left alone.
+ * @version 5.1 — Moves the delivery payout constant to file scope.
+ *                PHP does not allow `const` inside a function body;
+ *                the previous revision declared it inside
+ *                handleDelivered(), which is a compile-time error
+ *                ("syntax error, unexpected token const") that took
+ *                the entire handler offline — every action on this
+ *                endpoint returned a 500 with an HTML error body,
+ *                which the dashboard's fetch() could not parse as
+ *                JSON. Moving the constant to file scope after
+ *                declare(strict_types=1) restores the whole file.
  *
- *                (4.0: Aligns with the rider_pending handoff —
- *                adds accept_assignment and decline_assignment,
- *                removes picked_up, tightens delivered, and makes
+ *                No behavior change for any action. The value is
+ *                still 50.00 and is still the single point of truth
+ *                on the write path. The dashboard / earnings stats
+ *                SQL in rider-queries.php still assumes the same flat
+ *                rate; if the schedule ever changes, both places
+ *                must move together.
+ *
+ *                (5.0: Delivery payout — handleDelivered() runs the
+ *                order update and rider credit in one transaction
+ *                with a FOR UPDATE lock on the order row. 4.1: CSRF
+ *                validation reads rider_csrf_token instead of the
+ *                shared csrf_token. 4.0: Introduced
+ *                accept_assignment and decline_assignment; removed
+ *                picked_up; tightened delivered; made
  *                toggle_availability refuse while a delivery is
  *                active.)
  */
 
 declare(strict_types=1);
+
+/**
+ * Flat amount credited to a rider for each completed delivery.
+ *
+ * File-scope constant because PHP forbids `const` inside a function
+ * body. Referenced by handleDelivered() below. The dashboard and
+ * earnings stats SQL in rider-queries.php assume the same value, so
+ * if this number ever changes, the queries that compute
+ * today_earnings, week_earnings, month_earnings, and total_earnings
+ * must change in lockstep — or be rewritten to SUM(transaction.amount)
+ * for the delivered rows.
+ */
+const RIDER_DELIVERY_PAYOUT = 50.00;
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -238,8 +279,10 @@ function handleUploadPicture(PDO $db, int $riderId): array
  *
  * Eligibility gate: verified, online, fewer than two committed
  * orders, and the order is actually sitting in rider_pending with
- * this rider's id on it. acceptOrder() performs the state change and
- * locks the rider.
+ * this rider's id on it. acceptOrder() performs the state change.
+ *
+ * The rider's is_available flag is NOT touched here. Availability is
+ * the rider's own toggle and must survive across deliveries.
  */
 function handleAcceptAssignment(PDO $db, int $riderId): array
 {
@@ -308,10 +351,23 @@ function handleDeclineAssignment(PDO $db, int $riderId): array
 }
 
 /**
- * Mark a delivering order as delivered.
+ * Mark a delivering order as delivered and credit the rider.
  *
- * Only succeeds when the order is in 'delivering' and the caller is
- * the assigned rider.
+ * Runs both writes inside one transaction:
+ *   1. orders.order_status → 'delivered', delivered_at → NOW()
+ *   2. insert a completed deposit into the rider's financial account
+ *
+ * The order row is locked FOR UPDATE before the update, so a
+ * concurrent cancel / reassign cannot race the delivered transition.
+ * If either write fails, the whole transaction rolls back. The
+ * rider credit itself is idempotent per order (see
+ * creditRiderForDelivery in rider-queries.php), so a retry after a
+ * transient failure cannot double-pay.
+ *
+ * The payout amount lives in the file-scope RIDER_DELIVERY_PAYOUT
+ * constant. The dashboard / earnings stats SQL in rider-queries.php
+ * assumes the same flat rate; if the schedule ever changes, both
+ * places must move together.
  */
 function handleDelivered(PDO $db, int $riderId): array
 {
@@ -320,34 +376,70 @@ function handleDelivered(PDO $db, int $riderId): array
         return ['status' => 'error', 'message' => 'Invalid order.'];
     }
 
-    $check = $db->prepare(
-        "SELECT 1 FROM orders
-         WHERE order_id = :order_id
-           AND delivery_rider_id = :rider_id
-           AND order_status = 'delivering'
-         LIMIT 1"
-    );
-    $check->execute([':order_id' => $orderId, ':rider_id' => $riderId]);
-    if ($check->fetchColumn() === false) {
-        return ['status' => 'error', 'message' => 'Order not eligible for delivery.'];
+    $db->beginTransaction();
+
+    try {
+        // Lock the order row so a concurrent cancel / reassign cannot
+        // race the delivered transition.
+        $check = $db->prepare(
+            "SELECT order_id
+               FROM orders
+              WHERE order_id = :order_id
+                AND delivery_rider_id = :rider_id
+                AND order_status = 'delivering'
+              LIMIT 1
+              FOR UPDATE"
+        );
+        $check->execute([
+            ':order_id' => $orderId,
+            ':rider_id' => $riderId,
+        ]);
+
+        if ($check->fetchColumn() === false) {
+            $db->rollBack();
+            return ['status' => 'error', 'message' => 'Order not eligible for delivery.'];
+        }
+
+        $update = $db->prepare(
+            "UPDATE orders
+                SET order_status = 'delivered',
+                    delivered_at = NOW(),
+                    updated_at   = NOW()
+              WHERE order_id = :order_id
+                AND delivery_rider_id = :rider_id
+                AND order_status = 'delivering'"
+        );
+        $update->execute([
+            ':order_id' => $orderId,
+            ':rider_id' => $riderId,
+        ]);
+
+        if ($update->rowCount() === 0) {
+            $db->rollBack();
+            return ['status' => 'error', 'message' => 'Could not complete the delivery. Please try again.'];
+        }
+
+        // Credit the rider. The trigger on `transaction` moves the
+        // balance; this call only inserts the row. If the order was
+        // already credited (e.g. an admin override ran first), the
+        // function returns false and nothing further happens.
+        creditRiderForDelivery($db, $riderId, $orderId, RIDER_DELIVERY_PAYOUT);
+
+        $db->commit();
+
+        return [
+            'status'  => 'success',
+            'message' => 'Delivery marked as complete! '
+                       . '₱' . number_format(RIDER_DELIVERY_PAYOUT, 2)
+                       . ' added to your wallet.',
+        ];
+
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
     }
-
-    $update = $db->prepare(
-        "UPDATE orders
-            SET order_status = 'delivered',
-                delivered_at = NOW(),
-                updated_at   = NOW()
-          WHERE order_id = :order_id
-            AND delivery_rider_id = :rider_id
-            AND order_status = 'delivering'"
-    );
-    $update->execute([':order_id' => $orderId, ':rider_id' => $riderId]);
-
-    if ($update->rowCount() === 0) {
-        return ['status' => 'error', 'message' => 'Could not complete the delivery. Please try again.'];
-    }
-
-    return ['status' => 'success', 'message' => 'Delivery marked as complete!'];
 }
 
 function handleWithdrawal(PDO $db, int $riderId): array

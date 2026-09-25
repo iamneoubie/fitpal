@@ -17,26 +17,61 @@
  *   - Loads the signed-in rider's display name, initial, and
  *     verification status when a session is present.
  *
- * Token assignment is unconditional. Earlier revisions only assigned
- * $csrfToken inside the authenticated branch, which forced
- * sign-in.php and sign-up.php to require the helper and assign the
- * variable themselves before including the header. That contract is
- * easy to forget and duplicated logic in three files. Assigning it
- * here — the same way every page must already include this file —
- * makes the header the single CSRF bootstrap point for the rider
- * role.
+ * Shared rider chrome
+ * -------------------
+ * On every authenticated rider page (i.e. when
+ * $_SESSION['delivery_rider_id'] is set), this header pulls in FOUR
+ * things:
  *
- * Rider users do NOT have a cart, so there is no cart badge and no
- * cart-count query here. The nav reflects rider-only surfaces:
- * Dashboard, Deliveries, Earnings, and Profile.
+ *   1. rider/includes/rider-chat-modal.php
+ *      The chat modal markup. One modal per page.
+ *
+ *   2. rider/includes/assignment-panel.php
+ *      The bottom-anchored assignment panel and its notification
+ *      modal. Chrome, not page content.
+ *
+ *   3. <script src="../assets/ui/js/rider-chat-modal.js">
+ *      Chat modal open/close/tabs/send/delta poll.
+ *
+ *   4. <script src="../assets/ui/js/assignment-panel.js">
+ *      Assignment panel polling, row rendering, accept/decline,
+ *      and the notification modal.
+ *
+ * Cache busting — the important part
+ * ----------------------------------
+ * Every stylesheet link and every script tag carries a ?v=<version>
+ * query string. The version is built from the file's modification
+ * time AND its byte size, not from modification time alone.
+ *
+ * Why both: some editors preserve a file's mtime when you save new
+ * content into it. When that happens, filemtime() returns the same
+ * value before and after an edit, the query string stays the same,
+ * and the browser keeps serving its cached copy of the old file —
+ * even though the new file is on disk. Appending filesize() means
+ * the version changes whenever the file's byte count changes, which
+ * it always does when you edit it.
+ *
+ * When APP_ENV=development is set in the environment, the version
+ * is a fresh time() on every request, so nothing is cached at all
+ * while you iterate.
+ *
+ * filemtime() and filesize() both return false if the file is
+ * missing. The '0' fallback keeps the tag well-formed in that case.
  *
  * @package FitPal
- * @version 1.6 — Assigns $csrfToken on both branches so anonymous
- *                pages (sign-in.php, sign-up.php) no longer need to
- *                require the helper or set the variable themselves.
- *                This removes the duplicated bootstrap that existed
- *                in sign-in.php, sign-up.php, and header.php. All
- *                other behavior is unchanged from v1.5.
+ * @version 2.5 — Version helper now appends filesize() so the query
+ *                string changes on every edit even when the editor
+ *                preserves mtime. Adds an APP_ENV=development
+ *                override that uses time() so nothing is cached
+ *                during iteration. This is what makes a saved CSS
+ *                change actually reach the browser on the next
+ *                reload.
+ *
+ *                (2.4: added the explicit comment block above the
+ *                two shared include script tags. 2.3: extended
+ *                mtime cache-busting to every script tag. 2.2:
+ *                extended mtime cache-busting to every stylesheet.
+ *                2.1: added the shared rider chrome.)
  */
 
 declare(strict_types=1);
@@ -78,6 +113,66 @@ function getRiderAssetBase(): string {
 }
 
 $assetBase = getRiderAssetBase();
+
+// ===== ASSET VERSION HELPER =====
+//
+// Every stylesheet link and every script tag carries ?v=<version>.
+// The version is built from mtime AND filesize so it changes on every
+// edit, even when the editor preserves the file's mtime. When
+// APP_ENV=development is set, the version is a fresh time() on every
+// request so nothing is cached at all.
+$isDevEnv = (getenv('APP_ENV') === 'development');
+
+/**
+ * Build the cache-busting version string for a local asset.
+ *
+ * @param string $absolutePath Absolute path to the file on disk.
+ * @return string Version string, safe to place in a URL query.
+ */
+function riderAssetVersion(string $absolutePath, bool $isDevEnv): string
+{
+    if ($isDevEnv) {
+        return (string)time();
+    }
+
+    if (!file_exists($absolutePath)) {
+        return '0';
+    }
+
+    $mtime = filemtime($absolutePath);
+    $size  = filesize($absolutePath);
+
+    if ($mtime === false) {
+        $mtime = 0;
+    }
+    if ($size === false) {
+        $size = 0;
+    }
+
+    return $mtime . '-' . $size;
+}
+
+// ===== ASSET PATHS =====
+$sharedGlobalCss  = __DIR__ . '/../../shared/assets/css/global.css';
+$sharedHeaderCss  = __DIR__ . '/../../shared/assets/css/header.css';
+$riderHeaderCss   = __DIR__ . '/../assets/css/header.css';
+$riderPanelCss    = __DIR__ . '/../assets/css/assignment-panel.css';
+
+$riderHeaderJs    = __DIR__ . '/../assets/ui/js/header.js';
+$riderLogoutJs    = __DIR__ . '/../assets/ui/js/logout.js';
+$riderChatJs      = __DIR__ . '/../assets/ui/js/rider-chat-modal.js';
+$riderPanelJs     = __DIR__ . '/../assets/ui/js/assignment-panel.js';
+
+// ===== ASSET VERSIONS =====
+$sharedGlobalVer  = riderAssetVersion($sharedGlobalCss,  $isDevEnv);
+$sharedHeaderVer  = riderAssetVersion($sharedHeaderCss,  $isDevEnv);
+$riderHeaderVer   = riderAssetVersion($riderHeaderCss,   $isDevEnv);
+$riderPanelVer    = riderAssetVersion($riderPanelCss,    $isDevEnv);
+
+$riderHeaderJsVer = riderAssetVersion($riderHeaderJs,    $isDevEnv);
+$riderLogoutJsVer = riderAssetVersion($riderLogoutJs,    $isDevEnv);
+$riderChatJsVer   = riderAssetVersion($riderChatJs,      $isDevEnv);
+$riderPanelJsVer  = riderAssetVersion($riderPanelJs,     $isDevEnv);
 
 // ===== FETCH RIDER DATA (if logged in) =====
 $isLoggedIn   = false;
@@ -130,9 +225,19 @@ $pageCssMap = [
 
 $pageCssFile = $pageCssMap[$currentPage] ?? '';
 $pageCssPath = '';
+$pageCssVer  = '0';
 if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFile)) {
+    $pageCssFull = __DIR__ . '/../assets/css/' . $pageCssFile;
     $pageCssPath = '../assets/css/' . $pageCssFile;
+    $pageCssVer  = riderAssetVersion($pageCssFull, $isDevEnv);
 }
+
+// ===== EXPLICIT ENDPOINT PATHS =====
+//
+// Exposed to JS so neither shared script has to guess its own
+// relative path from its <script> src.
+$riderChatEndpoint       = '../../rider/backend/handlers/message-handler.php';
+$riderAssignmentEndpoint = '../../rider/backend/handlers/assignment-handler.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -146,12 +251,16 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
     <link rel="icon" type="image/x-icon" href="<?php echo $assetBase; ?>assets/images/brand/Logo.ico">
     <link rel="shortcut icon" href="<?php echo $assetBase; ?>assets/images/brand/Logo.ico">
 
-    <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/global.css">
-    <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/header.css">
-    <link rel="stylesheet" href="../assets/css/header.css">
+    <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/global.css?v=<?php echo $sharedGlobalVer; ?>">
+    <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/header.css?v=<?php echo $sharedHeaderVer; ?>">
+    <link rel="stylesheet" href="../assets/css/header.css?v=<?php echo $riderHeaderVer; ?>">
 
     <?php if (!empty($pageCssPath)): ?>
-    <link rel="stylesheet" href="<?php echo $pageCssPath; ?>">
+    <link rel="stylesheet" href="<?php echo $pageCssPath; ?>?v=<?php echo $pageCssVer; ?>">
+    <?php endif; ?>
+
+    <?php if ($isLoggedIn): ?>
+    <link rel="stylesheet" href="../assets/css/assignment-panel.css?v=<?php echo $riderPanelVer; ?>">
     <?php endif; ?>
 </head>
 
@@ -323,7 +432,53 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
         </div>
     </div>
 
+    <!-- ============================================
+         GLOBAL RIDER CONFIG
+         ============================================ -->
+    <script>
+    window.RIDER_CSRF_TOKEN = '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>';
+    window.RIDER_ASSET_BASE = '<?php echo $assetBase; ?>';
+    window.RIDER_CHAT_ENDPOINT = '<?php echo htmlspecialchars($riderChatEndpoint, ENT_QUOTES, 'UTF-8'); ?>';
+    window.RIDER_ASSIGNMENT_ENDPOINT = '<?php echo htmlspecialchars($riderAssignmentEndpoint, ENT_QUOTES, 'UTF-8'); ?>';
+    window.RIDER_ASSIGNMENT_CSRF = '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>';
+    </script>
+
     <main class="main-content" role="main">
 
-        <script src="../assets/ui/js/header.js" defer></script>
-        <script src="../assets/ui/js/logout.js" defer></script>
+        <script src="../assets/ui/js/header.js?v=<?php echo $riderHeaderJsVer; ?>" defer></script>
+        <script src="../assets/ui/js/logout.js?v=<?php echo $riderLogoutJsVer; ?>" defer></script>
+
+        <?php if ($isLoggedIn): ?>
+
+        <?php
+        // ============================================================
+        // SHARED RIDER CHROME
+        //
+        // Two includes and two scripts, loaded on every authenticated
+        // rider page. They own non-overlapping concerns:
+        //
+        //   rider-chat-modal.php + rider-chat-modal.js
+        //     → the chat modal, its open/close/tabs/send, its delta
+        //       poll, and the delegated [data-rider-chat-open]
+        //       listener that opens it from any page.
+        //
+        //   assignment-panel.php + assignment-panel.js
+        //     → the bottom-anchored assignment panel, its poll, its
+        //       row rendering, accept/decline, and the assignment
+        //       notification modal.
+        //
+        // Do NOT merge these files. Do NOT let one include a copy of
+        // the other.
+        // ============================================================
+
+        // 1. Chat modal markup. One instance per page.
+        require_once __DIR__ . '/rider-chat-modal.php';
+
+        // 2. Assignment panel markup + its notification modal.
+        require_once __DIR__ . '/assignment-panel.php';
+        ?>
+
+        <script src="../assets/ui/js/rider-chat-modal.js?v=<?php echo $riderChatJsVer; ?>" defer></script>
+        <script src="../assets/ui/js/assignment-panel.js?v=<?php echo $riderPanelJsVer; ?>" defer></script>
+
+        <?php endif; ?>

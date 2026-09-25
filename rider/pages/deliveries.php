@@ -2,29 +2,73 @@
 /**
  * FitPal Rider Deliveries Page
  *
- * Sections:
- *   1. Assigned to You  — orders the kitchen has handed to this
- *                          rider and that are waiting on an
- *                          accept / decline decision.
- *   2. Active           — orders in transit (rider accepted).
- *   3. History          — recently closed deliveries.
+ * Layout
+ * ------
+ * Three tabs, each a separate panel:
+ *
+ *   Active      The order the rider is currently running. This is
+ *               the default tab because it is what a rider opens
+ *               the page to check. Renders one card per in-transit
+ *               order (currently one, but the markup supports more
+ *               if the assignment cap changes). Actions: Call
+ *               Customer, Message, Mark Delivered.
+ *
+ *   Assigned    Orders the kitchen has handed to this rider and
+ *               that are waiting on an accept / decline decision.
+ *               This is the rider's own review surface — the
+ *               assignment panel at the bottom of the page does
+ *               notify and offer the same two actions, but a rider
+ *               who dismissed the notification, or who wants to
+ *               re-check details before deciding, needs a place to
+ *               see the offer in full. Actions: Decline, Accept.
+ *
+ *   History     Closed deliveries, read-only.
+ *
+ * Tab counts are shown as badges on each tab. The tab bar is
+ * styled like customer/pages/orders.php's filter tabs so both
+ * roles feel like the same product.
+ *
+ * Tab state
+ * ---------
+ * ?tab=active|assigned|history. Default is active. The value is
+ * validated against an allowlist so nothing user-supplied reaches
+ * the template raw.
+ *
+ * Panel enter animation
+ * ---------------------
+ * Only the .active panel runs the fade + slide-up keyframe
+ * declared in deliveries.css, so switching tabs reads as a
+ * content change rather than a full-page reload. The tab bar
+ * itself never animates, so the tap target stays exactly where
+ * the user left it.
+ *
+ * Empty-state routing
+ * -------------------
+ * When Active is empty but Assigned has rows, the Active panel
+ * shows a hint that points the rider at the Assigned tab. When
+ * Assigned is empty but the rider has no active work at all, the
+ * Active panel points at the assignment panel. History always
+ * renders its own empty state.
  *
  * Confirmation model
  * ------------------
- * Delivery actions open a styled confirm modal. The copy is authored
- * on each button via data-confirm-* attributes so the JS never
- * carries text. The modal carries two attributes:
+ * Delivery actions open a styled confirm modal. The copy is
+ * authored on each button via data-confirm-* attributes so the JS
+ * never carries text. The modal carries two attributes:
  *   - data-variant: "primary" or "danger" (drives button colour)
  *   - data-icon:    "accept" | "decline" | "delivered"
  *                   (drives which SVG is visible)
  *
- * Icon rule
- * ---------
- * Every icon file referenced below exists under
- * shared/assets/images/icons/. The three confirm-modal icons are:
- *   accept    -> verified-fill.svg
- *   decline   -> close-circle-fill.svg
- *   delivered -> verified-badge-fill.svg
+ * Chat modal
+ * ----------
+ * The chat modal is provided by rider/includes/rider-chat-modal.php,
+ * loaded on every authenticated rider page by header.php. This
+ * page's Message buttons use the delegated trigger contract:
+ *
+ *   data-rider-chat-open
+ *   data-rider-chat-order-id="<order_id>"
+ *   data-rider-chat-recipient="customer|restaurant_account"
+ *   data-rider-chat-subtitle="<display string>"
  *
  * Button rules
  * ------------
@@ -34,18 +78,23 @@
  * No transparent or outlined buttons are used on this page.
  *
  * @package FitPal
- * @version 3.6 — Corrected the docblock reference from
- *                includes/csrf-token.php to
- *                includes/rider-csrf-token.php, which is the file the
- *                header actually requires. No code change. (3.5:
- *                Removed the local CSRF block that wrote to the
- *                shared 'csrf_token' session key. The rider role's
- *                token is now generated in includes/header.php via
- *                includes/rider-csrf-token.php under
- *                'rider_csrf_token' and exposed as $csrfToken, so
- *                both the FITPAL_RIDER_DELIVERIES inline config and
- *                the delivery-status buttons carry the rider-scoped
- *                value.)
+ * @version 5.0 — Relaid out as three filter tabs with count
+ *                badges, matching the customer orders page pattern:
+ *                  - Active tab is now the default (was: Active
+ *                    section rendered below Assigned).
+ *                  - Assigned tab carries the pending decision
+ *                    cards.
+ *                  - History tab carries the closed deliveries.
+ *                Only the active panel renders; the other two
+ *                emit empty markup.
+ *                Added .rider-deliveries-panel.active fade-in so
+ *                a tab switch reads as a content change.
+ *
+ *                (4.1: stat strip removed, empty sections hidden.
+ *                4.0: chat modal extracted to shared include.
+ *                3.6: docblock corrected to rider-csrf-token.php.
+ *                3.5: local CSRF block removed; $csrfToken
+ *                inherited from header.php under rider_csrf_token.)
  */
 
 declare(strict_types=1);
@@ -68,20 +117,45 @@ $profile          = getRiderProfile($database_connection, $riderId) ?: [];
 $assignedOrders   = getAssignedOrders($database_connection, $riderId);
 $activeDeliveries = getRiderActiveDeliveries($database_connection, $riderId);
 $deliveryHistory  = getRiderDeliveryHistory($database_connection, $riderId, 10);
-$counts           = getRiderDeliveryCounts($database_connection, $riderId);
 
 $available  = (int)($profile['is_available'] ?? 0) === 1;
 $status     = (string)($profile['verification_status'] ?? 'pending');
 $isVerified = $status === 'verified';
 
-// $csrfToken is provided by header.php (rider_csrf_token).
+$assignedCount = count($assignedOrders);
+$activeCount   = count($activeDeliveries);
+$historyCount  = count($deliveryHistory);
 
+// ---------------------------------------------------------------
+// ACTIVE TAB
+// ---------------------------------------------------------------
+$allowedTabs = ['active', 'assigned', 'history'];
+$activeTab   = isset($_GET['tab']) ? strtolower(trim((string)$_GET['tab'])) : 'active';
+if (!in_array($activeTab, $allowedTabs, true)) {
+    $activeTab = 'active';
+}
+
+/**
+ * Build a URL for the given tab, preserving nothing else. Kept as
+ * a helper so the template doesn't hand-roll query strings.
+ */
+function deliveriesTabUrl(string $tab): string
+{
+    return 'deliveries.php?tab=' . urlencode($tab);
+}
+
+/**
+ * Format a date string for display on this page.
+ */
 function formatRiderDate(string $date): string
 {
     $ts = strtotime($date);
     return $ts !== false ? date('M d, g:i A', $ts) : $date;
 }
 
+/**
+ * Badge class for an order status.
+ */
 function getDeliveryStatusClass(string $status): string
 {
     return match ($status) {
@@ -96,6 +170,9 @@ function getDeliveryStatusClass(string $status): string
     };
 }
 
+/**
+ * Human label for an order status.
+ */
 function getDeliveryStatusLabel(string $status): string
 {
     return match ($status) {
@@ -116,17 +193,16 @@ require_once __DIR__ . '/../includes/header.php';
 <div class="content rider-deliveries-page">
     <div class="container">
 
-        <header class="rider-page-header">
-            <div>
-                <h1 class="heading-2">My <span>Deliveries</span></h1>
-                <p class="text-muted">Confirm assignments, manage active deliveries, and view your history</p>
+        <div class="page-title-header">
+            <div class="page-title-header-top">
+                <a href="dashboard.php" class="back-btn">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt="Back"
+                        class="back-btn-icon" width="20" height="20">
+                    <span>Back to Dashboard</span>
+                </a>
+                <h1>My Deliveries</h1>
             </div>
-            <div class="rider-page-actions">
-                <span class="badge <?php echo $available ? 'badge-success' : 'badge-secondary'; ?>">
-                    <?php echo $available ? 'Online' : 'Offline'; ?>
-                </span>
-            </div>
-        </header>
+        </div>
 
         <?php if (isset($_SESSION['rider_success'])): ?>
         <div class="alert alert-success" role="alert">
@@ -142,57 +218,243 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
         <?php endif; ?>
 
-        <section class="rider-delivery-stats">
-            <div class="rider-delivery-stat">
-                <span class="rider-delivery-stat-number"><?php echo count($assignedOrders); ?></span>
-                <span class="rider-delivery-stat-label">Awaiting You</span>
+        <!-- ============================================================
+             TAB BAR
+             Three filter tabs with count badges.
+             ============================================================ -->
+        <nav class="rider-deliveries-tabs" role="tablist" aria-label="Delivery sections">
+            <a href="<?php echo htmlspecialchars(deliveriesTabUrl('active'), ENT_QUOTES, 'UTF-8'); ?>"
+                class="rider-deliveries-tab <?php echo $activeTab === 'active' ? 'active' : ''; ?>" role="tab"
+                aria-selected="<?php echo $activeTab === 'active' ? 'true' : 'false'; ?>" aria-controls="panel-active"
+                id="tabBtnActive">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/riding-fill.svg" alt=""
+                    class="rider-deliveries-tab-icon"
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/car-fill.svg'">
+                <span>Active</span>
+                <?php if ($activeCount > 0): ?>
+                <span class="rider-deliveries-tab-count"><?php echo $activeCount; ?></span>
+                <?php endif; ?>
+            </a>
+
+            <a href="<?php echo htmlspecialchars(deliveriesTabUrl('assigned'), ENT_QUOTES, 'UTF-8'); ?>"
+                class="rider-deliveries-tab <?php echo $activeTab === 'assigned' ? 'active' : ''; ?>" role="tab"
+                aria-selected="<?php echo $activeTab === 'assigned' ? 'true' : 'false'; ?>"
+                aria-controls="panel-assigned" id="tabBtnAssigned">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/package.svg" alt=""
+                    class="rider-deliveries-tab-icon"
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/order.svg'">
+                <span>Assigned</span>
+                <?php if ($assignedCount > 0): ?>
+                <span class="rider-deliveries-tab-count rider-deliveries-tab-count-alert">
+                    <?php echo $assignedCount; ?>
+                </span>
+                <?php endif; ?>
+            </a>
+
+            <a href="<?php echo htmlspecialchars(deliveriesTabUrl('history'), ENT_QUOTES, 'UTF-8'); ?>"
+                class="rider-deliveries-tab <?php echo $activeTab === 'history' ? 'active' : ''; ?>" role="tab"
+                aria-selected="<?php echo $activeTab === 'history' ? 'true' : 'false'; ?>" aria-controls="panel-history"
+                id="tabBtnHistory">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/history-line.svg" alt=""
+                    class="rider-deliveries-tab-icon"
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/time-update.svg'">
+                <span>History</span>
+                <?php if ($historyCount > 0): ?>
+                <span class="rider-deliveries-tab-count"><?php echo $historyCount; ?></span>
+                <?php endif; ?>
+            </a>
+        </nav>
+
+        <!-- ============================================================
+             TAB: ACTIVE
+             ============================================================ -->
+        <section class="rider-deliveries-panel <?php echo $activeTab === 'active' ? 'active' : ''; ?>" id="panel-active"
+            role="tabpanel" aria-labelledby="tabBtnActive">
+            <?php if ($activeTab === 'active'): ?>
+
+            <?php if (empty($activeDeliveries)): ?>
+
+            <div class="rider-deliveries-empty">
+                <div class="rider-deliveries-empty-icon">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/riding-line.svg" alt=""
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/car-line.svg'">
+                </div>
+                <p class="rider-deliveries-empty-title">No active delivery</p>
+                <p class="rider-deliveries-empty-text">
+                    <?php if (!$isVerified): ?>
+                    Your account is pending verification. Active deliveries will appear here once you can go online.
+                    <?php elseif ($assignedCount > 0): ?>
+                    You have
+                    <?php echo $assignedCount; ?>
+                    assignment<?php echo $assignedCount === 1 ? '' : 's'; ?>
+                    waiting. Open the Assigned tab to accept one.
+                    <?php elseif ($available): ?>
+                    You're online. When the kitchen assigns you an order and you accept it, the delivery will appear
+                    here.
+                    <?php else: ?>
+                    Go online from the assignments panel at the bottom of the page to start receiving deliveries.
+                    <?php endif; ?>
+                </p>
+
+                <?php if ($assignedCount > 0): ?>
+                <a href="<?php echo htmlspecialchars(deliveriesTabUrl('assigned'), ENT_QUOTES, 'UTF-8'); ?>"
+                    class="btn btn-primary btn-sm">
+                    View Assigned
+                </a>
+                <?php endif; ?>
             </div>
-            <div class="rider-delivery-stat">
-                <span class="rider-delivery-stat-number"><?php echo $counts['active']; ?></span>
-                <span class="rider-delivery-stat-label">Active</span>
+
+            <?php else: ?>
+
+            <div class="rider-deliveries-list">
+                <?php foreach ($activeDeliveries as $delivery):
+                    $orderId        = (int)$delivery['order_id'];
+                    $orderStatus    = (string)$delivery['order_status'];
+                    $customerName   = (string)$delivery['customer_name'];
+                    $customerPhone  = (string)($delivery['customer_contact'] ?? '');
+                    $destination    = (string)$delivery['destination_address'];
+                    $orderDate      = (string)$delivery['order_date'];
+                    $branchName     = (string)($delivery['branch_name'] ?? '');
+                    $restaurantName = (string)($delivery['restaurant_name'] ?? '');
+                    $itemCount      = (int)($delivery['item_count'] ?? 0);
+                    $orderTotal     = (float)($delivery['order_total'] ?? 0);
+                    $riderEarning   = 50.00;
+
+                    $deliveredTitle = 'Mark as delivered?';
+                    $deliveredBody  = 'This closes the order and recognises the earning on your account.';
+                ?>
+                <article class="rider-delivery-card" data-order-id="<?php echo $orderId; ?>">
+
+                    <div class="rider-delivery-card-head">
+                        <div class="rider-delivery-card-id">
+                            <p class="rider-delivery-card-order">Order #<?php echo $orderId; ?></p>
+                            <p class="rider-delivery-card-date"><?php echo formatRiderDate($orderDate); ?></p>
+                        </div>
+                        <span class="badge <?php echo getDeliveryStatusClass($orderStatus); ?>">
+                            <?php echo getDeliveryStatusLabel($orderStatus); ?>
+                        </span>
+                    </div>
+
+                    <div class="rider-delivery-card-route">
+                        <div class="rider-route-stop">
+                            <div class="rider-route-icon rider-route-icon-pickup" aria-hidden="true">
+                                <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt=""
+                                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/community-general.svg'">
+                            </div>
+                            <div class="rider-route-info">
+                                <p class="rider-route-label">Pickup</p>
+                                <p class="rider-route-name">
+                                    <?php echo htmlspecialchars($restaurantName, ENT_QUOTES, 'UTF-8'); ?>
+                                </p>
+                                <p class="rider-route-address">
+                                    <?php echo htmlspecialchars($branchName, ENT_QUOTES, 'UTF-8'); ?>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="rider-route-connector" aria-hidden="true"></div>
+
+                        <div class="rider-route-stop">
+                            <div class="rider-route-icon rider-route-icon-dropoff" aria-hidden="true">
+                                <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="">
+                            </div>
+                            <div class="rider-route-info">
+                                <p class="rider-route-label">Drop-off</p>
+                                <p class="rider-route-name">
+                                    <?php echo htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8'); ?>
+                                </p>
+                                <p class="rider-route-address">
+                                    <?php echo htmlspecialchars($destination, ENT_QUOTES, 'UTF-8'); ?>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="rider-delivery-card-facts">
+                        <span class="rider-fact">
+                            <span class="rider-fact-label">Items</span>
+                            <span class="rider-fact-value"><?php echo $itemCount; ?></span>
+                        </span>
+                        <span class="rider-fact">
+                            <span class="rider-fact-label">Order</span>
+                            <span class="rider-fact-value"><?php echo formatRiderCurrency($orderTotal); ?></span>
+                        </span>
+                        <span class="rider-fact">
+                            <span class="rider-fact-label">Your Earning</span>
+                            <span class="rider-fact-value rider-fact-value-highlight">
+                                <?php echo formatRiderCurrency($riderEarning); ?>
+                            </span>
+                        </span>
+                    </div>
+
+                    <div class="rider-delivery-card-actions">
+                        <?php if ($customerPhone !== ''): ?>
+                        <a href="tel:<?php echo htmlspecialchars($customerPhone, ENT_QUOTES, 'UTF-8'); ?>"
+                            class="btn btn-neutral btn-sm">
+                            <img src="<?php echo $assetBase; ?>assets/images/icons/phone-fill.svg" alt=""
+                                class="btn-icon" width="16" height="16"
+                                onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg'">
+                            <span>Call</span>
+                        </a>
+                        <?php endif; ?>
+
+                        <button type="button" class="btn btn-neutral btn-sm" data-rider-chat-open
+                            data-rider-chat-order-id="<?php echo $orderId; ?>" data-rider-chat-recipient="customer"
+                            data-rider-chat-subtitle="Order #<?php echo $orderId; ?> • <?php echo htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8'); ?>">
+                            <img src="<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg" alt=""
+                                class="btn-icon" width="16" height="16">
+                            <span>Message</span>
+                        </button>
+
+                        <button type="button" class="btn btn-primary btn-sm delivery-status-btn"
+                            data-order-id="<?php echo $orderId; ?>" data-action="delivered"
+                            data-confirm-title="<?php echo htmlspecialchars($deliveredTitle, ENT_QUOTES, 'UTF-8'); ?>"
+                            data-confirm-message="<?php echo htmlspecialchars($deliveredBody, ENT_QUOTES, 'UTF-8'); ?>"
+                            data-confirm-label="Mark Delivered" data-confirm-variant="primary"
+                            data-confirm-icon="delivered">
+                            Mark Delivered
+                        </button>
+                    </div>
+                </article>
+                <?php endforeach; ?>
             </div>
-            <div class="rider-delivery-stat">
-                <span class="rider-delivery-stat-number"><?php echo $counts['today']; ?></span>
-                <span class="rider-delivery-stat-label">Today</span>
-            </div>
-            <div class="rider-delivery-stat">
-                <span class="rider-delivery-stat-number"><?php echo $counts['total']; ?></span>
-                <span class="rider-delivery-stat-label">All Time</span>
-            </div>
+
+            <?php endif; ?>
+
+            <?php endif; ?>
         </section>
 
         <!-- ============================================================
-             ASSIGNED TO YOU
+             TAB: ASSIGNED
              ============================================================ -->
-        <section class="rider-card">
-            <div class="rider-card-header">
-                <h2 class="heading-5">
-                    Assigned to You
-                    <?php if (count($assignedOrders) > 0): ?>
-                    <span class="badge badge-warning"><?php echo count($assignedOrders); ?></span>
-                    <?php endif; ?>
-                </h2>
-            </div>
+        <section class="rider-deliveries-panel <?php echo $activeTab === 'assigned' ? 'active' : ''; ?>"
+            id="panel-assigned" role="tabpanel" aria-labelledby="tabBtnAssigned">
+            <?php if ($activeTab === 'assigned'): ?>
 
             <?php if (empty($assignedOrders)): ?>
-            <div class="rider-empty-state">
-                <div class="rider-empty-icon">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/package.svg" alt="No pending assignments"
+
+            <div class="rider-deliveries-empty">
+                <div class="rider-deliveries-empty-icon">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/package.svg" alt=""
                         onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/order.svg'">
                 </div>
-                <p class="rider-empty-title">No assignments yet</p>
-                <p class="rider-empty-text">
+                <p class="rider-deliveries-empty-title">No pending assignments</p>
+                <p class="rider-deliveries-empty-text">
                     <?php if (!$isVerified): ?>
-                    Your account is pending verification. Assignments will appear once you're verified.
+                    Your account is pending verification. Assignments will appear here once you can go online.
                     <?php elseif (!$available): ?>
-                    You're offline. Go online from the dashboard so the kitchen can assign you orders.
+                    You're offline. Go online from the assignments panel at the bottom of the page so the kitchen can
+                    assign you orders.
                     <?php else: ?>
-                    When the kitchen assigns you an order, it will appear here for you to accept or decline.
+                    When the kitchen assigns you an order, it will appear here for you to accept or decline. The
+                    notification at the bottom of the page will also alert you.
                     <?php endif; ?>
                 </p>
             </div>
+
             <?php else: ?>
-            <div class="rider-active-deliveries">
+
+            <div class="rider-deliveries-list">
                 <?php foreach ($assignedOrders as $pending):
                     $orderId        = (int)$pending['order_id'];
                     $customerName   = (string)$pending['customer_name'];
@@ -206,76 +468,75 @@ require_once __DIR__ . '/../includes/header.php';
                     $canDecide = $isVerified && $available;
 
                     $acceptTitle = 'Accept this assignment?';
-                    $acceptBody  = 'You\'ll be responsible for picking up this order and delivering it to the customer. You won\'t be able to go offline until the delivery is complete.';
+                    $acceptBody  = "You'll be responsible for picking up this order and delivering it to the customer. You won't be able to go offline until the delivery is complete.";
 
                     $declineTitle = 'Decline this assignment?';
                     $declineBody  = 'The kitchen will choose another rider for this order. This cannot be undone.';
                 ?>
-                <div class="rider-active-delivery-card" data-order-id="<?php echo $orderId; ?>">
-                    <div class="rider-active-delivery-header">
-                        <div>
-                            <p class="rider-active-delivery-order">Order #<?php echo $orderId; ?></p>
-                            <p class="rider-active-delivery-date">
-                                <?php echo formatRiderDate($orderDate); ?>
-                            </p>
+                <article class="rider-delivery-card rider-delivery-card-assigned"
+                    data-order-id="<?php echo $orderId; ?>">
+
+                    <div class="rider-delivery-card-head">
+                        <div class="rider-delivery-card-id">
+                            <p class="rider-delivery-card-order">Order #<?php echo $orderId; ?></p>
+                            <p class="rider-delivery-card-date"><?php echo formatRiderDate($orderDate); ?></p>
                         </div>
-                        <span class="badge badge-warning">Awaiting Your Confirmation</span>
+                        <span class="badge badge-warning">Awaiting Confirmation</span>
                     </div>
 
-                    <div class="rider-active-delivery-body">
-                        <div class="rider-delivery-stop">
-                            <div class="rider-delivery-stop-icon rider-delivery-stop-icon-pickup">
-                                <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt="Pickup"
+                    <div class="rider-delivery-card-route">
+                        <div class="rider-route-stop">
+                            <div class="rider-route-icon rider-route-icon-pickup" aria-hidden="true">
+                                <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt=""
                                     onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/community-general.svg'">
                             </div>
-                            <div class="rider-delivery-stop-info">
-                                <p class="rider-delivery-stop-label">Pickup</p>
-                                <p class="rider-delivery-stop-name">
+                            <div class="rider-route-info">
+                                <p class="rider-route-label">Pickup</p>
+                                <p class="rider-route-name">
                                     <?php echo htmlspecialchars($restaurantName, ENT_QUOTES, 'UTF-8'); ?>
                                 </p>
-                                <p class="rider-delivery-stop-address">
+                                <p class="rider-route-address">
                                     <?php echo htmlspecialchars($branchName, ENT_QUOTES, 'UTF-8'); ?>
                                 </p>
                             </div>
                         </div>
 
-                        <div class="rider-delivery-connector" aria-hidden="true"></div>
+                        <div class="rider-route-connector" aria-hidden="true"></div>
 
-                        <div class="rider-delivery-stop">
-                            <div class="rider-delivery-stop-icon rider-delivery-stop-icon-dropoff">
-                                <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="Dropoff">
+                        <div class="rider-route-stop">
+                            <div class="rider-route-icon rider-route-icon-dropoff" aria-hidden="true">
+                                <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="">
                             </div>
-                            <div class="rider-delivery-stop-info">
-                                <p class="rider-delivery-stop-label">Drop-off</p>
-                                <p class="rider-delivery-stop-name">
+                            <div class="rider-route-info">
+                                <p class="rider-route-label">Drop-off</p>
+                                <p class="rider-route-name">
                                     <?php echo htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8'); ?>
                                 </p>
-                                <p class="rider-delivery-stop-address">
-                                    <?php echo htmlspecialchars(truncateText($destination, 60), ENT_QUOTES, 'UTF-8'); ?>
+                                <p class="rider-route-address">
+                                    <?php echo htmlspecialchars(truncateText($destination, 70), ENT_QUOTES, 'UTF-8'); ?>
                                 </p>
                             </div>
                         </div>
                     </div>
 
-                    <div class="rider-active-delivery-meta">
-                        <div class="rider-active-delivery-meta-item">
-                            <span class="rider-active-delivery-meta-label">Items</span>
-                            <span class="rider-active-delivery-meta-value"><?php echo $itemCount; ?></span>
-                        </div>
-                        <div class="rider-active-delivery-meta-item">
-                            <span class="rider-active-delivery-meta-label">Order Total</span>
-                            <span
-                                class="rider-active-delivery-meta-value"><?php echo formatRiderCurrency($orderTotal); ?></span>
-                        </div>
-                        <div class="rider-active-delivery-meta-item">
-                            <span class="rider-active-delivery-meta-label">Your Earning</span>
-                            <span class="rider-active-delivery-meta-value rider-active-delivery-meta-value-highlight">
+                    <div class="rider-delivery-card-facts">
+                        <span class="rider-fact">
+                            <span class="rider-fact-label">Items</span>
+                            <span class="rider-fact-value"><?php echo $itemCount; ?></span>
+                        </span>
+                        <span class="rider-fact">
+                            <span class="rider-fact-label">Order</span>
+                            <span class="rider-fact-value"><?php echo formatRiderCurrency($orderTotal); ?></span>
+                        </span>
+                        <span class="rider-fact">
+                            <span class="rider-fact-label">Your Earning</span>
+                            <span class="rider-fact-value rider-fact-value-highlight">
                                 <?php echo formatRiderCurrency(50.00); ?>
                             </span>
-                        </div>
+                        </span>
                     </div>
 
-                    <div class="rider-active-delivery-actions">
+                    <div class="rider-delivery-card-actions">
                         <?php if ($canDecide): ?>
                         <button type="button" class="btn btn-danger btn-sm delivery-status-btn"
                             data-order-id="<?php echo $orderId; ?>" data-action="decline_assignment"
@@ -297,271 +558,99 @@ require_once __DIR__ . '/../includes/header.php';
                         </span>
                         <?php endif; ?>
                     </div>
-                </div>
+                </article>
                 <?php endforeach; ?>
             </div>
+
+            <?php endif; ?>
+
             <?php endif; ?>
         </section>
 
         <!-- ============================================================
-             ACTIVE DELIVERIES
+             TAB: HISTORY
              ============================================================ -->
-        <section class="rider-card">
-            <div class="rider-card-header">
-                <h2 class="heading-5">
-                    Active Deliveries
-                    <?php if (count($activeDeliveries) > 0): ?>
-                    <span class="badge badge-primary"><?php echo count($activeDeliveries); ?></span>
-                    <?php endif; ?>
-                </h2>
-            </div>
+        <section class="rider-deliveries-panel <?php echo $activeTab === 'history' ? 'active' : ''; ?>"
+            id="panel-history" role="tabpanel" aria-labelledby="tabBtnHistory">
+            <?php if ($activeTab === 'history'): ?>
 
-            <?php if (empty($activeDeliveries)): ?>
-            <div class="rider-empty-state">
-                <div class="rider-empty-icon">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/package.svg" alt="No active deliveries"
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/order.svg'">
+            <div class="rider-deliveries-card">
+
+                <?php if (empty($deliveryHistory)): ?>
+                <div class="rider-deliveries-empty">
+                    <div class="rider-deliveries-empty-icon">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/time-update.svg" alt=""
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/update.svg'">
+                    </div>
+                    <p class="rider-deliveries-empty-title">No delivery history</p>
+                    <p class="rider-deliveries-empty-text">
+                        <?php if (!$isVerified): ?>
+                        Your account is pending verification. Completed deliveries will appear here.
+                        <?php elseif ($available): ?>
+                        You're online. Your first completed delivery will appear here.
+                        <?php else: ?>
+                        Go online from the assignments panel to start receiving delivery requests.
+                        <?php endif; ?>
+                    </p>
                 </div>
-                <p class="rider-empty-title">No active deliveries</p>
-                <p class="rider-empty-text">
-                    Accept an assignment above to start a delivery.
-                </p>
-            </div>
-            <?php else: ?>
-            <div class="rider-active-deliveries">
-                <?php foreach ($activeDeliveries as $delivery):
-                    $orderId        = (int)$delivery['order_id'];
-                    $orderStatus    = (string)$delivery['order_status'];
-                    $customerName   = (string)$delivery['customer_name'];
-                    $customerPhone  = (string)($delivery['customer_contact'] ?? '');
-                    $destination    = (string)$delivery['destination_address'];
-                    $orderDate      = (string)$delivery['order_date'];
-                    $branchName     = (string)($delivery['branch_name'] ?? '');
-                    $restaurantName = (string)($delivery['restaurant_name'] ?? '');
-                    $itemCount      = (int)($delivery['item_count'] ?? 0);
-                    $orderTotal     = (float)($delivery['order_total'] ?? 0);
-                    $riderEarning   = 50.00;
+                <?php else: ?>
 
-                    $deliveredTitle = 'Mark as delivered?';
-                    $deliveredBody  = 'This closes the order and recognises the earning on your account.';
-                ?>
-                <div class="rider-active-delivery-card" data-order-id="<?php echo $orderId; ?>">
-                    <div class="rider-active-delivery-header">
-                        <div>
-                            <p class="rider-active-delivery-order">Order #<?php echo $orderId; ?></p>
-                            <p class="rider-active-delivery-date">
-                                <?php echo formatRiderDate($orderDate); ?>
+                <div class="rider-history-list">
+                    <?php foreach ($deliveryHistory as $delivery):
+                        $orderId      = (int)$delivery['order_id'];
+                        $orderStatus  = (string)$delivery['order_status'];
+                        $customerName = (string)$delivery['customer_name'];
+                        $deliveredAt  = (string)($delivery['delivered_at'] ?? '');
+                        $riderEarning = 50.00;
+
+                        $isDelivered = $orderStatus === 'delivered';
+                    ?>
+                    <div class="rider-history-row">
+                        <div
+                            class="rider-history-icon <?php echo $isDelivered ? 'rider-history-icon-success' : 'rider-history-icon-neutral'; ?>">
+                            <?php if ($isDelivered): ?>
+                            <img src="<?php echo $assetBase; ?>assets/images/icons/verified-fill.svg" alt="Delivered"
+                                onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/verified-badge-fill.svg'">
+                            <?php else: ?>
+                            <img src="<?php echo $assetBase; ?>assets/images/icons/close-circle-fill.svg"
+                                alt="Cancelled"
+                                onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/cancel.svg'">
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="rider-history-info">
+                            <p class="rider-history-order">Order #<?php echo $orderId; ?></p>
+                            <p class="rider-history-customer">
+                                <?php echo htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8'); ?>
+                            </p>
+                            <p class="rider-history-date">
+                                <?php echo $deliveredAt !== '' ? formatRiderDate($deliveredAt) : '—'; ?>
                             </p>
                         </div>
-                        <span class="badge <?php echo getDeliveryStatusClass($orderStatus); ?>">
-                            <?php echo getDeliveryStatusLabel($orderStatus); ?>
-                        </span>
-                    </div>
 
-                    <div class="rider-active-delivery-body">
-                        <div class="rider-delivery-stop">
-                            <div class="rider-delivery-stop-icon rider-delivery-stop-icon-pickup">
-                                <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt="Pickup"
-                                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/community-general.svg'">
-                            </div>
-                            <div class="rider-delivery-stop-info">
-                                <p class="rider-delivery-stop-label">Pickup</p>
-                                <p class="rider-delivery-stop-name">
-                                    <?php echo htmlspecialchars($restaurantName, ENT_QUOTES, 'UTF-8'); ?>
-                                </p>
-                                <p class="rider-delivery-stop-address">
-                                    <?php echo htmlspecialchars($branchName, ENT_QUOTES, 'UTF-8'); ?>
-                                </p>
-                            </div>
-                        </div>
-
-                        <div class="rider-delivery-connector" aria-hidden="true"></div>
-
-                        <div class="rider-delivery-stop">
-                            <div class="rider-delivery-stop-icon rider-delivery-stop-icon-dropoff">
-                                <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="Dropoff">
-                            </div>
-                            <div class="rider-delivery-stop-info">
-                                <p class="rider-delivery-stop-label">Drop-off</p>
-                                <p class="rider-delivery-stop-name">
-                                    <?php echo htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8'); ?>
-                                </p>
-                                <p class="rider-delivery-stop-address">
-                                    <?php echo htmlspecialchars($destination, ENT_QUOTES, 'UTF-8'); ?>
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="rider-active-delivery-meta">
-                        <div class="rider-active-delivery-meta-item">
-                            <span class="rider-active-delivery-meta-label">Items</span>
-                            <span class="rider-active-delivery-meta-value"><?php echo $itemCount; ?></span>
-                        </div>
-                        <div class="rider-active-delivery-meta-item">
-                            <span class="rider-active-delivery-meta-label">Order Total</span>
-                            <span
-                                class="rider-active-delivery-meta-value"><?php echo formatRiderCurrency($orderTotal); ?></span>
-                        </div>
-                        <div class="rider-active-delivery-meta-item">
-                            <span class="rider-active-delivery-meta-label">Your Earning</span>
-                            <span class="rider-active-delivery-meta-value rider-active-delivery-meta-value-highlight">
-                                <?php echo formatRiderCurrency($riderEarning); ?>
+                        <div class="rider-history-meta">
+                            <span class="badge <?php echo getDeliveryStatusClass($orderStatus); ?>">
+                                <?php echo getDeliveryStatusLabel($orderStatus); ?>
                             </span>
+                            <p class="rider-history-earning">
+                                <?php echo $isDelivered ? '+' : ''; ?><?php echo formatRiderCurrency($isDelivered ? $riderEarning : 0); ?>
+                            </p>
                         </div>
                     </div>
-
-                    <div class="rider-active-delivery-actions">
-                        <?php if ($customerPhone !== ''): ?>
-                        <a href="tel:<?php echo htmlspecialchars($customerPhone, ENT_QUOTES, 'UTF-8'); ?>"
-                            class="btn btn-neutral btn-sm">
-                            <img src="<?php echo $assetBase; ?>assets/images/icons/phone-fill.svg" alt=""
-                                class="btn-icon" width="16" height="16"
-                                onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg'">
-                            <span>Call Customer</span>
-                        </a>
-                        <?php endif; ?>
-
-                        <button type="button" class="btn btn-neutral btn-sm delivery-chat-btn"
-                            data-order-id="<?php echo $orderId; ?>"
-                            data-customer-name="<?php echo htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8'); ?>"
-                            data-restaurant-name="<?php echo htmlspecialchars($restaurantName, ENT_QUOTES, 'UTF-8'); ?>">
-                            <img src="<?php echo $assetBase; ?>assets/images/icons/chat-line.svg" alt=""
-                                class="btn-icon" width="16" height="16"
-                                onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg'">
-                            <span>Message</span>
-                        </button>
-
-                        <button type="button" class="btn btn-primary btn-sm delivery-status-btn"
-                            data-order-id="<?php echo $orderId; ?>" data-action="delivered"
-                            data-confirm-title="<?php echo htmlspecialchars($deliveredTitle, ENT_QUOTES, 'UTF-8'); ?>"
-                            data-confirm-message="<?php echo htmlspecialchars($deliveredBody, ENT_QUOTES, 'UTF-8'); ?>"
-                            data-confirm-label="Mark Delivered" data-confirm-variant="primary"
-                            data-confirm-icon="delivered">
-                            Mark Delivered
-                        </button>
-                    </div>
+                    <?php endforeach; ?>
                 </div>
-                <?php endforeach; ?>
+
+                <?php endif; ?>
             </div>
+
             <?php endif; ?>
         </section>
 
-        <!-- ============================================================
-             DELIVERY HISTORY
-             ============================================================ -->
-        <section class="rider-card">
-            <div class="rider-card-header">
-                <h2 class="heading-5">Delivery History</h2>
-            </div>
-
-            <?php if (empty($deliveryHistory)): ?>
-            <div class="rider-empty-state">
-                <div class="rider-empty-icon">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/time-update.svg" alt="No history"
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/update.svg'">
-                </div>
-                <p class="rider-empty-title">No delivery history</p>
-                <p class="rider-empty-text">Your completed deliveries will appear here.</p>
-            </div>
-            <?php else: ?>
-            <div class="rider-history-list">
-                <?php foreach ($deliveryHistory as $delivery):
-                    $orderId      = (int)$delivery['order_id'];
-                    $orderStatus  = (string)$delivery['order_status'];
-                    $customerName = (string)$delivery['customer_name'];
-                    $deliveredAt  = (string)($delivery['delivered_at'] ?? '');
-                    $riderEarning = 50.00;
-                ?>
-                <div class="rider-history-row">
-                    <div
-                        class="rider-history-icon <?php echo $orderStatus === 'delivered' ? 'rider-history-icon-success' : 'rider-history-icon-neutral'; ?>">
-                        <?php if ($orderStatus === 'delivered'): ?>
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/verified-fill.svg" alt="Delivered"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/verified-badge-fill.svg'">
-                        <?php else: ?>
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/close-circle-fill.svg" alt="Cancelled"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/cancel.svg'">
-                        <?php endif; ?>
-                    </div>
-
-                    <div class="rider-history-info">
-                        <p class="rider-history-order">Order #<?php echo $orderId; ?></p>
-                        <p class="rider-history-customer">
-                            <?php echo htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8'); ?>
-                        </p>
-                        <p class="rider-history-date">
-                            <?php echo $deliveredAt !== '' ? formatRiderDate($deliveredAt) : '—'; ?>
-                        </p>
-                    </div>
-
-                    <div class="rider-history-meta">
-                        <span class="badge <?php echo getDeliveryStatusClass($orderStatus); ?>">
-                            <?php echo getDeliveryStatusLabel($orderStatus); ?>
-                        </span>
-                        <p class="rider-history-earning">
-                            <?php echo $orderStatus === 'delivered' ? '+' : ''; ?><?php echo formatRiderCurrency($orderStatus === 'delivered' ? $riderEarning : 0); ?>
-                        </p>
-                    </div>
-                </div>
-                <?php endforeach; ?>
-            </div>
-            <?php endif; ?>
-        </section>
-
-    </div>
-</div>
-
-<!-- ============================================================
-     CHAT MODAL
-     ============================================================ -->
-<div id="riderChatModal" class="modal" style="display: none;">
-    <div class="modal-overlay"></div>
-    <div class="modal-content rider-chat-modal-content">
-        <div class="modal-header">
-            <div>
-                <p class="heading-5 modal-title">Order Messages</p>
-                <p class="modal-subtitle" id="riderChatSubtitle"></p>
-            </div>
-            <button type="button" class="modal-close" id="riderChatClose">&times;</button>
-        </div>
-
-        <div class="rider-chat-tabs">
-            <button type="button" class="rider-chat-tab active" data-recipient="customer">
-                <img src="<?php echo $assetBase; ?>assets/images/icons/user-profile-circle.svg" alt=""
-                    class="rider-chat-tab-icon" width="16" height="16">
-                <span>Customer</span>
-            </button>
-            <button type="button" class="rider-chat-tab" data-recipient="restaurant_account">
-                <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt=""
-                    class="rider-chat-tab-icon" width="16" height="16">
-                <span>Kitchen</span>
-            </button>
-        </div>
-
-        <div class="rider-chat-body" id="riderChatMessages">
-            <div class="rider-chat-loading"><span>Loading messages…</span></div>
-        </div>
-
-        <form class="rider-chat-form" id="riderChatForm">
-            <input type="hidden" id="riderChatOrderId" value="">
-            <input type="hidden" id="riderChatRecipient" value="customer">
-            <input type="text" id="riderChatInput" class="rider-chat-input" placeholder="Type your message…"
-                maxlength="500" autocomplete="off" required>
-            <button type="submit" class="rider-chat-send" aria-label="Send message">
-                <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-right-s-line.svg" alt="Send"
-                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/arrow-right-long-line.svg'">
-            </button>
-        </form>
     </div>
 </div>
 
 <!-- ============================================================
      CONFIRM MODAL
-     Icon-led card. Three icons are rendered inside the icon
-     circle; CSS shows only the one matching the modal's
-     data-icon attribute. The confirm button's colour follows the
-     modal's data-variant.
      ============================================================ -->
 <div class="rider-confirm-modal" id="riderConfirmModal" style="display: none;" data-variant="primary" data-icon="accept"
     role="dialog" aria-modal="true" aria-labelledby="riderConfirmTitle">
@@ -590,7 +679,8 @@ require_once __DIR__ . '/../includes/header.php';
 window.FITPAL_RIDER_DELIVERIES = {
     csrfToken: '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>',
     assetBase: '<?php echo $assetBase; ?>',
-    riderId: <?php echo $riderId; ?>
+    riderId: <?php echo $riderId; ?>,
+    activeTab: '<?php echo htmlspecialchars($activeTab, ENT_QUOTES, 'UTF-8'); ?>'
 };
 </script>
 <script src="../assets/ui/js/deliveries.js" defer></script>

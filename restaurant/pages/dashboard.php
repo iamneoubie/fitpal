@@ -22,8 +22,20 @@
  * is an operational surface for branch staff only.
  *
  * @package FitPal
- * @version 1.1 — Total Orders tile and Active Orders hint link to
- *                kitchen.php for branch accounts.
+ * @version 1.2 — Reads the signed-in account's display name from the
+ *                restaurant role's own session key, 'restaurant_name',
+ *                instead of the shared 'user_name' key. The shared
+ *                key is written by every role on sign-in, so when the
+ *                same browser was signed in as both a rider and a
+ *                restaurant (one shared PHP session, role-scoped
+ *                keys), a rider sign-in overwrote 'user_name' and the
+ *                restaurant dashboard then rendered the rider's name
+ *                in the greeting. The greeting now reads the
+ *                restaurant-scoped key written by
+ *                restaurant/backend/handlers/sign-in-handler.php v2.1.
+ *
+ *                (1.1: Total Orders tile and Active Orders hint link
+ *                to kitchen.php for branch accounts.)
  */
 
 declare(strict_types=1);
@@ -47,7 +59,7 @@ $branchId      = !empty($_SESSION['restaurant_branch_id'])
 $scope         = (string)($_SESSION['restaurant_scope'] ?? 'owner');
 $branchName    = (string)($_SESSION['restaurant_branch_name'] ?? '');
 $branchCode    = (string)($_SESSION['restaurant_branch_code'] ?? '');
-$accountName   = (string)($_SESSION['user_name'] ?? '');
+$accountName   = (string)($_SESSION['restaurant_name'] ?? '');
 $firstName     = $accountName !== '' ? explode(' ', trim($accountName))[0] : 'Account';
 
 $isBranchScope = ($scope === 'branch' && $branchId > 0);

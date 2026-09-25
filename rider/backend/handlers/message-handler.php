@@ -6,20 +6,46 @@
  *   get_messages  → fetch conversation with customer or kitchen
  *   send_message  → send a message to customer or kitchen
  *
+ * Response shape
+ * --------------
+ * The shared rider chat modal (rider-chat-modal.js) expects each
+ * message to carry:
+ *
+ *   message_id  int
+ *   direction   "sent" | "received"
+ *   sender      display string ("You", "Customer", "Kitchen")
+ *   content     string
+ *   time        "g:i A" formatted timestamp
+ *
+ * and the top-level response to carry `max_id` — the highest
+ * message_id in the batch. The client uses max_id as its delta
+ * cursor, sending it back as `since_id` on the next poll.
+ *
+ * This shape matches customer/backend/handlers/message-handler.php
+ * so both roles render through identical JS.
+ *
+ * Delta fetch
+ * -----------
+ * When `since_id` is present and > 0, only rows with message_id
+ * strictly greater than it are returned. When it is absent or zero,
+ * the full conversation is returned. Both paths select the same
+ * columns and produce the same JSON, so the client renders either
+ * response with the same code.
+ *
  * @package FitPal
- * @version 1.1 — CSRF validation now compares against the rider
- *                role's own session key, rider_csrf_token, instead of
- *                the shared csrf_token. Requires
- *                includes/rider-csrf-token.php so the handler owns
- *                its CSRF bootstrap. Uses isset() on both keys
- *                before hash_equals() so an unset session key can
- *                never be coerced to an empty string and pass
- *                validation against an empty POST value. On
- *                mismatch, rotates the rider token before returning
- *                the JSON error, mirroring rider-handler.php v4.1
- *                and the admin handlers. Only the rider's own key is
- *                touched; the shared csrf_token key and every other
- *                role's token are left alone.
+ * @version 1.2 — Aligns the response shape with the shared rider
+ *                chat modal:
+ *                  - Adds `direction`, `sender`, `time`, and a
+ *                    top-level `max_id` to every message.
+ *                  - Accepts optional `since_id` on get_messages
+ *                    for delta polling.
+ *                The old fields (is_own, is_sent, sender_type,
+ *                sender_label, created_at) are kept for backwards
+ *                compatibility with any other caller, but the
+ *                modal reads the new fields exclusively.
+ *
+ *                (1.1: CSRF validated against rider_csrf_token;
+ *                rotates the rider token on mismatch.)
  */
 
 declare(strict_types=1);
@@ -50,9 +76,6 @@ if (
     !isset($_POST['csrf_token'], $_SESSION['rider_csrf_token']) ||
     !hash_equals((string)$_SESSION['rider_csrf_token'], (string)$_POST['csrf_token'])
 ) {
-    // Rotate the rider's own token so the next render generates a
-    // fresh one. Only the rider's key is cleared — never the shared
-    // 'csrf_token' key.
     unset($_SESSION['rider_csrf_token']);
 
     ob_end_clean();
@@ -92,6 +115,7 @@ function handleGetMessages(PDO $db, int $riderId): array
 {
     $orderId  = (int)($_POST['order_id'] ?? 0);
     $withType = (string)($_POST['with_type'] ?? 'customer');
+    $sinceId  = (int)($_POST['since_id'] ?? 0);
 
     if ($orderId <= 0) {
         return ['status' => 'error', 'message' => 'Invalid order.'];
@@ -101,7 +125,7 @@ function handleGetMessages(PDO $db, int $riderId): array
         return ['status' => 'error', 'message' => 'Invalid recipient type.'];
     }
 
-    // Verify the rider is assigned to this order
+    // Verify the rider is assigned to this order.
     $check = $db->prepare(
         "SELECT 1 FROM orders
          WHERE order_id = :order_id AND delivery_rider_id = :rider_id
@@ -112,50 +136,99 @@ function handleGetMessages(PDO $db, int $riderId): array
         return ['status' => 'error', 'message' => 'Order not found.'];
     }
 
-    $stmt = $db->prepare(
-        "SELECT
-            message_id,
-            sender_type,
-            sender_id,
-            recipient_type,
-            recipient_id,
-            content,
-            created_at,
-            CASE
-                WHEN sender_type = 'delivery_rider' THEN 1
-                ELSE 0
-            END AS is_own
-         FROM message
-         WHERE order_id = :order_id
-           AND (
-                (sender_type = 'delivery_rider' AND recipient_type = :with_type)
-             OR (sender_type = :with_type2 AND recipient_type = 'delivery_rider')
-           )
-         ORDER BY created_at ASC
-         LIMIT 200"
-    );
-    $stmt->execute([
-        ':order_id'   => $orderId,
-        ':with_type'  => $withType,
-        ':with_type2' => $withType,
-    ]);
+    // Two paths: full history (since_id = 0) or delta (since_id > 0).
+    // Both select the same columns so the client renders either
+    // response with the same code.
+    if ($sinceId > 0) {
+        $stmt = $db->prepare(
+            "SELECT
+                message_id,
+                sender_type,
+                sender_id,
+                recipient_type,
+                recipient_id,
+                content,
+                created_at
+             FROM message
+             WHERE order_id = :order_id
+               AND message_id > :since_id
+               AND (
+                    (sender_type = 'delivery_rider' AND recipient_type = :with_type)
+                 OR (sender_type = :with_type2 AND recipient_type = 'delivery_rider')
+               )
+             ORDER BY message_id ASC
+             LIMIT 200"
+        );
+        $stmt->execute([
+            ':order_id'   => $orderId,
+            ':since_id'   => $sinceId,
+            ':with_type'  => $withType,
+            ':with_type2' => $withType,
+        ]);
+    } else {
+        $stmt = $db->prepare(
+            "SELECT
+                message_id,
+                sender_type,
+                sender_id,
+                recipient_type,
+                recipient_id,
+                content,
+                created_at
+             FROM message
+             WHERE order_id = :order_id
+               AND (
+                    (sender_type = 'delivery_rider' AND recipient_type = :with_type)
+                 OR (sender_type = :with_type2 AND recipient_type = 'delivery_rider')
+               )
+             ORDER BY message_id ASC
+             LIMIT 200"
+        );
+        $stmt->execute([
+            ':order_id'   => $orderId,
+            ':with_type'  => $withType,
+            ':with_type2' => $withType,
+        ]);
+    }
+
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $messages = [];
+    $maxId    = $sinceId;
+
     foreach ($rows as $r) {
-        $isOwn = (int)$r['is_own'] === 1;
+        $mid   = (int)$r['message_id'];
+        $isOwn = ((string)$r['sender_type'] === 'delivery_rider');
+
+        if ($mid > $maxId) {
+            $maxId = $mid;
+        }
+
+        $ts   = strtotime((string)$r['created_at']);
+        $time = $ts !== false ? date('g:i A', $ts) : (string)$r['created_at'];
+
         $messages[] = [
-            'message_id'   => (int)$r['message_id'],
+            // New shape consumed by rider-chat-modal.js
+            'message_id' => $mid,
+            'direction'  => $isOwn ? 'sent' : 'received',
+            'sender'     => $isOwn ? 'You' : formatSenderLabel((string)$r['sender_type']),
+            'content'    => (string)$r['content'],
+            'time'       => $time,
+
+            // Backwards-compatible fields (older callers)
             'sender_type'  => (string)$r['sender_type'],
             'sender_label' => formatSenderLabel((string)$r['sender_type']),
-            'content'      => (string)$r['content'],
             'created_at'   => (string)$r['created_at'],
             'is_own'       => $isOwn,
             'is_sent'      => $isOwn,
         ];
     }
 
-    return ['status' => 'success', 'messages' => $messages];
+    return [
+        'status'   => 'success',
+        'messages' => $messages,
+        'max_id'   => $maxId,
+    ];
 }
 
 function handleSendMessage(PDO $db, int $riderId): array
@@ -174,7 +247,7 @@ function handleSendMessage(PDO $db, int $riderId): array
         return ['status' => 'error', 'message' => 'Message must be 1–500 characters.'];
     }
 
-    // Verify rider is assigned and order is active
+    // Verify rider is assigned and order is active.
     $orderStmt = $db->prepare(
         "SELECT order_id, customer_id, order_status
          FROM orders
@@ -188,8 +261,24 @@ function handleSendMessage(PDO $db, int $riderId): array
         return ['status' => 'error', 'message' => 'Order not found.'];
     }
 
-    if (!in_array($order['order_status'], ['pending', 'preparing', 'delivering'], true)) {
-        return ['status' => 'error', 'message' => 'This order is no longer active.'];
+    // Riders can talk to the kitchen during rider_pending and while
+    // delivering. Talk to the customer only once the order is
+    // actually in transit or delivered.
+    $status = (string)$order['order_status'];
+    if ($recipientType === 'restaurant_account') {
+        if (!in_array($status, ['rider_pending', 'delivering'], true)) {
+            return [
+                'status'  => 'error',
+                'message' => 'You can only message the kitchen for an order that is assigned to you.',
+            ];
+        }
+    } elseif ($recipientType === 'customer') {
+        if (!in_array($status, ['delivering', 'delivered'], true)) {
+            return [
+                'status'  => 'error',
+                'message' => 'You can only message the customer once you have accepted their order.',
+            ];
+        }
     }
 
     $recipientId = null;
@@ -241,14 +330,22 @@ function handleSendMessage(PDO $db, int $riderId): array
     $fetch->execute([':message_id' => $messageId]);
     $msg = $fetch->fetch(PDO::FETCH_ASSOC);
 
+    $ts   = strtotime((string)$msg['created_at']);
+    $time = $ts !== false ? date('g:i A', $ts) : (string)$msg['created_at'];
+
     return [
         'status'       => 'success',
         'message'      => 'Message sent.',
+        'max_id'       => $messageId,
         'message_data' => [
-            'message_id'   => (int)$msg['message_id'],
-            'sender_type'  => (string)$msg['sender_type'],
+            'message_id' => $messageId,
+            'direction'  => 'sent',
+            'sender'     => 'You',
+            'content'    => (string)$msg['content'],
+            'time'       => $time,
+
+            'sender_type'  => 'delivery_rider',
             'sender_label' => 'You',
-            'content'      => (string)$msg['content'],
             'created_at'   => (string)$msg['created_at'],
             'is_own'       => true,
             'is_sent'      => true,

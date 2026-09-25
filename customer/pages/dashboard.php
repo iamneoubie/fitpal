@@ -16,8 +16,27 @@
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 4.0 — Local formatCurrency() removed; uses the query-layer
- *                version.
+ * @version 4.1 — The greeting now reads the signed-in customer's
+ *                display name from $_SESSION['customer_name'] (written
+ *                by sign-in-handler.php v2.2). Previously it read
+ *                $_SESSION['user_name'], a generic key that the admin,
+ *                rider, and restaurant sign-in handlers also wrote
+ *                into the same shared PHP session. When both an admin
+ *                and a customer were signed in on the same browser,
+ *                whichever role signed in last clobbered the other's
+ *                user_name, and this greeting rendered the wrong
+ *                person's name while the profile card, orders, and
+ *                wallet — all fetched by customer_id from the
+ *                database — stayed correct. That mismatch was the
+ *                visible symptom of the collision.
+ *
+ *                A defensive fallback uses the session value from
+ *                header.php (which itself falls back to a database
+ *                lookup for pre-v2.2 sessions) so this page renders
+ *                a name even during the migration window.
+ *
+ *                (4.0: Local formatCurrency() removed; uses the
+ *                query-layer version.)
  */
 
 declare(strict_types=1);
@@ -36,7 +55,16 @@ require_once __DIR__ . '/../backend/database/customer-queries.php';
 require_once __DIR__ . '/../backend/database/dashboard-queries.php';
 
 $customerId = (int)$_SESSION['customer_id'];
-$userName   = $_SESSION['user_name'] ?? 'Customer';
+
+// Session-canonical display name. header.php has already resolved
+// this into $_SESSION['customer_name'] by the time we get here, so
+// this is a straight read. The fallback string is only reached if
+// the session value is somehow empty even after header.php's
+// resolution path — defensive, not expected in normal operation.
+$userName = $_SESSION['customer_name'] ?? 'Customer';
+if (trim($userName) === '') {
+    $userName = 'Customer';
+}
 
 // ---------------------------------------------------------------------
 // DATA

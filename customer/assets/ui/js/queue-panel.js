@@ -4,8 +4,40 @@
  * The queue panel is the UI for the session-based order queue. The
  * server (queue-handler.php) is the single source of truth.
  *
+ * State model
+ * -----------
+ * Three things must always agree:
+ *
+ *   1. `queue`  — the array returned by the server.
+ *   2. `isOpen` — whether the user has expanded the panel body.
+ *   3. The DOM  — `#queuePanel` carrying `open` or `closed`.
+ *
+ * When the queue has items the panel opens by default. `isOpen`
+ * starts as true so it matches that default on first paint. Every
+ * render funnels through updateVisibility(), which forces the inner
+ * panel class to match `isOpen` instead of leaving it to whatever
+ * the markup shipped with.
+ *
+ * Two events force `isOpen` to true regardless of the user's last
+ * choice:
+ *
+ *   - the first load, when the server reports items already queued
+ *   - a successful add, handled in window.addToQueue()
+ *
+ * Every other transition is user-driven via the header toggle. The
+ * panel only reverts to collapsed when the queue empties.
+ *
  * @package FitPal
- * @version 6.1 — Remove button uses shared cancel icon (no inline SVG).
+ * @version 6.3 — Panel now opens expanded on first load with items
+ *                and after every successful add. isOpen starts true
+ *                and updateVisibility() no longer resets it on a
+ *                normal render; only an empty queue forces it back
+ *                to false.
+ *
+ *                (6.2: fixed expanded-state desync by normalizing
+ *                the inner panel class in updateVisibility().
+ *                6.1: remove button uses shared cancel icon, no
+ *                inline SVG.)
  */
 (function () {
     'use strict';
@@ -34,13 +66,25 @@
     var cancelModalConfirm = document.getElementById('queueCancelModalConfirm');
 
     var queue       = [];
-    var isOpen      = false;
+
+    // The panel renders expanded by default whenever the queue has
+    // items. Starting at true makes the very first paint match that
+    // default, so the user never sees an "I have items but the panel
+    // is collapsed" state on load or after an add.
+    var isOpen      = true;
+
     var pendingRm   = null;
     var syncTimer   = null;
     var initialized = false;
 
     // ----------------------------------------------------------------
     // NETWORK
+    //
+    // The CSRF token is the customer role's own key. It is read from
+    // the page-level global window.FITPAL_CSRF_TOKEN, which menu.php
+    // bootstraps from $csrfToken (the value header.php pulled from
+    // customer_csrf_token). The DOM fallback exists so the panel still
+    // works on any page that forgot to set the global.
     // ----------------------------------------------------------------
     function csrfToken() {
         if (window.FITPAL_CSRF_TOKEN) return window.FITPAL_CSRF_TOKEN;
@@ -193,6 +237,20 @@
 
     // ----------------------------------------------------------------
     // VISIBILITY / PANEL
+    //
+    // The wrapper controls whether the whole panel is on screen at all
+    // (slide up from the bottom). The inner panel controls whether the
+    // body is expanded or collapsed to just the header strip.
+    //
+    // updateVisibility() reconciles the inner panel class with isOpen
+    // on every render. It does NOT reset isOpen — the only transition
+    // that clears isOpen is an empty queue, and that is handled below
+    // because there is nothing left to expand.
+    //
+    // Because isOpen starts true and is only cleared when the queue
+    // empties, the panel is expanded on first load with items and
+    // stays expanded until the user collapses it. A successful add
+    // re-expands it explicitly in window.addToQueue().
     // ----------------------------------------------------------------
     function updateVisibility(totalItems) {
         if (!wrapper) return;
@@ -202,7 +260,33 @@
         wrapper.classList.add(totalItems > 0 ? 'has-items' : 'empty');
         wrapper.setAttribute('aria-hidden', totalItems > 0 ? 'false' : 'true');
 
-        if (totalItems === 0 && isOpen) closePanel();
+        if (totalItems === 0) {
+            // Nothing to show. The panel can only be collapsed now.
+            // Forcing isOpen to false means the next time items
+            // appear the panel comes back expanded, which is the
+            // default the user expects on a fresh add.
+            isOpen = false;
+            if (panel) {
+                panel.classList.remove('open');
+                panel.classList.add('closed');
+            }
+            if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'false');
+            return;
+        }
+
+        // Items exist. Force the inner panel class to match isOpen.
+        if (panel) {
+            if (isOpen) {
+                panel.classList.remove('closed');
+                panel.classList.add('open');
+            } else {
+                panel.classList.remove('open');
+                panel.classList.add('closed');
+            }
+        }
+        if (toggleBtn) {
+            toggleBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        }
     }
 
     function openPanel() {
@@ -231,6 +315,11 @@
 
     // ----------------------------------------------------------------
     // ITEM EVENT BINDING
+    //
+    // Each render replaces the item list HTML, so listeners are
+    // re-attached after every render. The cloneNode(true) pattern
+    // strips any prior listeners before adding the new one, which
+    // prevents duplicate handlers accumulating across re-renders.
     // ----------------------------------------------------------------
     function bindItemEvents() {
         document.querySelectorAll('#queueItemsContainer .qty-minus').forEach(function (btn) {
@@ -356,6 +445,18 @@
 
     // ----------------------------------------------------------------
     // PUBLIC API — used by menu.js
+    //
+    // After a successful add the server returns the authoritative
+    // queue. Two things happen here, in order:
+    //
+    //   1. render() redraws the item list, the totals, and the wrapper
+    //      state.
+    //   2. openPanel() forces the panel back to expanded, overriding
+    //      whatever collapsed state the user left it in. The customer
+    //      just added something; showing them the updated queue is
+    //      the expected response to that action.
+    //
+    // If the add fails, the panel is left exactly where it was.
     // ----------------------------------------------------------------
     window.addToQueue = function (productId, name, price, quantity, image, stock, restaurantName, branchName) {
         quantity = quantity || 1;
@@ -426,6 +527,16 @@
         if (initialized) return;
         initialized = true;
 
+        // Force the panel into the expanded state before the first
+        // fetch resolves. The markup ships without an open/closed
+        // class, so this is what makes the initial DOM match
+        // isOpen === true from the very first paint.
+        if (panel) {
+            panel.classList.remove('closed');
+            panel.classList.add('open');
+        }
+        if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'true');
+
         refreshQueue();
 
         if (panelHeader) {
@@ -495,7 +606,7 @@
             }
         });
 
-        console.log('Queue Panel v6.1 initialized');
+        console.log('Queue Panel v6.3 initialized');
     }
 
     if (document.readyState === 'loading') {

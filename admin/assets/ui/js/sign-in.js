@@ -5,7 +5,19 @@
  * All real validation happens server-side; this is a UX layer only.
  *
  * @package FitPal
- * @version 1.0
+ * @version 1.1 — Input error class switched from 'error' to
+ *                'is-error' to match the admin role's convention.
+ *                profile.js has always used 'is-error', and the
+ *                shared admin form styles are written against that
+ *                name. sign-in.js was the only holdout still adding
+ *                the bare 'error' class, which meant the sign-in
+ *                page needed its own duplicate CSS rule to style
+ *                the invalid state. Both files now agree on
+ *                'is-error'.
+ *
+ *                sign-in.css still carries an `.error` rule during
+ *                the transition. A follow-up CSS pass can delete it
+ *                once nothing references the old name.
  */
 
 (function () {
@@ -80,11 +92,11 @@
             clearFieldError(password, passwordError);
         }
         function showFieldError(input, errorEl, message) {
-            if (input)   input.classList.add('error');
+            if (input)   input.classList.add('is-error');
             if (errorEl) { errorEl.textContent = message; errorEl.style.display = 'block'; }
         }
         function clearFieldError(input, errorEl) {
-            if (input)   input.classList.remove('error');
+            if (input)   input.classList.remove('is-error');
             if (errorEl) { errorEl.textContent = ''; errorEl.style.display = 'none'; }
         }
     });

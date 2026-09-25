@@ -8,7 +8,17 @@
  *             scoped to a specific branch_code
  *
  * @package FitPal
- * @version 2.0 — Owns its own CSRF bootstrap and rotates the
+ * @version 2.1 — Writes the signed-in account's display name to the
+ *                restaurant role's own session key, 'restaurant_name',
+ *                instead of the shared 'user_name' key. Removes the
+ *                writes to the shared 'user_email' and 'user_role'
+ *                keys entirely, since nothing in the restaurant role
+ *                reads them and every other role runs on the same PHP
+ *                session — a restaurant sign-in writing those keys
+ *                would clobber whatever the rider, customer, or admin
+ *                role had stored under them.
+ *
+ *                Owns its own CSRF bootstrap and rotates the
  *                restaurant token on mismatch.
  *
  *                require_once on includes/restaurant-csrf-token.php
@@ -36,10 +46,11 @@
  *                by this file — other roles in the same PHP session
  *                may still depend on it.
  *
- *                (1.2: Validated against restaurant_csrf_token (own
+ *                (2.0: Validated against restaurant_csrf_token (own
  *                key) instead of the shared csrf_token, so a sign-in
  *                by another role in the same browser session can no
- *                longer delete/rotate the token this form relied on.)
+ *                longer delete/rotate the token this form relied on.
+ *                1.2: Same key split for the sign-in form itself.)
  */
 
 declare(strict_types=1);
@@ -156,11 +167,9 @@ try {
     $_SESSION['restaurant_branch_code'] = (string)($account['branch_code'] ?? '');
     $_SESSION['restaurant_branch_name'] = (string)($account['branch_name'] ?? '');
     $_SESSION['restaurant_scope']       = $roleScope;
-    $_SESSION['user_role']              = 'restaurant';
-    $_SESSION['user_name']              = trim(
+    $_SESSION['restaurant_name']        = trim(
         ($account['first_name'] ?? '') . ' ' . ($account['last_name'] ?? '')
     );
-    $_SESSION['user_email']             = (string)($account['email'] ?? '');
     $_SESSION['restaurant_role']        = (string)($account['role'] ?? 'owner');
     $_SESSION['business_name']          = (string)($account['business_name'] ?? '');
     $_SESSION['created']                = time();

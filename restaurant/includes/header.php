@@ -32,12 +32,21 @@
  *    kitchen page is an operational surface for branch staff.
  *
  * @package FitPal
- * @version 4.0 — Adds restaurant-csrf-token.php and assigns
+ * @version 4.1 — Reads the signed-in account's display name from the
+ *                restaurant role's own session key, 'restaurant_name',
+ *                instead of the shared 'user_name' key. All four roles
+ *                (admin, customer, rider, restaurant) run on the same
+ *                PHP session, so a shared name key meant a rider or
+ *                customer sign-out in the same browser could wipe the
+ *                restaurant's display name mid-session. The name is now
+ *                role-scoped and immune to other roles' sign-out paths.
+ *
+ *                (4.0: Adds restaurant-csrf-token.php and assigns
  *                $csrfToken unconditionally so no restaurant page
  *                needs to bootstrap CSRF itself. Removes the
  *                duplicated inline token generation that existed in
  *                sign-in.php, sign-up.php, profile.php, and
- *                kitchen.php. (3.1: Adds the Kitchen nav link for
+ *                kitchen.php. 3.1: Adds the Kitchen nav link for
  *                branch staff roles.)
  */
 
@@ -75,7 +84,7 @@ function getRestaurantAssetBase(): string
 $assetBase = getRestaurantAssetBase();
 
 $isLoggedIn      = !empty($_SESSION['restaurant_account_id']);
-$accountName     = $isLoggedIn ? (string)($_SESSION['user_name']       ?? '') : '';
+$accountName     = $isLoggedIn ? (string)($_SESSION['restaurant_name']  ?? '') : '';
 $businessName    = $isLoggedIn ? (string)($_SESSION['business_name']   ?? '') : '';
 $restaurantRole  = $isLoggedIn ? (string)($_SESSION['restaurant_role'] ?? '') : '';
 $restaurantScope = $isLoggedIn ? (string)($_SESSION['restaurant_scope'] ?? 'owner') : '';

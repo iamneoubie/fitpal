@@ -4,7 +4,28 @@
  *
  * Shows the current status, a progress timeline, the assigned rider,
  * the restaurant contact, order summary, and a chat modal that lets
- * the customer message the restaurant and the rider.
+ * the customer message the kitchen and (once a rider has accepted)
+ * the rider.
+ *
+ * ---------------------------------------------------------------------
+ * CHAT GATING (mirrors the handler)
+ * ---------------------------------------------------------------------
+ *   - Kitchen tab     → rendered for every order that is not
+ *                       cancelled/refunded. The customer can start a
+ *                       conversation from the moment the order is
+ *                       placed.
+ *   - Rider tab       → rendered only when the order has a rider
+ *                       assigned AND the order is not
+ *                       cancelled/refunded. The Message button on
+ *                       the rider card is disabled while the order
+ *                       sits in 'rider_pending' (rider has not
+ *                       accepted yet). It becomes live the moment
+ *                       the order reaches 'delivering'.
+ *
+ * The two "Message" buttons on the tracking cards open the same
+ * modal but route to different tabs:
+ *   - Rider card      → data-open-tab="delivery_rider"
+ *   - Restaurant card → data-open-tab="restaurant_account"
  *
  * ---------------------------------------------------------------------
  * SCOPE RULES APPLIED
@@ -16,8 +37,23 @@
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 1.1 — CSRF token now inherited from header.php; local
- *                generation removed.
+ * @version 1.3 — Chat gating:
+ *                  - Rider card and rider chat tab are rendered only
+ *                    when the rider has actually accepted the order
+ *                    (status = 'delivering' or 'delivered'). During
+ *                    'rider_pending' the rider card still shows so
+ *                    the customer can see who was assigned, but the
+ *                    Message button is a disabled placeholder with a
+ *                    short caption.
+ *                  - The Message button on each card carries
+ *                    data-open-tab so the modal opens on the right
+ *                    channel.
+ *                  - Kitchen tab is hidden on cancelled/refunded
+ *                    orders, matching the handler's refusal.
+ *
+ *                (1.2: CSRF token inherited from header.php; local
+ *                generation removed. 1.1: fixed rider and restaurant
+ *                Message buttons both opening the same tab.)
  */
 
 declare(strict_types=1);
@@ -76,9 +112,33 @@ $serviceFee   = $totals ? (float)$totals['service_fee']  : 0.0;
 $vat          = $totals ? (float)$totals['vat']          : 0.0;
 $orderTotal   = $totals ? (float)$totals['total']        : 0.0;
 
-// Chat unread counts
-$unreadRestaurant = countUnreadOrderMessages($database_connection, $orderId, 'restaurant_account');
-$unreadRider      = countUnreadOrderMessages($database_connection, $orderId, 'delivery_rider');
+// Chat gating flags. The rider card is shown only when a rider is
+// attached AND the order is not cancelled/refunded. The Message
+// button on that card is live only when the rider has actually
+// accepted (order is 'delivering' or 'delivered').
+$hasRider          = $rider !== false;
+$riderCanBeMessaged = $hasRider && !$isTerminal && riderHasAcceptedOrder($database_connection, $orderId);
+
+$showRiderCard = $hasRider && !$isTerminal;
+$showRiderTab  = $showRiderCard && $riderCanBeMessaged;
+
+$showKitchenTab = !$isTerminal;
+
+// Unread counts. Rider count is only meaningful once the rider is
+// allowed to talk to the customer; before then the rider channel has
+// no history anyway, and countUnreadOrderMessages() would return 0.
+$unreadRestaurant = $showKitchenTab
+    ? countUnreadOrderMessages($database_connection, $orderId, 'restaurant_account')
+    : 0;
+
+$unreadRider = $showRiderTab
+    ? countUnreadOrderMessages($database_connection, $orderId, 'delivery_rider')
+    : 0;
+
+// Default tab when the modal opens without an explicit origin. The
+// kitchen is always available for a live order, so it is the safe
+// default.
+$defaultChatTab = $showKitchenTab ? 'restaurant_account' : 'delivery_rider';
 
 /**
  * Format a peso amount for display on this page.
@@ -97,7 +157,10 @@ require_once __DIR__ . '/../includes/header.php';
 <link rel="stylesheet" href="../assets/css/order-tracking.css">
 
 <div class="content tracking-page" id="trackingPage" data-order-id="<?php echo $orderId; ?>"
-    data-csrf-token="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+    data-csrf-token="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>"
+    data-default-chat-tab="<?php echo htmlspecialchars($defaultChatTab, ENT_QUOTES, 'UTF-8'); ?>"
+    data-can-message-kitchen="<?php echo $showKitchenTab ? '1' : '0'; ?>"
+    data-can-message-rider="<?php echo $riderCanBeMessaged ? '1' : '0'; ?>">
 
     <div class="container">
 
@@ -199,12 +262,12 @@ require_once __DIR__ . '/../includes/header.php';
             <div>
 
                 <!-- Rider Card -->
+                <?php if ($showRiderCard): ?>
                 <section class="tracking-card" style="margin-bottom: 24px;" aria-labelledby="rider-card-title">
                     <div class="card-header">
                         <h2 class="heading-5" id="rider-card-title">Your Rider</h2>
                     </div>
                     <div class="card-body">
-                        <?php if ($rider): ?>
                         <div class="rider-info">
                             <div class="rider-avatar">
                                 <?php if (!empty($rider['profile_picture'])): ?>
@@ -237,12 +300,21 @@ require_once __DIR__ . '/../includes/header.php';
                             </div>
                         </div>
                         <div class="rider-actions">
-                            <button type="button" class="btn btn-chat" id="chatOpenBtn">
+                            <?php if ($riderCanBeMessaged): ?>
+                            <button type="button" class="btn btn-chat" id="chatOpenBtn" data-open-tab="delivery_rider">
                                 <img src="<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg" alt=""
                                     class="btn-icon" width="16" height="16">
                                 <span>Message<?php echo $unreadRider > 0 ? ' (' . $unreadRider . ')' : ''; ?></span>
                             </button>
-                            <?php if (!empty($rider['contact_number'])): ?>
+                            <?php else: ?>
+                            <button type="button" class="btn btn-chat" disabled aria-disabled="true"
+                                title="Waiting for the rider to accept your order">
+                                <img src="<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg" alt=""
+                                    class="btn-icon" width="16" height="16">
+                                <span>Waiting for rider to accept</span>
+                            </button>
+                            <?php endif; ?>
+                            <?php if (!empty($rider['contact_number']) && $riderCanBeMessaged): ?>
                             <a href="tel:<?php echo htmlspecialchars(preg_replace('/\s+/', '', (string)$rider['contact_number']), ENT_QUOTES, 'UTF-8'); ?>"
                                 class="btn btn-call">
                                 <img src="<?php echo $assetBase; ?>assets/images/icons/phone-fill.svg" alt=""
@@ -251,7 +323,14 @@ require_once __DIR__ . '/../includes/header.php';
                             </a>
                             <?php endif; ?>
                         </div>
-                        <?php else: ?>
+                    </div>
+                </section>
+                <?php elseif (!$hasRider && !$isTerminal): ?>
+                <section class="tracking-card" style="margin-bottom: 24px;" aria-labelledby="rider-card-title">
+                    <div class="card-header">
+                        <h2 class="heading-5" id="rider-card-title">Your Rider</h2>
+                    </div>
+                    <div class="card-body">
                         <div class="rider-placeholder">
                             <div class="rider-placeholder-icon">
                                 <img src="<?php echo $assetBase; ?>assets/images/icons/riding-line.svg" alt=""
@@ -259,12 +338,12 @@ require_once __DIR__ . '/../includes/header.php';
                             </div>
                             <p>A rider will be assigned once your order is ready for pickup.</p>
                         </div>
-                        <?php endif; ?>
                     </div>
                 </section>
+                <?php endif; ?>
 
                 <!-- Restaurant Card -->
-                <?php if ($restaurant): ?>
+                <?php if ($restaurant && $showKitchenTab): ?>
                 <section class="tracking-card" aria-labelledby="restaurant-card-title">
                     <div class="card-header">
                         <h2 class="heading-5" id="restaurant-card-title">Restaurant</h2>
@@ -292,12 +371,45 @@ require_once __DIR__ . '/../includes/header.php';
                             </div>
                         </div>
                         <div class="restaurant-actions">
-                            <button type="button" class="btn btn-chat" id="chatOpenBtnRestaurant">
+                            <button type="button" class="btn btn-chat" id="chatOpenBtnRestaurant"
+                                data-open-tab="restaurant_account">
                                 <img src="<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg" alt=""
                                     class="btn-icon" width="16" height="16">
                                 <span>Message<?php echo $unreadRestaurant > 0 ? ' (' . $unreadRestaurant . ')' : ''; ?></span>
                             </button>
                         </div>
+                    </div>
+                </section>
+                <?php elseif ($restaurant): ?>
+                <section class="tracking-card" aria-labelledby="restaurant-card-title">
+                    <div class="card-header">
+                        <h2 class="heading-5" id="restaurant-card-title">Restaurant</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="restaurant-info">
+                            <div class="restaurant-avatar">
+                                <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt=""
+                                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/restaurant-fill.svg'">
+                            </div>
+                            <div class="restaurant-details">
+                                <p class="restaurant-name">
+                                    <?php echo htmlspecialchars(getRestaurantDisplayName($restaurant), ENT_QUOTES, 'UTF-8'); ?>
+                                </p>
+                                <p class="restaurant-branch">
+                                    <?php
+                                    $branchParts = array_filter([
+                                        $restaurant['branch_name'] ?? '',
+                                        $restaurant['barangay']    ?? '',
+                                        $restaurant['city']        ?? '',
+                                    ]);
+                                    echo htmlspecialchars(implode(', ', $branchParts), ENT_QUOTES, 'UTF-8');
+                                    ?>
+                                </p>
+                            </div>
+                        </div>
+                        <p class="rider-placeholder" style="margin-top: 12px;">
+                            This order is closed. Messaging is no longer available.
+                        </p>
                     </div>
                 </section>
                 <?php endif; ?>
@@ -364,8 +476,10 @@ require_once __DIR__ . '/../includes/header.php';
 
 <!-- ============================================
      CUSTOMER CHAT MODAL
-     Structure mirrors the rider chat modal but
-     uses customer-specific class names.
+     Opened by either Message button on the page. The button's
+     data-open-tab attribute decides which tab is active on open;
+     the panel then lets the customer switch freely to whichever
+     channels are available for this order.
      ============================================ -->
 <div id="customerChatModal" class="modal" style="display: none;">
     <div class="modal-overlay"></div>
@@ -379,13 +493,22 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
 
         <div class="customer-chat-tabs">
-            <button type="button" class="customer-chat-tab active" data-recipient="restaurant_account">
+            <?php if ($showKitchenTab): ?>
+            <button type="button"
+                class="customer-chat-tab<?php echo $defaultChatTab === 'restaurant_account' ? ' active' : ''; ?>"
+                data-recipient="restaurant_account"
+                aria-selected="<?php echo $defaultChatTab === 'restaurant_account' ? 'true' : 'false'; ?>">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt=""
                     class="customer-chat-tab-icon" width="16" height="16">
                 <span>Restaurant</span>
             </button>
-            <?php if ($rider): ?>
-            <button type="button" class="customer-chat-tab" data-recipient="delivery_rider">
+            <?php endif; ?>
+
+            <?php if ($showRiderTab): ?>
+            <button type="button"
+                class="customer-chat-tab<?php echo $defaultChatTab === 'delivery_rider' ? ' active' : ''; ?>"
+                data-recipient="delivery_rider"
+                aria-selected="<?php echo $defaultChatTab === 'delivery_rider' ? 'true' : 'false'; ?>">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/riding-fill.svg" alt=""
                     class="customer-chat-tab-icon" width="16" height="16">
                 <span>Rider</span>
@@ -399,7 +522,8 @@ require_once __DIR__ . '/../includes/header.php';
 
         <form class="customer-chat-form" id="customerChatForm">
             <input type="hidden" id="customerChatOrderId" value="<?php echo $orderId; ?>">
-            <input type="hidden" id="customerChatRecipient" value="restaurant_account">
+            <input type="hidden" id="customerChatRecipient"
+                value="<?php echo htmlspecialchars($defaultChatTab, ENT_QUOTES, 'UTF-8'); ?>">
             <input type="text" id="customerChatInput" class="customer-chat-input" placeholder="Type your message…"
                 maxlength="500" autocomplete="off" required>
             <button type="submit" class="customer-chat-send" aria-label="Send message">

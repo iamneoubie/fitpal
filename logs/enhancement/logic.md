@@ -7,4 +7,3 @@ rider no withdraw button / bank transfer
 customer no customize button in customer check out
 
 rider no history of transaction
-

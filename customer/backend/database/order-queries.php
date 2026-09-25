@@ -30,12 +30,24 @@
  *   Online — records a `completed` payment transaction. No wallet
  *            movement (simulation).
  *
+ * Cancellation policy:
+ *   Only 'pending' orders are cancellable by the customer. Once the
+ *   kitchen accepts an order and moves it to 'preparing', the order
+ *   is locked from the customer's side. See
+ *   cancelOrderAsCustomer() for the guard clause that enforces this
+ *   atomically.
+ *
  * Refund policy: see refundOrderToWallet().
  *
  * @package FitPal
- * @version 7.0 — Raw SQL from order-handler.php moved here; reorder
- *                line builder co-located because this file is safe
- *                to require from pages.
+ * @version 7.1 — cancelOrderAsCustomer() guard tightened to 'pending'
+ *                only. Matches the button visibility in orders.php
+ *                and the status guard in
+ *                order-handler.php::handleCancelOrder().
+ *
+ *                (7.0: raw SQL from order-handler.php moved here;
+ *                reorder line builder co-located because this file is
+ *                safe to require from pages.)
  */
 
 declare(strict_types=1);
@@ -372,10 +384,14 @@ function getOrderOwnership(PDO $db, int $orderId, int $customerId): array|false
  * Move a customer's order to its final cancelled/refunded state.
  *
  * The guard clause in the UPDATE ensures the transition only happens
- * from a cancellable state ('pending' or 'preparing'). If a concurrent
- * request already moved the order forward, rowCount() is 0 and this
- * returns false — the caller should treat that as "already processed"
- * rather than retrying.
+ * from 'pending'. If the kitchen has already moved the order to
+ * 'preparing' — or a concurrent request beat this one — rowCount() is
+ * 0 and this returns false. The caller should treat that as "already
+ * processed" rather than retrying.
+ *
+ * This is the atomic check: the status predicate runs inside the same
+ * UPDATE that performs the transition, so there is no window between
+ * a read-and-decide and the write.
  *
  * @param PDO $db
  * @param int $orderId
@@ -396,7 +412,7 @@ function cancelOrderAsCustomer(
                 updated_at   = NOW()
           WHERE order_id = :order_id
             AND customer_id = :customer_id
-            AND order_status IN ('pending', 'preparing')"
+            AND order_status = 'pending'"
     );
     $stmt->execute([
         ':new_status'  => $finalStatus,

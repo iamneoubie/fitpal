@@ -39,7 +39,7 @@ if (isset($_SESSION['customer_id']) && !empty($_SESSION['customer_id'])) {
 // Single source of truth for the customer role's CSRF token. The
 // helper generates it on first use and stores it under
 // 'customer_csrf_token' — never the shared 'csrf_token' key.
-require_once __DIR__ . '/../includes/csrf_token.php';
+require_once __DIR__ . '/../includes/customer-csrf-token.php';
 $csrfToken = getCustomerCsrfToken();
 
 require_once __DIR__ . '/../includes/header.php';

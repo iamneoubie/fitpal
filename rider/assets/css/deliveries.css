@@ -1,15 +1,55 @@
 /**
  * FitPal Rider Deliveries Page Styles
  *
+ * Layout
+ * ------
+ * Three filter tabs (Active / Assigned / History). Each tab is an
+ * anchor link carrying ?tab=<name>; the server renders only the
+ * selected panel. The tab bar stays static across renders; only
+ * the .active panel runs the enter animation.
+ *
+ * Shared markup
+ * -------------
+ * The two actionable tabs (Active, Assigned) render the same card
+ * shape so a rider sees the same pickup → drop-off block regardless
+ * of which tab they are on:
+ *
+ *   .rider-delivery-card             card shell
+ *   .rider-delivery-card-head        order # + status badge
+ *   .rider-delivery-card-route       pickup → connector → dropoff
+ *   .rider-delivery-card-facts       items / order / earning pills
+ *   .rider-delivery-card-actions     Call / Message / status button
+ *
+ * Shared route and fact rules are declared once and used by both.
+ *
+ * Tab transition
+ * --------------
+ * Only the active panel runs the fade + slide-up keyframe, so a
+ * tab switch reads as a content change instead of a full-page
+ * reload. The tab bar itself never animates — the tap target the
+ * user just hit stays exactly where they left it.
+ *
+ * Reduced-motion safety: both the panel animation and the panel
+ * hover transitions are disabled under prefers-reduced-motion.
+ *
  * @package FitPal
- * @version 3.4 — .btn-neutral and .btn-danger are now global on this
- *                page instead of scoped to .rider-deliveries-page.
- *                This makes them reach the confirm modal, which
- *                lives outside the page wrapper. Cancel renders
- *                black-on-white as the button rules require.
- *                Icon file paths were already corrected in the
- *                page markup; no CSS change was needed for them.
- *                Every textarea rule still sets resize: none.
+ * @version 5.0 — Relaid out as filter tabs:
+ *                  - Added .rider-deliveries-tabs / -tab / -count
+ *                    so the tab bar matches customer orders.php.
+ *                  - Replaced the always-scrolling layout with
+ *                    three .rider-deliveries-panel sections.
+ *                  - Introduced a single .rider-delivery-card
+ *                    shape shared by Active and Assigned.
+ *                  - Added panel enter animation + reduced-motion
+ *                    escape hatch.
+ *                  - Folded the old rider-assigned-* and
+ *                    rider-active-* namespaces into the shared
+ *                    card shape; both used the same info, only
+ *                    their action rows differed.
+ *
+ *                (4.0: stat strip removed. 3.4: .btn-neutral and
+ *                .btn-danger made global. 3.0: initial deliveries
+ *                layout.)
  */
 
 /* ============================================
@@ -104,143 +144,321 @@
     margin: 0 auto;
     padding: 0 16px;
     width: 100%;
+    box-sizing: border-box;
 }
 
 /* ============================================
-   PAGE HEADER
+   PAGE TITLE HEADER
+   Back button on the left, title on the right.
    ============================================ */
 
-.rider-page-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
+.page-title-header {
     margin-bottom: 24px;
-    flex-wrap: wrap;
-    gap: 16px;
 }
 
-.rider-page-header .heading-2 {
-    margin: 0 0 4px 0;
-    font-size: var(--font-size-3xl);
+.page-title-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.page-title-header h1 {
+    font-size: var(--font-size-2xl);
+    font-weight: 700;
+    color: var(--text);
+    margin: 0;
+    text-align: right;
     line-height: 1.2;
 }
 
-.rider-page-header .heading-2 span {
-    color: var(--primary);
-}
-
-.rider-page-header .text-muted {
-    color: var(--gray-500);
-    margin: 0;
-    font-size: var(--font-size-sm);
-}
-
-.rider-page-actions {
-    display: flex;
+.page-title-header .back-btn {
+    display: inline-flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
+    color: #ffffff;
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    font-family: inherit;
+    padding: 10px 18px;
+    border-radius: var(--radius-base);
+    background: #1a1a1a;
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    cursor: pointer;
+    white-space: nowrap;
     flex-shrink: 0;
 }
 
-/* ============================================
-   DELIVERY STATS
-   ============================================ */
-
-.rider-delivery-stats {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    margin-bottom: 24px;
+.page-title-header .back-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.rider-delivery-stat {
-    background: var(--white);
-    border: 1px solid var(--gray-100);
-    border-radius: var(--radius-lg);
-    padding: 18px 20px;
-    text-align: center;
-    box-shadow: var(--shadow-sm);
-}
-
-.rider-delivery-stat-number {
+.page-title-header .back-btn-icon {
+    width: 20px;
+    height: 20px;
     display: block;
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    color: var(--text);
-    line-height: 1.2;
-}
-
-.rider-delivery-stat-label {
-    display: block;
-    font-size: var(--font-size-xs);
-    color: var(--gray-500);
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-    font-weight: var(--font-weight-medium);
-    margin-top: 4px;
+    flex-shrink: 0;
+    filter: brightness(0) invert(1);
 }
 
 /* ============================================
-   ACTIVE / ASSIGNED DELIVERIES
+   ALERTS
    ============================================ */
 
-.rider-active-deliveries {
+.alert {
+    padding: 12px 18px;
+    border-radius: var(--radius-base);
+    margin-bottom: 20px;
+    border: 1px solid transparent;
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+}
+
+.alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+
+.alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+/* ============================================
+   TAB BAR
+   Mirrors the customer orders page's filter tabs: pill row,
+   active tab filled primary, count badge on each tab that has
+   rows. The Assigned tab's count uses the alert tint so a
+   pending decision reads as something needing attention.
+   ============================================ */
+
+.rider-deliveries-tabs {
     display: flex;
-    flex-direction: column;
-    gap: 16px;
-    padding: 16px 20px;
-}
-
-.rider-active-delivery-card {
+    gap: 6px;
     background: var(--white);
     border: 1px solid var(--gray-200);
     border-radius: var(--radius-lg);
-    overflow: hidden;
-    transition: border-color 0.15s ease;
+    padding: 4px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-sm);
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
 }
 
-.rider-active-delivery-card:hover {
+.rider-deliveries-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.rider-deliveries-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    padding: 10px 16px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--gray-600);
+    text-decoration: none;
+    text-align: center;
+    white-space: nowrap;
+    transition: background 0.15s ease, color 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.rider-deliveries-tab:hover {
+    background: var(--gray-50);
+    color: var(--text);
+}
+
+.rider-deliveries-tab:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.rider-deliveries-tab.active {
+    background: var(--primary);
+    color: var(--white);
+}
+
+.rider-deliveries-tab-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+    opacity: 0.7;
+    filter: brightness(0) saturate(100%)
+            invert(45%) sepia(8%) saturate(800%)
+            hue-rotate(50deg) brightness(95%) contrast(90%);
+    transition: opacity 0.15s ease, filter 0.15s ease;
+}
+
+.rider-deliveries-tab:hover .rider-deliveries-tab-icon {
+    opacity: 1;
+    filter: brightness(0) saturate(100%)
+            invert(20%) sepia(8%) saturate(800%)
+            hue-rotate(50deg) brightness(95%) contrast(95%);
+}
+
+.rider-deliveries-tab.active .rider-deliveries-tab-icon {
+    opacity: 1;
+    filter: brightness(0) invert(1);
+}
+
+/* ---- Count badge ---- */
+
+.rider-deliveries-tab-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: var(--radius-full);
+    background: var(--gray-200);
+    color: var(--gray-700);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.rider-deliveries-tab-count-alert {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.rider-deliveries-tab:hover .rider-deliveries-tab-count {
+    background: var(--gray-300);
+}
+
+.rider-deliveries-tab:hover .rider-deliveries-tab-count-alert {
+    background: #ffecb3;
+}
+
+.rider-deliveries-tab.active .rider-deliveries-tab-count,
+.rider-deliveries-tab.active .rider-deliveries-tab-count-alert {
+    background: rgba(255, 255, 255, 0.25);
+    color: var(--white);
+}
+
+/* ============================================
+   PANELS
+   Only the active panel renders content. Only the active panel
+   runs the enter animation, so a tab switch reads as a content
+   change rather than a full-page reload.
+   ============================================ */
+
+.rider-deliveries-panel {
+    display: block;
+}
+
+.rider-deliveries-panel.active {
+    animation: riderDeliveriesPanelIn 180ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes riderDeliveriesPanelIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================
+   LIST
+   Vertical stack of delivery cards.
+   ============================================ */
+
+.rider-deliveries-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* ============================================
+   DELIVERY CARD
+   Shared shape used by both the Active and Assigned tabs.
+   ============================================ */
+
+.rider-delivery-card {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.rider-delivery-card:hover {
     border-color: var(--gray-300);
+    box-shadow: var(--shadow-md);
 }
 
-.rider-active-delivery-header {
+.rider-delivery-card-assigned {
+    border-left: 3px solid var(--primary);
+}
+
+/* ---- Head: order id + status badge ---- */
+
+.rider-delivery-card-head {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    padding: 14px 18px;
-    background: var(--gray-50);
-    border-bottom: 1px solid var(--gray-200);
     gap: 12px;
     flex-wrap: wrap;
 }
 
-.rider-active-delivery-order {
-    margin: 0 0 2px 0;
-    font-size: var(--font-size-base);
-    font-weight: var(--font-weight-bold);
-    color: var(--text);
+.rider-delivery-card-id {
+    min-width: 0;
 }
 
-.rider-active-delivery-date {
+.rider-delivery-card-order {
+    margin: 0 0 2px 0;
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.2;
+}
+
+.rider-delivery-card-date {
     margin: 0;
     font-size: var(--font-size-xs);
     color: var(--gray-500);
 }
 
-.rider-active-delivery-body {
-    padding: 16px 18px;
+/* ---- Route ---- */
+
+.rider-delivery-card-route {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 0;
 }
 
-.rider-delivery-stop {
+.rider-route-stop {
     display: flex;
     align-items: flex-start;
     gap: 12px;
 }
 
-.rider-delivery-stop-icon {
+.rider-route-icon {
     width: 36px;
     height: 36px;
     border-radius: var(--radius-full);
@@ -248,36 +466,45 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    padding: 9px;
+    box-sizing: border-box;
 }
 
-.rider-delivery-stop-icon img {
-    width: 18px;
-    height: 18px;
+.rider-route-icon img {
+    width: 100%;
+    height: 100%;
+    max-width: 18px;
+    max-height: 18px;
     display: block;
+    object-fit: contain;
 }
 
-.rider-delivery-stop-icon-pickup {
+.rider-route-icon-pickup {
     background: rgba(255, 193, 7, 0.15);
 }
 
-.rider-delivery-stop-icon-pickup img {
-    filter: brightness(0) saturate(100%) invert(70%) sepia(90%) saturate(1000%) hue-rotate(0deg) brightness(95%) contrast(90%);
+.rider-route-icon-pickup img {
+    filter: brightness(0) saturate(100%)
+            invert(70%) sepia(90%) saturate(1000%)
+            hue-rotate(0deg) brightness(95%) contrast(90%);
 }
 
-.rider-delivery-stop-icon-dropoff {
+.rider-route-icon-dropoff {
     background: rgba(89, 193, 74, 0.12);
 }
 
-.rider-delivery-stop-icon-dropoff img {
-    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+.rider-route-icon-dropoff img {
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
 }
 
-.rider-delivery-stop-info {
+.rider-route-info {
     flex: 1;
     min-width: 0;
 }
 
-.rider-delivery-stop-label {
+.rider-route-label {
     margin: 0 0 2px 0;
     font-size: 10px;
     font-weight: var(--font-weight-bold);
@@ -286,106 +513,107 @@
     letter-spacing: 0.5px;
 }
 
-.rider-delivery-stop-name {
+.rider-route-name {
     margin: 0 0 2px 0;
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
     color: var(--text);
+    line-height: 1.3;
+    word-break: break-word;
 }
 
-.rider-delivery-stop-address {
+.rider-route-address {
     margin: 0;
     font-size: var(--font-size-xs);
     color: var(--gray-600);
     line-height: 1.4;
+    word-break: break-word;
 }
 
-.rider-delivery-connector {
+.rider-route-connector {
     height: 16px;
     margin-left: 17px;
     border-left: 2px dashed var(--gray-200);
 }
 
-.rider-active-delivery-meta {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-    padding: 14px 18px;
+/* ---- Fact pills ---- */
+
+.rider-delivery-card-facts {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+    padding: 12px 14px;
     background: var(--gray-50);
-    border-top: 1px solid var(--gray-100);
+    border: 1px solid var(--gray-100);
+    border-radius: var(--radius-base);
 }
 
-.rider-active-delivery-meta-item {
-    text-align: center;
+.rider-fact {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
 }
 
-.rider-active-delivery-meta-label {
-    display: block;
+.rider-fact-label {
     font-size: 10px;
+    font-weight: var(--font-weight-bold);
     color: var(--gray-500);
     text-transform: uppercase;
     letter-spacing: 0.4px;
-    font-weight: var(--font-weight-semibold);
-    margin-bottom: 4px;
+    line-height: 1.2;
 }
 
-.rider-active-delivery-meta-value {
-    display: block;
-    font-size: var(--font-size-base);
+.rider-fact-value {
+    font-size: var(--font-size-sm);
     font-weight: var(--font-weight-bold);
     color: var(--text);
+    line-height: 1.2;
+    white-space: nowrap;
 }
 
-.rider-active-delivery-meta-value-highlight {
+.rider-fact-value-highlight {
     color: var(--primary);
 }
 
-.rider-active-delivery-actions {
+/* ---- Actions ---- */
+
+.rider-delivery-card-actions {
     display: flex;
-    gap: 8px;
-    padding: 12px 18px;
-    border-top: 1px solid var(--gray-100);
+    align-items: center;
+    gap: 10px;
     flex-wrap: wrap;
 }
 
-.rider-active-delivery-actions .btn {
-    flex: 1;
-    min-width: 120px;
+.rider-delivery-card-actions .btn,
+.rider-delivery-card-actions .btn-neutral,
+.rider-delivery-card-actions .btn-danger,
+.rider-delivery-card-actions .btn-primary,
+.rider-delivery-card-actions .btn-disabled {
+    flex: 1 1 0;
+    min-width: 140px;
     justify-content: center;
+    padding: 10px 18px;
 }
 
-.rider-active-delivery-actions .btn-icon {
+.rider-delivery-card-actions .btn-icon {
     width: 16px;
     height: 16px;
     display: block;
     flex-shrink: 0;
 }
 
-/* Icons on neutral (black) buttons are inverted to white. */
-.rider-active-delivery-actions .btn-neutral .btn-icon {
+.rider-delivery-card-actions .btn-neutral .btn-icon,
+.rider-delivery-card-actions .btn-danger .btn-icon,
+.rider-delivery-card-actions .btn-primary .btn-icon {
     filter: brightness(0) invert(1);
 }
 
-/* Icons on danger (red) buttons are inverted to white. */
-.rider-active-delivery-actions .btn-danger .btn-icon {
-    filter: brightness(0) invert(1);
-}
-
-/* Icons on primary (green) buttons are inverted to white. */
-.rider-active-delivery-actions .btn-primary .btn-icon {
-    filter: brightness(0) invert(1);
-}
-
-/* --------------------------------------------------------------
-   Disabled action slot
-   -------------------------------------------------------------- */
-.rider-active-delivery-actions .btn-disabled {
+.rider-delivery-card-actions .btn-disabled {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    flex: 1;
-    min-width: 120px;
-    padding: 8px 16px;
     border: none;
     border-radius: var(--radius-base);
     background: var(--gray-100);
@@ -397,8 +625,16 @@
 }
 
 /* ============================================
-   DELIVERY HISTORY
+   HISTORY CARD
    ============================================ */
+
+.rider-deliveries-card {
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--gray-100);
+    overflow: hidden;
+}
 
 .rider-history-list {
     display: flex;
@@ -444,7 +680,9 @@
 }
 
 .rider-history-icon-success img {
-    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
 }
 
 .rider-history-icon-neutral {
@@ -452,7 +690,9 @@
 }
 
 .rider-history-icon-neutral img {
-    filter: brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(600%) hue-rotate(330deg) brightness(90%) contrast(85%);
+    filter: brightness(0) saturate(100%)
+            invert(40%) sepia(90%) saturate(600%)
+            hue-rotate(330deg) brightness(90%) contrast(85%);
 }
 
 .rider-history-info {
@@ -494,51 +734,61 @@
 }
 
 /* ============================================
-   EMPTY STATE
+   EMPTY STATE (per tab)
    ============================================ */
 
-.rider-empty-state {
+.rider-deliveries-empty {
     text-align: center;
-    padding: 40px 20px;
+    padding: 60px 24px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
     display: flex;
     flex-direction: column;
     align-items: center;
+    min-height: 320px;
+    justify-content: center;
 }
 
-.rider-empty-icon {
-    width: 64px;
-    height: 64px;
-    margin-bottom: 14px;
+.rider-deliveries-empty-icon {
+    width: 72px;
+    height: 72px;
+    margin-bottom: 16px;
     background: var(--gray-100);
     border-radius: var(--radius-full);
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 14px;
+    padding: 16px;
 }
 
-.rider-empty-icon img {
+.rider-deliveries-empty-icon img {
     width: 100%;
     height: 100%;
-    max-width: 32px;
-    max-height: 32px;
+    max-width: 40px;
+    max-height: 40px;
     object-fit: contain;
     opacity: 0.4;
 }
 
-.rider-empty-title {
+.rider-deliveries-empty-title {
+    margin: 0 0 6px 0;
     font-size: var(--font-size-base);
     font-weight: var(--font-weight-semibold);
     color: var(--text);
-    margin: 0 0 6px 0;
 }
 
-.rider-empty-text {
+.rider-deliveries-empty-text {
+    margin: 0;
     font-size: var(--font-size-sm);
     color: var(--gray-500);
-    margin: 0 0 12px 0;
-    max-width: 340px;
-    line-height: 1.5;
+    max-width: 400px;
+    line-height: 1.6;
+}
+
+.rider-deliveries-empty .btn {
+    margin-top: 16px;
 }
 
 /* ============================================
@@ -643,7 +893,9 @@
 
 .rider-chat-tab.active .rider-chat-tab-icon {
     opacity: 1;
-    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
 }
 
 .rider-chat-body {
@@ -773,9 +1025,6 @@
 
 /* ============================================
    CONFIRM MODAL
-   Icon-led card. Three icons are stacked in the icon circle; CSS
-   shows only the one matching the modal's data-icon. The confirm
-   button's colour follows the modal's data-variant.
    ============================================ */
 
 .rider-confirm-modal {
@@ -824,7 +1073,6 @@
     opacity: 1;
 }
 
-/* Icon circle: 64 px, tinted by variant. */
 .rider-confirm-icon {
     width: 64px;
     height: 64px;
@@ -845,7 +1093,6 @@
     background: rgba(220, 53, 69, 0.12);
 }
 
-/* Only one of the three icons is visible at a time. */
 .rider-confirm-icon img {
     width: 28px;
     height: 28px;
@@ -854,17 +1101,23 @@
 
 .rider-confirm-modal[data-icon="accept"] .rider-confirm-icon-accept {
     display: block;
-    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
 }
 
 .rider-confirm-modal[data-icon="decline"] .rider-confirm-icon-decline {
     display: block;
-    filter: brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(600%) hue-rotate(330deg) brightness(90%) contrast(85%);
+    filter: brightness(0) saturate(100%)
+            invert(40%) sepia(90%) saturate(600%)
+            hue-rotate(330deg) brightness(90%) contrast(85%);
 }
 
 .rider-confirm-modal[data-icon="delivered"] .rider-confirm-icon-delivered {
     display: block;
-    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%) hue-rotate(75deg) brightness(95%) contrast(85%);
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
 }
 
 .rider-confirm-title {
@@ -914,7 +1167,6 @@
     transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-/* Confirm button — stable class, colour from the modal's variant. */
 .rider-confirm-modal[data-variant="primary"] .rider-confirm-btn {
     background: var(--primary);
     border-color: var(--primary);
@@ -948,7 +1200,7 @@
 }
 
 /* ============================================
-   RESPONSIVE
+   RESPONSIVE — TABLET (≤ 768px)
    ============================================ */
 
 @media (max-width: 768px) {
@@ -956,22 +1208,68 @@
         padding: 16px 0 32px 0;
     }
 
-    .rider-page-header .heading-2 {
-        font-size: var(--font-size-2xl);
+    .page-title-header h1 {
+        font-size: var(--font-size-xl);
     }
 
-    .rider-delivery-stats {
-        grid-template-columns: repeat(2, 1fr);
+    .page-title-header .back-btn {
+        padding: 8px 14px;
+        font-size: var(--font-size-xs);
+    }
+
+    .page-title-header .back-btn-icon {
+        width: 16px;
+        height: 16px;
+    }
+
+    .rider-deliveries-tab {
+        padding: 10px 12px;
+        font-size: var(--font-size-xs);
+    }
+
+    .rider-deliveries-tab-icon {
+        width: 14px;
+        height: 14px;
+    }
+
+    .rider-deliveries-tab-count {
+        min-width: 18px;
+        height: 18px;
+        font-size: 10px;
+    }
+
+    .rider-delivery-card {
+        padding: 16px;
+        gap: 14px;
+    }
+
+    .rider-delivery-card-actions {
+        flex-wrap: wrap;
+    }
+
+    .rider-delivery-card-actions .btn,
+    .rider-delivery-card-actions .btn-neutral,
+    .rider-delivery-card-actions .btn-danger,
+    .rider-delivery-card-actions .btn-primary,
+    .rider-delivery-card-actions .btn-disabled {
+        flex: 1 1 calc(50% - 5px);
+        min-width: 0;
+    }
+
+    .rider-delivery-card-actions .btn:last-child,
+    .rider-delivery-card-actions .btn-disabled:last-child {
+        flex: 1 1 100%;
+    }
+
+    .rider-history-row {
+        grid-template-columns: 40px 1fr auto;
         gap: 12px;
+        padding: 12px 16px;
     }
 
-    .rider-active-delivery-actions {
-        flex-direction: column;
-    }
-
-    .rider-active-delivery-actions .btn,
-    .rider-active-delivery-actions .btn-disabled {
-        min-width: 100%;
+    .rider-history-icon {
+        width: 36px;
+        height: 36px;
     }
 
     .rider-chat-modal-content {
@@ -979,18 +1277,112 @@
     }
 }
 
+/* ============================================
+   RESPONSIVE — MOBILE (≤ 480px)
+   ============================================ */
+
 @media (max-width: 480px) {
-    .rider-delivery-stats {
-        grid-template-columns: 1fr 1fr;
+    .rider-deliveries-page .container {
+        padding: 0 12px;
+    }
+
+    .page-title-header h1 {
+        font-size: var(--font-size-lg);
+    }
+
+    .page-title-header-top {
         gap: 10px;
     }
 
-    .rider-delivery-stat {
-        padding: 14px 12px;
+    .page-title-header .back-btn {
+        padding: 8px 12px;
+        font-size: var(--font-size-xs);
     }
 
-    .rider-delivery-stat-number {
-        font-size: var(--font-size-xl);
+    /* Tab bar goes icon-above-label so three tabs fit cleanly */
+
+    .rider-deliveries-tabs {
+        padding: 3px;
+        gap: 4px;
+    }
+
+    .rider-deliveries-tab {
+        flex-direction: column;
+        gap: 3px;
+        padding: 8px 6px;
+        font-size: 11px;
+    }
+
+    .rider-deliveries-tab-icon {
+        width: 16px;
+        height: 16px;
+    }
+
+    .rider-deliveries-tab-count {
+        min-width: 16px;
+        height: 16px;
+        font-size: 9px;
+        padding: 0 5px;
+        position: absolute;
+        top: 4px;
+        right: 8px;
+    }
+
+    /* Give the tab a positioning context for the badge corner */
+    .rider-deliveries-tab {
+        position: relative;
+    }
+
+    .rider-delivery-card {
+        padding: 14px;
+        gap: 12px;
+    }
+
+    .rider-delivery-card-order {
+        font-size: var(--font-size-sm);
+    }
+
+    .rider-route-icon {
+        width: 32px;
+        height: 32px;
+        padding: 7px;
+    }
+
+    .rider-route-icon img {
+        max-width: 16px;
+        max-height: 16px;
+    }
+
+    .rider-route-connector {
+        margin-left: 15px;
+        height: 12px;
+    }
+
+    .rider-fact-label {
+        font-size: 9px;
+    }
+
+    .rider-fact-value {
+        font-size: var(--font-size-xs);
+    }
+
+    .rider-delivery-card-facts {
+        gap: 14px;
+        justify-content: space-between;
+    }
+
+    .rider-delivery-card-actions {
+        flex-direction: column-reverse;
+        gap: 8px;
+    }
+
+    .rider-delivery-card-actions .btn,
+    .rider-delivery-card-actions .btn-neutral,
+    .rider-delivery-card-actions .btn-danger,
+    .rider-delivery-card-actions .btn-primary,
+    .rider-delivery-card-actions .btn-disabled {
+        width: 100%;
+        flex: 1 1 auto;
     }
 
     .rider-history-row {
@@ -1020,19 +1412,20 @@
         width: 100%;
     }
 
-    .rider-active-delivery-meta {
-        grid-template-columns: 1fr;
-        gap: 8px;
+    .rider-deliveries-empty {
+        padding: 40px 18px;
+        min-height: 260px;
     }
 
-    .rider-active-delivery-meta-item {
-        display: flex;
-        justify-content: space-between;
-        text-align: left;
+    .rider-deliveries-empty-icon {
+        width: 60px;
+        height: 60px;
+        padding: 14px;
     }
 
-    .rider-active-delivery-meta-label {
-        margin-bottom: 0;
+    .rider-deliveries-empty-icon img {
+        max-width: 32px;
+        max-height: 32px;
     }
 
     .rider-chat-modal-content {
@@ -1060,10 +1453,15 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .rider-deliveries-panel.active {
+        animation: none !important;
+    }
+
+    .rider-delivery-card,
     .rider-confirm-modal,
     .rider-confirm-content,
     .rider-confirm-icon,
-    .rider-active-delivery-card,
+    .rider-history-row,
     .rider-chat-send,
     .rider-chat-tab {
         transition: none !important;

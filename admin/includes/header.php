@@ -17,21 +17,35 @@
  *   - Loads the signed-in administrator's display name, initial, and
  *     role when a session is present.
  *
- * The $csrfToken initialization is guarded with !isset() so a caller
- * that sets the variable before including this file (sign-in.php
- * does exactly that) is not clobbered with an empty default.
- * Authenticated pages do not set it first; the header assigns it
- * from getAdminCsrfToken() inside the logged-in branch.
+ * The $csrfToken initialization is deliberately asymmetric and both
+ * halves are intentional:
+ *
+ *   - Before the authenticated check, a guarded init sets an empty
+ *     default only when the caller has not already set the variable.
+ *     sign-in.php assigns $csrfToken before including this file, so
+ *     the guard prevents the header from clobbering it with ''.
+ *
+ *   - Inside the authenticated branch, the assignment is
+ *     UNCONDITIONAL. On an authenticated page the header is the
+ *     authoritative source of the token, and getAdminCsrfToken()
+ *     is idempotent within the request — if a future authenticated
+ *     page pre-set the variable, the value it set would be exactly
+ *     what the helper returns anyway. sign-in.php never reaches
+ *     this branch because it redirects away when a session is
+ *     already present. The asymmetry exists so the sign-in form
+ *     (unauthenticated) keeps its pre-set token while authenticated
+ *     pages get the header's value regardless of what they passed.
  *
  * @package FitPal
- * @version 5.1 — Rewrote the docblock to describe only current
- *                behavior. The historical narrative about the old
- *                inline generation block and the shared csrf_token
- *                key now lives in includes/admin-csrf-token.php,
- *                where it explains why the per-role key exists.
- *                No code change: the helper require, the guarded
- *                $csrfToken init, and the authenticated
- *                getAdminCsrfToken() call are unchanged from v5.0.
+ * @version 5.2 — Documented the intentional asymmetry in the
+ *                $csrfToken initialization. No code change: the
+ *                guarded default and the unconditional
+ *                authenticated-branch assignment are unchanged from
+ *                v5.0/v5.1. (5.1: Rewrote the docblock to describe
+ *                only current behavior. The historical narrative
+ *                about the old inline generation block and the
+ *                shared csrf_token key now lives in
+ *                includes/admin-csrf-token.php.)
  */
 
 declare(strict_types=1);
@@ -78,9 +92,10 @@ $adminName    = '';
 $adminInitial = '';
 $adminRole    = '';
 
-// Do not overwrite a value the caller may have already set. On the
-// sign-in page, sign-in.php assigns $csrfToken before including this
-// file; the header must not clobber it with an empty default.
+// Guarded default. On the sign-in page, sign-in.php assigns
+// $csrfToken before including this file; the header must not
+// clobber it with an empty default. See the class docblock for why
+// the authenticated branch below assigns unconditionally.
 if (!isset($csrfToken)) {
     $csrfToken = '';
 }
@@ -88,6 +103,12 @@ if (!isset($csrfToken)) {
 if (!empty($_SESSION['administrator_id'])) {
     $isLoggedIn = true;
 
+    // Unconditional on purpose. On an authenticated page the header
+    // is the authoritative source of the token, and
+    // getAdminCsrfToken() is idempotent within the request, so any
+    // value a caller pre-set would equal what the helper returns
+    // anyway. sign-in.php never reaches this branch — it redirects
+    // away when a session is already present.
     $csrfToken = getAdminCsrfToken();
 
     try {

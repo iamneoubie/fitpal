@@ -11,19 +11,39 @@
  * mirroring the restaurant and customer headers.
  *
  * Reserves the scrollbar gutter on <html> so hiding the body
- * scrollbar when the logout modal opens does not shift the page.
+ * scrollbar when a modal opens does not shift the page and does
+ * not leave the scrollbar's region unpainted behind the modal
+ * overlay. This is the same rule the customer role sets at the
+ * top of its own header.css; the customer side works because of
+ * it, the rider side was missing it.
  *
  * @package FitPal
- * @version 3.1 - scrollbar-gutter: stable added so the logout modal
- *                does not reflow the page behind it. Matches the fix
- *                already applied to customer/assets/css/header.css.
+ * @version 3.2 — Restores the html { scrollbar-gutter: stable }
+ *                rule at the top of the file, matching the
+ *                customer role's header.css. The customer page's
+ *                modal overlay covers the full viewport including
+ *                the scrollbar's region because the gutter is
+ *                reserved as part of the layout viewport; the
+ *                rider page's modal overlay stopped short of the
+ *                scrollbar because no gutter was reserved, leaving
+ *                a visible white strip between the overlay's right
+ *                edge and the scrollbar. Copying the rule here
+ *                makes the rider behave the same way the customer
+ *                does, without any JS-side padding compensation.
+ *
+ *                (3.1: scrollbar-gutter: stable added to the
+ *                page's assignment-panel.css — did not take effect.
+ *                Placing it in header.css matches the customer
+ *                role's working arrangement.)
  */
 
-/* Reserve the scrollbar gutter permanently. With this in place, the
-   viewport's usable width is identical whether a scrollbar is visible
-   or not, so nothing reflows when the body scrollbar is hidden by a
-   modal scroll lock. This is the same guard used by cart.css,
-   orders.css, and wallet.css on the customer side. */
+/* Reserve the scrollbar gutter permanently. With this in place,
+   the layout viewport is the same width whether a scrollbar is
+   visible or not, so hiding the body scrollbar when a modal opens
+   no longer widens the viewport, no longer shifts the page, and
+   no longer leaves a white strip along the right edge of a
+   modal's overlay. This matches the guard the customer role sets
+   in customer/assets/css/header.css. */
 html {
     scrollbar-gutter: stable;
 }

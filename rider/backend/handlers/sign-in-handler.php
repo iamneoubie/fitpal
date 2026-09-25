@@ -25,7 +25,19 @@
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 2.2 — Owns its own CSRF bootstrap and rotates the rider
+ * @version 2.3 — Removes the writes to the shared session keys
+ *                'user_name', 'user_email', and 'user_role'. All four
+ *                FitPal roles run on the same PHP session, and no
+ *                rider page reads any of those three keys — the rider
+ *                header loads the display name from the database, not
+ *                from the session. Leaving the writes in place only
+ *                gave the rider sign-in a way to clobber whatever the
+ *                restaurant, customer, or admin role had stored under
+ *                the same shared key in the same browser. The rider's
+ *                identity now lives entirely under the role-scoped
+ *                'delivery_rider_id' key.
+ *
+ *                Owns its own CSRF bootstrap and rotates the rider
  *                token on mismatch.
  *
  *                require_once on includes/rider-csrf-token.php makes
@@ -48,11 +60,12 @@
  *                by this file — other roles in the same PHP session
  *                may still depend on it.
  *
- *                (2.1: Validates against rider_csrf_token (own key)
+ *                (2.2: Validated against rider_csrf_token (own key)
  *                instead of the shared csrf_token, so a sign-in by
  *                another role in the same browser session can no
  *                longer delete/rotate the token this form relied on.
- *                Only unsets its own token key on success.)
+ *                Only unsets its own token key on success. 2.1:
+ *                Rotated rider token on CSRF mismatch.)
  */
 
 declare(strict_types=1);
@@ -137,11 +150,6 @@ try {
     $riderId = (int)$rider['delivery_rider_id'];
 
     $_SESSION['delivery_rider_id'] = $riderId;
-    $_SESSION['user_role']         = 'rider';
-    $_SESSION['user_name']         = trim(
-        ($rider['first_name'] ?? '') . ' ' . ($rider['last_name'] ?? '')
-    );
-    $_SESSION['user_email']        = (string)($rider['email'] ?? '');
     $_SESSION['created']           = time();
 
     // Explicit opt-in required: force offline on every fresh sign-in.
