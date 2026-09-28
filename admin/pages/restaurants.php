@@ -5,6 +5,13 @@
  * Paginated restaurant list with verification tabs, search, and a
  * nested detail modal.
  *
+ * Page header
+ * -----------
+ * Single flex row: heading block on the left, back button on the
+ * right. The back button is a .btn-outline inside
+ * .admin-page-header-actions, which the shared admin-tables.css
+ * renders as a neutral black/white pill anchored top-right.
+ *
  * Modal layout:
  *   Business Info tab  → sub-tabs: Details · Description
  *   Branches tab       → flat list of branch cards
@@ -15,30 +22,24 @@
  *   Accounts tab       → flat list of account holder cards
  *   Verification tab   → flat current-status summary
  *
- *   Footer: state-driven verification actions.
- *     The buttons rendered depend on the restaurant's current
- *     verification_status. Only the actions that make sense for the
- *     current state are shown.
+ * Footer is state-driven — buttons rendered depend on the
+ * restaurant's current verification_status:
  *
- *       pending   → [Verify] [Deny]
- *       verified  → [Suspend]
- *       denied    → [Verify] [Suspend]
- *       suspended → [Remove Suspension]     (returns to 'pending')
- *
- *     Arrows WRAP at the ends of the current walk set.
+ *     pending   → [Verify] [Deny]
+ *     verified  → [Suspend]
+ *     denied    → [Verify] [Suspend]
+ *     suspended → [Remove Suspension]  (returns to 'pending')
  *
  * No inline CSS. No inline JS. Styles come from admin-tables.css
  * plus the compact-override block at the end of restaurants.css.
  * Behaviour comes from the shared admin-modal.js.
  *
  * @package FitPal
- * @version 10.0 — Footer is now state-driven. Previously it always
- *                 rendered Approve/Deny. The button set is now a
- *                 function of the restaurant's current
- *                 verification_status, matching the schema's four
- *                 states (pending, verified, denied, suspended).
- *                 Remove Suspension returns the restaurant to
- *                 pending, not to verified.
+ * @version 12.0 — Page header markup adjusted so the title is
+ *                 top-left and the back button is top-right,
+ *                 matching the customer role's pattern and the
+ *                 admin-tables.css layout.
+ *                 (10.0: Footer is state-driven.)
  */
 declare(strict_types=1);
 
@@ -107,6 +108,10 @@ function buildRestaurantUrl(array $overrides = []): string
 <div class="content admin-list-page">
     <div class="container">
 
+        <!-- ============================================
+             PAGE HEADER
+             Title block left, back button right.
+             ============================================ -->
         <header class="admin-page-header">
             <div class="admin-page-header-left">
                 <h1 class="heading-2">Restaurant <span>Management</span></h1>
@@ -114,8 +119,8 @@ function buildRestaurantUrl(array $overrides = []): string
             </div>
             <div class="admin-page-header-actions">
                 <a href="dashboard.php" class="btn btn-outline btn-sm">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt=""
-                        class="btn-icon btn-icon-no-filter btn-icon-16" width="16" height="16">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt="" class="btn-icon"
+                        width="16" height="16">
                     <span>Dashboard</span>
                 </a>
             </div>
@@ -228,7 +233,7 @@ function buildRestaurantUrl(array $overrides = []): string
                         <a href="<?php echo htmlspecialchars(buildRestaurantUrl(['open' => $rid]), ENT_QUOTES, 'UTF-8'); ?>"
                             class="btn btn-outline btn-sm">
                             <img src="<?php echo $assetBase; ?>assets/images/icons/pages-line.svg" alt=""
-                                class="btn-icon btn-icon-no-filter btn-icon-14" width="14" height="14">
+                                class="btn-icon btn-icon-14" width="14" height="14">
                             <span>View Details</span>
                         </a>
                     </div>
@@ -595,20 +600,6 @@ function buildRestaurantUrl(array $overrides = []): string
 
         </div>
 
-        <!-- ============================================================
-             Footer — state-driven verification actions
-
-             Buttons rendered depend on $openVerification:
-               pending   → [Verify] [Deny]
-               verified  → [Suspend]
-               denied    → [Verify] [Suspend]
-               suspended → [Remove Suspension]
-
-             Each button posts status=<target> to
-             set_restaurant_verification. Remove Suspension posts
-             status=pending (returns to pending, not verified, so the
-             reviewer can choose again).
-             ============================================================ -->
         <div class="admin-modal-tab-footer">
             <button type="button" class="tab-arrow" data-phase-prev aria-label="Previous">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-s-line.svg" alt="" width="16"

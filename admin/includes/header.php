@@ -14,8 +14,46 @@
  *     path delete another role's already-rendered token.
  *   - Requires the shared PDO connection via admin-connect.php.
  *   - Computes $assetBase and $pageCssPath for the current page.
- *   - Loads the signed-in administrator's display name, initial, and
- *     role when a session is present.
+ *   - Resolves the signed-in administrator's display name, initial,
+ *     and role.
+ *
+ * Stylesheet load order
+ * ---------------------
+ * The header emits, in this order:
+ *
+ *   1. shared/assets/css/global.css       (design tokens + components)
+ *   2. shared/assets/css/header.css       (shared header chrome)
+ *   3. ../assets/css/header.css           (admin header tuning)
+ *   4. ../assets/css/admin-shared.css     (admin list-page chrome)
+ *   5. ../assets/css/<page>.css           (page-specific tuning)
+ *
+ * admin-shared.css was added in v5.4. It carries the list-page
+ * chrome that used to be duplicated across admin-tables.css,
+ * customers.css, riders.css, and restaurants.css. It must load
+ * before the page-specific file so the page tuning wins on cascade
+ * position without needing !important. It is linked unconditionally
+ * because the page map does not distinguish list pages from
+ * non-list pages; the rules it declares only apply to elements
+ * that carry the .admin-list-page / .admin-modal / .admin-table-*
+ * classes, so loading it on dashboard.php or profile.php is a
+ * no-op cost (a small file the browser caches after first use).
+ *
+ * Session-first display resolution
+ * --------------------------------
+ * Sign-in-handler.php writes $_SESSION['admin_name'] and
+ * $_SESSION['admin_role'] on the success path. This header reads
+ * them from the session first and only falls back to a database
+ * query when either is missing — which happens only for sessions
+ * that predate the migration of the sign-in handler to the
+ * {role}_-prefixed key convention (v1.6), or when a session was
+ * tampered with to strip the keys.
+ *
+ * Before this revision the header always queried, once per
+ * authenticated page load, on every page, even though the session
+ * almost always already carried the values. A five-page admin
+ * session paid five redundant LEFT JOIN queries. Now the query
+ * fires at most once per session, on the first page view after a
+ * sign-in that did not populate the session keys.
  *
  * The $csrfToken initialization is deliberately asymmetric and both
  * halves are intentional:
@@ -32,19 +70,25 @@
  *     page pre-set the variable, the value it set would be exactly
  *     what the helper returns anyway. sign-in.php never reaches
  *     this branch because it redirects away when a session is
- *     already present. The asymmetry exists so the sign-in form
- *     (unauthenticated) keeps its pre-set token while authenticated
- *     pages get the header's value regardless of what they passed.
+ *     already present.
  *
  * @package FitPal
- * @version 5.2 — Documented the intentional asymmetry in the
- *                $csrfToken initialization. No code change: the
- *                guarded default and the unconditional
- *                authenticated-branch assignment are unchanged from
- *                v5.0/v5.1. (5.1: Rewrote the docblock to describe
- *                only current behavior. The historical narrative
- *                about the old inline generation block and the
- *                shared csrf_token key now lives in
+ * @version 5.4 — Adds the admin-shared.css <link>, placed between
+ *                admin's own header.css and the page-specific CSS
+ *                link so shared list-page chrome loads before the
+ *                page tuning it is layered under.
+ *
+ *                (5.3: Session-first display resolution. The header
+ *                no longer fires a database query on every
+ *                authenticated page load. It reads
+ *                $_SESSION['admin_name'] and $_SESSION['admin_role']
+ *                first, and only falls back to a query when either
+ *                is missing.
+ *
+ *                5.2: Documented the intentional asymmetry in the
+ *                $csrfToken initialization. No code change.
+ *                5.1: Rewrote the docblock to describe only current
+ *                behavior. 5.0: CSRF consolidation via
  *                includes/admin-csrf-token.php.)
  */
 
@@ -63,12 +107,6 @@ if (!isset($_SESSION['created'])) {
 }
 
 // ===== CSRF TOKEN (admin role) =====
-//
-// Single source of truth for the admin role's CSRF token. The helper
-// generates it on first use and stores it under 'admin_csrf_token' —
-// never the shared 'csrf_token' key. sign-in.php deliberately requires
-// this same file before including the header, because its form must
-// render even when the header's authenticated branch is not taken.
 require_once __DIR__ . '/admin-csrf-token.php';
 
 // ===== DATABASE =====
@@ -105,29 +143,64 @@ if (!empty($_SESSION['administrator_id'])) {
 
     // Unconditional on purpose. On an authenticated page the header
     // is the authoritative source of the token, and
-    // getAdminCsrfToken() is idempotent within the request, so any
-    // value a caller pre-set would equal what the helper returns
-    // anyway. sign-in.php never reaches this branch — it redirects
-    // away when a session is already present.
+    // getAdminCsrfToken() is idempotent within the request.
     $csrfToken = getAdminCsrfToken();
 
-    try {
-        $stmt = $database_connection->prepare(
-            "SELECT a.first_name, a.last_name, ap.role
-             FROM administrator a
-             LEFT JOIN administrator_profile ap ON a.administrator_id = ap.administrator_id
-             WHERE a.administrator_id = :id
-             LIMIT 1"
-        );
-        $stmt->execute([':id' => (int)$_SESSION['administrator_id']]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        if ($row) {
-            $adminName    = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
-            $adminInitial = strtoupper(substr((string)($row['first_name'] ?? 'A'), 0, 1));
-            $adminRole    = (string)($row['role'] ?? '');
+    // -----------------------------------------------------------------
+    // Session-first display resolution.
+    //
+    // The session keys are written by sign-in-handler.php v1.6+.
+    // Older sessions (pre-v1.6) and sessions that were tampered with
+    // will not have them, so a single fallback query fills them in
+    // and caches the result back into the session. On every
+    // subsequent page load the session values are used and the query
+    // is skipped entirely.
+    //
+    // The session's admin_name is intentionally not trusted for
+    // authorization — it is a display string only. Authorization
+    // still reads $_SESSION['administrator_id'], which was set by the
+    // sign-in handler after session_regenerate_id(true). A tampered
+    // display name cannot elevate privileges; it can only change the
+    // text rendered in the header. This is the same trust level the
+    // customer role's header grants $_SESSION['customer_name'].
+    // -----------------------------------------------------------------
+    $nameFromSession = trim((string)($_SESSION['admin_name'] ?? ''));
+    $roleFromSession = trim((string)($_SESSION['admin_role'] ?? ''));
+
+    if ($nameFromSession === '' || $roleFromSession === '') {
+        try {
+            $stmt = $database_connection->prepare(
+                "SELECT a.first_name, a.last_name, ap.role
+                 FROM administrator a
+                 LEFT JOIN administrator_profile ap ON a.administrator_id = ap.administrator_id
+                 WHERE a.administrator_id = :id
+                 LIMIT 1"
+            );
+            $stmt->execute([':id' => (int)$_SESSION['administrator_id']]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($row) {
+                $fetchedName = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+                $fetchedRole = (string)($row['role'] ?? '');
+
+                $_SESSION['admin_name'] = $fetchedName;
+                $_SESSION['admin_role'] = $fetchedRole;
+
+                $nameFromSession = $fetchedName;
+                $roleFromSession = $fetchedRole;
+            }
+        } catch (PDOException $e) {
+            // Silent fail — the login state is still valid; the
+            // header simply renders without a name and initial. The
+            // next page load will retry the fallback query.
         }
-    } catch (PDOException $e) {
-        // Silently fail — login state still valid
+    }
+
+    $adminName = $nameFromSession;
+    $adminRole = $roleFromSession;
+
+    if ($adminName !== '') {
+        $adminInitial = strtoupper(substr($adminName, 0, 1));
     }
 }
 
@@ -165,6 +238,7 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
     <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/global.css">
     <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/header.css">
     <link rel="stylesheet" href="../assets/css/header.css">
+    <link rel="stylesheet" href="../assets/css/admin-shared.css">
 
     <?php if ($pageCssPath !== ''): ?>
     <link rel="stylesheet" href="<?php echo $pageCssPath; ?>">

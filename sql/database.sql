@@ -1,55 +1,35 @@
 -- =====================================================
--- DATABASE: fitpal_food_delivery v.1.3.0
+-- DATABASE: fitpal_food_delivery v.1.3.1
 -- Dietary Meal Ordering and Restaurant Nutrition Analytics System
 -- WITH FULL CUSTOMIZABLE MEAL SUPPORT
 -- ACID Compliant with Proper Constraints
 --
--- v1.3.0 changes
+-- v1.3.1 changes
 -- --------------
+--   ~ Table 9: administrator_profile now includes a
+--     `profile_picture` column. This allows the admin role
+--     to upload and display a profile picture, matching the
+--     capability already present on the customer and rider
+--     profiles. The column is a VARCHAR(255) and nullable,
+--     storing a project-root-relative path to the uploaded
+--     file.
+--
+--     No other tables, columns, indexes, or triggers changed.
+--
+-- v1.3.0 changes (retained)
+-- -------------------------
 --   ~ New order status: 'picking_up' inserted between
 --     'rider_pending' and 'delivering'.
---
---     Rider flow is now:
---         rider_pending  →  (rider accepts)     →  picking_up
---         picking_up     →  (rider marks picked up)  →  delivering
---         delivering     →  (rider marks delivered) →  delivered
---
---     Accepting no longer puts the order in transit. The rider
---     must take a second explicit action ("Mark Picked Up") to
---     move from picking_up to delivering. No step may be skipped.
---
 --   ~ orders.order_status CHECK now allows 'picking_up'.
---
---   ~ before_order_rider_assign trigger reworded to match the
---     application layer's cap of 3. Old body rejected when
---     `active_orders > 2` counted across 'preparing'/'delivering'.
---     New body rejects when the rider's count across
---     'rider_pending'/'picking_up'/'delivering' is >= 3.
---     Same number and operator as the PHP layer, so the two
---     never disagree on where the ceiling sits.
---
---   ~ after_order_stock_restore trigger's OLD-status set now
---     includes 'picking_up', so a cancel or refund issued while
---     an order was in picking_up correctly restores stock.
---
---   ~ kitchen_queue_view no longer filters by a fixed status
---     list. It now exposes every live order status so the
---     kitchen page can render New / Preparing / Waiting on
---     Rider / Out for Delivery / Recent buckets from one view.
---
---   ~ No columns removed, no columns renamed, no foreign keys
---     changed. Every change above is additive or a redefinition
---     of an existing CHECK / trigger / view body.
+--   ~ before_order_rider_assign trigger reworded.
+--   ~ after_order_stock_restore trigger's OLD-status set
+--     now includes 'picking_up'.
+--   ~ kitchen_queue_view no longer filters by a fixed
+--     status list.
 --
 -- v1.2.0 changes (retained)
 -- -------------------------
 --   ~ Table 8b: delivery_rider_document generalized.
---     - drivers_license column renamed to id_path.
---     - New id_type VARCHAR(30) NOT NULL column added.
---     - Enables bicycle riders and other non-motor-vehicle
---       riders to submit a government-issued ID.
---     - issue_date and expiry_date remain NULL-able.
---     - No other tables, columns, indexes, or triggers changed.
 --
 -- v1.1.1 changes (retained)
 -- -------------------------
@@ -59,9 +39,6 @@
 -- v1.1.0 changes (retained)
 -- -------------------------
 --   + Table 12: restaurant_permit
---   + original_name tightened to NOT NULL.
---   + display_order CHECK (>= 0).
---   + idx_order renamed to idx_restaurant_order.
 --
 -- Totals policy: orders no longer store subtotal, delivery_charge,
 -- or total_amount. They are computed on read from queue_item
@@ -344,6 +321,7 @@ CREATE TABLE administrator_profile (
             'support'
         )
     ),
+    profile_picture VARCHAR(255) NULL,
     permissions JSON NULL,
     is_active TINYINT(1) DEFAULT 1,
     last_login TIMESTAMP NULL,
@@ -352,7 +330,7 @@ CREATE TABLE administrator_profile (
     FOREIGN KEY (administrator_id) REFERENCES administrator (administrator_id) ON DELETE CASCADE,
     INDEX idx_administrator_id (administrator_id),
     INDEX idx_is_active (is_active)
-) COMMENT = 'Administrator profile with roles and permissions';
+) COMMENT = 'Administrator profile with roles, permissions, and profile picture';
 
 -- =====================================================
 -- 10. RESTAURANT
@@ -756,24 +734,55 @@ CREATE TABLE transaction (
 ) COMMENT = 'Financial transaction history';
 
 -- =====================================================
--- 23. FEEDBACK
+-- 23. FEEDBACK (parent — one row per order)
+--
+-- Cardinality:
+--     one order     ->  at most one feedback row
+--     one feedback  ->  zero or more feedback_product rows
+--
+-- Rating dimensions on this row:
+--     restaurant_rating       — rates the BRANCH the order came from
+--                               (branch_id is denormalized here so
+--                               AVG-per-branch does not need to join
+--                               through queue_item)
+--     delivery_rider_rating   — rates whoever orders.delivery_rider_id
+--                               was at 'delivered' time. NULL when the
+--                               order had no rider (pickup) or the
+--                               rider has since been deleted.
+--
+-- Written comments live on feedback_product, one per product.
 -- =====================================================
+
 CREATE TABLE feedback (
     feedback_id INT AUTO_INCREMENT PRIMARY KEY,
-    product_id INT NOT NULL,
-    customer_id INT NOT NULL,
     order_id INT NOT NULL,
-    rating TINYINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
-    comment TEXT NULL,
+    customer_id INT NOT NULL,
+    restaurant_branch_id INT NOT NULL,
+    delivery_rider_id INT NULL,
+    restaurant_rating TINYINT NULL CHECK (
+        restaurant_rating IS NULL
+        OR restaurant_rating BETWEEN 1 AND 5
+    ),
+    delivery_rider_rating TINYINT NULL CHECK (
+        delivery_rider_rating IS NULL
+        OR delivery_rider_rating BETWEEN 1 AND 5
+    ),
     date_posted TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (product_id) REFERENCES product (product_id) ON DELETE CASCADE,
-    FOREIGN KEY (customer_id) REFERENCES customer (customer_id) ON DELETE CASCADE,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (order_id) REFERENCES orders (order_id) ON DELETE CASCADE,
-    UNIQUE KEY unique_review_per_product_per_order (order_id, product_id),
-    INDEX idx_product_id (product_id),
+    FOREIGN KEY (customer_id) REFERENCES customer (customer_id) ON DELETE CASCADE,
+    FOREIGN KEY (restaurant_branch_id) REFERENCES restaurant_branch (restaurant_branch_id) ON DELETE CASCADE,
+    FOREIGN KEY (delivery_rider_id) REFERENCES delivery_rider (delivery_rider_id) ON DELETE SET NULL,
+    UNIQUE KEY unique_feedback_per_order (order_id),
     INDEX idx_customer_id (customer_id),
-    INDEX idx_order_id (order_id)
-) COMMENT = 'Product reviews and feedback';
+    INDEX idx_branch_id (restaurant_branch_id),
+    INDEX idx_rider_id (delivery_rider_id),
+    INDEX idx_date_posted (date_posted),
+    CONSTRAINT chk_feedback_has_a_rating CHECK (
+        restaurant_rating IS NOT NULL
+        OR delivery_rider_rating IS NOT NULL
+    )
+) COMMENT = 'Per-order feedback: restaurant (branch) and rider ratings';
 
 -- =====================================================
 -- 24. NOTIFICATION

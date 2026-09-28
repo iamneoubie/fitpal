@@ -1,13 +1,26 @@
 /**
  * FitPal Admin Dashboard JavaScript
  *
- * This page loads the shared admin-modal.js module for any modal
- * behaviour. This file only owns dashboard-specific logic.
+ * Responsibilities:
+ *   - Apply bar heights from data-bar-height attributes to both
+ *     single and stacked bar charts.
+ *   - Apply horizontal performer-bar widths from data-bar-width
+ *     attributes.
+ *   - Chart tooltip on hover, focus, and touch.
+ *   - Sub-tab switching between the four analytics panels.
+ *
+ * The shared admin-modal.js is loaded alongside this file for any
+ * modal behaviour. This file owns only dashboard behaviour.
  *
  * @package FitPal
- * @version 4.0 — Removed all modal logic. The page now relies on
- *                the shared admin-modal.js module for any modal
- *                interactions.
+ * @version 5.0 — Adds stacked-bar fill heights, performer-bar
+ *                widths, and the four sub-tab chart panels. The
+ *                tooltip now reads its body from a data-detail
+ *                attribute when present so a stacked bar can show
+ *                a breakdown, not just the total.
+ *
+ *                (4.0: removed modal logic, moved to
+ *                admin-modal.js.)
  */
 (function () {
     'use strict';
@@ -15,8 +28,9 @@
     document.addEventListener('DOMContentLoaded', function () {
 
         // ============================================
-        // CHART BAR HEIGHTS
+        // BAR HEIGHTS — vertical charts
         // ============================================
+
         document.querySelectorAll('.admin-chart-bar[data-bar-height]').forEach(function (bar) {
             var value = bar.getAttribute('data-bar-height');
             if (value === null || value === '') return;
@@ -28,34 +42,77 @@
         });
 
         // ============================================
+        // STACKED FILL HEIGHTS — fills inside a bar
+        // ============================================
+
+        document.querySelectorAll('.admin-chart-bar-fill[data-fill-height]').forEach(function (fill) {
+            var value = fill.getAttribute('data-fill-height');
+            if (value === null || value === '') return;
+
+            var pct = parseFloat(value);
+            if (isNaN(pct)) return;
+
+            fill.style.height = pct + '%';
+        });
+
+        // ============================================
+        // HORIZONTAL PERFORMER BARS
+        // ============================================
+
+        document.querySelectorAll('.admin-performer-bar[data-bar-width]').forEach(function (bar) {
+            var value = bar.getAttribute('data-bar-width');
+            if (value === null || value === '') return;
+
+            var pct = parseFloat(value);
+            if (isNaN(pct)) return;
+
+            bar.style.width = pct + '%';
+        });
+
+        // ============================================
         // CHART TOOLTIP
         // ============================================
-        var chart = document.querySelector('.admin-weekly-chart');
+
+        var charts = document.querySelectorAll('.admin-weekly-chart');
         var tooltip = document.getElementById('adminChartTooltip');
 
-        if (chart && tooltip) {
-            var bars = chart.querySelectorAll('.admin-chart-bar');
+        if (charts.length > 0 && tooltip) {
             var activeBar = null;
+            var activeChart = null;
 
             function showTooltipFor(bar) {
                 var column = bar.closest('.admin-chart-column');
                 if (!column) return;
-                var day = column.dataset.day || '';
+
+                var chart = bar.closest('.admin-weekly-chart');
+                if (!chart) return;
+
+                var day    = column.dataset.day    || '';
                 var amount = column.dataset.amount || '';
-                tooltip.textContent = day + ' — ' + amount;
+                var detail = column.dataset.detail || '';
+
+                if (detail !== '') {
+                    tooltip.textContent = day + ' — ' + amount + ' · ' + detail;
+                } else {
+                    tooltip.textContent = day + ' — ' + amount;
+                }
+
                 tooltip.classList.add('is-visible');
                 activeBar = bar;
+                activeChart = chart;
                 positionTooltip();
             }
 
             function hideTooltip() {
                 tooltip.classList.remove('is-visible');
                 activeBar = null;
+                activeChart = null;
             }
 
             function positionTooltip() {
-                if (!activeBar) return;
-                var chartRect = chart.getBoundingClientRect();
+                if (!activeBar || !activeChart) return;
+
+                var chartRect = activeChart.getBoundingClientRect();
                 var barRect = activeBar.getBoundingClientRect();
                 var tooltipRect = tooltip.getBoundingClientRect();
 
@@ -76,10 +133,12 @@
                 }
 
                 tooltip.style.left = left + 'px';
-                tooltip.style.top = top + 'px';
+                tooltip.style.top  = top  + 'px';
             }
 
-            bars.forEach(function (bar) {
+            // Re-attach listeners every time a bar becomes visible
+            // (a chart panel may be hidden when the page loads).
+            document.querySelectorAll('.admin-chart-bar').forEach(function (bar) {
                 bar.addEventListener('mouseenter', function () { showTooltipFor(this); });
                 bar.addEventListener('mouseleave', hideTooltip);
                 bar.addEventListener('focus', function () { showTooltipFor(this); });
@@ -108,6 +167,40 @@
             }
             window.addEventListener('resize', scheduleReposition, { passive: true });
             window.addEventListener('scroll', scheduleReposition, { passive: true });
+
+            window.adminChartHideTooltip = hideTooltip;
         }
+
+        // ============================================
+        // SUB-TAB SWITCHING
+        // ============================================
+
+        var subtabs = document.querySelectorAll('.admin-chart-subtab');
+        var panels  = document.querySelectorAll('.admin-chart-panel');
+
+        subtabs.forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                var key = this.dataset.chart;
+                if (!key) return;
+
+                subtabs.forEach(function (t) {
+                    var isActive = t.dataset.chart === key;
+                    t.classList.toggle('active', isActive);
+                    t.setAttribute('aria-selected', isActive ? 'true' : 'false');
+                });
+
+                panels.forEach(function (p) {
+                    p.classList.toggle('active', p.dataset.chartPanel === key);
+                });
+
+                // The tooltip is shared across the whole chart body.
+                // Hide it when the panel changes so it does not float
+                // over the new panel.
+                if (typeof window.adminChartHideTooltip === 'function') {
+                    window.adminChartHideTooltip();
+                }
+            });
+        });
+
     });
 })();

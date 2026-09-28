@@ -2,14 +2,37 @@
 /**
  * FitPal Admin Dashboard
  *
- * Overview of platform health and the moderation queue.
+ * The dashboard surfaces the metrics an admin, marketing, and finance
+ * reader need on a single screen:
  *
- * All SQL lives in admin-queries.php. This page contains no SQL,
- * no inline CSS, and no inline JS.
+ *   - Four stat cards at the top (customers, restaurants, riders,
+ *     platform revenue). Each links to its list page.
+ *   - A chart card with four sub-tabs:
+ *       Revenue      7-day GMV vs platform fees
+ *       Fees         7-day fee-bucket breakdown
+ *       Orders       7-day order count by payment method
+ *       Performers   Top restaurants by GMV, top riders by deliveries
+ *
+ * The dashboard header no longer renders a navigation button row —
+ * the stat cards already act as the navigation.
+ *
+ * The recent-moderation-activity card has been removed. The pending-
+ * riders list stays in the right column of the first row and is
+ * still served by getRidersPaginated() with $withTotal = false,
+ * because the card renders no pagination and discards the total.
+ *
+ * All SQL lives in admin-queries.php. This page contains no SQL, no
+ * inline CSS, and no inline JS.
  *
  * @package FitPal
- * @version 5.0 — Loads the shared admin-modal.js for consistency.
- *                No other functional change from 4.4.
+ * @version 6.0 — New analytics-first layout. Adds the chart card
+ *                with four sub-tabs. Removes the header action row
+ *                and the recent-activity card. Loads the shared
+ *                admin-modal.js for consistency with the other
+ *                admin pages.
+ *
+ *                (5.0: loaded admin-modal.js for consistency.
+ *                4.4: no functional change from 4.3.)
  */
 declare(strict_types=1);
 
@@ -25,32 +48,112 @@ if (empty($_SESSION['administrator_id'])) {
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../backend/database/admin-queries.php';
 
-$adminId = (int)$_SESSION['administrator_id'];
+$adminId      = (int)$_SESSION['administrator_id'];
 $adminProfile = getAdminProfile($database_connection, $adminId) ?: [];
-$firstName = (string)($adminProfile['first_name'] ?? 'Admin');
+$firstName    = (string)($adminProfile['first_name'] ?? 'Admin');
 
 $stats = getAdminDashboardStats($database_connection);
 
 $weeklyRevenue = getAdminWeeklyRevenue($database_connection, 7);
+$weeklyFees    = getAdminWeeklyFeeBreakdown($database_connection, 7);
+$weeklyOrders  = getAdminWeeklyOrders($database_connection, 7);
 
-$weeklyMax = 0.0;
+$topRestaurants = getAdminTopRestaurants($database_connection, 5);
+$topRiders      = getAdminTopRiders($database_connection, 5);
+
+$today = date('Y-m-d');
+
+// ---- Revenue chart scale ----
+$revenueMax = 0.0;
 foreach ($weeklyRevenue as $d) {
-    if ($d['amount'] > $weeklyMax) $weeklyMax = $d['amount'];
+    $stacked = $d['gmv'] + $d['platform_fees'];
+    if ($stacked > $revenueMax) $revenueMax = $stacked;
 }
-$chartScale   = getAdminChartScale($weeklyMax);
-$chartCeiling = $chartScale['ceiling'];
-$today        = date('Y-m-d');
+$revenueScale = getAdminChartScale($revenueMax);
 
-$barHeights = [];
+$revenueBarHeights = [];
 foreach ($weeklyRevenue as $d) {
-    $pct = $chartCeiling > 0 ? ($d['amount'] / $chartCeiling) * 100 : 0;
-    $barHeights[$d['date']] = $d['amount'] > 0 ? max(4, min(100, $pct)) : 0;
+    $stacked = $d['gmv'] + $d['platform_fees'];
+    $pct = $revenueScale['ceiling'] > 0
+        ? ($stacked / $revenueScale['ceiling']) * 100
+        : 0;
+    $revenueBarHeights[$d['date']] = $stacked > 0
+        ? max(4, min(100, $pct))
+        : 0;
 }
 
-$pendingRidersData = getRidersPaginated($database_connection, 1, 5, '', 'pending');
-$pendingRiders = $pendingRidersData['rows'];
+// ---- Fees chart scale ----
+$feesMax = 0.0;
+foreach ($weeklyFees as $d) {
+    if ($d['total'] > $feesMax) $feesMax = $d['total'];
+}
+$feesScale = getAdminChartScale($feesMax);
 
-$recentActivity = getRecentVerificationActivity($database_connection, 6);
+$feesBarHeights = [];
+foreach ($weeklyFees as $d) {
+    $pct = $feesScale['ceiling'] > 0
+        ? ($d['total'] / $feesScale['ceiling']) * 100
+        : 0;
+    $feesBarHeights[$d['date']] = $d['total'] > 0
+        ? max(4, min(100, $pct))
+        : 0;
+}
+
+// ---- Orders chart scale ----
+$ordersMax = 0;
+foreach ($weeklyOrders as $d) {
+    if ($d['total'] > $ordersMax) $ordersMax = $d['total'];
+}
+$ordersScale = getAdminChartScale((float)$ordersMax);
+
+$ordersBarHeights = [];
+foreach ($weeklyOrders as $d) {
+    $pct = $ordersScale['ceiling'] > 0
+        ? ($d['total'] / $ordersScale['ceiling']) * 100
+        : 0;
+    $ordersBarHeights[$d['date']] = $d['total'] > 0
+        ? max(4, min(100, $pct))
+        : 0;
+}
+
+// ---- Fee bucket totals for the strip ----
+$feeTotals = [
+    'base_delivery'  => 0.0,
+    'extra_branches' => 0.0,
+    'service_fee'    => 0.0,
+    'vat'            => 0.0,
+];
+foreach ($weeklyFees as $d) {
+    $feeTotals['base_delivery']  += $d['base_delivery'];
+    $feeTotals['extra_branches'] += $d['extra_branches'];
+    $feeTotals['service_fee']    += $d['service_fee'];
+    $feeTotals['vat']            += $d['vat'];
+}
+
+// ---- Order payment totals for the strip ----
+$paymentTotals = ['cod' => 0, 'wallet' => 0, 'online' => 0, 'total' => 0, 'delivered' => 0, 'cancelled' => 0];
+foreach ($weeklyOrders as $d) {
+    $paymentTotals['cod']       += $d['cod'];
+    $paymentTotals['wallet']    += $d['wallet'];
+    $paymentTotals['online']    += $d['online'];
+    $paymentTotals['total']     += $d['total'];
+    $paymentTotals['delivered'] += $d['delivered'];
+    $paymentTotals['cancelled'] += $d['cancelled'];
+}
+$refundRate = $paymentTotals['total'] > 0
+    ? round(($paymentTotals['cancelled'] / $paymentTotals['total']) * 100, 1)
+    : 0.0;
+
+// ---- Top-performer normalization ----
+$maxTopRestaurantGmv = 0.0;
+foreach ($topRestaurants as $r) {
+    if ($r['gmv'] > $maxTopRestaurantGmv) $maxTopRestaurantGmv = $r['gmv'];
+}
+
+$maxTopRiderDeliveries = 0;
+foreach ($topRiders as $r) {
+    if ($r['deliveries'] > $maxTopRiderDeliveries) $maxTopRiderDeliveries = $r['deliveries'];
+}
 
 // $csrfToken is provided by header.php (admin_csrf_token).
 ?>
@@ -58,29 +161,16 @@ $recentActivity = getRecentVerificationActivity($database_connection, 6);
 <div class="content admin-dashboard-page">
     <div class="container">
 
+        <!-- ============================================
+             HEADER
+             No action row — the stat cards are the nav.
+             ============================================ -->
         <header class="admin-dashboard-header">
             <div class="admin-dashboard-greeting">
                 <h1 class="heading-2">
                     Welcome back, <span><?php echo htmlspecialchars($firstName, ENT_QUOTES, 'UTF-8'); ?></span>
                 </h1>
-                <p class="text-muted">Platform health and the moderation queue at a glance.</p>
-            </div>
-            <div class="admin-dashboard-actions">
-                <a href="customers.php" class="btn btn-outline btn-sm">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/people-team.svg" alt="" class="btn-icon"
-                        width="16" height="16">
-                    <span>Customers</span>
-                </a>
-                <a href="riders.php" class="btn btn-outline btn-sm">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/riding-fill.svg" alt="" class="btn-icon"
-                        width="16" height="16">
-                    <span>Riders</span>
-                </a>
-                <a href="restaurants.php" class="btn btn-primary btn-sm">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt="" class="btn-icon"
-                        width="16" height="16">
-                    <span>Restaurants</span>
-                </a>
+                <p class="text-muted">Platform health and analytics at a glance.</p>
             </div>
         </header>
 
@@ -98,6 +188,9 @@ $recentActivity = getRecentVerificationActivity($database_connection, 6);
         </div>
         <?php endif; ?>
 
+        <!-- ============================================
+             STAT CARDS
+             ============================================ -->
         <section class="admin-stats-grid" aria-label="Platform statistics">
 
             <a href="customers.php" class="admin-stat-card">
@@ -157,92 +250,424 @@ $recentActivity = getRecentVerificationActivity($database_connection, 6);
                     <img src="<?php echo $assetBase; ?>assets/images/icons/coin-line.svg" alt="">
                 </div>
                 <div class="admin-stat-info">
-                    <p class="admin-stat-number"><?php echo formatAdminCurrency($stats['gross_revenue']); ?></p>
-                    <p class="admin-stat-label">Gross Revenue</p>
+                    <p class="admin-stat-number">
+                        <?php echo formatAdminCurrencyCompact($stats['platform_revenue']); ?>
+                    </p>
+                    <p class="admin-stat-label">Platform Revenue</p>
                     <p class="admin-stat-hint">
-                        <?php echo number_format($stats['orders_this_week']); ?> orders this week
+                        from <?php echo number_format($stats['total_orders']); ?> orders
                     </p>
                 </div>
             </div>
 
         </section>
 
+        <!-- ============================================
+             ROW: Chart card (2/3) + Pending riders (1/3)
+             ============================================ -->
         <div class="admin-dashboard-row admin-dashboard-row-primary">
 
-            <section class="admin-card" aria-labelledby="admin-chart-title">
+            <!-- ============================================
+                 CHART CARD — four sub-tabs
+                 ============================================ -->
+            <section class="admin-card admin-chart-card" aria-labelledby="admin-chart-title">
                 <div class="admin-card-header">
-                    <h2 class="heading-5" id="admin-chart-title">Revenue — Last 7 Days</h2>
+                    <h2 class="heading-5" id="admin-chart-title">Analytics</h2>
+                    <span class="admin-chart-range">Last 7 Days</span>
+                </div>
+
+                <!-- Sub-tab row -->
+                <div class="admin-chart-subtabs" role="tablist" aria-label="Analytics view">
+                    <button type="button" class="admin-chart-subtab active" data-chart="revenue" role="tab"
+                        aria-selected="true">
+                        Revenue
+                    </button>
+                    <button type="button" class="admin-chart-subtab" data-chart="fees" role="tab" aria-selected="false">
+                        Fees
+                    </button>
+                    <button type="button" class="admin-chart-subtab" data-chart="orders" role="tab"
+                        aria-selected="false">
+                        Orders
+                    </button>
+                    <button type="button" class="admin-chart-subtab" data-chart="performers" role="tab"
+                        aria-selected="false">
+                        Performers
+                    </button>
                 </div>
 
                 <div class="admin-chart-body">
-                    <div class="admin-weekly-chart" role="img"
-                        aria-label="Bar chart of revenue over the last seven days">
-                        <div class="admin-chart-y-axis" aria-hidden="true">
-                            <?php foreach (array_reverse($chartScale['gridlines']) as $grid): ?>
-                            <span class="admin-chart-y-label">₱<?php echo number_format($grid, 0); ?></span>
-                            <?php endforeach; ?>
-                        </div>
-                        <div class="admin-chart-plot">
-                            <?php foreach ($chartScale['gridlines'] as $grid): ?>
-                            <div class="admin-chart-gridline" aria-hidden="true"></div>
-                            <?php endforeach; ?>
-                            <div class="admin-chart-columns">
-                                <?php foreach ($weeklyRevenue as $day):
-                                    $pct = $barHeights[$day['date']];
-                                    $isToday = ($day['date'] === $today);
-                                    $hasValue = $day['amount'] > 0;
-                                ?>
-                                <div class="admin-chart-column"
-                                    data-day="<?php echo htmlspecialchars($day['short'], ENT_QUOTES, 'UTF-8'); ?>"
-                                    data-amount="<?php echo htmlspecialchars(formatAdminCurrency($day['amount']), ENT_QUOTES, 'UTF-8'); ?>">
-                                    <div class="admin-chart-bar-track">
-                                        <div class="admin-chart-bar <?php echo $isToday ? 'is-today' : ''; ?> <?php echo $hasValue ? '' : 'is-empty'; ?>"
-                                            data-bar-height="<?php echo $pct; ?>" tabindex="0"
-                                            aria-label="<?php echo htmlspecialchars($day['label'] . ' ' . formatAdminCurrency($day['amount']), ENT_QUOTES, 'UTF-8'); ?>">
-                                        </div>
-                                    </div>
-                                    <span class="admin-chart-label <?php echo $isToday ? 'is-today' : ''; ?>">
-                                        <?php echo htmlspecialchars($day['short'], ENT_QUOTES, 'UTF-8'); ?>
-                                    </span>
-                                </div>
+
+                    <!-- ============================================
+                         PANEL: Revenue
+                         ============================================ -->
+                    <div class="admin-chart-panel active" data-chart-panel="revenue" role="tabpanel">
+                        <div class="admin-weekly-chart" role="img"
+                            aria-label="Bar chart of GMV and platform revenue over the last seven days">
+                            <div class="admin-chart-y-axis" aria-hidden="true">
+                                <?php foreach (array_reverse($revenueScale['gridlines']) as $grid): ?>
+                                <span class="admin-chart-y-label">₱<?php echo number_format($grid, 0); ?></span>
                                 <?php endforeach; ?>
                             </div>
+                            <div class="admin-chart-plot">
+                                <?php foreach ($revenueScale['gridlines'] as $grid): ?>
+                                <div class="admin-chart-gridline" aria-hidden="true"></div>
+                                <?php endforeach; ?>
+                                <div class="admin-chart-columns">
+                                    <?php foreach ($weeklyRevenue as $day):
+                                        $pct     = $revenueBarHeights[$day['date']];
+                                        $isToday = ($day['date'] === $today);
+                                        $stacked = $day['gmv'] + $day['platform_fees'];
+                                        $gmvPct  = $stacked > 0 ? ($day['gmv'] / $stacked) * 100 : 0;
+                                    ?>
+                                    <div class="admin-chart-column"
+                                        data-day="<?php echo htmlspecialchars($day['short'], ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-amount="<?php echo htmlspecialchars(formatAdminCurrency($stacked), ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-detail="GMV <?php echo htmlspecialchars(formatAdminCurrency($day['gmv']), ENT_QUOTES, 'UTF-8'); ?> · Fees <?php echo htmlspecialchars(formatAdminCurrency($day['platform_fees']), ENT_QUOTES, 'UTF-8'); ?>">
+                                        <div class="admin-chart-bar-track">
+                                            <div class="admin-chart-bar admin-chart-bar-stacked <?php echo $isToday ? 'is-today' : ''; ?>"
+                                                data-bar-height="<?php echo $pct; ?>" tabindex="0"
+                                                aria-label="<?php echo htmlspecialchars($day['label'] . ' ' . formatAdminCurrency($stacked), ENT_QUOTES, 'UTF-8'); ?>">
+                                                <span class="admin-chart-bar-fill admin-chart-bar-fill-gmv"
+                                                    data-fill-height="<?php echo $gmvPct; ?>"></span>
+                                                <span class="admin-chart-bar-fill admin-chart-bar-fill-fees"
+                                                    data-fill-height="<?php echo 100 - $gmvPct; ?>"></span>
+                                            </div>
+                                        </div>
+                                        <span class="admin-chart-label <?php echo $isToday ? 'is-today' : ''; ?>">
+                                            <?php echo htmlspecialchars($day['short'], ENT_QUOTES, 'UTF-8'); ?>
+                                        </span>
+                                    </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                            <div class="admin-chart-tooltip" id="adminChartTooltip" role="status" aria-live="polite">
+                            </div>
                         </div>
-                        <div class="admin-chart-tooltip" id="adminChartTooltip" role="status" aria-live="polite"></div>
+
+                        <div class="admin-chart-legend">
+                            <span class="admin-chart-legend-item">
+                                <span class="admin-chart-legend-swatch admin-chart-legend-swatch-gmv"></span>
+                                Item Subtotal (GMV)
+                            </span>
+                            <span class="admin-chart-legend-item">
+                                <span class="admin-chart-legend-swatch admin-chart-legend-swatch-fees"></span>
+                                Platform Fees
+                            </span>
+                        </div>
+
+                        <div class="admin-chart-summary">
+                            <div class="admin-chart-summary-item">
+                                <span class="admin-chart-summary-label">GMV (All Time)</span>
+                                <span class="admin-chart-summary-value">
+                                    <?php echo formatAdminCurrency($stats['gross_merchandise_value']); ?>
+                                </span>
+                                <span class="admin-chart-summary-hint">
+                                    what customers spent on food
+                                </span>
+                            </div>
+                            <div class="admin-chart-summary-item">
+                                <span class="admin-chart-summary-label">Platform Revenue (All Time)</span>
+                                <span class="admin-chart-summary-value">
+                                    <?php echo formatAdminCurrency($stats['platform_revenue']); ?>
+                                </span>
+                                <span class="admin-chart-summary-hint">
+                                    delivery + service + VAT
+                                </span>
+                            </div>
+                            <div class="admin-chart-summary-item">
+                                <span class="admin-chart-summary-label">Avg. Order Value</span>
+                                <span class="admin-chart-summary-value">
+                                    <?php echo formatAdminCurrency($stats['average_order_value']); ?>
+                                </span>
+                                <span class="admin-chart-summary-hint">
+                                    across <?php echo number_format($stats['total_orders']); ?> orders
+                                </span>
+                            </div>
+                        </div>
                     </div>
 
-                    <div class="admin-chart-summary">
-                        <div class="admin-chart-summary-item">
-                            <span class="admin-chart-summary-label">Today</span>
-                            <span class="admin-chart-summary-value">
-                                <?php echo formatAdminCurrency($stats['revenue_today']); ?>
+                    <!-- ============================================
+                         PANEL: Fees
+                         ============================================ -->
+                    <div class="admin-chart-panel" data-chart-panel="fees" role="tabpanel">
+                        <div class="admin-weekly-chart" role="img"
+                            aria-label="Bar chart of fee breakdown over the last seven days">
+                            <div class="admin-chart-y-axis" aria-hidden="true">
+                                <?php foreach (array_reverse($feesScale['gridlines']) as $grid): ?>
+                                <span class="admin-chart-y-label">₱<?php echo number_format($grid, 0); ?></span>
+                                <?php endforeach; ?>
+                            </div>
+                            <div class="admin-chart-plot">
+                                <?php foreach ($feesScale['gridlines'] as $grid): ?>
+                                <div class="admin-chart-gridline" aria-hidden="true"></div>
+                                <?php endforeach; ?>
+                                <div class="admin-chart-columns">
+                                    <?php foreach ($weeklyFees as $day):
+                                        $pct     = $feesBarHeights[$day['date']];
+                                        $isToday = ($day['date'] === $today);
+                                        $total   = $day['total'];
+                                        $basePct = $total > 0 ? ($day['base_delivery'] / $total) * 100 : 0;
+                                        $extraPct = $total > 0 ? ($day['extra_branches'] / $total) * 100 : 0;
+                                        $svcPct  = $total > 0 ? ($day['service_fee'] / $total) * 100 : 0;
+                                        $vatPct  = $total > 0 ? ($day['vat'] / $total) * 100 : 0;
+                                    ?>
+                                    <div class="admin-chart-column"
+                                        data-day="<?php echo htmlspecialchars($day['short'], ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-amount="<?php echo htmlspecialchars(formatAdminCurrency($total), ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-detail="Delivery <?php echo htmlspecialchars(formatAdminCurrency($day['base_delivery']), ENT_QUOTES, 'UTF-8'); ?> · Branches <?php echo htmlspecialchars(formatAdminCurrency($day['extra_branches']), ENT_QUOTES, 'UTF-8'); ?> · Service <?php echo htmlspecialchars(formatAdminCurrency($day['service_fee']), ENT_QUOTES, 'UTF-8'); ?> · VAT <?php echo htmlspecialchars(formatAdminCurrency($day['vat']), ENT_QUOTES, 'UTF-8'); ?>">
+                                        <div class="admin-chart-bar-track">
+                                            <div class="admin-chart-bar admin-chart-bar-stacked <?php echo $isToday ? 'is-today' : ''; ?>"
+                                                data-bar-height="<?php echo $pct; ?>" tabindex="0"
+                                                aria-label="<?php echo htmlspecialchars($day['label'] . ' ' . formatAdminCurrency($total), ENT_QUOTES, 'UTF-8'); ?>">
+                                                <span class="admin-chart-bar-fill admin-chart-bar-fill-fee-base"
+                                                    data-fill-height="<?php echo $basePct; ?>"></span>
+                                                <span class="admin-chart-bar-fill admin-chart-bar-fill-fee-extra"
+                                                    data-fill-height="<?php echo $extraPct; ?>"></span>
+                                                <span class="admin-chart-bar-fill admin-chart-bar-fill-fee-service"
+                                                    data-fill-height="<?php echo $svcPct; ?>"></span>
+                                                <span class="admin-chart-bar-fill admin-chart-bar-fill-fee-vat"
+                                                    data-fill-height="<?php echo $vatPct; ?>"></span>
+                                            </div>
+                                        </div>
+                                        <span class="admin-chart-label <?php echo $isToday ? 'is-today' : ''; ?>">
+                                            <?php echo htmlspecialchars($day['short'], ENT_QUOTES, 'UTF-8'); ?>
+                                        </span>
+                                    </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="admin-chart-legend">
+                            <span class="admin-chart-legend-item">
+                                <span class="admin-chart-legend-swatch admin-chart-legend-swatch-fee-base"></span>
+                                Base Delivery
                             </span>
-                            <span class="admin-chart-summary-hint">
-                                <?php echo number_format($stats['orders_today']); ?> orders
+                            <span class="admin-chart-legend-item">
+                                <span class="admin-chart-legend-swatch admin-chart-legend-swatch-fee-extra"></span>
+                                Extra Branches
+                            </span>
+                            <span class="admin-chart-legend-item">
+                                <span class="admin-chart-legend-swatch admin-chart-legend-swatch-fee-service"></span>
+                                Service Fee
+                            </span>
+                            <span class="admin-chart-legend-item">
+                                <span class="admin-chart-legend-swatch admin-chart-legend-swatch-fee-vat"></span>
+                                VAT
                             </span>
                         </div>
-                        <div class="admin-chart-summary-item">
-                            <span class="admin-chart-summary-label">This Week</span>
-                            <span class="admin-chart-summary-value">
-                                <?php echo formatAdminCurrency($stats['revenue_this_week']); ?>
-                            </span>
-                            <span class="admin-chart-summary-hint">
-                                <?php echo number_format($stats['orders_this_week']); ?> orders
-                            </span>
-                        </div>
-                        <div class="admin-chart-summary-item">
-                            <span class="admin-chart-summary-label">All Time</span>
-                            <span class="admin-chart-summary-value">
-                                <?php echo formatAdminCurrency($stats['gross_revenue']); ?>
-                            </span>
-                            <span class="admin-chart-summary-hint">
-                                <?php echo number_format($stats['total_orders']); ?> orders
-                            </span>
+
+                        <div class="admin-chart-summary">
+                            <div class="admin-chart-summary-item">
+                                <span class="admin-chart-summary-label">Base Delivery</span>
+                                <span class="admin-chart-summary-value">
+                                    <?php echo formatAdminCurrency($feeTotals['base_delivery']); ?>
+                                </span>
+                                <span class="admin-chart-summary-hint">7-day total</span>
+                            </div>
+                            <div class="admin-chart-summary-item">
+                                <span class="admin-chart-summary-label">Extra Branches</span>
+                                <span class="admin-chart-summary-value">
+                                    <?php echo formatAdminCurrency($feeTotals['extra_branches']); ?>
+                                </span>
+                                <span class="admin-chart-summary-hint">7-day total</span>
+                            </div>
+                            <div class="admin-chart-summary-item">
+                                <span class="admin-chart-summary-label">Service Fee</span>
+                                <span class="admin-chart-summary-value">
+                                    <?php echo formatAdminCurrency($feeTotals['service_fee']); ?>
+                                </span>
+                                <span class="admin-chart-summary-hint">7-day total</span>
+                            </div>
+                            <div class="admin-chart-summary-item">
+                                <span class="admin-chart-summary-label">VAT Collected</span>
+                                <span class="admin-chart-summary-value">
+                                    <?php echo formatAdminCurrency($feeTotals['vat']); ?>
+                                </span>
+                                <span class="admin-chart-summary-hint">7-day total</span>
+                            </div>
                         </div>
                     </div>
+
+                    <!-- ============================================
+                         PANEL: Orders
+                         ============================================ -->
+                    <div class="admin-chart-panel" data-chart-panel="orders" role="tabpanel">
+                        <div class="admin-weekly-chart" role="img"
+                            aria-label="Bar chart of order counts by payment method over the last seven days">
+                            <div class="admin-chart-y-axis" aria-hidden="true">
+                                <?php foreach (array_reverse($ordersScale['gridlines']) as $grid): ?>
+                                <span class="admin-chart-y-label"><?php echo number_format($grid, 0); ?></span>
+                                <?php endforeach; ?>
+                            </div>
+                            <div class="admin-chart-plot">
+                                <?php foreach ($ordersScale['gridlines'] as $grid): ?>
+                                <div class="admin-chart-gridline" aria-hidden="true"></div>
+                                <?php endforeach; ?>
+                                <div class="admin-chart-columns">
+                                    <?php foreach ($weeklyOrders as $day):
+                                        $pct     = $ordersBarHeights[$day['date']];
+                                        $isToday = ($day['date'] === $today);
+                                        $total   = $day['total'];
+                                        $codPct    = $total > 0 ? ($day['cod'] / $total) * 100 : 0;
+                                        $walletPct = $total > 0 ? ($day['wallet'] / $total) * 100 : 0;
+                                        $onlinePct = $total > 0 ? ($day['online'] / $total) * 100 : 0;
+                                    ?>
+                                    <div class="admin-chart-column"
+                                        data-day="<?php echo htmlspecialchars($day['short'], ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-amount="<?php echo $total; ?> orders"
+                                        data-detail="COD <?php echo (int)$day['cod']; ?> · Wallet <?php echo (int)$day['wallet']; ?> · Online <?php echo (int)$day['online']; ?>">
+                                        <div class="admin-chart-bar-track">
+                                            <div class="admin-chart-bar admin-chart-bar-stacked <?php echo $isToday ? 'is-today' : ''; ?>"
+                                                data-bar-height="<?php echo $pct; ?>" tabindex="0"
+                                                aria-label="<?php echo htmlspecialchars($day['label'] . ' ' . $total . ' orders', ENT_QUOTES, 'UTF-8'); ?>">
+                                                <span class="admin-chart-bar-fill admin-chart-bar-fill-pay-cod"
+                                                    data-fill-height="<?php echo $codPct; ?>"></span>
+                                                <span class="admin-chart-bar-fill admin-chart-bar-fill-pay-wallet"
+                                                    data-fill-height="<?php echo $walletPct; ?>"></span>
+                                                <span class="admin-chart-bar-fill admin-chart-bar-fill-pay-online"
+                                                    data-fill-height="<?php echo $onlinePct; ?>"></span>
+                                            </div>
+                                        </div>
+                                        <span class="admin-chart-label <?php echo $isToday ? 'is-today' : ''; ?>">
+                                            <?php echo htmlspecialchars($day['short'], ENT_QUOTES, 'UTF-8'); ?>
+                                        </span>
+                                    </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="admin-chart-legend">
+                            <span class="admin-chart-legend-item">
+                                <span class="admin-chart-legend-swatch admin-chart-legend-swatch-pay-cod"></span>
+                                Cash on Delivery
+                            </span>
+                            <span class="admin-chart-legend-item">
+                                <span class="admin-chart-legend-swatch admin-chart-legend-swatch-pay-wallet"></span>
+                                Wallet
+                            </span>
+                            <span class="admin-chart-legend-item">
+                                <span class="admin-chart-legend-swatch admin-chart-legend-swatch-pay-online"></span>
+                                Online
+                            </span>
+                        </div>
+
+                        <div class="admin-chart-summary">
+                            <div class="admin-chart-summary-item">
+                                <span class="admin-chart-summary-label">Total Orders</span>
+                                <span class="admin-chart-summary-value">
+                                    <?php echo number_format($paymentTotals['total']); ?>
+                                </span>
+                                <span class="admin-chart-summary-hint">7-day total</span>
+                            </div>
+                            <div class="admin-chart-summary-item">
+                                <span class="admin-chart-summary-label">Delivered</span>
+                                <span class="admin-chart-summary-value">
+                                    <?php echo number_format($paymentTotals['delivered']); ?>
+                                </span>
+                                <span class="admin-chart-summary-hint">7-day total</span>
+                            </div>
+                            <div class="admin-chart-summary-item">
+                                <span class="admin-chart-summary-label">Refund Rate</span>
+                                <span class="admin-chart-summary-value">
+                                    <?php echo number_format($refundRate, 1); ?>%
+                                </span>
+                                <span class="admin-chart-summary-hint">
+                                    <?php echo number_format($paymentTotals['cancelled']); ?> cancelled
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ============================================
+                         PANEL: Performers
+                         ============================================ -->
+                    <div class="admin-chart-panel" data-chart-panel="performers" role="tabpanel">
+
+                        <div class="admin-performer-block">
+                            <h3 class="admin-performer-heading">Top Restaurants by GMV</h3>
+
+                            <?php if (empty($topRestaurants)): ?>
+                            <p class="admin-performer-empty">No orders yet.</p>
+                            <?php else: ?>
+                            <ul class="admin-performer-list">
+                                <?php foreach ($topRestaurants as $idx => $r):
+                                    $pct = $maxTopRestaurantGmv > 0
+                                        ? ($r['gmv'] / $maxTopRestaurantGmv) * 100
+                                        : 0;
+                                ?>
+                                <li class="admin-performer-item">
+                                    <span class="admin-performer-rank"><?php echo $idx + 1; ?></span>
+                                    <div class="admin-performer-info">
+                                        <div class="admin-performer-top">
+                                            <span class="admin-performer-name">
+                                                <?php echo htmlspecialchars($r['restaurant_name'], ENT_QUOTES, 'UTF-8'); ?>
+                                            </span>
+                                            <span class="admin-performer-value">
+                                                <?php echo formatAdminCurrency($r['gmv']); ?>
+                                            </span>
+                                        </div>
+                                        <div class="admin-performer-track">
+                                            <span class="admin-performer-bar admin-performer-bar-restaurant"
+                                                data-bar-width="<?php echo $pct; ?>"></span>
+                                        </div>
+                                        <span class="admin-performer-meta">
+                                            <?php echo number_format($r['order_count']); ?> orders ·
+                                            <?php echo formatAdminCurrency($r['platform_fees']); ?> platform fees
+                                        </span>
+                                    </div>
+                                </li>
+                                <?php endforeach; ?>
+                            </ul>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="admin-performer-block">
+                            <h3 class="admin-performer-heading">Top Riders by Completed Deliveries</h3>
+
+                            <?php if (empty($topRiders)): ?>
+                            <p class="admin-performer-empty">No deliveries yet.</p>
+                            <?php else: ?>
+                            <ul class="admin-performer-list">
+                                <?php foreach ($topRiders as $idx => $r):
+                                    $pct = $maxTopRiderDeliveries > 0
+                                        ? ($r['deliveries'] / $maxTopRiderDeliveries) * 100
+                                        : 0;
+                                ?>
+                                <li class="admin-performer-item">
+                                    <span class="admin-performer-rank"><?php echo $idx + 1; ?></span>
+                                    <div class="admin-performer-info">
+                                        <div class="admin-performer-top">
+                                            <span class="admin-performer-name">
+                                                <?php echo htmlspecialchars($r['rider_name'], ENT_QUOTES, 'UTF-8'); ?>
+                                            </span>
+                                            <span class="admin-performer-value">
+                                                <?php echo number_format($r['deliveries']); ?> deliveries
+                                            </span>
+                                        </div>
+                                        <div class="admin-performer-track">
+                                            <span class="admin-performer-bar admin-performer-bar-rider"
+                                                data-bar-width="<?php echo $pct; ?>"></span>
+                                        </div>
+                                        <span class="admin-performer-meta">
+                                            <?php echo number_format($r['avg_rating'], 1); ?> ★ average rating
+                                        </span>
+                                    </div>
+                                </li>
+                                <?php endforeach; ?>
+                            </ul>
+                            <?php endif; ?>
+                        </div>
+
+                    </div>
+
                 </div>
             </section>
 
+            <!-- ============================================
+                 PENDING RIDERS CARD
+                 ============================================ -->
             <section class="admin-card" aria-labelledby="admin-pending-title">
                 <div class="admin-card-header">
                     <h2 class="heading-5" id="admin-pending-title">Pending Riders</h2>
@@ -250,6 +675,18 @@ $recentActivity = getRecentVerificationActivity($database_connection, 6);
                     <a href="riders.php?status=pending" class="admin-card-link">View All</a>
                     <?php endif; ?>
                 </div>
+
+                <?php
+                $pendingRidersData = getRidersPaginated(
+                    $database_connection,
+                    1,
+                    5,
+                    '',
+                    'pending',
+                    false
+                );
+                $pendingRiders = $pendingRidersData['rows'];
+                ?>
 
                 <?php if (empty($pendingRiders)): ?>
                 <div class="admin-empty-state">
@@ -292,64 +729,6 @@ $recentActivity = getRecentVerificationActivity($database_connection, 6);
             </section>
 
         </div>
-
-        <section class="admin-card" aria-labelledby="admin-activity-title">
-            <div class="admin-card-header">
-                <h2 class="heading-5" id="admin-activity-title">Recent Moderation Activity</h2>
-            </div>
-
-            <?php if (empty($recentActivity)): ?>
-            <div class="admin-empty-state">
-                <div class="admin-empty-icon" aria-hidden="true">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/time-update.svg" alt="">
-                </div>
-                <p class="admin-empty-title">No moderation activity yet</p>
-                <p class="admin-empty-text">Verification decisions will appear here.</p>
-            </div>
-            <?php else: ?>
-            <div class="admin-activity-list">
-                <?php foreach ($recentActivity as $a):
-                    $kind      = (string)$a['entity_type'];
-                    $entityId  = (int)$a['entity_id'];
-                    $entityName = (string)$a['entity_name'];
-                    $status    = (string)$a['verification_status'];
-                    $when      = (string)$a['verified_at'];
-
-                    $openUrl = $kind === 'rider'
-                        ? 'riders.php?open=' . $entityId
-                        : 'restaurants.php?open=' . $entityId;
-
-                    $iconFile = $kind === 'rider'
-                        ? 'order.svg'
-                        : 'restaurant.svg';
-
-                    $statusBadge = adminVerificationBadgeClass($status);
-                    $statusLabel = adminVerificationLabel($status);
-                ?>
-                <a href="<?php echo htmlspecialchars($openUrl, ENT_QUOTES, 'UTF-8'); ?>" class="admin-activity-row">
-                    <div
-                        class="admin-activity-icon admin-activity-icon-<?php echo htmlspecialchars($kind, ENT_QUOTES, 'UTF-8'); ?>">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/<?php echo htmlspecialchars($iconFile, ENT_QUOTES, 'UTF-8'); ?>"
-                            alt="" width="18" height="18">
-                    </div>
-                    <div class="admin-activity-body">
-                        <p class="admin-activity-name">
-                            <?php echo htmlspecialchars($entityName, ENT_QUOTES, 'UTF-8'); ?>
-                        </p>
-                        <p class="admin-activity-meta">
-                            <?php echo $kind === 'rider' ? 'Rider' : 'Restaurant'; ?>
-                            &middot;
-                            <?php echo htmlspecialchars(formatAdminDate($when), ENT_QUOTES, 'UTF-8'); ?>
-                        </p>
-                    </div>
-                    <span class="badge <?php echo $statusBadge; ?>">
-                        <?php echo htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8'); ?>
-                    </span>
-                </a>
-                <?php endforeach; ?>
-            </div>
-            <?php endif; ?>
-        </section>
 
     </div>
 </div>

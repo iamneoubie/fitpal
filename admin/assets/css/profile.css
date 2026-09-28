@@ -5,12 +5,14 @@
  *   .profile-page
  *     .container
  *       .page-title-header
- *       .profile-header-card        (avatar + name + role + last login)
+ *       .profile-header-card        (avatar + name + role + actions)
+ *         .profile-header-left      (avatar wrap + name column)
+ *         .profile-header-right     (edit btn OR save/cancel row)
  *       .profile-tabs               (Personal Information | Security)
  *       .profile-tab-content
  *         .profile-card
  *           .profile-card-header / .profile-card-body
- *           form rows + actions
+ *           form rows (edit-mode lifecycle)
  *
  * Container alignment: .profile-page .container matches
  * .admin-list-page .container and .header-container exactly —
@@ -18,10 +20,55 @@
  * the full container width so their left edge lines up with the
  * logo in the header. No inner max-width is applied to any card.
  *
+ * Edit-mode lifecycle
+ * -------------------
+ *   .profile-page.is-editing           set on the page wrapper
+ *   .profile-header-right .btn-edit    visible in view mode only
+ *   .profile-edit-actions              visible in edit mode only
+ *     .btn-cancel                      black, 50% share
+ *     .btn-primary                     primary, 50% share
+ *
+ * Both action buttons share the row evenly on desktop and tablet;
+ * they stack 100% wide on mobile.
+ *
+ * Avatar block
+ * ------------
+ * .profile-avatar-wrap is a 72px circle with a 3px primary ring,
+ * containing one of:
+ *
+ *   - .profile-avatar-image         the uploaded picture
+ *   - .profile-avatar-placeholder   the initial letter, primary
+ *                                   background, white text
+ *
+ * A small edit button sits on the bottom-right of the ring,
+ * visible only in edit mode (toggled by .is-hidden). A hidden
+ * <input type="file"> is parked next to the wrap and is triggered
+ * by the edit button's click handler in profile.js.
+ *
+ * Modals
+ * ------
+ * The page renders two confirmation modals from the customer
+ * pattern:
+ *
+ *   #confirmEditModal      "Edit Profile?" — proceed / not now
+ *   #unsavedChangesModal   "Unsaved Changes" — keep editing / save
+ *
+ * Both use the shared .modal/.modal-content shell (from
+ * global.css) plus the .confirm-modal-content layout defined
+ * below. Every modal contains an SVG-backed icon.
+ *
  * @package FitPal
- * @version 2.0 — Container aligned to 1200px / 16px padding to match
- *                admin-tables.css and header.css. Removed the inner
- *                760px reading-width constraint on cards.
+ * @version 4.0 — Adds the edit-mode lifecycle styles (header
+ *                actions row, avatar edit button, view/edit
+ *                toggles) and the confirm/unsaved modals. Existing
+ *                rules for tabs, form, password field, and
+ *                responsive breakpoints are preserved byte-for-byte
+ *                from v3.0.
+ *
+ *                (3.0: Adds the avatar wrap, image, placeholder,
+ *                and edit button styles. 2.0: Container aligned to
+ *                1200px / 16px padding to match admin-tables.css
+ *                and header.css.)
  */
 
 /* ============================================
@@ -160,6 +207,7 @@ html {
 .profile-header-card {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 20px;
     background: var(--white);
     border: 1px solid var(--gray-200);
@@ -171,9 +219,56 @@ html {
     box-sizing: border-box;
 }
 
-.profile-avatar-large {
+.profile-header-left {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    min-width: 0;
+    flex: 1;
+}
+
+.profile-header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+/* ------------------------------------------------------------
+   Avatar wrap
+   ------------------------------------------------------------
+   A 72px circle with a 3px primary ring. The wrap is the
+   positioning parent for the edit button, which anchors to the
+   bottom-right corner. Overflow is visible so the button is not
+   clipped by the wrap's rounded bounds.
+   ------------------------------------------------------------ */
+
+.profile-avatar-wrap {
+    position: relative;
     width: 72px;
     height: 72px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: 3px solid var(--primary);
+    padding: 2px;
+    background: var(--white);
+    box-sizing: border-box;
+    overflow: visible;
+}
+
+.profile-avatar-image {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+    background: var(--gray-100);
+}
+
+.profile-avatar-placeholder {
+    width: 100%;
+    height: 100%;
     border-radius: 50%;
     background: var(--primary);
     color: var(--white);
@@ -182,11 +277,61 @@ html {
     justify-content: center;
     font-size: 28px;
     font-weight: 700;
-    flex-shrink: 0;
     text-transform: uppercase;
     line-height: 1;
     user-select: none;
 }
+
+.profile-avatar-edit {
+    position: absolute;
+    right: -4px;
+    bottom: -4px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--primary);
+    border: 2px solid var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    transition: background 0.15s ease, transform 0.15s ease;
+    z-index: 2;
+}
+
+.profile-avatar-edit.is-hidden {
+    display: none;
+}
+
+.profile-avatar-edit:hover {
+    background: var(--primary-dark);
+    transform: scale(1.08);
+}
+
+.profile-avatar-edit:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.profile-avatar-edit:focus-visible {
+    outline: 2px solid var(--primary-dark);
+    outline-offset: 2px;
+}
+
+.profile-avatar-edit img {
+    width: 13px;
+    height: 13px;
+    display: block;
+    flex-shrink: 0;
+    filter: brightness(0) invert(1);
+}
+
+/* ------------------------------------------------------------
+   Header info column
+   ------------------------------------------------------------ */
 
 .profile-header-info {
     display: flex;
@@ -237,6 +382,97 @@ html {
     font-size: var(--font-size-xs);
     color: var(--gray-400);
 }
+
+/* ------------------------------------------------------------
+   Edit-mode actions in the header card
+   ------------------------------------------------------------
+   View mode:
+     #editProfileBtn is visible, #profileEditActions is hidden.
+   Edit mode:
+     #editProfileBtn is hidden, #profileEditActions is visible
+     and lays out Cancel + Save Changes as a 50/50 row.
+   ------------------------------------------------------------ */
+
+.profile-edit-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: nowrap;
+    width: 100%;
+    max-width: 320px;
+}
+
+.profile-edit-actions.is-hidden {
+    display: none;
+}
+
+.profile-edit-actions .btn {
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: center;
+    height: 44px;
+    padding: 0 18px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    cursor: pointer;
+    border: 2px solid transparent;
+    text-decoration: none;
+    font-family: inherit;
+}
+
+/* Edit Profile button — visible in view mode only. */
+.btn-edit {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: var(--primary);
+    color: var(--white);
+    border: 1px solid var(--primary);
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s ease;
+}
+
+.btn-edit:hover {
+    background: var(--primary-dark);
+}
+
+.btn-edit .btn-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    filter: brightness(0) invert(1);
+}
+
+/* The page wrapper carries .is-editing while the admin is in edit
+   mode. Hide the standalone Edit button so only the Save/Cancel
+   row is visible. */
+.profile-page.is-editing #editProfileBtn {
+    display: none;
+}
+
+/* Cancel button — black background, white text. */
+.btn-cancel {
+    background: #1a1a1a;
+    color: #ffffff;
+    border-color: #1a1a1a;
+}
+
+.btn-cancel:hover {
+    background: #000000;
+    border-color: #000000;
+}
+
+/* Save Changes button uses the shared .btn-primary look. */
 
 /* ============================================
    TABS
@@ -561,7 +797,8 @@ html {
 }
 
 /* ============================================
-   FORM ACTIONS
+   FORM ACTIONS — used by the Security tab
+   (Personal Information's Save/Cancel row lives in the header card)
    ============================================ */
 
 .form-actions {
@@ -576,6 +813,156 @@ html {
 .form-actions .btn {
     min-width: 160px;
     justify-content: center;
+}
+
+/* ============================================
+   CONFIRM MODALS
+   Used by #confirmEditModal and #unsavedChangesModal.
+   ============================================ */
+
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(5, 10, 4, 0.5);
+    z-index: var(--z-modal-backdrop);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.modal.active {
+    display: flex !important;
+}
+
+.modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.modal-content {
+    position: relative;
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xl);
+    width: 100%;
+    max-width: 440px;
+    max-height: 90vh;
+    overflow-y: auto;
+    z-index: 1;
+    animation: modalFadeIn 0.25s ease;
+    margin: 0 auto;
+    box-sizing: border-box;
+}
+
+@keyframes modalFadeIn {
+    from { opacity: 0; transform: scale(0.96) translateY(-10px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.confirm-modal-content {
+    text-align: center;
+    padding: 0;
+    max-width: 440px;
+}
+
+.confirm-modal-icon {
+    width: 64px;
+    height: 64px;
+    margin: 32px auto 16px;
+    background: rgba(89, 193, 74, 0.1);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.confirm-modal-icon img {
+    width: 28px;
+    height: 28px;
+    display: block;
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.confirm-modal-content h3 {
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    color: var(--text);
+    margin: 0 0 8px 0;
+    text-align: center;
+    padding: 0 16px;
+}
+
+.confirm-modal-content .text-muted {
+    font-size: var(--font-size-base);
+    color: var(--gray-600);
+    margin: 0 0 24px 0;
+    text-align: center;
+    line-height: 1.6;
+    padding: 0 20px;
+}
+
+.confirm-modal-content .text-muted strong {
+    color: var(--text);
+    font-weight: 600;
+}
+
+.confirm-modal-content .modal-footer {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    padding: 16px 20px 28px 20px;
+    border-top: 1px solid var(--gray-200);
+    margin-top: 0;
+}
+
+.confirm-modal-content .modal-footer .btn {
+    flex: 1;
+    justify-content: center;
+    padding: 10px 20px;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    border-radius: var(--radius-base);
+    font-family: inherit;
+    min-width: 0;
+    max-width: 50%;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid transparent;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.confirm-modal-content .modal-footer .btn-primary {
+    background: var(--primary);
+    color: var(--white);
+    border-color: var(--primary);
+}
+
+.confirm-modal-content .modal-footer .btn-primary:hover {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+}
+
+.confirm-modal-content .modal-footer .btn-cancel {
+    background: #1a1a1a;
+    color: #ffffff;
+    border-color: #1a1a1a;
+}
+
+.confirm-modal-content .modal-footer .btn-cancel:hover {
+    background: #000000;
+    border-color: #000000;
 }
 
 /* ============================================
@@ -604,12 +991,57 @@ html {
     .profile-header-card {
         padding: 20px;
         gap: 16px;
+        flex-direction: column;
+        align-items: stretch;
     }
 
-    .profile-avatar-large {
-        width: 60px;
-        height: 60px;
-        font-size: 22px;
+    .profile-header-left {
+        flex-direction: row;
+        align-items: center;
+        gap: 16px;
+        width: 100%;
+    }
+
+    .profile-header-right {
+        justify-content: stretch;
+        width: 100%;
+        gap: 10px;
+    }
+
+    .profile-header-right .btn-edit {
+        width: 100%;
+        justify-content: center;
+        padding: 12px 20px;
+        min-height: 48px;
+    }
+
+    .profile-edit-actions {
+        width: 100%;
+        max-width: none;
+    }
+
+    .profile-edit-actions .btn {
+        height: 48px;
+        padding: 0 14px;
+    }
+
+    .profile-avatar-wrap {
+        width: 64px;
+        height: 64px;
+    }
+
+    .profile-avatar-placeholder {
+        font-size: 24px;
+    }
+
+    .profile-avatar-edit {
+        width: 26px;
+        height: 26px;
+    }
+
+    .profile-avatar-edit img {
+        width: 12px;
+        height: 12px;
     }
 
     .profile-name {
@@ -663,6 +1095,33 @@ html {
     .password-rules {
         grid-template-columns: 1fr;
     }
+
+    .confirm-modal-content {
+        max-width: calc(100vw - 24px);
+        max-height: 95vh;
+    }
+
+    .confirm-modal-content .modal-footer {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 12px 16px 20px 16px;
+    }
+
+    .confirm-modal-content .modal-footer .btn {
+        width: 100%;
+        max-width: 100%;
+        flex: 1 1 100%;
+        padding: 12px 20px;
+    }
+
+    .confirm-modal-content h3 {
+        font-size: var(--font-size-lg);
+    }
+
+    .confirm-modal-content .text-muted {
+        font-size: var(--font-size-sm);
+        padding: 0 12px;
+    }
 }
 
 /* ============================================
@@ -679,20 +1138,56 @@ html {
     }
 
     .profile-header-card {
-        flex-direction: column;
-        align-items: flex-start;
-        padding: 18px;
-        text-align: left;
+        padding: 16px 14px;
     }
 
-    .profile-avatar-large {
+    .profile-header-left {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+
+    .profile-header-info {
+        align-items: center;
+        text-align: center;
+    }
+
+    .profile-meta-row {
+        justify-content: center;
+    }
+
+    .profile-avatar-wrap {
         width: 56px;
         height: 56px;
+    }
+
+    .profile-avatar-placeholder {
         font-size: 20px;
+    }
+
+    .profile-avatar-edit {
+        width: 24px;
+        height: 24px;
+    }
+
+    .profile-avatar-edit img {
+        width: 11px;
+        height: 11px;
     }
 
     .profile-name {
         font-size: var(--font-size-lg);
+    }
+
+    .profile-header-right .btn-edit {
+        min-height: 44px;
+        padding: 10px 16px;
+        font-size: var(--font-size-sm);
+    }
+
+    .profile-edit-actions .btn {
+        height: 44px;
+        font-size: var(--font-size-sm);
     }
 
     .profile-card-header {
@@ -726,6 +1221,11 @@ html {
         width: 16px;
         height: 16px;
     }
+
+    .confirm-modal-content .modal-footer .btn {
+        padding: 10px 16px;
+        font-size: var(--font-size-xs);
+    }
 }
 
 /* ============================================
@@ -739,7 +1239,11 @@ html {
     .password-toggle,
     .password-rule,
     .password-rule-icon,
-    .page-title-header .back-btn {
+    .page-title-header .back-btn,
+    .profile-avatar-edit,
+    .profile-edit-actions .btn,
+    .btn-edit,
+    .modal-content {
         transition: none !important;
         animation: none !important;
     }

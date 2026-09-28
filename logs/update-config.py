@@ -25,7 +25,7 @@ PINNED_ENTRIES = [
     "/logs/instructions/general.md",
     "/logs/output/project_structure.md",
     "/sql/database.sql",
-    "/sql/sample/seed-data.sql",
+    "/sql/seed/all-in-one.sql",
 ]
 
 # Directories to skip when walking (relative to project root)

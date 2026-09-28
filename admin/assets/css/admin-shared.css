@@ -1,30 +1,70 @@
 /**
- * FitPal Admin Tables — shared list page styles
- * Version 10.0 — Visual hierarchy pass.
+ * FitPal Admin — Shared List-Page Chrome
+ * Version 1.0 — New file.
  *
- * Every admin list page (customers, riders, restaurants) uses this
- * stylesheet. Pages should not define their own list styles.
+ * This file is the single source of truth for the admin list-page
+ * chrome. It replaces the ~1,100 lines that were duplicated verbatim
+ * across:
  *
- * Modal hierarchy:
- *   Level 1 — top tab bar   (.admin-modal-tabs)
- *     Underlined tabs on a light tinted strip. Reads as the
- *     primary navigation.
+ *   admin/assets/css/admin-tables.css
+ *   admin/assets/css/customers.css
+ *   admin/assets/css/riders.css
+ *   admin/assets/css/restaurants.css
  *
- *   Level 2 — sub-tab row   (.admin-subtabs)
- *     A segmented-control strip sitting directly beneath the top
- *     tabs, on the same tinted background. The active sub-tab is
- *     a solid filled pill. Reads as a clear step below the tabs.
+ * What lives here
+ * ---------------
+ * Everything that is identical across the three list pages:
  *
- *   Level 3 — phase content (.admin-modal-phase)
- *     The actual data, on the white panel body.
+ *   - Content wrapper / scrollbar hygiene
+ *   - Page header (title block left, back button right)
+ *   - Filter bar (search form + status tabs)
+ *   - Data table (card layout, avatar, body cells, meta, actions)
+ *   - Pagination
+ *   - Modal shell (backdrop, panel, header, close)
+ *   - Modal top tab bar
+ *   - Modal panel body + tab panel + sub-tab row + sub-phase
+ *   - Modal footer + footer arrows
+ *   - Detail blocks (grid, label/value, section heading,
+ *     document preview, address card, contact card, orders list)
+ *   - Badges
+ *   - Alerts
+ *   - Responsive breakpoints at 992 / 768 / 480
+ *   - adminFadeIn / adminScaleIn keyframes
+ *   - Neutral-button override (scoped to .admin-list-page)
+ *   - Page-header back-button scale (scoped to .admin-page-header-actions)
  *
- *   Footer — action bar
- *     A tinted strip matching the tab bars, with action buttons
- *     on the right. Reads as a closing bar, not as floating
- *     buttons at the bottom of the content.
+ * What stays per-page
+ * -------------------
+ * customers.css, riders.css, and restaurants.css keep only the
+ * tuning that is genuinely page-specific:
+ *
+ *   - The wide-modal width override
+ *   - The compact modal-footer control row
+ *   - The sub-tab strip that stretches its pills evenly
+ *   - The tightened detail-grid gutter
+ *
+ * Those per-page files no longer re-declare any chrome.
+ *
+ * Load order
+ * ----------
+ * The admin pages load, in order:
+ *
+ *   <link rel="stylesheet" href="../assets/css/admin-shared.css">
+ *   <link rel="stylesheet" href="../assets/css/<page>.css">
+ *
+ * The page file wins on equal specificity by virtue of cascade
+ * position. No !important is used to force the page overrides to
+ * apply.
+ *
+ * admin-tables.css
+ * ----------------
+ * admin-tables.css is now a two-line shim that @imports this file.
+ * It exists so any older <link> tag that still points at it keeps
+ * working. A later cleanup pass can delete the shim and update the
+ * link tags.
  *
  * @package FitPal
- * @version 10.0
+ * @version 1.0
  */
 
 /* ============================================
@@ -64,27 +104,34 @@ html {
 
 /* ============================================
    PAGE HEADER
+   ============================================
+   Single row on desktop and tablet:
+     title block on the left, back button on the right.
+
+   Stacks vertically only below 480px.
    ============================================ */
 
 .admin-page-header {
   display: flex;
-  justify-content: space-between;
+  flex-direction: row;
   align-items: flex-start;
-  margin-bottom: 24px;
-  flex-wrap: wrap;
+  justify-content: space-between;
   gap: 16px;
+  margin-bottom: 24px;
 }
 
 .admin-page-header-left {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
+  text-align: left;
 }
 
 .admin-page-header .heading-2 {
-  margin: 0 0 4px 0;
+  margin: 0 0 6px 0;
   font-size: var(--font-size-3xl);
   line-height: 1.2;
   color: var(--text);
+  word-break: break-word;
 }
 
 .admin-page-header .heading-2 span {
@@ -95,6 +142,8 @@ html {
   color: var(--gray-500);
   margin: 0;
   font-size: var(--font-size-sm);
+  line-height: 1.5;
+  word-break: break-word;
 }
 
 .admin-page-header-actions {
@@ -102,7 +151,16 @@ html {
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  margin-left: auto;
+}
+
+.admin-page-header-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
 }
 
 .admin-page-header-actions .btn-icon {
@@ -110,6 +168,7 @@ html {
   height: 16px;
   display: block;
   flex-shrink: 0;
+  filter: brightness(0) invert(1);
 }
 
 /* ============================================
@@ -159,11 +218,6 @@ html {
   box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
 }
 
-.admin-search-input:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
 .admin-search-btn {
   flex: 0 0 auto;
   height: 40px;
@@ -184,6 +238,7 @@ html {
     border-color 0.15s ease,
     box-shadow 0.15s ease;
   font-family: inherit;
+  white-space: nowrap;
 }
 
 .admin-search-btn:hover {
@@ -278,9 +333,9 @@ html {
 
 .admin-table-row {
   display: grid;
-  gap: 14px;
+  gap: 16px;
   align-items: center;
-  padding: 14px 20px;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--gray-100);
   transition: background 0.15s ease;
 }
@@ -336,8 +391,8 @@ html {
 
 /* ---- Avatar cell ---- */
 .admin-cell-avatar {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   background: var(--primary);
   color: var(--white);
@@ -345,10 +400,11 @@ html {
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 16px;
+  font-size: 18px;
   flex-shrink: 0;
   text-transform: uppercase;
   overflow: hidden;
+  line-height: 1;
 }
 
 .admin-cell-avatar img {
@@ -358,19 +414,23 @@ html {
   display: block;
 }
 
-/* ---- Body cell ---- */
+/* ---- Body cells ---- */
 .admin-cell-body {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .admin-cell-title {
-  margin: 0 0 2px 0;
+  margin: 0;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.4;
 }
 
 .admin-cell-subtitle {
@@ -380,48 +440,96 @@ html {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.4;
 }
 
 .admin-cell-meta {
-  margin: 4px 0 0 0;
+  margin: 0;
   font-size: var(--font-size-xs);
   color: var(--gray-500);
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 12px;
+  gap: 4px 12px;
+  line-height: 1.4;
 }
 
 .admin-cell-meta-item {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
+}
+
+.admin-cell-meta-item strong {
+  color: var(--text);
+  font-weight: 600;
 }
 
 /* ---- Actions cell ---- */
 .admin-cell-actions {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
+  align-items: center;
 }
 
 .admin-cell-actions .btn {
   white-space: nowrap;
 }
 
-/* ---- Three-column table layout (customers) ---- */
+/* ---- Table layout: customers ---- */
 .admin-table-customers .admin-table-row {
-  grid-template-columns: 44px minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: 48px minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  grid-template-areas: "avatar info meta actions";
 }
 
-/* ---- Three-column table layout (riders) ---- */
+.admin-table-customers .admin-table-row .admin-cell-avatar {
+  grid-area: avatar;
+}
+.admin-table-customers .admin-table-row .admin-cell-body:nth-of-type(1) {
+  grid-area: info;
+}
+.admin-table-customers .admin-table-row .admin-cell-body:nth-of-type(2) {
+  grid-area: meta;
+}
+.admin-table-customers .admin-table-row .admin-cell-actions {
+  grid-area: actions;
+}
+
+/* ---- Table layout: riders ---- */
 .admin-table-riders .admin-table-row {
-  grid-template-columns: 44px minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: 48px minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  grid-template-areas: "avatar info meta actions";
 }
 
-/* ---- Two-column table layout (restaurants) ---- */
+.admin-table-riders .admin-table-row .admin-cell-avatar {
+  grid-area: avatar;
+}
+.admin-table-riders .admin-table-row .admin-cell-body:nth-of-type(1) {
+  grid-area: info;
+}
+.admin-table-riders .admin-table-row .admin-cell-body:nth-of-type(2) {
+  grid-area: meta;
+}
+.admin-table-riders .admin-table-row .admin-cell-actions {
+  grid-area: actions;
+}
+
+/* ---- Table layout: restaurants ---- */
 .admin-table-restaurants .admin-table-row {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  grid-template-areas: "info meta actions";
+}
+
+.admin-table-restaurants .admin-table-row .admin-cell-body:nth-of-type(1) {
+  grid-area: info;
+}
+.admin-table-restaurants .admin-table-row .admin-cell-body:nth-of-type(2) {
+  grid-area: meta;
+}
+.admin-table-restaurants .admin-table-row .admin-cell-actions {
+  grid-area: actions;
 }
 
 /* ============================================
@@ -558,7 +666,7 @@ html {
 }
 
 .admin-modal-panel-wide {
-  width: 820px;
+  width: 720px;
 }
 
 .admin-modal-header {
@@ -602,8 +710,7 @@ html {
   flex-shrink: 0;
   transition:
     background 0.15s ease,
-    color 0.15s ease,
-    box-shadow 0.15s ease;
+    color 0.15s ease;
   font-family: inherit;
   text-decoration: none;
 }
@@ -620,12 +727,6 @@ html {
 
 /* ============================================
    MODAL — TOP TAB BAR
-   ============================================
-   Tabs are underlined. The bar sits on a very light tinted
-   strip so it visually separates from the panel body below.
-   The active tab gets both a primary-coloured label and a
-   2px underline, plus a subtle white lift so it reads as the
-   "current" step.
    ============================================ */
 
 .admin-modal-tabs {
@@ -759,10 +860,6 @@ html {
 
 /* ============================================
    MODAL — TAB PANEL
-   ============================================
-   Each top tab maps to one panel. Only the .active panel is
-   shown. The panel provides its own padding so tab panels with
-   a sub-tab row can render the sub-tab strip full-bleed.
    ============================================ */
 
 .admin-modal-tab-panel {
@@ -776,11 +873,6 @@ html {
 
 /* ============================================
    MODAL — SUB-TAB ROW
-   ============================================
-   A segmented-control strip. The row sits on a soft tinted
-   track that spans the panel width, so it reads as a step below
-   the top tab bar. Each sub-tab is a pill; the active one is
-   filled with the primary colour.
    ============================================ */
 
 .admin-subtabs {
@@ -863,11 +955,6 @@ html {
 
 /* ============================================
    MODAL — FOOTER (ACTION BAR)
-   ============================================
-   Tinted strip that visually matches the top tab bar, so the
-   modal reads as: tab bar / content / action bar. Actions are
-   right-aligned, with optional arrows on the left when the
-   modal uses them.
    ============================================ */
 
 .admin-modal-tab-footer {
@@ -882,8 +969,6 @@ html {
   flex-wrap: wrap;
 }
 
-/* When arrows are present they should sit on the left, pushing
-   the action group to the right. */
 .admin-modal-tab-footer .tab-arrow:first-child {
   margin-right: auto;
 }
@@ -936,8 +1021,7 @@ html {
     background 0.15s ease,
     border-color 0.15s ease,
     color 0.15s ease,
-    opacity 0.15s ease,
-    box-shadow 0.15s ease;
+    opacity 0.15s ease;
   font-family: inherit;
 }
 
@@ -1032,7 +1116,6 @@ html {
   color: var(--gray-500);
 }
 
-/* ---- Section Heading ---- */
 .admin-section-heading {
   display: flex;
   align-items: center;
@@ -1073,6 +1156,10 @@ html {
   border-radius: var(--radius-base);
   overflow: hidden;
   background: var(--white);
+}
+
+.admin-doc-block:last-child {
+  margin-bottom: 0;
 }
 
 .admin-doc-head {
@@ -1289,30 +1376,12 @@ html {
   min-height: 22px;
 }
 
-.badge-success {
-  background: #d4edda;
-  color: #155724;
-}
-.badge-warning {
-  background: #fff3cd;
-  color: #856404;
-}
-.badge-danger {
-  background: #f8d7da;
-  color: #721c24;
-}
-.badge-info {
-  background: #d1ecf1;
-  color: #0c5460;
-}
-.badge-primary {
-  background: #cce5ff;
-  color: #004085;
-}
-.badge-secondary {
-  background: var(--gray-200);
-  color: var(--gray-600);
-}
+.badge-success   { background: #d4edda; color: #155724; }
+.badge-warning   { background: #fff3cd; color: #856404; }
+.badge-danger    { background: #f8d7da; color: #721c24; }
+.badge-info      { background: #d1ecf1; color: #0c5460; }
+.badge-primary   { background: #cce5ff; color: #004085; }
+.badge-secondary { background: var(--gray-200); color: var(--gray-600); }
 
 /* ============================================
    ALERTS
@@ -1343,26 +1412,27 @@ html {
    RESPONSIVE
    ============================================ */
 
+/* ---- ≤992px: two-column info, actions pinned right ---- */
 @media (max-width: 992px) {
   .admin-table-customers .admin-table-row,
   .admin-table-riders .admin-table-row {
-    grid-template-columns: 44px minmax(0, 1fr) auto;
+    grid-template-columns: 48px minmax(0, 1fr) auto;
     grid-template-areas:
       "avatar info actions"
       "avatar meta actions";
-    row-gap: 4px;
+    row-gap: 6px;
   }
   .admin-table-customers .admin-table-row .admin-cell-avatar,
   .admin-table-riders .admin-table-row .admin-cell-avatar {
     grid-area: avatar;
     grid-row: span 2;
   }
-  .admin-table-customers .admin-table-row .admin-cell-body,
-  .admin-table-riders .admin-table-row .admin-cell-body {
+  .admin-table-customers .admin-table-row .admin-cell-body:nth-of-type(1),
+  .admin-table-riders .admin-table-row .admin-cell-body:nth-of-type(1) {
     grid-area: info;
   }
-  .admin-table-customers .admin-table-row .admin-cell-meta,
-  .admin-table-riders .admin-table-row .admin-cell-meta {
+  .admin-table-customers .admin-table-row .admin-cell-body:nth-of-type(2),
+  .admin-table-riders .admin-table-row .admin-cell-body:nth-of-type(2) {
     grid-area: meta;
   }
   .admin-table-customers .admin-table-row .admin-cell-actions,
@@ -1375,11 +1445,12 @@ html {
     grid-template-areas:
       "info actions"
       "meta actions";
+    row-gap: 6px;
   }
-  .admin-table-restaurants .admin-table-row .admin-cell-body {
+  .admin-table-restaurants .admin-table-row .admin-cell-body:nth-of-type(1) {
     grid-area: info;
   }
-  .admin-table-restaurants .admin-table-row .admin-cell-meta {
+  .admin-table-restaurants .admin-table-row .admin-cell-body:nth-of-type(2) {
     grid-area: meta;
   }
   .admin-table-restaurants .admin-table-row .admin-cell-actions {
@@ -1387,21 +1458,27 @@ html {
   }
 }
 
+/* ---- ≤768px: full stack ---- */
 @media (max-width: 768px) {
   .admin-list-page {
     padding: 16px 0 32px 0;
   }
-  .admin-page-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
+
   .admin-page-header .heading-2 {
     font-size: var(--font-size-2xl);
   }
-  .admin-page-header-actions {
-    justify-content: flex-start;
-    width: 100%;
+
+  .admin-page-header-actions .btn {
+    padding: 8px 14px;
+    font-size: var(--font-size-xs);
+    min-height: 38px;
   }
+
+  .admin-page-header-actions .btn-icon {
+    width: 14px;
+    height: 14px;
+  }
+
   .admin-filter-bar {
     padding: 12px 14px;
     gap: 10px;
@@ -1409,6 +1486,9 @@ html {
   .admin-search-form {
     min-width: 0;
     width: 100%;
+  }
+  .admin-search-btn {
+    padding: 0 14px;
   }
   .admin-filter-tab {
     padding: 6px 12px;
@@ -1418,28 +1498,34 @@ html {
   .admin-table-customers .admin-table-row,
   .admin-table-riders .admin-table-row,
   .admin-table-restaurants .admin-table-row {
-    grid-template-columns: 40px minmax(0, 1fr);
+    grid-template-columns: 44px minmax(0, 1fr);
     grid-template-areas:
       "avatar info"
       "avatar meta"
       "actions actions";
-    row-gap: 6px;
-    padding: 14px 16px;
+    row-gap: 8px;
+    padding: 16px 16px;
   }
+
   .admin-table-customers .admin-table-row .admin-cell-avatar,
   .admin-table-riders .admin-table-row .admin-cell-avatar {
     grid-area: avatar;
+    grid-row: span 2;
+    align-self: flex-start;
   }
-  .admin-table-customers .admin-table-row .admin-cell-body,
-  .admin-table-riders .admin-table-row .admin-cell-body,
-  .admin-table-restaurants .admin-table-row .admin-cell-body {
+
+  .admin-table-customers .admin-table-row .admin-cell-body:nth-of-type(1),
+  .admin-table-riders .admin-table-row .admin-cell-body:nth-of-type(1),
+  .admin-table-restaurants .admin-table-row .admin-cell-body:nth-of-type(1) {
     grid-area: info;
   }
-  .admin-table-customers .admin-table-row .admin-cell-meta,
-  .admin-table-riders .admin-table-row .admin-cell-meta,
-  .admin-table-restaurants .admin-table-row .admin-cell-meta {
+
+  .admin-table-customers .admin-table-row .admin-cell-body:nth-of-type(2),
+  .admin-table-riders .admin-table-row .admin-cell-body:nth-of-type(2),
+  .admin-table-restaurants .admin-table-row .admin-cell-body:nth-of-type(2) {
     grid-area: meta;
   }
+
   .admin-table-customers .admin-table-row .admin-cell-actions,
   .admin-table-riders .admin-table-row .admin-cell-actions,
   .admin-table-restaurants .admin-table-row .admin-cell-actions {
@@ -1447,6 +1533,7 @@ html {
     justify-content: flex-start;
     width: 100%;
   }
+
   .admin-table-restaurants .admin-table-row {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
@@ -1518,31 +1605,58 @@ html {
   }
 }
 
+/* ---- ≤480px: header stacks; row goes single column ---- */
 @media (max-width: 480px) {
   .admin-list-page .container {
     padding: 0 12px;
   }
-  .admin-page-header .heading-2 {
-    font-size: var(--font-size-xl);
+
+  .admin-page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
   }
+
+  .admin-page-header .heading-2 {
+    font-size: var(--font-size-2xl);
+  }
+
+  .admin-page-header-actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+
+  .admin-page-header-actions .btn {
+    width: 100%;
+    justify-content: center;
+    padding: 10px 16px;
+    font-size: var(--font-size-xs);
+  }
+
   .admin-table-customers .admin-table-row,
   .admin-table-riders .admin-table-row {
     grid-template-columns: 36px minmax(0, 1fr);
-    padding: 12px 14px;
+    padding: 14px 14px;
+    column-gap: 12px;
   }
+
   .admin-cell-avatar {
     width: 36px;
     height: 36px;
     font-size: 14px;
   }
+
   .admin-cell-actions {
     flex-direction: column;
     align-items: stretch;
   }
+
   .admin-cell-actions .btn {
     width: 100%;
     justify-content: center;
   }
+
   .admin-pagination {
     flex-direction: column;
     align-items: stretch;
@@ -1558,6 +1672,7 @@ html {
     padding: 5px 10px;
     font-size: var(--font-size-xs);
   }
+
   .admin-doc-image {
     padding: 8px;
     min-height: 180px;
@@ -1565,6 +1680,7 @@ html {
   .admin-doc-image img {
     max-height: 300px;
   }
+
   .admin-modal-tab-footer {
     padding: 10px 12px;
   }
@@ -1579,34 +1695,17 @@ html {
    ============================================ */
 
 @keyframes adminFadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 @keyframes adminScaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0.96) translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
+  from { opacity: 0; transform: scale(0.96) translateY(-8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .admin-stat-card,
-  .admin-stat-arrow,
-  .admin-stat-arrow-img,
   .admin-table-row,
-  .admin-pending-row,
-  .admin-pending-arrow,
-  .admin-chart-bar,
-  .admin-chart-tooltip,
   .admin-modal-backdrop,
   .admin-modal-panel,
   .admin-modal-close,
@@ -1620,4 +1719,88 @@ html {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* ============================================================
+   NEUTRAL BUTTON OVERRIDE
+   ============================================================
+   The ruleset's button color table is binary:
+
+     Confirm / positive        → primary background, white text
+     Neutral                   → black background, white text
+     Negative (delete/remove)  → danger background, white text
+
+   "Transparent background + black border + black text" is
+   forbidden as a global default. The override below replaces it
+   inside .admin-list-page.
+   ============================================================ */
+
+.admin-list-page .btn-outline {
+  background: #1a1a1a;
+  color: #ffffff;
+  border-color: #1a1a1a;
+}
+
+.admin-list-page .btn-outline:hover,
+.admin-list-page .btn-outline:focus,
+.admin-list-page .btn-outline:focus-visible {
+  background: #000000;
+  color: #ffffff;
+  border-color: #000000;
+}
+
+.admin-list-page .btn-outline:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.admin-list-page .btn-outline:disabled,
+.admin-list-page .btn-outline[aria-disabled="true"] {
+  background: #1a1a1a;
+  color: #ffffff;
+  border-color: #1a1a1a;
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.admin-list-page .btn-outline .btn-icon {
+  filter: brightness(0) invert(1);
+}
+
+/* ------------------------------------------------------------
+   PAGE HEADER BACK BUTTON
+   ------------------------------------------------------------
+   The page-header back button is a .btn.btn-outline.btn-sm.
+   The .btn-sm modifier from global.css ships a compact scale
+   (4px 8px padding, 12px font) that is meant for in-table
+   actions like "View Details". Applied to a header-level
+   navigation button, that scale reads visibly smaller than
+   the profile page's standalone .back-btn.
+
+   This block brings the header back button up to the same
+   scale as the profile page's back button:
+     padding 10px 18px
+     font-size 14px
+     18px icon
+     box-shadow 0 2px 8px rgba(0,0,0,0.15)
+
+   Scope: .admin-page-header-actions only. Table-row
+   .btn-outline.btn-sm buttons on the same page keep the
+   compact scale.
+   ------------------------------------------------------------ */
+
+.admin-list-page .admin-page-header-actions .btn-outline.btn-sm {
+  padding: 10px 18px;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  border-radius: var(--radius-base);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  min-height: 42px;
+  gap: 8px;
+}
+
+.admin-list-page .admin-page-header-actions .btn-outline.btn-sm .btn-icon {
+  width: 18px;
+  height: 18px;
+  filter: brightness(0) invert(1);
 }

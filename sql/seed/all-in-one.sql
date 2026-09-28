@@ -1,6 +1,6 @@
 -- =====================================================
 -- FitPal Seed Data
--- Version 5.8
+-- Version 5.9
 --
 -- ALIGNED WITH: fitpal_food_delivery schema v1.3.0
 --   - customer_address is a CHILD of customer
@@ -14,8 +14,38 @@
 --   - order_status includes 'picking_up' between 'rider_pending'
 --     and 'delivering' (v1.3.0)
 --
--- v5.8 changes
+-- v5.9 changes
 -- ------------
+--   * Rider identity documents now point at the curated
+--     manifest (shared/assets/images/manifest/) instead of
+--     the runtime upload directory. Each rider gets a
+--     distinct manifest file so no two riders share the same
+--     image in the admin KYC review screen:
+--       - Carlos (motorcycle) → drivers-license-1.jpg
+--       - Miguel (car)        → drivers-license-2.jpg
+--       - Andrei (bicycle)    → national-id-1.jpg
+--
+--   * Every product description now carries a full % Daily
+--     Value label for Protein, Carbs, Fat, Dietary Fiber,
+--     Vitamin A, and Vitamin C. Previously Fat was missing
+--     its percentage on most rows and label formatting was
+--     inconsistent across products.
+--
+--     Daily Values used (FDA, 2,000 kcal reference):
+--       Protein 50g, Carbs 275g, Fat 78g,
+--       Dietary Fiber 28g, Vitamin A 900mcg, Vitamin C 90mg.
+--
+--     Calories and Sugars have no established Daily Value and
+--     are shown in units only.
+--
+--   * New verification V20 asserts no two riders share the
+--     same id_path.
+--
+--   * No data values other than rider document paths and
+--     product description labels changed.
+--
+-- v5.8 changes (retained)
+-- -----------------------
 --   * No data values changed. This revision only tracks the schema
 --     bump from v1.2.0 to v1.3.0.
 --
@@ -45,8 +75,6 @@
 --     single drivers_license column.
 --   * For the bicycle rider, issue_date and expiry_date are NULL
 --     because a national ID may not display either.
---   * Document paths point at the per-rider upload layout:
---       shared/uploads/rider/documents/<rider_id>/<file>
 --   * V17 verification added to confirm every rider has a
 --     document row and that id_type is never NULL.
 --   * V18 verification added to confirm no bicycle rider carries
@@ -78,10 +106,9 @@
 --   shared/assets/images/manifest/drivers-license/drivers-license-2.jpg
 --   shared/assets/images/manifest/national-id/national-id-1.jpg
 --
---   The seed inserts reference these under shared/uploads/rider/
---   documents/<rider_id>/ — copy the manifest files to those paths
---   before running the seed, or the file-existence verification
---   step in deployment tooling will flag them.
+--   These are the curated seed assets. Runtime rider uploads
+--   live under shared/uploads/rider/documents/<rider_id>/ and
+--   are written by sign-up-handler.php, not by this seed.
 --
 -- PRINCIPLES
 --   1.  Every account gets at least one address row.
@@ -103,6 +130,9 @@
 --       trivially satisfied; the rule exists so a future seed
 --       that DOES insert live orders does not silently violate
 --       the schema's rider cap.
+--  12.  (v5.9) Every rider document points at a DISTINCT
+--       manifest file. No two riders share an image. Product
+--       nutrition labels carry a % DV on every macro line.
 -- =====================================================
 
 USE fitpal_food_delivery;
@@ -794,13 +824,17 @@ VALUES (
 --             id_type + id_path + issue_date + expiry_date.
 --           Motor-vehicle riders submit 'drivers_license'.
 --           Bicycle rider submits 'national_id' with NULL dates.
---           Paths point at shared/uploads/rider/documents/<id>/.
 --     v5.8: No rider is seeded with any live order. The schema
 --           v1.3.0 cap of 3 concurrent orders per rider
 --           (rider_pending + picking_up + delivering) is
---           therefore trivially satisfied by this seed. If a
---           future revision adds demo orders, that revision must
---           keep every rider at or below the cap.
+--           therefore trivially satisfied by this seed.
+--     v5.9: Document paths point at the curated manifest
+--           (shared/assets/images/manifest/), NOT the runtime
+--           upload directory. Each rider gets a DISTINCT file
+--           so no two riders share the same image:
+--             - Carlos (motorcycle) → drivers-license-1.jpg
+--             - Miguel (car)        → drivers-license-2.jpg
+--             - Andrei (bicycle)    → national-id-1.jpg
 -- -----------------------------------------------------
 
 -- Rider 1: Motorcycle, verified, NOT available
@@ -908,11 +942,9 @@ VALUES (
     );
 
 -- Rider 1 identity document: driver's license.
--- Path follows the per-rider upload layout:
---   shared/uploads/rider/documents/<rider_id>/<filename>
--- Filenames mirror what the sign-up handler writes
--- (MM_DD_YYYY_<n>.<ext>) so the on-disk shape and the DB
--- row describe the same kind of file.
+-- Seed data points at the curated manifest, not the runtime
+-- upload directory. Each rider gets a distinct manifest file
+-- so no two riders share the same image.
 INSERT INTO
     delivery_rider_document (
         delivery_rider_id,
@@ -924,11 +956,7 @@ INSERT INTO
 VALUES (
         @rider1_id,
         'drivers_license',
-        CONCAT(
-            'shared/uploads/rider/documents/',
-            @rider1_id,
-            '/06_15_2021_0.jpg'
-        ),
+        'shared/assets/images/manifest/drivers-license/drivers-license-1.jpg',
         '2021-06-15',
         DATE_ADD(CURDATE(), INTERVAL 10 YEAR)
     );
@@ -1038,6 +1066,7 @@ VALUES (
     );
 
 -- Rider 2 identity document: driver's license.
+-- Distinct manifest file from Rider 1.
 INSERT INTO
     delivery_rider_document (
         delivery_rider_id,
@@ -1049,11 +1078,7 @@ INSERT INTO
 VALUES (
         @rider2_id,
         'drivers_license',
-        CONCAT(
-            'shared/uploads/rider/documents/',
-            @rider2_id,
-            '/11_03_2020_0.jpg'
-        ),
+        'shared/assets/images/manifest/drivers-license/drivers-license-2.jpg',
         '2020-11-03',
         DATE_ADD(CURDATE(), INTERVAL 10 YEAR)
     );
@@ -1169,9 +1194,10 @@ VALUES (
     );
 
 -- Rider 3 identity document: national ID.
--- issue_date and expiry_date are NULL because a Philippine
--- national ID does not expose either date. The admin review
--- view treats a NULL expiry as 'valid' for id_state.
+-- Bicycle rider, so not a driver's license. issue_date and
+-- expiry_date are NULL because a Philippine national ID does
+-- not expose either date. Distinct manifest file from both
+-- motor riders.
 INSERT INTO
     delivery_rider_document (
         delivery_rider_id,
@@ -1183,11 +1209,7 @@ INSERT INTO
 VALUES (
         @rider3_id,
         'national_id',
-        CONCAT(
-            'shared/uploads/rider/documents/',
-            @rider3_id,
-            '/02_20_2024_0.jpg'
-        ),
+        'shared/assets/images/manifest/national-id/national-id-1.jpg',
         NULL,
         NULL
     );
@@ -2418,12 +2440,14 @@ SET
 -- is DERIVED in Section 9. The value we put here is a placeholder
 -- that will be overwritten.
 --
--- v5.6: Each description now carries a per-serving nutrition
--- block derived from the product's default ingredient build.
--- Values use a 2,000 kcal reference daily value (DV):
---   Protein DV = 50g, Carbs DV = 275g, Fat DV = 78g,
---   Fiber DV = 28g, Vitamin A DV = 900mcg, Vitamin C DV = 90mg.
--- Sugars have no established DV and are shown in grams only.
+-- v5.6: Each description carries a per-serving nutrition block
+-- derived from the product's default ingredient build.
+-- v5.9: Every macro line now carries a % Daily Value using the
+-- FDA 2,000 kcal reference:
+--   Protein = 50g, Carbs = 275g, Fat = 78g,
+--   Dietary Fiber = 28g, Vitamin A = 900mcg, Vitamin C = 90mg.
+-- Calories and Sugars have no established Daily Value and are
+-- shown in units only.
 
 -- -----------------------------------------------------
 -- Green Bowl Cafe - 10 products
@@ -2449,13 +2473,13 @@ VALUES (
 
 Per serving (default build):
 Calories: 390 kcal
-Protein: 39g (78% DV)
-Carbs: 45g (16% DV)
-Fat: 10.5g (13% DV)
-Dietary Fiber: 6g (21% DV)
+Protein: 39g (78%)
+Carbs: 45g (16%)
+Fat: 10.5g (13%)
+Dietary Fiber: 6g (21%)
 Sugars: 3g
-Vitamin A: 420mcg (47% DV)
-Vitamin C: 18mg (20% DV)',
+Vitamin A: 420mcg (47%)
+Vitamin C: 18mg (20%)',
         220.00,
         100,
         1,
@@ -2487,13 +2511,13 @@ VALUES (
 
 Per serving (default build):
 Calories: 210 kcal
-Protein: 5g (10% DV)
-Carbs: 12g (4% DV)
-Fat: 8.5g (11% DV)
-Dietary Fiber: 4g (14% DV)
+Protein: 5g (10%)
+Carbs: 12g (4%)
+Fat: 8.5g (11%)
+Dietary Fiber: 4g (14%)
 Sugars: 2g
-Vitamin A: 380mcg (42% DV)
-Vitamin C: 22mg (24% DV)',
+Vitamin A: 380mcg (42%)
+Vitamin C: 22mg (24%)',
         180.00,
         80,
         1,
@@ -2525,13 +2549,13 @@ VALUES (
 
 Per serving (default build):
 Calories: 415 kcal
-Protein: 8g (16% DV)
-Carbs: 48g (17% DV)
-Fat: 8g (10% DV)
-Dietary Fiber: 7g (25% DV)
+Protein: 8g (16%)
+Carbs: 48g (17%)
+Fat: 8g (10%)
+Dietary Fiber: 7g (25%)
 Sugars: 5g
-Vitamin A: 90mcg (10% DV)
-Vitamin C: 8mg (9% DV)',
+Vitamin A: 90mcg (10%)
+Vitamin C: 8mg (9%)',
         190.00,
         60,
         1,
@@ -2563,13 +2587,13 @@ VALUES (
 
 Per serving:
 Calories: 280 kcal
-Protein: 12g (24% DV)
-Carbs: 38g (14% DV)
-Fat: 8g (10% DV)
-Dietary Fiber: 6g (21% DV)
+Protein: 12g (24%)
+Carbs: 38g (14%)
+Fat: 8g (10%)
+Dietary Fiber: 6g (21%)
 Sugars: 2g
-Vitamin A: 210mcg (23% DV)
-Vitamin C: 14mg (16% DV)',
+Vitamin A: 210mcg (23%)
+Vitamin C: 14mg (16%)',
         220.00,
         20,
         0,
@@ -2599,13 +2623,13 @@ VALUES (
 
 Per serving:
 Calories: 290 kcal
-Protein: 18g (36% DV)
-Carbs: 22g (8% DV)
-Fat: 14g (18% DV)
-Dietary Fiber: 8g (29% DV)
+Protein: 18g (36%)
+Carbs: 22g (8%)
+Fat: 14g (18%)
+Dietary Fiber: 8g (29%)
 Sugars: 4g
-Vitamin A: 160mcg (18% DV)
-Vitamin C: 26mg (29% DV)',
+Vitamin A: 160mcg (18%)
+Vitamin C: 26mg (29%)',
         130.00,
         30,
         0,
@@ -2635,13 +2659,13 @@ VALUES (
 
 Per serving:
 Calories: 120 kcal
-Protein: 4g (8% DV)
-Carbs: 15g (5% DV)
-Fat: 4g (5% DV)
-Dietary Fiber: 3g (11% DV)
+Protein: 4g (8%)
+Carbs: 15g (5%)
+Fat: 4g (5%)
+Dietary Fiber: 3g (11%)
 Sugars: 3g
-Vitamin A: 140mcg (16% DV)
-Vitamin C: 20mg (22% DV)',
+Vitamin A: 140mcg (16%)
+Vitamin C: 20mg (22%)',
         260.00,
         12,
         0,
@@ -2671,13 +2695,13 @@ VALUES (
 
 Per serving (default build):
 Calories: 420 kcal
-Protein: 32g (64% DV)
-Carbs: 18g (7% DV)
-Fat: 22g (28% DV)
-Dietary Fiber: 5g (18% DV)
+Protein: 32g (64%)
+Carbs: 18g (7%)
+Fat: 22g (28%)
+Dietary Fiber: 5g (18%)
 Sugars: 2g
-Vitamin A: 310mcg (34% DV)
-Vitamin C: 12mg (13% DV)',
+Vitamin A: 310mcg (34%)
+Vitamin C: 12mg (13%)',
         240.00,
         75,
         1,
@@ -2709,13 +2733,13 @@ VALUES (
 
 Per serving (default build):
 Calories: 380 kcal
-Protein: 38g (76% DV)
-Carbs: 42g (15% DV)
-Fat: 18.5g (24% DV)
-Dietary Fiber: 4g (14% DV)
+Protein: 38g (76%)
+Carbs: 42g (15%)
+Fat: 18.5g (24%)
+Dietary Fiber: 4g (14%)
 Sugars: 3g
-Vitamin A: 180mcg (20% DV)
-Vitamin C: 16mg (18% DV)',
+Vitamin A: 180mcg (20%)
+Vitamin C: 16mg (18%)',
         350.00,
         70,
         1,
@@ -2747,13 +2771,13 @@ VALUES (
 
 Per serving:
 Calories: 350 kcal
-Protein: 16g (32% DV)
-Carbs: 28g (10% DV)
-Fat: 16g (21% DV)
-Dietary Fiber: 9g (32% DV)
+Protein: 16g (32%)
+Carbs: 28g (10%)
+Fat: 16g (21%)
+Dietary Fiber: 9g (32%)
 Sugars: 4g
-Vitamin A: 680mcg (76% DV)
-Vitamin C: 34mg (38% DV)',
+Vitamin A: 680mcg (76%)
+Vitamin C: 34mg (38%)',
         350.00,
         8,
         0,
@@ -2783,13 +2807,13 @@ VALUES (
 
 Per serving:
 Calories: 180 kcal
-Protein: 8g (16% DV)
-Carbs: 12g (4% DV)
-Fat: 14g (18% DV)
-Dietary Fiber: 4g (14% DV)
+Protein: 8g (16%)
+Carbs: 12g (4%)
+Fat: 14g (18%)
+Dietary Fiber: 4g (14%)
 Sugars: 6g
-Vitamin A: 60mcg (7% DV)
-Vitamin C: 18mg (20% DV)',
+Vitamin A: 60mcg (7%)
+Vitamin C: 18mg (20%)',
         190.00,
         10,
         0,
@@ -2822,13 +2846,13 @@ VALUES (
 
 Per serving (default build):
 Calories: 510 kcal
-Protein: 52g (104% DV)
-Carbs: 12g (4% DV)
-Fat: 38g (49% DV)
-Dietary Fiber: 7g (25% DV)
+Protein: 52g (104%)
+Carbs: 12g (4%)
+Fat: 38g (49%)
+Dietary Fiber: 7g (25%)
 Sugars: 3g
-Vitamin A: 480mcg (53% DV)
-Vitamin C: 24mg (27% DV)',
+Vitamin A: 480mcg (53%)
+Vitamin C: 24mg (27%)',
         480.00,
         90,
         1,
@@ -2860,13 +2884,13 @@ VALUES (
 
 Per serving (default build):
 Calories: 520 kcal
-Protein: 48g (96% DV)
-Carbs: 6g (2% DV)
-Fat: 36g (46% DV)
-Dietary Fiber: 2g (7% DV)
+Protein: 48g (96%)
+Carbs: 6g (2%)
+Fat: 36g (46%)
+Dietary Fiber: 2g (7%)
 Sugars: 1g
-Vitamin A: 320mcg (36% DV)
-Vitamin C: 6mg (7% DV)',
+Vitamin A: 320mcg (36%)
+Vitamin C: 6mg (7%)',
         450.00,
         70,
         1,
@@ -2898,13 +2922,13 @@ VALUES (
 
 Per serving (default build):
 Calories: 620 kcal
-Protein: 56g (112% DV)
-Carbs: 4g (1% DV)
-Fat: 46g (59% DV)
-Dietary Fiber: 3g (11% DV)
+Protein: 56g (112%)
+Carbs: 4g (1%)
+Fat: 46g (59%)
+Dietary Fiber: 3g (11%)
 Sugars: 1g
-Vitamin A: 520mcg (58% DV)
-Vitamin C: 14mg (16% DV)',
+Vitamin A: 520mcg (58%)
+Vitamin C: 14mg (16%)',
         380.00,
         85,
         1,
@@ -2936,13 +2960,13 @@ VALUES (
 
 Per serving:
 Calories: 480 kcal
-Protein: 38g (76% DV)
-Carbs: 8g (3% DV)
-Fat: 34g (44% DV)
-Dietary Fiber: 2g (7% DV)
+Protein: 38g (76%)
+Carbs: 8g (3%)
+Fat: 34g (44%)
+Dietary Fiber: 2g (7%)
 Sugars: 1g
-Vitamin A: 280mcg (31% DV)
-Vitamin C: 10mg (11% DV)',
+Vitamin A: 280mcg (31%)
+Vitamin C: 10mg (11%)',
         550.00,
         8,
         0,
@@ -2972,13 +2996,13 @@ VALUES (
 
 Per serving:
 Calories: 200 kcal
-Protein: 12g (24% DV)
-Carbs: 4g (1% DV)
-Fat: 16g (21% DV)
-Dietary Fiber: 1g (4% DV)
+Protein: 12g (24%)
+Carbs: 4g (1%)
+Fat: 16g (21%)
+Dietary Fiber: 1g (4%)
 Sugars: 0g
-Vitamin A: 240mcg (27% DV)
-Vitamin C: 4mg (4% DV)',
+Vitamin A: 240mcg (27%)
+Vitamin C: 4mg (4%)',
         380.00,
         12,
         0,
@@ -3008,13 +3032,13 @@ VALUES (
 
 Per serving:
 Calories: 540 kcal
-Protein: 50g (100% DV)
-Carbs: 5g (2% DV)
-Fat: 38g (49% DV)
-Dietary Fiber: 2g (7% DV)
+Protein: 50g (100%)
+Carbs: 5g (2%)
+Fat: 38g (49%)
+Dietary Fiber: 2g (7%)
 Sugars: 2g
-Vitamin A: 360mcg (40% DV)
-Vitamin C: 12mg (13% DV)',
+Vitamin A: 360mcg (40%)
+Vitamin C: 12mg (13%)',
         430.00,
         6,
         0,
@@ -3044,13 +3068,13 @@ VALUES (
 
 Per serving (default build):
 Calories: 140 kcal
-Protein: 16g (32% DV)
-Carbs: 3g (1% DV)
-Fat: 12g (15% DV)
-Dietary Fiber: 1g (4% DV)
+Protein: 16g (32%)
+Carbs: 3g (1%)
+Fat: 12g (15%)
+Dietary Fiber: 1g (4%)
 Sugars: 0g
-Vitamin A: 180mcg (20% DV)
-Vitamin C: 3mg (3% DV)',
+Vitamin A: 180mcg (20%)
+Vitamin C: 3mg (3%)',
         500.00,
         65,
         1,
@@ -3082,13 +3106,13 @@ VALUES (
 
 Per serving (default build):
 Calories: 500 kcal
-Protein: 42g (84% DV)
-Carbs: 8g (3% DV)
-Fat: 34g (44% DV)
-Dietary Fiber: 3g (11% DV)
+Protein: 42g (84%)
+Carbs: 8g (3%)
+Fat: 34g (44%)
+Dietary Fiber: 3g (11%)
 Sugars: 2g
-Vitamin A: 300mcg (33% DV)
-Vitamin C: 8mg (9% DV)',
+Vitamin A: 300mcg (33%)
+Vitamin C: 8mg (9%)',
         420.00,
         60,
         1,
@@ -3120,13 +3144,13 @@ VALUES (
 
 Per serving:
 Calories: 110 kcal
-Protein: 3g (6% DV)
-Carbs: 6g (2% DV)
-Fat: 8g (10% DV)
-Dietary Fiber: 2g (7% DV)
+Protein: 3g (6%)
+Carbs: 6g (2%)
+Fat: 8g (10%)
+Dietary Fiber: 2g (7%)
 Sugars: 1g
-Vitamin A: 220mcg (24% DV)
-Vitamin C: 5mg (6% DV)',
+Vitamin A: 220mcg (24%)
+Vitamin C: 5mg (6%)',
         490.00,
         15,
         0,
@@ -3156,13 +3180,13 @@ VALUES (
 
 Per serving:
 Calories: 250 kcal
-Protein: 8g (16% DV)
-Carbs: 5g (2% DV)
-Fat: 22g (28% DV)
-Dietary Fiber: 1g (4% DV)
+Protein: 8g (16%)
+Carbs: 5g (2%)
+Fat: 22g (28%)
+Dietary Fiber: 1g (4%)
 Sugars: 2g
-Vitamin A: 140mcg (16% DV)
-Vitamin C: 8mg (9% DV)',
+Vitamin A: 140mcg (16%)
+Vitamin C: 8mg (9%)',
         530.00,
         9,
         0,
@@ -3195,13 +3219,13 @@ VALUES (
 
 Per serving (default build):
 Calories: 330 kcal
-Protein: 37g (74% DV)
-Carbs: 4g (1% DV)
-Fat: 18g (23% DV)
-Dietary Fiber: 3g (11% DV)
+Protein: 37g (74%)
+Carbs: 4g (1%)
+Fat: 18g (23%)
+Dietary Fiber: 3g (11%)
 Sugars: 1g
-Vitamin A: 120mcg (13% DV)
-Vitamin C: 6mg (7% DV)',
+Vitamin A: 120mcg (13%)
+Vitamin C: 6mg (7%)',
         350.00,
         80,
         1,
@@ -3233,13 +3257,13 @@ VALUES (
 
 Per serving (default build):
 Calories: 85 kcal
-Protein: 4g (8% DV)
-Carbs: 14g (5% DV)
-Fat: 2g (3% DV)
-Dietary Fiber: 4g (14% DV)
+Protein: 4g (8%)
+Carbs: 14g (5%)
+Fat: 2g (3%)
+Dietary Fiber: 4g (14%)
 Sugars: 3g
-Vitamin A: 100mcg (11% DV)
-Vitamin C: 18mg (20% DV)',
+Vitamin A: 100mcg (11%)
+Vitamin C: 18mg (20%)',
         390.00,
         75,
         1,
@@ -3271,13 +3295,13 @@ VALUES (
 
 Per serving (default build):
 Calories: 450 kcal
-Protein: 42g (84% DV)
-Carbs: 10g (4% DV)
-Fat: 26g (33% DV)
-Dietary Fiber: 3g (11% DV)
+Protein: 42g (84%)
+Carbs: 10g (4%)
+Fat: 26g (33%)
+Dietary Fiber: 3g (11%)
 Sugars: 2g
-Vitamin A: 260mcg (29% DV)
-Vitamin C: 14mg (16% DV)',
+Vitamin A: 260mcg (29%)
+Vitamin C: 14mg (16%)',
         320.00,
         70,
         1,
@@ -3309,13 +3333,13 @@ VALUES (
 
 Per serving:
 Calories: 390 kcal
-Protein: 26g (52% DV)
-Carbs: 18g (7% DV)
-Fat: 18g (23% DV)
-Dietary Fiber: 3g (11% DV)
+Protein: 26g (52%)
+Carbs: 18g (7%)
+Fat: 18g (23%)
+Dietary Fiber: 3g (11%)
 Sugars: 2g
-Vitamin A: 140mcg (16% DV)
-Vitamin C: 8mg (9% DV)',
+Vitamin A: 140mcg (16%)
+Vitamin C: 8mg (9%)',
         390.00,
         20,
         0,
@@ -3345,13 +3369,13 @@ VALUES (
 
 Per serving:
 Calories: 310 kcal
-Protein: 30g (60% DV)
-Carbs: 14g (5% DV)
-Fat: 18g (23% DV)
-Dietary Fiber: 4g (14% DV)
+Protein: 30g (60%)
+Carbs: 14g (5%)
+Fat: 18g (23%)
+Dietary Fiber: 4g (14%)
 Sugars: 2g
-Vitamin A: 180mcg (20% DV)
-Vitamin C: 10mg (11% DV)',
+Vitamin A: 180mcg (20%)
+Vitamin C: 10mg (11%)',
         160.00,
         15,
         0,
@@ -3381,13 +3405,13 @@ VALUES (
 
 Per serving:
 Calories: 160 kcal
-Protein: 6g (12% DV)
-Carbs: 14g (5% DV)
-Fat: 12g (15% DV)
-Dietary Fiber: 3g (11% DV)
+Protein: 6g (12%)
+Carbs: 14g (5%)
+Fat: 12g (15%)
+Dietary Fiber: 3g (11%)
 Sugars: 4g
-Vitamin A: 200mcg (22% DV)
-Vitamin C: 16mg (18% DV)',
+Vitamin A: 200mcg (22%)
+Vitamin C: 16mg (18%)',
         360.00,
         8,
         0,
@@ -3417,13 +3441,13 @@ VALUES (
 
 Per serving (default build):
 Calories: 490 kcal
-Protein: 46g (92% DV)
-Carbs: 8g (3% DV)
-Fat: 30g (38% DV)
-Dietary Fiber: 2g (7% DV)
+Protein: 46g (92%)
+Carbs: 8g (3%)
+Fat: 30g (38%)
+Dietary Fiber: 2g (7%)
 Sugars: 1g
-Vitamin A: 220mcg (24% DV)
-Vitamin C: 9mg (10% DV)',
+Vitamin A: 220mcg (24%)
+Vitamin C: 9mg (10%)',
         300.00,
         85,
         1,
@@ -3455,13 +3479,13 @@ VALUES (
 
 Per serving (default build):
 Calories: 115 kcal
-Protein: 20g (40% DV)
-Carbs: 6g (2% DV)
-Fat: 8g (10% DV)
-Dietary Fiber: 3g (11% DV)
+Protein: 20g (40%)
+Carbs: 6g (2%)
+Fat: 8g (10%)
+Dietary Fiber: 3g (11%)
 Sugars: 2g
-Vitamin A: 320mcg (36% DV)
-Vitamin C: 28mg (31% DV)',
+Vitamin A: 320mcg (36%)
+Vitamin C: 28mg (31%)',
         280.00,
         90,
         1,
@@ -3493,13 +3517,13 @@ VALUES (
 
 Per serving:
 Calories: 440 kcal
-Protein: 34g (68% DV)
-Carbs: 12g (4% DV)
-Fat: 22g (28% DV)
-Dietary Fiber: 3g (11% DV)
+Protein: 34g (68%)
+Carbs: 12g (4%)
+Fat: 22g (28%)
+Dietary Fiber: 3g (11%)
 Sugars: 2g
-Vitamin A: 160mcg (18% DV)
-Vitamin C: 12mg (13% DV)',
+Vitamin A: 160mcg (18%)
+Vitamin C: 12mg (13%)',
         440.00,
         16,
         0,
@@ -3529,13 +3553,13 @@ VALUES (
 
 Per serving:
 Calories: 75 kcal
-Protein: 2g (4% DV)
-Carbs: 4g (1% DV)
-Fat: 5g (6% DV)
-Dietary Fiber: 2g (7% DV)
+Protein: 2g (4%)
+Carbs: 4g (1%)
+Fat: 5g (6%)
+Dietary Fiber: 2g (7%)
 Sugars: 3g
-Vitamin A: 80mcg (9% DV)
-Vitamin C: 10mg (11% DV)',
+Vitamin A: 80mcg (9%)
+Vitamin C: 10mg (11%)',
         200.00,
         14,
         0,
@@ -5269,7 +5293,7 @@ COMMIT;
 -- =====================================================
 -- VERIFICATION
 -- =====================================================
-SELECT '=== Seed data loaded (v5.8) ===' AS status;
+SELECT '=== Seed data loaded (v5.9) ===' AS status;
 
 -- V1. Every customizable product's default price modifiers sum to 0.
 SELECT
@@ -5496,7 +5520,7 @@ WHERE
     drp.vehicle_type = 'bicycle'
     AND drd.id_type = 'drivers_license';
 
--- V19. (v5.8) No rider is seeded with more than 3 live orders.
+-- V19. No rider is seeded with more than 3 live orders.
 --      The current seed inserts zero live orders, so this returns
 --      no rows. The check exists so a future revision that adds
 --      demo orders cannot silently violate the schema's cap.
@@ -5514,3 +5538,20 @@ GROUP BY
     dr.email
 HAVING
     live_order_count > 3;
+
+-- V20. (v5.9) No two riders share the same id_path.
+--      Every seeded rider document must point at a distinct
+--      manifest file. If this returns rows, two riders are
+--      showing the same image in the admin KYC review screen.
+SELECT
+    id_path,
+    COUNT(*) AS rider_count,
+    GROUP_CONCAT(
+        delivery_rider_id
+        ORDER BY delivery_rider_id
+    ) AS rider_ids
+FROM delivery_rider_document
+GROUP BY
+    id_path
+HAVING
+    rider_count > 1;

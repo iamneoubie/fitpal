@@ -3,30 +3,21 @@
  * FitPal Admin — Customers List
  *
  * Paginated list of customer accounts with search, status tabs, and
- * a per-customer detail modal that uses a nested navigation layout:
+ * a per-customer detail modal that uses a nested navigation layout.
  *
- *   Top tabs (underlined):
- *     Personal Info  — sub-tabs: Photo | Credentials | Profile | Preferences
- *     Addresses      — flat list, no sub-tabs
- *     Account        — sub-tabs: Account Summary | Transactions
- *
- *   Footer:
- *     The button rendered depends on the customer's current state:
- *       Active   → [Deactivate]
- *       Inactive → [Activate]
- *
- *     Arrows WRAP at the ends of the current walk set.
- *
- * No inline CSS. No inline JS. Styles come from admin-tables.css
- * plus the compact-override block at the end of customers.css.
- * Behaviour comes from the shared admin-modal.js.
+ * Page header
+ * -----------
+ * Single flex row: heading block on the left, back button on the
+ * right. The back button is a .btn-outline inside
+ * .admin-page-header-actions, which the shared admin-tables.css
+ * renders as a neutral black/white pill anchored top-right.
  *
  * @package FitPal
- * @version 12.0 — Footer is now state-driven. Instead of showing both
- *                 Activate and Deactivate with one disabled, only the
- *                 action that applies to the current state is shown.
- *                 Active customers show Deactivate; inactive customers
- *                 show Activate.
+ * @version 12.0 — Page header markup adjusted so the title is
+ *                 top-left and the back button is top-right,
+ *                 matching the customer role's pattern and the
+ *                 admin-tables.css layout.
+ *                 (11.0: Footer of the detail modal is state-driven.)
  */
 declare(strict_types=1);
 
@@ -94,6 +85,10 @@ function buildCustomerUrl(array $overrides = []): string
 <div class="content admin-list-page">
     <div class="container">
 
+        <!-- ============================================
+             PAGE HEADER
+             Title block left, back button right.
+             ============================================ -->
         <header class="admin-page-header">
             <div class="admin-page-header-left">
                 <h1 class="heading-2">Customer <span>Management</span></h1>
@@ -101,8 +96,8 @@ function buildCustomerUrl(array $overrides = []): string
             </div>
             <div class="admin-page-header-actions">
                 <a href="dashboard.php" class="btn btn-outline btn-sm">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt=""
-                        class="btn-icon btn-icon-no-filter" width="16" height="16">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt="" class="btn-icon"
+                        width="16" height="16">
                     <span>Dashboard</span>
                 </a>
             </div>
@@ -220,7 +215,7 @@ function buildCustomerUrl(array $overrides = []): string
                         <a href="<?php echo htmlspecialchars(buildCustomerUrl(['open' => $cid]), ENT_QUOTES, 'UTF-8'); ?>"
                             class="btn btn-outline btn-sm">
                             <img src="<?php echo $assetBase; ?>assets/images/icons/pages-line.svg" alt=""
-                                class="btn-icon btn-icon-no-filter btn-icon-14" width="14" height="14">
+                                class="btn-icon btn-icon-14" width="14" height="14">
                             <span>View Details</span>
                         </a>
                     </div>
@@ -333,7 +328,6 @@ function buildCustomerUrl(array $overrides = []): string
         $openPicUrl   = $openPic !== '' ? adminAssetUrl($assetBase, $openPic) : '';
         ?>
 
-        <!-- Top-level tabs -->
         <div class="admin-modal-tabs" role="tablist">
             <button type="button" class="admin-modal-tab active" data-tab="personal" role="tab">
                 Personal Info
@@ -348,12 +342,8 @@ function buildCustomerUrl(array $overrides = []): string
 
         <div class="admin-modal-panel-body">
 
-            <!-- ============================================
-                 Tab: Personal Info
-                 ============================================ -->
             <div class="admin-modal-tab-panel active" data-tab-panel="personal" role="tabpanel">
 
-                <!-- Sub-tab row -->
                 <div class="admin-subtabs" role="tablist">
                     <button type="button" class="admin-subtab active" data-subtab="photo" role="tab">
                         Photo
@@ -369,7 +359,6 @@ function buildCustomerUrl(array $overrides = []): string
                     </button>
                 </div>
 
-                <!-- Sub-phase: Photo -->
                 <div class="admin-modal-phase active" data-phase="photo" role="tabpanel">
                     <div class="admin-photo-block">
                         <div class="admin-photo-frame">
@@ -398,7 +387,6 @@ function buildCustomerUrl(array $overrides = []): string
                     </div>
                 </div>
 
-                <!-- Sub-phase: Credentials -->
                 <div class="admin-modal-phase" data-phase="credentials" role="tabpanel">
                     <div class="admin-detail-grid">
                         <div class="admin-detail-item">
@@ -440,7 +428,6 @@ function buildCustomerUrl(array $overrides = []): string
                     </div>
                 </div>
 
-                <!-- Sub-phase: Profile -->
                 <div class="admin-modal-phase" data-phase="profile" role="tabpanel">
                     <div class="admin-detail-grid">
                         <div class="admin-detail-item">
@@ -479,7 +466,6 @@ function buildCustomerUrl(array $overrides = []): string
                     </div>
                 </div>
 
-                <!-- Sub-phase: Preferences -->
                 <div class="admin-modal-phase" data-phase="preference" role="tabpanel">
                     <div class="admin-detail-grid">
                         <div class="admin-detail-item admin-detail-item-full">
@@ -515,9 +501,6 @@ function buildCustomerUrl(array $overrides = []): string
 
             </div>
 
-            <!-- ============================================
-                 Tab: Addresses (flat list, no sub-tabs)
-                 ============================================ -->
             <div class="admin-modal-tab-panel" data-tab-panel="addresses" role="tabpanel">
                 <h3 class="admin-section-heading">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="" width="14"
@@ -549,12 +532,8 @@ function buildCustomerUrl(array $overrides = []): string
                 <?php endif; ?>
             </div>
 
-            <!-- ============================================
-                 Tab: Account
-                 ============================================ -->
             <div class="admin-modal-tab-panel" data-tab-panel="account" role="tabpanel">
 
-                <!-- Sub-tab row -->
                 <div class="admin-subtabs" role="tablist">
                     <button type="button" class="admin-subtab active" data-subtab="summary" role="tab">
                         Account Summary
@@ -564,7 +543,6 @@ function buildCustomerUrl(array $overrides = []): string
                     </button>
                 </div>
 
-                <!-- Sub-phase: Account Summary -->
                 <div class="admin-modal-phase active" data-phase="summary" role="tabpanel">
                     <div class="admin-detail-grid">
                         <div class="admin-detail-item">
@@ -596,7 +574,6 @@ function buildCustomerUrl(array $overrides = []): string
                     </div>
                 </div>
 
-                <!-- Sub-phase: Transactions -->
                 <div class="admin-modal-phase" data-phase="transactions" role="tabpanel">
                     <?php if (empty($openOrders)): ?>
                     <div class="admin-doc-empty">
@@ -633,13 +610,6 @@ function buildCustomerUrl(array $overrides = []): string
 
         </div>
 
-        <!-- ============================================================
-             Footer — state-driven account action
-
-             Only the action that applies to the current state is shown:
-               Active   → [Deactivate]
-               Inactive → [Activate]
-             ============================================================ -->
         <div class="admin-modal-tab-footer">
             <button type="button" class="tab-arrow" data-phase-prev aria-label="Previous">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-s-line.svg" alt="" width="16"

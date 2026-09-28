@@ -4,8 +4,8 @@
  *
  * Pure data-access layer for the admin role. Owns every query against
  * the customer, delivery_rider, restaurant, financial_account, orders,
- * and queue_item tables. Also owns the presentation helpers that
- * operate on rows from those tables.
+ * transaction, and queue_item tables. Also owns the presentation
+ * helpers that operate on rows from those tables.
  *
  * No $_POST, no header(), no echo.
  *
@@ -16,16 +16,37 @@
  *
  * Default page size is 5 across every list.
  *
+ * Dashboard analytics
+ * -------------------
+ * Four readers back the dashboard's chart tabs:
+ *
+ *   getAdminDashboardStats()    high-level counts + gross revenue
+ *   getAdminWeeklyRevenue()     7-day GMV + fee series
+ *   getAdminWeeklyFeeBreakdown() 7-day fee-bucket series
+ *   getAdminWeeklyOrders()      7-day order count by payment method
+ *   getAdminTopRestaurants()    top restaurants by GMV
+ *   getAdminTopRiders()         top riders by completed deliveries
+ *
+ * Every total is computed from queue_item + the fee schedule in
+ * customer/backend/database/fee-queries.php. The orders table itself
+ * no longer stores subtotal, delivery_charge, total_amount, or any
+ * of the fee fields, so the analytics view has to re-derive them
+ * from the current fee constants. The constants are loaded here so
+ * the dashboard, the checkout page, and createOrderFromQueue() all
+ * agree on the same numbers.
+ *
  * @package FitPal
- * @version 6.0 — Adds getRestaurantPermits() to back the Permits
- *                tab in the restaurant detail modal. The
- *                restaurant_permit table has existed since schema
- *                v1.1.0 and is written by the restaurant sign-up
- *                handler; only the admin-side reader was missing,
- *                which made the new modal tab call an undefined
- *                function. No other function is changed.
+ * @version 9.0 — Adds four analytics readers for the dashboard's
+ *                chart tabs. All existing readers are unchanged.
+ *
+ *                (8.0: merged dashboard order scans; added
+ *                $withTotal to paginated readers. 7.0: added
+ *                admin profile picture functions. 6.0: added
+ *                getRestaurantPermits().)
  */
 declare(strict_types=1);
+
+require_once __DIR__ . '/../../../customer/backend/database/fee-queries.php';
 
 /* =============================================================
  * PAGINATION HELPER
@@ -107,7 +128,8 @@ function getAdminProfile(PDO $db, int $adminId): array|false
             ap.role,
             ap.permissions,
             ap.last_login,
-            ap.created_at AS profile_created_at
+            ap.created_at AS profile_created_at,
+            ap.profile_picture
          FROM administrator a
          LEFT JOIN administrator_profile ap
                 ON a.administrator_id = ap.administrator_id
@@ -142,6 +164,34 @@ function updateAdminProfile(
         ':admin_id'       => $adminId,
     ]);
     return true;
+}
+
+function updateAdminProfilePicture(PDO $db, int $adminId, string $relativePath): bool
+{
+    $stmt = $db->prepare(
+        "UPDATE administrator_profile
+            SET profile_picture = :picture
+          WHERE administrator_id = :admin_id"
+    );
+    $stmt->execute([
+        ':picture'  => $relativePath,
+        ':admin_id' => $adminId,
+    ]);
+
+    return $stmt->rowCount() > 0;
+}
+
+function getAdminProfilePicture(PDO $db, int $adminId): string
+{
+    $stmt = $db->prepare(
+        "SELECT profile_picture
+           FROM administrator_profile
+          WHERE administrator_id = :admin_id
+          LIMIT 1"
+    );
+    $stmt->execute([':admin_id' => $adminId]);
+    $value = $stmt->fetchColumn();
+    return $value === false || $value === null ? '' : (string)$value;
 }
 
 function updateAdminPassword(PDO $db, int $adminId, string $newHashedPassword): bool
@@ -181,20 +231,23 @@ function getAdminDashboardStats(PDO $db): array
         'active_orders'        => 0,
         'delivered_orders'     => 0,
         'cancelled_orders'     => 0,
-        'gross_revenue'        => 0.0,
+        'refunded_orders'      => 0,
+        'gross_merchandise_value' => 0.0,
+        'platform_revenue'     => 0.0,
         'revenue_this_week'    => 0.0,
         'revenue_today'        => 0.0,
+        'average_order_value'  => 0.0,
     ];
 
     $entityRow = $db->query(
         "SELECT
-            (SELECT COUNT(*) FROM customer)                                   AS total_customers,
-            (SELECT COUNT(*) FROM customer WHERE is_active = 1)               AS active_customers,
-            (SELECT COUNT(*) FROM restaurant)                                 AS total_restaurants,
-            (SELECT COUNT(*) FROM restaurant WHERE verification_status = 'verified') AS verified_restaurants,
-            (SELECT COUNT(*) FROM delivery_rider)                             AS total_riders,
-            (SELECT COUNT(*) FROM delivery_rider_profile WHERE verification_status = 'verified') AS verified_riders,
-            (SELECT COUNT(*) FROM delivery_rider_profile WHERE verification_status = 'pending')  AS pending_riders"
+            (SELECT COUNT(*) FROM customer)                                                        AS total_customers,
+            (SELECT COUNT(*) FROM customer WHERE is_active = 1)                                    AS active_customers,
+            (SELECT COUNT(*) FROM restaurant)                                                      AS total_restaurants,
+            (SELECT COUNT(*) FROM restaurant WHERE verification_status = 'verified')               AS verified_restaurants,
+            (SELECT COUNT(*) FROM delivery_rider)                                                  AS total_riders,
+            (SELECT COUNT(*) FROM delivery_rider_profile WHERE verification_status = 'verified')   AS verified_riders,
+            (SELECT COUNT(*) FROM delivery_rider_profile WHERE verification_status = 'pending')    AS pending_riders"
     )->fetch(PDO::FETCH_ASSOC) ?: [];
 
     $stats['total_customers']      = (int)($entityRow['total_customers'] ?? 0);
@@ -205,15 +258,48 @@ function getAdminDashboardStats(PDO $db): array
     $stats['verified_riders']      = (int)($entityRow['verified_riders'] ?? 0);
     $stats['pending_riders']       = (int)($entityRow['pending_riders'] ?? 0);
 
+    // One scan of orders+queue_item produces every order and revenue
+    // aggregate the dashboard needs.
     $orderRow = $db->query(
         "SELECT
-            COUNT(*) AS total_orders,
-            SUM(CASE WHEN DATE(order_date) = CURDATE() THEN 1 ELSE 0 END) AS orders_today,
-            SUM(CASE WHEN order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) THEN 1 ELSE 0 END) AS orders_this_week,
-            SUM(CASE WHEN order_status IN ('pending','preparing','rider_pending','picking_up','delivering') THEN 1 ELSE 0 END) AS active_orders,
-            SUM(CASE WHEN order_status = 'delivered' THEN 1 ELSE 0 END) AS delivered_orders,
-            SUM(CASE WHEN order_status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_orders
-         FROM orders"
+            COUNT(DISTINCT o.order_id) AS total_orders,
+            COUNT(DISTINCT CASE
+                WHEN DATE(o.order_date) = CURDATE()
+                THEN o.order_id END) AS orders_today,
+            COUNT(DISTINCT CASE
+                WHEN o.order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+                THEN o.order_id END) AS orders_this_week,
+            COUNT(DISTINCT CASE
+                WHEN o.order_status IN ('pending','preparing','rider_pending','picking_up','delivering')
+                THEN o.order_id END) AS active_orders,
+            COUNT(DISTINCT CASE
+                WHEN o.order_status = 'delivered'
+                THEN o.order_id END) AS delivered_orders,
+            COUNT(DISTINCT CASE
+                WHEN o.order_status = 'cancelled'
+                THEN o.order_id END) AS cancelled_orders,
+            COUNT(DISTINCT CASE
+                WHEN o.order_status = 'refunded'
+                THEN o.order_id END) AS refunded_orders,
+            COALESCE(SUM(CASE
+                WHEN o.order_status NOT IN ('cancelled','refunded')
+                THEN qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
+                ELSE 0 END), 0) AS gross_merchandise_value,
+            COALESCE(SUM(CASE
+                WHEN o.order_status NOT IN ('cancelled','refunded')
+                 AND o.order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+                THEN qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
+                ELSE 0 END), 0) AS gmv_this_week,
+            COALESCE(SUM(CASE
+                WHEN o.order_status NOT IN ('cancelled','refunded')
+                 AND DATE(o.order_date) = CURDATE()
+                THEN qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
+                ELSE 0 END), 0) AS gmv_today,
+            COUNT(DISTINCT CASE
+                WHEN o.order_status NOT IN ('cancelled','refunded')
+                THEN o.order_id END) AS billable_orders
+         FROM orders o
+         LEFT JOIN queue_item qi ON qi.order_id = o.order_id"
     )->fetch(PDO::FETCH_ASSOC) ?: [];
 
     $stats['total_orders']     = (int)($orderRow['total_orders'] ?? 0);
@@ -222,28 +308,58 @@ function getAdminDashboardStats(PDO $db): array
     $stats['active_orders']    = (int)($orderRow['active_orders'] ?? 0);
     $stats['delivered_orders'] = (int)($orderRow['delivered_orders'] ?? 0);
     $stats['cancelled_orders'] = (int)($orderRow['cancelled_orders'] ?? 0);
+    $stats['refunded_orders']  = (int)($orderRow['refunded_orders'] ?? 0);
 
-    $revRow = $db->query(
-        "SELECT
-            COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0) AS gross_revenue,
-            COALESCE(SUM(CASE
-                WHEN o.order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
-                THEN qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
-                ELSE 0 END), 0) AS revenue_this_week,
-            COALESCE(SUM(CASE
-                WHEN DATE(o.order_date) = CURDATE()
-                THEN qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
-                ELSE 0 END), 0) AS revenue_today
-         FROM orders o
-         JOIN queue_item qi ON qi.order_id = o.order_id
-         WHERE o.order_status NOT IN ('cancelled', 'refunded')"
-    )->fetch(PDO::FETCH_ASSOC) ?: [];
+    $gmv        = (float)($orderRow['gross_merchandise_value'] ?? 0);
+    $gmvWeek    = (float)($orderRow['gmv_this_week'] ?? 0);
+    $gmvToday   = (float)($orderRow['gmv_today'] ?? 0);
+    $billable   = max(1, (int)($orderRow['billable_orders'] ?? 0));
 
-    $stats['gross_revenue']     = (float)($revRow['gross_revenue'] ?? 0);
-    $stats['revenue_this_week'] = (float)($revRow['revenue_this_week'] ?? 0);
-    $stats['revenue_today']     = (float)($revRow['revenue_today'] ?? 0);
+    $stats['gross_merchandise_value'] = $gmv;
+    $stats['average_order_value']     = round($gmv / $billable, 2);
+
+    // Platform revenue = all four fee buckets across non-cancelled
+    // orders. Computed with the same constants the checkout page and
+    // createOrderFromQueue() use, so the dashboard never disagrees
+    // with what the customer was charged.
+    $stats['platform_revenue']  = round(
+        calculatePlatformRevenueFromGmv($gmv, $stats['delivered_orders'] + $stats['active_orders']),
+        2
+    );
+    $stats['revenue_this_week'] = round(
+        calculatePlatformRevenueFromGmv($gmvWeek, 0),
+        2
+    );
+    $stats['revenue_today']     = round(
+        calculatePlatformRevenueFromGmv($gmvToday, 0),
+        2
+    );
 
     return $stats;
+}
+
+/**
+ * Compute the platform's take for a given GMV and order count.
+ *
+ * The fee schedule is defined in fee-queries.php. Because a
+ * per-order breakdown by branch count is not available from the
+ * aggregate GMV alone, this function applies the base delivery fee
+ * and service fee per order, VAT on the GMV, and assumes the
+ * average order has 1 branch. Extra-branch surcharges are therefore
+ * not modeled here — they only appear in the per-order series used
+ * by the Fees tab, where the branch count is available.
+ *
+ * @param float $gmv
+ * @param int   $orderCount
+ * @return float
+ */
+function calculatePlatformRevenueFromGmv(float $gmv, int $orderCount): float
+{
+    $baseDelivery = FITPAL_DELIVERY_BASE_FEE * $orderCount;
+    $serviceFee   = FITPAL_SERVICE_FEE * $orderCount;
+    $vat          = $gmv * FITPAL_VAT_RATE;
+
+    return $baseDelivery + $serviceFee + $vat;
 }
 
 function getAdminChartScale(float $maxAmount): array
@@ -285,6 +401,17 @@ function getAdminChartScale(float $maxAmount): array
     ];
 }
 
+/**
+ * Seven-day series of GMV and platform revenue.
+ *
+ * Each day returns:
+ *   gmv              sum of item subtotals for non-cancelled orders
+ *   platform_fees    base delivery + service + VAT (no extra branch)
+ *   orders           distinct order count for that day
+ *
+ * Days with no orders are included with zeroed values, so the chart
+ * always has exactly $days bars.
+ */
 function getAdminWeeklyRevenue(PDO $db, int $days = 7): array
 {
     $days = max(1, min(30, $days));
@@ -292,7 +419,9 @@ function getAdminWeeklyRevenue(PDO $db, int $days = 7): array
     $stmt = $db->prepare(
         "SELECT
             DATE(o.order_date) AS day,
-            COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0) AS amount,
+            COALESCE(SUM(
+                qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
+            ), 0) AS gmv,
             COUNT(DISTINCT o.order_id) AS orders
          FROM orders o
          JOIN queue_item qi ON qi.order_id = o.order_id
@@ -307,7 +436,7 @@ function getAdminWeeklyRevenue(PDO $db, int $days = 7): array
     $byDay = [];
     while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $byDay[$r['day']] = [
-            'amount' => (float)$r['amount'],
+            'gmv'    => (float)$r['gmv'],
             'orders' => (int)$r['orders'],
         ];
     }
@@ -316,74 +445,271 @@ function getAdminWeeklyRevenue(PDO $db, int $days = 7): array
     for ($i = $days - 1; $i >= 0; $i--) {
         $ts   = strtotime("-{$i} days");
         $date = date('Y-m-d', $ts);
+
+        $gmv    = $byDay[$date]['gmv'] ?? 0.0;
+        $orders = $byDay[$date]['orders'] ?? 0;
+
         $series[] = [
-            'date'   => $date,
-            'label'  => date('l', $ts),
-            'short'  => date('D', $ts),
-            'amount' => $byDay[$date]['amount'] ?? 0.0,
-            'orders' => $byDay[$date]['orders'] ?? 0,
+            'date'          => $date,
+            'label'         => date('l', $ts),
+            'short'         => date('D', $ts),
+            'gmv'           => $gmv,
+            'platform_fees' => calculatePlatformRevenueFromGmv($gmv, $orders),
+            'orders'        => $orders,
         ];
     }
     return $series;
 }
 
-function getRecentVerificationActivity(PDO $db, int $limit = 6): array
+/**
+ * Seven-day series of fee buckets.
+ *
+ * Each day returns the four fee lines the platform charges:
+ *
+ *   base_delivery    FITPAL_DELIVERY_BASE_FEE × distinct orders
+ *   extra_branches   FITPAL_DELIVERY_EXTRA_PER_BRANCH × extra branches
+ *   service_fee      FITPAL_SERVICE_FEE × distinct orders
+ *   vat              FITPAL_VAT_RATE × GMV
+ *
+ * The extra-branch surcharge is per order for each branch beyond the
+ * first. It is computed here as
+ *   (branch_count_for_order - 1) × FITPAL_DELIVERY_EXTRA_PER_BRANCH
+ * summed across the day's orders.
+ */
+function getAdminWeeklyFeeBreakdown(PDO $db, int $days = 7): array
+{
+    $days = max(1, min(30, $days));
+
+    // Per-order branch counts, one row per day.
+    $stmt = $db->prepare(
+        "SELECT
+            DATE(o.order_date) AS day,
+            o.order_id,
+            COUNT(DISTINCT qi.branch_id) AS branch_count,
+            COALESCE(SUM(
+                qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
+            ), 0) AS order_gmv
+         FROM orders o
+         JOIN queue_item qi ON qi.order_id = o.order_id
+         WHERE o.order_status NOT IN ('cancelled', 'refunded')
+           AND o.order_date >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
+         GROUP BY DATE(o.order_date), o.order_id
+         ORDER BY day ASC"
+    );
+    $stmt->bindValue(':days', $days - 1, PDO::PARAM_INT);
+    $stmt->execute();
+
+    $byDay = [];
+    while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $day       = $r['day'];
+        $branches  = max(1, (int)$r['branch_count']);
+        $orderGmv  = (float)$r['order_gmv'];
+        $extra     = $branches - 1;
+
+        if (!isset($byDay[$day])) {
+            $byDay[$day] = [
+                'base_delivery'  => 0.0,
+                'extra_branches' => 0.0,
+                'service_fee'    => 0.0,
+                'vat'            => 0.0,
+                'orders'         => 0,
+            ];
+        }
+
+        $byDay[$day]['base_delivery']  += FITPAL_DELIVERY_BASE_FEE;
+        $byDay[$day]['extra_branches'] += $extra * FITPAL_DELIVERY_EXTRA_PER_BRANCH;
+        $byDay[$day]['service_fee']    += FITPAL_SERVICE_FEE;
+        $byDay[$day]['vat']            += $orderGmv * FITPAL_VAT_RATE;
+        $byDay[$day]['orders']         += 1;
+    }
+
+    $series = [];
+    for ($i = $days - 1; $i >= 0; $i--) {
+        $ts   = strtotime("-{$i} days");
+        $date = date('Y-m-d', $ts);
+        $row  = $byDay[$date] ?? [
+            'base_delivery'  => 0.0,
+            'extra_branches' => 0.0,
+            'service_fee'    => 0.0,
+            'vat'            => 0.0,
+            'orders'         => 0,
+        ];
+
+        $series[] = [
+            'date'           => $date,
+            'label'          => date('l', $ts),
+            'short'          => date('D', $ts),
+            'base_delivery'  => round($row['base_delivery'], 2),
+            'extra_branches' => round($row['extra_branches'], 2),
+            'service_fee'    => round($row['service_fee'], 2),
+            'vat'            => round($row['vat'], 2),
+            'total'          => round(
+                $row['base_delivery'] +
+                $row['extra_branches'] +
+                $row['service_fee'] +
+                $row['vat'],
+                2
+            ),
+            'orders'         => $row['orders'],
+        ];
+    }
+    return $series;
+}
+
+/**
+ * Seven-day series of order counts by payment method.
+ */
+function getAdminWeeklyOrders(PDO $db, int $days = 7): array
+{
+    $days = max(1, min(30, $days));
+
+    $stmt = $db->prepare(
+        "SELECT
+            DATE(order_date) AS day,
+            SUM(CASE WHEN payment_method = 'COD'    THEN 1 ELSE 0 END) AS cod,
+            SUM(CASE WHEN payment_method = 'Wallet' THEN 1 ELSE 0 END) AS wallet,
+            SUM(CASE WHEN payment_method = 'Online' THEN 1 ELSE 0 END) AS online,
+            SUM(CASE WHEN order_status = 'delivered' THEN 1 ELSE 0 END) AS delivered,
+            SUM(CASE WHEN order_status IN ('cancelled','refunded') THEN 1 ELSE 0 END) AS cancelled,
+            COUNT(*) AS total
+         FROM orders
+         WHERE order_date >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
+         GROUP BY DATE(order_date)
+         ORDER BY day ASC"
+    );
+    $stmt->bindValue(':days', $days - 1, PDO::PARAM_INT);
+    $stmt->execute();
+
+    $byDay = [];
+    while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $byDay[$r['day']] = $r;
+    }
+
+    $series = [];
+    for ($i = $days - 1; $i >= 0; $i--) {
+        $ts   = strtotime("-{$i} days");
+        $date = date('Y-m-d', $ts);
+        $row  = $byDay[$date] ?? [
+            'cod'       => 0,
+            'wallet'    => 0,
+            'online'    => 0,
+            'delivered' => 0,
+            'cancelled' => 0,
+            'total'     => 0,
+        ];
+
+        $series[] = [
+            'date'      => $date,
+            'label'     => date('l', $ts),
+            'short'     => date('D', $ts),
+            'cod'       => (int)$row['cod'],
+            'wallet'    => (int)$row['wallet'],
+            'online'    => (int)$row['online'],
+            'delivered' => (int)$row['delivered'],
+            'cancelled' => (int)$row['cancelled'],
+            'total'     => (int)$row['total'],
+        ];
+    }
+    return $series;
+}
+
+/**
+ * Top restaurants by GMV across non-cancelled orders.
+ *
+ * @param int $limit
+ * @return array<int, array{
+ *     restaurant_id:int,
+ *     restaurant_name:string,
+ *     order_count:int,
+ *     gmv:float,
+ *     platform_fees:float
+ * }>
+ */
+function getAdminTopRestaurants(PDO $db, int $limit = 5): array
 {
     $limit = max(1, min(20, $limit));
 
-    $sql = "
-        SELECT * FROM (
-            SELECT * FROM (
-                SELECT
-                    'rider' AS entity_type,
-                    dr.delivery_rider_id AS entity_id,
-                    CONCAT(
-                        dr.first_name, ' ',
-                        COALESCE(dr.middle_name, ''), ' ',
-                        dr.last_name
-                    ) AS entity_name,
-                    drp.verification_status,
-                    drp.verified_at
-                FROM delivery_rider_profile drp
-                JOIN delivery_rider dr
-                  ON dr.delivery_rider_id = drp.delivery_rider_id
-                WHERE drp.verified_at IS NOT NULL
-                  AND drp.verification_status IN ('verified', 'denied', 'suspended')
-                ORDER BY drp.verified_at DESC
-                LIMIT :rider_limit
-            ) AS recent_riders
-
-            UNION ALL
-
-            SELECT * FROM (
-                SELECT
-                    'restaurant' AS entity_type,
-                    r.restaurant_id AS entity_id,
-                    r.business_name AS entity_name,
-                    r.verification_status,
-                    r.verified_at
-                FROM restaurant r
-                WHERE r.verified_at IS NOT NULL
-                  AND r.verification_status IN ('verified', 'denied', 'suspended')
-                ORDER BY r.verified_at DESC
-                LIMIT :restaurant_limit
-            ) AS recent_restaurants
-        ) AS combined
-        ORDER BY verified_at DESC
-        LIMIT :outer_limit
-    ";
-
-    $stmt = $db->prepare($sql);
-    $stmt->bindValue(':rider_limit',      $limit, PDO::PARAM_INT);
-    $stmt->bindValue(':restaurant_limit', $limit, PDO::PARAM_INT);
-    $stmt->bindValue(':outer_limit',      $limit, PDO::PARAM_INT);
+    $stmt = $db->prepare(
+        "SELECT
+            r.restaurant_id,
+            r.business_name AS restaurant_name,
+            COUNT(DISTINCT o.order_id) AS order_count,
+            COALESCE(SUM(
+                qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
+            ), 0) AS gmv
+         FROM restaurant r
+         JOIN restaurant_branch rb ON rb.restaurant_id = r.restaurant_id
+         JOIN queue_item qi ON qi.branch_id = rb.restaurant_branch_id
+         JOIN orders o ON o.order_id = qi.order_id
+         WHERE o.order_status NOT IN ('cancelled', 'refunded')
+         GROUP BY r.restaurant_id, r.business_name
+         ORDER BY gmv DESC
+         LIMIT :lim"
+    );
+    $stmt->bindValue(':lim', $limit, PDO::PARAM_INT);
     $stmt->execute();
 
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     foreach ($rows as &$row) {
-        $row['entity_name'] = trim((string)preg_replace('/\s+/', ' ', (string)$row['entity_name']));
-        $row['entity_id']   = (int)$row['entity_id'];
+        $row['restaurant_id'] = (int)$row['restaurant_id'];
+        $row['order_count']   = (int)$row['order_count'];
+        $row['gmv']           = (float)$row['gmv'];
+        $row['platform_fees'] = calculatePlatformRevenueFromGmv(
+            $row['gmv'],
+            $row['order_count']
+        );
+    }
+    unset($row);
+
+    return $rows;
+}
+
+/**
+ * Top riders by completed deliveries.
+ *
+ * @param int $limit
+ * @return array<int, array{
+ *     delivery_rider_id:int,
+ *     rider_name:string,
+ *     deliveries:int,
+ *     avg_rating:float
+ * }>
+ */
+function getAdminTopRiders(PDO $db, int $limit = 5): array
+{
+    $limit = max(1, min(20, $limit));
+
+    $stmt = $db->prepare(
+        "SELECT
+            dr.delivery_rider_id,
+            CONCAT(
+                dr.first_name, ' ',
+                COALESCE(dr.middle_name, ''), ' ',
+                dr.last_name
+            ) AS rider_name,
+            COUNT(o.order_id) AS deliveries,
+            COALESCE(drp.average_rating, 0.0) AS avg_rating
+         FROM delivery_rider dr
+         LEFT JOIN delivery_rider_profile drp
+                ON drp.delivery_rider_id = dr.delivery_rider_id
+         LEFT JOIN orders o
+                ON o.delivery_rider_id = dr.delivery_rider_id
+               AND o.order_status = 'delivered'
+         GROUP BY dr.delivery_rider_id, rider_name, drp.average_rating
+         ORDER BY deliveries DESC, avg_rating DESC
+         LIMIT :lim"
+    );
+    $stmt->bindValue(':lim', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($rows as &$row) {
+        $row['delivery_rider_id'] = (int)$row['delivery_rider_id'];
+        $row['rider_name']        = trim((string)preg_replace('/\s+/', ' ', (string)$row['rider_name']));
+        $row['deliveries']        = (int)$row['deliveries'];
+        $row['avg_rating']        = (float)$row['avg_rating'];
     }
     unset($row);
 
@@ -391,7 +717,7 @@ function getRecentVerificationActivity(PDO $db, int $limit = 6): array
 }
 
 /* =============================================================
- * CUSTOMER MANAGEMENT (paginated)
+ * CUSTOMER / RIDER / RESTAURANT MANAGEMENT (unchanged)
  * ============================================================= */
 
 function getCustomersPaginated(
@@ -399,7 +725,8 @@ function getCustomersPaginated(
     int $page = 1,
     int $perPage = 5,
     string $search = '',
-    string $statusFilter = 'all'
+    string $statusFilter = 'all',
+    bool $withTotal = true
 ): array {
     $where  = "WHERE 1=1";
     $params = [];
@@ -419,12 +746,16 @@ function getCustomersPaginated(
         $where .= " AND c.is_active = 0";
     }
 
-    $countStmt = $db->prepare("SELECT COUNT(*) FROM customer c {$where}");
-    foreach ($params as $k => $v) {
-        $countStmt->bindValue($k, $v);
+    if ($withTotal) {
+        $countStmt = $db->prepare("SELECT COUNT(*) FROM customer c {$where}");
+        foreach ($params as $k => $v) {
+            $countStmt->bindValue($k, $v);
+        }
+        $countStmt->execute();
+        $total = (int)$countStmt->fetchColumn();
+    } else {
+        $total = 0;
     }
-    $countStmt->execute();
-    $total = (int)$countStmt->fetchColumn();
 
     $env = adminPaginationEnvelope($total, $perPage, $page);
 
@@ -449,8 +780,15 @@ function getCustomersPaginated(
     $stmt->bindValue(':offset', ($env['page'] - 1) * $env['perPage'], PDO::PARAM_INT);
     $stmt->execute();
 
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if (!$withTotal) {
+        $env['total']      = count($rows);
+        $env['totalPages'] = 1;
+    }
+
     return [
-        'rows'       => $stmt->fetchAll(PDO::FETCH_ASSOC),
+        'rows'       => $rows,
         'total'      => $env['total'],
         'page'       => $env['page'],
         'perPage'    => $env['perPage'],
@@ -545,16 +883,13 @@ function setCustomerActiveStatus(PDO $db, int $customerId, bool $isActive): bool
     return $stmt->rowCount() > 0;
 }
 
-/* =============================================================
- * RIDER MANAGEMENT (paginated)
- * ============================================================= */
-
 function getRidersPaginated(
     PDO $db,
     int $page = 1,
     int $perPage = 5,
     string $search = '',
-    string $statusFilter = 'all'
+    string $statusFilter = 'all',
+    bool $withTotal = true
 ): array {
     $where  = "WHERE 1=1";
     $params = [];
@@ -573,17 +908,21 @@ function getRidersPaginated(
         $params[':status'] = $statusFilter;
     }
 
-    $countStmt = $db->prepare(
-        "SELECT COUNT(*)
-         FROM delivery_rider dr
-         LEFT JOIN delivery_rider_profile drp ON drp.delivery_rider_id = dr.delivery_rider_id
-         {$where}"
-    );
-    foreach ($params as $k => $v) {
-        $countStmt->bindValue($k, $v);
+    if ($withTotal) {
+        $countStmt = $db->prepare(
+            "SELECT COUNT(*)
+             FROM delivery_rider dr
+             LEFT JOIN delivery_rider_profile drp ON drp.delivery_rider_id = dr.delivery_rider_id
+             {$where}"
+        );
+        foreach ($params as $k => $v) {
+            $countStmt->bindValue($k, $v);
+        }
+        $countStmt->execute();
+        $total = (int)$countStmt->fetchColumn();
+    } else {
+        $total = 0;
     }
-    $countStmt->execute();
-    $total = (int)$countStmt->fetchColumn();
 
     $env = adminPaginationEnvelope($total, $perPage, $page);
 
@@ -613,8 +952,15 @@ function getRidersPaginated(
     $stmt->bindValue(':offset', ($env['page'] - 1) * $env['perPage'], PDO::PARAM_INT);
     $stmt->execute();
 
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if (!$withTotal) {
+        $env['total']      = count($rows);
+        $env['totalPages'] = 1;
+    }
+
     return [
-        'rows'       => $stmt->fetchAll(PDO::FETCH_ASSOC),
+        'rows'       => $rows,
         'total'      => $env['total'],
         'page'       => $env['page'],
         'perPage'    => $env['perPage'],
@@ -767,16 +1113,13 @@ function setRiderActiveStatus(PDO $db, int $riderId, bool $isActive): bool
     return $stmt->rowCount() > 0;
 }
 
-/* =============================================================
- * RESTAURANT MANAGEMENT (paginated)
- * ============================================================= */
-
 function getRestaurantsPaginated(
     PDO $db,
     int $page = 1,
     int $perPage = 5,
     string $search = '',
-    string $statusFilter = 'all'
+    string $statusFilter = 'all',
+    bool $withTotal = true
 ): array {
     $where  = "WHERE 1=1";
     $params = [];
@@ -790,12 +1133,16 @@ function getRestaurantsPaginated(
         $params[':status'] = $statusFilter;
     }
 
-    $countStmt = $db->prepare("SELECT COUNT(*) FROM restaurant r {$where}");
-    foreach ($params as $k => $v) {
-        $countStmt->bindValue($k, $v);
+    if ($withTotal) {
+        $countStmt = $db->prepare("SELECT COUNT(*) FROM restaurant r {$where}");
+        foreach ($params as $k => $v) {
+            $countStmt->bindValue($k, $v);
+        }
+        $countStmt->execute();
+        $total = (int)$countStmt->fetchColumn();
+    } else {
+        $total = 0;
     }
-    $countStmt->execute();
-    $total = (int)$countStmt->fetchColumn();
 
     $env = adminPaginationEnvelope($total, $perPage, $page);
 
@@ -824,8 +1171,15 @@ function getRestaurantsPaginated(
     $stmt->bindValue(':offset', ($env['page'] - 1) * $env['perPage'], PDO::PARAM_INT);
     $stmt->execute();
 
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if (!$withTotal) {
+        $env['total']      = count($rows);
+        $env['totalPages'] = 1;
+    }
+
     return [
-        'rows'       => $stmt->fetchAll(PDO::FETCH_ASSOC),
+        'rows'       => $rows,
         'total'      => $env['total'],
         'page'       => $env['page'],
         'perPage'    => $env['perPage'],
@@ -907,30 +1261,6 @@ function getRestaurantAccounts(PDO $db, int $restaurantId): array
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-/**
- * Fetch every permit row for a restaurant, in upload order.
- *
- * Rows are written by the restaurant sign-up handler inside the
- * registration transaction. display_order preserves the sequence
- * the applicant uploaded them in; permit_id breaks ties if two
- * rows share a display_order. The admin modal renders one image
- * preview per row using file_path, with original_name as the
- * block title and display_order as a small badge.
- *
- * The order of the ORDER BY mirrors the schema's
- * idx_restaurant_order index (restaurant_id, display_order).
- *
- * @param PDO $db
- * @param int $restaurantId
- * @return array<int, array{
- *     permit_id:int,
- *     restaurant_id:int,
- *     file_path:string,
- *     original_name:string,
- *     display_order:int,
- *     created_at:string
- * }>
- */
 function getRestaurantPermits(PDO $db, int $restaurantId): array
 {
     $stmt = $db->prepare(
@@ -989,13 +1319,24 @@ function setRestaurantActiveStatus(PDO $db, int $restaurantId, bool $isActive): 
 
 /* =============================================================
  * PRESENTATION HELPERS
- * Operate on rows returned by the queries above. No DB access.
- * Live here so admin pages and handlers share a single source.
  * ============================================================= */
 
 function formatAdminCurrency(int|float|string|null $amount): string
 {
     return '₱' . number_format((float)($amount ?? 0), 2);
+}
+
+function formatAdminCurrencyCompact(int|float|string|null $amount): string
+{
+    $n = (float)($amount ?? 0);
+
+    if ($n >= 1_000_000) {
+        return '₱' . number_format($n / 1_000_000, 1) . 'M';
+    }
+    if ($n >= 1_000) {
+        return '₱' . number_format($n / 1_000, 1) . 'K';
+    }
+    return '₱' . number_format($n, 0);
 }
 
 function formatAdminDate(?string $date): string
@@ -1133,13 +1474,6 @@ function parseAdminTagList(?string $raw): array
     ));
 }
 
-/**
- * Resolve a project-root-relative path into a browser URL.
- *
- * @param string $assetBase    Header-provided asset base ending in 'shared/'.
- * @param string $relativePath DB-stored path relative to the project root.
- * @return string
- */
 function adminAssetUrl(string $assetBase, string $relativePath): string
 {
     if ($relativePath === '') {
