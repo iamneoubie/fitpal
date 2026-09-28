@@ -17,24 +17,35 @@
  * top of its own header.css; the customer side works because of
  * it, the rider side was missing it.
  *
- * @package FitPal
- * @version 3.2 — Restores the html { scrollbar-gutter: stable }
- *                rule at the top of the file, matching the
- *                customer role's header.css. The customer page's
- *                modal overlay covers the full viewport including
- *                the scrollbar's region because the gutter is
- *                reserved as part of the layout viewport; the
- *                rider page's modal overlay stopped short of the
- *                scrollbar because no gutter was reserved, leaving
- *                a visible white strip between the overlay's right
- *                edge and the scrollbar. Copying the rule here
- *                makes the rider behave the same way the customer
- *                does, without any JS-side padding compensation.
+ * Avatar circle
+ * -------------
+ * .user-profile-circle is a 36px circle in the header, filled by
+ * one of three children:
  *
- *                (3.1: scrollbar-gutter: stable added to the
- *                page's assignment-panel.css — did not take effect.
- *                Placing it in header.css matches the customer
- *                role's working arrangement.)
+ *   - .user-initial         the initial letter, white on green
+ *   - .profile-icon         the fallback user glyph, filtered to
+ *                           white
+ *   - .profile-icon-image   a real rider photo
+ *
+ * .profile-icon and .profile-icon-image share the same 20px
+ * footprint so the circle's appearance is stable across all three
+ * states. Only the photo variant carries a filter override: the
+ * fallback glyph is tinted white to sit on the green circle, but
+ * a real photo must render at full color.
+ *
+ * The mobile greeting reuses the same class names inside its own
+ * .mobile-user-avatar circle.
+ *
+ * @package FitPal
+ * @version 3.3 — Adds .profile-icon-image so the rider avatar circle
+ *                can display a real photo at full color, and widens
+ *                the mobile greeting avatar selector to match the
+ *                same class. The rest of the file is unchanged from
+ *                3.2.
+ *
+ *                (3.2: restored html { scrollbar-gutter: stable }.
+ *                3.1: scrollbar-gutter: stable added to the page's
+ *                assignment-panel.css — did not take effect.)
  */
 
 /* Reserve the scrollbar gutter permanently. With this in place,
@@ -382,6 +393,7 @@ html {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    overflow: hidden;
 }
 
 .mobile-user-avatar .user-initial-large {
@@ -391,10 +403,26 @@ html {
     text-transform: uppercase;
 }
 
+/* Fallback icon inside the mobile greeting circle. The base selector
+   is widened to match the photo variant so the same sizing applies
+   before the dedicated .profile-icon-image override below runs. */
 .mobile-user-avatar img {
     width: 24px;
     height: 24px;
     filter: brightness(0) saturate(100%) invert(100%);
+}
+
+/* Real rider photo inside the mobile greeting circle. Fills the
+   44px circle edge-to-edge; object-fit keeps the aspect ratio while
+   cropping the longer side rather than distorting. The filter is
+   explicitly reset — the base rule above would otherwise invert a
+   real photo to a negative. */
+.mobile-user-avatar .profile-icon-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    filter: none;
 }
 
 .mobile-user-name {
@@ -450,6 +478,7 @@ html {
     border: 2px solid var(--primary);
     transition: all var(--transition-fast);
     text-decoration: none;
+    overflow: hidden;
 }
 
 .user-profile-circle:hover {
@@ -464,10 +493,23 @@ html {
     text-transform: uppercase;
 }
 
+/* Fallback user glyph. Tinted white so it sits on the green circle. */
 .user-profile-circle .profile-icon {
     width: 20px;
     height: 20px;
     filter: brightness(0) saturate(100%) invert(100%);
+}
+
+/* Real rider photo inside the desktop circle. Fills the 36px circle
+   edge-to-edge; object-fit crops rather than distorts. The filter is
+   explicitly reset — the base .profile-icon rule above would
+   otherwise invert a real photo to a negative. */
+.user-profile-circle .profile-icon-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    filter: none;
 }
 
 /* ============================================

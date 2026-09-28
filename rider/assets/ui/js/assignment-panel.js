@@ -25,11 +25,24 @@
  * The actions sit INSIDE the top band so they align with the order
  * number on the same line. They are not a separate grid column.
  *
+ * Live statuses (v8.0)
+ * --------------------
+ * The panel surfaces three statuses, each with its own action set:
+ *
+ *   rider_pending  → Accept, Decline, [Message Kitchen], [Call Kitchen]
+ *   picking_up     → Mark Picked Up, [Message Kitchen], [Call Kitchen]
+ *   delivering     → Mark Delivered, [Message Customer], [Call Customer]
+ *
+ * The status field on the row drives the action choice. Every
+ * action button posts to assignment-handler.php with the matching
+ * `action` value.
+ *
  * Click-to-navigate contract
  * --------------------------
- * Clicking the top band navigates to deliveries.php. The band is
- * given role="link", tabindex="0", and an aria-label so keyboard
- * users can reach it and activate it with Enter or Space.
+ * Clicking the top band (but NOT an action button inside it)
+ * navigates to deliveries.php. The band is given role="link",
+ * tabindex="0", and an aria-label so keyboard users can reach it
+ * and activate it with Enter or Space.
  *
  * Panel state contract
  * --------------------
@@ -56,46 +69,36 @@
  *
  * The modal's copy and its confirm button colour are expressed
  * through data-variant and data-icon on the modal element; CSS
- * reads those. The label swap on hover ("Online" → "Go Offline")
- * is a pure CSS concern: the pill holds two spans and CSS shows
- * exactly one on :hover / :focus-visible. JS only writes the
- * action text on each poll, because the copy depends on BOTH
- * flags.
+ * reads those.
  *
- * The confirm button POSTs to rider-handler.php with
- * action=toggle_availability. That is the same endpoint the
- * dashboard's Go Online / Go Offline button uses; nothing new
- * server-side.
+ * Going offline is refused by the server while the rider holds any
+ * live order. The "Blocked" shape here is the client-side mirror of
+ * that rule; the server is still the authority.
  *
  * @package FitPal
- * @version 7.0 — Availability pill wired as a control.
+ * @version 8.0 — Adds the 'picking_up' status:
+ *                  - buildRowActions() renders Mark Picked Up +
+ *                    Message Kitchen + Call Kitchen on picking_up
+ *                    rows.
+ *                  - submitDecision() is generalized to handle
+ *                    accept, decline, and mark_picked_up through
+ *                    one code path. All three replace the row in
+ *                    place with the server-returned payload.
+ *                  - updateRowInPlace() replaces the old
+ *                    accept-specific path so the row's actions
+ *                    flip cleanly when a picking_up order moves
+ *                    to delivering.
+ *                  - The availability modal's Blocked shape now
+ *                    names live orders as the reason the rider
+ *                    cannot go offline.
+ *                  - No change to the notification modal — it is
+ *                    still only for fresh rider_pending offers.
  *
- *                The pill opens a styled availability modal with
- *                three shapes: Go Online (primary), Go Offline
- *                (danger), and Blocked when the rider has a live
- *                assignment (info-only, no state change). The
- *                modal's copy and icon and confirm-button colour
- *                are driven by data-variant and data-icon on the
- *                modal element; CSS owns the visuals. Confirm
- *                POSTs toggle_availability to rider-handler.php,
- *                then optimistically flips lastKnownOnline,
- *                repaints the pill, and polls so the assignment
- *                list resyncs.
- *
- *                updateStatusPill() now also writes the pill's
- *                action-label span text and its aria-label, so the
- *                hover verb is always correct for the current
- *                state without any hover-time JS.
- *
- *                No change to the notification modal, the row
- *                layout, the row delegation, or the panel
- *                open/closed logic from v6.0.
- *
- *                (6.0: panel state always in sync. 5.0: accept
- *                re-renders the row in place rather than removing
- *                it; wrapper no longer hides itself. 4.0: click-
- *                to-navigate on the row's top band. 3.0: three-
- *                band row layout with actions in the top band.)
+ *                (7.0: availability pill as a control.
+ *                6.0: panel state always in sync. 5.0: accept
+ *                re-renders the row in place. 4.0: click-to-
+ *                navigate on the row's top band. 3.0: three-band
+ *                row layout.)
  */
 
 (function () {
@@ -302,17 +305,6 @@
 
     // ============================================================
     // AVAILABILITY PILL + MODAL
-    //
-    // The pill opens one of three modal shapes based on the two
-    // flags the panel already tracks. The modal's copy and its
-    // confirm-button colour and its visible icon are expressed by
-    // data-variant and data-icon on the modal element; CSS reads
-    // those.
-    //
-    // Confirm POSTs toggle_availability to rider-handler.php. On
-    // success we optimistically flip lastKnownOnline, repaint the
-    // pill (which also rewrites the hover action label), and poll
-    // so the assignment list resyncs with the server.
     // ============================================================
     function wireAvailabilityPill() {
         if (!statusPillEl || !availModal) return;
@@ -354,8 +346,9 @@
                 openAvailabilityModal({
                     variant: 'neutral',
                     icon: 'blocked',
-                    title: "Finish your active delivery first",
-                    text: "You can't go offline while you have an order on the road. Mark the delivery complete, then try again.",
+                    title: 'Finish your active orders first',
+                    text: "You can't go offline while you have orders in progress. "
+                        + 'Complete all of them, then try again.',
                     confirmLabel: 'Got it',
                     hideCancel: true,
                     onConfirm: null
@@ -477,8 +470,6 @@
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (!data || data.status !== 'success') {
-                    // Re-enable so the rider can retry without
-                    // reopening the modal.
                     if (availConfirmBtn) {
                         availConfirmBtn.disabled = false;
                         availConfirmBtn.textContent =
@@ -491,8 +482,7 @@
                     return;
                 }
 
-                // Optimistic local flip, then a poll to resync the
-                // assignment list with whatever the server now has.
+                // Optimistic local flip, then a poll to resync.
                 lastKnownOnline = (newValue === 1);
                 updateStatusPill(lastKnownOnline, lastKnownEligible);
 
@@ -582,7 +572,7 @@
     function applyResponseState(data, fullReplace) {
         var eligible = !!data.eligible;
         var online   = !!data.online;
-        var counts   = data.counts || { pending: 0, active: 0, total: 0 };
+        var counts   = data.counts || { pending: 0, picking_up: 0, active: 0, total: 0 };
         var rows     = data.rows || [];
         var maxId    = parseInt(data.max_id, 10) || lastOrderId;
         var dismissed = Array.isArray(data.dismissed) ? data.dismissed : null;
@@ -694,16 +684,6 @@
      *   - the action label span (what shows on hover / focus)
      *   - the pill's own aria-label
      *   - the .is-online / .is-offline classes
-     *
-     * The action text depends on BOTH the online flag and whether
-     * the rider currently has a live assignment:
-     *
-     *   offline                      → "Go Online"
-     *   online, no live assignment   → "Go Offline"
-     *   online, with live assignment → "Can't Go Offline"
-     *
-     * CSS decides which of the two spans is visible; this function
-     * only writes the text and the classes.
      */
     function updateStatusPill(online, eligible) {
         if (!statusPillEl) return;
@@ -725,7 +705,7 @@
             if (statusTextEl) statusTextEl.textContent = 'Online';
 
             if (hasLiveAssignments) {
-                if (statusActionEl) statusActionEl.textContent = "Can't Go Offline";
+                if (statusActionEl) statusActionEl.textContent = "Finish Orders First";
             } else {
                 if (statusActionEl) statusActionEl.textContent = 'Go Offline';
             }
@@ -857,6 +837,17 @@
         return line;
     }
 
+    /**
+     * Fill the actions slot for a row based on its status.
+     *
+     *   rider_pending → [Decline] [Accept] [Message Kitchen] [Call Kitchen]
+     *   picking_up    → [Mark Picked Up] [Message Kitchen] [Call Kitchen]
+     *   delivering    → [Mark Delivered] [Message Customer] [Call Customer]
+     *
+     * All three action buttons post to assignment-handler.php with a
+     * matching `action` value: accept, decline, or mark_picked_up.
+     * The row's own status is used to label the primary action.
+     */
     function buildRowActions(row, container) {
         var status = String(row.status || '');
         var oid    = parseInt(row.order_id, 10) || 0;
@@ -890,7 +881,36 @@
             if (row.call_number) {
                 container.appendChild(buildCallLink(row));
             }
+        } else if (status === 'picking_up') {
+            container.appendChild(buildActionButton({
+                label: 'Mark Picked Up',
+                icon: 'package.svg',
+                iconFallbacks: ['cart-arrow-up.svg', 'add-to-queue.svg', 'order.svg'],
+                variant: 'primary',
+                attrs: {
+                    'data-action': 'mark_picked_up',
+                    'data-order-id': String(oid)
+                }
+            }));
+
+            if (row.message_enabled && row.message_channel) {
+                container.appendChild(buildChatTrigger(row));
+            }
+            if (row.call_number) {
+                container.appendChild(buildCallLink(row));
+            }
         } else if (status === 'delivering') {
+            container.appendChild(buildActionButton({
+                label: 'Mark Delivered',
+                icon: 'verified-badge-fill.svg',
+                iconFallbacks: ['verified-fill.svg', 'check-line.svg'],
+                variant: 'primary',
+                attrs: {
+                    'data-action': 'delivered',
+                    'data-order-id': String(oid)
+                }
+            }));
+
             if (row.message_enabled && row.message_channel) {
                 container.appendChild(buildChatTrigger(row));
             }
@@ -1000,8 +1020,10 @@
                 var orderId = parseInt(btn.getAttribute('data-order-id'), 10) || 0;
                 if (!orderId) return;
 
-                if (action === 'accept')  return submitDecision(btn, 'accept',  orderId);
-                if (action === 'decline') return submitDecision(btn, 'decline', orderId);
+                if (action === 'accept')         return submitDecision(btn, 'accept',  orderId);
+                if (action === 'decline')        return submitDecision(btn, 'decline', orderId);
+                if (action === 'mark_picked_up') return submitDecision(btn, 'mark_picked_up', orderId);
+                if (action === 'delivered')      return submitDecision(btn, 'delivered', orderId);
                 return;
             }
 
@@ -1031,12 +1053,45 @@
     }
 
     // ============================================================
-    // ACCEPT / DECLINE
+    // ACCEPT / DECLINE / MARK PICKED UP / DELIVERED
+    //
+    // All four actions post to the same endpoint with different
+    // `action` values. The handler returns a `row` payload shaped
+    // by shapeAssignmentRow(); we swap the row in place with it so
+    // the actions reflect the new status without a full reload.
+    //
+    // mark_picked_up is owned by the assignment handler (not the
+    // rider handler), so the panel keeps a single write endpoint
+    // for all its row actions. The delivered action is the one
+    // exception — it lives on rider-handler.php because it credits
+    // the rider's wallet inside a transaction. This file posts
+    // delivered to rider-handler.php directly.
     // ============================================================
     function submitDecision(btn, action, orderId) {
         btn.disabled = true;
 
-        post(action, { order_id: orderId })
+        var endpoint;
+        var fd = new FormData();
+        fd.append('csrf_token', csrfToken());
+        fd.append('action', action);
+        fd.append('order_id', String(orderId));
+
+        if (action === 'delivered') {
+            // delivered credits the rider and must go through
+            // rider-handler.php, which owns the transaction.
+            endpoint = '../backend/handlers/rider-handler.php';
+        } else {
+            // accept, decline, mark_picked_up all live on the
+            // assignment handler.
+            endpoint = ENDPOINT;
+        }
+
+        fetch(endpoint, {
+            method: 'POST',
+            body: fd,
+            credentials: 'same-origin'
+        })
+            .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (!data || data.status !== 'success') {
                     btn.disabled = false;
@@ -1047,14 +1102,14 @@
                     return;
                 }
 
-                if (action === 'accept') {
-                    if (data.row) {
-                        replaceRow(data.row);
-                    } else {
-                        loadList();
-                    }
-                } else {
+                if (action === 'decline') {
                     removeRow(orderId);
+                } else if (data.row) {
+                    replaceRow(data.row);
+                } else {
+                    // No row payload. Fall back to a full list
+                    // refresh so the panel does not drift.
+                    loadList();
                 }
 
                 if (orderId > lastOrderId) lastOrderId = orderId;
@@ -1062,9 +1117,7 @@
                 delete expandedIds[orderId];
 
                 showPanelToast(
-                    data.message || (action === 'accept'
-                        ? 'Assignment accepted.'
-                        : 'Assignment declined.'),
+                    data.message || defaultSuccessMessage(action),
                     'success'
                 );
             })
@@ -1072,6 +1125,21 @@
                 btn.disabled = false;
                 showPanelToast('Network error. Please try again.', 'error');
             });
+    }
+
+    function defaultSuccessMessage(action) {
+        switch (action) {
+            case 'accept':
+                return 'Assignment accepted.';
+            case 'decline':
+                return 'Assignment declined.';
+            case 'mark_picked_up':
+                return 'Order picked up.';
+            case 'delivered':
+                return 'Delivery completed.';
+            default:
+                return 'Done.';
+        }
     }
 
     function replaceRow(row) {
@@ -1113,15 +1181,19 @@
     }
 
     function refreshCountsFromDom() {
-        var pending = 0, active = 0;
+        var pending = 0;
+        var picking = 0;
+        var active = 0;
+
         Object.keys(rowsById).forEach(function (key) {
             var el = rowsById[key];
             var status = el.getAttribute('data-status') || '';
             if (status === 'rider_pending') pending++;
+            else if (status === 'picking_up') picking++;
             else if (status === 'delivering') active++;
         });
 
-        var total = pending + active;
+        var total = pending + picking + active;
 
         if (badgeEl) {
             badgeEl.textContent = String(total);

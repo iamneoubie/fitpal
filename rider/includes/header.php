@@ -2,76 +2,79 @@
 /**
  * FitPal Rider Header
  *
- * Renders the rider chrome (nav, user block, logout modal) and
- * bootstraps the rider role's request-scoped needs:
+ * Renders the rider chrome (nav, user block, logout modal, sign-out
+ * block modal) and bootstraps the rider role's request-scoped needs:
  *
  *   - Starts or resumes the PHP session.
  *   - Requires includes/rider-csrf-token.php and assigns $csrfToken
- *     on every request, authenticated or not. The helper stores the
- *     token under 'rider_csrf_token' — never the shared 'csrf_token'
- *     key — because all FitPal roles run on the same PHP session and
- *     a shared key would let one role's success path delete another
- *     role's already-rendered token.
+ *     on every request, authenticated or not.
  *   - Requires the shared PDO connection via rider-connect.php.
  *   - Computes $assetBase and $pageCssPath for the current page.
- *   - Loads the signed-in rider's display name, initial, and
- *     verification status when a session is present.
+ *   - Loads the signed-in rider's display name, initial,
+ *     verification status, and profile picture URL.
  *
  * Shared rider chrome
  * -------------------
- * On every authenticated rider page (i.e. when
- * $_SESSION['delivery_rider_id'] is set), this header pulls in FOUR
- * things:
+ * On every authenticated rider page, this header pulls in FOUR things:
  *
  *   1. rider/includes/rider-chat-modal.php
- *      The chat modal markup. One modal per page.
- *
  *   2. rider/includes/assignment-panel.php
- *      The bottom-anchored assignment panel and its notification
- *      modal. Chrome, not page content.
- *
  *   3. <script src="../assets/ui/js/rider-chat-modal.js">
- *      Chat modal open/close/tabs/send/delta poll.
- *
  *   4. <script src="../assets/ui/js/assignment-panel.js">
- *      Assignment panel polling, row rendering, accept/decline,
- *      and the notification modal.
  *
- * Cache busting — the important part
- * ----------------------------------
- * Every stylesheet link and every script tag carries a ?v=<version>
- * query string. The version is built from the file's modification
- * time AND its byte size, not from modification time alone.
+ * Sign-out guard
+ * --------------
+ * The header renders TWO modals:
  *
- * Why both: some editors preserve a file's mtime when you save new
- * content into it. When that happens, filemtime() returns the same
- * value before and after an edit, the query string stays the same,
- * and the browser keeps serving its cached copy of the old file —
- * even though the new file is on disk. Appending filesize() means
- * the version changes whenever the file's byte count changes, which
- * it always does when you edit it.
+ *   #logoutModal
+ *     The normal Yes/No confirmation. Shown only after the
+ *     pre-flight check in logout.js reports the rider is eligible
+ *     to sign out.
  *
- * When APP_ENV=development is set in the environment, the version
- * is a fresh time() on every request, so nothing is cached at all
- * while you iterate.
+ *   #riderBlockSignOutModal
+ *     The blocking modal. Shown when the pre-flight check reports
+ *     the rider is NOT eligible — either because they still have
+ *     live orders, or because they are still online.
  *
- * filemtime() and filesize() both return false if the file is
- * missing. The '0' fallback keeps the tag well-formed in that case.
+ *     It has a single OK button. It does not offer a "Go Offline"
+ *     shortcut, because going offline is a deliberate state change
+ *     that belongs to the assignment panel, not to the sign-out
+ *     flow. The rider reads the modal, does what it says, and tries
+ *     again.
+ *
+ *     The body text is written by logout.js, because the correct
+ *     copy depends on WHICH condition failed.
+ *
+ * Avatar
+ * ------
+ * Both the desktop .user-profile-circle and the mobile
+ * .mobile-user-avatar render the same three-way fallback:
+ *
+ *   1. The uploaded picture, when drp.profile_picture resolves to a
+ *      usable URL.
+ *   2. The initial letter, when there is no picture.
+ *   3. The fallback user glyph, when the initial is also empty.
+ *
+ * Cache busting
+ * -------------
+ * Every stylesheet link and every script tag carries a
+ * ?v=<version> query string built from the file's modification
+ * time AND its byte size. When APP_ENV=development is set, the
+ * version is a fresh time() on every request.
  *
  * @package FitPal
- * @version 2.5 — Version helper now appends filesize() so the query
- *                string changes on every edit even when the editor
- *                preserves mtime. Adds an APP_ENV=development
- *                override that uses time() so nothing is cached
- *                during iteration. This is what makes a saved CSS
- *                change actually reach the browser on the next
- *                reload.
+ * @version 2.8 — Adds the #riderBlockSignOutModal and wires it into
+ *                the sign-out guard. The modal is informational with
+ *                a single OK button; logout.js writes the body text
+ *                and decides which modal to open. No other rule
+ *                changed from 2.7.
  *
- *                (2.4: added the explicit comment block above the
- *                two shared include script tags. 2.3: extended
- *                mtime cache-busting to every script tag. 2.2:
- *                extended mtime cache-busting to every stylesheet.
- *                2.1: added the shared rider chrome.)
+ *                (2.7: docblock-only update for the per-rider
+ *                upload layout. 2.6: avatar picture support. 2.5:
+ *                version helper appends filesize(). 2.4: shared
+ *                include script tags documented. 2.3: every script
+ *                mtime-busted. 2.2: every stylesheet mtime-busted.
+ *                2.1: shared rider chrome.)
  */
 
 declare(strict_types=1);
@@ -89,10 +92,6 @@ if (!isset($_SESSION['created'])) {
 }
 
 // ===== CSRF TOKEN (rider role) =====
-//
-// Single source of truth for the rider role's CSRF token. The helper
-// generates it on first use and stores it under 'rider_csrf_token' —
-// never the shared 'csrf_token' key.
 require_once __DIR__ . '/rider-csrf-token.php';
 
 // ===== DATABASE =====
@@ -115,19 +114,10 @@ function getRiderAssetBase(): string {
 $assetBase = getRiderAssetBase();
 
 // ===== ASSET VERSION HELPER =====
-//
-// Every stylesheet link and every script tag carries ?v=<version>.
-// The version is built from mtime AND filesize so it changes on every
-// edit, even when the editor preserves the file's mtime. When
-// APP_ENV=development is set, the version is a fresh time() on every
-// request so nothing is cached at all.
 $isDevEnv = (getenv('APP_ENV') === 'development');
 
 /**
  * Build the cache-busting version string for a local asset.
- *
- * @param string $absolutePath Absolute path to the file on disk.
- * @return string Version string, safe to place in a URL query.
  */
 function riderAssetVersion(string $absolutePath, bool $isDevEnv): string
 {
@@ -175,13 +165,12 @@ $riderChatJsVer   = riderAssetVersion($riderChatJs,      $isDevEnv);
 $riderPanelJsVer  = riderAssetVersion($riderPanelJs,     $isDevEnv);
 
 // ===== FETCH RIDER DATA (if logged in) =====
-$isLoggedIn   = false;
-$riderName    = '';
-$riderInitial = '';
-$riderStatus  = '';
+$isLoggedIn      = false;
+$riderName       = '';
+$riderInitial    = '';
+$riderStatus     = '';
+$riderPictureUrl = '';
 
-// Always expose a rider-scoped token so any form rendered below can
-// carry it, regardless of whether the visitor is authenticated.
 $csrfToken = getRiderCsrfToken();
 
 if (!empty($_SESSION['delivery_rider_id'])) {
@@ -189,8 +178,11 @@ if (!empty($_SESSION['delivery_rider_id'])) {
 
     try {
         $stmt = $database_connection->prepare(
-            "SELECT dr.first_name, dr.last_name,
-                    drp.verification_status
+            "SELECT
+                dr.first_name,
+                dr.last_name,
+                drp.verification_status,
+                drp.profile_picture
              FROM delivery_rider dr
              LEFT JOIN delivery_rider_profile drp
                     ON dr.delivery_rider_id = drp.delivery_rider_id
@@ -204,6 +196,14 @@ if (!empty($_SESSION['delivery_rider_id'])) {
             $riderName    = trim($riderData['first_name'] . ' ' . $riderData['last_name']);
             $riderInitial = strtoupper(substr($riderData['first_name'], 0, 1));
             $riderStatus  = (string)($riderData['verification_status'] ?? '');
+
+            $picturePath = (string)($riderData['profile_picture'] ?? '');
+            if ($picturePath !== '' && is_string($assetBase) && $assetBase !== '') {
+                $projectRootUrl = preg_replace('#shared/$#', '', $assetBase);
+                if (is_string($projectRootUrl)) {
+                    $riderPictureUrl = $projectRootUrl . $picturePath;
+                }
+            }
         }
     } catch (PDOException $e) {
         // Silently fail — login state still valid
@@ -233,9 +233,6 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
 }
 
 // ===== EXPLICIT ENDPOINT PATHS =====
-//
-// Exposed to JS so neither shared script has to guess its own
-// relative path from its <script> src.
 $riderChatEndpoint       = '../../rider/backend/handlers/message-handler.php';
 $riderAssignmentEndpoint = '../../rider/backend/handlers/assignment-handler.php';
 ?>
@@ -308,9 +305,16 @@ $riderAssignmentEndpoint = '../../rider/backend/handlers/assignment-handler.php'
 
                 <div class="nav-actions">
                     <a href="profile.php" class="user-profile-circle"
-                        title="<?php echo htmlspecialchars($riderName, ENT_QUOTES, 'UTF-8'); ?>"
+                        title="<?php echo htmlspecialchars($riderName !== '' ? $riderName : 'Rider', ENT_QUOTES, 'UTF-8'); ?>"
                         aria-label="Go to profile">
-                        <?php if (!empty($riderInitial)): ?>
+                        <?php if ($riderPictureUrl !== ''): ?>
+                        <img src="<?php echo htmlspecialchars($riderPictureUrl, ENT_QUOTES, 'UTF-8'); ?>" alt=""
+                            class="profile-icon profile-icon-image"
+                            onerror="this.onerror=null; this.style.display='none'; if (this.nextElementSibling) { this.nextElementSibling.style.display='inline-flex'; }">
+                        <span class="user-initial" style="display: none;">
+                            <?php echo htmlspecialchars($riderInitial !== '' ? $riderInitial : 'R', ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                        <?php elseif (!empty($riderInitial)): ?>
                         <span
                             class="user-initial"><?php echo htmlspecialchars($riderInitial, ENT_QUOTES, 'UTF-8'); ?></span>
                         <?php else: ?>
@@ -356,7 +360,14 @@ $riderAssignmentEndpoint = '../../rider/backend/handlers/assignment-handler.php'
             <li class="mobile-nav-item mobile-user-greeting">
                 <a href="profile.php" class="mobile-user-greeting-link">
                     <div class="mobile-user-avatar">
-                        <?php if (!empty($riderInitial)): ?>
+                        <?php if ($riderPictureUrl !== ''): ?>
+                        <img src="<?php echo htmlspecialchars($riderPictureUrl, ENT_QUOTES, 'UTF-8'); ?>" alt=""
+                            class="profile-icon profile-icon-image"
+                            onerror="this.onerror=null; this.style.display='none'; if (this.nextElementSibling) { this.nextElementSibling.style.display='inline-flex'; }">
+                        <span class="user-initial-large" style="display: none;">
+                            <?php echo htmlspecialchars($riderInitial !== '' ? $riderInitial : 'R', ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                        <?php elseif (!empty($riderInitial)): ?>
                         <span
                             class="user-initial-large"><?php echo htmlspecialchars($riderInitial, ENT_QUOTES, 'UTF-8'); ?></span>
                         <?php else: ?>
@@ -412,6 +423,10 @@ $riderAssignmentEndpoint = '../../rider/backend/handlers/assignment-handler.php'
 
     <!-- ============================================
          LOGOUT CONFIRMATION MODAL
+
+         Shown only after the pre-flight check in logout.js
+         reports the rider is eligible to sign out. See the
+         blocking modal below for the other path.
          ============================================ -->
     <div class="logout-modal" id="logoutModal" style="display: none;" role="dialog" aria-modal="true"
         aria-labelledby="logoutModalTitle">
@@ -433,6 +448,39 @@ $riderAssignmentEndpoint = '../../rider/backend/handlers/assignment-handler.php'
     </div>
 
     <!-- ============================================
+         SIGN-OUT BLOCK MODAL
+
+         Shown when the rider is NOT eligible to sign out.
+         Two reasons, one modal:
+
+           - the rider still has live orders
+           - the rider is still online
+
+         logout.js writes the body text, because the copy
+         depends on which condition failed. The modal has a
+         single OK button: it is informational. The rider
+         reads it, does what it says, and tries again.
+
+         The icon is the same warning glyph the rest of the
+         rider chrome uses for a refusal.
+         ============================================ -->
+    <div class="logout-modal" id="riderBlockSignOutModal" style="display: none;" role="dialog" aria-modal="true"
+        aria-labelledby="riderBlockSignOutTitle">
+        <div class="logout-modal-overlay" data-block-signout-cancel></div>
+        <div class="logout-modal-content">
+            <div class="logout-modal-icon" aria-hidden="true">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/error-warning-line.svg" alt=""
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/information-fill.svg'">
+            </div>
+            <p class="logout-modal-title" id="riderBlockSignOutTitle">Can't sign out yet</p>
+            <p class="logout-modal-text" id="riderBlockSignOutText"></p>
+            <div class="logout-modal-actions">
+                <button type="button" class="logout-btn-cancel" data-block-signout-cancel>OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
          GLOBAL RIDER CONFIG
          ============================================ -->
     <script>
@@ -441,6 +489,7 @@ $riderAssignmentEndpoint = '../../rider/backend/handlers/assignment-handler.php'
     window.RIDER_CHAT_ENDPOINT = '<?php echo htmlspecialchars($riderChatEndpoint, ENT_QUOTES, 'UTF-8'); ?>';
     window.RIDER_ASSIGNMENT_ENDPOINT = '<?php echo htmlspecialchars($riderAssignmentEndpoint, ENT_QUOTES, 'UTF-8'); ?>';
     window.RIDER_ASSIGNMENT_CSRF = '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>';
+    window.RIDER_HANDLER_ENDPOINT = '../backend/handlers/rider-handler.php';
     </script>
 
     <main class="main-content" role="main">

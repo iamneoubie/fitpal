@@ -8,6 +8,28 @@
  * selected panel. The tab bar stays static across renders; only
  * the .active panel runs the enter animation.
  *
+ * Active tab — v5.1
+ * -----------------
+ * The Active tab now shows every order the rider is currently
+ * working, across two statuses:
+ *
+ *   picking_up  — accepted; en route to or at the restaurant.
+ *                 Primary action on the card: "Mark Picked Up".
+ *                 Contact action: "Message Kitchen" (chat) and,
+ *                 when the kitchen's phone number is available,
+ *                 "Call Kitchen".
+ *
+ *   delivering  — food in hand; en route to the customer.
+ *                 Primary action: "Mark Delivered".
+ *                 Contact actions: "Call" and "Message" target
+ *                 the customer.
+ *
+ * Both statuses render through the same card shape, so the CSS
+ * does not branch on status. The only thing that changes per
+ * status is the label on the primary button and which contact
+ * affordances are rendered next to it — both are decided in PHP,
+ * not in CSS.
+ *
  * Shared markup
  * -------------
  * The two actionable tabs (Active, Assigned) render the same card
@@ -22,34 +44,43 @@
  *
  * Shared route and fact rules are declared once and used by both.
  *
+ * Confirm modal — icon variants (v5.1)
+ * ------------------------------------
+ * The confirm modal carries data-icon on the modal element; CSS
+ * shows exactly one of the pre-rendered SVGs inside the icon
+ * circle. The four variants:
+ *
+ *   data-icon="accept"    → .rider-confirm-icon-accept
+ *   data-icon="decline"   → .rider-confirm-icon-decline
+ *   data-icon="picked_up" → .rider-confirm-icon-picked_up  (NEW)
+ *   data-icon="delivered" → .rider-confirm-icon-delivered
+ *
+ * The "picked_up" variant is the one added by this revision. It
+ * fires when the rider taps "Mark Picked Up" on a picking_up card.
+ * The other three are unchanged.
+ *
  * Tab transition
  * --------------
  * Only the active panel runs the fade + slide-up keyframe, so a
  * tab switch reads as a content change instead of a full-page
- * reload. The tab bar itself never animates — the tap target the
- * user just hit stays exactly where they left it.
+ * reload.
  *
  * Reduced-motion safety: both the panel animation and the panel
  * hover transitions are disabled under prefers-reduced-motion.
  *
  * @package FitPal
- * @version 5.0 — Relaid out as filter tabs:
- *                  - Added .rider-deliveries-tabs / -tab / -count
- *                    so the tab bar matches customer orders.php.
- *                  - Replaced the always-scrolling layout with
- *                    three .rider-deliveries-panel sections.
- *                  - Introduced a single .rider-delivery-card
- *                    shape shared by Active and Assigned.
- *                  - Added panel enter animation + reduced-motion
- *                    escape hatch.
- *                  - Folded the old rider-assigned-* and
- *                    rider-active-* namespaces into the shared
- *                    card shape; both used the same info, only
- *                    their action rows differed.
+ * @version 5.2 — Page shell now stretches to the footer. The chain
+ *                .content → .rider-deliveries-page → .container
+ *                is now all flex columns with flex: 1, matching the
+ *                customer cart/orders/wallet shell. This lets the
+ *                empty state (or the last panel) fill the space to
+ *                the footer instead of leaving a gap.
  *
- *                (4.0: stat strip removed. 3.4: .btn-neutral and
- *                .btn-danger made global. 3.0: initial deliveries
- *                layout.)
+ *                (5.1: Adds the "picked_up" icon variant to the confirm
+ *                modal. 5.0: three-tab layout. 4.1: stat strip removed.
+ *                4.0: chat modal extracted to shared include. 3.4:
+ *                .btn-neutral and .btn-danger made global. 3.0: initial
+ *                deliveries layout.)
  */
 
 /* ============================================
@@ -136,7 +167,10 @@
 .rider-deliveries-page {
     background: var(--gray-50);
     padding: 24px 0 40px 0;
+    display: flex;
+    flex-direction: column;
     flex: 1;
+    min-height: calc(100vh - 70px);
 }
 
 .rider-deliveries-page .container {
@@ -145,6 +179,9 @@
     padding: 0 16px;
     width: 100%;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
 }
 
 /* ============================================
@@ -154,6 +191,7 @@
 
 .page-title-header {
     margin-bottom: 24px;
+    flex-shrink: 0;
 }
 
 .page-title-header-top {
@@ -216,6 +254,7 @@
     border: 1px solid transparent;
     font-size: var(--font-size-sm);
     line-height: 1.5;
+    flex-shrink: 0;
 }
 
 .alert-success {
@@ -232,10 +271,6 @@
 
 /* ============================================
    TAB BAR
-   Mirrors the customer orders page's filter tabs: pill row,
-   active tab filled primary, count badge on each tab that has
-   rows. The Assigned tab's count uses the alert tint so a
-   pending decision reads as something needing attention.
    ============================================ */
 
 .rider-deliveries-tabs {
@@ -250,6 +285,7 @@
     overflow-x: auto;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
+    flex-shrink: 0;
 }
 
 .rider-deliveries-tabs::-webkit-scrollbar {
@@ -354,16 +390,16 @@
 
 /* ============================================
    PANELS
-   Only the active panel renders content. Only the active panel
-   runs the enter animation, so a tab switch reads as a content
-   change rather than a full-page reload.
    ============================================ */
 
 .rider-deliveries-panel {
-    display: block;
+    display: none;
+    flex: 1;
+    flex-direction: column;
 }
 
 .rider-deliveries-panel.active {
+    display: flex;
     animation: riderDeliveriesPanelIn 180ms cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
@@ -380,13 +416,19 @@
 
 /* ============================================
    LIST
-   Vertical stack of delivery cards.
    ============================================ */
 
 .rider-deliveries-list {
     display: flex;
     flex-direction: column;
+    flex: 1;
     gap: 16px;
+}
+
+/* Non-empty children keep their natural height. */
+.rider-deliveries-list > .rider-delivery-card,
+.rider-deliveries-list > .rider-deliveries-card {
+    flex: 0 0 auto;
 }
 
 /* ============================================
@@ -634,6 +676,7 @@
     box-shadow: var(--shadow-sm);
     border: 1px solid var(--gray-100);
     overflow: hidden;
+    flex: 1;
 }
 
 .rider-history-list {
@@ -747,8 +790,9 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    min-height: 320px;
     justify-content: center;
+    flex: 1;
+    min-height: 320px;
 }
 
 .rider-deliveries-empty-icon {
@@ -1099,6 +1143,13 @@
     display: none;
 }
 
+/* ---- Icon variants ----
+ *
+ * data-icon on the modal element decides which of the four
+ * pre-rendered SVGs is visible. All four share the same 28px box;
+ * only one is displayed at a time.
+ */
+
 .rider-confirm-modal[data-icon="accept"] .rider-confirm-icon-accept {
     display: block;
     filter: brightness(0) saturate(100%)
@@ -1111,6 +1162,19 @@
     filter: brightness(0) saturate(100%)
             invert(40%) sepia(90%) saturate(600%)
             hue-rotate(330deg) brightness(90%) contrast(85%);
+}
+
+/* New in v5.1: the "Mark Picked Up" confirm.
+ *
+ * The icon is the same package glyph the deliveries page uses on
+ * its rider_route_stop pickup tile and the assignment panel uses
+ * on a picking_up row. Tinted to the primary green so it matches
+ * the confirm button colour. */
+.rider-confirm-modal[data-icon="picked_up"] .rider-confirm-icon-picked_up {
+    display: block;
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
 }
 
 .rider-confirm-modal[data-icon="delivered"] .rider-confirm-icon-delivered {
@@ -1311,6 +1375,7 @@
         gap: 3px;
         padding: 8px 6px;
         font-size: 11px;
+        position: relative;
     }
 
     .rider-deliveries-tab-icon {
@@ -1326,11 +1391,6 @@
         position: absolute;
         top: 4px;
         right: 8px;
-    }
-
-    /* Give the tab a positioning context for the badge corner */
-    .rider-deliveries-tab {
-        position: relative;
     }
 
     .rider-delivery-card {

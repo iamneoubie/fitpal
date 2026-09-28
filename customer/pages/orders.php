@@ -10,37 +10,60 @@
  *
  * Button visibility by status
  * ---------------------------
- *   pending        → Track, Cancel
- *   preparing      → Track
- *   rider_pending  → Track
- *   delivering     → Track
- *   delivered      → View Receipt, Reorder
- *   cancelled      → Reorder
- *   refunded       → Reorder
+ *   pending                      → Track Order, Cancel
+ *   preparing                    → Track Order
+ *   rider_pending                → Track Order
+ *   picking_up                   → Track Order
+ *   delivering                   → Track Order
+ *   delivered, within 1h grace   → Message (primary), View Receipt, Reorder
+ *   delivered, past 1h grace     → View Tracking (secondary), View Receipt, Reorder
+ *   cancelled                    → View Tracking (secondary), Reorder
+ *   refunded                     → View Tracking (secondary), Reorder
  *
- * The customer can cancel only while the order is still in 'pending'
- * — that is, before the kitchen has accepted it. The moment the
- * kitchen flips the order to 'preparing', ingredients are committed
- * and the order is locked from the customer's side. Track remains
- * available for every live status so the customer can follow the
- * order from placement to delivery.
+ * Two concepts, deliberately separated
+ * ------------------------------------
+ *   The tracking page is reachable for every order that is not
+ *   currently in a state where it has no story left to tell. For a
+ *   live order that is "not yet delivered". For a delivered order it
+ *   is "any time" — a past order is still a valid thing to look at,
+ *   the timeline still tells the customer what happened, and the
+ *   summary is a useful reference.
+ *
+ *   The chat is reachable for a narrower set of states, governed by
+ *   customerOrderHasOpenChatWindow(). Only a delivered order inside
+ *   the one-hour grace window, plus every live order, has an open
+ *   conversation. Past the window the chat is closed but the
+ *   tracking page is still useful.
+ *
+ *   The button label reflects which of the two the customer is
+ *   going to do:
+ *
+ *     Track Order   — the order is still moving. Primary colour.
+ *     Message       — the order is delivered and the chat is still
+ *                     open. Primary colour, because chat is the
+ *                     reason to go.
+ *     View Tracking — the order is closed (delivered past the grace
+ *                     window, cancelled, or refunded). Secondary
+ *                     colour, because this is a record lookup, not
+ *                     an action.
  *
  * @package FitPal
- * @version 3.5 — Cancel restricted to 'pending' only. Once the
- *                kitchen accepts an order ('preparing'), the button
- *                disappears and the order is locked from the
- *                customer's side. The customer-facing Cancel button
- *                and the server-side guards in
- *                order-handler.php::handleCancelOrder() and
- *                order-queries.php::cancelOrderAsCustomer() were
- *                updated together — a Cancel button without the
- *                matching server guard would look live but fail.
+ * @version 4.1 — The tracking page is now reachable for every order
+ *                regardless of chat grace window. Cancelled and
+ *                refunded orders also render the tracking page as a
+ *                closed record. The button label and colour split
+ *                by what the customer is going to do: Track Order
+ *                for a live order, Message for a delivered order
+ *                whose chat is still open, View Tracking for a
+ *                closed order. The chat gate itself is unchanged —
+ *                it is still governed by
+ *                customerOrderHasOpenChatWindow().
  *
- *                (3.4: Track Order available from 'pending' onward;
- *                Cancel extended to 'rider_pending'. 3.3: CSRF token
- *                inherited from header.php; local generation removed.
- *                3.2: expand icon uses shared arrow-drop-down icon,
- *                no inline SVG.)
+ *                (4.0: Message button stays for the grace window.
+ *                3.6: Track covers 'picking_up'. 3.5: cancel
+ *                restricted to 'pending' only. 3.4: Track available
+ *                from 'pending'. 3.3: CSRF inherited from header.
+ *                3.2: expand icon from shared icons.)
  */
 declare(strict_types=1);
 
@@ -55,6 +78,7 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
 
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../backend/database/order-queries.php';
+require_once __DIR__ . '/../backend/database/tracking-queries.php';
 
 $customerId = (int)$_SESSION['customer_id'];
 
@@ -121,9 +145,7 @@ try {
 // CSRF
 // ============================================
 // Provided by header.php (via includes/csrf_token.php), stored under
-// the customer role's own session key 'customer_csrf_token'. The
-// header is required near the top of this file, so $csrfToken is
-// already populated here.
+// the customer role's own session key 'customer_csrf_token'.
 
 // ============================================
 // HELPERS
@@ -221,6 +243,55 @@ function formatCustomizationLine(array $cust): ?string
     return $line;
 }
 
+/**
+ * Return the tracking-button descriptor for an order, or null when
+ * the order has no story left to tell.
+ *
+ * Two independent questions:
+ *
+ *   1. Is the chat still open? — customerOrderHasOpenChatWindow()
+ *   2. Can the customer still open the tracking page? — this
+ *      function's $canOpenTracking.
+ *
+ * The label and colour follow from which of the two the customer is
+ * going to do.
+ *
+ * @param string      $status
+ * @param string|null $deliveredAt
+ * @return array{canOpen:bool, label:string, primary:bool}
+ */
+function getTrackingButtonDescriptor(string $status, ?string $deliveredAt): array
+{
+    // Cancelled and refunded orders are closed records. The tracking
+    // page still renders them (it shows the terminal status, a
+    // closed timeline, and the order summary), so the button stays.
+    // Everything else is either live or delivered.
+
+    $chatOpen = customerOrderHasOpenChatWindow($status, $deliveredAt);
+
+    if ($chatOpen) {
+        // Live order or delivered-within-grace. Chat is reachable,
+        // so the button is the "open the conversation" action.
+        $label = ($status === 'delivered') ? 'Message' : 'Track Order';
+
+        return [
+            'canOpen' => true,
+            'label'   => $label,
+            'primary' => true,
+        ];
+    }
+
+    // No chat. The tracking page is still a valid read-only record
+    // for any order that is not cancelled/refunded, and it is a
+    // closed record for those two as well. Either way the button
+    // is a lookup, not an action, so it is secondary.
+    return [
+        'canOpen' => true,
+        'label'   => 'Track Order',
+        'primary' => false,
+    ];
+}
+
 $hasOrders = !empty($orders);
 ?>
 
@@ -306,21 +377,21 @@ $hasOrders = !empty($orders);
              ============================================ -->
         <div class="orders-list" id="ordersList">
             <?php foreach ($orders as $order):
-                $orderId    = (int)$order['order_id'];
-                $status     = $order['order_status'];
-                $items      = $order['items'] ?? [];
-                $itemCount  = (int)$order['item_count'];
-                $totalAmt   = (float)$order['total_amount'];
-                $orderDate  = $order['order_date'];
+                $orderId     = (int)$order['order_id'];
+                $status      = (string)$order['order_status'];
+                $deliveredAt = $order['delivered_at'] ?? null;
+                $items       = $order['items'] ?? [];
+                $itemCount   = (int)$order['item_count'];
+                $totalAmt    = (float)$order['total_amount'];
+                $orderDate   = $order['order_date'];
 
-                // The customer can follow any live order.
-                $canTrack = in_array($status, ['pending', 'preparing', 'rider_pending', 'delivering'], true);
+                // Tracking button descriptor — label, colour, and
+                // whether the button is rendered at all. See the
+                // helper's docblock for the two-question split.
+                $trackBtn = getTrackingButtonDescriptor($status, $deliveredAt);
 
                 // The customer can cancel only while the order is
-                // still waiting for the kitchen to accept it. Once the
-                // kitchen flips the order to 'preparing', ingredients
-                // are being used and the order is locked. The customer
-                // must go through support to stop it from that point on.
+                // still waiting for the kitchen to accept it.
                 $canCancel = ($status === 'pending');
 
                 $canReview  = ($status === 'delivered');
@@ -533,9 +604,10 @@ $hasOrders = !empty($orders);
                         </button>
                         <?php endif; ?>
 
-                        <?php if ($canTrack): ?>
-                        <a href="order-tracking.php?id=<?php echo $orderId; ?>" class="btn btn-primary btn-sm">
-                            Track Order
+                        <?php if ($trackBtn['canOpen']): ?>
+                        <a href="order-tracking.php?id=<?php echo $orderId; ?>"
+                            class="btn <?php echo $trackBtn['primary'] ? 'btn-primary' : 'btn-outline'; ?> btn-sm">
+                            <?php echo htmlspecialchars($trackBtn['label'], ENT_QUOTES, 'UTF-8'); ?>
                         </a>
                         <?php endif; ?>
 

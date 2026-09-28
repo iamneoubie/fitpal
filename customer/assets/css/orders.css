@@ -1,9 +1,25 @@
 /**
  * FitPal Customer Orders Page Styles
- * Version 3.5 — Reserves the viewport scrollbar gutter on <html>.
+ * Version 3.6 — The page shell now stretches to the viewport so the
+ *                empty state fills the vertical space between the
+ *                page header and the bottom of the page instead of
+ *                leaving dead white space beneath a short card.
+ *                Mirrors the chain used in menu.css v3.4:
+ *
+ *                  .content          flex: 1
+ *                  .orders-page      flex: 1, flex-column
+ *                  .container        flex: 1, flex-column
+ *                  .empty-state      flex: 1 (stretch)
+ *                  .orders-list      flex: 1, flex-column
+ *
+ *                The `.empty-state` rule lives under the page shell
+ *                directly, so it stretches when the list is absent.
+ *                `.orders-list` gets `flex: 1` too, but its children
+ *                stay at natural height via `flex: 0 0 auto`, so
+ *                only the empty state (when present) actually grows.
  *
  * @package FitPal
- * @version 3.5
+ * @version 3.6
  */
 
 /* Reserve the scrollbar gutter permanently. If the shift is caused by
@@ -30,6 +46,10 @@ html {
 
 .orders-page {
     padding: 24px 0 60px 0;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: calc(100vh - 70px);
 }
 
 .orders-page .container {
@@ -38,6 +58,9 @@ html {
     padding: 0 16px;
     width: 100%;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
 }
 
 /* ============================================
@@ -48,6 +71,7 @@ html {
     margin-bottom: 24px;
     padding-bottom: 12px;
     border-bottom: 2px solid var(--primary);
+    flex-shrink: 0;
 }
 
 .page-title-header .heading-2 {
@@ -78,6 +102,7 @@ html {
     border: 1px solid transparent;
     font-size: var(--font-size-sm);
     line-height: 1.5;
+    flex-shrink: 0;
 }
 
 .alert-success {
@@ -106,6 +131,7 @@ html {
     border: 1px solid var(--gray-200);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
+    flex: 1;
     min-height: 400px;
 }
 
@@ -168,6 +194,7 @@ html {
     margin-bottom: 24px;
     padding-bottom: 16px;
     border-bottom: 1px solid var(--gray-200);
+    flex-shrink: 0;
 }
 
 .filter-tab {
@@ -223,7 +250,14 @@ html {
 .orders-list {
     display: flex;
     flex-direction: column;
+    flex: 1;
     gap: 16px;
+}
+
+/* Non-empty children keep their natural height. Only the empty
+   state (rendered outside the list) actually stretches. */
+.orders-list > .order-card {
+    flex: 0 0 auto;
 }
 
 /* ============================================
@@ -1105,9 +1139,13 @@ html {
 
 .no-filter-results {
     margin-top: 24px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 .no-filter-results .empty-state {
+    flex: 1;
     min-height: 300px;
     padding: 40px 24px;
 }

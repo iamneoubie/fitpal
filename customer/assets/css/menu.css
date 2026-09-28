@@ -1,9 +1,23 @@
 /**
  * FitPal Menu Page Styles
- * Version 3.3 — Removed order-tracker padding (component deleted).
+ * Version 3.4 — Menu page shell now stretches to the viewport so the
+ *                empty state fills the vertical space between the
+ *                fixed filter bar and the bottom of the page instead
+ *                of leaving dead white space beneath a short card.
+ *
+ *                The chain that makes this work:
+ *                  .content          flex: 1
+ *                  .menu-page        flex: 1, flex-column
+ *                  .container        flex: 1, flex-column
+ *                  .restaurant-list  flex: 1, flex-column
+ *                  .empty-state      flex: 1
+ *
+ *                Non-empty children of .restaurant-list keep their
+ *                natural height via flex: 0 0 auto, so only the
+ *                empty state stretches.
  *
  * @package FitPal
- * @version 3.3
+ * @version 3.4
  */
 
 /* ============================================
@@ -22,6 +36,10 @@
 
 .menu-page {
     padding: 16px 0 100px 0;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: calc(100vh - 70px);
 }
 
 .menu-page .container {
@@ -30,6 +48,9 @@
     padding: 0 16px;
     width: 100%;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
 }
 
 /* ============================================
@@ -106,6 +127,7 @@
     border-radius: var(--radius-lg);
     border: 1px solid var(--gray-100);
     box-shadow: var(--shadow-sm);
+    flex: 1;
     min-height: 400px;
 }
 
@@ -184,7 +206,14 @@
 .restaurant-list {
     display: flex;
     flex-direction: column;
+    flex: 1;
     gap: 24px;
+}
+
+/* Non-empty children keep their natural height. Only the empty
+   state stretches to fill the space left by an empty list. */
+.restaurant-list > .restaurant-card {
+    flex: 0 0 auto;
 }
 
 .restaurant-card {

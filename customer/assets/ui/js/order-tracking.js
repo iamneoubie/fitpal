@@ -1,51 +1,45 @@
 /**
  * FitPal Customer Order Tracking JavaScript
- * Version 2.0 — Chat gating + delta polling.
+ * Version 3.0 — Real-time status polling on top of chat delta polling.
  *
- * Handles:
- *   - Chat modal open / close with the correct tab preselected
- *     (each Message button on the page carries data-open-tab).
- *   - Tab switching between Restaurant and Rider.
- *   - Initial full message load, then a delta poll that fetches
- *     only new messages.
- *   - Send a message; append it optimistically; advance the delta
- *     cursor so the next poll does not duplicate it.
- *   - Mark incoming messages as read when a channel is opened.
- *   - Suspend polling while the tab is hidden or while the user is
- *     typing, and resume on visibility return / empty input.
+ * Two independent concerns live in this file:
  *
- * Delta polling — why and how
- * ---------------------------
- * The earlier version polled every 8 seconds and redrew the whole
- * message list on every tick. That was wasteful even for idle
- * conversations (a full SELECT with the recipient joins each tick)
- * and produced a visible scroll reset on mobile.
+ *   1. LIVE ORDER STATUS
+ *      Polls order-handler.php's `get_tracking_status` action every
+ *      few seconds. The server returns the order's current status
+ *      plus a revision hash derived from order_status, delivered_at,
+ *      and delivery_rider_id. When the revision differs from the one
+ *      the page was rendered with, the page reloads once and picks
+ *      up the new server-rendered state.
  *
- * This version keeps a per-channel cursor, `lastMessageId`. The
- * initial load fetches the full conversation and the server returns
- * the highest message_id it saw (`max_id`). Every subsequent poll
- * sends `since_id=lastMessageId`; the server returns an empty array
- * when nothing new arrived and the client does nothing — no DOM
- * writes, no scroll, no re-render. When something did arrive, only
- * the new rows are appended.
+ *      Why reload rather than patch the DOM in place: the tracking
+ *      page's DOM is coupled to the order status in ways a small
+ *      patch would have to mirror — the timeline step classes, the
+ *      rider card's Message button enablement, the chat tab
+ *      availability, the alert banners. Reloading once on an actual
+ *      status change is simpler, always correct, and cheap because
+ *      the page itself is a single indexed read with one small join.
  *
- * The cursor is per-channel. Switching tabs resets the message list
- * but not the cursor: the cursor for each channel is kept in a small
- * map so a switch back to a channel already loaded can still delta
- * correctly.
+ *      The polling loop:
+ *        - Uses a 6-second interval.
+ *        - Pauses while document.hidden.
+ *        - Resumes with one immediate fetch on visibilitychange to
+ *          visible.
+ *        - Stops entirely after a reload is triggered.
  *
- * Poll lifecycle
- * --------------
- *   - Polling starts on modal open.
- *   - Polling stops on modal close.
- *   - Polling pauses while document.hidden is true and resumes with
- *     one immediate fetch when the tab returns to foreground.
- *   - Polling pauses while the user is actively typing (input has
- *     content) and resumes on submit or when the input becomes empty.
- *   - Interval: 5 seconds.
+ *   2. CHAT DELTA POLLING
+ *      Per-channel cursor, initial full load, delta fetch, send with
+ *      optimistic append, mark-read on channel focus. Same contract
+ *      as the previous revision; unchanged below.
+ *
+ * Cadence rationale:
+ *   Status changes are infrequent (a handful per order) but the user
+ *   is watching the page. 6 seconds is fast enough to feel live and
+ *   slow enough that a ten-minute track session costs about a
+ *   hundred shallow reads, not a thousand.
  *
  * @package FitPal
- * @version 2.0
+ * @version 3.0
  */
 
 (function () {
@@ -59,12 +53,17 @@
         var page = document.getElementById('trackingPage');
         if (!page) return;
 
-        var CSRF_TOKEN  = page.dataset.csrfToken || '';
-        var ORDER_ID    = parseInt(page.dataset.orderId, 10) || 0;
-        var DEFAULT_TAB = page.dataset.defaultChatTab || 'restaurant_account';
+        var CSRF_TOKEN    = page.dataset.csrfToken    || '';
+        var ORDER_ID      = parseInt(page.dataset.orderId, 10) || 0;
+        var HANDLER_URL   = page.dataset.handlerUrl   || '../backend/handlers/order-handler.php';
+        var DEFAULT_TAB   = page.dataset.defaultChatTab || 'restaurant_account';
         var CAN_MSG_KITCHEN = page.dataset.canMessageKitchen === '1';
         var CAN_MSG_RIDER   = page.dataset.canMessageRider === '1';
 
+        var currentRevision = page.dataset.revision || '';
+        var currentStatus   = page.dataset.orderStatus || '';
+
+        // ---- Chat DOM ----
         var modal          = document.getElementById('customerChatModal');
         var chatCloseBtn   = document.getElementById('customerChatClose');
         var tabs           = document.querySelectorAll('.customer-chat-tab');
@@ -76,29 +75,120 @@
         var riderOpenBtn      = document.getElementById('chatOpenBtn');
         var restaurantOpenBtn = document.getElementById('chatOpenBtnRestaurant');
 
+        // ============================================
+        // LIVE STATUS POLL
+        // ============================================
+
+        var STATUS_POLL_MS = 6000;
+        var statusPollTimer = null;
+        var statusFetchInFlight = false;
+        var hasReloaded = false;
+
+        function fetchTrackingStatus() {
+            if (statusFetchInFlight || hasReloaded) return;
+            statusFetchInFlight = true;
+
+            var body = new URLSearchParams();
+            body.append('csrf_token', CSRF_TOKEN);
+            body.append('action', 'get_tracking_status');
+            body.append('order_id', String(ORDER_ID));
+            body.append('current_revision', currentRevision);
+
+            fetch(HANDLER_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: body.toString(),
+                credentials: 'same-origin',
+                cache: 'no-store'
+            })
+            .then(function (res) {
+                return res.json().catch(function () {
+                    return { status: 'error' };
+                });
+            })
+            .then(function (data) {
+                if (!data || data.status !== 'success') return;
+
+                // Server reports the order's current status and a
+                // revision hash. If they match what the page was
+                // rendered with, nothing visible changed and there is
+                // nothing to do.
+                if (data.revision && data.revision !== currentRevision) {
+                    currentRevision = data.revision;
+                    hasReloaded = true;
+                    window.location.reload();
+                    return;
+                }
+
+                // Revision unchanged but status string differs (can
+                // happen if the revision formula changes in a future
+                // release). Reload defensively so the page's visible
+                // status never drifts from the server.
+                if (data.order_status && data.order_status !== currentStatus) {
+                    currentStatus = data.order_status;
+                    hasReloaded = true;
+                    window.location.reload();
+                }
+            })
+            .catch(function () {
+                // Silent. The next tick retries.
+            })
+            .finally(function () {
+                statusFetchInFlight = false;
+            });
+        }
+
+        function startStatusPolling() {
+            if (statusPollTimer) return;
+            statusPollTimer = setInterval(function () {
+                if (document.hidden) return;
+                fetchTrackingStatus();
+            }, STATUS_POLL_MS);
+        }
+
+        function stopStatusPolling() {
+            if (statusPollTimer) {
+                clearInterval(statusPollTimer);
+                statusPollTimer = null;
+            }
+        }
+
+        startStatusPolling();
+
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState !== 'visible') return;
+            fetchTrackingStatus();
+        });
+
+        window.addEventListener('pageshow', function (e) {
+            if (!e.persisted) return;
+            fetchTrackingStatus();
+        });
+
+        window.addEventListener('beforeunload', function () {
+            stopStatusPolling();
+        });
+
+        // ============================================
+        // CHAT MODAL
+        // ============================================
         if (!modal || !body || !form || !input) return;
 
-        // ============================================
-        // STATE
-        // ============================================
         var activeChannel = DEFAULT_TAB;
 
-        // Highest message_id the client already holds, per channel.
-        // 0 means "nothing loaded yet, do a full fetch on first poll".
         var channelCursor = {
             restaurant_account: 0,
             delivery_rider:     0,
         };
 
-        // Guards against re-entrant fetches for the same channel.
         var fetching = {
             restaurant_account: false,
             delivery_rider:     false,
         };
 
-        // Set of message_id values already rendered. Used to dedupe
-        // anything that races between an optimistic append and the
-        // next delta fetch.
         var renderedIds = {
             restaurant_account: Object.create(null),
             delivery_rider:     Object.create(null),
@@ -106,16 +196,6 @@
 
         var pollTimer = null;
         var POLL_INTERVAL_MS = 5000;
-
-        // ============================================
-        // HELPERS
-        // ============================================
-        function findTabButton(channel) {
-            for (var i = 0; i < tabs.length; i++) {
-                if (tabs[i].dataset.recipient === channel) return tabs[i];
-            }
-            return null;
-        }
 
         function tabIsAvailable(channel) {
             if (channel === 'restaurant_account') return CAN_MSG_KITCHEN;
@@ -132,7 +212,6 @@
         }
 
         function scrollToBottom() {
-            // rAF so the browser has painted the appended node first.
             requestAnimationFrame(function () {
                 body.scrollTop = body.scrollHeight;
             });
@@ -153,23 +232,6 @@
             body.innerHTML = '<div class="customer-chat-loading"><span>Loading messages…</span></div>';
         }
 
-        // ============================================
-        // MESSAGE RENDERING
-        // ============================================
-
-        /**
-         * Append a single message node to the chat body.
-         *
-         * Skips silently if the message_id has already been rendered
-         * for the current channel. The caller is responsible for
-         * removing any loading/empty placeholder before the first
-         * append.
-         *
-         * @param {string} channel
-         * @param {Object} msg  { message_id, direction, sender, content, time }
-         * @param {boolean} skipScroll
-         * @returns {boolean} True if a node was actually added.
-         */
         function appendMessage(channel, msg, skipScroll) {
             if (!msg) return false;
 
@@ -206,13 +268,6 @@
             return true;
         }
 
-        /**
-         * Render the response of a full load. Clears the body first.
-         *
-         * @param {string} channel
-         * @param {Array}  messages
-         * @param {number} maxId
-         */
         function renderFull(channel, messages, maxId) {
             body.innerHTML = '';
 
@@ -230,22 +285,6 @@
             }
         }
 
-        // ============================================
-        // SERVER CALLS
-        // ============================================
-
-        /**
-         * Fetch messages for a channel.
-         *
-         * When sinceId > 0, the server returns only messages newer
-         * than it. When sinceId is 0, the server returns the full
-         * conversation. Both responses carry max_id so the cursor
-         * advances on the client.
-         *
-         * @param {string} channel
-         * @param {number} sinceId
-         * @returns {Promise<{status:string, messages:Array, max_id:number, message?:string}>}
-         */
         function fetchMessages(channel, sinceId) {
             var formData = new FormData();
             formData.append('csrf_token', CSRF_TOKEN);
@@ -267,21 +306,6 @@
             });
         }
 
-        /**
-         * Load a channel's messages into the body.
-         *
-         * If the channel has already been loaded (cursor > 0) this
-         * is a delta poll — new rows are appended, no placeholder
-         * churn, no scroll reset when nothing new arrived.
-         *
-         * If the channel has not been loaded yet (cursor === 0) this
-         * is the initial full fetch.
-         *
-         * @param {string}  channel
-         * @param {Object}  [opts]
-         * @param {boolean} [opts.showLoading=false] Show the loading
-         *   placeholder (used when opening the modal).
-         */
         function loadMessages(channel, opts) {
             opts = opts || {};
             if (fetching[channel]) return;
@@ -316,14 +340,9 @@
                             channelCursor[channel] = maxId;
                         }
                     } else if (maxId > channelCursor[channel]) {
-                        // No new rows but the server reported a higher
-                        // max_id (e.g. rows added by another sender
-                        // this client can't see). Keep the cursor in
-                        // sync anyway.
                         channelCursor[channel] = maxId;
                     }
 
-                    // Only mark-read on the currently visible channel.
                     if (channel === activeChannel) {
                         markRead(channel);
                     }
@@ -333,11 +352,6 @@
                 });
         }
 
-        /**
-         * Mark incoming messages as read for the given channel.
-         * Fire-and-forget; failures are silent because read state is
-         * cosmetic and the next open will retry.
-         */
         function markRead(channel) {
             var formData = new FormData();
             formData.append('csrf_token', CSRF_TOKEN);
@@ -352,13 +366,8 @@
             }).catch(function () { /* silent */ });
         }
 
-        // ============================================
-        // MODAL OPEN / CLOSE
-        // ============================================
         function openModal(channel) {
             if (!tabIsAvailable(channel)) {
-                // Fall back to the other channel if the requested one
-                // is not available for this order.
                 channel = tabIsAvailable('restaurant_account')
                     ? 'restaurant_account'
                     : 'delivery_rider';
@@ -425,9 +434,6 @@
             }
         });
 
-        // ============================================
-        // TABS
-        // ============================================
         tabs.forEach(function (tab) {
             tab.addEventListener('click', function () {
                 var channel = this.dataset.recipient || 'restaurant_account';
@@ -438,15 +444,9 @@
                 recipientInput.value = channel;
                 setActiveTabButton(channel);
 
-                // Reset the visible body so the user does not see the
-                // previous channel's messages while the first delta
-                // for this channel is in flight.
                 if (channelCursor[channel] === 0) {
                     renderLoading();
                 } else {
-                    // Channel has history on the client. Do a full
-                    // repaint from the server (cheap for the current
-                    // size) so the visible list matches this channel.
                     channelCursor[channel] = 0;
                     renderedIds[channel] = Object.create(null);
                     renderLoading();
@@ -456,18 +456,12 @@
             });
         });
 
-        // ============================================
-        // SEND
-        // ============================================
         form.addEventListener('submit', function (e) {
             e.preventDefault();
 
             var content = input.value.trim();
             if (content === '') return;
 
-            // Guard: the server will refuse a send to a channel that
-            // is not yet open. Short-circuit here so the user gets
-            // immediate feedback instead of a failed round trip.
             if (!tabIsAvailable(activeChannel)) {
                 return;
             }
@@ -492,8 +486,6 @@
                     if (data && data.status === 'success') {
                         input.value = '';
 
-                        // Strip the placeholder if this was the first
-                        // message in the conversation.
                         var placeholder = body.querySelector('.customer-chat-empty');
                         if (placeholder) placeholder.remove();
 
@@ -518,10 +510,6 @@
                 });
         });
 
-        /**
-         * Show a transient inline error above the input row. Does not
-         * use window.alert, matching the rest of the customer role.
-         */
         function showInlineError(message) {
             var toast = document.getElementById('trackingToast');
             if (!toast) {
@@ -551,16 +539,13 @@
             }, 2800);
         }
 
-        // ============================================
-        // POLLING
-        // ============================================
         function startPolling() {
             stopPolling();
             pollTimer = setInterval(function () {
                 if (!modal.classList.contains('active')) return;
                 if (document.hidden) return;
-                if (input.value.trim() !== '') return;   // user is typing
-                if (fetching[activeChannel]) return;     // a poll is still in flight
+                if (input.value.trim() !== '') return;
+                if (fetching[activeChannel]) return;
 
                 loadMessages(activeChannel, { showLoading: false });
             }, POLL_INTERVAL_MS);
@@ -573,38 +558,11 @@
             }
         }
 
-        // Refresh once when the tab returns to foreground, then
-        // resume the interval. Skipping this would leave the modal
-        // showing stale messages until the next 5-second tick after
-        // the user returns.
         document.addEventListener('visibilitychange', function () {
             if (document.visibilityState === 'visible' &&
                 modal.classList.contains('active')) {
                 loadMessages(activeChannel, { showLoading: false });
             }
         });
-
-        // ============================================
-        // TYPING PAUSE / RESUME
-        // ============================================
-        input.addEventListener('focus', function () {
-            // Nothing to do on focus — the interval checks the value
-            // each tick, so a user who is simply focused but not
-            // typing still gets polls.
-        });
-
-        input.addEventListener('input', function () {
-            // Pause polls the moment there is content in the box.
-            // The interval itself checks `input.value.trim() !== ''`
-            // before every tick, so no timer manipulation is needed.
-        });
-
-        input.addEventListener('blur', function () {
-            // On blur with an empty box, resume normal polling on the
-            // next tick. If the user clears the box without blurring,
-            // the next tick also resumes because the interval reads
-            // the input value directly.
-        });
-
     });
 })();

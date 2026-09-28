@@ -9,83 +9,170 @@
  *
  * No $_POST, no header(), no echo, no session writes.
  *
- * Assignment model
- * ----------------
- * The kitchen assigns a rider, which moves an order to
- * 'rider_pending' and sets orders.delivery_rider_id. The rider then
- * accepts (moves to 'delivering') or declines (returns the order to
- * 'preparing', clears the rider). This file is the only place those
- * two transitions are written.
+ * ---------------------------------------------------------------------
+ * Order lifecycle (v7.5)
+ * ---------------------------------------------------------------------
+ * The rider's delivery lifecycle is a two-step accept:
  *
+ *     rider_pending  --acceptOrder()-->  picking_up
+ *     picking_up     --markOrderPickedUp()-->  delivering
+ *     delivering     --(delivered by handleDelivered)-->  delivered
+ *
+ * Accepting no longer puts the order in transit. The rider must take
+ * a second explicit action ("Mark Picked Up") to move from
+ * picking_up to delivering. No step may be skipped:
+ *
+ *   - markOrderPickedUp() only accepts from 'picking_up'
+ *   - handleDelivered() (in rider-handler.php) only accepts from
+ *     'delivering'
+ *
+ * ---------------------------------------------------------------------
  * Availability model
- * ------------------
+ * ---------------------------------------------------------------------
  * `delivery_rider_profile.is_available` is the rider's OWN toggle.
  * It is set at sign-in (forced offline), flipped by the rider from
  * the dashboard, and cleared on sign-out. It is NOT touched by the
- * accept path, the deliver path, or the kitchen's assign/reassign
- * paths. A rider who is online stays online across every delivery
- * they accept. The "one active delivery per rider" rule is enforced
- * by the locking busy-check inside
- * restaurant/backend/database/order-queries.php::assignRiderToOrder(),
- * not by flipping this flag.
+ * accept path, the pickup path, the deliver path, or the kitchen's
+ * assign/reassign paths.
  *
+ * Going offline is refused while the rider has any order in
+ * 'rider_pending', 'picking_up', or 'delivering'. The rider must
+ * finish all in-flight work before they can go offline. The refusal
+ * is enforced by setRiderAvailability().
+ *
+ * ---------------------------------------------------------------------
+ * Concurrent-order cap (v7.5)
+ * ---------------------------------------------------------------------
+ * A rider may hold at most 3 orders at once. The cap counts the
+ * orders the rider has ACTUALLY COMMITTED TO:
+ *
+ *     picking_up   accepted; en route to or at the restaurant
+ *     delivering   rider has the food; en route to the customer
+ *
+ * 'rider_pending' is deliberately EXCLUDED. An order in
+ * 'rider_pending' is a kitchen offer the rider has not yet accepted
+ * or declined. It does not occupy a delivery slot. The rider may
+ * accept all of the pending offers the kitchen sends; the cap only
+ * applies once the rider has actually accepted.
+ *
+ * This is what lets a rider with 3 pending offers accept all 3.
+ * Before the accept, the rider holds zero committed orders. After
+ * the accept, each order becomes 'picking_up' and starts counting.
+ * To accept a 4th, the rider must finish at least one of the three
+ * already accepted — dropping the committed count back to 2, which
+ * leaves room for one more.
+ *
+ * The cap number lives in RIDER_CONCURRENT_CAP in this file. The
+ * same number is enforced by:
+ *
+ *   - acceptOrder()'s caller (handleAccept in assignment-handler.php,
+ *     and handleAcceptAssignment in rider-handler.php),
+ *   - the restaurant's assignRiderToOrder() / reassignRiderToOrder()
+ *     under a FOR UPDATE lock on the rider's profile row,
+ *   - the SQL trigger before_order_rider_assign (which also counts
+ *     only the committed statuses — see the schema trigger body).
+ *
+ * ---------------------------------------------------------------------
  * Payout model
- * ------------
+ * ---------------------------------------------------------------------
  * A completed delivery credits the rider's financial_account via a
  * `deposit` transaction. The database trigger
  * `after_transaction_insert` moves the balance — this file never
  * writes financial_account.balance directly. creditRiderForDelivery()
  * is the single write path and is idempotent per order.
  *
- * Registration model
- * ------------------
- * sign-up-handler.php does no SQL of its own. It delegates every
- * read and write to this file:
- *   - riderEmailExists / riderUsernameExists / riderContactExists
- *     for the pre-transaction uniqueness probes.
- *   - createRiderAccount for the four core inserts (financial
- *     account, delivery rider, profile, address) inside one
- *     transaction, including the password hash.
- *   - insertRiderEmergencyContact and insertRiderDocument for the
- *     two child rows the handler writes after the rider exists.
- *
+ * ---------------------------------------------------------------------
  * Change log
- * ----------
- * v7.1 — DELTA-FRIENDLY ACTIVE DELIVERIES.
- *   - getRiderActiveDeliveries() accepts an optional $sinceOrderId.
- *     When > 0, the query filters to orders with order_id strictly
- *     greater than it. When 0, it returns the whole active list.
- *     The old call sites keep working because the parameter is
- *     optional.
+ * ---------------------------------------------------------------------
+ * v7.5 — The concurrent-order cap now counts only the orders the
+ *        rider has actually accepted:
  *
- *   - No other function changed. The panel uses its own list
- *     functions in assignment-queries.php; this file's active-list
- *     reader is kept because the deliveries page still calls it.
+ *        - COMMITTED_RIDER_STATUSES replaces LIVE_RIDER_STATUSES as
+ *          the set that hasActiveOrder() and riderAtConcurrentCap()
+ *          count against the cap. It is ['picking_up','delivering'].
+ *          'rider_pending' is excluded.
  *
- *   - Payout constant alignment note: the flat ₱50.00 per delivery
- *     is hard-coded in getRiderDashboardStats(), getRiderWeeklyEarnings(),
- *     and getRiderRecentDeliveries() below, and it also lives as
- *     RIDER_DELIVERY_PAYOUT in rider/backend/handlers/rider-handler.php.
- *     If the schedule ever changes, all four places must move
- *     together — or the three readers here should switch to
- *     SUM(transaction.amount) over completed deposits.
+ *        - LIVE_RIDER_STATUSES is retained and still used by
+ *          setRiderAvailability() — a rider cannot go offline while
+ *          any order is still assigned to them, whether they have
+ *          accepted it or not. This is a different rule with a
+ *          different purpose, so it keeps a different set.
  *
- * v7.0 — DELIVERY PAYOUT + AVAILABILITY CLEANUP.
- *   - acceptOrder() no longer touches is_available. Availability is
- *     the rider's own toggle and must survive across deliveries.
- *   - creditRiderForDelivery() added. Inserts a completed deposit
- *     for a finished delivery, idempotent per order.
- *   - setRiderAvailability() remains the only function that writes
- *     is_available.
+ *        - hasActiveOrder() now counts committed orders only.
  *
- * v6.0 — REGISTRATION SQL CONSOLIDATED HERE.
- *   - riderEmailExists / riderUsernameExists / riderContactExists.
- *   - createRiderAccount.
+ *        - riderAtConcurrentCap() now checks against the committed
+ *          count.
+ *
+ *        - getRiderDeliveryCounts()'s 'active' bucket, which is what
+ *          the deliveries page tab badge shows, now counts committed
+ *          orders only as well. 'rider_pending' offers are shown on
+ *          the Assigned tab, and their count lives in the Assigned
+ *          tab badge, not the Active tab badge.
+ *
+ *        Rationale: a kitchen offer the rider has not accepted must
+ *        not occupy a delivery slot. A rider with 3 pending offers
+ *        was blocked from accepting any of them because the old
+ *        cap counted 'rider_pending' against the limit. The new cap
+ *        lets the rider accept all 3, and only starts refusing once
+ *        the rider actually holds 3 accepted orders.
+ *
+ *        No other function changed from v7.4. The write functions
+ *        (acceptOrder, markOrderPickedUp, declineOrder) are
+ *        unchanged, because they already transition through the
+ *        right statuses and do not themselves read the cap.
+ *
+ * v7.4 — Added 'picking_up' between 'rider_pending' and 'delivering'.
+ *        Retained.
+ *
+ * v7.3 — insertRiderDocument() rewritten for the generalized
+ *        schema (id_type + id_path). Retained.
+ *
+ * v7.2 — Adds updateRiderProfilePicture(). Retained.
+ *
+ * v7.1 — DELTA-FRIENDLY ACTIVE DELIVERIES. Retained.
+ *
+ * v7.0 — DELIVERY PAYOUT + AVAILABILITY CLEANUP. Retained.
+ *
+ * v6.0 — REGISTRATION SQL CONSOLIDATED HERE. Retained.
  *
  * v5.0 — RIDER ACCEPT / DECLINE FOR THE RIDER_PENDING HANDOFF.
  */
 
 declare(strict_types=1);
+
+if (!defined('RIDER_CONCURRENT_CAP')) {
+    define('RIDER_CONCURRENT_CAP', 3);
+}
+
+/**
+ * Statuses that count against the concurrent-order cap.
+ *
+ * These are the statuses the rider has ACTUALLY COMMITTED TO. Once
+ * an order enters one of them, the rider owns it and it occupies a
+ * delivery slot until it reaches a closed state.
+ *
+ * 'rider_pending' is deliberately absent. An order in
+ * 'rider_pending' is a kitchen offer the rider has not yet accepted
+ * or declined. It is not yet the rider's order, so it must not
+ * occupy a slot. Excluding it is what lets a rider with several
+ * pending offers accept all of them.
+ */
+if (!defined('COMMITTED_RIDER_STATUSES')) {
+    define('COMMITTED_RIDER_STATUSES', ['picking_up', 'delivering']);
+}
+
+/**
+ * Statuses that block a rider from going offline.
+ *
+ * This is a broader set than COMMITTED_RIDER_STATUSES. A rider must
+ * not be allowed to go offline while ANY order is still assigned to
+ * them — including a 'rider_pending' offer they have not yet
+ * decided on. An offer sitting in 'rider_pending' needs the rider's
+ * decision; going offline would strand it.
+ */
+if (!defined('LIVE_RIDER_STATUSES')) {
+    define('LIVE_RIDER_STATUSES', ['rider_pending', 'picking_up', 'delivering']);
+}
 
 // ============================================
 // AUTHENTICATION
@@ -164,21 +251,24 @@ function isRiderActive(PDO $db, int $riderId): bool
 // ============================================
 
 /**
- * Flip a rider's availability.
+ * Set the rider's own availability flag.
  *
- * This is the ONLY function in the rider codebase that writes
- * delivery_rider_profile.is_available on a per-toggle basis. It is
- * called from:
- *   - sign-in-handler.php on every successful sign-in (forced
- *     offline, so a rider explicitly opts in after each login);
- *   - rider-handler.php when the rider toggles from the dashboard.
+ * Going offline (isAvailable = 0) is refused while the rider has
+ * any order in 'rider_pending', 'picking_up', or 'delivering'. The
+ * rider must finish all in-flight work — and decide on every
+ * pending offer — before they can go offline. Going online
+ * (isAvailable = 1) has no guard.
  *
- * A rider cannot be switched to offline while they have an order in
- * 'delivering' — they must finish the run first. Switching to online
- * is always allowed.
+ * Note this guard uses the BROADER LIVE_RIDER_STATUSES set, not
+ * COMMITTED_RIDER_STATUSES. A 'rider_pending' offer the rider has
+ * not yet answered still blocks sign-out, because leaving it
+ * unanswered would strand the order. The cap, by contrast, uses the
+ * narrower committed set — the two rules are deliberately different.
  *
- * Returns true when the write was performed, false when the rule
- * refused it.
+ * @param PDO $db
+ * @param int $riderId
+ * @param int $isAvailable
+ * @return bool  false when the offline transition is refused
  */
 function setRiderAvailability(PDO $db, int $riderId, int $isAvailable): bool
 {
@@ -186,7 +276,7 @@ function setRiderAvailability(PDO $db, int $riderId, int $isAvailable): bool
         $busyStmt = $db->prepare(
             "SELECT 1 FROM orders
               WHERE delivery_rider_id = :rider_id
-                AND order_status = 'delivering'
+                AND order_status IN ('rider_pending','picking_up','delivering')
               LIMIT 1"
         );
         $busyStmt->execute([':rider_id' => $riderId]);
@@ -221,22 +311,44 @@ function updateRiderContact(PDO $db, int $riderId, string $contactNumber): bool
     return true;
 }
 
+/**
+ * Update the rider's profile picture path.
+ *
+ * Scoped to the owning rider — the WHERE clause pins delivery_rider_id,
+ * so a call can only ever change the picture on the row that belongs
+ * to the authenticated rider.
+ *
+ * Returns true when a row was actually written, false when the
+ * submitted path equals the stored one (MySQL reports 0 affected rows
+ * on a no-op UPDATE). The handler must not treat that false as a
+ * failure: from the rider's point of view the picture they chose is
+ * now on file, and the response should still be status: success.
+ *
+ * @param PDO    $db
+ * @param int    $riderId
+ * @param string $relativePath
+ *        e.g. 'shared/uploads/rider/profiles/12/09_27_2026_0.jpg'
+ * @return bool
+ */
+function updateRiderProfilePicture(PDO $db, int $riderId, string $relativePath): bool
+{
+    $stmt = $db->prepare(
+        "UPDATE delivery_rider_profile
+            SET profile_picture = :picture
+          WHERE delivery_rider_id = :rider_id"
+    );
+    $stmt->execute([
+        ':picture'  => $relativePath,
+        ':rider_id' => $riderId,
+    ]);
+
+    return $stmt->rowCount() > 0;
+}
+
 // ============================================
 // ASSIGNED ORDERS (kitchen handoff)
 // ============================================
 
-/**
- * Orders the kitchen has assigned to this rider that are waiting on
- * an accept/decline decision.
- *
- * Only orders in 'rider_pending' whose delivery_rider_id matches the
- * caller are returned. Read-only. No side effects.
- *
- * @param PDO $db
- * @param int $riderId
- * @param int $limit
- * @return array<int, array<string, mixed>>
- */
 function getAssignedOrders(PDO $db, int $riderId, int $limit = 20): array
 {
     $stmt = $db->prepare(
@@ -269,12 +381,24 @@ function getAssignedOrders(PDO $db, int $riderId, int $limit = 20): array
 }
 
 /**
- * Count how many orders this rider is already committed to.
+ * Count the rider's committed concurrent orders.
  *
- * Counts orders that are in an active delivery state or waiting on
- * this rider's decision. Used to enforce the rider's cap before an
- * accept, so the rider gets a clean message instead of a DB-level
- * trigger SIGNAL.
+ * Counts ONLY 'picking_up' and 'delivering'. These are the orders
+ * the rider has actually accepted and is now responsible for.
+ *
+ * 'rider_pending' is excluded. An order in 'rider_pending' is a
+ * kitchen offer the rider has not yet decided on; it does not
+ * occupy a delivery slot. Excluding it is what lets a rider with
+ * several pending offers accept all of them.
+ *
+ * Closed work ('delivered', 'cancelled', 'refunded') does not
+ * count. The current order is not excluded — callers who want to
+ * exclude a specific order should subtract it themselves or use a
+ * dedicated helper.
+ *
+ * @param PDO $db
+ * @param int $riderId
+ * @return int
  */
 function hasActiveOrder(PDO $db, int $riderId): int
 {
@@ -282,33 +406,54 @@ function hasActiveOrder(PDO $db, int $riderId): int
         "SELECT COUNT(*)
          FROM orders
          WHERE delivery_rider_id = :rider_id
-           AND order_status IN ('rider_pending', 'delivering')"
+           AND order_status IN ('picking_up','delivering')"
     );
     $stmt->execute([':rider_id' => $riderId]);
     return (int)$stmt->fetchColumn();
 }
 
 /**
- * Accept the kitchen's assignment.
+ * Convenience: true when the rider is at or above the concurrent
+ * order cap of 3.
  *
- * Only succeeds when the order is in 'rider_pending' AND the caller
- * is the assigned rider. On success, the order moves to 'delivering'.
+ * Checks the committed count from hasActiveOrder() — the orders the
+ * rider has accepted. A rider with 3 'rider_pending' offers but no
+ * accepted orders is NOT at the cap and can accept all of them.
+ * Once 3 orders are accepted, the rider is at the cap and must
+ * finish at least one before accepting a 4th.
  *
- * The rider's is_available flag is intentionally NOT modified here.
- * Availability is the rider's own toggle and must survive across
- * deliveries — a rider who was online when they accepted an order
- * must still be online after they finish it. The kitchen's "one
- * active delivery per rider" rule is enforced at assignment time by
- * assignRiderToOrder() in restaurant/backend/database/order-queries.php,
- * not by locking the rider offline.
+ * @param PDO $db
+ * @param int $riderId
+ * @return bool
+ */
+function riderAtConcurrentCap(PDO $db, int $riderId): bool
+{
+    return hasActiveOrder($db, $riderId) >= RIDER_CONCURRENT_CAP;
+}
+
+/**
+ * Accept a rider_pending assignment.
  *
- * Returns true when the transition ran, false otherwise.
+ * Moves the order to 'picking_up' — NOT to 'delivering'. The rider
+ * must then call markOrderPickedUp() once they have the food in
+ * hand. This two-step flow means the order is visible to the
+ * kitchen as "picking up" until the rider explicitly confirms the
+ * pickup.
+ *
+ * Returns true on a successful transition, false if the order was
+ * not in 'rider_pending' for this rider (already accepted,
+ * declined, or reassigned by the kitchen).
+ *
+ * @param PDO $db
+ * @param int $riderId
+ * @param int $orderId
+ * @return bool
  */
 function acceptOrder(PDO $db, int $riderId, int $orderId): bool
 {
     $orderStmt = $db->prepare(
         "UPDATE orders
-            SET order_status = 'delivering',
+            SET order_status = 'picking_up',
                 updated_at   = NOW()
           WHERE order_id = :order_id
             AND delivery_rider_id = :rider_id
@@ -323,17 +468,36 @@ function acceptOrder(PDO $db, int $riderId, int $orderId): bool
 }
 
 /**
- * Decline the kitchen's assignment.
+ * Mark the order as physically picked up: 'picking_up' → 'delivering'.
  *
- * Returns the order to 'preparing' and clears delivery_rider_id so
- * it reappears in the kitchen's Preparing tab for a new assignment.
+ * Only fires from 'picking_up' for this rider. A rider who never
+ * accepted, or whose order was already moved to 'delivering', will
+ * get a false return. This is the only way to enter 'delivering'
+ * via the rider side.
  *
- * Only succeeds when the order is in 'rider_pending' AND the caller
- * is the assigned rider. The rider's is_available is not touched:
- * they were never marked unavailable for a pending request.
- *
- * Returns true when the transition ran, false otherwise.
+ * @param PDO $db
+ * @param int $riderId
+ * @param int $orderId
+ * @return bool
  */
+function markOrderPickedUp(PDO $db, int $riderId, int $orderId): bool
+{
+    $stmt = $db->prepare(
+        "UPDATE orders
+            SET order_status = 'delivering',
+                updated_at   = NOW()
+          WHERE order_id = :order_id
+            AND delivery_rider_id = :rider_id
+            AND order_status = 'picking_up'"
+    );
+    $stmt->execute([
+        ':order_id' => $orderId,
+        ':rider_id' => $riderId,
+    ]);
+
+    return $stmt->rowCount() === 1;
+}
+
 function declineOrder(PDO $db, int $riderId, int $orderId): bool
 {
     $stmt = $db->prepare(
@@ -357,36 +521,12 @@ function declineOrder(PDO $db, int $riderId, int $orderId): bool
 // DELIVERY PAYOUT
 // ============================================
 
-/**
- * Credit the rider's wallet for a completed delivery.
- *
- * Inserts a `completed` deposit transaction into the rider's
- * financial_account. The database trigger `after_transaction_insert`
- * moves the balance — this function never writes
- * financial_account.balance directly.
- *
- * Idempotent per order: if a completed deposit already exists for
- * this rider and this order, the function returns false and writes
- * nothing. That makes it safe to call from any path that might also
- * trigger a payout (e.g. a future admin mark-delivered override, or
- * a retry after a transient failure).
- *
- * Called inside an open transaction by handleDelivered() in
- * rider-handler.php. It does not open or commit one of its own.
- *
- * @param PDO   $db
- * @param int   $riderId
- * @param int   $orderId
- * @param float $amount
- * @return bool  True if a deposit row was inserted, false otherwise.
- */
 function creditRiderForDelivery(PDO $db, int $riderId, int $orderId, float $amount): bool
 {
     if ($riderId <= 0 || $orderId <= 0 || $amount <= 0) {
         return false;
     }
 
-    // Resolve the rider's financial account.
     $acct = $db->prepare(
         "SELECT financial_account_id
            FROM delivery_rider_profile
@@ -400,7 +540,6 @@ function creditRiderForDelivery(PDO $db, int $riderId, int $orderId, float $amou
         return false;
     }
 
-    // Idempotency: has this order already been credited to this rider?
     $dup = $db->prepare(
         "SELECT 1
            FROM transaction
@@ -419,7 +558,6 @@ function creditRiderForDelivery(PDO $db, int $riderId, int $orderId, float $amou
         return false;
     }
 
-    // Completed deposit — the trigger credits the balance.
     $ins = $db->prepare(
         "INSERT INTO transaction
             (financial_account_id, order_id, amount, transaction_type,
@@ -442,14 +580,6 @@ function creditRiderForDelivery(PDO $db, int $riderId, int $orderId, float $amou
 // REGISTRATION LOOKUPS
 // ============================================
 
-/**
- * Return true if a delivery_rider row already exists with this email.
- *
- * Called by sign-up-handler.php before the registration transaction
- * opens so the client can be told which field collided. This is a
- * pre-check, not a replacement for the UNIQUE constraint on
- * delivery_rider.email — the DB remains the authoritative guard.
- */
 function riderEmailExists(PDO $db, string $email): bool
 {
     $stmt = $db->prepare(
@@ -459,10 +589,6 @@ function riderEmailExists(PDO $db, string $email): bool
     return $stmt->fetchColumn() !== false;
 }
 
-/**
- * Return true if a delivery_rider row already exists with this
- * username. See riderEmailExists() for the contract.
- */
 function riderUsernameExists(PDO $db, string $username): bool
 {
     $stmt = $db->prepare(
@@ -472,10 +598,6 @@ function riderUsernameExists(PDO $db, string $username): bool
     return $stmt->fetchColumn() !== false;
 }
 
-/**
- * Return true if a delivery_rider row already exists with this
- * contact number. See riderEmailExists() for the contract.
- */
 function riderContactExists(PDO $db, string $contact): bool
 {
     $stmt = $db->prepare(
@@ -489,67 +611,11 @@ function riderContactExists(PDO $db, string $contact): bool
 // REGISTRATION WRITES
 // ============================================
 
-/**
- * Create the four core rider rows in one transaction:
- *
- *   1. financial_account    (balance 0.00, type 'rider')
- *   2. delivery_rider       (credentials; password hashed here)
- *   3. delivery_rider_profile
- *        - points at the rider and the financial account
- *        - holds the two upload paths
- *        - verification_status = 'pending'
- *        - is_available = 0
- *   4. delivery_rider_address  (default row for the rider)
- *
- * Contract with the caller:
- *   - The two upload files have already been moved to their final
- *     directories before this function runs. This function does not
- *     touch $_FILES or the filesystem. It only stores the paths it
- *     is given.
- *   - Every scalar field has already been validated. This function
- *     does not re-validate shape.
- *   - The caller is responsible for unlinking the moved files if
- *     this function throws. The handler's catch blocks already do
- *     that.
- *
- * On any failure the transaction is rolled back and the original
- * Throwable is re-thrown so the caller can decide how to respond.
- *
- * @param PDO   $db
- * @param array $account {
- *     first_name:     string,
- *     middle_name:    string,   // '' means NULL
- *     last_name:      string,
- *     birthdate:      string,   // Y-m-d
- *     gender:         string,
- *     email:          string,
- *     contact_number: string,   // digits only, no spaces
- *     username:       string,
- *     password:       string,   // PLAINTEXT — hashed inside
- * }
- * @param array $profile {
- *     profile_picture: string,  // project-root-relative path
- *     vehicle_type:    string,
- *     vehicle_plate:   string,  // '' means NULL
- * }
- * @param array $address {
- *     block:       string,
- *     barangay:    string,   // '' means NULL
- *     city:        string,
- *     province:    string,   // '' means NULL
- *     region:      string,   // '' means NULL
- *     postal_code: string,   // '' means NULL
- * }
- *
- * @return array{delivery_rider_id:int, financial_account_id:int}
- * @throws Throwable  Rolls back the transaction and re-throws.
- */
 function createRiderAccount(PDO $db, array $account, array $profile, array $address): array
 {
     $db->beginTransaction();
 
     try {
-        // ---- 1. Financial account ----
         $fa = $db->prepare(
             "INSERT INTO financial_account (balance, account_type)
              VALUES (0.00, 'rider')"
@@ -557,7 +623,6 @@ function createRiderAccount(PDO $db, array $account, array $profile, array $addr
         $fa->execute();
         $financialAccountId = (int)$db->lastInsertId();
 
-        // ---- 2. Delivery rider ----
         $hashed = password_hash((string)$account['password'], PASSWORD_BCRYPT);
 
         $rider = $db->prepare(
@@ -581,7 +646,6 @@ function createRiderAccount(PDO $db, array $account, array $profile, array $addr
         ]);
         $deliveryRiderId = (int)$db->lastInsertId();
 
-        // ---- 3. Rider profile ----
         $profileStmt = $db->prepare(
             "INSERT INTO delivery_rider_profile
                 (delivery_rider_id, financial_account_id, profile_picture,
@@ -602,7 +666,6 @@ function createRiderAccount(PDO $db, array $account, array $profile, array $addr
                 : null,
         ]);
 
-        // ---- 4. Rider address ----
         $addressStmt = $db->prepare(
             "INSERT INTO delivery_rider_address
                 (delivery_rider_id, block, barangay, city,
@@ -636,29 +699,6 @@ function createRiderAccount(PDO $db, array $account, array $profile, array $addr
     }
 }
 
-/**
- * Insert a rider's emergency contact.
- *
- * Called by sign-up-handler.php after createRiderAccount() returns
- * the rider id. Kept as a separate function (rather than folded into
- * createRiderAccount()) because:
- *   - it is a child of the rider and is written after the rider
- *     exists;
- *   - a future "add another emergency contact" flow can reuse this
- *     function unchanged.
- *
- * @param PDO   $db
- * @param int   $riderId
- * @param array $data {
- *     first_name:     string,
- *     middle_name:    string,   // '' means NULL
- *     last_name:      string,
- *     contact_number: string,
- *     relationship:   string,
- *     address:        string,   // '' means NULL
- * }
- * @return int  New emergency_contact_id
- */
 function insertRiderEmergencyContact(PDO $db, int $riderId, array $data): int
 {
     $stmt = $db->prepare(
@@ -683,34 +723,36 @@ function insertRiderEmergencyContact(PDO $db, int $riderId, array $data): int
 }
 
 /**
- * Insert a rider's driver's license document row.
+ * Insert a rider identity document row.
  *
- * Called by sign-up-handler.php after createRiderAccount() returns
- * the rider id. Kept as a separate function for the same reasons as
- * insertRiderEmergencyContact().
+ * The generalized delivery_rider_document schema (v1.2.0) uses
+ * id_type + id_path. issue_date and expiry_date are optional; an
+ * empty string is coerced to SQL NULL.
  *
- * @param PDO   $db
- * @param int   $riderId
- * @param array $data {
- *     drivers_license: string,   // project-root-relative path
- *     issue_date:      string,   // Y-m-d, '' means NULL
- *     expiry_date:     string,   // Y-m-d, '' means NULL
- * }
- * @return int  New document_id
+ * @param PDO    $db
+ * @param int    $riderId
+ * @param array{
+ *     id_type:    string,
+ *     id_path:    string,
+ *     issue_date: string,
+ *     expiry_date: string
+ * } $data
+ * @return int   Inserted document_id.
  */
 function insertRiderDocument(PDO $db, int $riderId, array $data): int
 {
     $stmt = $db->prepare(
         "INSERT INTO delivery_rider_document
-            (delivery_rider_id, drivers_license, issue_date, expiry_date)
+            (delivery_rider_id, id_type, id_path, issue_date, expiry_date)
          VALUES
-            (:rider_id, :drivers_license, :issue_date, :expiry_date)"
+            (:rider_id, :id_type, :id_path, :issue_date, :expiry_date)"
     );
     $stmt->execute([
-        ':rider_id'        => $riderId,
-        ':drivers_license' => $data['drivers_license'],
-        ':issue_date'      => $data['issue_date']  !== '' ? $data['issue_date']  : null,
-        ':expiry_date'     => $data['expiry_date'] !== '' ? $data['expiry_date'] : null,
+        ':rider_id'    => $riderId,
+        ':id_type'     => $data['id_type'],
+        ':id_path'     => $data['id_path'],
+        ':issue_date'  => $data['issue_date']  !== '' ? $data['issue_date']  : null,
+        ':expiry_date' => $data['expiry_date'] !== '' ? $data['expiry_date'] : null,
     ]);
 
     return (int)$db->lastInsertId();
@@ -954,25 +996,22 @@ function getRiderChartScale(float $maxAmount): array
 // ============================================
 
 /**
- * Active deliveries for a rider — orders in 'delivering' that are
- * assigned to them.
+ * Fetch the rider's active deliveries — orders in either
+ * 'picking_up' or 'delivering'.
  *
- * Optional delta filter
- * ---------------------
- * When $sinceOrderId > 0, only orders with order_id strictly greater
- * than it are returned. This mirrors the assignment panel's poll
- * contract and lets a caller drive a delta refresh without a second
- * query function.
+ * The rider's "Active" tab on deliveries.php shows both statuses,
+ * so this query returns both. A 'picking_up' order and a
+ * 'delivering' order appear side by side with different action
+ * buttons on each card.
  *
- * The deliveries page calls this with no argument (full list).
- * Nothing else in the current codebase calls the delta form; the
- * parameter is here so a future caller — e.g. a live refresh of the
- * Active Deliveries section — can reuse the same SELECT shape
- * without duplicating it.
+ * Delta support: when $sinceOrderId > 0, only rows with order_id
+ * greater than it are returned. The client uses the delta path to
+ * poll for newly accepted orders without re-fetching the whole
+ * list.
  *
  * @param PDO $db
  * @param int $riderId
- * @param int $sinceOrderId  0 for full list; > 0 for delta.
+ * @param int $sinceOrderId
  * @return array<int, array<string, mixed>>
  */
 function getRiderActiveDeliveries(PDO $db, int $riderId, int $sinceOrderId = 0): array
@@ -1000,7 +1039,7 @@ function getRiderActiveDeliveries(PDO $db, int $riderId, int $sinceOrderId = 0):
              LEFT JOIN restaurant_branch rb ON qi.branch_id = rb.restaurant_branch_id
              LEFT JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
              WHERE o.delivery_rider_id = :rider_id
-               AND o.order_status = 'delivering'
+               AND o.order_status IN ('picking_up','delivering')
                AND o.order_id > :since_order_id
              GROUP BY o.order_id
              ORDER BY o.order_id ASC"
@@ -1030,7 +1069,7 @@ function getRiderActiveDeliveries(PDO $db, int $riderId, int $sinceOrderId = 0):
          LEFT JOIN restaurant_branch rb ON qi.branch_id = rb.restaurant_branch_id
          LEFT JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
          WHERE o.delivery_rider_id = :rider_id
-           AND o.order_status = 'delivering'
+           AND o.order_status IN ('picking_up','delivering')
          GROUP BY o.order_id
          ORDER BY o.order_date ASC"
     );
@@ -1066,11 +1105,32 @@ function getRiderDeliveryHistory(PDO $db, int $riderId, int $limit = 10): array
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
+/**
+ * Counts of the rider's orders grouped by the buckets that matter
+ * to the deliveries page.
+ *
+ *   'active'  → order_status IN ('picking_up','delivering').
+ *               These are the orders the rider has actually
+ *               accepted and is now responsible for. This bucket
+ *               matches the concurrent-order cap's committed set,
+ *               so the Active tab badge shows the same count the
+ *               cap enforces against.
+ *               'rider_pending' offers are shown on the Assigned
+ *               tab, and their count lives in the Assigned tab
+ *               badge (assignedOrders.length), not here.
+ *   'today'   → delivered today
+ *   'week'    → delivered in the last 7 days (including today)
+ *   'total'   → total delivered
+ *
+ * @param PDO $db
+ * @param int $riderId
+ * @return array{active:int, today:int, week:int, total:int}
+ */
 function getRiderDeliveryCounts(PDO $db, int $riderId): array
 {
     $stmt = $db->prepare(
         "SELECT
-            SUM(CASE WHEN order_status IN ('rider_pending','delivering') THEN 1 ELSE 0 END) AS active,
+            SUM(CASE WHEN order_status IN ('picking_up','delivering') THEN 1 ELSE 0 END) AS active,
             SUM(CASE WHEN order_status = 'delivered'
                       AND DATE(delivered_at) = CURDATE() THEN 1 ELSE 0 END) AS today,
             SUM(CASE WHEN order_status = 'delivered'

@@ -8,68 +8,21 @@
  *
  * Response shape: HTML redirect with a session flash. There is no
  * JSON API for mutations because every mutation originates from a
- * normal form submit and every page already renders flashes. AJAX is
- * unnecessary here.
+ * normal form submit and every page already renders flashes.
  *
  * This file contains NO SQL. Every read and write goes through
  * admin-queries.php.
  *
  * @package FitPal
- * @version 2.3 — CSRF-mismatch redirect now honors the whitelisted
- *                redirect_to destination instead of hardcoding
- *                dashboard.php.
+ * @version 4.0 — Removed the `check_sign_out` action. Admins only
+ *                verify and review; they do not take orders or
+ *                assignments, so there is no sign-out guard.
+ *                Sign-out is a direct redirect to the sign-out
+ *                handler with no pre-flight check.
  *
- *                Previously a CSRF mismatch on the profile page's
- *                Personal Information or Change Password form
- *                bounced the admin to dashboard.php, not back to
- *                profile.php. The flash still rendered (dashboard
- *                displays admin_error), so the failure was not
- *                silent, but the user was dropped on the wrong page
- *                and had to navigate back manually to retry.
- *
- *                The fix reorders the handler: the redirect_to
- *                whitelist is resolved BEFORE the CSRF check, so
- *                the mismatch branch can redirect to the same
- *                whitelisted destination a successful submit would
- *                have used. Resolution still runs first because the
- *                whitelist is what keeps an attacker-supplied
- *                redirect_to from steering the mismatch redirect to
- *                an off-site URL — that guarantee is unchanged; only
- *                the ordering relative to the CSRF check moved.
- *
- *                (2.2: Owns its own CSRF bootstrap and rotates the
- *                admin token on mismatch.
- *
- *                require_once on includes/admin-csrf-token.php makes
- *                this handler the authoritative reader of
- *                'admin_csrf_token' rather than an incidental one
- *                that only worked because the page which rendered
- *                the form had already called getAdminCsrfToken().
- *
- *                On the CSRF-mismatch branch the token is unset
- *                before redirecting, mirroring
- *                sign-in-handler.php v1.5. Without that rotation,
- *                getAdminCsrfToken() on the next render of
- *                dashboard.php saw the key still set and returned
- *                the same stale value, so a user who hit a mismatch
- *                was stuck re-submitting the dead token until the
- *                session was cleared manually. Rotating here forces
- *                a fresh token into the next form.
- *
- *                Only admin's own key is touched. The shared
- *                'csrf_token' key is never read, written, or cleared
- *                by this file — other roles in the same PHP session
- *                may still depend on it.
- *
- *                2.1: CSRF validation switched from the shared
- *                'csrf_token' key to admin's own 'admin_csrf_token',
- *                so a customer/rider/restaurant sign-in running
- *                unset($_SESSION['csrf_token']) can no longer delete
- *                the token an already-rendered admin form depends
- *                on. The POST field name stays 'csrf_token' so the
- *                form contract is unchanged.)
+ *                All action handlers now use the standardized
+ *                query functions.
  */
-
 declare(strict_types=1);
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -79,12 +32,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/admin-queries.php';
 
-// Own the admin role's CSRF bootstrap. The helper is idempotent and
-// stores the token under 'admin_csrf_token' — never the shared
-// 'csrf_token' key. Requiring it here means this handler does not
-// depend on the page that rendered the form having already generated
-// the token, and it gives the mismatch branch below a key it can
-// rotate.
+// Own the admin role's CSRF bootstrap.
 require_once __DIR__ . '/../../includes/admin-csrf-token.php';
 
 if (empty($_SESSION['administrator_id'])) {
@@ -97,12 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// Resolve the redirect destination BEFORE the CSRF check so the
-// mismatch branch below can honor the same whitelisted page the
-// successful path would have used. Running the whitelist first is
-// what keeps an attacker-supplied redirect_to from steering either
-// branch to an off-site URL — the ordering change does not weaken
-// that guarantee, because the whitelist still runs on every request.
+// Resolve the redirect destination BEFORE the CSRF check.
 $redirect = (string)($_POST['redirect_to'] ?? 'dashboard.php');
 
 $allowedRedirects = [
@@ -116,12 +59,6 @@ $redirectUrl = '../../pages/' . $redirect;
 
 if (!isset($_POST['csrf_token'], $_SESSION['admin_csrf_token'])
     || !hash_equals((string)$_SESSION['admin_csrf_token'], (string)$_POST['csrf_token'])) {
-    // Rotate admin's own token so the next render generates a fresh
-    // one. Without this the key stays set, getAdminCsrfToken()
-    // returns the same stale value on the redirect destination, and
-    // the user is stuck re-submitting a token the handler has
-    // already rejected. Only admin's key is cleared — never the
-    // shared 'csrf_token' key.
     unset($_SESSION['admin_csrf_token']);
 
     $_SESSION['admin_error'] = 'Security validation failed. Please try again.';

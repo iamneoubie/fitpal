@@ -36,7 +36,7 @@
  * always present and the header bar inside it is a focusable
  * control.
  *
- * The availability pill is now a real <button>. It is keyboard
+ * The availability pill is a real <button>. It is keyboard
  * focusable and fires on Enter / Space for free. It carries:
  *   - aria-label  the current state ("Online" / "Offline" /
  *                 "Inactive"), kept in sync by the JS
@@ -54,9 +54,7 @@
  *                                      the modal
  *
  * CSS toggles which span is visible on :hover and :focus-visible.
- * JS owns the text inside the action span, because the copy
- * depends on BOTH the online flag and whether the rider has a live
- * assignment, and only the JS tracks both.
+ * JS owns the text inside the action span.
  *
  * What it renders
  * ---------------
@@ -68,6 +66,30 @@
  *   - An assignment notification modal.
  *   - An availability modal (Go Online / Go Offline / Blocked).
  *
+ * Live assignment statuses (v4.0)
+ * -------------------------------
+ * The panel surfaces three statuses as "live":
+ *
+ *   rider_pending  — kitchen asked; rider has not yet decided.
+ *                    Row actions: Accept, Decline, Message Kitchen,
+ *                    Call Kitchen.
+ *
+ *   picking_up     — rider accepted; en route to or at the
+ *                    restaurant; food not yet in hand.
+ *                    Row actions: Mark Picked Up, Message Kitchen,
+ *                    Call Kitchen.
+ *
+ *   delivering     — rider has the food; en route to the customer.
+ *                    Row actions: Mark Delivered, Message Customer,
+ *                    Call Customer.
+ *
+ * All three count toward the concurrent-order cap of 3. The status
+ * label and badge are provided by the server in the row payload;
+ * the row's action buttons are injected by assignment-panel.js at
+ * render time based on the row's `status` field. No markup in this
+ * include changes per status — the skeleton is one row shape and
+ * the JS fills the actions slot.
+ *
  * Session use
  * -----------
  * Read only: $_SESSION['delivery_rider_id']. Never writes to session.
@@ -78,19 +100,17 @@
  * included before this file.
  *
  * @package FitPal
- * @version 4.0 — The availability pill is now a <button> that opens
- *                a new availability modal. The modal has three
- *                shapes, all decided in JS: Go Online (primary),
- *                Go Offline (danger), and Blocked when the rider
- *                has a live assignment (info-only, no state change).
- *                The pill's label swaps on hover and focus through
- *                CSS; the action text is written by JS because the
- *                copy depends on both the online flag and the
- *                rider's assignment state. aria-live moved off the
- *                pill and onto the modal, where the announcement
- *                belongs. No change to the panel body, the row
- *                skeleton, the empty state, or the assignment
- *                notification modal.
+ * @version 4.0 — Documents the picking_up status and the new
+ *                mark_picked_up row action. Updates the offline
+ *                hint copy to reflect the tightened availability
+ *                rule (the rider cannot go offline while holding
+ *                any live order).
+ *
+ *                No markup structure changes from v3.0. The row
+ *                skeleton, the notification modal, and the
+ *                availability modal are byte-identical to v3.0
+ *                except for the offline hint text and this
+ *                docblock.
  *
  *                (3.0: aria-hidden="false" on the wrapper. 2.0:
  *                three-zone header grid. 1.0: initial.)
@@ -177,7 +197,7 @@ $riderId = (int)$_SESSION['delivery_rider_id'];
                     <img src="<?php echo $assetBase; ?>assets/images/icons/information-fill.svg" alt="" width="16"
                         height="16"
                         onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
-                    <span>You are offline. Go online from the dashboard to accept new assignments.</span>
+                    <span>You are offline. Go online from the assignments panel to accept new deliveries.</span>
                 </div>
 
                 <div class="assignment-ineligible-hint" id="assignmentIneligibleHint" hidden>
@@ -210,6 +230,10 @@ $riderId = (int)$_SESSION['delivery_rider_id'];
      ASSIGNMENT NOTIFICATION MODAL
      Pops when a NEW rider_pending assignment arrives while the
      rider is online. Accept / Decline / Dismiss.
+
+     The modal is NOT shown for picking_up or delivering rows —
+     those are statuses the rider moved the order into themselves.
+     The notification is only for a fresh offer the kitchen sent.
      ============================================================ -->
 <div class="assignment-notify-modal" id="assignmentNotifyModal" style="display: none;" role="dialog" aria-modal="true"
     aria-labelledby="assignmentNotifyTitle">
@@ -271,10 +295,13 @@ $riderId = (int)$_SESSION['delivery_rider_id'];
      hidden in the blocked shape because there is nothing to
      cancel — the rider is being told, not asked.
 
+     The "blocked" shape is used in two cases:
+       - the rider is not verified (cannot go online)
+       - the rider has live orders (cannot go offline until all
+         of them are finished)
+
      aria-live="polite" on the title element so the copy that JS
-     writes into it is announced when the modal opens. The pill
-     itself no longer carries aria-live; the announcement belongs
-     here.
+     writes into it is announced when the modal opens.
      ============================================================ -->
 <div class="assignment-availability-modal" id="assignmentAvailabilityModal" style="display: none;"
     data-variant="primary" data-icon="online" role="dialog" aria-modal="true"

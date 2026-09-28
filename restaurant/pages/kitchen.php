@@ -5,20 +5,29 @@
  * Two views, chosen by the signed-in account's scope:
  *
  *   Branch view (manager / staff / kitchen)
- *     - Tabs for New, Preparing, Waiting on Rider, Out for Delivery,
- *       and Recent (delivered / cancelled / refunded).
- *     - Actions: Start Preparing, Cancel, Assign Rider,
- *       Reassign Rider, Message (customer / rider).
- *     - An order NEVER disappears when its status changes; it slides
- *       into the correct tab.
+ *     - Tab bar for New, Preparing, Waiting on Rider, Out for
+ *       Delivery, and Recent.
+ *     - Each tab renders at most five cards. A pagination bar sits
+ *       below the list and carries ?tab=<key>&page=<n>.
+ *     - Each card is three bands:
+ *         HEADER  — order id, date, status badge, chevron
+ *         SUMMARY — Restaurant • Branch • Customer • Rider • Total
+ *         DETAILS — pickup block, drop-off block, rider block,
+ *                   item list, subtotal. Collapsed by default.
+ *     - Step-by-step actions:
+ *         New         → Start Preparing, Cancel
+ *         Preparing   → Assign Rider, Cancel, Message
+ *         Waiting     → Reassign Rider, Message
+ *         Out for Delivery → Message
+ *         Recent      → Message, but only while the delivered
+ *                       grace window is open.
  *     - The order list is live: kitchen-realtime.js polls
- *       order-handler.php on a delta cursor and updates the DOM in
- *       place as orders arrive and move between tabs.
+ *       order-handler.php on a delta cursor.
+ *     - The rider modal's roster is live: orders.js fetches and
+ *       polls the roster while the modal stays open.
  *
  *   Owner view (owner / partner)
  *     - Read-only summary across all branches.
- *     - Counts include rider_pending and delivering buckets.
- *     - No action buttons, no live polling, no chat.
  *
  * Access control:
  *   - Unauthenticated visitors are redirected to sign-in.
@@ -26,52 +35,79 @@
  *     partner is redirected to the dashboard.
  *
  * ---------------------------------------------------------------------
+ * STATUS FLOW
+ * ---------------------------------------------------------------------
+ *     pending → preparing → rider_pending → picking_up → delivering
+ *                                                              ↓
+ *                                                         delivered
+ *
+ * Kitchen-side visibility:
+ *
+ *   New                 pending
+ *   Preparing           preparing
+ *   Waiting on Rider    rider_pending + picking_up
+ *   Out for Delivery    delivering
+ *   Recent              delivered + cancelled + refunded
+ *
+ * ---------------------------------------------------------------------
+ * DELIVERED GRACE WINDOW
+ * ---------------------------------------------------------------------
+ * A card in the Recent tab can only offer the Message action while
+ * the delivered grace window is open. That window is decided in
+ * SQL by the query layer (chat_grace_open, computed from
+ * delivered_at and RESTAURANT_CHAT_DELIVERED_GRACE_SECONDS) and
+ * enforced on the server by chat-handler.php's gateChannel(). The
+ * Message button is rendered only when the flag is 1, so the
+ * button and the gate agree by construction.
+ *
+ * ---------------------------------------------------------------------
+ * TEMPLATE STRUCTURE
+ * ---------------------------------------------------------------------
+ * This file does NOT emit a DOCTYPE or a <head>. restaurant/includes/
+ * header.php has already done that before this file runs, and has
+ * opened <main class="main-content">. Everything this page emits
+ * lives inside that <main>.
+ *
+ * Config for the client is carried on #kitchenPage via data-*
+ * attributes. No inline script block sits in the body.
+ *
+ * ---------------------------------------------------------------------
  * SCOPE RULES APPLIED
  * ---------------------------------------------------------------------
- *  - No inline CSS. orders.css is loaded via the header's
- *    $pageCssMap and re-linked at the top of this page.
- *  - No inline JS. kitchen-realtime.js is loaded at the bottom of
- *    the page for the branch view; orders.js is retained for the
- *    confirm/rider modals. Config is passed to JS via data-*
- *    attributes on #kitchenPage.
+ *  - No inline CSS. orders.css is loaded by header.php's
+ *    $pageCssMap for kitchen.php.
+ *  - No inline JS. kitchen-realtime.js and orders.js are loaded at
+ *    the bottom of the page for the branch view.
  *  - No SQL. All data comes from
- *    restaurant/backend/database/order-queries.php and, for the
- *    chat modal, from restaurant/backend/database/chat-queries.php.
- *  - No view helpers. Formatting is done inline where needed.
+ *    restaurant/backend/database/order-queries.php.
  *  - Icons reference only files present under
  *    shared/assets/images/icons/.
+ *  - Every modal on the page contains an <img> icon.
  * ---------------------------------------------------------------------
  *
- * Chat modal
- * ----------
- * The modal markup lives in restaurant/includes/chat-modal.php and
- * is required only on the branch view. It is opened by any element
- * on the page that carries data-restaurant-chat-open plus the
- * order_id and counterparty attributes. The kitchen renders one
- * Message button per order card. Its counterparty defaults to
- * 'customer'; on orders that have a rider attached, the modal's
- * Rider tab is also enabled.
- *
- * Live order payloads
- * -------------------
- * For the poll to swap a card in place, the server needs to send
- * the full card markup back. kitchenCardHtml() below is the single
- * builder for that markup: it is called both by the initial render
- * here and by order-handler.php's `poll` action. Keeping it in one
- * function is why a card updated via poll looks identical to one
- * rendered on page load.
- *
  * @package FitPal
- * @version 4.0 — Live order list + chat modal:
- *                  - Polls order-handler.php for delta updates and
- *                    swaps cards in place as statuses change.
- *                  - Adds a Message button to each order card that
- *                    opens the shared chat modal.
- *                  - kitchenCardHtml() is now the single card
- *                    builder, shared with the handler's poll action.
+ * @version 8.0 — Message button grace window and card render sync:
+ *                  - The card's Message action now reads the
+ *                    delivered grace flag (`chat_grace_open`) on
+ *                    completed orders, so the button is only
+ *                    rendered when the server-side chat gate
+ *                    would accept the send.
+ *                  - The card's action footer is now always
+ *                    rendered, though actions themselves remain
+ *                    conditional. This ensures the footer renders
+ *                    on completed cards that have the Message
+ *                    action available.
+ *                  - No other structural change. The tab bar,
+ *                    pagination bar, new-order pill, confirm
+ *                    modal, rider modal, chat modal include, and
+ *                    owner view are unchanged from v7.0.
  *
- *                (3.0: CSRF token inherited from header.php; local
- *                generation removed. 2.0: rider_pending handoff.)
+ *                (7.0: collapsible kitchen cards and unified
+ *                contact view. 6.0: realtime rider roster in the
+ *                modal. 5.0: pagination and step-by-step actions.
+ *                4.0: 'picking_up' status. 3.0: CSRF token
+ *                inherited from header.php. 2.0: rider_pending
+ *                handoff.)
  */
 
 declare(strict_types=1);
@@ -114,6 +150,9 @@ require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../backend/database/order-queries.php';
 
 // $assetBase and $csrfToken are provided by header.php.
+// header.php has already emitted <!DOCTYPE html>, <head>, <body>,
+// and <header class="header restaurant-header">, and has opened
+// <main class="main-content">.
 
 /* --------------------------------------------------------------
  * PAGE LOCALS (formatting only — declared before they are used)
@@ -130,6 +169,7 @@ function kitchenStatusLabel(string $status): string
         'pending'       => 'New',
         'preparing'     => 'Preparing',
         'rider_pending' => 'Waiting on Rider',
+        'picking_up'    => 'Picking Up',
         'delivering'    => 'Out for Delivery',
         'delivered'     => 'Delivered',
         'cancelled'     => 'Cancelled',
@@ -144,6 +184,7 @@ function kitchenStatusBadge(string $status): string
         'pending'       => 'badge-warning',
         'preparing'     => 'badge-info',
         'rider_pending' => 'badge-primary',
+        'picking_up'    => 'badge-primary',
         'delivering'    => 'badge-primary',
         'delivered'     => 'badge-success',
         'cancelled'     => 'badge-danger',
@@ -159,30 +200,66 @@ function kitchenDate(string $date): string
 }
 
 /**
+ * Build the pickup block's address line from the joined branch
+ * columns. Returns an empty string when every segment is blank.
+ */
+function kitchenBranchAddressLine(array $order): string
+{
+    $parts = [];
+    foreach (['branch_block', 'branch_barangay', 'branch_city', 'branch_province'] as $key) {
+        $v = trim((string)($order[$key] ?? ''));
+        if ($v !== '') {
+            $parts[] = $v;
+        }
+    }
+    return implode(', ', $parts);
+}
+
+/**
+ * Build the rider vehicle line, filtered so blank segments do not
+ * leave a stray separator. Returns an empty string when neither
+ * the vehicle type nor the plate is present.
+ */
+function kitchenRiderVehicleLine(array $order): string
+{
+    $parts = [];
+    $vehicle = trim((string)($order['rider_vehicle_type'] ?? ''));
+    $plate   = trim((string)($order['rider_vehicle_plate'] ?? ''));
+    if ($vehicle !== '') $parts[] = $vehicle;
+    if ($plate   !== '') $parts[] = $plate;
+    return implode(' • ', $parts);
+}
+
+/**
  * Build the full markup for one order card.
  *
  * Single source of truth for card HTML. Called by the initial render
- * here and by order-handler.php's `poll` action, so a card swapped
- * in via poll looks identical to one rendered on page load.
+ * here and by order-handler.php's renderKitchenCard(), so a card
+ * swapped in via poll looks identical to one rendered on page load.
  *
- * $order is expected to contain the fields produced by
- * getBranchKitchenOrders() plus an `items` array from
- * getKitchenOrderItems(). $assetBase must be in scope.
+ * The card is three bands:
+ *   - header  (always visible)
+ *   - summary (always visible)
+ *   - details (collapsed by default; orders.js toggles)
  *
  * @param array<string, mixed> $order
  * @param string $assetBase
- * @param bool $isCompleted  true when rendering a closed order
- *                           (Recent tab). Suppresses action
- *                           buttons.
+ * @param bool $isCompleted
+ * @param bool $isNew         Marked by the poll when a card is fresh.
  * @return string
  */
-function kitchenCardHtml(array $order, string $assetBase, bool $isCompleted = false): string
-{
+function kitchenCardHtml(
+    array $order,
+    string $assetBase,
+    bool $isCompleted = false,
+    bool $isNew = false
+): string {
     $orderId      = (int)($order['order_id'] ?? 0);
     $orderStatus  = (string)($order['order_status'] ?? '');
     $items        = is_array($order['items'] ?? null) ? $order['items'] : [];
     $itemCount    = (int)($order['item_count'] ?? count($items));
     $subtotal     = (float)($order['subtotal'] ?? 0);
+
     $customerName = trim(
         (string)($order['customer_first_name'] ?? '') . ' ' .
         (string)($order['customer_last_name'] ?? '')
@@ -190,23 +267,64 @@ function kitchenCardHtml(array $order, string $assetBase, bool $isCompleted = fa
     if ($customerName === '') {
         $customerName = 'Customer';
     }
-    $assignedRiderId = isset($order['delivery_rider_id']) && $order['delivery_rider_id'] !== null
+    $customerContact = (string)($order['customer_contact'] ?? '—');
+    $destination     = (string)($order['destination_address'] ?? '');
+
+    $assignedRiderId   = isset($order['delivery_rider_id']) && $order['delivery_rider_id'] !== null
         ? (int)$order['delivery_rider_id']
         : 0;
     $assignedRiderName = trim(
         (string)($order['rider_first_name'] ?? '') . ' ' .
         (string)($order['rider_last_name'] ?? '')
     );
+    $riderContact = (string)($order['rider_contact'] ?? '');
 
+    $restaurantName = trim((string)($order['restaurant_name'] ?? ''));
+    $branchName     = trim((string)($order['branch_name'] ?? ''));
+    $branchAddress  = kitchenBranchAddressLine($order);
+    $riderVehicle   = kitchenRiderVehicleLine($order);
+
+    // ---- Summary line -----------------------------------------
+    //
+    // Restaurant • Branch • Customer • Rider • Total
+    //
+    // The rider segment renders as an em-dash when no rider is
+    // attached, so the line always has the same number of fields.
+    $summary = shapeKitchenOrderSummaryRow($order);
+    $riderSummary = $summary['rider_name'] !== '' ? $summary['rider_name'] : '—';
+
+    // ---- Step-by-step action visibility -----------------------
+    //
+    // $isCompleted only affects the status-badge treatment and the
+    // Message-action grace check. Actions themselves are conditioned
+    // on the order's status, not on $isCompleted.
     $canStartPreparing = !$isCompleted && $orderStatus === 'pending';
     $canCancel         = !$isCompleted && in_array($orderStatus, ['pending', 'preparing'], true);
     $canAssignRider    = !$isCompleted
-        && in_array($orderStatus, ['pending', 'preparing'], true)
+        && $orderStatus === 'preparing'
         && $assignedRiderId === 0;
     $canReassignRider  = !$isCompleted
-        && in_array($orderStatus, ['pending', 'preparing', 'rider_pending'], true)
+        && in_array($orderStatus, ['preparing', 'rider_pending'], true)
         && $assignedRiderId > 0;
-    $canMessage        = !$isCompleted;
+
+    // Message action availability.
+    //
+    // Live orders: always available.
+    // Completed orders: only while the delivered grace window is
+    // open, decided by the query layer's chat_grace_open column.
+    // This mirrors chat-handler.php's server-side gate exactly.
+    $canMessage = !$isCompleted
+        || ($summary['is_delivered'] && $summary['chat_grace_open']);
+
+    // Rider-block sub-badge.
+    $riderBlockBadge = '';
+    if (!$isCompleted) {
+        if ($orderStatus === 'rider_pending') {
+            $riderBlockBadge = '<span class="badge badge-warning">Awaiting confirmation</span>';
+        } elseif ($orderStatus === 'picking_up') {
+            $riderBlockBadge = '<span class="badge badge-primary">Picking up</span>';
+        }
+    }
 
     $closedAt = '';
     if ($isCompleted) {
@@ -220,13 +338,29 @@ function kitchenCardHtml(array $order, string $assetBase, bool $isCompleted = fa
     }
 
     $cardClass = 'kitchen-order-card'
-        . ($isCompleted ? ' kitchen-order-card-completed is-hidden' : '');
+        . ($isCompleted ? ' kitchen-order-card-completed' : '')
+        . ($isNew ? ' is-new' : '');
+
+    $detailsId = 'kitchenOrderDetails' . $orderId;
+
+    // Assemble the summary line as five textual segments joined
+    // with a bullet. Each segment is escaped at output time.
+    $summarySegments = [
+        $summary['restaurant_name'],
+        $summary['branch_name'],
+        $summary['customer_name'],
+        $riderSummary,
+        kitchenMoney($summary['order_total']),
+    ];
 
     ob_start();
     ?>
 <article class="<?php echo $cardClass; ?>" data-order-id="<?php echo $orderId; ?>"
     data-order-status="<?php echo htmlspecialchars($orderStatus, ENT_QUOTES, 'UTF-8'); ?>">
 
+    <!-- ============================================================
+         HEADER BAND — always visible
+         ============================================================ -->
     <header class="kitchen-order-header">
         <div class="kitchen-order-header-left">
             <span class="kitchen-order-id">#<?php echo $orderId; ?></span>
@@ -242,32 +376,121 @@ function kitchenCardHtml(array $order, string $assetBase, bool $isCompleted = fa
             <span class="badge <?php echo kitchenStatusBadge($orderStatus); ?>">
                 <?php echo kitchenStatusLabel($orderStatus); ?>
             </span>
+            <button type="button" class="kitchen-order-toggle" data-row-expand="1"
+                aria-controls="<?php echo $detailsId; ?>" aria-expanded="false" aria-label="Toggle order details">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-drop-down-line.svg" alt=""
+                    class="kitchen-order-toggle-icon" width="18" height="18"
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/arrow-drop-down-line.svg'">
+            </button>
         </div>
     </header>
 
-    <div class="kitchen-order-body">
+    <!-- ============================================================
+         SUMMARY BAND — always visible
+         One line. The chef reads this and decides which card to
+         expand. The rider segment renders as "—" when no rider is
+         attached so the line always has the same number of fields.
+         ============================================================ -->
+    <div class="kitchen-order-summary">
+        <?php foreach ($summarySegments as $i => $segment): ?>
+        <?php if ($i > 0): ?>
+        <span class="kitchen-order-summary-sep" aria-hidden="true">•</span>
+        <?php endif; ?>
+        <span class="kitchen-order-summary-seg">
+            <?php echo htmlspecialchars((string)$segment, ENT_QUOTES, 'UTF-8'); ?>
+        </span>
+        <?php endforeach; ?>
+    </div>
 
-        <div class="kitchen-order-meta">
-            <div class="kitchen-meta-block">
-                <span class="kitchen-meta-label">Customer</span>
-                <span class="kitchen-meta-value">
-                    <?php echo htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8'); ?>
-                </span>
+    <!-- ============================================================
+         DETAILS BAND — collapsed by default
+         ============================================================ -->
+    <div class="kitchen-order-details" id="<?php echo $detailsId; ?>" hidden>
+
+        <!-- ---- Route: pickup and drop-off ---- -->
+        <div class="kitchen-route">
+
+            <div class="kitchen-route-stop kitchen-route-stop-pickup">
+                <div class="kitchen-route-icon kitchen-route-icon-pickup" aria-hidden="true">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt=""
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/community-general.svg'">
+                </div>
+                <div class="kitchen-route-info">
+                    <span class="kitchen-route-label">Pickup</span>
+                    <span class="kitchen-route-name">
+                        <?php echo htmlspecialchars($restaurantName !== '' ? $restaurantName : '—', ENT_QUOTES, 'UTF-8'); ?>
+                    </span>
+                    <?php if ($branchName !== ''): ?>
+                    <span class="kitchen-route-sub">
+                        <?php echo htmlspecialchars($branchName, ENT_QUOTES, 'UTF-8'); ?>
+                    </span>
+                    <?php endif; ?>
+                    <?php if ($branchAddress !== ''): ?>
+                    <span class="kitchen-route-address">
+                        <?php echo htmlspecialchars($branchAddress, ENT_QUOTES, 'UTF-8'); ?>
+                    </span>
+                    <?php endif; ?>
+                </div>
             </div>
-            <div class="kitchen-meta-block">
-                <span class="kitchen-meta-label">Contact</span>
-                <span class="kitchen-meta-value">
-                    <?php echo htmlspecialchars((string)($order['customer_contact'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
-                </span>
-            </div>
-            <div class="kitchen-meta-block kitchen-meta-block-wide">
-                <span class="kitchen-meta-label">Deliver To</span>
-                <span class="kitchen-meta-value">
-                    <?php echo htmlspecialchars((string)($order['destination_address'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>
-                </span>
+
+            <div class="kitchen-route-connector" aria-hidden="true"></div>
+
+            <div class="kitchen-route-stop kitchen-route-stop-dropoff">
+                <div class="kitchen-route-icon kitchen-route-icon-dropoff" aria-hidden="true">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt=""
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/location-target-fill.svg'">
+                </div>
+                <div class="kitchen-route-info">
+                    <span class="kitchen-route-label">Drop-off</span>
+                    <span class="kitchen-route-name">
+                        <?php echo htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8'); ?>
+                    </span>
+                    <span class="kitchen-route-contact">
+                        <?php echo htmlspecialchars($customerContact, ENT_QUOTES, 'UTF-8'); ?>
+                    </span>
+                    <?php if ($destination !== ''): ?>
+                    <span class="kitchen-route-address">
+                        <?php echo htmlspecialchars($destination, ENT_QUOTES, 'UTF-8'); ?>
+                    </span>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
 
+        <!-- ---- Rider block ---- -->
+        <div class="kitchen-rider-block">
+            <span class="kitchen-rider-block-label">Rider</span>
+            <?php if ($assignedRiderId > 0): ?>
+            <div class="kitchen-rider-block-body">
+                <span class="kitchen-rider-block-name">
+                    <?php echo htmlspecialchars($assignedRiderName !== '' ? $assignedRiderName : ('#' . $assignedRiderId), ENT_QUOTES, 'UTF-8'); ?>
+                </span>
+                <?php if ($riderContact !== ''): ?>
+                <span class="kitchen-rider-block-contact">
+                    <?php echo htmlspecialchars($riderContact, ENT_QUOTES, 'UTF-8'); ?>
+                </span>
+                <?php endif; ?>
+                <?php if ($riderVehicle !== ''): ?>
+                <span class="kitchen-rider-block-vehicle">
+                    <?php echo htmlspecialchars($riderVehicle, ENT_QUOTES, 'UTF-8'); ?>
+                </span>
+                <?php endif; ?>
+                <?php if ($riderBlockBadge !== ''): ?>
+                <span class="kitchen-rider-block-badge">
+                    <?php echo $riderBlockBadge; ?>
+                </span>
+                <?php endif; ?>
+            </div>
+            <?php else: ?>
+            <div class="kitchen-rider-block-body">
+                <span class="kitchen-rider-block-empty">
+                    <?php echo $isCompleted ? '—' : 'Not assigned'; ?>
+                </span>
+            </div>
+            <?php endif; ?>
+        </div>
+
+        <!-- ---- Items ---- -->
         <div class="kitchen-order-items">
             <p class="kitchen-items-heading">
                 <?php echo $itemCount; ?> item<?php echo $itemCount === 1 ? '' : 's'; ?>
@@ -287,7 +510,7 @@ function kitchenCardHtml(array $order, string $assetBase, bool $isCompleted = fa
                         </span>
                     </div>
 
-                    <?php if (!$isCompleted && !empty($customs)): ?>
+                    <?php if (!empty($customs)): ?>
                     <ul class="kitchen-item-customs">
                         <?php foreach ($customs as $cust):
                             $custName = (string)($cust['ingredient_name'] ?? '');
@@ -314,7 +537,7 @@ function kitchenCardHtml(array $order, string $assetBase, bool $isCompleted = fa
                     </ul>
                     <?php endif; ?>
 
-                    <?php if (!$isCompleted && $itemNotes !== ''): ?>
+                    <?php if ($itemNotes !== ''): ?>
                     <p class="kitchen-item-notes">
                         <strong>Note:</strong>
                         <?php echo nl2br(htmlspecialchars($itemNotes, ENT_QUOTES, 'UTF-8')); ?>
@@ -325,40 +548,33 @@ function kitchenCardHtml(array $order, string $assetBase, bool $isCompleted = fa
             </ul>
         </div>
 
-        <div class="kitchen-order-side">
-            <div class="kitchen-order-total">
-                <span class="kitchen-order-total-label">Subtotal</span>
-                <span class="kitchen-order-total-value">
-                    <?php echo kitchenMoney($subtotal); ?>
-                </span>
-            </div>
-
-            <div class="kitchen-order-rider">
-                <span class="kitchen-meta-label">Rider</span>
-                <?php if ($assignedRiderId > 0): ?>
-                <span class="kitchen-rider-assigned">
-                    <?php echo htmlspecialchars($assignedRiderName !== '' ? $assignedRiderName : ('#' . $assignedRiderId), ENT_QUOTES, 'UTF-8'); ?>
-                </span>
-                <?php if (!$isCompleted && $orderStatus === 'rider_pending'): ?>
-                <span class="kitchen-rider-awaiting">
-                    <span class="badge badge-warning">Awaiting confirmation</span>
-                </span>
-                <?php endif; ?>
-                <?php else: ?>
-                <span class="kitchen-rider-unassigned">
-                    <?php echo $isCompleted ? '—' : 'Not assigned'; ?>
-                </span>
-                <?php endif; ?>
-            </div>
+        <!-- ---- Subtotal ---- -->
+        <div class="kitchen-order-total">
+            <span class="kitchen-order-total-label">Subtotal</span>
+            <span class="kitchen-order-total-value">
+                <?php echo kitchenMoney($subtotal); ?>
+            </span>
         </div>
     </div>
 
-    <?php if (!$isCompleted): ?>
+    <!-- ============================================================
+         ACTION FOOTER — always visible
+         Actions themselves are conditional; the footer always
+         renders so a card without any available action still has
+         its bottom edge.
+         ============================================================ -->
     <footer class="kitchen-order-actions">
         <?php if ($canCancel): ?>
         <button type="button" class="btn btn-outline btn-sm kitchen-action-btn" data-action="cancel_order"
             data-order-id="<?php echo $orderId; ?>">
             Cancel
+        </button>
+        <?php endif; ?>
+
+        <?php if ($canStartPreparing): ?>
+        <button type="button" class="btn btn-primary btn-sm kitchen-action-btn" data-action="start_preparing"
+            data-order-id="<?php echo $orderId; ?>">
+            Start Preparing
         </button>
         <?php endif; ?>
 
@@ -388,38 +604,172 @@ function kitchenCardHtml(array $order, string $assetBase, bool $isCompleted = fa
             <span>Message</span>
         </button>
         <?php endif; ?>
-
-        <?php if ($canStartPreparing): ?>
-        <button type="button" class="btn btn-primary btn-sm kitchen-action-btn" data-action="start_preparing"
-            data-order-id="<?php echo $orderId; ?>">
-            Start Preparing
-        </button>
-        <?php endif; ?>
     </footer>
-    <?php endif; ?>
 </article>
 <?php
     return (string)ob_get_clean();
+}
+
+/**
+ * Render the pagination bar for a tab.
+ *
+ * @param string $tab
+ * @param int $page
+ * @param int $totalPages
+ * @return string
+ */
+function kitchenPaginationHtml(string $tab, int $page, int $totalPages): string
+{
+    if ($totalPages <= 1) {
+        return '';
+    }
+
+    $prevUrl = 'kitchen.php?tab=' . urlencode($tab) . '&page=' . max(1, $page - 1);
+    $nextUrl = 'kitchen.php?tab=' . urlencode($tab) . '&page=' . min($totalPages, $page + 1);
+
+    ob_start();
+    ?>
+<nav class="kitchen-pagination" aria-label="Order pages">
+    <?php if ($page > 1): ?>
+    <a href="<?php echo htmlspecialchars($prevUrl, ENT_QUOTES, 'UTF-8'); ?>" class="kitchen-pagination-link"
+        data-page-link data-tab="<?php echo htmlspecialchars($tab, ENT_QUOTES, 'UTF-8'); ?>"
+        data-page="<?php echo $page - 1; ?>">
+        <img src="<?php echo $GLOBALS['assetBaseForPagination'] ?? '../../shared/'; ?>assets/images/icons/arrow-left-s-line.svg"
+            alt="" class="kitchen-pagination-icon" width="14" height="14"
+            onerror="this.onerror=null; this.src='<?php echo $GLOBALS['assetBaseForPagination'] ?? '../../shared/'; ?>assets/images/icons/arrow-left-line.svg'">
+        <span>Previous</span>
+    </a>
+    <?php else: ?>
+    <span class="kitchen-pagination-link is-disabled">
+        <img src="<?php echo $GLOBALS['assetBaseForPagination'] ?? '../../shared/'; ?>assets/images/icons/arrow-left-s-line.svg"
+            alt="" class="kitchen-pagination-icon" width="14" height="14"
+            onerror="this.onerror=null; this.src='<?php echo $GLOBALS['assetBaseForPagination'] ?? '../../shared/'; ?>assets/images/icons/arrow-left-line.svg'">
+        <span>Previous</span>
+    </span>
+    <?php endif; ?>
+
+    <span class="kitchen-pagination-info">
+        Page <?php echo $page; ?> of <?php echo $totalPages; ?>
+    </span>
+
+    <?php if ($page < $totalPages): ?>
+    <a href="<?php echo htmlspecialchars($nextUrl, ENT_QUOTES, 'UTF-8'); ?>" class="kitchen-pagination-link"
+        data-page-link data-tab="<?php echo htmlspecialchars($tab, ENT_QUOTES, 'UTF-8'); ?>"
+        data-page="<?php echo $page + 1; ?>">
+        <span>Next</span>
+        <img src="<?php echo $GLOBALS['assetBaseForPagination'] ?? '../../shared/'; ?>assets/images/icons/arrow-right-s-line.svg"
+            alt="" class="kitchen-pagination-icon" width="14" height="14"
+            onerror="this.onerror=null; this.src='<?php echo $GLOBALS['assetBaseForPagination'] ?? '../../shared/'; ?>assets/images/icons/arrow-right-long-line.svg'">
+    </a>
+    <?php else: ?>
+    <span class="kitchen-pagination-link is-disabled">
+        <span>Next</span>
+        <img src="<?php echo $GLOBALS['assetBaseForPagination'] ?? '../../shared/'; ?>assets/images/icons/arrow-right-s-line.svg"
+            alt="" class="kitchen-pagination-icon" width="14" height="14"
+            onerror="this.onerror=null; this.src='<?php echo $GLOBALS['assetBaseForPagination'] ?? '../../shared/'; ?>assets/images/icons/arrow-right-long-line.svg'">
+    </span>
+    <?php endif; ?>
+</nav>
+<?php
+    return (string)ob_get_clean();
+}
+
+/**
+ * Human-readable title for a tab, used in the empty state.
+ *
+ * @param string $tab
+ * @return string
+ */
+function kitchenTabTitle(string $tab): string
+{
+    return match ($tab) {
+        'new'              => 'New Orders',
+        'preparing'        => 'Preparing',
+        'waiting_on_rider' => 'Waiting on Rider',
+        'out_for_delivery' => 'Out for Delivery',
+        'recent'           => 'Recent Orders',
+        default            => 'Orders',
+    };
+}
+
+/**
+ * Empty-state copy for a tab.
+ *
+ * @param string $tab
+ * @return array{title:string, text:string}
+ */
+function kitchenTabEmptyCopy(string $tab): array
+{
+    return match ($tab) {
+        'new' => [
+            'title' => 'No new orders',
+            'text'  => 'New orders will appear here as soon as they are placed.',
+        ],
+        'preparing' => [
+            'title' => 'Nothing is being prepared',
+            'text'  => 'Press Start Preparing on a new order and it will show up here.',
+        ],
+        'waiting_on_rider' => [
+            'title' => 'No orders waiting on a rider',
+            'text'  => 'Orders waiting on rider confirmation, and riders on their way to pick up, appear here.',
+        ],
+        'out_for_delivery' => [
+            'title' => 'Nothing is out for delivery',
+            'text'  => 'Orders a rider has picked up appear here until they are delivered.',
+        ],
+        'recent' => [
+            'title' => 'No recent orders yet',
+            'text'  => 'Delivered, cancelled, and refunded orders appear here.',
+        ],
+        default => [
+            'title' => 'No orders',
+            'text'  => 'There is nothing to show in this tab.',
+        ],
+    };
 }
 
 /* --------------------------------------------------------------
  * LOAD DATA FOR THE ACTIVE VIEW
  * -------------------------------------------------------------- */
 
+$allowedTabs = ['new', 'preparing', 'waiting_on_rider', 'out_for_delivery', 'recent'];
+$activeTab   = isset($_GET['tab']) ? strtolower(trim((string)$_GET['tab'])) : 'new';
+if (!in_array($activeTab, $allowedTabs, true)) {
+    $activeTab = 'new';
+}
+
+$requestedPage = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+
+$tabStatuses = [
+    'new'              => ['pending'],
+    'preparing'        => ['preparing'],
+    'waiting_on_rider' => ['rider_pending', 'picking_up'],
+    'out_for_delivery' => ['delivering'],
+];
+
 $activeOrders    = [];
 $completedOrders = [];
 $kitchenCounts   = [
-    'pending'         => 0,
-    'preparing'       => 0,
-    'rider_pending'   => 0,
-    'delivering'      => 0,
-    'delivered_today' => 0,
-    'cancelled_today' => 0,
+    'new'              => 0,
+    'preparing'        => 0,
+    'waiting_on_rider' => 0,
+    'out_for_delivery' => 0,
+    'recent'           => 0,
+    'total_live'       => 0,
 ];
 $availableRiders = [];
 $ownerSummary    = null;
 $ownerBranchRows = [];
 $loadError       = '';
+$pagination      = [
+    'items'      => [],
+    'total'      => 0,
+    'totalPages' => 1,
+    'page'       => 1,
+    'perPage'    => KITCHEN_DEFAULT_PER_PAGE,
+];
+
+$GLOBALS['assetBaseForPagination'] = $assetBase;
 
 if ($isOwner) {
 
@@ -434,35 +784,50 @@ if ($isOwner) {
 } else {
 
     try {
-        $activeOrders = getBranchKitchenOrders(
-            $database_connection,
-            $branchId,
-            ['pending', 'preparing', 'rider_pending', 'delivering']
-        );
+        $kitchenCounts = getKitchenTabCounts($database_connection, $branchId);
 
-        $completedOrders = getBranchCompletedOrders($database_connection, $branchId, 30);
+        if ($activeTab === 'recent') {
+            $pagination = getBranchCompletedOrdersPaginated(
+                $database_connection,
+                $branchId,
+                $requestedPage,
+                KITCHEN_DEFAULT_PER_PAGE
+            );
 
-        $kitchenCounts = getKitchenOrderCounts($database_connection, $branchId);
+            foreach ($pagination['items'] as &$order) {
+                $order['items'] = getKitchenOrderItems(
+                    $database_connection,
+                    (int)$order['order_id'],
+                    $branchId
+                );
+            }
+            unset($order);
+
+            $completedOrders = $pagination['items'];
+        } else {
+            $statuses = $tabStatuses[$activeTab] ?? ['pending'];
+
+            $pagination = getBranchKitchenOrdersPaginated(
+                $database_connection,
+                $branchId,
+                $statuses,
+                $requestedPage,
+                KITCHEN_DEFAULT_PER_PAGE
+            );
+
+            foreach ($pagination['items'] as &$order) {
+                $order['items'] = getKitchenOrderItems(
+                    $database_connection,
+                    (int)$order['order_id'],
+                    $branchId
+                );
+            }
+            unset($order);
+
+            $activeOrders = $pagination['items'];
+        }
 
         $availableRiders = getAvailableRidersForBranch($database_connection, $branchId, 0);
-
-        foreach ($activeOrders as &$order) {
-            $order['items'] = getKitchenOrderItems(
-                $database_connection,
-                (int)$order['order_id'],
-                $branchId
-            );
-        }
-        unset($order);
-
-        foreach ($completedOrders as &$order) {
-            $order['items'] = getKitchenOrderItems(
-                $database_connection,
-                (int)$order['order_id'],
-                $branchId
-            );
-        }
-        unset($order);
 
     } catch (PDOException $e) {
         error_log('Kitchen branch view load error: ' . $e->getMessage());
@@ -470,25 +835,40 @@ if ($isOwner) {
     }
 }
 
-// Highest order_id in the live set. This is the initial delta cursor
-// the poll action uses.
 $maxLiveOrderId = 0;
-foreach ($activeOrders as $o) {
-    $oid = (int)($o['order_id'] ?? 0);
-    if ($oid > $maxLiveOrderId) $maxLiveOrderId = $oid;
+if (!$isOwner) {
+    try {
+        $liveIdsStmt = $database_connection->prepare(
+            "SELECT COALESCE(MAX(o.order_id), 0)
+               FROM orders o
+               JOIN queue_item qi ON qi.order_id = o.order_id
+              WHERE qi.branch_id = :branch_id
+                AND o.order_status IN ('pending','preparing','rider_pending','picking_up','delivering')"
+        );
+        $liveIdsStmt->execute([':branch_id' => $branchId]);
+        $maxLiveOrderId = (int)$liveIdsStmt->fetchColumn();
+    } catch (PDOException $e) {
+        $maxLiveOrderId = 0;
+    }
 }
 
-$liveCount = count($activeOrders);
+// The chain that stretches to the footer:
+//   main.main-content (in header.php, flex: 1)
+//     → .content       (flex: 1, flex-column)
+//     → .kitchen-page  (flex: 1, flex-column)
+//     → .container     (flex: 1, flex-column)
+//     → .kitchen-orders (flex: 1)
+//     → footer sibling (flex-shrink: 0)
 ?>
-
-<link rel="stylesheet" href="../assets/css/orders.css">
-
 <div class="content kitchen-page" id="kitchenPage"
     data-csrf-token="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>"
     data-scope="<?php echo $isOwner ? 'owner' : 'branch'; ?>" data-branch-id="<?php echo $branchId; ?>"
     data-asset-base="<?php echo htmlspecialchars($assetBase, ENT_QUOTES, 'UTF-8'); ?>"
     data-handler-url="../backend/handlers/order-handler.php" data-chat-url="../backend/handlers/chat-handler.php"
-    data-max-order-id="<?php echo $maxLiveOrderId; ?>" data-live-count="<?php echo $liveCount; ?>">
+    data-max-order-id="<?php echo $maxLiveOrderId; ?>"
+    data-active-tab="<?php echo htmlspecialchars($activeTab, ENT_QUOTES, 'UTF-8'); ?>"
+    data-active-page="<?php echo (int)$pagination['page']; ?>"
+    data-per-page="<?php echo (int)KITCHEN_DEFAULT_PER_PAGE; ?>">
 
     <div class="container">
 
@@ -533,7 +913,8 @@ $liveCount = count($activeOrders);
                 <span class="kitchen-summary-label">Preparing</span>
             </div>
             <div class="kitchen-summary-tile">
-                <span class="kitchen-summary-count"><?php echo (int)($ownerSummary['rider_pending'] ?? 0); ?></span>
+                <span
+                    class="kitchen-summary-count"><?php echo (int)($ownerSummary['rider_pending'] ?? 0) + (int)($ownerSummary['picking_up'] ?? 0); ?></span>
                 <span class="kitchen-summary-label">Waiting on Rider</span>
             </div>
             <div class="kitchen-summary-tile">
@@ -587,7 +968,9 @@ $liveCount = count($activeOrders);
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($ownerBranchRows as $row): ?>
+                        <?php foreach ($ownerBranchRows as $row):
+                            $waitingFolded = (int)$row['rider_pending'] + (int)$row['picking_up'];
+                        ?>
                         <tr>
                             <td>
                                 <span class="kitchen-branch-name">
@@ -599,7 +982,7 @@ $liveCount = count($activeOrders);
                             </td>
                             <td class="is-numeric"><?php echo (int)$row['pending']; ?></td>
                             <td class="is-numeric"><?php echo (int)$row['preparing']; ?></td>
-                            <td class="is-numeric"><?php echo (int)$row['rider_pending']; ?></td>
+                            <td class="is-numeric"><?php echo $waitingFolded; ?></td>
                             <td class="is-numeric"><?php echo (int)$row['delivering']; ?></td>
                             <td class="is-numeric"><?php echo kitchenMoney($row['revenue_7d']); ?></td>
                         </tr>
@@ -612,56 +995,118 @@ $liveCount = count($activeOrders);
 
         <?php else: ?>
 
-        <div class="kitchen-tabs" role="tablist">
-            <button type="button" class="kitchen-tab active" data-filter="pending" role="tab" aria-selected="true">
-                New
-                <span class="kitchen-tab-count"><?php echo (int)$kitchenCounts['pending']; ?></span>
-            </button>
-            <button type="button" class="kitchen-tab" data-filter="preparing" role="tab" aria-selected="false">
-                Preparing
-                <span class="kitchen-tab-count"><?php echo (int)$kitchenCounts['preparing']; ?></span>
-            </button>
-            <button type="button" class="kitchen-tab" data-filter="rider_pending" role="tab" aria-selected="false">
-                Waiting on Rider
-                <span class="kitchen-tab-count"><?php echo (int)$kitchenCounts['rider_pending']; ?></span>
-            </button>
-            <button type="button" class="kitchen-tab" data-filter="delivering" role="tab" aria-selected="false">
-                Out for Delivery
-                <span class="kitchen-tab-count"><?php echo (int)$kitchenCounts['delivering']; ?></span>
-            </button>
-            <button type="button" class="kitchen-tab" data-filter="recent" role="tab" aria-selected="false">
-                Recent
-                <span class="kitchen-tab-count">
-                    <?php echo (int)$kitchenCounts['delivered_today'] + (int)$kitchenCounts['cancelled_today']; ?>
+        <!-- ============================================================
+             TAB BAR
+             ============================================================ -->
+        <nav class="kitchen-tabs" role="tablist" aria-label="Order status tabs">
+            <a href="kitchen.php?tab=new" class="kitchen-tab <?php echo $activeTab === 'new' ? 'active' : ''; ?>"
+                role="tab" aria-selected="<?php echo $activeTab === 'new' ? 'true' : 'false'; ?>"
+                aria-controls="panel-new" data-tab-link data-tab="new">
+                <span>New</span>
+                <span class="kitchen-tab-count" data-tab-count="new"><?php echo (int)$kitchenCounts['new']; ?></span>
+            </a>
+
+            <a href="kitchen.php?tab=preparing"
+                class="kitchen-tab <?php echo $activeTab === 'preparing' ? 'active' : ''; ?>" role="tab"
+                aria-selected="<?php echo $activeTab === 'preparing' ? 'true' : 'false'; ?>"
+                aria-controls="panel-preparing" data-tab-link data-tab="preparing">
+                <span>Preparing</span>
+                <span class="kitchen-tab-count"
+                    data-tab-count="preparing"><?php echo (int)$kitchenCounts['preparing']; ?></span>
+            </a>
+
+            <a href="kitchen.php?tab=waiting_on_rider"
+                class="kitchen-tab <?php echo $activeTab === 'waiting_on_rider' ? 'active' : ''; ?>" role="tab"
+                aria-selected="<?php echo $activeTab === 'waiting_on_rider' ? 'true' : 'false'; ?>"
+                aria-controls="panel-waiting_on_rider" data-tab-link data-tab="waiting_on_rider">
+                <span>Waiting on Rider</span>
+                <span class="kitchen-tab-count"
+                    data-tab-count="waiting_on_rider"><?php echo (int)$kitchenCounts['waiting_on_rider']; ?></span>
+            </a>
+
+            <a href="kitchen.php?tab=out_for_delivery"
+                class="kitchen-tab <?php echo $activeTab === 'out_for_delivery' ? 'active' : ''; ?>" role="tab"
+                aria-selected="<?php echo $activeTab === 'out_for_delivery' ? 'true' : 'false'; ?>"
+                aria-controls="panel-out_for_delivery" data-tab-link data-tab="out_for_delivery">
+                <span>Out for Delivery</span>
+                <span class="kitchen-tab-count"
+                    data-tab-count="out_for_delivery"><?php echo (int)$kitchenCounts['out_for_delivery']; ?></span>
+            </a>
+
+            <a href="kitchen.php?tab=recent" class="kitchen-tab <?php echo $activeTab === 'recent' ? 'active' : ''; ?>"
+                role="tab" aria-selected="<?php echo $activeTab === 'recent' ? 'true' : 'false'; ?>"
+                aria-controls="panel-recent" data-tab-link data-tab="recent">
+                <span>Recent</span>
+                <span class="kitchen-tab-count"
+                    data-tab-count="recent"><?php echo (int)$kitchenCounts['recent']; ?></span>
+            </a>
+        </nav>
+
+        <!-- ============================================================
+             NEW-ORDER PILL
+             ============================================================ -->
+        <div class="kitchen-new-order-pill" id="kitchenNewOrderPill" hidden>
+            <a href="kitchen.php?tab=<?php echo htmlspecialchars($activeTab, ENT_QUOTES, 'UTF-8'); ?>&page=1"
+                class="kitchen-new-order-link">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/update.svg" alt="" class="kitchen-new-order-icon"
+                    width="16" height="16"
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/update.svg'">
+                <span class="kitchen-new-order-text">
+                    <strong id="kitchenNewOrderCount">0</strong>
+                    new order<span id="kitchenNewOrderPlural">s</span> available
                 </span>
-            </button>
+                <span class="kitchen-new-order-cta">Refresh</span>
+            </a>
         </div>
 
-        <section class="kitchen-orders" id="kitchenOrderList" aria-label="Incoming orders">
-
-            <?php if (empty($activeOrders) && empty($completedOrders)): ?>
-            <div class="kitchen-empty-state">
-                <p class="kitchen-empty-title">No orders yet</p>
-                <p class="kitchen-empty-text">
-                    New orders will appear here as soon as they are placed.
-                </p>
-            </div>
-            <?php endif; ?>
+        <!-- ============================================================
+             ACTIVE PANEL
+             ============================================================ -->
+        <section class="kitchen-orders" id="kitchenOrderList"
+            aria-label="<?php echo htmlspecialchars(kitchenTabTitle($activeTab), ENT_QUOTES, 'UTF-8'); ?>"
+            data-active-tab="<?php echo htmlspecialchars($activeTab, ENT_QUOTES, 'UTF-8'); ?>"
+            data-active-page="<?php echo (int)$pagination['page']; ?>"
+            data-total-pages="<?php echo (int)$pagination['totalPages']; ?>">
 
             <?php
-            foreach ($activeOrders as $order) {
-                echo kitchenCardHtml($order, $assetBase, false);
-            }
-
-            foreach ($completedOrders as $order) {
-                echo kitchenCardHtml($order, $assetBase, true);
-            }
+            $panelOrders = $activeTab === 'recent' ? $completedOrders : $activeOrders;
             ?>
+
+            <?php if (empty($panelOrders)):
+                $emptyCopy = kitchenTabEmptyCopy($activeTab);
+            ?>
+            <div class="kitchen-empty-state"
+                data-empty-tab="<?php echo htmlspecialchars($activeTab, ENT_QUOTES, 'UTF-8'); ?>">
+                <p class="kitchen-empty-title"><?php echo htmlspecialchars($emptyCopy['title'], ENT_QUOTES, 'UTF-8'); ?>
+                </p>
+                <p class="kitchen-empty-text"><?php echo htmlspecialchars($emptyCopy['text'], ENT_QUOTES, 'UTF-8'); ?>
+                </p>
+            </div>
+            <?php else:
+                foreach ($panelOrders as $order) {
+                    echo kitchenCardHtml(
+                        $order,
+                        $assetBase,
+                        $activeTab === 'recent',
+                        false
+                    );
+                }
+            endif; ?>
 
         </section>
 
-        <div class="kitchen-modal" id="riderModal" style="display:none;" role="dialog" aria-modal="true"
-            aria-labelledby="riderModalTitle">
+        <?php
+        echo kitchenPaginationHtml(
+            $activeTab,
+            (int)$pagination['page'],
+            (int)$pagination['totalPages']
+        );
+        ?>
+
+        <!-- ============================================================
+             RIDER MODAL
+             ============================================================ -->
+        <div class="kitchen-modal" id="riderModal" role="dialog" aria-modal="true" aria-labelledby="riderModalTitle">
             <div class="kitchen-modal-overlay" data-close-modal="rider-modal"></div>
             <div class="kitchen-modal-content">
                 <div class="kitchen-modal-header">
@@ -678,48 +1123,70 @@ $liveCount = count($activeOrders);
                         Currently assigned: <strong id="riderModalCurrentRider"></strong>
                     </p>
 
-                    <?php if (empty($availableRiders)): ?>
-                    <div class="kitchen-empty-state">
-                        <p class="kitchen-empty-title">No riders available</p>
-                        <p class="kitchen-empty-text">
-                            Every verified rider is currently busy. Try again in a moment.
-                        </p>
-                    </div>
-                    <?php else: ?>
+                    <?php
+                    $shapedRiders = shapeAvailableRiderList($availableRiders);
+                    ?>
+
                     <ul class="kitchen-rider-list" id="riderList">
-                        <?php foreach ($availableRiders as $rider):
-                            $riderId     = (int)$rider['delivery_rider_id'];
-                            $riderName   = trim(
-                                (string)($rider['first_name'] ?? '') . ' ' .
-                                (string)($rider['last_name'] ?? '')
-                            );
-                            $riderMeta   = array_filter([
-                                (string)($rider['vehicle_type'] ?? ''),
-                                (string)($rider['vehicle_plate'] ?? ''),
-                                (string)($rider['rider_city'] ?? ''),
-                            ]);
-                            $riderRating = number_format((float)($rider['average_rating'] ?? 0), 1);
-                        ?>
+                        <?php if (empty($shapedRiders)): ?>
+                        <li class="kitchen-rider-empty">
+                            No riders available right now. Everyone is offline or at the active-order cap.
+                        </li>
+                        <?php else: ?>
+                        <?php foreach ($shapedRiders as $r): ?>
                         <li>
-                            <button type="button" class="kitchen-rider-option" data-rider-id="<?php echo $riderId; ?>"
-                                data-rider-name="<?php echo htmlspecialchars($riderName, ENT_QUOTES, 'UTF-8'); ?>">
+                            <button type="button" class="kitchen-rider-option"
+                                data-rider-id="<?php echo (int)$r['rider_id']; ?>"
+                                data-rider-name="<?php echo htmlspecialchars($r['name'], ENT_QUOTES, 'UTF-8'); ?>">
                                 <span class="kitchen-rider-name">
-                                    <?php echo htmlspecialchars($riderName !== '' ? $riderName : ('Rider #' . $riderId), ENT_QUOTES, 'UTF-8'); ?>
+                                    <?php echo htmlspecialchars($r['name'], ENT_QUOTES, 'UTF-8'); ?>
                                 </span>
                                 <span class="kitchen-rider-meta">
-                                    <?php echo htmlspecialchars(implode(' • ', $riderMeta), ENT_QUOTES, 'UTF-8'); ?>
+                                    <?php echo htmlspecialchars($r['meta'], ENT_QUOTES, 'UTF-8'); ?>
+                                    <?php if ($r['slot_label'] !== ''): ?>
+                                    <span class="kitchen-rider-capacity">
+                                        (<?php echo htmlspecialchars($r['slot_label'], ENT_QUOTES, 'UTF-8'); ?>)
+                                    </span>
+                                    <?php endif; ?>
                                 </span>
                                 <span class="kitchen-rider-rating">
                                     <img src="<?php echo $assetBase; ?>assets/images/icons/star-fill.svg" alt="Rating"
                                         width="14" height="14"
                                         onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/star-empty.svg'">
-                                    <?php echo $riderRating; ?>
+                                    <?php echo htmlspecialchars($r['rating'], ENT_QUOTES, 'UTF-8'); ?>
                                 </span>
                             </button>
                         </li>
                         <?php endforeach; ?>
+                        <?php endif; ?>
                     </ul>
-                    <?php endif; ?>
+
+                    <div id="riderModalFallback" hidden>
+                        <?php if (empty($shapedRiders)): ?>
+                        <div class="kitchen-rider-empty">
+                            No riders available right now. Everyone is offline or at the active-order cap.
+                        </div>
+                        <?php else: ?>
+                        <?php foreach ($shapedRiders as $r): ?>
+                        <div class="kitchen-rider-option-fallback" data-rider-id="<?php echo (int)$r['rider_id']; ?>">
+                            <span class="kitchen-rider-name">
+                                <?php echo htmlspecialchars($r['name'], ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                            <span class="kitchen-rider-meta">
+                                <?php echo htmlspecialchars($r['meta'], ENT_QUOTES, 'UTF-8'); ?>
+                                <?php if ($r['slot_label'] !== ''): ?>
+                                <span class="kitchen-rider-capacity">
+                                    (<?php echo htmlspecialchars($r['slot_label'], ENT_QUOTES, 'UTF-8'); ?>)
+                                </span>
+                                <?php endif; ?>
+                            </span>
+                            <span class="kitchen-rider-rating">
+                                <?php echo htmlspecialchars($r['rating'], ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                        </div>
+                        <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
                 </div>
 
                 <div class="kitchen-modal-footer">
@@ -728,7 +1195,10 @@ $liveCount = count($activeOrders);
             </div>
         </div>
 
-        <div class="kitchen-modal" id="confirmModal" style="display:none;" role="dialog" aria-modal="true"
+        <!-- ============================================================
+             CONFIRM MODAL
+             ============================================================ -->
+        <div class="kitchen-modal" id="confirmModal" role="dialog" aria-modal="true"
             aria-labelledby="confirmModalTitle">
             <div class="kitchen-modal-overlay" data-close-modal="confirm-modal"></div>
             <div class="kitchen-modal-content kitchen-confirm-content">
@@ -752,7 +1222,6 @@ $liveCount = count($activeOrders);
         </div>
 
         <?php
-        // Chat modal — branch view only. Owner view is read-only.
         require_once __DIR__ . '/../includes/chat-modal.php';
         ?>
 
@@ -760,13 +1229,8 @@ $liveCount = count($activeOrders);
     </div>
 </div>
 
-<script>
-window.RESTAURANT_CSRF_TOKEN = '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>';
-window.RESTAURANT_ASSET_BASE = '<?php echo $assetBase; ?>';
-</script>
-<script src="../assets/ui/js/orders.js" defer></script>
-
 <?php if (!$isOwner): ?>
+<script src="../assets/ui/js/orders.js" defer></script>
 <script src="../assets/ui/js/kitchen-realtime.js" defer></script>
 <?php endif; ?>
 

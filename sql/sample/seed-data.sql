@@ -1,61 +1,108 @@
 -- =====================================================
 -- FitPal Seed Data
--- Version 5.5
+-- Version 5.8
 --
--- ALIGNED WITH: fitpal_food_delivery schema v1.1.0
+-- ALIGNED WITH: fitpal_food_delivery schema v1.3.0
 --   - customer_address is a CHILD of customer
 --   - delivery_rider_address is a CHILD of delivery_rider
 --   - product_composition has NO max_quantity_per_item
 --   - feedback UNIQUE is (order_id, product_id)
 --   - cart UNIQUE includes customization_hash
 --   - delivery_rider_emergency_contact (no is_primary; earliest id = primary)
---   - delivery_rider_document (drivers_license path + issue_date + expiry_date)
+--   - delivery_rider_document (id_type + id_path + issue_date + expiry_date)
 --   - restaurant_permit (file_path + original_name + display_order)
+--   - order_status includes 'picking_up' between 'rider_pending'
+--     and 'delivering' (v1.3.0)
 --
--- v5.5 changes
+-- v5.8 changes
 -- ------------
---   * ALL financial_account balances set to 0.00 (customer wallet,
---     restaurant branches, riders). No seeded money.
---   * ALL delivery_rider_profile.is_available set to 0 for every
---     rider (Carlos, Miguel, Andrei). Riders must toggle themselves
---     available after sign-in.
---   * V11 verification extended to surface is_available alongside
---     profile_picture so the zero-availability state is visible
---     from the seed output.
---   * V15 and V16 added to catch seeded money and pre-available
---     riders respectively.
+--   * No data values changed. This revision only tracks the schema
+--     bump from v1.2.0 to v1.3.0.
+--
+--   * New PRINCIPLE 11 documents the per-rider concurrent-order
+--     cap that v1.3.0 introduced. Any future seed that inserts
+--     live orders must respect it: no rider may be pre-seeded
+--     with more than 3 orders across the 'rider_pending',
+--     'picking_up', and 'delivering' statuses. The current seed
+--     inserts zero live orders, so the cap is trivially satisfied,
+--     but the rule is stated here so it is not forgotten.
+--
+--   * The header comment now names the 'picking_up' status so a
+--     future seed author inserting demo orders knows it exists
+--     and where it sits in the lifecycle.
+--
+--   * delivery_rider_document inserts are unchanged from v5.7.
+--     Each rider carries a document whose id_type reflects what
+--     they submitted:
+--       - Carlos (motorcycle) → 'drivers_license'
+--       - Miguel (car)        → 'drivers_license'
+--       - Andrei (bicycle)    → 'national_id'
+--
+-- v5.7 changes (retained)
+-- -----------------------
+--   * delivery_rider_document inserts rewritten for the
+--     generalized schema. id_type + id_path replace the old
+--     single drivers_license column.
+--   * For the bicycle rider, issue_date and expiry_date are NULL
+--     because a national ID may not display either.
+--   * Document paths point at the per-rider upload layout:
+--       shared/uploads/rider/documents/<rider_id>/<file>
+--   * V17 verification added to confirm every rider has a
+--     document row and that id_type is never NULL.
+--   * V18 verification added to confirm no bicycle rider carries
+--     a 'drivers_license' id_type.
+--
+-- v5.6 changes (retained)
+-- -----------------------
+--   * Product descriptions include a realistic per-serving
+--     nutrition block.
+--   * Rider document paths corrected to point at real manifest files.
+--   * Restaurant permit paths corrected to point at real manifest files.
+--
+-- v5.5 changes (retained)
+-- -----------------------
+--   * ALL financial_account balances set to 0.00.
+--   * ALL delivery_rider_profile.is_available set to 0.
 --
 -- v5.4 changes (retained)
 -- -----------------------
 --   + Section 4.5: restaurant_permit rows for all three seeded
 --     restaurants. Three permits each, display_order 0..2.
---   + Permit file_path values use the SAME prefix the handler
---     writes ('shared/uploads/restaurant-permits/...').
---   + Permit original_name is never NULL (schema NOT NULL).
---   + Verification queries V12–V14 added at the end.
 --
 -- PREREQUISITE
 -- ------------
--- Four SVG placeholder files must exist on disk:
---   shared/uploads/restaurant-permits/placeholder-dti.svg
---   shared/uploads/restaurant-permits/placeholder-mayors-permit.svg
---   shared/uploads/restaurant-permits/placeholder-sanitary.svg
---   shared/uploads/restaurant-permits/placeholder-business.svg
--- Plus one rider license placeholder:
---   uploads/riders/documents/placeholder-license.svg
+-- The following files must exist on disk:
+--   shared/assets/images/manifest/permits/business-permit.png
+--   shared/assets/images/manifest/permits/sanitary-permit.jpg
+--   shared/assets/images/manifest/drivers-license/drivers-license-1.jpg
+--   shared/assets/images/manifest/drivers-license/drivers-license-2.jpg
+--   shared/assets/images/manifest/national-id/national-id-1.jpg
+--
+--   The seed inserts reference these under shared/uploads/rider/
+--   documents/<rider_id>/ — copy the manifest files to those paths
+--   before running the seed, or the file-existence verification
+--   step in deployment tooling will flag them.
 --
 -- PRINCIPLES
---   1. Every account gets at least one address row.
---   2. All FK variables captured via LAST_INSERT_ID().
---   3. Passwords stored as PLAINTEXT for the demo. DO NOT use
---      in production.
---   4. dietary_information.calories for customizable products
---      is DERIVED at the end (Section 9).
---   5. Every choice group has exactly one is_required = 1 row.
---   6. Every rider gets one emergency contact + one license
---      document row. profile_picture stays NULL.
---   7. Every restaurant gets three permit rows.
---   8. (v5.5) NO seeded money. NO rider pre-marked available.
+--   1.  Every account gets at least one address row.
+--   2.  All FK variables captured via LAST_INSERT_ID().
+--   3.  Passwords stored as PLAINTEXT for the demo. DO NOT use
+--       in production.
+--   4.  dietary_information.calories for customizable products
+--       is DERIVED at the end (Section 9).
+--   5.  Every choice group has exactly one is_required = 1 row.
+--   6.  Every rider gets one emergency contact + one identity
+--       document row. profile_picture stays NULL.
+--   7.  Every restaurant gets three permit rows.
+--   8.  (v5.5) NO seeded money. NO rider pre-marked available.
+--   9.  (v5.6) Product descriptions carry a full nutrition block.
+--  10.  (v5.7) Bicycle riders submit a non-driver's-license ID.
+--  11.  (v5.8) No rider is pre-seeded with more than 3 orders
+--       across 'rider_pending' + 'picking_up' + 'delivering'.
+--       The current seed inserts zero live orders, so the cap is
+--       trivially satisfied; the rule exists so a future seed
+--       that DOES insert live orders does not silently violate
+--       the schema's rider cap.
 -- =====================================================
 
 USE fitpal_food_delivery;
@@ -160,9 +207,9 @@ INSERT INTO
         is_active
     )
 VALUES (
-        'User',
+        'Peter',
         NULL,
-        'User',
+        'Parker',
         'user@example.com',
         '09123456789',
         'user',
@@ -226,7 +273,7 @@ SET @customer_address_id = LAST_INSERT_ID();
 -- =====================================================
 
 -- -----------------------------------------------------
--- 4.1 Green Bowl Cafe — plant-forward, vegan-leaning
+-- 4.1 Green Bowl Cafe - plant-forward, vegan-leaning
 -- -----------------------------------------------------
 INSERT INTO
     restaurant (
@@ -276,7 +323,7 @@ VALUES (
 
 SET @branch1_id = LAST_INSERT_ID();
 
--- Owner (branch_id NULL — owner spans all branches)
+-- Owner (branch_id NULL - owner spans all branches)
 INSERT INTO
     restaurant_account (
         restaurant_id,
@@ -381,25 +428,25 @@ INSERT INTO
     )
 VALUES (
         @rest1_id,
-        'shared/uploads/restaurant-permits/placeholder-dti.svg',
-        'DTI-Certificate-of-Business-Name.svg',
+        'shared/assets/images/manifest/permits/business-permit.png',
+        'DTI-Certificate-of-Business-Name.png',
         0
     ),
     (
         @rest1_id,
-        'shared/uploads/restaurant-permits/placeholder-mayors-permit.svg',
-        'Mayors-Permit-2026.svg',
+        'shared/assets/images/manifest/permits/business-permit.png',
+        'Mayors-Permit-2026.png',
         1
     ),
     (
         @rest1_id,
-        'shared/uploads/restaurant-permits/placeholder-sanitary.svg',
-        'Sanitary-Permit.svg',
+        'shared/assets/images/manifest/permits/sanitary-permit.jpg',
+        'Sanitary-Permit.jpg',
         2
     );
 
 -- -----------------------------------------------------
--- 4.2 Keto Kitchen — high-fat, low-carb
+-- 4.2 Keto Kitchen - high-fat, low-carb
 -- -----------------------------------------------------
 INSERT INTO
     restaurant (
@@ -551,25 +598,25 @@ INSERT INTO
     )
 VALUES (
         @rest2_id,
-        'shared/uploads/restaurant-permits/placeholder-dti.svg',
-        'DTI-Registration-Keto-Kitchen.svg',
+        'shared/assets/images/manifest/permits/business-permit.png',
+        'DTI-Registration-Keto-Kitchen.png',
         0
     ),
     (
         @rest2_id,
-        'shared/uploads/restaurant-permits/placeholder-business.svg',
-        'Business-Permit-Makati.svg',
+        'shared/assets/images/manifest/permits/business-permit.png',
+        'Business-Permit-Makati.png',
         1
     ),
     (
         @rest2_id,
-        'shared/uploads/restaurant-permits/placeholder-sanitary.svg',
-        'Sanitary-Permit-KK.svg',
+        'shared/assets/images/manifest/permits/sanitary-permit.jpg',
+        'Sanitary-Permit-KK.jpg',
         2
     );
 
 -- -----------------------------------------------------
--- 4.3 Asian Fusion Fit — gluten-free Asian, halal-friendly
+-- 4.3 Asian Fusion Fit - gluten-free Asian, halal-friendly
 -- -----------------------------------------------------
 INSERT INTO
     restaurant (
@@ -721,28 +768,39 @@ INSERT INTO
     )
 VALUES (
         @rest3_id,
-        'shared/uploads/restaurant-permits/placeholder-dti.svg',
-        'DTI-AFF-Registration.svg',
+        'shared/assets/images/manifest/permits/business-permit.png',
+        'DTI-AFF-Registration.png',
         0
     ),
     (
         @rest3_id,
-        'shared/uploads/restaurant-permits/placeholder-mayors-permit.svg',
-        'Mayors-Permit-Quezon-City.svg',
+        'shared/assets/images/manifest/permits/business-permit.png',
+        'Mayors-Permit-Quezon-City.png',
         1
     ),
     (
         @rest3_id,
-        'shared/uploads/restaurant-permits/placeholder-business.svg',
-        'Business-Permit-AFF.svg',
+        'shared/assets/images/manifest/permits/sanitary-permit.jpg',
+        'Business-Permit-AFF.jpg',
         2
     );
 
 -- -----------------------------------------------------
 -- 4.4 Delivery riders (3) + profiles + addresses
---     + emergency contacts + license documents
+--     + emergency contacts + identity documents
 --
 --     v5.5: ALL riders seeded with is_available = 0.
+--     v5.7: Identity documents use the generalized schema:
+--             id_type + id_path + issue_date + expiry_date.
+--           Motor-vehicle riders submit 'drivers_license'.
+--           Bicycle rider submits 'national_id' with NULL dates.
+--           Paths point at shared/uploads/rider/documents/<id>/.
+--     v5.8: No rider is seeded with any live order. The schema
+--           v1.3.0 cap of 3 concurrent orders per rider
+--           (rider_pending + picking_up + delivering) is
+--           therefore trivially satisfied by this seed. If a
+--           future revision adds demo orders, that revision must
+--           keep every rider at or below the cap.
 -- -----------------------------------------------------
 
 -- Rider 1: Motorcycle, verified, NOT available
@@ -849,17 +907,28 @@ VALUES (
         '88 Rider Hub, Barangay Poblacion, Makati, Metro Manila'
     );
 
--- Rider 1 driver's license document (SVG placeholder path)
+-- Rider 1 identity document: driver's license.
+-- Path follows the per-rider upload layout:
+--   shared/uploads/rider/documents/<rider_id>/<filename>
+-- Filenames mirror what the sign-up handler writes
+-- (MM_DD_YYYY_<n>.<ext>) so the on-disk shape and the DB
+-- row describe the same kind of file.
 INSERT INTO
     delivery_rider_document (
         delivery_rider_id,
-        drivers_license,
+        id_type,
+        id_path,
         issue_date,
         expiry_date
     )
 VALUES (
         @rider1_id,
-        'uploads/riders/documents/placeholder-license.svg',
+        'drivers_license',
+        CONCAT(
+            'shared/uploads/rider/documents/',
+            @rider1_id,
+            '/06_15_2021_0.jpg'
+        ),
         '2021-06-15',
         DATE_ADD(CURDATE(), INTERVAL 10 YEAR)
     );
@@ -968,22 +1037,34 @@ VALUES (
         '22-D Mabini Ave., Barangay Bel-Air, Makati, Metro Manila'
     );
 
--- Rider 2 driver's license document (SVG placeholder path)
+-- Rider 2 identity document: driver's license.
 INSERT INTO
     delivery_rider_document (
         delivery_rider_id,
-        drivers_license,
+        id_type,
+        id_path,
         issue_date,
         expiry_date
     )
 VALUES (
         @rider2_id,
-        'uploads/riders/documents/placeholder-license.svg',
+        'drivers_license',
+        CONCAT(
+            'shared/uploads/rider/documents/',
+            @rider2_id,
+            '/11_03_2020_0.jpg'
+        ),
         '2020-11-03',
         DATE_ADD(CURDATE(), INTERVAL 10 YEAR)
     );
 
 -- Rider 3: Bicycle, pending, NOT available
+--
+-- Because the vehicle is a bicycle, this rider cannot submit a
+-- driver's license. They submit a national ID instead. A national
+-- ID card in the Philippines does not carry an issue date or an
+-- expiry date on its face, so both columns are NULL here. NULL
+-- means "not applicable", not "missing".
 INSERT INTO
     delivery_rider (
         first_name,
@@ -1087,19 +1168,28 @@ VALUES (
         '5-B Luna St., Barangay Kamuning, Quezon City, Metro Manila'
     );
 
--- Rider 3 driver's license document (SVG placeholder path)
+-- Rider 3 identity document: national ID.
+-- issue_date and expiry_date are NULL because a Philippine
+-- national ID does not expose either date. The admin review
+-- view treats a NULL expiry as 'valid' for id_state.
 INSERT INTO
     delivery_rider_document (
         delivery_rider_id,
-        drivers_license,
+        id_type,
+        id_path,
         issue_date,
         expiry_date
     )
 VALUES (
         @rider3_id,
-        'uploads/riders/documents/placeholder-license.svg',
-        '2024-02-20',
-        DATE_ADD(CURDATE(), INTERVAL 10 YEAR)
+        'national_id',
+        CONCAT(
+            'shared/uploads/rider/documents/',
+            @rider3_id,
+            '/02_20_2024_0.jpg'
+        ),
+        NULL,
+        NULL
     );
 
 -- =====================================================
@@ -1110,7 +1200,7 @@ VALUES (
 -- a single-row INSERT so nothing depends on MAX() arithmetic.
 
 -- -----------------------------------------------------
--- Green Bowl Cafe — 10 rows
+-- Green Bowl Cafe - 10 rows
 -- -----------------------------------------------------
 INSERT INTO
     dietary_information (
@@ -1333,7 +1423,7 @@ VALUES (
 SET @diet10_id = LAST_INSERT_ID();
 
 -- -----------------------------------------------------
--- Keto Kitchen — 10 rows
+-- Keto Kitchen - 10 rows
 -- -----------------------------------------------------
 INSERT INTO
     dietary_information (
@@ -1556,7 +1646,7 @@ VALUES (
 SET @diet20_id = LAST_INSERT_ID();
 
 -- -----------------------------------------------------
--- Asian Fusion Fit — 10 rows
+-- Asian Fusion Fit - 10 rows
 -- -----------------------------------------------------
 INSERT INTO
     dietary_information (
@@ -2327,9 +2417,16 @@ SET
 -- Note: For customizable products, dietary_information.calories
 -- is DERIVED in Section 9. The value we put here is a placeholder
 -- that will be overwritten.
+--
+-- v5.6: Each description now carries a per-serving nutrition
+-- block derived from the product's default ingredient build.
+-- Values use a 2,000 kcal reference daily value (DV):
+--   Protein DV = 50g, Carbs DV = 275g, Fat DV = 78g,
+--   Fiber DV = 28g, Vitamin A DV = 900mcg, Vitamin C DV = 90mg.
+-- Sugars have no established DV and are shown in grams only.
 
 -- -----------------------------------------------------
--- Green Bowl Cafe — 10 products
+-- Green Bowl Cafe - 10 products
 -- -----------------------------------------------------
 INSERT INTO
     product (
@@ -2348,7 +2445,17 @@ VALUES (
         @branch1_id,
         @diet1_id,
         'Garden Harvest Bowl',
-        'A vibrant bowl built on a warm grain base with a choice of protein and a rotating cast of seasonal vegetables. Bright, balanced, and filling without being heavy.',
+        'A vibrant bowl built on a warm grain base with a choice of protein and a rotating cast of seasonal vegetables. Bright, balanced, and filling without being heavy.
+
+Per serving (default build):
+Calories: 390 kcal
+Protein: 39g (78% DV)
+Carbs: 45g (16% DV)
+Fat: 10.5g (13% DV)
+Dietary Fiber: 6g (21% DV)
+Sugars: 3g
+Vitamin A: 420mcg (47% DV)
+Vitamin C: 18mg (20% DV)',
         220.00,
         100,
         1,
@@ -2376,7 +2483,17 @@ VALUES (
         @branch1_id,
         @diet2_id,
         'Market Greens Salad',
-        'A crisp, refreshing salad built on a bed of fresh greens with layered proteins and a light house dressing. Designed to be adjusted to your own taste.',
+        'A crisp, refreshing salad built on a bed of fresh greens with layered proteins and a light house dressing. Designed to be adjusted to your own taste.
+
+Per serving (default build):
+Calories: 210 kcal
+Protein: 5g (10% DV)
+Carbs: 12g (4% DV)
+Fat: 8.5g (11% DV)
+Dietary Fiber: 4g (14% DV)
+Sugars: 2g
+Vitamin A: 380mcg (42% DV)
+Vitamin C: 22mg (24% DV)',
         180.00,
         80,
         1,
@@ -2404,7 +2521,17 @@ VALUES (
         @branch1_id,
         @diet7_id,
         'Morning Power Smoothie',
-        'A thick, spoonable smoothie built for breakfast or a post-workout refill. Choose your base, mix-ins, and protein add-ons to match your goals.',
+        'A thick, spoonable smoothie built for breakfast or a post-workout refill. Choose your base, mix-ins, and protein add-ons to match your goals.
+
+Per serving (default build):
+Calories: 415 kcal
+Protein: 8g (16% DV)
+Carbs: 48g (17% DV)
+Fat: 8g (10% DV)
+Dietary Fiber: 7g (25% DV)
+Sugars: 5g
+Vitamin A: 90mcg (10% DV)
+Vitamin C: 8mg (9% DV)',
         190.00,
         60,
         1,
@@ -2432,7 +2559,17 @@ VALUES (
         @branch1_id,
         @diet3_id,
         'Classic Vegan Bowl',
-        'A simple, satisfying bowl of seasoned tofu over brown rice with fresh seasonal vegetables. A go-to for plant-based regulars.',
+        'A simple, satisfying bowl of seasoned tofu over brown rice with fresh seasonal vegetables. A go-to for plant-based regulars.
+
+Per serving:
+Calories: 280 kcal
+Protein: 12g (24% DV)
+Carbs: 38g (14% DV)
+Fat: 8g (10% DV)
+Dietary Fiber: 6g (21% DV)
+Sugars: 2g
+Vitamin A: 210mcg (23% DV)
+Vitamin C: 14mg (16% DV)',
         220.00,
         20,
         0,
@@ -2458,7 +2595,17 @@ VALUES (
         @branch1_id,
         @diet4_id,
         'Edamame Citrus Salad',
-        'Steamed edamame tossed with a bright citrus vinaigrette over fresh greens. Light, clean, and packed with plant protein.',
+        'Steamed edamame tossed with a bright citrus vinaigrette over fresh greens. Light, clean, and packed with plant protein.
+
+Per serving:
+Calories: 290 kcal
+Protein: 18g (36% DV)
+Carbs: 22g (8% DV)
+Fat: 14g (18% DV)
+Dietary Fiber: 8g (29% DV)
+Sugars: 4g
+Vitamin A: 160mcg (18% DV)
+Vitamin C: 26mg (29% DV)',
         130.00,
         30,
         0,
@@ -2484,7 +2631,17 @@ VALUES (
         @branch1_id,
         @diet5_id,
         'Zucchini Noodle Pesto',
-        'Spiralized zucchini tossed with basil pesto and blistered cherry tomatoes. A low-carb take on a pasta night classic.',
+        'Spiralized zucchini tossed with basil pesto and blistered cherry tomatoes. A low-carb take on a pasta night classic.
+
+Per serving:
+Calories: 120 kcal
+Protein: 4g (8% DV)
+Carbs: 15g (5% DV)
+Fat: 4g (5% DV)
+Dietary Fiber: 3g (11% DV)
+Sugars: 3g
+Vitamin A: 140mcg (16% DV)
+Vitamin C: 20mg (22% DV)',
         260.00,
         12,
         0,
@@ -2510,7 +2667,17 @@ VALUES (
         @branch1_id,
         @diet8_id,
         'Sunrise Breakfast Bowl',
-        'A warm breakfast bowl with quinoa, soft-scrambled eggs, and vegetables. A gentle start to the day that still keeps you full.',
+        'A warm breakfast bowl with quinoa, soft-scrambled eggs, and vegetables. A gentle start to the day that still keeps you full.
+
+Per serving (default build):
+Calories: 420 kcal
+Protein: 32g (64% DV)
+Carbs: 18g (7% DV)
+Fat: 22g (28% DV)
+Dietary Fiber: 5g (18% DV)
+Sugars: 2g
+Vitamin A: 310mcg (34% DV)
+Vitamin C: 12mg (13% DV)',
         240.00,
         75,
         1,
@@ -2538,7 +2705,17 @@ VALUES (
         @branch1_id,
         @diet10_id,
         'Seaside Poke Bowl',
-        'A fresh poke-style bowl with cubed salmon, crisp vegetables, and a sesame-soy finish. Bright, clean, and easy to adjust.',
+        'A fresh poke-style bowl with cubed salmon, crisp vegetables, and a sesame-soy finish. Bright, clean, and easy to adjust.
+
+Per serving (default build):
+Calories: 380 kcal
+Protein: 38g (76% DV)
+Carbs: 42g (15% DV)
+Fat: 18.5g (24% DV)
+Dietary Fiber: 4g (14% DV)
+Sugars: 3g
+Vitamin A: 180mcg (20% DV)
+Vitamin C: 16mg (18% DV)',
         350.00,
         70,
         1,
@@ -2566,7 +2743,17 @@ VALUES (
         @branch1_id,
         @diet9_id,
         'Superfood Buddha Bowl',
-        'A colorful bowl of kale, roasted sweet potato, and chickpeas finished with a turmeric-tahini sauce. Vegan, gluten-free, and rich in fiber.',
+        'A colorful bowl of kale, roasted sweet potato, and chickpeas finished with a turmeric-tahini sauce. Vegan, gluten-free, and rich in fiber.
+
+Per serving:
+Calories: 350 kcal
+Protein: 16g (32% DV)
+Carbs: 28g (10% DV)
+Fat: 16g (21% DV)
+Dietary Fiber: 9g (32% DV)
+Sugars: 4g
+Vitamin A: 680mcg (76% DV)
+Vitamin C: 34mg (38% DV)',
         350.00,
         8,
         0,
@@ -2592,7 +2779,17 @@ VALUES (
         @branch1_id,
         @diet6_id,
         'Berry Almond Smoothie',
-        'A blended smoothie of mixed berries, plant-based protein, and almond milk. Naturally sweet, dairy-free, and filling.',
+        'A blended smoothie of mixed berries, plant-based protein, and almond milk. Naturally sweet, dairy-free, and filling.
+
+Per serving:
+Calories: 180 kcal
+Protein: 8g (16% DV)
+Carbs: 12g (4% DV)
+Fat: 14g (18% DV)
+Dietary Fiber: 4g (14% DV)
+Sugars: 6g
+Vitamin A: 60mcg (7% DV)
+Vitamin C: 18mg (20% DV)',
         190.00,
         10,
         0,
@@ -2602,7 +2799,7 @@ VALUES (
     );
 
 -- -----------------------------------------------------
--- Keto Kitchen — 10 products
+-- Keto Kitchen - 10 products
 -- -----------------------------------------------------
 INSERT INTO
     product (
@@ -2621,7 +2818,17 @@ VALUES (
         @branch2_id,
         @diet11_id,
         'Keto Power Bowl',
-        'A hearty, low-carb bowl built on cauliflower rice with a choice of protein, healthy fats, and greens. Designed to keep you full without the carbs.',
+        'A hearty, low-carb bowl built on cauliflower rice with a choice of protein, healthy fats, and greens. Designed to keep you full without the carbs.
+
+Per serving (default build):
+Calories: 510 kcal
+Protein: 52g (104% DV)
+Carbs: 12g (4% DV)
+Fat: 38g (49% DV)
+Dietary Fiber: 7g (25% DV)
+Sugars: 3g
+Vitamin A: 480mcg (53% DV)
+Vitamin C: 24mg (27% DV)',
         480.00,
         90,
         1,
@@ -2649,7 +2856,17 @@ VALUES (
         @branch2_id,
         @diet14_id,
         'Keto Smash Burger',
-        'A juicy beef patty with melted cheese and crisp lettuce, served bunless or with a keto-friendly wrap. Customizable down to the toppings.',
+        'A juicy beef patty with melted cheese and crisp lettuce, served bunless or with a keto-friendly wrap. Customizable down to the toppings.
+
+Per serving (default build):
+Calories: 520 kcal
+Protein: 48g (96% DV)
+Carbs: 6g (2% DV)
+Fat: 36g (46% DV)
+Dietary Fiber: 2g (7% DV)
+Sugars: 1g
+Vitamin A: 320mcg (36% DV)
+Vitamin C: 6mg (7% DV)',
         450.00,
         70,
         1,
@@ -2677,7 +2894,17 @@ VALUES (
         @branch2_id,
         @diet18_id,
         'Keto Garden Salad',
-        'A low-carb salad built on a bed of spinach with a choice of protein and fresh vegetables. Light but satisfying.',
+        'A low-carb salad built on a bed of spinach with a choice of protein and fresh vegetables. Light but satisfying.
+
+Per serving (default build):
+Calories: 620 kcal
+Protein: 56g (112% DV)
+Carbs: 4g (1% DV)
+Fat: 46g (59% DV)
+Dietary Fiber: 3g (11% DV)
+Sugars: 1g
+Vitamin A: 520mcg (58% DV)
+Vitamin C: 14mg (16% DV)',
         380.00,
         85,
         1,
@@ -2705,7 +2932,17 @@ VALUES (
         @branch2_id,
         @diet12_id,
         'Keto Steak Plate',
-        'Grilled ribeye with buttered asparagus and a creamy cauliflower mash. A full keto plate with no compromises.',
+        'Grilled ribeye with buttered asparagus and a creamy cauliflower mash. A full keto plate with no compromises.
+
+Per serving:
+Calories: 480 kcal
+Protein: 38g (76% DV)
+Carbs: 8g (3% DV)
+Fat: 34g (44% DV)
+Dietary Fiber: 2g (7% DV)
+Sugars: 1g
+Vitamin A: 280mcg (31% DV)
+Vitamin C: 10mg (11% DV)',
         550.00,
         8,
         0,
@@ -2731,7 +2968,17 @@ VALUES (
         @branch2_id,
         @diet13_id,
         'Egg & Avocado Bowl',
-        'Soft-scrambled eggs with sliced avocado, crispy bacon, and a touch of cheddar. A simple, high-fat breakfast or brunch.',
+        'Soft-scrambled eggs with sliced avocado, crispy bacon, and a touch of cheddar. A simple, high-fat breakfast or brunch.
+
+Per serving:
+Calories: 200 kcal
+Protein: 12g (24% DV)
+Carbs: 4g (1% DV)
+Fat: 16g (21% DV)
+Dietary Fiber: 1g (4% DV)
+Sugars: 0g
+Vitamin A: 240mcg (27% DV)
+Vitamin C: 4mg (4% DV)',
         380.00,
         12,
         0,
@@ -2757,7 +3004,17 @@ VALUES (
         @branch2_id,
         @diet20_id,
         'Chicken Parmesan Plate',
-        'Grilled chicken breast topped with parmesan and a rich marinara, served with sautéed greens. Keto-friendly and deeply savory.',
+        'Grilled chicken breast topped with parmesan and a rich marinara, served with sautéed greens. Keto-friendly and deeply savory.
+
+Per serving:
+Calories: 540 kcal
+Protein: 50g (100% DV)
+Carbs: 5g (2% DV)
+Fat: 38g (49% DV)
+Dietary Fiber: 2g (7% DV)
+Sugars: 2g
+Vitamin A: 360mcg (40% DV)
+Vitamin C: 12mg (13% DV)',
         430.00,
         6,
         0,
@@ -2783,7 +3040,17 @@ VALUES (
         @branch2_id,
         @diet17_id,
         'Keto Butcher Plate',
-        'A customizable keto plate with your choice of protein and sides. Built for people who want control over their macros.',
+        'A customizable keto plate with your choice of protein and sides. Built for people who want control over their macros.
+
+Per serving (default build):
+Calories: 140 kcal
+Protein: 16g (32% DV)
+Carbs: 3g (1% DV)
+Fat: 12g (15% DV)
+Dietary Fiber: 1g (4% DV)
+Sugars: 0g
+Vitamin A: 180mcg (20% DV)
+Vitamin C: 3mg (3% DV)',
         500.00,
         65,
         1,
@@ -2811,7 +3078,17 @@ VALUES (
         @branch2_id,
         @diet16_id,
         'Keto Cauliflower Pizza',
-        'A cauliflower-crust pizza topped with cheddar, parmesan, and grilled chicken. Customizable with extra keto toppings.',
+        'A cauliflower-crust pizza topped with cheddar, parmesan, and grilled chicken. Customizable with extra keto toppings.
+
+Per serving (default build):
+Calories: 500 kcal
+Protein: 42g (84% DV)
+Carbs: 8g (3% DV)
+Fat: 34g (44% DV)
+Dietary Fiber: 3g (11% DV)
+Sugars: 2g
+Vitamin A: 300mcg (33% DV)
+Vitamin C: 8mg (9% DV)',
         420.00,
         60,
         1,
@@ -2839,7 +3116,17 @@ VALUES (
         @branch2_id,
         @diet19_id,
         'Salmon Dill Plate',
-        'Pan-seared salmon finished with a dill cream sauce and sautéed spinach. Rich, silky, and low-carb.',
+        'Pan-seared salmon finished with a dill cream sauce and sautéed spinach. Rich, silky, and low-carb.
+
+Per serving:
+Calories: 110 kcal
+Protein: 3g (6% DV)
+Carbs: 6g (2% DV)
+Fat: 8g (10% DV)
+Dietary Fiber: 2g (7% DV)
+Sugars: 1g
+Vitamin A: 220mcg (24% DV)
+Vitamin C: 5mg (6% DV)',
         490.00,
         15,
         0,
@@ -2865,7 +3152,17 @@ VALUES (
         @branch2_id,
         @diet15_id,
         'Shrimp Scampi Zoodles',
-        'Garlic-butter shrimp over zucchini noodles with a light lemon finish. Keto, gluten-free, and bright.',
+        'Garlic-butter shrimp over zucchini noodles with a light lemon finish. Keto, gluten-free, and bright.
+
+Per serving:
+Calories: 250 kcal
+Protein: 8g (16% DV)
+Carbs: 5g (2% DV)
+Fat: 22g (28% DV)
+Dietary Fiber: 1g (4% DV)
+Sugars: 2g
+Vitamin A: 140mcg (16% DV)
+Vitamin C: 8mg (9% DV)',
         530.00,
         9,
         0,
@@ -2875,7 +3172,7 @@ VALUES (
     );
 
 -- -----------------------------------------------------
--- Asian Fusion Fit — 10 products
+-- Asian Fusion Fit - 10 products
 -- -----------------------------------------------------
 INSERT INTO
     product (
@@ -2894,7 +3191,17 @@ VALUES (
         @branch3_id,
         @diet21_id,
         'Nori Hand Roll Set',
-        'A build-your-own hand roll set with toasted nori, a choice of protein, and fresh fillings. Served with gluten-free sauces.',
+        'A build-your-own hand roll set with toasted nori, a choice of protein, and fresh fillings. Served with gluten-free sauces.
+
+Per serving (default build):
+Calories: 330 kcal
+Protein: 37g (74% DV)
+Carbs: 4g (1% DV)
+Fat: 18g (23% DV)
+Dietary Fiber: 3g (11% DV)
+Sugars: 1g
+Vitamin A: 120mcg (13% DV)
+Vitamin C: 6mg (7% DV)',
         350.00,
         80,
         1,
@@ -2922,7 +3229,17 @@ VALUES (
         @branch3_id,
         @diet24_id,
         'Rainbow Poke Bowl',
-        'A colorful poke bowl with fresh salmon, crisp vegetables, and a sesame-soy finish. Gluten-free and halal-friendly.',
+        'A colorful poke bowl with fresh salmon, crisp vegetables, and a sesame-soy finish. Gluten-free and halal-friendly.
+
+Per serving (default build):
+Calories: 85 kcal
+Protein: 4g (8% DV)
+Carbs: 14g (5% DV)
+Fat: 2g (3% DV)
+Dietary Fiber: 4g (14% DV)
+Sugars: 3g
+Vitamin A: 100mcg (11% DV)
+Vitamin C: 18mg (20% DV)',
         390.00,
         75,
         1,
@@ -2950,7 +3267,17 @@ VALUES (
         @branch3_id,
         @diet26_id,
         'Tokyo Noodle Bowl',
-        'A warm noodle bowl with a choice of protein, fresh vegetables, and a light broth. Customizable to your spice and sauce preference.',
+        'A warm noodle bowl with a choice of protein, fresh vegetables, and a light broth. Customizable to your spice and sauce preference.
+
+Per serving (default build):
+Calories: 450 kcal
+Protein: 42g (84% DV)
+Carbs: 10g (4% DV)
+Fat: 26g (33% DV)
+Dietary Fiber: 3g (11% DV)
+Sugars: 2g
+Vitamin A: 260mcg (29% DV)
+Vitamin C: 14mg (16% DV)',
         320.00,
         70,
         1,
@@ -2978,7 +3305,17 @@ VALUES (
         @branch3_id,
         @diet22_id,
         'Gluten-Free Salmon Roll',
-        'A fresh salmon roll wrapped in nori and served with gluten-free soy sauce. Clean, simple, and satisfying.',
+        'A fresh salmon roll wrapped in nori and served with gluten-free soy sauce. Clean, simple, and satisfying.
+
+Per serving:
+Calories: 390 kcal
+Protein: 26g (52% DV)
+Carbs: 18g (7% DV)
+Fat: 18g (23% DV)
+Dietary Fiber: 3g (11% DV)
+Sugars: 2g
+Vitamin A: 140mcg (16% DV)
+Vitamin C: 8mg (9% DV)',
         390.00,
         20,
         0,
@@ -3004,7 +3341,17 @@ VALUES (
         @branch3_id,
         @diet23_id,
         'Seaweed Sesame Salad',
-        'A chilled seaweed salad tossed with sesame seeds and rice vinegar. Light, briny, and refreshing.',
+        'A chilled seaweed salad tossed with sesame seeds and rice vinegar. Light, briny, and refreshing.
+
+Per serving:
+Calories: 310 kcal
+Protein: 30g (60% DV)
+Carbs: 14g (5% DV)
+Fat: 18g (23% DV)
+Dietary Fiber: 4g (14% DV)
+Sugars: 2g
+Vitamin A: 180mcg (20% DV)
+Vitamin C: 10mg (11% DV)',
         160.00,
         15,
         0,
@@ -3030,7 +3377,17 @@ VALUES (
         @branch3_id,
         @diet25_id,
         'Grilled Fish & Greens',
-        'Grilled tilapia with seasonal vegetables and a light herb butter. Simple, clean, and halal-friendly.',
+        'Grilled tilapia with seasonal vegetables and a light herb butter. Simple, clean, and halal-friendly.
+
+Per serving:
+Calories: 160 kcal
+Protein: 6g (12% DV)
+Carbs: 14g (5% DV)
+Fat: 12g (15% DV)
+Dietary Fiber: 3g (11% DV)
+Sugars: 4g
+Vitamin A: 200mcg (22% DV)
+Vitamin C: 16mg (18% DV)',
         360.00,
         8,
         0,
@@ -3056,7 +3413,17 @@ VALUES (
         @branch3_id,
         @diet28_id,
         'Osaka Rice Bowl',
-        'A customizable Japanese rice bowl with a choice of protein and toppings. Comforting and easy to tailor.',
+        'A customizable Japanese rice bowl with a choice of protein and toppings. Comforting and easy to tailor.
+
+Per serving (default build):
+Calories: 490 kcal
+Protein: 46g (92% DV)
+Carbs: 8g (3% DV)
+Fat: 30g (38% DV)
+Dietary Fiber: 2g (7% DV)
+Sugars: 1g
+Vitamin A: 220mcg (24% DV)
+Vitamin C: 9mg (10% DV)',
         300.00,
         85,
         1,
@@ -3084,7 +3451,17 @@ VALUES (
         @branch3_id,
         @diet29_id,
         'Wok-Tossed Vegetables',
-        'A colorful stir fry of seasonal vegetables tossed in a light sauce. Customizable with protein and sauce choices.',
+        'A colorful stir fry of seasonal vegetables tossed in a light sauce. Customizable with protein and sauce choices.
+
+Per serving (default build):
+Calories: 115 kcal
+Protein: 20g (40% DV)
+Carbs: 6g (2% DV)
+Fat: 8g (10% DV)
+Dietary Fiber: 3g (11% DV)
+Sugars: 2g
+Vitamin A: 320mcg (36% DV)
+Vitamin C: 28mg (31% DV)',
         280.00,
         90,
         1,
@@ -3112,7 +3489,17 @@ VALUES (
         @branch3_id,
         @diet27_id,
         'Spicy Tuna Roll',
-        'A spicy tuna roll with cucumber and avocado, finished with a light chili glaze. Halal-friendly and gluten-free.',
+        'A spicy tuna roll with cucumber and avocado, finished with a light chili glaze. Halal-friendly and gluten-free.
+
+Per serving:
+Calories: 440 kcal
+Protein: 34g (68% DV)
+Carbs: 12g (4% DV)
+Fat: 22g (28% DV)
+Dietary Fiber: 3g (11% DV)
+Sugars: 2g
+Vitamin A: 160mcg (18% DV)
+Vitamin C: 12mg (13% DV)',
         440.00,
         16,
         0,
@@ -3138,7 +3525,17 @@ VALUES (
         @branch3_id,
         @diet30_id,
         'Matcha Banana Smoothie',
-        'A refreshing green tea smoothie blended with banana and spinach. Lightly sweet and dairy-free.',
+        'A refreshing green tea smoothie blended with banana and spinach. Lightly sweet and dairy-free.
+
+Per serving:
+Calories: 75 kcal
+Protein: 2g (4% DV)
+Carbs: 4g (1% DV)
+Fat: 5g (6% DV)
+Dietary Fiber: 2g (7% DV)
+Sugars: 3g
+Vitamin A: 80mcg (9% DV)
+Vitamin C: 10mg (11% DV)',
         200.00,
         14,
         0,
@@ -4872,7 +5269,7 @@ COMMIT;
 -- =====================================================
 -- VERIFICATION
 -- =====================================================
-SELECT '=== Seed data loaded (v5.5) ===' AS status;
+SELECT '=== Seed data loaded (v5.8) ===' AS status;
 
 -- V1. Every customizable product's default price modifiers sum to 0.
 SELECT
@@ -5000,28 +5397,17 @@ GROUP BY
 HAVING
     emergency_contact_count = 0;
 
--- V10. Every rider has a driver's license document row,
--- and every expiry_date is in the future.
-SELECT
-    dr.delivery_rider_id,
-    dr.email,
-    drd.document_id,
-    drd.drivers_license,
-    drd.issue_date,
-    drd.expiry_date,
-    CASE
-        WHEN drd.document_id IS NULL THEN 'missing_document'
-        WHEN drd.expiry_date IS NULL THEN 'missing_expiry'
-        WHEN drd.expiry_date < CURDATE() THEN 'expired'
-        ELSE 'valid'
-    END AS license_state
+-- V10. Every rider has an identity document row.
+--      Surfaces id_type so a reviewer can see which document
+--      each rider submitted.
+SELECT dr.delivery_rider_id, dr.email, drp.vehicle_type, drd.document_id, drd.id_type, drd.id_path, drd.issue_date, drd.expiry_date
 FROM
     delivery_rider dr
+    LEFT JOIN delivery_rider_profile drp ON drp.delivery_rider_id = dr.delivery_rider_id
     LEFT JOIN delivery_rider_document drd ON drd.delivery_rider_id = dr.delivery_rider_id
 ORDER BY dr.delivery_rider_id;
 
 -- V11. Rider profile picture paths are NULL AND is_available = 0.
---      (v5.5: extended to surface availability.)
 SELECT dr.delivery_rider_id, dr.email, drp.profile_picture, drp.is_available, drp.verification_status
 FROM
     delivery_rider dr
@@ -5051,7 +5437,7 @@ WHERE
     OR original_name = '';
 
 -- V14. Permit display_order values within each restaurant are
--- contiguous starting at 0 (catches seed off-by-one mistakes).
+-- contiguous starting at 0.
 SELECT
     rp.restaurant_id,
     COUNT(*) AS permit_count,
@@ -5069,7 +5455,6 @@ HAVING
     order_state <> 'ok';
 
 -- V15. Every financial account balance is 0.00.
---      Catches accidental seeded money.
 SELECT
     financial_account_id,
     account_type,
@@ -5085,3 +5470,47 @@ FROM
     JOIN delivery_rider_profile drp ON drp.delivery_rider_id = dr.delivery_rider_id
 WHERE
     drp.is_available <> 0;
+
+-- V17. No rider document row has a NULL id_type.
+--      Every document must declare what it is.
+SELECT
+    document_id,
+    delivery_rider_id,
+    id_type,
+    id_path
+FROM delivery_rider_document
+WHERE
+    id_type IS NULL
+    OR id_type = '';
+
+-- V18. No bicycle rider carries a 'drivers_license' id_type.
+--      A bicycle rider cannot legally hold a driver's license for
+--      their vehicle, so their document must be a different type
+--      (national_id, passport, etc.).
+SELECT dr.delivery_rider_id, dr.email, drp.vehicle_type, drd.id_type
+FROM
+    delivery_rider dr
+    JOIN delivery_rider_profile drp ON drp.delivery_rider_id = dr.delivery_rider_id
+    JOIN delivery_rider_document drd ON drd.delivery_rider_id = dr.delivery_rider_id
+WHERE
+    drp.vehicle_type = 'bicycle'
+    AND drd.id_type = 'drivers_license';
+
+-- V19. (v5.8) No rider is seeded with more than 3 live orders.
+--      The current seed inserts zero live orders, so this returns
+--      no rows. The check exists so a future revision that adds
+--      demo orders cannot silently violate the schema's cap.
+SELECT dr.delivery_rider_id, dr.email, COUNT(o.order_id) AS live_order_count
+FROM delivery_rider dr
+    JOIN orders o ON o.delivery_rider_id = dr.delivery_rider_id
+WHERE
+    o.order_status IN (
+        'rider_pending',
+        'picking_up',
+        'delivering'
+    )
+GROUP BY
+    dr.delivery_rider_id,
+    dr.email
+HAVING
+    live_order_count > 3;

@@ -3,32 +3,22 @@
  * FitPal Admin — Restaurants List
  *
  * Paginated restaurant list with verification tabs, search, and a
- * detail modal that shows branches and account holders.
+ * tabbed detail modal.
  *
- * No inline CSS. No inline JS. Styles come from restaurants.css.
- * Behavior comes from restaurants.js.
+ * Modal layout:
+ *   Business Info tab → 2 phases (Details, Description & Tags)
+ *   Branches tab      → 1 phase  (branch cards)
+ *   Permits tab       → 1 phase  (permit image previews)
+ *   Accounts tab      → 1 phase  (account holder cards)
+ *   Verification tab  → 1 phase  (current status summary)
+ *
+ * Footer: [<] [Approve] [Deny] [>]
  *
  * @package FitPal
- * @version 3.5 — Removed the data-csrf-token attribute from the
- *                top-level .admin-list-page container. It was added
- *                in v3.3 so restaurants.js could read the
- *                admin-scoped CSRF token from the DOM, but
- *                restaurants.js v4.0 was rewritten to do no such
- *                thing — the docblock on the JS file explicitly
- *                states the page renders no bulk-selection UI and
- *                performs no client-side fetch. All mutations are
- *                plain form POSTs whose footer forms already carry
- *                the token as a hidden csrf_token field. The
- *                attribute therefore leaked the token into HTML
- *                source for no consumer. Removing it closes the
- *                leak and drops the misleading contract. (3.4:
- *                Version bump to match the CSRF consolidation in
- *                header.php v5.0 and includes/admin-csrf-token.php
- *                v1.0. No functional change: this page already
- *                reads $csrfToken from header.php and never
- *                generated the token itself.)
+ * @version 8.0 — Two-level wizard modal, adds Permits tab with
+ *                file_path / original_name previews, and footer
+ *                with centered actions.
  */
-
 declare(strict_types=1);
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -64,16 +54,16 @@ $pagination = $data;
 $openRestaurant = null;
 $openBranches = [];
 $openAccounts = [];
+$openPermits = [];
 
 if ($openId > 0) {
     $openRestaurant = getRestaurantDetails($database_connection, $openId);
     if ($openRestaurant) {
         $openBranches = getRestaurantBranches($database_connection, $openId);
         $openAccounts = getRestaurantAccounts($database_connection, $openId);
+        $openPermits  = getRestaurantPermits($database_connection, $openId);
     }
 }
-
-// $csrfToken is provided by header.php (admin_csrf_token).
 
 function buildRestaurantUrl(array $overrides = []): string
 {
@@ -294,22 +284,25 @@ function buildRestaurantUrl(array $overrides = []): string
     </div>
 </div>
 
+<!-- ============================================================
+     MODAL: Restaurant Details
+     Tabs: Business Info (2 phases) / Branches (1) / Permits (1) /
+           Accounts (1) / Verification (1)
+     Footer: [<] [Approve] [Deny] [>]
+     ============================================================ -->
 <div class="admin-modal <?php echo $openRestaurant ? 'is-open' : ''; ?>" id="restaurantDetailsModal"
     aria-hidden="<?php echo $openRestaurant ? 'false' : 'true'; ?>" role="dialog">
     <div class="admin-modal-backdrop"
         data-close-url="<?php echo htmlspecialchars(buildRestaurantUrl(['open' => null]), ENT_QUOTES, 'UTF-8'); ?>">
     </div>
     <div class="admin-modal-panel admin-modal-panel-wide" role="document">
+
         <div class="admin-modal-header">
             <div class="admin-modal-header-left">
-                <p class="admin-modal-title">
-                    <?php echo $openRestaurant
-                        ? htmlspecialchars((string)$openRestaurant['business_name'], ENT_QUOTES, 'UTF-8')
-                        : 'Restaurant Details'; ?>
-                </p>
+                <p class="admin-modal-title">Restaurant Details</p>
                 <p class="admin-modal-subtitle">
                     <?php echo $openRestaurant
-                        ? htmlspecialchars((string)($openRestaurant['cuisine_type'] ?? ''), ENT_QUOTES, 'UTF-8')
+                        ? htmlspecialchars((string)$openRestaurant['business_name'] . ' · ' . ($openRestaurant['cuisine_type'] ?? ''), ENT_QUOTES, 'UTF-8')
                         : 'Select a restaurant to review.'; ?>
                 </p>
             </div>
@@ -321,240 +314,311 @@ function buildRestaurantUrl(array $overrides = []): string
         <div class="admin-modal-panel-body">
             <p class="admin-detail-value admin-detail-value-muted">No restaurant selected.</p>
         </div>
-        <?php else: ?>
-
-        <?php
-        $openVerification = (string)($openRestaurant['verification_status'] ?? 'pending');
-        $openIsActive = (int)$openRestaurant['is_active'] === 1;
+        <?php else:
+            $openVerification = (string)($openRestaurant['verification_status'] ?? 'pending');
+            $openIsActive = (int)$openRestaurant['is_active'] === 1;
         ?>
 
-        <div class="admin-modal-tabs">
-            <button type="button" class="admin-modal-tab active" data-tab-target="rest-panel-info">
-                <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt="" width="14" height="14"
-                    class="btn-icon-no-filter">
-                <span>Info</span>
+        <div class="admin-modal-tabs" role="tablist">
+            <button type="button" class="admin-modal-tab active" data-tab="info" role="tab">Business Info</button>
+            <button type="button" class="admin-modal-tab" data-tab="branches" role="tab">
+                Branches <span class="tab-count"><?php echo count($openBranches); ?></span>
             </button>
-            <button type="button" class="admin-modal-tab" data-tab-target="rest-panel-branches">
-                <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="" width="14" height="14"
-                    class="btn-icon-no-filter">
-                <span>Branches</span>
-                <span class="tab-count"><?php echo count($openBranches); ?></span>
+            <button type="button" class="admin-modal-tab" data-tab="permits" role="tab">
+                Permits <span class="tab-count"><?php echo count($openPermits); ?></span>
             </button>
-            <button type="button" class="admin-modal-tab" data-tab-target="rest-panel-accounts">
-                <img src="<?php echo $assetBase; ?>assets/images/icons/people-team.svg" alt="" width="14" height="14"
-                    class="btn-icon-no-filter">
-                <span>Accounts</span>
-                <span class="tab-count"><?php echo count($openAccounts); ?></span>
+            <button type="button" class="admin-modal-tab" data-tab="accounts" role="tab">
+                Accounts <span class="tab-count"><?php echo count($openAccounts); ?></span>
             </button>
+            <button type="button" class="admin-modal-tab" data-tab="verify" role="tab">Verification</button>
         </div>
 
         <div class="admin-modal-panel-body">
 
-            <div class="admin-modal-tab-panel active" id="rest-panel-info">
-                <div class="admin-detail-grid">
-                    <div class="admin-detail-item admin-detail-item-full">
-                        <span class="admin-detail-label">Business Name</span>
-                        <span class="admin-detail-value">
-                            <?php echo htmlspecialchars((string)$openRestaurant['business_name'], ENT_QUOTES, 'UTF-8'); ?>
-                        </span>
-                    </div>
-                    <div class="admin-detail-item">
-                        <span class="admin-detail-label">Cuisine</span>
-                        <span class="admin-detail-value">
-                            <?php echo htmlspecialchars((string)($openRestaurant['cuisine_type'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
-                        </span>
-                    </div>
-                    <div class="admin-detail-item">
-                        <span class="admin-detail-label">Verification</span>
-                        <span class="admin-detail-value">
-                            <span class="badge <?php echo adminVerificationBadgeClass($openVerification); ?>">
-                                <?php echo adminVerificationLabel($openVerification); ?>
-                            </span>
-                        </span>
-                    </div>
-                    <div class="admin-detail-item">
-                        <span class="admin-detail-label">Account Status</span>
-                        <span class="admin-detail-value">
-                            <span class="badge <?php echo $openIsActive ? 'badge-success' : 'badge-secondary'; ?>">
-                                <?php echo $openIsActive ? 'Active' : 'Inactive'; ?>
-                            </span>
-                        </span>
-                    </div>
-                    <div class="admin-detail-item">
-                        <span class="admin-detail-label">Branches</span>
-                        <span class="admin-detail-value">
-                            <?php echo number_format((int)($openRestaurant['branch_count'] ?? 0)); ?>
-                        </span>
-                    </div>
-                    <div class="admin-detail-item">
-                        <span class="admin-detail-label">Products</span>
-                        <span class="admin-detail-value">
-                            <?php echo number_format((int)($openRestaurant['product_count'] ?? 0)); ?>
-                        </span>
-                    </div>
-                    <div class="admin-detail-item">
-                        <span class="admin-detail-label">Created</span>
-                        <span class="admin-detail-value">
-                            <?php echo htmlspecialchars(formatAdminDate((string)($openRestaurant['created_at'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>
-                        </span>
-                    </div>
-                    <div class="admin-detail-item">
-                        <span class="admin-detail-label">Verified At</span>
-                        <span class="admin-detail-value">
-                            <?php echo htmlspecialchars(formatAdminDate((string)($openRestaurant['verified_at'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>
-                        </span>
-                    </div>
-                    <div class="admin-detail-item admin-detail-item-full">
-                        <span class="admin-detail-label">Dietary Tags</span>
-                        <span class="admin-detail-value">
-                            <?php
-                            $tags = parseAdminTagList((string)($openRestaurant['dietary_tags'] ?? ''));
-                            echo empty($tags)
-                                ? '—'
-                                : htmlspecialchars(implode(', ', array_map(
-                                    fn($t) => ucwords(str_replace('_', ' ', $t)),
-                                    $tags
-                                )), ENT_QUOTES, 'UTF-8');
-                            ?>
-                        </span>
-                    </div>
-                    <div class="admin-detail-item admin-detail-item-full">
-                        <span class="admin-detail-label">Description</span>
-                        <span class="admin-detail-value">
-                            <?php echo nl2br(htmlspecialchars((string)($openRestaurant['description'] ?? '—'), ENT_QUOTES, 'UTF-8')); ?>
-                        </span>
-                    </div>
-                </div>
-            </div>
+            <!-- ============ TAB: Business Info ============ -->
+            <div class="admin-modal-tab-panel active" data-tab-panel="info">
 
-            <div class="admin-modal-tab-panel" id="rest-panel-branches">
-                <?php if (empty($openBranches)): ?>
-                <div class="admin-doc-empty">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="">
-                    <span>No branches on file.</span>
-                </div>
-                <?php else: ?>
-                <?php foreach ($openBranches as $b): ?>
-                <div class="admin-address-card">
-                    <div class="admin-address-label">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/building.svg" alt="" width="14"
+                <!-- Phase 1: Details -->
+                <div class="admin-modal-phase active" data-phase="1">
+                    <h3 class="admin-section-heading">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant-fill.svg" alt="" width="14"
                             height="14" class="btn-icon-no-filter">
-                        <span><?php echo htmlspecialchars((string)$b['branch_name'], ENT_QUOTES, 'UTF-8'); ?></span>
-                        <span class="admin-contact-badge branch-code-badge">
-                            <?php echo htmlspecialchars((string)$b['branch_code'], ENT_QUOTES, 'UTF-8'); ?>
-                        </span>
-                        <span
-                            class="badge <?php echo (int)$b['is_active'] === 1 ? 'badge-success' : 'badge-secondary'; ?>">
-                            <?php echo (int)$b['is_active'] === 1 ? 'Active' : 'Inactive'; ?>
-                        </span>
-                    </div>
-                    <p class="admin-address-text">
-                        <?php
-                        $parts = array_filter([
-                            $b['block'] ?? '',
-                            $b['barangay'] ?? '',
-                            $b['city'] ?? '',
-                            $b['province'] ?? '',
-                            $b['region'] ?? '',
-                            $b['postal_code'] ?? '',
-                            $b['country'] ?? '',
-                        ]);
-                        echo htmlspecialchars(implode(', ', $parts) ?: '—', ENT_QUOTES, 'UTF-8');
-                        ?>
-                    </p>
-                    <div class="admin-cell-meta admin-cell-meta-spaced">
-                        <span class="admin-cell-meta-item">
-                            <?php echo number_format((int)($b['product_count'] ?? 0)); ?> products
-                        </span>
-                        <span class="admin-cell-meta-item">
-                            Balance: <?php echo formatAdminCurrency((float)($b['balance'] ?? 0)); ?>
-                        </span>
+                        Business Details
+                    </h3>
+                    <div class="admin-detail-grid">
+                        <div class="admin-detail-item admin-detail-item-full">
+                            <span class="admin-detail-label">Business Name</span>
+                            <span
+                                class="admin-detail-value"><?php echo htmlspecialchars((string)$openRestaurant['business_name'], ENT_QUOTES, 'UTF-8'); ?></span>
+                        </div>
+                        <div class="admin-detail-item">
+                            <span class="admin-detail-label">Cuisine</span>
+                            <span
+                                class="admin-detail-value"><?php echo htmlspecialchars((string)($openRestaurant['cuisine_type'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?></span>
+                        </div>
+                        <div class="admin-detail-item">
+                            <span class="admin-detail-label">Created</span>
+                            <span
+                                class="admin-detail-value"><?php echo htmlspecialchars(formatAdminDate((string)($openRestaurant['created_at'] ?? '')), ENT_QUOTES, 'UTF-8'); ?></span>
+                        </div>
+                        <div class="admin-detail-item">
+                            <span class="admin-detail-label">Branches</span>
+                            <span
+                                class="admin-detail-value"><?php echo number_format((int)($openRestaurant['branch_count'] ?? 0)); ?></span>
+                        </div>
+                        <div class="admin-detail-item">
+                            <span class="admin-detail-label">Products</span>
+                            <span
+                                class="admin-detail-value"><?php echo number_format((int)($openRestaurant['product_count'] ?? 0)); ?></span>
+                        </div>
                     </div>
                 </div>
-                <?php endforeach; ?>
-                <?php endif; ?>
-            </div>
 
-            <div class="admin-modal-tab-panel" id="rest-panel-accounts">
-                <?php if (empty($openAccounts)): ?>
-                <div class="admin-doc-empty">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/people-team.svg" alt="">
-                    <span>No accounts on file.</span>
+                <!-- Phase 2: Description & Tags -->
+                <div class="admin-modal-phase" data-phase="2">
+                    <h3 class="admin-section-heading">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/info-card-fill.svg" alt="" width="14"
+                            height="14" class="btn-icon-no-filter">
+                        Description &amp; Tags
+                    </h3>
+                    <div class="admin-detail-grid">
+                        <div class="admin-detail-item admin-detail-item-full">
+                            <span class="admin-detail-label">Dietary Tags</span>
+                            <span class="admin-detail-value">
+                                <?php
+                                $tags = parseAdminTagList((string)($openRestaurant['dietary_tags'] ?? ''));
+                                echo empty($tags) ? '—' : htmlspecialchars(implode(', ', array_map(
+                                    fn($t) => ucwords(str_replace('_', ' ', $t)), $tags
+                                )), ENT_QUOTES, 'UTF-8');
+                                ?>
+                            </span>
+                        </div>
+                        <div class="admin-detail-item admin-detail-item-full">
+                            <span class="admin-detail-label">Description</span>
+                            <span class="admin-detail-value">
+                                <?php echo nl2br(htmlspecialchars((string)($openRestaurant['description'] ?? '—'), ENT_QUOTES, 'UTF-8')); ?>
+                            </span>
+                        </div>
+                    </div>
                 </div>
-                <?php else: ?>
-                <?php foreach ($openAccounts as $acc): ?>
-                <div class="admin-contact-card">
-                    <div class="admin-contact-header">
-                        <p class="admin-contact-name">
-                            <?php echo htmlspecialchars(adminName($acc), ENT_QUOTES, 'UTF-8'); ?>
+
+            </div><!-- /info -->
+
+            <!-- ============ TAB: Branches ============ -->
+            <div class="admin-modal-tab-panel" data-tab-panel="branches">
+                <div class="admin-modal-phase active" data-phase="1">
+                    <h3 class="admin-section-heading">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="" width="14"
+                            height="14" class="btn-icon-no-filter">
+                        Branches
+                        <span class="section-count"><?php echo count($openBranches); ?></span>
+                    </h3>
+                    <?php if (empty($openBranches)): ?>
+                    <div class="admin-doc-empty">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="">
+                        <span>No branches on file.</span>
+                    </div>
+                    <?php else: ?>
+                    <?php foreach ($openBranches as $b): ?>
+                    <div class="admin-address-card">
+                        <div class="admin-address-label">
+                            <img src="<?php echo $assetBase; ?>assets/images/icons/building.svg" alt="" width="14"
+                                height="14" class="btn-icon-no-filter">
+                            <span><?php echo htmlspecialchars((string)$b['branch_name'], ENT_QUOTES, 'UTF-8'); ?></span>
+                            <span class="admin-contact-badge">
+                                <?php echo htmlspecialchars((string)$b['branch_code'], ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                            <span
+                                class="badge <?php echo (int)$b['is_active'] === 1 ? 'badge-success' : 'badge-secondary'; ?>">
+                                <?php echo (int)$b['is_active'] === 1 ? 'Active' : 'Inactive'; ?>
+                            </span>
+                        </div>
+                        <p class="admin-address-text">
+                            <?php
+                            $parts = array_filter([
+                                $b['block'] ?? '', $b['barangay'] ?? '', $b['city'] ?? '',
+                                $b['province'] ?? '', $b['region'] ?? '', $b['postal_code'] ?? '', $b['country'] ?? '',
+                            ]);
+                            echo htmlspecialchars(implode(', ', $parts) ?: '—', ENT_QUOTES, 'UTF-8');
+                            ?>
                         </p>
-                        <span class="admin-contact-badge">
-                            <?php echo htmlspecialchars(adminRoleLabel((string)$acc['role']), ENT_QUOTES, 'UTF-8'); ?>
-                        </span>
-                        <span
-                            class="badge <?php echo (int)$acc['is_active'] === 1 ? 'badge-success' : 'badge-secondary'; ?>">
-                            <?php echo (int)$acc['is_active'] === 1 ? 'Active' : 'Inactive'; ?>
-                        </span>
+                        <div class="admin-cell-meta" style="margin-top: 6px;">
+                            <span
+                                class="admin-cell-meta-item"><?php echo number_format((int)($b['product_count'] ?? 0)); ?>
+                                products</span>
+                            <span class="admin-cell-meta-item">Balance:
+                                <?php echo formatAdminCurrency((float)($b['balance'] ?? 0)); ?></span>
+                        </div>
                     </div>
-                    <div class="admin-contact-body">
-                        <span><strong>Email:</strong>
-                            <?php echo htmlspecialchars((string)$acc['email'], ENT_QUOTES, 'UTF-8'); ?></span>
-                        <span><strong>Contact:</strong>
-                            <?php echo htmlspecialchars((string)($acc['contact_number'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?></span>
-                    </div>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
                 </div>
-                <?php endforeach; ?>
-                <?php endif; ?>
+            </div><!-- /branches -->
+
+            <!-- ============ TAB: Permits ============ -->
+            <div class="admin-modal-tab-panel" data-tab-panel="permits">
+                <div class="admin-modal-phase active" data-phase="1">
+                    <h3 class="admin-section-heading">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/file-image-fill.svg" alt="" width="14"
+                            height="14" class="btn-icon-no-filter">
+                        Permits &amp; Documents
+                        <span class="section-count"><?php echo count($openPermits); ?></span>
+                    </h3>
+                    <?php if (empty($openPermits)): ?>
+                    <div class="admin-doc-empty">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/file-image-fill.svg" alt="">
+                        <span>No permits on file.</span>
+                    </div>
+                    <?php else: ?>
+                    <?php foreach ($openPermits as $permit):
+                        $permitUrl = adminAssetUrl($assetBase, (string)$permit['file_path']);
+                    ?>
+                    <div class="admin-doc-block">
+                        <div class="admin-doc-head">
+                            <p class="admin-doc-title">
+                                <?php echo htmlspecialchars((string)$permit['original_name'], ENT_QUOTES, 'UTF-8'); ?>
+                            </p>
+                            <div class="admin-doc-meta">
+                                <span>Order: <?php echo (int)$permit['display_order']; ?></span>
+                                <span>Uploaded:
+                                    <?php echo htmlspecialchars(formatAdminDateShort((string)$permit['created_at']), ENT_QUOTES, 'UTF-8'); ?></span>
+                            </div>
+                        </div>
+                        <div class="admin-doc-image">
+                            <img src="<?php echo htmlspecialchars($permitUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                                alt="<?php echo htmlspecialchars((string)$permit['original_name'], ENT_QUOTES, 'UTF-8'); ?>">
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
+            </div><!-- /permits -->
+
+            <!-- ============ TAB: Accounts ============ -->
+            <div class="admin-modal-tab-panel" data-tab-panel="accounts">
+                <div class="admin-modal-phase active" data-phase="1">
+                    <h3 class="admin-section-heading">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/people-team.svg" alt="" width="14"
+                            height="14" class="btn-icon-no-filter">
+                        Accounts
+                        <span class="section-count"><?php echo count($openAccounts); ?></span>
+                    </h3>
+                    <?php if (empty($openAccounts)): ?>
+                    <div class="admin-doc-empty">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/people-team.svg" alt="">
+                        <span>No accounts on file.</span>
+                    </div>
+                    <?php else: ?>
+                    <?php foreach ($openAccounts as $acc): ?>
+                    <div class="admin-contact-card">
+                        <div class="admin-contact-header">
+                            <p class="admin-contact-name">
+                                <?php echo htmlspecialchars(adminName($acc), ENT_QUOTES, 'UTF-8'); ?></p>
+                            <span
+                                class="admin-contact-badge"><?php echo htmlspecialchars(adminRoleLabel((string)$acc['role']), ENT_QUOTES, 'UTF-8'); ?></span>
+                            <span
+                                class="badge <?php echo (int)$acc['is_active'] === 1 ? 'badge-success' : 'badge-secondary'; ?>">
+                                <?php echo (int)$acc['is_active'] === 1 ? 'Active' : 'Inactive'; ?>
+                            </span>
+                        </div>
+                        <div class="admin-contact-body">
+                            <span><strong>Email:</strong>
+                                <?php echo htmlspecialchars((string)$acc['email'], ENT_QUOTES, 'UTF-8'); ?></span>
+                            <span><strong>Contact:</strong>
+                                <?php echo htmlspecialchars((string)($acc['contact_number'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?></span>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
+            </div><!-- /accounts -->
+
+            <!-- ============ TAB: Verification ============ -->
+            <div class="admin-modal-tab-panel" data-tab-panel="verify">
+                <div class="admin-modal-phase active" data-phase="1">
+                    <h3 class="admin-section-heading">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/verified-fill.svg" alt="" width="14"
+                            height="14" class="btn-icon-no-filter">
+                        Verification Status
+                    </h3>
+                    <div class="admin-detail-grid">
+                        <div class="admin-detail-item">
+                            <span class="admin-detail-label">Current Verification</span>
+                            <span class="admin-detail-value">
+                                <span class="badge <?php echo adminVerificationBadgeClass($openVerification); ?>">
+                                    <?php echo adminVerificationLabel($openVerification); ?>
+                                </span>
+                            </span>
+                        </div>
+                        <div class="admin-detail-item">
+                            <span class="admin-detail-label">Account Status</span>
+                            <span class="admin-detail-value">
+                                <span class="badge <?php echo $openIsActive ? 'badge-success' : 'badge-secondary'; ?>">
+                                    <?php echo $openIsActive ? 'Active' : 'Inactive'; ?>
+                                </span>
+                            </span>
+                        </div>
+                        <div class="admin-detail-item">
+                            <span class="admin-detail-label">Verified At</span>
+                            <span
+                                class="admin-detail-value"><?php echo htmlspecialchars(formatAdminDate((string)($openRestaurant['verified_at'] ?? '')), ENT_QUOTES, 'UTF-8'); ?></span>
+                        </div>
+                    </div>
+                    <p class="admin-detail-value admin-detail-value-muted" style="margin: 12px 0 16px 0;">
+                        Approve or deny from the footer controls below.
+                    </p>
+                </div>
+            </div><!-- /verify -->
+
+        </div>
+
+        <div class="admin-modal-tab-footer">
+            <button type="button" class="tab-arrow" data-phase-prev aria-label="Previous phase">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-s-line.svg" alt="" width="16"
+                    height="16"
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg'">
+            </button>
+
+            <div class="admin-modal-footer-actions">
+                <form method="POST" action="../backend/handlers/admin-handler.php">
+                    <input type="hidden" name="csrf_token"
+                        value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                    <input type="hidden" name="action" value="set_restaurant_verification">
+                    <input type="hidden" name="restaurant_id"
+                        value="<?php echo (int)$openRestaurant['restaurant_id']; ?>">
+                    <input type="hidden" name="status" value="verified">
+                    <input type="hidden" name="redirect_to" value="restaurants.php">
+                    <button type="submit" class="btn btn-primary btn-sm"
+                        <?php echo $openVerification === 'verified' ? 'disabled' : ''; ?>>
+                        Approve
+                    </button>
+                </form>
+
+                <form method="POST" action="../backend/handlers/admin-handler.php">
+                    <input type="hidden" name="csrf_token"
+                        value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                    <input type="hidden" name="action" value="set_restaurant_verification">
+                    <input type="hidden" name="restaurant_id"
+                        value="<?php echo (int)$openRestaurant['restaurant_id']; ?>">
+                    <input type="hidden" name="status" value="denied">
+                    <input type="hidden" name="redirect_to" value="restaurants.php">
+                    <button type="submit" class="btn btn-danger btn-sm"
+                        <?php echo $openVerification === 'denied' ? 'disabled' : ''; ?>>
+                        Deny
+                    </button>
+                </form>
             </div>
 
+            <button type="button" class="tab-arrow" data-phase-next aria-label="Next phase">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-right-s-line.svg" alt="" width="16"
+                    height="16"
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/arrow-right-long-line.svg'">
+            </button>
         </div>
-
-        <div class="admin-modal-footer">
-            <form method="POST" action="../backend/handlers/admin-handler.php" class="form-inline">
-                <input type="hidden" name="csrf_token"
-                    value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
-                <input type="hidden" name="action" value="set_restaurant_verification">
-                <input type="hidden" name="restaurant_id" value="<?php echo (int)$openRestaurant['restaurant_id']; ?>">
-                <input type="hidden" name="status" value="verified">
-                <input type="hidden" name="redirect_to" value="restaurants.php">
-                <button type="submit" class="btn btn-primary btn-sm"
-                    <?php echo $openVerification === 'verified' ? 'disabled' : ''; ?>>
-                    Approve
-                </button>
-            </form>
-
-            <form method="POST" action="../backend/handlers/admin-handler.php" class="form-inline">
-                <input type="hidden" name="csrf_token"
-                    value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
-                <input type="hidden" name="action" value="set_restaurant_verification">
-                <input type="hidden" name="restaurant_id" value="<?php echo (int)$openRestaurant['restaurant_id']; ?>">
-                <input type="hidden" name="status" value="denied">
-                <input type="hidden" name="redirect_to" value="restaurants.php">
-                <button type="submit" class="btn btn-danger btn-sm"
-                    <?php echo $openVerification === 'denied' ? 'disabled' : ''; ?>>
-                    Deny
-                </button>
-            </form>
-
-            <form method="POST" action="../backend/handlers/admin-handler.php" class="form-inline">
-                <input type="hidden" name="csrf_token"
-                    value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
-                <input type="hidden" name="action" value="toggle_restaurant">
-                <input type="hidden" name="restaurant_id" value="<?php echo (int)$openRestaurant['restaurant_id']; ?>">
-                <input type="hidden" name="activate" value="<?php echo $openIsActive ? '0' : '1'; ?>">
-                <input type="hidden" name="redirect_to" value="restaurants.php">
-                <button type="submit" class="btn btn-outline btn-sm">
-                    <?php echo $openIsActive ? 'Deactivate' : 'Activate'; ?>
-                </button>
-            </form>
-
-            <a href="<?php echo htmlspecialchars(buildRestaurantUrl(['open' => null]), ENT_QUOTES, 'UTF-8'); ?>"
-                class="btn btn-outline btn-sm">Close</a>
-        </div>
-
         <?php endif; ?>
     </div>
 </div>
 
+<script src="../assets/ui/js/admin-modal.js" defer></script>
 <script src="../assets/ui/js/restaurants.js" defer></script>
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>

@@ -1,14 +1,18 @@
 /**
  * FitPal Customer Profile Page Styles
- * Version 2.9 — Reserves the viewport scrollbar gutter, removes the
- *                backdrop-filter blur from the modal overlay, and
- *                anchors the modal content with a fixed-pixel width.
- *                This mirrors the treatment already applied to cart,
- *                orders, and wallet so no modal shifts when the body
- *                scrollbar is hidden.
+ * Version 4.3 — Cancel and Save Changes now share the row evenly on
+ *                desktop and tablet. Without an explicit flex share,
+ *                the wider "Save Changes" label pushed the primary
+ *                button visibly wider than "Cancel". The base rule
+ *                now pins both to flex: 1 1 0 with min-width: 0 so
+ *                the split is exact at every horizontal layout.
+ *
+ *                No other rule changed. Mobile (≤ 768px) still
+ *                stacks the two buttons vertically at 100% width
+ *                each, unchanged from 4.2.
  *
  * @package FitPal
- * @version 2.9
+ * @version 4.3
  */
 
 /* Reserve the scrollbar gutter permanently. */
@@ -147,22 +151,84 @@ html {
     gap: 16px;
 }
 
-.profile-avatar {
+.profile-avatar-wrap {
+    position: relative;
+    width: 64px;
+    height: 64px;
     flex-shrink: 0;
+    border-radius: 50%;
+    border: 3px solid var(--primary);
+    padding: 2px;
+    background: var(--white);
+    box-sizing: border-box;
+    overflow: visible;
+}
+
+.profile-avatar-image {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+    background: var(--gray-100);
 }
 
 .profile-avatar-placeholder {
-    width: 56px;
-    height: 56px;
+    width: 100%;
+    height: 100%;
     border-radius: 50%;
     background: var(--primary);
     color: var(--white);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 22px;
+    font-size: 24px;
     font-weight: 700;
     text-transform: uppercase;
+    line-height: 1;
+}
+
+/* ---- Edit button ----
+   Visible only in edit mode. */
+.profile-avatar-edit {
+    position: absolute;
+    right: -4px;
+    bottom: -4px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--primary);
+    border: 2px solid var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    transition: background 0.15s ease, transform 0.15s ease;
+    z-index: 2;
+}
+
+.profile-avatar-edit.is-hidden {
+    display: none;
+}
+
+.profile-avatar-edit:hover {
+    background: var(--primary-dark);
+    transform: scale(1.08);
+}
+
+.profile-avatar-edit:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.profile-avatar-edit img {
+    width: 12px;
+    height: 12px;
+    display: block;
+    filter: brightness(0) invert(1);
 }
 
 .profile-name-role {
@@ -197,25 +263,57 @@ html {
     flex-shrink: 0;
 }
 
+.profile-edit-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Cancel and Save Changes share the row evenly on desktop and
+   tablet. Without this, the wider "Save Changes" label makes the
+   primary button visibly wider than "Cancel". flex: 1 1 0 pins
+   both to an equal flex share; min-width: 0 stops a long label from
+   refusing to shrink below its natural width; justify-content
+   keeps the text centered inside each button. */
+.profile-edit-actions .btn {
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: center;
+}
+
+.profile-edit-actions.is-hidden {
+    display: none;
+}
+
+.profile-page.is-editing #editProfileBtn {
+    display: none;
+}
+
 .btn-edit {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 20px;
-    background: var(--gray-100);
-    color: var(--text);
-    border: 1px solid var(--gray-200);
+    gap: 8px;
+    padding: 10px 20px;
+    background: var(--primary);
+    color: var(--white);
+    border: 1px solid var(--primary);
     border-radius: var(--radius-base);
     font-size: var(--font-size-sm);
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
     font-family: inherit;
+    transition: background 0.15s ease;
+}
+
+.btn-edit:hover {
+    background: var(--primary-dark);
 }
 
 .btn-edit .btn-icon {
     width: 16px;
     height: 16px;
     display: block;
+    filter: brightness(0) invert(1);
 }
 
 /* ============================================
@@ -254,23 +352,6 @@ html {
 .profile-tab.active {
     background: var(--primary);
     color: var(--white);
-}
-
-.profile-tab .tab-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 20px;
-    height: 20px;
-    padding: 0 6px;
-    border-radius: var(--radius-full);
-    background: rgba(255, 255, 255, 0.2);
-    font-size: var(--font-size-xs);
-    font-weight: 600;
-}
-
-.profile-tab.active .tab-badge {
-    background: rgba(255, 255, 255, 0.25);
 }
 
 /* ============================================
@@ -326,19 +407,27 @@ html {
 }
 
 .profile-card .card-body {
-    padding: 20px;
+    padding: 24px 20px;
 }
 
 /* ============================================
-   FORM FIELDS
+   FORM LAYOUT — rider parity
    ============================================ */
 
-.form-group {
-    margin-bottom: 16px;
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+    margin-bottom: 20px;
 }
 
-.form-group:last-child {
+.form-row:last-child {
     margin-bottom: 0;
+}
+
+.form-group {
+    margin: 0;
+    min-width: 0;
 }
 
 .field-label {
@@ -348,74 +437,42 @@ html {
     color: var(--gray-500);
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
 }
 
 .form-control {
     width: 100%;
-    padding: 10px 0;
-    border: none;
-    border-bottom: 2px solid var(--gray-200);
-    font-size: var(--font-size-base);
-    background: transparent;
-    color: var(--text);
-    font-family: inherit;
-}
-
-.form-control:disabled {
-    opacity: 1;
-    cursor: default;
-    background: transparent;
-    color: var(--text);
-}
-
-.form-control:focus {
-    outline: none;
-    border-bottom-color: var(--primary);
-}
-
-.form-control:not(:disabled) {
-    background: var(--white);
     padding: 10px 12px;
     border: 1px solid var(--gray-300);
     border-radius: var(--radius-base);
-    border-bottom: 1px solid var(--gray-300);
+    font-size: var(--font-size-base);
+    font-family: inherit;
+    background: var(--white);
+    color: var(--text);
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.form-control:disabled {
+    background: var(--gray-50);
+    color: var(--gray-600);
+    cursor: not-allowed;
+    border-color: var(--gray-200);
 }
 
 .form-control:not(:disabled):focus {
+    outline: none;
     border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
-    border-bottom-color: var(--primary);
 }
 
-select.form-control:disabled {
+select.form-control {
     appearance: none;
     -webkit-appearance: none;
-    background: transparent;
-    cursor: default;
-    color: var(--text);
-}
-
-select.form-control:not(:disabled) {
-    appearance: auto;
-    -webkit-appearance: auto;
-}
-
-.profile-actions {
-    display: flex;
-    gap: 12px;
-    margin-top: 16px;
-    padding-top: 16px;
-    border-top: 1px solid var(--gray-200);
-}
-
-.profile-actions .btn {
-    flex: 1;
-    justify-content: center;
-}
-
-.profile-actions.is-hidden {
-    display: none;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%23666' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='M3 5l3 3 3-3'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 36px;
 }
 
 /* ============================================
@@ -585,6 +642,7 @@ select.form-control:not(:disabled) {
     border: 1px solid transparent;
     text-decoration: none;
     justify-content: center;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .btn-sm {
@@ -603,8 +661,18 @@ select.form-control:not(:disabled) {
     border-color: var(--primary);
 }
 
+.btn-primary:hover {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+}
+
 .btn-primary .btn-icon {
     filter: brightness(0) invert(1);
+}
+
+.btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 .btn-danger {
@@ -615,6 +683,11 @@ select.form-control:not(:disabled) {
 
 .btn-danger .btn-icon {
     filter: brightness(0) invert(1);
+}
+
+.btn-danger:hover {
+    background: #b91c1c;
+    border-color: #b91c1c;
 }
 
 .btn-outline {
@@ -629,12 +702,17 @@ select.form-control:not(:disabled) {
     border-color: var(--black);
 }
 
+.btn-cancel:hover {
+    background: #000000;
+    border-color: #000000;
+}
+
 .btn-cancel .btn-icon {
     filter: brightness(0) invert(1);
 }
 
 /* ============================================
-   MODAL - Multi-step
+   MODALS
    ============================================ */
 
 .modal {
@@ -692,7 +770,77 @@ select.form-control:not(:disabled) {
     }
 }
 
-/* Modal Progress */
+.confirm-modal-content {
+    text-align: center;
+    padding: 0;
+    max-width: 440px;
+}
+
+.confirm-modal-icon {
+    width: 64px;
+    height: 64px;
+    margin: 32px auto 16px;
+    background: rgba(89, 193, 74, 0.1);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.confirm-modal-icon img {
+    width: 28px;
+    height: 28px;
+    display: block;
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.confirm-modal-content h3 {
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    color: var(--text);
+    margin: 0 0 8px 0;
+    text-align: center;
+    padding: 0 16px;
+}
+
+.confirm-modal-content .text-muted {
+    font-size: var(--font-size-base);
+    color: var(--gray-600);
+    margin: 0 0 24px 0;
+    text-align: center;
+    line-height: 1.6;
+    padding: 0 20px;
+}
+
+.confirm-modal-content .text-muted strong {
+    color: var(--text);
+    font-weight: 600;
+}
+
+.confirm-modal-content .modal-footer {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    padding: 16px 20px 28px 20px;
+    border-top: 1px solid var(--gray-200);
+    margin-top: 0;
+}
+
+.confirm-modal-content .modal-footer .btn {
+    flex: 1;
+    justify-content: center;
+    padding: 10px 20px;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    border-radius: var(--radius-base);
+    font-family: inherit;
+    min-width: 0;
+    max-width: 50%;
+    min-height: 44px;
+}
+
 .modal-progress {
     display: flex;
     align-items: center;
@@ -765,7 +913,6 @@ select.form-control:not(:disabled) {
     background: var(--primary);
 }
 
-/* Modal Steps */
 .modal-step {
     display: none;
     padding: 20px;
@@ -793,7 +940,6 @@ select.form-control:not(:disabled) {
     border-radius: var(--radius-base);
 }
 
-/* Address Summary */
 .address-summary {
     background: var(--gray-50);
     border-radius: var(--radius-base);
@@ -819,7 +965,6 @@ select.form-control:not(:disabled) {
     min-height: 20px;
 }
 
-/* Modal Header */
 .modal-header {
     display: flex;
     justify-content: space-between;
@@ -849,7 +994,6 @@ select.form-control:not(:disabled) {
     color: var(--text);
 }
 
-/* Modal Form Groups */
 .modal .form-group {
     padding: 0;
     margin-bottom: 14px;
@@ -877,6 +1021,7 @@ select.form-control:not(:disabled) {
     font-size: var(--font-size-base);
     background: var(--white);
     color: var(--text);
+    box-sizing: border-box;
     transition: border-color var(--transition-fast);
 }
 
@@ -1003,53 +1148,110 @@ select.form-control:not(:disabled) {
 }
 
 /* ============================================
-   RESPONSIVE
+   RESPONSIVE — TABLET & MOBILE (≤ 768px)
    ============================================ */
 
 @media (max-width: 768px) {
+
+    /* ---- Page header ---- */
     .page-title-header-top {
         gap: 12px;
     }
 
+    /* ---- Header card: full vertical stack ---- */
+
     .profile-header-card {
         flex-direction: column;
         align-items: stretch;
-        padding: 16px 20px;
+        padding: 20px 16px;
+        gap: 16px;
     }
 
     .profile-header-left {
+        flex-direction: column;
+        align-items: center;
         justify-content: center;
+        gap: 12px;
+        text-align: center;
+        width: 100%;
     }
 
     .profile-name-role {
         align-items: center;
         text-align: center;
+        width: 100%;
+    }
+
+    .profile-full-name {
+        font-size: var(--font-size-xl);
+        text-align: center;
+    }
+
+    .profile-role-badge {
+        text-align: center;
+    }
+
+    .profile-balance {
+        text-align: center;
+        margin-top: 4px;
     }
 
     .profile-header-right {
-        justify-content: center;
+        justify-content: stretch;
         width: 100%;
+        gap: 10px;
     }
 
     .profile-header-right .btn-edit {
         width: 100%;
         justify-content: center;
-        padding: 10px;
+        padding: 12px 20px;
+        min-height: 48px;
     }
 
-    .profile-tabs {
+    /* Edit mode: Cancel + Save Changes stacked vertically,
+       each 100% wide. flex: 1 1 0 from the base rule is inert
+       once flex-direction flips to column — the flex basis
+       applies to the main axis, and on a column the main axis
+       is vertical. width: 100% then drives the horizontal size. */
+    .profile-edit-actions {
+        width: 100%;
         flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .profile-edit-actions .btn {
+        width: 100%;
+        justify-content: center;
+        padding: 12px 20px;
+        min-height: 48px;
+    }
+
+    /* ---- Tabs: 50 / 50 in a single row ---- */
+    .profile-tabs {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 4px;
         padding: 4px;
     }
 
     .profile-tab {
-        padding: 10px 16px;
+        flex: none;
+        width: 100%;
+        padding: 12px 10px;
         font-size: var(--font-size-sm);
+        min-height: 48px;
     }
 
     .profile-card .card-body {
         padding: 16px;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+        gap: 14px;
+        margin-bottom: 14px;
     }
 
     .modal-content {
@@ -1063,15 +1265,6 @@ select.form-control:not(:disabled) {
 
     .modal-step .step-actions .btn {
         width: 100%;
-    }
-
-    .profile-actions {
-        flex-direction: column;
-    }
-
-    .profile-actions .btn {
-        width: 100%;
-        justify-content: center;
     }
 
     .address-item-header {
@@ -1099,13 +1292,15 @@ select.form-control:not(:disabled) {
         font-size: 10px;
     }
 
-    #deleteAddressModal .modal-footer {
+    #deleteAddressModal .modal-footer,
+    .confirm-modal-content .modal-footer {
         flex-direction: column;
         align-items: stretch;
         padding: 12px 16px 20px 16px;
     }
 
-    #deleteAddressModal .modal-footer .btn {
+    #deleteAddressModal .modal-footer .btn,
+    .confirm-modal-content .modal-footer .btn {
         width: 100%;
         justify-content: center;
         flex: 1 1 100%;
@@ -1118,11 +1313,13 @@ select.form-control:not(:disabled) {
         height: 48px;
     }
 
-    #deleteAddressModal h3 {
+    #deleteAddressModal h3,
+    .confirm-modal-content h3 {
         font-size: var(--font-size-lg);
     }
 
-    #deleteAddressModal .text-muted {
+    #deleteAddressModal .text-muted,
+    .confirm-modal-content .text-muted {
         font-size: var(--font-size-sm);
         padding: 0 12px;
     }
@@ -1131,6 +1328,11 @@ select.form-control:not(:disabled) {
         padding: 24px 0 12px 0;
     }
 }
+
+/* ============================================
+   RESPONSIVE — MOBILE (≤ 480px)
+   Sizes shrink; layout is unchanged from 768px.
+   ============================================ */
 
 @media (max-width: 480px) {
     .page-title-header-top {
@@ -1141,18 +1343,49 @@ select.form-control:not(:disabled) {
         font-size: var(--font-size-xl);
     }
 
+    .profile-header-card {
+        padding: 16px 14px;
+    }
+
+    .profile-avatar-wrap {
+        width: 56px;
+        height: 56px;
+    }
+
     .profile-avatar-placeholder {
-        width: 48px;
-        height: 48px;
-        font-size: 18px;
+        font-size: 20px;
+    }
+
+    .profile-avatar-edit {
+        width: 24px;
+        height: 24px;
+    }
+
+    .profile-avatar-edit img {
+        width: 10px;
+        height: 10px;
     }
 
     .profile-full-name {
         font-size: var(--font-size-lg);
     }
 
-    .profile-header-card {
-        padding: 12px 16px;
+    .profile-header-right .btn-edit {
+        padding: 10px 16px;
+        font-size: var(--font-size-sm);
+        min-height: 44px;
+    }
+
+    .profile-edit-actions .btn {
+        padding: 10px 16px;
+        font-size: var(--font-size-sm);
+        min-height: 44px;
+    }
+
+    .profile-tab {
+        padding: 10px 6px;
+        font-size: var(--font-size-xs);
+        min-height: 44px;
     }
 
     .profile-card .card-header {
@@ -1162,12 +1395,7 @@ select.form-control:not(:disabled) {
     }
 
     .profile-card .card-body {
-        padding: 12px 14px;
-    }
-
-    .profile-tab {
-        padding: 8px 12px;
-        font-size: var(--font-size-xs);
+        padding: 14px 16px;
     }
 
     .address-item {
@@ -1195,10 +1423,6 @@ select.form-control:not(:disabled) {
         font-size: var(--font-size-base);
     }
 
-    .modal-footer {
-        padding: 12px 14px;
-    }
-
     .modal-step {
         padding: 14px;
     }
@@ -1213,20 +1437,24 @@ select.form-control:not(:disabled) {
         font-size: 9px;
     }
 
-    #deleteAddressModal .modal-footer {
+    #deleteAddressModal .modal-footer,
+    .confirm-modal-content .modal-footer {
         padding: 10px 14px 16px 14px;
     }
 
-    #deleteAddressModal .modal-footer .btn {
+    #deleteAddressModal .modal-footer .btn,
+    .confirm-modal-content .modal-footer .btn {
         padding: 10px 16px;
         font-size: var(--font-size-xs);
     }
 
-    #deleteAddressModal h3 {
+    #deleteAddressModal h3,
+    .confirm-modal-content h3 {
         font-size: var(--font-size-base);
     }
 
-    #deleteAddressModal .text-muted {
+    #deleteAddressModal .text-muted,
+    .confirm-modal-content .text-muted {
         font-size: var(--font-size-xs);
         padding: 0 8px;
         margin-bottom: 16px;
@@ -1241,6 +1469,10 @@ select.form-control:not(:disabled) {
         padding: 20px 0 10px 0;
     }
 }
+
+/* ============================================
+   DESKTOP — back button sizing
+   ============================================ */
 
 @media (min-width: 768px) {
     .page-title-header .back-btn {

@@ -18,8 +18,16 @@
  *       Do not declare any *Address* function in this file.
  *
  * @package FitPal
- * @version 3.1 — Adds formatCurrency() so profile, dashboard, and
- *                wallet share one peso formatter.
+ * @version 3.2 — Adds updateCustomerProfilePicture() and
+ *                getCustomerProfilePicture(). These back the profile
+ *                picture upload flow on customer/pages/profile.php.
+ *                The UPDATE is scoped to the owning customer so a
+ *                call can only ever change the authenticated
+ *                customer's own row. No other function in this file
+ *                is changed.
+ *
+ *                (3.1: Adds formatCurrency() so profile, dashboard,
+ *                and wallet share one peso formatter.)
  */
 
 declare(strict_types=1);
@@ -55,6 +63,7 @@ function getCustomerProfile(PDO $db, int $customerId): array|false
             c.contact_number,
             c.birthdate,
             c.gender,
+            cp.profile_picture,
             cp.dietary_preferences,
             cp.allergies,
             cp.fitness_goal,
@@ -203,6 +212,81 @@ function contactExists(PDO $db, string $contact): bool
     $stmt = $db->prepare("SELECT 1 FROM customer WHERE contact_number = ?");
     $stmt->execute([$contact]);
     return $stmt->fetch() !== false;
+}
+
+/* ---------------------------------------------------------------
+ * PROFILE PICTURE
+ * --------------------------------------------------------------- */
+
+/**
+ * Update the customer's profile picture path.
+ *
+ * Scoped to the owning customer — the WHERE clause pins customer_id,
+ * so a call can only ever change the picture on the row that belongs
+ * to the authenticated customer.
+ *
+ * Returns true when a row was actually written. Returns false when
+ * the submitted path equals the value already stored (MySQL reports
+ * 0 affected rows on a no-op UPDATE). The caller must not treat that
+ * false as a failure: from the customer's point of view the picture
+ * they chose is now on file, and the handler's response should still
+ * be status: success. This mirrors the rider-side
+ * handleUpdateProfile() behaviour, which returns success even when
+ * rowCount() is 0.
+ *
+ * The path stored here is the project-root-relative path the handler
+ * builds after moving the uploaded file. The DB does not care about
+ * the filename shape; callers must not assume one.
+ *
+ * @param PDO    $db
+ * @param int    $customerId
+ * @param string $relativePath
+ *        e.g. 'shared/uploads/customer-profiles/customer_12_abc123.jpg'
+ * @return bool
+ */
+function updateCustomerProfilePicture(PDO $db, int $customerId, string $relativePath): bool
+{
+    $stmt = $db->prepare(
+        "UPDATE customer_profile
+            SET profile_picture = :picture
+          WHERE customer_id = :customer_id"
+    );
+    $stmt->execute([
+        ':picture'     => $relativePath,
+        ':customer_id' => $customerId,
+    ]);
+
+    return $stmt->rowCount() > 0;
+}
+
+/**
+ * Read just the customer's current profile picture path.
+ *
+ * A targeted single-column read. The profile page uses
+ * getCustomerProfile() for its full join; this function exists so
+ * the upload handler can echo the path it just wrote without
+ * re-running the entire join.
+ *
+ * Returns an empty string when no picture is on file, so callers
+ * never have to null-check. The profile page treats an empty string
+ * as "render the initial letter instead".
+ *
+ * @param PDO $db
+ * @param int $customerId
+ * @return string
+ */
+function getCustomerProfilePicture(PDO $db, int $customerId): string
+{
+    $stmt = $db->prepare(
+        "SELECT profile_picture
+           FROM customer_profile
+          WHERE customer_id = :customer_id
+          LIMIT 1"
+    );
+    $stmt->execute([':customer_id' => $customerId]);
+
+    $value = $stmt->fetchColumn();
+    return $value === false || $value === null ? '' : (string)$value;
 }
 
 /* ---------------------------------------------------------------

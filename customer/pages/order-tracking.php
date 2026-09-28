@@ -8,24 +8,66 @@
  * the rider.
  *
  * ---------------------------------------------------------------------
+ * STATUS FLOW
+ * ---------------------------------------------------------------------
+ *     pending → preparing → rider_pending → picking_up → delivering
+ *                                                              ↓
+ *                                                         delivered
+ *
+ * The 'picking_up' stage sits between 'rider_pending' and
+ * 'delivering'. A rider who accepts a rider_pending offer is in
+ * 'picking_up' — on the way to or at the restaurant, food not yet
+ * in hand. The rider then taps "Mark Picked Up" to move the order
+ * to 'delivering', and finally "Mark Delivered" to close it. The
+ * timeline and the status card both reflect this step.
+ *
+ * ---------------------------------------------------------------------
+ * REACHABILITY
+ * ---------------------------------------------------------------------
+ * This page is reachable for every order the customer owns — live,
+ * delivered, cancelled, or refunded. The tracking page is the
+ * canonical per-order view. A delivered order past the one-hour
+ * grace window still has a story: the timeline, the restaurant and
+ * rider the order was delivered by, and the order summary. A
+ * cancelled or refunded order likewise.
+ *
+ * Only the chat is time-limited. See CHAT GATING below.
+ *
+ * ---------------------------------------------------------------------
  * CHAT GATING (mirrors the handler)
  * ---------------------------------------------------------------------
  *   - Kitchen tab     → rendered for every order that is not
- *                       cancelled/refunded. The customer can start a
- *                       conversation from the moment the order is
- *                       placed.
+ *                       cancelled/refunded, plus a one-hour window
+ *                       after delivery so the customer can report a
+ *                       missing item or thank the kitchen.
  *   - Rider tab       → rendered only when the order has a rider
  *                       assigned AND the order is not
- *                       cancelled/refunded. The Message button on
- *                       the rider card is disabled while the order
- *                       sits in 'rider_pending' (rider has not
- *                       accepted yet). It becomes live the moment
- *                       the order reaches 'delivering'.
+ *                       cancelled/refunded. The rider tab becomes
+ *                       live the moment the order reaches
+ *                       'picking_up' (rider accepted). It stays
+ *                       live through 'delivering' and the one-hour
+ *                       post-delivery grace window, then closes.
+ *
+ * When BOTH chat channels are closed (delivered past the window,
+ * cancelled, or refunded), the page renders a "messaging closed"
+ * notice in place of the restaurant card's Message button and the
+ * rider card's Message placeholder, and the chat modal is not
+ * rendered at all.
  *
  * The two "Message" buttons on the tracking cards open the same
  * modal but route to different tabs:
  *   - Rider card      → data-open-tab="delivery_rider"
  *   - Restaurant card → data-open-tab="restaurant_account"
+ *
+ * ---------------------------------------------------------------------
+ * REAL-TIME UPDATES
+ * ---------------------------------------------------------------------
+ * The page renders once, server-side. On top of that, a light poll
+ * (see order-tracking.js) hits the order-handler's
+ * `get_tracking_status` action every few seconds with the current
+ * revision token. The handler returns the order's current
+ * order_status and a revision hash. When the revision changes, the
+ * page reloads once and picks up the new server-rendered state.
  *
  * ---------------------------------------------------------------------
  * SCOPE RULES APPLIED
@@ -37,23 +79,24 @@
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 1.3 — Chat gating:
- *                  - Rider card and rider chat tab are rendered only
- *                    when the rider has actually accepted the order
- *                    (status = 'delivering' or 'delivered'). During
- *                    'rider_pending' the rider card still shows so
- *                    the customer can see who was assigned, but the
- *                    Message button is a disabled placeholder with a
- *                    short caption.
- *                  - The Message button on each card carries
- *                    data-open-tab so the modal opens on the right
- *                    channel.
- *                  - Kitchen tab is hidden on cancelled/refunded
- *                    orders, matching the handler's refusal.
+ * @version 1.5 — The page is now reachable for every order the
+ *                customer owns, including delivered orders past the
+ *                1-hour grace window and cancelled/refunded orders.
+ *                  - New "messaging closed" treatment: when neither
+ *                    chat channel is open, both card Message
+ *                    buttons are replaced with an explanatory
+ *                    notice, and the chat modal is not rendered at
+ *                    all.
+ *                  - The rider card now has a distinct disabled
+ *                    variant for "delivered, grace window closed",
+ *                    separate from "rider has not yet accepted".
+ *                  - The chat modal and its tabs are only rendered
+ *                    when at least one channel is open.
  *
- *                (1.2: CSRF token inherited from header.php; local
- *                generation removed. 1.1: fixed rider and restaurant
- *                Message buttons both opening the same tab.)
+ *                (1.4: 'picking_up' support, 1-hour grace, real-time
+ *                tracking. 1.3: chat gating. 1.2: CSRF inherited
+ *                from header. 1.1: fixed rider/restaurant buttons
+ *                opening the same tab.)
  */
 
 declare(strict_types=1);
@@ -112,21 +155,36 @@ $serviceFee   = $totals ? (float)$totals['service_fee']  : 0.0;
 $vat          = $totals ? (float)$totals['vat']          : 0.0;
 $orderTotal   = $totals ? (float)$totals['total']        : 0.0;
 
-// Chat gating flags. The rider card is shown only when a rider is
-// attached AND the order is not cancelled/refunded. The Message
-// button on that card is live only when the rider has actually
-// accepted (order is 'delivering' or 'delivered').
-$hasRider          = $rider !== false;
-$riderCanBeMessaged = $hasRider && !$isTerminal && riderHasAcceptedOrder($database_connection, $orderId);
+// ---------------------------------------------------------------------
+// Chat gating flags
+//
+// The grace-aware helpers live in tracking-queries.php so the page
+// and the handler agree on exactly when a channel closes.
+// ---------------------------------------------------------------------
+$deliveredGraceOpen = customerOrderDeliveredWithinGrace($order);
 
+// The kitchen channel is open for every order that is not
+// cancelled/refunded, plus the one-hour post-delivery window.
+$showKitchenTab = !$isTerminal
+    && ($orderStatus !== 'delivered' || $deliveredGraceOpen);
+
+// A rider card is shown whenever a rider is attached to the order
+// and the order is not cancelled/refunded. This includes
+// 'rider_pending' (so the customer can see who was assigned) and
+// 'picking_up' (so the customer can see the rider on the way to the
+// restaurant).
+$hasRider = $rider !== false;
 $showRiderCard = $hasRider && !$isTerminal;
-$showRiderTab  = $showRiderCard && $riderCanBeMessaged;
 
-$showKitchenTab = !$isTerminal;
+// The rider tab and its Message button only go live once the rider
+// has actually accepted the order — from 'picking_up' through the
+// one-hour post-delivery window. See riderHasAcceptedOrder().
+$riderCanBeMessaged = $hasRider
+    && !$isTerminal
+    && riderHasAcceptedOrder($database_connection, $orderId);
 
-// Unread counts. Rider count is only meaningful once the rider is
-// allowed to talk to the customer; before then the rider channel has
-// no history anyway, and countUnreadOrderMessages() would return 0.
+$showRiderTab = $showRiderCard && $riderCanBeMessaged;
+
 $unreadRestaurant = $showKitchenTab
     ? countUnreadOrderMessages($database_connection, $orderId, 'restaurant_account')
     : 0;
@@ -135,10 +193,31 @@ $unreadRider = $showRiderTab
     ? countUnreadOrderMessages($database_connection, $orderId, 'delivery_rider')
     : 0;
 
-// Default tab when the modal opens without an explicit origin. The
-// kitchen is always available for a live order, so it is the safe
-// default.
-$defaultChatTab = $showKitchenTab ? 'restaurant_account' : 'delivery_rider';
+// Any channel open → the chat modal is reachable.
+$chatIsReachable = $showKitchenTab || $showRiderTab;
+
+// Why the chat is closed, for the notice copy. Three distinct
+// reasons, so the customer is not told "this order is closed" on an
+// order that is merely past the 1-hour mark.
+$chatClosedReason = '';
+if (!$chatIsReachable) {
+    if ($orderStatus === 'delivered') {
+        $chatClosedReason = 'The one-hour messaging window for this delivered order has ended.';
+    } elseif (in_array($orderStatus, ['cancelled', 'refunded'], true)) {
+        $chatClosedReason = 'This order was ' . $orderStatus . '. Messaging is no longer available.';
+    } else {
+        $chatClosedReason = 'Messaging is not available for this order.';
+    }
+}
+
+// Default tab when the modal opens without an explicit origin.
+$defaultChatTab = $showKitchenTab
+    ? 'restaurant_account'
+    : ($showRiderTab ? 'delivery_rider' : 'restaurant_account');
+
+// Live status snapshot used as the initial revision for the poll.
+$liveSnapshot    = getOrderLiveSnapshot($database_connection, $orderId, $customerId);
+$initialRevision = $liveSnapshot['revision'] ?? '';
 
 /**
  * Format a peso amount for display on this page.
@@ -160,7 +239,10 @@ require_once __DIR__ . '/../includes/header.php';
     data-csrf-token="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>"
     data-default-chat-tab="<?php echo htmlspecialchars($defaultChatTab, ENT_QUOTES, 'UTF-8'); ?>"
     data-can-message-kitchen="<?php echo $showKitchenTab ? '1' : '0'; ?>"
-    data-can-message-rider="<?php echo $riderCanBeMessaged ? '1' : '0'; ?>">
+    data-can-message-rider="<?php echo $riderCanBeMessaged ? '1' : '0'; ?>"
+    data-order-status="<?php echo htmlspecialchars($orderStatus, ENT_QUOTES, 'UTF-8'); ?>"
+    data-revision="<?php echo htmlspecialchars($initialRevision, ENT_QUOTES, 'UTF-8'); ?>"
+    data-handler-url="../backend/handlers/order-handler.php">
 
     <div class="container">
 
@@ -254,6 +336,21 @@ require_once __DIR__ . '/../includes/header.php';
         <?php endif; ?>
 
         <!-- ============================================
+             CHAT-CLOSED NOTICE
+             Shown only when neither channel is reachable.
+             ============================================ -->
+        <?php if (!$chatIsReachable && $chatClosedReason !== ''): ?>
+        <div class="tracking-chat-closed-notice" role="status">
+            <img src="<?php echo $assetBase; ?>assets/images/icons/information-fill.svg" alt=""
+                class="tracking-chat-closed-icon" width="18" height="18"
+                onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
+            <p class="tracking-chat-closed-text">
+                <?php echo htmlspecialchars($chatClosedReason, ENT_QUOTES, 'UTF-8'); ?>
+            </p>
+        </div>
+        <?php endif; ?>
+
+        <!-- ============================================
              MAIN ROW
              ============================================ -->
         <div class="tracking-row">
@@ -306,21 +403,20 @@ require_once __DIR__ . '/../includes/header.php';
                                     class="btn-icon" width="16" height="16">
                                 <span>Message<?php echo $unreadRider > 0 ? ' (' . $unreadRider . ')' : ''; ?></span>
                             </button>
-                            <?php else: ?>
+                            <?php elseif ($orderStatus === 'rider_pending'): ?>
                             <button type="button" class="btn btn-chat" disabled aria-disabled="true"
                                 title="Waiting for the rider to accept your order">
                                 <img src="<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg" alt=""
                                     class="btn-icon" width="16" height="16">
                                 <span>Waiting for rider to accept</span>
                             </button>
-                            <?php endif; ?>
-                            <?php if (!empty($rider['contact_number']) && $riderCanBeMessaged): ?>
-                            <a href="tel:<?php echo htmlspecialchars(preg_replace('/\s+/', '', (string)$rider['contact_number']), ENT_QUOTES, 'UTF-8'); ?>"
-                                class="btn btn-call">
-                                <img src="<?php echo $assetBase; ?>assets/images/icons/phone-fill.svg" alt=""
+                            <?php elseif ($orderStatus === 'delivered'): ?>
+                            <button type="button" class="btn btn-chat" disabled aria-disabled="true"
+                                title="The messaging window for this order has ended">
+                                <img src="<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg" alt=""
                                     class="btn-icon" width="16" height="16">
-                                <span>Call</span>
-                            </a>
+                                <span>Messaging window closed</span>
+                            </button>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -343,7 +439,7 @@ require_once __DIR__ . '/../includes/header.php';
                 <?php endif; ?>
 
                 <!-- Restaurant Card -->
-                <?php if ($restaurant && $showKitchenTab): ?>
+                <?php if ($restaurant): ?>
                 <section class="tracking-card" aria-labelledby="restaurant-card-title">
                     <div class="card-header">
                         <h2 class="heading-5" id="restaurant-card-title">Restaurant</h2>
@@ -370,6 +466,7 @@ require_once __DIR__ . '/../includes/header.php';
                                 </p>
                             </div>
                         </div>
+                        <?php if ($showKitchenTab): ?>
                         <div class="restaurant-actions">
                             <button type="button" class="btn btn-chat" id="chatOpenBtnRestaurant"
                                 data-open-tab="restaurant_account">
@@ -378,38 +475,21 @@ require_once __DIR__ . '/../includes/header.php';
                                 <span>Message<?php echo $unreadRestaurant > 0 ? ' (' . $unreadRestaurant . ')' : ''; ?></span>
                             </button>
                         </div>
-                    </div>
-                </section>
-                <?php elseif ($restaurant): ?>
-                <section class="tracking-card" aria-labelledby="restaurant-card-title">
-                    <div class="card-header">
-                        <h2 class="heading-5" id="restaurant-card-title">Restaurant</h2>
-                    </div>
-                    <div class="card-body">
-                        <div class="restaurant-info">
-                            <div class="restaurant-avatar">
-                                <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt=""
-                                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/restaurant-fill.svg'">
-                            </div>
-                            <div class="restaurant-details">
-                                <p class="restaurant-name">
-                                    <?php echo htmlspecialchars(getRestaurantDisplayName($restaurant), ENT_QUOTES, 'UTF-8'); ?>
-                                </p>
-                                <p class="restaurant-branch">
-                                    <?php
-                                    $branchParts = array_filter([
-                                        $restaurant['branch_name'] ?? '',
-                                        $restaurant['barangay']    ?? '',
-                                        $restaurant['city']        ?? '',
-                                    ]);
-                                    echo htmlspecialchars(implode(', ', $branchParts), ENT_QUOTES, 'UTF-8');
-                                    ?>
-                                </p>
-                            </div>
+                        <?php elseif ($orderStatus === 'delivered'): ?>
+                        <div class="restaurant-actions">
+                            <button type="button" class="btn btn-chat" disabled aria-disabled="true"
+                                title="The messaging window for this order has ended">
+                                <img src="<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg" alt=""
+                                    class="btn-icon" width="16" height="16">
+                                <span>Messaging window closed</span>
+                            </button>
                         </div>
+                        <?php elseif ($isTerminal): ?>
                         <p class="rider-placeholder" style="margin-top: 12px;">
-                            This order is closed. Messaging is no longer available.
+                            This order was <?php echo htmlspecialchars($orderStatus, ENT_QUOTES, 'UTF-8'); ?>.
+                            Messaging is no longer available.
                         </p>
+                        <?php endif; ?>
                     </div>
                 </section>
                 <?php endif; ?>
@@ -476,11 +556,12 @@ require_once __DIR__ . '/../includes/header.php';
 
 <!-- ============================================
      CUSTOMER CHAT MODAL
-     Opened by either Message button on the page. The button's
-     data-open-tab attribute decides which tab is active on open;
-     the panel then lets the customer switch freely to whichever
-     channels are available for this order.
+     Rendered only when at least one channel is open. Opening the
+     modal on a page with no channels would show an empty tab bar
+     with no way to send, which is what the chat-closed notice
+     above replaces.
      ============================================ -->
+<?php if ($chatIsReachable): ?>
 <div id="customerChatModal" class="modal" style="display: none;">
     <div class="modal-overlay"></div>
     <div class="modal-content customer-chat-modal-content">
@@ -533,6 +614,7 @@ require_once __DIR__ . '/../includes/header.php';
         </form>
     </div>
 </div>
+<?php endif; ?>
 
 <script src="../assets/ui/js/order-tracking.js" defer></script>
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>

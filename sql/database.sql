@@ -1,42 +1,67 @@
 -- =====================================================
--- DATABASE: fitpal_food_delivery v.1.1.1
+-- DATABASE: fitpal_food_delivery v.1.3.0
 -- Dietary Meal Ordering and Restaurant Nutrition Analytics System
 -- WITH FULL CUSTOMIZABLE MEAL SUPPORT
 -- ACID Compliant with Proper Constraints
 --
--- v1.1.1 changes
+-- v1.3.0 changes
 -- --------------
+--   ~ New order status: 'picking_up' inserted between
+--     'rider_pending' and 'delivering'.
+--
+--     Rider flow is now:
+--         rider_pending  →  (rider accepts)     →  picking_up
+--         picking_up     →  (rider marks picked up)  →  delivering
+--         delivering     →  (rider marks delivered) →  delivered
+--
+--     Accepting no longer puts the order in transit. The rider
+--     must take a second explicit action ("Mark Picked Up") to
+--     move from picking_up to delivering. No step may be skipped.
+--
+--   ~ orders.order_status CHECK now allows 'picking_up'.
+--
+--   ~ before_order_rider_assign trigger reworded to match the
+--     application layer's cap of 3. Old body rejected when
+--     `active_orders > 2` counted across 'preparing'/'delivering'.
+--     New body rejects when the rider's count across
+--     'rider_pending'/'picking_up'/'delivering' is >= 3.
+--     Same number and operator as the PHP layer, so the two
+--     never disagree on where the ceiling sits.
+--
+--   ~ after_order_stock_restore trigger's OLD-status set now
+--     includes 'picking_up', so a cancel or refund issued while
+--     an order was in picking_up correctly restores stock.
+--
+--   ~ kitchen_queue_view no longer filters by a fixed status
+--     list. It now exposes every live order status so the
+--     kitchen page can render New / Preparing / Waiting on
+--     Rider / Out for Delivery / Recent buckets from one view.
+--
+--   ~ No columns removed, no columns renamed, no foreign keys
+--     changed. Every change above is additive or a redefinition
+--     of an existing CHECK / trigger / view body.
+--
+-- v1.2.0 changes (retained)
+-- -------------------------
+--   ~ Table 8b: delivery_rider_document generalized.
+--     - drivers_license column renamed to id_path.
+--     - New id_type VARCHAR(30) NOT NULL column added.
+--     - Enables bicycle riders and other non-motor-vehicle
+--       riders to submit a government-issued ID.
+--     - issue_date and expiry_date remain NULL-able.
+--     - No other tables, columns, indexes, or triggers changed.
+--
+-- v1.1.1 changes (retained)
+-- -------------------------
 --   ~ before_transaction_insert now guards its balance check
---     behind NEW.status = 'completed'. Previously the check ran
---     on every payment and withdrawal row, including pending
---     COD and Online payment rows that were never going to
---     touch the wallet balance. With the v5.5 seed (all wallet
---     balances at 0.00), the first COD or Online order for a
---     customer threw 'Insufficient balance' at the transaction
---     insert, which rolled back the entire order creation.
+--     behind NEW.status = 'completed'.
 --
---     The corrected trigger only rejects a payment/withdrawal
---     when it is being inserted as 'completed'. Pending rows
---     pass through cleanly. When the application later flips a
---     pending row to 'completed' via UPDATE, that path is
---     covered by after_transaction_update_status, which is the
---     correct place to enforce the wallet balance at the moment
---     funds actually move.
---
---     No tables, columns, indexes, or other triggers were
---     changed. This is a behavior fix inside an existing
---     trigger body only.
---
--- v1.1.0 changes
--- --------------
---   + Table 12: restaurant_permit — permit/verification photos
---     uploaded during restaurant registration. Integrated into
---     the main DDL rather than added as a post-hoc CREATE TABLE,
---     so the schema file remains the single source of truth.
---   + original_name tightened to NOT NULL (handler always supplies it).
+-- v1.1.0 changes (retained)
+-- -------------------------
+--   + Table 12: restaurant_permit
+--   + original_name tightened to NOT NULL.
 --   + display_order CHECK (>= 0).
---   + idx_order renamed to idx_restaurant_order (it indexes the
---     composite (restaurant_id, display_order), not an order_id).
+--   + idx_order renamed to idx_restaurant_order.
 --
 -- Totals policy: orders no longer store subtotal, delivery_charge,
 -- or total_amount. They are computed on read from queue_item
@@ -272,20 +297,39 @@ CREATE TABLE delivery_rider_profile (
 
 -- =====================================================
 -- 8b. DELIVERY_RIDER_DOCUMENT
--- Just the driver's license file path + issue/expiry dates.
+-- Generalized identity document storage for riders.
+--
+-- id_type stores the document type as a free-form string
+-- ('drivers_license', 'national_id', 'passport', etc.) so that
+-- riders on bicycles or other non-motor vehicles can submit a
+-- government-issued ID other than a driver's license. Validation
+-- against a known set of types is done at the application layer,
+-- not here, so adding a new type later does not require an ALTER.
+--
+-- id_path stores the project-root-relative path to the uploaded
+-- file under shared/uploads/rider/documents/<rider_id>/.
+--
+-- issue_date and expiry_date are NULL-able because not every
+-- document type carries both. A national ID may have no expiry,
+-- or no issue date on the face of the card. An admin reviewer
+-- reading a NULL expiry treats it as "not applicable", which is
+-- different from "missing" — the application layer never inserts
+-- a placeholder date to work around a NULL.
 -- =====================================================
 CREATE TABLE delivery_rider_document (
     document_id INT AUTO_INCREMENT PRIMARY KEY,
     delivery_rider_id INT NOT NULL,
-    drivers_license VARCHAR(255) NOT NULL,
+    id_type VARCHAR(30) NOT NULL,
+    id_path VARCHAR(255) NOT NULL,
     issue_date DATE NULL,
     expiry_date DATE NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (delivery_rider_id) REFERENCES delivery_rider (delivery_rider_id) ON DELETE CASCADE,
     INDEX idx_rider (delivery_rider_id),
+    INDEX idx_id_type (id_type),
     INDEX idx_expiry (expiry_date)
-) COMMENT = 'Delivery rider driver''s license document';
+) COMMENT = 'Rider identity document (driver''s license, national ID, passport, etc.)';
 
 -- =====================================================
 -- 9. ADMINISTRATOR_PROFILE
@@ -588,6 +632,12 @@ CREATE TABLE cart (
 -- does NOT reference customer_address, so deleting a saved address
 -- never affects past orders. Price totals are computed from
 -- queue_item on read.
+--
+-- v1.3.0: order_status now includes 'picking_up' between
+-- 'rider_pending' and 'delivering'. A rider who accepts a
+-- rider_pending offer lands in 'picking_up'; the rider then
+-- taps "Mark Picked Up" to move into 'delivering'. The two
+-- steps are distinct, and no step may be skipped.
 -- =====================================================
 CREATE TABLE orders (
     order_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -599,6 +649,7 @@ CREATE TABLE orders (
             'pending',
             'preparing',
             'rider_pending',
+            'picking_up',
             'delivering',
             'delivered',
             'cancelled',
@@ -867,13 +918,20 @@ BEGIN
      WHERE product_id = NEW.product_id;
 END$$
 
--- Restore stock on cancel OR refund (idempotent on transition)
+-- Restore stock on cancel OR refund (idempotent on transition).
+--
+-- v1.3.0: the OLD-status set now includes 'picking_up'. A rider
+-- who accepted a rider_pending offer is in 'picking_up' — the
+-- kitchen's stock was already decremented when the queue_item
+-- was inserted, so a cancel or refund issued while the order
+-- was in picking_up must restore it just like the older live
+-- statuses did.
 CREATE TRIGGER after_order_stock_restore
 AFTER UPDATE ON orders
 FOR EACH ROW
 BEGIN
     IF NEW.order_status IN ('cancelled','refunded')
-       AND OLD.order_status IN ('pending','preparing','delivering')
+       AND OLD.order_status IN ('pending','preparing','rider_pending','picking_up','delivering')
        AND OLD.order_status <> NEW.order_status
     THEN
         UPDATE product p
@@ -987,7 +1045,33 @@ BEGIN
     END IF;
 END$$
 
--- Cap active orders per rider
+-- Cap concurrent orders per rider at 3.
+--
+-- v1.3.0: the cap is now 3, counting every order the rider
+-- holds across the three live delivery-facing statuses:
+--
+--     rider_pending  — the kitchen has asked; rider has not yet
+--                      accepted or declined
+--     picking_up     — rider accepted; en route to or at the
+--                      restaurant; food not yet in hand
+--     delivering     — rider has the food; en route to customer
+--
+-- The threshold is expressed as `>= 3` so it reads identically
+-- to the PHP layer's rejection in
+-- restaurant/backend/database/order-queries.php
+-- (assignRiderToOrder() and reassignRiderToOrder()). Same
+-- number, same operator, no off-by-one drift.
+--
+-- A rider with 3 already is invisible to the kitchen's
+-- available-rider list (see getAvailableRidersForBranch() in
+-- the query layer), and if a race ever tries to attach a 4th
+-- assignment, this trigger is what stops it. The application
+-- layer's FOR UPDATE lock on the rider's profile row is the
+-- fast path; this trigger is the last-resort guard.
+--
+-- 'preparing' is deliberately excluded. An order in 'preparing'
+-- has no rider attached — the rider becomes attached only when
+-- the kitchen moves it to 'rider_pending'.
 CREATE TRIGGER before_order_rider_assign
 BEFORE UPDATE ON orders
 FOR EACH ROW
@@ -995,17 +1079,17 @@ BEGIN
     DECLARE active_orders INT;
 
     IF NEW.delivery_rider_id IS NOT NULL
-       AND NEW.order_status IN ('preparing','delivering')
+       AND NEW.order_status IN ('rider_pending','picking_up','delivering')
     THEN
         SELECT COUNT(*) INTO active_orders
           FROM orders
          WHERE delivery_rider_id = NEW.delivery_rider_id
-           AND order_status IN ('preparing','delivering')
+           AND order_status IN ('rider_pending','picking_up','delivering')
            AND order_id <> NEW.order_id;
 
-        IF active_orders > 2 THEN
+        IF active_orders >= 3 THEN
             SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'Rider already has too many active orders';
+            SET MESSAGE_TEXT = 'Rider already has the maximum of 3 active orders';
         END IF;
     END IF;
 END$$
@@ -1324,9 +1408,10 @@ BEGIN
         drp.average_rating,
         drp.total_deliveries,
         drp.is_available,
-        drd.drivers_license,
-        drd.issue_date AS license_issue_date,
-        drd.expiry_date AS license_expiry_date,
+        drd.id_type,
+        drd.id_path,
+        drd.issue_date AS id_issue_date,
+        drd.expiry_date AS id_expiry_date,
         (SELECT COUNT(*) FROM delivery_rider_emergency_contact ec
           WHERE ec.delivery_rider_id = dr.delivery_rider_id) AS emergency_contact_count
     FROM delivery_rider dr
@@ -1391,6 +1476,20 @@ FROM
             order_id
     ) it ON it.order_id = o.order_id;
 
+-- kitchen_queue_view — v1.3.0
+--
+-- Previously this view filtered by a fixed status list
+-- ('pending','preparing'), which meant the kitchen page could
+-- not read live 'picking_up' or 'delivering' rows from it.
+-- v1.3.0 lifts the WHERE filter so every live status is
+-- visible through this view. The kitchen page and its poll
+-- handler slice the statuses they need themselves, so the
+-- view stays a general-purpose read of every live order.
+--
+-- 'delivered', 'cancelled', and 'refunded' are still excluded
+-- because the kitchen's live board does not show closed work.
+-- The closed bucket is served by getBranchCompletedOrders()
+-- in the query layer, which reads the orders table directly.
 CREATE OR REPLACE VIEW kitchen_queue_view AS
 SELECT
     qi.queue_item_id,
@@ -1428,7 +1527,13 @@ FROM
     AND ci.is_removed = 0
     LEFT JOIN ingredient i ON ci.ingredient_id = i.ingredient_id
 WHERE
-    o.order_status IN ('pending', 'preparing')
+    o.order_status IN (
+        'pending',
+        'preparing',
+        'rider_pending',
+        'picking_up',
+        'delivering'
+    )
 GROUP BY
     qi.queue_item_id
 ORDER BY o.order_date ASC;
@@ -1569,6 +1674,13 @@ GROUP BY
     p.product_id;
 
 -- Rider KYC overview for admin dashboards.
+--
+-- id_type is surfaced so an admin reviewer can tell at a glance
+-- whether the rider submitted a driver's license, a national ID,
+-- or another document type. id_state is computed from
+-- expiry_date only when id_type is a document that carries one;
+-- for document types without an expiry, the state reads 'valid'
+-- because there is nothing to expire.
 CREATE OR REPLACE VIEW rider_kyc_overview AS
 SELECT
     dr.delivery_rider_id,
@@ -1583,15 +1695,17 @@ SELECT
     dr.contact_number,
     drp.verification_status,
     drp.profile_picture,
-    drd.drivers_license,
+    drd.id_type,
+    drd.id_path,
     drd.issue_date,
     drd.expiry_date,
     CASE
-        WHEN drd.expiry_date IS NULL THEN 'missing'
+        WHEN drd.id_type IS NULL THEN 'missing'
+        WHEN drd.expiry_date IS NULL THEN 'valid'
         WHEN drd.expiry_date < CURDATE() THEN 'expired'
         WHEN drd.expiry_date < DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN 'expiring_soon'
         ELSE 'valid'
-    END AS license_state,
+    END AS id_state,
     (
         SELECT COUNT(*)
         FROM

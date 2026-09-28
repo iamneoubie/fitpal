@@ -24,11 +24,22 @@
  *
  * Payment policy:
  *   COD    — records a `payment` transaction with status 'pending'.
+ *            No wallet movement at placement. On cancel, the
+ *            pending row is flipped to 'failed' and no refund is
+ *            issued.
  *   Wallet — requires sufficient balance. Records a `completed`
  *            payment transaction. The after_transaction_insert
- *            trigger deducts from financial_account.balance.
- *   Online — records a `completed` payment transaction. No wallet
- *            movement (simulation).
+ *            trigger deducts from financial_account.balance. On
+ *            cancel, a completed refund is issued against the same
+ *            wallet account, restoring the balance.
+ *   Online — records a `payment` transaction with status 'pending'.
+ *            No wallet movement at placement. The payment is
+ *            simulated as taking place on an external channel, so
+ *            financial_account.balance is not touched. On cancel, a
+ *            completed refund is issued against the customer's
+ *            wallet account, so the money the customer paid
+ *            externally is converted into FitPal wallet balance
+ *            rather than lost.
  *
  * Cancellation policy:
  *   Only 'pending' orders are cancellable by the customer. Once the
@@ -40,14 +51,44 @@
  * Refund policy: see refundOrderToWallet().
  *
  * @package FitPal
- * @version 7.1 — cancelOrderAsCustomer() guard tightened to 'pending'
- *                only. Matches the button visibility in orders.php
- *                and the status guard in
- *                order-handler.php::handleCancelOrder().
+ * @version 8.0 — Online payment is no longer treated as a wallet
+ *                movement at placement, and its refund no longer
+ *                depends on the existence of a wallet-side payment
+ *                row.
  *
- *                (7.0: raw SQL from order-handler.php moved here;
- *                reorder line builder co-located because this file is
- *                safe to require from pages.)
+ *                createOrderFromQueue():
+ *                  - The transaction status for 'Online' is now
+ *                    'pending', matching 'COD'. A pending row is
+ *                    bookkeeping only; the trigger on
+ *                    `transaction` does not move the balance for
+ *                    pending rows. This means an Online order
+ *                    never debits the customer's wallet.
+ *
+ *                refundOrderToWallet():
+ *                  - The refund amount is now read from the order's
+ *                    own total (via a queue_item sum) rather than
+ *                    from a sum of prior wallet-side payment rows.
+ *                    Before this revision the Online path summed
+ *                    payment rows that would not exist under the
+ *                    new placement rule, so the refund would have
+ *                    been zero and the money would have vanished.
+ *                  - The COD short-circuit is preserved. COD still
+ *                    issues no refund and still flips any pending
+ *                    payment row to 'failed'.
+ *                  - The Wallet path still refunds the order total
+ *                    against the customer's wallet account,
+ *                    reversing the placement debit.
+ *                  - The idempotency guard is preserved. A second
+ *                    completed refund row for the same order is
+ *                    still refused, so a cancelled order cannot
+ *                    credit the wallet twice.
+ *
+ *                (7.2: getActiveOrder() treats 'rider_pending' and
+ *                'picking_up' as active. 7.1: cancelOrderAsCustomer()
+ *                guard tightened to 'pending' only. 7.0: raw SQL
+ *                from order-handler.php moved here; reorder line
+ *                builder co-located because this file is safe to
+ *                require from pages.)
  */
 
 declare(strict_types=1);
@@ -68,7 +109,8 @@ require_once __DIR__ . '/fee-queries.php';
  * schedule.
  *
  * Each queue item is expected to be the enriched shape produced by
- * queue-handler.php's queueEnrich():
+ * queue-handler.php's queueEnrich(), or the shape written by
+ * cart-handler.php's handlePushToQueue():
  *
  *   [
  *     'product_id'           => int,
@@ -306,7 +348,23 @@ function createOrderFromQueue(
         }
 
         // ---- Record the payment transaction ----
-        $transactionStatus = ($paymentMethod === 'COD') ? 'pending' : 'completed';
+        //
+        // Status rules:
+        //   COD    → 'pending'. No wallet movement; the payment is
+        //            collected in cash on delivery.
+        //   Online → 'pending'. No wallet movement; the payment is
+        //            simulated as taking place on an external
+        //            channel. A pending row is bookkeeping only and
+        //            the transaction trigger does not touch
+        //            financial_account.balance. On cancel, a
+        //            completed refund is issued against the
+        //            customer's wallet account so the externally
+        //            paid amount is converted into FitPal wallet
+        //            balance rather than lost.
+        //   Wallet → 'completed'. The trigger deducts the order
+        //            total from the customer's wallet account. On
+        //            cancel, a completed refund reverses it.
+        $transactionStatus = ($paymentMethod === 'Wallet') ? 'completed' : 'pending';
 
         $description = match ($paymentMethod) {
             'Wallet' => 'Wallet payment for order #' . $orderId,
@@ -428,14 +486,37 @@ function cancelOrderAsCustomer(
  * Behaviour by original payment method:
  *
  *   COD    — no refund transaction. Any pending `payment` transaction
- *            is marked 'failed'.
- *   Wallet — inserts a `completed` refund transaction. The trigger
- *            credits the wallet automatically.
- *   Online — inserts a `completed` refund transaction for bookkeeping.
- *   Legacy — orders with no payment transaction cancel as a clean no-op.
+ *            is marked 'failed'. Nothing ever moved through the
+ *            wallet for a COD order, so nothing is refunded.
  *
- * Idempotent: if a completed refund already exists for this order,
- * returns false and does nothing.
+ *   Wallet — the customer's wallet was debited at placement by the
+ *            after_transaction_insert trigger on the completed
+ *            `payment` row. A completed `refund` row is now written,
+ *            and the trigger credits the wallet back. Net wallet
+ *            change across the order's life: zero.
+ *
+ *   Online — the customer's wallet was NOT debited at placement
+ *            (the `payment` row is written 'pending' by
+ *            createOrderFromQueue()). The payment is simulated as
+ *            taking place on an external channel. A completed
+ *            `refund` row is now written against the customer's
+ *            wallet account, and the trigger credits the wallet by
+ *            the order total. Net wallet change: the externally
+ *            paid amount is converted into FitPal wallet balance.
+ *
+ * Amount source
+ * -------------
+ * The refund amount is read from the order's own total, computed
+ * from queue_item rows. It is NOT read from a prior wallet-side
+ * `payment` row, because an Online order has no completed
+ * wallet-side payment row to sum. Before this revision the Online
+ * path summed payment rows, saw zero, and returned without issuing
+ * a refund — the money the customer paid externally would have
+ * vanished.
+ *
+ * Idempotency: if a completed refund already exists for this order,
+ * returns false and does nothing. A second cancel request cannot
+ * credit the wallet twice.
  *
  * @param PDO $db
  * @param int $orderId
@@ -462,7 +543,12 @@ function refundOrderToWallet(PDO $db, int $orderId): bool
         }
 
         $paymentMethod = (string)$order['payment_method'];
+        $customerId    = (int)$order['customer_id'];
 
+        // ---- Idempotency guard ----
+        //
+        // If a completed refund already exists for this order, this
+        // is a duplicate cancel. Credit the wallet nothing more.
         $existingStmt = $db->prepare(
             "SELECT 1 FROM transaction
               WHERE order_id = :order_id
@@ -476,6 +562,7 @@ function refundOrderToWallet(PDO $db, int $orderId): bool
             return false;
         }
 
+        // ---- Resolve and lock the customer's wallet account ----
         $accountStmt = $db->prepare(
             "SELECT fa.financial_account_id
                FROM customer_profile cp
@@ -485,7 +572,7 @@ function refundOrderToWallet(PDO $db, int $orderId): bool
               LIMIT 1
               FOR UPDATE"
         );
-        $accountStmt->execute([':customer_id' => (int)$order['customer_id']]);
+        $accountStmt->execute([':customer_id' => $customerId]);
         $financialAccountId = (int)$accountStmt->fetchColumn();
 
         if ($financialAccountId <= 0) {
@@ -493,15 +580,12 @@ function refundOrderToWallet(PDO $db, int $orderId): bool
             throw new RuntimeException('Customer financial account not found.');
         }
 
-        $amountStmt = $db->prepare(
-            "SELECT COALESCE(SUM(amount), 0) FROM transaction
-              WHERE order_id = :order_id
-                AND transaction_type = 'payment'
-                AND status IN ('completed', 'pending')"
-        );
-        $amountStmt->execute([':order_id' => $orderId]);
-        $paidAmount = (float)$amountStmt->fetchColumn();
-
+        // ---- COD short-circuit ----
+        //
+        // COD never moved money through the wallet. Flip any
+        // pending payment row to 'failed' as cleanup so the
+        // bookkeeping does not show a phantom pending payment
+        // forever, and return without issuing a refund.
         if ($paymentMethod === 'COD') {
             $failStmt = $db->prepare(
                 "UPDATE transaction
@@ -516,11 +600,47 @@ function refundOrderToWallet(PDO $db, int $orderId): bool
             return true;
         }
 
-        if ($paidAmount <= 0) {
+        // ---- Refund amount = the order's own total ----
+        //
+        // Read from queue_item, the same source getOrderTotals()
+        // uses. This is the amount the customer paid for the
+        // order, regardless of payment method.
+        //
+        // Note: the fee schedule (delivery, service, VAT) is
+        // computed on read by getOrderTotals(). The refund here
+        // uses the item subtotal only, matching the amount the
+        // `payment` row was created with at placement time. If
+        // the fee policy ever changes so that the stored payment
+        // amount and the stored item subtotal diverge, this
+        // function must be updated to match.
+        $amountStmt = $db->prepare(
+            "SELECT COALESCE(
+                        SUM(queue_quantity * COALESCE(final_price, unit_price)),
+                        0
+                    )
+               FROM queue_item
+              WHERE order_id = :order_id"
+        );
+        $amountStmt->execute([':order_id' => $orderId]);
+        $refundAmount = (float)$amountStmt->fetchColumn();
+
+        if ($refundAmount <= 0) {
+            // A valid order always has at least one queue_item.
+            // A zero sum here means the order row exists but its
+            // items do not, which is a data-integrity problem and
+            // not something to silently credit the wallet for.
             $db->commit();
             return false;
         }
 
+        // ---- Issue the refund ----
+        //
+        // For Wallet: this credits back the placement debit.
+        // For Online: this credits the externally-paid amount
+        //             into the wallet so the money is not lost.
+        // Both cases write the same shape of `refund` row and
+        // rely on the after_transaction_insert trigger to
+        // credit the wallet.
         $refundStmt = $db->prepare(
             "INSERT INTO transaction
                 (financial_account_id, order_id, amount, transaction_type,
@@ -532,7 +652,7 @@ function refundOrderToWallet(PDO $db, int $orderId): bool
         $refundStmt->execute([
             ':financial_account_id' => $financialAccountId,
             ':order_id'             => $orderId,
-            ':amount'               => $paidAmount,
+            ':amount'               => $refundAmount,
             ':description'          => 'Refund for cancelled order #' . $orderId,
         ]);
 
@@ -649,11 +769,31 @@ function getOrderDetails(PDO $db, int $orderId): array|false
 
 /**
  * Get the customer's current active order, if any.
+ *
+ * An order is considered "active" for the whole span from placement
+ * to delivery. That includes the two rider-facing statuses added in
+ * schema v1.3.0:
+ *
+ *     rider_pending  — kitchen has proposed a rider; rider may
+ *                      still decline
+ *     picking_up     — rider accepted; en route to / at the
+ *                      restaurant; food not yet in hand
+ *
+ * Both are live, both are visible to the customer on orders.php and
+ * order-tracking.php, and both belong in the dashboard's "current
+ * order" card. Leaving them out caused the card to briefly blank out
+ * while an order was sitting in one of those two statuses.
  */
 function getActiveOrder(PDO $db, int $customerId): array|false
 {
-    $activeStatuses = ['pending', 'preparing', 'delivering'];
-    $placeholders   = implode(',', array_fill(0, count($activeStatuses), '?'));
+    $activeStatuses = [
+        'pending',
+        'preparing',
+        'rider_pending',
+        'picking_up',
+        'delivering',
+    ];
+    $placeholders = implode(',', array_fill(0, count($activeStatuses), '?'));
 
     $stmt = $db->prepare(
         "SELECT

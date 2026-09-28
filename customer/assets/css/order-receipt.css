@@ -1,23 +1,54 @@
 /**
  * FitPal Customer Order Receipt Styles
- * Version 1.1
+ * Version 1.3
  *
  * Read-only receipt view for a delivered order. Single-column layout,
  * print-friendly, styled with the same tokens used across the customer
  * role (see global.css). No interactive components, no modals, no JS.
  *
- * v1.1 changes
+ * v1.3 changes
  * ------------
- *   ~ The outer .container now matches the header container width
- *     (1200px) so the receipt page aligns with the site header bar,
- *     consistent with every other customer page (dashboard, menu,
- *     cart, checkout, orders, tracking, wallet, profile).
- *   + A new .receipt-shell wrapper constrains the receipt card itself
- *     to a narrow reading column (800px) and centers it inside the
- *     wider outer container.
+ *   + Rider block restructured. The flat meta line is replaced by a
+ *     two-part layout:
+ *
+ *       .receipt-rider-top        avatar + "Delivered by" + name
+ *       .receipt-rider-grid       labeled key/value grid for contact,
+ *                                 vehicle, rating, and deliveries
+ *
+ *   + New .receipt-rider-contact rule. The rider's phone number is a
+ *     tel: link with a phone icon, on its own line, in the primary
+ *     tint so it reads as actionable on first glance. The icon is
+ *     tinted to match the link color.
+ *
+ *   + New .receipt-rider-grid rules. Two-column key/value grid on
+ *     desktop, single column on mobile. Each label is a small
+ *     uppercase caption; each value is body text. This replaces the
+ *     single dense meta line that made vehicle, plate, rating, and
+ *     deliveries run together.
+ *
+ *   + New .receipt-meta-value-status rule and .receipt-meta-status-icon
+ *     for the "Delivered" status cell, so the success state reads at
+ *     a glance.
+ *
+ *   + Totals row labels get a slightly wider gap and the grand-total
+ *     row gets a touch more separation from the rows above it, so the
+ *     fee stack reads as a clear column rather than a block.
+ *
+ *   + Everything from v1.2 — outer container width, inner receipt
+ *     shell, and the base .receipt-rider block padding — is retained.
+ *
+ * v1.2 changes (retained)
+ * -----------------------
+ *   + New .receipt-rider block between the restaurant block and the
+ *     meta grid.
+ *
+ * v1.1 changes (retained)
+ * -----------------------
+ *   ~ Outer .container matches the header container width (1200px).
+ *   + .receipt-shell wrapper constrains the receipt card to 800px.
  *
  * @package FitPal
- * @version 1.1
+ * @version 1.3
  */
 
 /* ============================================
@@ -38,8 +69,6 @@
     padding: 24px 0 60px 0;
 }
 
-/* Outer container mirrors .header-container so the receipt page
-   aligns with the site header on wide viewports. */
 .order-receipt-page .container {
     max-width: 1200px;
     margin: 0 auto;
@@ -48,8 +77,6 @@
     box-sizing: border-box;
 }
 
-/* Inner shell constrains the receipt card to a comfortable reading
-   width and centers it inside the 1200px outer container. */
 .receipt-shell {
     max-width: 800px;
     margin: 0 auto;
@@ -59,10 +86,6 @@
 
 /* ============================================
    PAGE HEADER
-   Back button anchored left, title anchored right,
-   matching order-tracking.php and wallet.php.
-   The page header also lives inside .receipt-shell so it shares the
-   same visual column as the card below it.
    ============================================ */
 
 .page-title-header {
@@ -237,8 +260,202 @@
 }
 
 /* ============================================
+   RIDER BLOCK
+
+   Two-part layout:
+
+     .receipt-rider-top       avatar square + "Delivered by" + name
+     .receipt-rider-grid      labeled key/value grid for the rider's
+                              contact, vehicle, rating, and deliveries
+
+   The block is omitted entirely by the PHP when no rider is attached
+   to the order. The "grid" is a definition list so each value carries
+   its own label rather than running together with its neighbors.
+   ============================================ */
+
+.receipt-rider {
+    padding: 18px 0;
+    border-bottom: 1px dashed var(--gray-200);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.receipt-rider-top {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+}
+
+.receipt-rider-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-base);
+    background: rgba(89, 193, 74, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 11px;
+    box-sizing: border-box;
+}
+
+.receipt-rider-avatar img {
+    width: 100%;
+    height: 100%;
+    max-width: 24px;
+    max-height: 24px;
+    object-fit: contain;
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.receipt-rider-headline {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.receipt-rider-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.receipt-rider-name {
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: var(--text);
+    margin: 0;
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+/* ------------------------------------------------------------
+   Rider key/value grid
+   ------------------------------------------------------------
+   Two-column grid on wider viewports, single column on narrow.
+   dt is a small uppercase caption, dd is the value. The grid
+   collapses to one column below 480px so a long phone number or a
+   long vehicle line never has to compete with a neighboring cell
+   for width.
+   ------------------------------------------------------------ */
+
+.receipt-rider-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 20px;
+    margin: 0;
+    padding: 0;
+}
+
+.receipt-rider-grid-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.receipt-rider-grid-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.receipt-rider-grid-value {
+    font-size: var(--font-size-sm);
+    color: var(--text);
+    margin: 0;
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+.receipt-rider-grid-value-note {
+    color: var(--gray-500);
+    font-size: var(--font-size-xs);
+}
+
+/* ------------------------------------------------------------
+   Rider contact — the tap-to-call link
+   ------------------------------------------------------------
+   The phone number is its own row in the grid, styled as a link in
+   the primary tint. The icon is tinted to match. On mobile the row
+   spans both columns so a long number never wraps awkwardly next to
+   an unrelated field.
+   ------------------------------------------------------------ */
+
+.receipt-rider-contact {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--primary);
+    font-weight: 600;
+    text-decoration: none;
+    line-height: 1.4;
+    transition: color 0.15s ease;
+    word-break: break-word;
+}
+
+.receipt-rider-contact:hover,
+.receipt-rider-contact:focus-visible {
+    color: var(--primary-dark);
+    text-decoration: underline;
+}
+
+.receipt-rider-contact-icon {
+    width: 14px;
+    height: 14px;
+    display: block;
+    flex-shrink: 0;
+    /* Tint to primary. Overridden to primary-dark on hover. */
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+    transition: filter 0.15s ease;
+}
+
+.receipt-rider-contact:hover .receipt-rider-contact-icon,
+.receipt-rider-contact:focus-visible .receipt-rider-contact-icon {
+    filter: brightness(0) saturate(100%)
+            invert(35%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(85%) contrast(90%);
+}
+
+/* ------------------------------------------------------------
+   Rider rating — inline star + value
+   ------------------------------------------------------------ */
+
+.receipt-rider-rating {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.receipt-rider-rating-icon {
+    width: 14px;
+    height: 14px;
+    display: block;
+    flex-shrink: 0;
+    /* Warm gold tint to match the star's meaning. */
+    filter: brightness(0) saturate(100%)
+            invert(72%) sepia(65%) saturate(750%)
+            hue-rotate(1deg) brightness(98%) contrast(90%);
+}
+
+/* ============================================
    META GRID
-   Two-column key/value blocks.
    ============================================ */
 
 .receipt-meta-grid {
@@ -271,6 +488,25 @@
     margin: 0;
     line-height: 1.5;
     word-break: break-word;
+}
+
+/* Success state cell — "Delivered" with a check icon. */
+.receipt-meta-value-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--primary-dark);
+    font-weight: 600;
+}
+
+.receipt-meta-status-icon {
+    width: 14px;
+    height: 14px;
+    display: block;
+    flex-shrink: 0;
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
 }
 
 /* ============================================
@@ -419,7 +655,7 @@
     max-width: 320px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
 }
 
 .receipt-total-row {
@@ -442,8 +678,8 @@
 }
 
 .receipt-total-row.grand {
-    margin-top: 6px;
-    padding-top: 12px;
+    margin-top: 8px;
+    padding-top: 14px;
     border-top: 1px solid var(--gray-200);
     font-size: var(--font-size-lg);
     font-weight: 700;
@@ -518,6 +754,13 @@
         gap: 12px;
     }
 
+    /* Rider grid stays two columns at this width — a tablet has
+       room for two short values side by side. Only mobile drops
+       to a single column. */
+    .receipt-rider-grid {
+        gap: 10px 16px;
+    }
+
     .receipt-totals {
         justify-content: stretch;
     }
@@ -557,10 +800,38 @@
         height: 34px;
     }
 
-    /* Collapse the items table into a stacked list.
-       Each row becomes a block with the item name on top
-       and quantity × unit price → line total on the second line. */
+    /* Rider block on mobile: avatar stays fixed, text column takes
+       the rest. The key/value grid collapses to a single column so
+       each labeled value owns its own row. */
+    .receipt-rider {
+        gap: 12px;
+    }
 
+    .receipt-rider-top {
+        gap: 12px;
+    }
+
+    .receipt-rider-avatar {
+        width: 42px;
+        height: 42px;
+        padding: 9px;
+    }
+
+    .receipt-rider-avatar img {
+        max-width: 22px;
+        max-height: 22px;
+    }
+
+    .receipt-rider-name {
+        font-size: var(--font-size-sm);
+    }
+
+    .receipt-rider-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    /* Collapse the items table into a stacked list. */
     .receipt-items-table,
     .receipt-items-table thead,
     .receipt-items-table tbody,

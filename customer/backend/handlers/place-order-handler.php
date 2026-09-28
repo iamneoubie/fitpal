@@ -14,9 +14,19 @@
  * There is no cart table involved anywhere in this flow.
  *
  * @package FitPal
- * @version 8.1 — Validates against customer_csrf_token with hash_equals;
- *                rejects empty tokens explicitly. (8.0: queue-
- *                authoritative; cart system deleted.)
+ * @version 8.2 — Adds a per-request guard so a double-click on
+ *                "Place Order" cannot create two orders. The guard
+ *                is a short-lived session flag keyed by a hash of
+ *                the current queue. On the first request the flag
+ *                is set and the order is created. A second request
+ *                arriving before the first redirects finds the flag
+ *                still set and is refused.
+ *
+ *                No other behavior changed from 8.1.
+ *
+ *                (8.1: validates against customer_csrf_token with
+ *                hash_equals; rejects empty tokens explicitly.
+ *                8.0: queue-authoritative; cart system deleted.)
  */
 
 declare(strict_types=1);
@@ -96,6 +106,29 @@ if (empty($_SESSION['order_queue']) || !is_array($_SESSION['order_queue'])) {
     exit;
 }
 
+// ---- Double-submit guard ----
+//
+// The "Place Order" button disables itself on click, but a slow
+// network can still let two requests through before the first
+// response lands. The guard stores a hash of the current queue in
+// the session. On the first request the hash is absent, so we set
+// it and continue. On any subsequent request the hash is present
+// and matches, so we refuse the duplicate.
+//
+// The hash is cleared on success (the queue is gone anyway) and on
+// any failure path that returns to checkout.php, so a customer who
+// fixes an error and retries is not blocked.
+$queueHash = hash('sha256', json_encode($_SESSION['order_queue']));
+$guardKey  = '_place_order_guard';
+
+if (isset($_SESSION[$guardKey]) && $_SESSION[$guardKey] === $queueHash) {
+    $_SESSION['order_error'] = 'This order has already been submitted. Please check your orders.';
+    header('Location: ../../pages/orders.php');
+    exit;
+}
+
+$_SESSION[$guardKey] = $queueHash;
+
 // ===============================================================
 // ATOMIC ORDER CREATION (queue → orders + queue_item + customizations)
 // ===============================================================
@@ -109,11 +142,12 @@ try {
     );
 
     // The order is now real. Clear everything that represented the
-    // pre-order staging.
+    // pre-order staging, including the double-submit guard.
     unset($_SESSION['order_queue']);
     unset($_SESSION['checkout_address_id']);
     unset($_SESSION['checkout_error']);
     unset($_SESSION['queue_error']);
+    unset($_SESSION[$guardKey]);
 
     $_SESSION['order_success']   = 'Order #' . $orderId . ' placed successfully!';
     $_SESSION['highlight_order'] = $orderId;
@@ -122,11 +156,13 @@ try {
     exit;
 
 } catch (RuntimeException $e) {
+    unset($_SESSION[$guardKey]);
     $_SESSION['order_error'] = $e->getMessage();
     header('Location: ../../pages/checkout.php');
     exit;
 
 } catch (PDOException $e) {
+    unset($_SESSION[$guardKey]);
     error_log('Place order DB error: ' . $e->getMessage());
     $_SESSION['order_error'] = 'A system error occurred. Please try again.';
     header('Location: ../../pages/checkout.php');

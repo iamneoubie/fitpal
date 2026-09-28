@@ -5,16 +5,18 @@
  * Handles customer-initiated order actions.
  *
  * Actions:
- *   cancel_order      → cancel a 'pending' order. Issues a refund when
- *                       the original payment method was Wallet or
- *                       Online and a payment was recorded. COD orders
- *                       are cancelled with no refund. Legacy orders
- *                       (no payment on record) cancel cleanly with no
- *                       refund.
- *   get_order_details → return an order as JSON
- *   reorder           → rebuild the session order queue from a past
- *                       order, validating each product against the
- *                       current database state.
+ *   cancel_order        → cancel a 'pending' order. Issues a refund
+ *                         when the original payment method was
+ *                         Wallet or Online and a payment was
+ *                         recorded. COD orders are cancelled with no
+ *                         refund. Legacy orders (no payment on
+ *                         record) cancel cleanly with no refund.
+ *   get_order_details   → return an order as JSON
+ *   get_tracking_status → read-only order_status + revision for the
+ *                         tracking page's real-time poll
+ *   reorder             → rebuild the session order queue from a
+ *                         past order, validating each product
+ *                         against the current database state.
  *
  * Only 'pending' orders are cancellable. The moment the kitchen
  * accepts the order and moves it to 'preparing', ingredients are
@@ -22,22 +24,24 @@
  * customer must go through support to stop it from that point on.
  *
  * This handler contains NO SQL. All data access goes through
- * customer/backend/database/order-queries.php.
+ * customer/backend/database/order-queries.php and
+ * tracking-queries.php.
  *
  * This file is NOT safe to require from a page — it runs a full
  * request dispatch at load time. Pure helpers that pages need
  * (e.g. buildReorderLine) live in order-queries.php.
  *
  * @package FitPal
- * @version 5.2 — Cancel restricted to 'pending' only. The cancellable
- *                status list and its guard are updated together with
- *                the matching button visibility in orders.php and the
- *                WHERE clause in order-queries.php::cancelOrderAsCustomer().
+ * @version 5.3 — Adds get_tracking_status. The tracking page polls
+ *                this action with the revision it currently holds.
+ *                The action returns the current order_status and a
+ *                revision hash; the client reloads only when the
+ *                hash changes. One indexed read per poll, no full
+ *                tracking payload.
  *
- *                (5.1: Validates against customer_csrf_token; explicit
- *                empty guards on both sides. 5.0: raw SQL moved to
- *                order-queries.php; buildReorderLine relocated;
- *                Throwable caught.)
+ *                (5.2: cancel restricted to 'pending' only. 5.1:
+ *                CSRF validated against customer_csrf_token. 5.0:
+ *                raw SQL moved to order-queries.php.)
  */
 
 declare(strict_types=1);
@@ -58,6 +62,7 @@ $customerId = (int)$_SESSION['customer_id'];
 
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/order-queries.php';
+require_once __DIR__ . '/../database/tracking-queries.php';
 
 // Per-role CSRF check. The customer role validates against its own
 // session key, 'customer_csrf_token', never the shared 'csrf_token'.
@@ -83,6 +88,10 @@ try {
 
         case 'get_order_details':
             handleGetOrderDetails($database_connection, $customerId);
+            break;
+
+        case 'get_tracking_status':
+            handleGetTrackingStatus($database_connection, $customerId);
             break;
 
         case 'reorder':
@@ -232,6 +241,58 @@ function handleGetOrderDetails(PDO $db, int $customerId): void
     echo json_encode([
         'status' => 'success',
         'order'  => $order,
+    ]);
+}
+
+/**
+ * Read-only poll endpoint for the tracking page.
+ *
+ * Returns the current order_status and a revision hash for a single
+ * order, scoped to the owner. The client compares the returned
+ * revision to what it already holds and reloads the page only when
+ * the revision differs. A poll that finds nothing new therefore
+ * transfers a tiny JSON body — no full tracking payload, no message
+ * history, no totals.
+ *
+ * The revision is derived from the fields the customer actually
+ * sees: order_status, delivered_at, and delivery_rider_id. Any of
+ * those changing — the kitchen moving the order forward, a rider
+ * being assigned or reassigned, the rider accepting, the rider
+ * picking up, the order being delivered, or the order being
+ * cancelled/refunded — produces a new hash.
+ *
+ * `updated_at` is deliberately excluded. It is touched by transient
+ * bookkeeping writes that do not change what the customer sees, and
+ * including it would make the revision churn for no visible reason.
+ *
+ * Returns the initial revision when called without a `current_revision`
+ * field, so the client can bootstrap without a separate call.
+ */
+function handleGetTrackingStatus(PDO $db, int $customerId): void
+{
+    $orderId = (int)($_POST['order_id'] ?? 0);
+
+    if ($orderId <= 0) {
+        echo json_encode(['status' => 'error', 'message' => 'Invalid order ID']);
+        return;
+    }
+
+    $snapshot = getOrderLiveSnapshot($db, $orderId, $customerId);
+
+    if ($snapshot === null) {
+        echo json_encode(['status' => 'error', 'message' => 'Order not found']);
+        return;
+    }
+
+    $currentRevision = (string)($_POST['current_revision'] ?? '');
+    $changed = ($currentRevision === '') || ($currentRevision !== $snapshot['revision']);
+
+    echo json_encode([
+        'status'       => 'success',
+        'order_id'     => $snapshot['order_id'],
+        'order_status' => $snapshot['order_status'],
+        'revision'     => $snapshot['revision'],
+        'changed'      => $changed,
     ]);
 }
 

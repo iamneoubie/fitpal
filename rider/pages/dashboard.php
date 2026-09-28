@@ -8,37 +8,46 @@
  *   2. Four stat cards (wallet, deliveries, rating, today's earnings)
  *   3. Current Work strip
  *        A compact card that answers "what should I do next?":
- *          - Active delivery exists    → link to Deliveries (Active tab)
- *          - Pending assignment exists → link to Deliveries (Assigned tab)
+ *          - Not verified              → verification reminder
+ *          - Has picking_up orders     → "Head to pickup" copy,
+ *                                        names the count and payout
+ *          - Has delivering orders     → "Delivering to Juan" copy
+ *                                        at 1, count + payout at 2–3
+ *          - Has both                  → "2 in progress" copy with
+ *                                        a split summary
  *          - Neither, rider is online  → "You're clear" status
  *          - Neither, rider is offline → "Go online" reminder
- *          - Not verified              → verification reminder
  *   4. Two-column row: weekly chart | info card
  *   5. Verification warning (only when not verified)
  *
- * Recent Deliveries removed
- * -------------------------
- * The previous version rendered a Recent Deliveries list at the
- * bottom of the dashboard. That list duplicated the deliveries
- * page's History tab, and having two surfaces showing the same
- * closed deliveries made it unclear which one was authoritative.
- * The History tab on deliveries.php is now the single source for
- * closed deliveries; the dashboard no longer touches them.
+ * Current Work strip — live-status awareness (v4.3)
+ * --------------------------------------------------
+ * The rider's live work now spans two statuses, both of which
+ * count as active:
  *
- * In its place, the Current Work strip answers the question a
- * rider opens the dashboard to ask mid-shift: "what's next?" That
- * is dashboard-specific information — it is not shown on the
- * deliveries page in the same at-a-glance form.
+ *   picking_up  — accepted; en route to or at the restaurant.
+ *                 Food not yet in hand.
+ *   delivering  — food in hand; en route to the customer.
+ *
+ * The strip runs three signals in priority order:
+ *
+ *   1. If not verified → the blocked face.
+ *   2. If the rider has any live order → the working face.
+ *      The working face's copy is chosen from the mix:
+ *        - picking_up only   → "N pickups in progress"
+ *        - delivering only   → "Delivering to X" (1) or "N deliveries"
+ *        - both              → "N in progress" + split subtitle
+ *   3. If neither, check availability → clear or offline face.
+ *
+ * Plural copy is dynamic (D14 option C) so it reads correctly at
+ * every count from 1 to the cap of 3. The payout line shows the
+ * total earnings the rider will collect when every live order is
+ * delivered, so a rider with 3 orders sees "up to ₱150.00" rather
+ * than a flat ₱50.00 that only matches 1 order.
  *
  * Info card (right column)
  * ------------------------
- * The right column used to be a "Performance" card with two rate
- * bars (Acceptance Rate, Completion Rate) and a vehicle block.
- * That mixed two different concerns: numbers that already live on
- * the earnings page, and identity data the rider actually wants
- * at a glance.
- *
- * The card now reads top to bottom:
+ * Reads top to bottom:
  *
  *   Profile            header, with a link to profile.php
  *   ├── Name           first + middle + last, concatenated
@@ -54,40 +63,34 @@
  *   Total deliveries
  *   Average rating
  *
- * The acceptance-rate and completion-rate bars were removed. They
- * are order-metric surfaces, not identity surfaces, and both
- * numbers are still readable on the earnings page. The two stat
- * cards at the top of the dashboard (Total Deliveries and Average
- * Rating) already cover the same ground, so the bars were
- * duplicating data too.
- *
  * Data sources
  * ------------
  *   - getRiderProfile()            profile, wallet balance, status
  *   - getRiderDashboardStats()     stat-card numbers + chart scale
  *   - getRiderWeeklyEarnings()     chart bars
  *   - getAssignedOrders()          Current Work strip (pending)
- *   - getRiderActiveDeliveries()   Current Work strip (active)
+ *   - getRiderActiveDeliveries()   Current Work strip (picking_up
+ *                                  + delivering)
  *
  * Every one of those lives in rider/backend/database/rider-queries.php.
  * This page contains no SQL.
  *
  * @package FitPal
- * @version 4.2 — Right column rebuilt. The Performance card now
- *                shows identity (name, email, contact), vehicle,
- *                and the status meta list. The two metric bars
- *                (Acceptance Rate, Completion Rate) were removed
- *                because they duplicate the earnings page and the
- *                top stat cards. Vehicle icon still maps to the
- *                rider's registered vehicle type.
+ * @version 4.3 — Current Work strip reads the new picking_up
+ *                status:
+ *                  - $activeDeliveries now contains orders in
+ *                    picking_up and delivering (both, thanks to
+ *                    the updated getRiderActiveDeliveries()).
+ *                  - The "active" branch of $currentWork is
+ *                    rewritten to distinguish pickups from
+ *                    deliveries, and to show a combined face when
+ *                    the rider holds both.
+ *                  - Plural copy is dynamic (D14 option C).
+ *                  - Payout text scales with the live count.
  *
- *                (4.1: vehicle icon corrected from coin-line.svg
- *                to a type-mapped icon. 4.0: Recent Deliveries
- *                removed, Current Work strip added. 3.6: removed
- *                dashboard-actions block. 3.5: docblock reference
- *                corrected to rider-csrf-token.php. 3.4: local
- *                CSRF block removed; $csrfToken inherited from
- *                header.php under rider_csrf_token.)
+ *                (4.2: Right column rebuilt as an info card.
+ *                4.1: Vehicle icon corrected. 4.0: Recent
+ *                Deliveries removed, Current Work strip added.)
  */
 
 declare(strict_types=1);
@@ -115,6 +118,7 @@ $weeklyEarnings   = getRiderWeeklyEarnings($database_connection, $riderId);
 $chartScale       = getRiderChartScale($stats['week_earnings_max'] ?? 0);
 
 $assignedOrders   = getAssignedOrders($database_connection, $riderId);
+// Returns both picking_up and delivering orders.
 $activeDeliveries = getRiderActiveDeliveries($database_connection, $riderId);
 
 // ============================================
@@ -186,11 +190,30 @@ $today = date('Y-m-d');
 // ============================================
 // CURRENT WORK
 //
-// What should the rider do next? Three signals, checked in
-// priority order. The first one that matches wins the strip.
+// Live work spans two statuses: picking_up (accepted; food not in
+// hand) and delivering (food in hand; en route to customer). The
+// strip runs in priority order and picks the first face that
+// matches.
 // ============================================
 $activeCount   = count($activeDeliveries);
 $assignedCount = count($assignedOrders);
+
+// Split the active set so the copy can describe the mix.
+$pickingUpOrders  = [];
+$deliveringOrders = [];
+foreach ($activeDeliveries as $order) {
+    $s = (string)($order['order_status'] ?? '');
+    if ($s === 'picking_up') {
+        $pickingUpOrders[] = $order;
+    } elseif ($s === 'delivering') {
+        $deliveringOrders[] = $order;
+    }
+}
+$pickingUpCount  = count($pickingUpOrders);
+$deliveringCount = count($deliveringOrders);
+
+$riderPayoutPerDelivery = 50.00;
+$livePayoutTotal        = $activeCount * $riderPayoutPerDelivery;
 
 $currentWork = null;
 
@@ -203,31 +226,68 @@ if (!$isVerified) {
         'text'   => 'Your account is ' . strtolower($statusLabel) . '. You cannot go online or accept orders until it is approved.',
     ];
 } elseif ($activeCount > 0) {
-    $firstActive = $activeDeliveries[0];
-    $customerName = (string)($firstActive['customer_name'] ?? 'the customer');
+    // The rider has live work. Which copy depends on the mix.
+    if ($pickingUpCount > 0 && $deliveringCount === 0) {
+        // All pickups. At 1, name the restaurant. At 2+, count.
+        if ($pickingUpCount === 1) {
+            $first = $pickingUpOrders[0];
+            $restaurantName = (string)($first['restaurant_name'] ?? 'the restaurant');
+            $title = 'Head to ' . $restaurantName;
+        } else {
+            $title = $pickingUpCount . ' pickups in progress';
+        }
+        $text = $pickingUpCount === 1
+            ? 'Tap "Mark Picked Up" once you have the food, then head to the customer.'
+            : 'Mark each order as picked up before heading out.';
+        $text .= ' ₱' . number_format($livePayoutTotal, 2)
+               . ' total on delivery.';
+    } elseif ($deliveringCount > 0 && $pickingUpCount === 0) {
+        // All deliveries. At 1, name the customer. At 2+, count.
+        if ($deliveringCount === 1) {
+            $first = $deliveringOrders[0];
+            $customerName = (string)($first['customer_name'] ?? 'the customer');
+            $title = 'Delivering to ' . $customerName;
+        } else {
+            $title = $deliveringCount . ' deliveries in progress';
+        }
+        $text = $deliveringCount === 1
+            ? 'Mark it delivered to earn ₱' . number_format($riderPayoutPerDelivery, 2) . '.'
+            : 'Mark each order delivered to collect ₱' . number_format($livePayoutTotal, 2) . ' total.';
+    } else {
+        // Mixed. Lead with the count, subtitle names the split.
+        $title = $activeCount . ' in progress';
+        $text = $pickingUpCount . ' pickup' . ($pickingUpCount === 1 ? '' : 's')
+              . ' and ' . $deliveringCount . ' deliver' . ($deliveringCount === 1 ? 'y' : 'ies')
+              . ' on your route. ₱' . number_format($livePayoutTotal, 2) . ' total on completion.';
+    }
 
     $currentWork = [
         'kind'   => 'active',
         'icon'   => 'riding-fill.svg',
         'label'  => 'In progress',
-        'title'  => $activeCount === 1
-            ? 'Delivering to ' . $customerName
-            : $activeCount . ' active deliveries',
-        'text'   => 'Finish the run and mark it delivered to earn ₱50.00.',
+        'title'  => $title,
+        'text'   => $text,
         'href'   => 'deliveries.php?tab=active',
         'cta'    => 'Open Deliveries',
     ];
 } elseif ($assignedCount > 0) {
+    // Pending offers exist, no live work yet. The plural copy
+    // works at 1, 2, or 3.
+    if ($assignedCount === 1) {
+        $title = '1 assignment waiting';
+        $text  = 'The kitchen assigned you an order. Accept or decline to continue.';
+    } else {
+        $title = $assignedCount . ' assignments waiting';
+        $text  = 'The kitchen assigned you ' . $assignedCount
+               . ' orders. Accept or decline each one to continue.';
+    }
+
     $currentWork = [
         'kind'   => 'assigned',
         'icon'   => 'package.svg',
         'label'  => 'Action needed',
-        'title'  => $assignedCount === 1
-            ? '1 assignment waiting'
-            : $assignedCount . ' assignments waiting',
-        'text'   => 'The kitchen assigned you '
-                  . ($assignedCount === 1 ? 'an order' : 'orders')
-                  . '. Accept or decline to continue.',
+        'title'  => $title,
+        'text'   => $text,
         'href'   => 'deliveries.php?tab=assigned',
         'cta'    => 'Review Assignment' . ($assignedCount === 1 ? '' : 's'),
     ];
@@ -394,7 +454,6 @@ $emailLabel   = $email   !== '' ? $email   : '—';
 
         <!-- ============================================
              CURRENT WORK STRIP
-             Answers "what should I do next?" for the rider.
              ============================================ -->
         <section
             class="rider-work-card rider-work-card-<?php echo htmlspecialchars($currentWork['kind'], ENT_QUOTES, 'UTF-8'); ?>"

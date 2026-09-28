@@ -6,18 +6,53 @@
  *   Step 1 — Personal Information
  *   Step 2 — Vehicle Details
  *   Step 3 — Address & Emergency Contact
- *   Step 4 — Verification Uploads (Formal Photo + Driver's License)
+ *   Step 4 — Verification Uploads (Formal Photo + Driver's License
+ *            or other government-issued ID)
  *   Step 5 — Review & Submit
  *
  * The two required uploads live on Step 4 so the handler can read them
  * from the same request. They are presented side by side (photo left,
- * license right) in a two-column grid that collapses to a single
- * column on tablet and mobile:
- *   4A. Formal Photo      → $_FILES['profile_picture']
- *   4B. Driver's License  → $_FILES['drivers_license']
+ * ID right) in a two-column grid that collapses to a single column on
+ * tablet and mobile:
+ *   4A. Formal Photo         → $_FILES['profile_picture']
+ *   4B. Driver's License     → $_FILES['drivers_license']
+ *       (the input name stays 'drivers_license' for the whole page
+ *        because that is the field the handler reads; the DISPLAY
+ *        label and the required dates change based on the vehicle
+ *        type the applicant selected in Step 2)
  *
- * License issue date and expiry date are both required. An admin
- * cannot verify a rider without knowing when the license expires.
+ * Vehicle-type-driven layout
+ * --------------------------
+ * Two regions of the page depend on the vehicle type selected in
+ * Step 2:
+ *
+ *   Step 2 — Motor-vehicle-only fields
+ *     The plate, make, model, and year inputs apply only to a motor
+ *     vehicle. When the applicant selects 'bicycle', the entire
+ *     block is hidden: a bicycle has no plate, and the applicant has
+ *     no make/model/year to record for it. The inputs are wrapped in
+ *     a single #vehicleMotorOnlyFields container so CSS can hide
+ *     them together.
+ *
+ *   Step 4 — Identity-document block
+ *     The block renders both shapes (Driver's License and Valid
+ *     Government ID). CSS keyed on the page-level data attribute
+ *     shows exactly one of them, and hides the license-date row
+ *     when the vehicle is a bicycle.
+ *
+ * Both swaps are driven by a single attribute on the page root:
+ *
+ *     .register-page[data-vehicle-type="bicycle"]
+ *
+ * sign-up.js keeps that attribute in sync with the vehicle_type
+ * select. No inline style or inline script is used anywhere on the
+ * page — every swap is a CSS rule reading that attribute.
+ *
+ * License dates (issue_date / expiry_date) are only required when
+ * the vehicle is not a bicycle. The two date inputs carry the
+ * `required` attribute by default, and sign-up.js removes it when
+ * the vehicle is switched to bicycle. When the applicant switches
+ * back, sign-up.js restores it.
  *
  * Step 5 shows the review summary, the terms checkbox, and the final
  * submit button.
@@ -29,20 +64,21 @@
  *   - 32px / 24px card padding
  *
  * @package FitPal
- * @version 6.3 — Dropped the page-local CSRF bootstrap. The rider
- *                role's token is now assigned unconditionally by
- *                includes/header.php via rider-csrf-token.php, so
- *                this page no longer generates $_SESSION
- *                ['rider_csrf_token'] inline. It simply includes
- *                the header and reads $csrfToken from it. Behavior
- *                is unchanged: the form's POST field stays named
- *                csrf_token, and sign-up-handler.php still validates
- *                against $_SESSION['rider_csrf_token'].
+ * @version 6.6 — The plate, make, model, and year form-groups are
+ *                now wrapped in a single #vehicleMotorOnlyFields
+ *                container inside Step 2. CSS hides the whole
+ *                container when the vehicle is a bicycle, so the
+ *                three optional fields no longer render for a
+ *                bicycle applicant. Removed the previous
+ *                #vehiclePlateGroup id, whose per-group hide rule
+ *                was the only Step 2 visibility rule and left the
+ *                three optional fields visible.
  *
- *                (6.2: Uses its own session key, rider_csrf_token,
- *                for the registration form so a sign-in by another
- *                role in the same browser session cannot invalidate
- *                the token this form was rendered with.)
+ *                (6.5: added #vehiclePlateGroup. 6.4: Step 4's
+ *                identity block became vehicle-type-aware. 6.3:
+ *                dropped the page-local CSRF bootstrap; the rider
+ *                role's token is now assigned by includes/header.php
+ *                via rider-csrf-token.php.)
  */
 
 declare(strict_types=1);
@@ -80,7 +116,7 @@ $relationshipOptions = [
 ];
 ?>
 
-<div class="content register-page">
+<div class="content register-page" data-vehicle-type="">
     <div class="container">
         <div class="register-card">
 
@@ -295,43 +331,64 @@ $relationshipOptions = [
                             </select>
                             <div class="form-error" id="vehicleTypeError"></div>
                         </div>
-
-                        <div class="form-group">
-                            <label for="vehicle_plate" class="form-label">
-                                Plate Number
-                            </label>
-                            <input type="text" id="vehicle_plate" name="vehicle_plate" class="form-control"
-                                placeholder="e.g. ABC 1234" autocomplete="off" maxlength="10">
-                            <div class="form-error" id="vehiclePlateError"></div>
-                            <div class="form-hint">Required for motor vehicles</div>
-                        </div>
                     </div>
 
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="vehicle_make" class="form-label">
-                                Make / Brand <span class="text-muted">(Optional)</span>
-                            </label>
-                            <input type="text" id="vehicle_make" name="vehicle_make" class="form-control"
-                                placeholder="e.g. Honda" autocomplete="off" maxlength="40">
+                    <!-- ============================================================
+                         MOTOR-VEHICLE-ONLY FIELDS
+
+                         Every input in this wrapper applies only to a motor
+                         vehicle. When the applicant selects 'bicycle' in
+                         vehicle_type, sign-up.css hides this whole block via
+                         the page-level data-vehicle-type attribute:
+
+                             .register-page[data-vehicle-type="bicycle"]
+                                 #vehicleMotorOnlyFields { display: none; }
+
+                         sign-up.js also clears the values inside this block
+                         when the vehicle becomes bicycle, so a value typed
+                         while 'motorcycle' was selected does not linger in
+                         the DOM after the switch.
+                         ============================================================ -->
+                    <div id="vehicleMotorOnlyFields">
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="vehicle_plate" class="form-label">
+                                    Plate Number
+                                </label>
+                                <input type="text" id="vehicle_plate" name="vehicle_plate" class="form-control"
+                                    placeholder="e.g. ABC 1234" autocomplete="off" maxlength="10">
+                                <div class="form-error" id="vehiclePlateError"></div>
+                                <div class="form-hint">Required for motor vehicles</div>
+                            </div>
                         </div>
 
-                        <div class="form-group">
-                            <label for="vehicle_model" class="form-label">
-                                Model <span class="text-muted">(Optional)</span>
-                            </label>
-                            <input type="text" id="vehicle_model" name="vehicle_model" class="form-control"
-                                placeholder="e.g. Click 125i" autocomplete="off" maxlength="40">
-                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="vehicle_make" class="form-label">
+                                    Make / Brand <span class="text-muted">(Optional)</span>
+                                </label>
+                                <input type="text" id="vehicle_make" name="vehicle_make" class="form-control"
+                                    placeholder="e.g. Honda" autocomplete="off" maxlength="40">
+                            </div>
 
-                        <div class="form-group">
-                            <label for="vehicle_year" class="form-label">
-                                Year <span class="text-muted">(Optional)</span>
-                            </label>
-                            <input type="number" id="vehicle_year" name="vehicle_year" class="form-control"
-                                placeholder="e.g. 2022" min="1980" max="<?php echo (int)date('Y') + 1; ?>"
-                                autocomplete="off" inputmode="numeric">
-                            <div class="form-error" id="vehicleYearError"></div>
+                            <div class="form-group">
+                                <label for="vehicle_model" class="form-label">
+                                    Model <span class="text-muted">(Optional)</span>
+                                </label>
+                                <input type="text" id="vehicle_model" name="vehicle_model" class="form-control"
+                                    placeholder="e.g. Click 125i" autocomplete="off" maxlength="40">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="vehicle_year" class="form-label">
+                                    Year <span class="text-muted">(Optional)</span>
+                                </label>
+                                <input type="number" id="vehicle_year" name="vehicle_year" class="form-control"
+                                    placeholder="e.g. 2022" min="1980" max="<?php echo (int)date('Y') + 1; ?>"
+                                    autocomplete="off" inputmode="numeric">
+                                <div class="form-error" id="vehicleYearError"></div>
+                            </div>
                         </div>
                     </div>
 
@@ -488,8 +545,9 @@ $relationshipOptions = [
                     <div class="step-description">
                         <p>
                             We need two photos before you can start delivering: a formal
-                            profile picture and your driver's license. Each has its own
-                            requirements below.
+                            profile picture and a valid identity document. The exact
+                            document required depends on the vehicle you chose in
+                            Step 2.
                         </p>
                     </div>
 
@@ -544,31 +602,53 @@ $relationshipOptions = [
                             </div>
                         </div>
 
-                        <!-- 4B — DRIVER'S LICENSE (RIGHT) -->
+                        <!-- 4B — IDENTITY DOCUMENT (RIGHT)
+                             Two shapes live in this one block. CSS keyed
+                             on the page-level data-vehicle-type attribute
+                             shows exactly one of them. Both shapes share
+                             the same dropzone, the same file input, and
+                             the same remove button, so whichever is
+                             visible at submit time submits the same
+                             $_FILES['drivers_license'] entry. Only the
+                             header copy and the guidelines list change. -->
                         <div class="upload-block" id="uploadBlockLicense">
 
                             <div class="upload-block-header">
                                 <div class="upload-block-number" aria-hidden="true">2</div>
                                 <div class="upload-block-heading">
-                                    <h3 class="upload-block-title">
-                                        Driver's License <span class="text-danger">*</span>
-                                    </h3>
-                                    <p class="upload-block-subtitle">
-                                        Photo of your valid driver's license.
-                                    </p>
+
+                                    <!-- Driver's License shape -->
+                                    <div class="upload-block-heading-drivers-license">
+                                        <h3 class="upload-block-title">
+                                            Driver's License <span class="text-danger">*</span>
+                                        </h3>
+                                        <p class="upload-block-subtitle">
+                                            Photo of your valid driver's license.
+                                        </p>
+                                    </div>
+
+                                    <!-- Valid Government ID shape -->
+                                    <div class="upload-block-heading-government-id">
+                                        <h3 class="upload-block-title">
+                                            Valid Government ID <span class="text-danger">*</span>
+                                        </h3>
+                                        <p class="upload-block-subtitle">
+                                            Photo of a valid government-issued ID.
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
 
                             <div class="upload-block-body">
                                 <div class="upload-dropzone upload-avatar" id="licenseDropzone" tabindex="0"
-                                    role="button" aria-label="Upload driver's license">
+                                    role="button" aria-label="Upload identity document">
                                     <input type="file" id="drivers_license" name="drivers_license"
                                         accept="image/jpeg,image/png,image/webp" hidden>
 
                                     <div class="upload-preview" id="licensePreview" hidden>
-                                        <img src="" alt="License preview" id="licensePreviewImg">
+                                        <img src="" alt="ID preview" id="licensePreviewImg">
                                         <button type="button" class="upload-remove" id="licenseRemove"
-                                            aria-label="Remove license photo">&times;</button>
+                                            aria-label="Remove ID photo">&times;</button>
                                     </div>
 
                                     <div class="upload-hint" id="licenseHint">
@@ -577,14 +657,22 @@ $relationshipOptions = [
                                                 alt=""
                                                 onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-user-line.svg'">
                                         </div>
-                                        <p class="upload-hint-title">Upload license</p>
+                                        <p class="upload-hint-title">Upload ID</p>
                                         <p class="upload-hint-text">JPG, PNG, WEBP &middot; Max 5&nbsp;MB</p>
                                     </div>
                                 </div>
 
-                                <ul class="upload-guidelines">
+                                <!-- Driver's License shape guidelines -->
+                                <ul class="upload-guidelines upload-guidelines-drivers-license">
                                     <li>All four corners of the card visible</li>
                                     <li>Name, number, expiry must be readable</li>
+                                    <li>No glare, blur, or partial crops</li>
+                                </ul>
+
+                                <!-- Valid Government ID shape guidelines -->
+                                <ul class="upload-guidelines upload-guidelines-government-id">
+                                    <li>All four corners of the card visible</li>
+                                    <li>Name, ID number must be readable</li>
                                     <li>No glare, blur, or partial crops</li>
                                 </ul>
 
@@ -593,8 +681,12 @@ $relationshipOptions = [
                         </div>
                     </div>
 
-                    <!-- License dates: full-width row under the pair -->
-                    <div class="form-row upload-block-dates">
+                    <!-- License dates: full-width row under the pair.
+                         Hidden when the vehicle is a bicycle because a
+                         national ID carries neither date on its face.
+                         sign-up.js toggles the `required` attribute on
+                         the two inputs as the vehicle type changes. -->
+                    <div class="form-row upload-block-dates" id="licenseDatesRow">
                         <div class="form-group">
                             <label for="license_issue_date" class="form-label">
                                 License Issue Date <span class="text-danger">*</span>
@@ -705,10 +797,14 @@ $relationshipOptions = [
                                 <span class="review-value" id="reviewProfilePhoto">—</span>
                             </div>
                             <div class="review-row">
-                                <span class="review-label">Driver's License</span>
+                                <span class="review-label" id="reviewIdDocLabel">Driver's License</span>
                                 <span class="review-value" id="reviewLicensePhoto">—</span>
                             </div>
-                            <div class="review-row">
+                            <!-- License Validity row is hidden for bicycle
+                                 applicants. sign-up.js toggles the parent
+                                 .review-row's display based on the same
+                                 vehicle-type flag it uses for Step 4. -->
+                            <div class="review-row" id="reviewLicenseDatesRow">
                                 <span class="review-label">License Validity</span>
                                 <span class="review-value" id="reviewLicenseDates">—</span>
                             </div>

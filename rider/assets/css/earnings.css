@@ -40,31 +40,19 @@
  *   - Modal header title uses plain block display, no inline-flex.
  *
  * @package FitPal
- * @version 5.0 — Modal block consolidated into a single
- *                  `.modal.rider-withdraw-modal` section. Every
- *                  value realigned to the customer wallet recharge
- *                  modal reference:
- *                    - footer .btn flex: 1 (was 1 1 0)
- *                    - error slot always reserves min-height: 16px,
- *                      margin: 0 0 12px 0 (was collapse-to-zero)
- *                    - quick buttons natural height (was min-height
- *                      44px)
- *                    - modal-title plain block (was inline-flex)
- *                    - modal-close padding 0 var(--spacing-2)
- *                    - amount prefix uses flex align (removed
- *                      top:50% / translateY)
- *                    - amount input removed appearance and
- *                      background transition
- *                    - removed ::placeholder rule
- *                    - added html { scrollbar-gutter: stable }
- *                  Removed the duplicate second modal block that
- *                  used `.rider-withdraw-modal` alone.
+ * @version 5.1 — Page shell now stretches to the footer. The chain
+ *                .content → .rider-earnings-page → .container is
+ *                now all flex columns with flex: 1, matching the
+ *                customer wallet shell. This lets the empty
+ *                transaction state (or the last panel) fill the
+ *                space to the footer instead of leaving a gap.
  *
- *                (4.4: cascade-locked modal block. 4.3: modal
- *                width and prefix alignment. 4.2: modal width and
- *                prefix alignment. 4.1: modal structure aligned.
- *                4.0: shared classes. 3.0: tabs. 2.4: page-owned
- *                body/footer. 2.0: tabs added. 1.0: initial.)
+ *                (5.0: Modal block consolidated. 4.4: cascade-locked
+ *                modal block. 4.3: modal width and prefix alignment.
+ *                4.2: modal width and prefix alignment. 4.1: modal
+ *                structure aligned. 4.0: shared classes. 3.0: tabs.
+ *                2.4: page-owned body/footer. 2.0: tabs added.
+ *                1.0: initial.)
  */
 
 /* Reserve the scrollbar gutter permanently. When the body scrollbar
@@ -90,7 +78,10 @@ html {
 .rider-earnings-page {
     background: var(--gray-50);
     padding: 24px 0 40px 0;
+    display: flex;
+    flex-direction: column;
     flex: 1;
+    min-height: calc(100vh - 70px);
 }
 
 .rider-earnings-page .container {
@@ -99,6 +90,9 @@ html {
     padding: 0 16px;
     width: 100%;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
 }
 
 /* ============================================
@@ -107,6 +101,7 @@ html {
 
 .page-title-header {
     margin-bottom: 24px;
+    flex-shrink: 0;
 }
 
 .page-title-header-top {
@@ -169,6 +164,7 @@ html {
     border: 1px solid transparent;
     font-size: var(--font-size-sm);
     line-height: 1.5;
+    flex-shrink: 0;
 }
 
 .alert-success {
@@ -199,6 +195,7 @@ html {
     overflow-x: auto;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
+    flex-shrink: 0;
 }
 
 .rider-earnings-tabs::-webkit-scrollbar {
@@ -268,10 +265,13 @@ html {
    ============================================ */
 
 .rider-earnings-panel {
-    display: block;
+    display: none;
+    flex: 1;
+    flex-direction: column;
 }
 
 .rider-earnings-panel.active {
+    display: flex;
     animation: riderEarningsPanelIn 180ms cubic-bezier(0.4, 0, 0.2, 1) both;
 }
 
@@ -302,6 +302,7 @@ html {
     margin-bottom: 24px;
     box-shadow: var(--shadow-lg);
     flex-wrap: wrap;
+    flex-shrink: 0;
 }
 
 .rider-balance-left {
@@ -367,6 +368,7 @@ html {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 16px;
+    flex-shrink: 0;
 }
 
 .rider-earnings-stat {
@@ -416,6 +418,7 @@ html {
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    flex: 1;
 }
 
 .rider-card-header {
@@ -444,6 +447,7 @@ html {
 
 .rider-chart-body {
     padding: 20px;
+    flex: 1;
 }
 
 .rider-weekly-chart {
@@ -722,6 +726,7 @@ html {
     gap: 16px;
     padding: 16px 20px;
     border-top: 1px solid var(--gray-100);
+    flex-shrink: 0;
 }
 
 .rider-pagination-link {
@@ -763,6 +768,9 @@ html {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
+    flex: 1;
+    min-height: 300px;
 }
 
 .rider-empty-icon {

@@ -4,77 +4,92 @@
  *
  * Actions:
  *   toggle_availability, update_profile, upload_picture,
- *   accept_assignment, decline_assignment, delivered,
- *   request_withdrawal
+ *   accept_assignment, decline_assignment,
+ *   mark_picked_up, delivered,
+ *   request_withdrawal,
+ *   check_sign_out
  *
- * Assignment model
- * ----------------
- * The kitchen assigns a rider, moving the order to 'rider_pending'.
- * The rider accepts (order → 'delivering') or declines (order →
- * 'preparing', rider freed). This handler is the only entry point for
- * those transitions.
+ * Order lifecycle
+ * ---------------
+ *     rider_pending  --accept_assignment-->  picking_up
+ *     picking_up     --mark_picked_up----->  delivering
+ *     delivering     --delivered---------->  delivered
+ *
+ * Accepting no longer puts the order in transit. The rider must
+ * take a second explicit action ("Mark Picked Up") once they have
+ * the food in hand. No step may be skipped:
+ *
+ *   - accept_assignment only accepts from 'rider_pending'
+ *   - mark_picked_up    only accepts from 'picking_up'
+ *   - delivered         only accepts from 'delivering'
+ *
+ * Concurrent-order cap
+ * --------------------
+ * The cap of 3 applies to the orders the rider has ACTUALLY
+ * ACCEPTED — the ones in 'picking_up' and 'delivering'. An order in
+ * 'rider_pending' is a kitchen offer the rider has not yet decided
+ * on; it does not occupy a delivery slot. A rider with 3 pending
+ * offers can accept all 3. Once all 3 are accepted, the rider is at
+ * the cap and must finish at least one before accepting a 4th.
+ *
+ * The same cap is enforced by the restaurant's assignRiderToOrder()
+ * under a FOR UPDATE lock and by the SQL trigger
+ * before_order_rider_assign — but only for committed orders.
  *
  * Availability model
  * ------------------
  * toggle_availability is the ONLY action in this file that writes
- * delivery_rider_profile.is_available. accept_assignment and
- * delivered deliberately do NOT touch it: a rider who was online when
- * they accepted an order stays online when they finish it. The
- * "one active delivery per rider" rule is enforced at assignment
- * time by the kitchen's order-queries.php::assignRiderToOrder(), not
- * by flipping this flag.
+ * delivery_rider_profile.is_available. accept_assignment,
+ * mark_picked_up, and delivered deliberately do NOT touch it: a
+ * rider who was online when they accepted an order stays online
+ * when they finish it. Going offline is refused while the rider
+ * has any order in 'rider_pending', 'picking_up', or 'delivering'
+ * — enforced by setRiderAvailability() in rider-queries.php.
  *
- * Payout model
- * ------------
- * delivered runs inside a single transaction that (a) flips the
- * order to 'delivered' and (b) credits the rider's financial_account
- * via creditRiderForDelivery() from rider-queries.php. If either
- * write fails, both roll back. creditRiderForDelivery() is
- * idempotent per order, so a retry after a transient failure cannot
- * double-pay.
+ * Sign-out eligibility
+ * --------------------
+ * check_sign_out is a read-only action. It answers two questions:
+ *
+ *   1. Does the rider have any live order right now?
+ *   2. Is the rider currently online?
+ *
+ * A rider may only sign out when BOTH are false:
+ *
+ *   - every order is finished (no 'rider_pending', no 'picking_up',
+ *     no 'delivering'), and
+ *   - the rider is offline (is_available = 0).
+ *
+ * The client calls this before opening the sign-out confirmation
+ * modal. When the answer is "not yet", the client opens a blocking
+ * modal instead and tells the rider exactly which condition is
+ * unmet.
+ *
+ * The check is deliberately read-only. It does NOT flip the rider
+ * offline on the way out. Sign-out must never be a hidden state
+ * change — the rider decides when to go offline, and they do that
+ * from the assignment panel, not from the sign-out button.
  *
  * @package FitPal
- * @version 5.1 — Moves the delivery payout constant to file scope.
- *                PHP does not allow `const` inside a function body;
- *                the previous revision declared it inside
- *                handleDelivered(), which is a compile-time error
- *                ("syntax error, unexpected token const") that took
- *                the entire handler offline — every action on this
- *                endpoint returned a 500 with an HTML error body,
- *                which the dashboard's fetch() could not parse as
- *                JSON. Moving the constant to file scope after
- *                declare(strict_types=1) restores the whole file.
+ * @version 7.2 — The accept_assignment guard message now names the
+ *                cap as "accepted orders" to match the committed-
+ *                order count riderAtConcurrentCap() enforces.
+ *                A rider with 3 pending offers but no accepted
+ *                orders is no longer refused. No other action
+ *                changed.
  *
- *                No behavior change for any action. The value is
- *                still 50.00 and is still the single point of truth
- *                on the write path. The dashboard / earnings stats
- *                SQL in rider-queries.php still assumes the same flat
- *                rate; if the schedule ever changes, both places
- *                must move together.
- *
- *                (5.0: Delivery payout — handleDelivered() runs the
- *                order update and rider credit in one transaction
- *                with a FOR UPDATE lock on the order row. 4.1: CSRF
- *                validation reads rider_csrf_token instead of the
- *                shared csrf_token. 4.0: Introduced
- *                accept_assignment and decline_assignment; removed
- *                picked_up; tightened delivered; made
- *                toggle_availability refuse while a delivery is
- *                active.)
+ *                (7.1: adds check_sign_out. 7.0: picking_up
+ *                intermediate status. 6.1: per-rider, per-day
+ *                upload layout. 6.0: upload URL resolution.
+ *                5.2: upload UPDATE delegated to rider-queries.php.
+ *                5.1: delivery payout constant at file scope.
+ *                5.0: delivery payout. 4.1: rider_csrf_token.
+ *                4.0: accept + decline.)
  */
 
 declare(strict_types=1);
 
 /**
  * Flat amount credited to a rider for each completed delivery.
- *
- * File-scope constant because PHP forbids `const` inside a function
- * body. Referenced by handleDelivered() below. The dashboard and
- * earnings stats SQL in rider-queries.php assume the same value, so
- * if this number ever changes, the queries that compute
- * today_earnings, week_earnings, month_earnings, and total_earnings
- * must change in lockstep — or be rewritten to SUM(transaction.amount)
- * for the delivered rows.
  */
 const RIDER_DELIVERY_PAYOUT = 50.00;
 
@@ -98,22 +113,13 @@ require_once __DIR__ . '/../database/rider-queries.php';
 
 // Own the rider role's CSRF bootstrap. The helper is idempotent and
 // stores the token under 'rider_csrf_token' — never the shared
-// 'csrf_token' key. Requiring it here means this handler does not
-// depend on the page that rendered the form having already generated
-// the token, and it gives the mismatch branch below a key it can
-// rotate.
+// 'csrf_token' key.
 require_once __DIR__ . '/../../includes/rider-csrf-token.php';
 
 if (
     !isset($_POST['csrf_token'], $_SESSION['rider_csrf_token']) ||
     !hash_equals((string)$_SESSION['rider_csrf_token'], (string)$_POST['csrf_token'])
 ) {
-    // Rotate the rider's own token so the next render generates a
-    // fresh one. Without this the key stays set, getRiderCsrfToken()
-    // returns the same stale value, and the client is stuck
-    // re-submitting a token the handler has already rejected.
-    // Only the rider's key is cleared — never the shared
-    // 'csrf_token' key.
     unset($_SESSION['rider_csrf_token']);
 
     ob_end_clean();
@@ -141,12 +147,16 @@ try {
             break;
 
         case 'accept_assignment':
-        case 'accept_order': // legacy alias, remove after one release
+        case 'accept_order':
             $response = handleAcceptAssignment($database_connection, $riderId);
             break;
 
         case 'decline_assignment':
             $response = handleDeclineAssignment($database_connection, $riderId);
+            break;
+
+        case 'mark_picked_up':
+            $response = handleMarkPickedUp($database_connection, $riderId);
             break;
 
         case 'delivered':
@@ -155,6 +165,10 @@ try {
 
         case 'request_withdrawal':
             $response = handleWithdrawal($database_connection, $riderId);
+            break;
+
+        case 'check_sign_out':
+            $response = handleCheckSignOut($database_connection, $riderId);
             break;
     }
 } catch (PDOException $e) {
@@ -171,6 +185,42 @@ exit;
 
 // ----------------------------------------------------------------
 
+/**
+ * Answer the two questions the sign-out button needs before it can
+ * let the rider leave:
+ *
+ *   can_sign_out  true only when the rider has no live orders AND
+ *                 is offline.
+ *   is_online     the rider's current availability flag.
+ *   active_count  number of orders in rider_pending / picking_up /
+ *                 delivering.
+ *
+ * Read-only. Does not change availability, does not touch any
+ * order. The client uses the three fields to decide whether to
+ * open the normal sign-out confirmation or a blocking modal that
+ * names the unmet condition.
+ */
+function handleCheckSignOut(PDO $db, int $riderId): array
+{
+    $profile = getRiderProfile($db, $riderId);
+
+    if (!$profile) {
+        return ['status' => 'error', 'message' => 'Rider not found.'];
+    }
+
+    $isOnline    = (int)($profile['is_available'] ?? 0) === 1;
+    $activeCount = hasActiveOrder($db, $riderId);
+
+    $canSignOut = (!$isOnline) && ($activeCount === 0);
+
+    return [
+        'status'       => 'success',
+        'can_sign_out' => $canSignOut,
+        'is_online'    => $isOnline,
+        'active_count' => $activeCount,
+    ];
+}
+
 function handleToggleAvailability(PDO $db, int $riderId): array
 {
     $isAvailable = (int)($_POST['is_available'] ?? 0) === 1 ? 1 : 0;
@@ -180,7 +230,8 @@ function handleToggleAvailability(PDO $db, int $riderId): array
     if (!$applied) {
         return [
             'status'  => 'error',
-            'message' => 'You cannot go offline while you have an active delivery.',
+            'message' => 'You cannot go offline while you have active orders. '
+                       . 'Finish all your deliveries first.',
         ];
     }
 
@@ -206,20 +257,93 @@ function handleUpdateProfile(PDO $db, int $riderId): array
     return ['status' => 'success', 'message' => 'Profile updated successfully.'];
 }
 
+/**
+ * Build the next MM_DD_YYYY_<n>.<ext> filename for a destination
+ * folder.
+ */
+function buildRiderUploadFilename(string $uploadDir, string $ext): string
+{
+    $dayPrefix = date('m_d_Y');
+
+    $existing = @scandir($uploadDir);
+    if ($existing === false) {
+        $existing = [];
+    }
+
+    $usedIndexes  = [];
+    $prefixLength = strlen($dayPrefix) + 1;
+
+    foreach ($existing as $entry) {
+        if ($entry === '.' || $entry === '..') {
+            continue;
+        }
+        if (strpos($entry, $dayPrefix . '_') !== 0) {
+            continue;
+        }
+
+        $rest   = substr($entry, $prefixLength);
+        $dotPos = strpos($rest, '.');
+        if ($dotPos === false) {
+            continue;
+        }
+
+        $counterPart = substr($rest, 0, $dotPos);
+        if ($counterPart === '' || !ctype_digit($counterPart)) {
+            continue;
+        }
+
+        $usedIndexes[(int)$counterPart] = true;
+    }
+
+    $nextIndex = 0;
+    while (isset($usedIndexes[$nextIndex])) {
+        $nextIndex++;
+    }
+
+    return $dayPrefix . '_' . $nextIndex . '.' . $ext;
+}
+
+/**
+ * Receive a profile picture upload, move the file into place, and
+ * store its project-root-relative path.
+ */
 function handleUploadPicture(PDO $db, int $riderId): array
 {
-    if (empty($_FILES['profile_picture']) || $_FILES['profile_picture']['error'] !== UPLOAD_ERR_OK) {
-        return ['status' => 'error', 'message' => 'No file uploaded or upload failed.'];
+    if (empty($_FILES['profile_picture']) || !is_array($_FILES['profile_picture'])) {
+        return ['status' => 'error', 'message' => 'No file uploaded.'];
     }
 
     $file = $_FILES['profile_picture'];
 
-    if ($file['size'] > 2 * 1024 * 1024) {
+    if (!isset($file['error']) || is_array($file['error'])) {
+        return ['status' => 'error', 'message' => 'Invalid upload payload.'];
+    }
+
+    if ($file['error'] === UPLOAD_ERR_NO_FILE) {
+        return ['status' => 'error', 'message' => 'No file uploaded.'];
+    }
+
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        return [
+            'status'  => 'error',
+            'message' => 'Upload failed (code ' . (int)$file['error'] . ').',
+        ];
+    }
+
+    if (!isset($file['size']) || (int)$file['size'] <= 0) {
+        return ['status' => 'error', 'message' => 'Uploaded file is empty.'];
+    }
+
+    if ((int)$file['size'] > 2 * 1024 * 1024) {
         return ['status' => 'error', 'message' => 'File must be under 2 MB.'];
     }
 
     $finfo = finfo_open(FILEINFO_MIME_TYPE);
-    $mime  = finfo_file($finfo, $file['tmp_name']);
+    if ($finfo === false) {
+        return ['status' => 'error', 'message' => 'Could not inspect the uploaded file.'];
+    }
+
+    $mime = (string)finfo_file($finfo, (string)$file['tmp_name']);
     finfo_close($finfo);
 
     $allowed = [
@@ -230,60 +354,78 @@ function handleUploadPicture(PDO $db, int $riderId): array
     ];
 
     if (!isset($allowed[$mime])) {
-        return ['status' => 'error', 'message' => 'Only JPG, PNG, WEBP, or GIF allowed.'];
+        return [
+            'status'  => 'error',
+            'message' => 'Unsupported file type. Use JPG, PNG, WEBP, or GIF.',
+        ];
     }
 
     $ext = $allowed[$mime];
 
     $projectRoot = realpath(__DIR__ . '/../../..');
     if ($projectRoot === false) {
-        return ['status' => 'error', 'message' => 'Upload path unavailable.'];
+        return ['status' => 'error', 'message' => 'Server storage path unavailable.'];
     }
 
-    $uploadDir = $projectRoot . '/shared/uploads/rider-profiles';
+    $relativeDir = 'shared/uploads/rider/profiles/' . $riderId;
+    $uploadDir   = $projectRoot . '/' . $relativeDir;
 
     if (!is_dir($uploadDir)) {
-        if (!mkdir($uploadDir, 0755, true)) {
+        if (!mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
             return ['status' => 'error', 'message' => 'Could not create upload directory.'];
         }
     }
 
-    $filename = 'rider_' . $riderId . '_' . time() . '.' . $ext;
-    $fullPath = $uploadDir . '/' . $filename;
+    $filename = buildRiderUploadFilename($uploadDir, $ext);
 
-    if (!move_uploaded_file($file['tmp_name'], $fullPath)) {
-        return ['status' => 'error', 'message' => 'Could not save file.'];
+    $fullPath     = $uploadDir . '/' . $filename;
+    $relativePath = $relativeDir . '/' . $filename;
+
+    if (!move_uploaded_file((string)$file['tmp_name'], $fullPath)) {
+        return ['status' => 'error', 'message' => 'Could not save the uploaded file.'];
     }
 
-    $relativePath = 'shared/uploads/rider-profiles/' . $filename;
+    try {
+        updateRiderProfilePicture($db, $riderId, $relativePath);
+    } catch (Throwable $e) {
+        if (is_file($fullPath)) {
+            @unlink($fullPath);
+        }
+        throw $e;
+    }
 
-    $stmt = $db->prepare(
-        "UPDATE delivery_rider_profile
-            SET profile_picture = :pic
-          WHERE delivery_rider_id = :rider_id"
-    );
-    $stmt->execute([
-        ':pic'      => $relativePath,
-        ':rider_id' => $riderId,
-    ]);
+    $url = '';
+
+    $projectRootFs  = $projectRoot;
+    $documentRootFs = isset($_SERVER['DOCUMENT_ROOT']) && is_string($_SERVER['DOCUMENT_ROOT'])
+        ? realpath($_SERVER['DOCUMENT_ROOT'])
+        : false;
+
+    if ($projectRootFs !== false && $documentRootFs !== false) {
+        $projectRootFs  = str_replace('\\', '/', $projectRootFs);
+        $documentRootFs = rtrim(str_replace('\\', '/', $documentRootFs), '/');
+
+        $urlPrefix = '';
+
+        if ($projectRootFs === $documentRootFs) {
+            $urlPrefix = '';
+        } elseif (strpos($projectRootFs, $documentRootFs . '/') === 0) {
+            $urlPrefix = substr($projectRootFs, strlen($documentRootFs));
+        } else {
+            $urlPrefix = '';
+        }
+
+        $url = $urlPrefix . '/' . ltrim($relativePath, '/');
+    }
 
     return [
         'status'  => 'success',
         'message' => 'Profile picture updated.',
         'path'    => $relativePath,
+        'url'     => $url,
     ];
 }
 
-/**
- * Accept the kitchen's assignment.
- *
- * Eligibility gate: verified, online, fewer than two committed
- * orders, and the order is actually sitting in rider_pending with
- * this rider's id on it. acceptOrder() performs the state change.
- *
- * The rider's is_available flag is NOT touched here. Availability is
- * the rider's own toggle and must survive across deliveries.
- */
 function handleAcceptAssignment(PDO $db, int $riderId): array
 {
     $orderId = (int)($_POST['order_id'] ?? 0);
@@ -300,10 +442,13 @@ function handleAcceptAssignment(PDO $db, int $riderId): array
         return ['status' => 'error', 'message' => 'Go online first to accept orders.'];
     }
 
-    if (hasActiveOrder($db, $riderId) >= 2) {
+    if (riderAtConcurrentCap($db, $riderId)) {
         return [
             'status'  => 'error',
-            'message' => 'You already have the maximum number of active orders. Complete one before accepting another.',
+            'message' => 'You already have '
+                       . RIDER_CONCURRENT_CAP
+                       . ' accepted orders in progress. '
+                       . 'Finish at least one before accepting another.',
         ];
     }
 
@@ -318,16 +463,11 @@ function handleAcceptAssignment(PDO $db, int $riderId): array
 
     return [
         'status'  => 'success',
-        'message' => 'Assignment accepted. Head to the restaurant for pickup.',
+        'message' => 'Assignment accepted. Head to the restaurant to pick up the order.',
+        'order_status' => 'picking_up',
     ];
 }
 
-/**
- * Decline the kitchen's assignment.
- *
- * Returns the order to the kitchen's Preparing tab with no rider
- * attached. The rider's availability is untouched.
- */
 function handleDeclineAssignment(PDO $db, int $riderId): array
 {
     $orderId = (int)($_POST['order_id'] ?? 0);
@@ -350,25 +490,30 @@ function handleDeclineAssignment(PDO $db, int $riderId): array
     ];
 }
 
-/**
- * Mark a delivering order as delivered and credit the rider.
- *
- * Runs both writes inside one transaction:
- *   1. orders.order_status → 'delivered', delivered_at → NOW()
- *   2. insert a completed deposit into the rider's financial account
- *
- * The order row is locked FOR UPDATE before the update, so a
- * concurrent cancel / reassign cannot race the delivered transition.
- * If either write fails, the whole transaction rolls back. The
- * rider credit itself is idempotent per order (see
- * creditRiderForDelivery in rider-queries.php), so a retry after a
- * transient failure cannot double-pay.
- *
- * The payout amount lives in the file-scope RIDER_DELIVERY_PAYOUT
- * constant. The dashboard / earnings stats SQL in rider-queries.php
- * assumes the same flat rate; if the schedule ever changes, both
- * places must move together.
- */
+function handleMarkPickedUp(PDO $db, int $riderId): array
+{
+    $orderId = (int)($_POST['order_id'] ?? 0);
+    if ($orderId <= 0) {
+        return ['status' => 'error', 'message' => 'Invalid order.'];
+    }
+
+    $picked = markOrderPickedUp($db, $riderId, $orderId);
+
+    if (!$picked) {
+        return [
+            'status'  => 'error',
+            'message' => 'Could not mark this order as picked up. '
+                       . 'It may already be in transit or was reassigned.',
+        ];
+    }
+
+    return [
+        'status'       => 'success',
+        'message'      => 'Order picked up. Head to the customer.',
+        'order_status' => 'delivering',
+    ];
+}
+
 function handleDelivered(PDO $db, int $riderId): array
 {
     $orderId = (int)($_POST['order_id'] ?? 0);
@@ -379,8 +524,6 @@ function handleDelivered(PDO $db, int $riderId): array
     $db->beginTransaction();
 
     try {
-        // Lock the order row so a concurrent cancel / reassign cannot
-        // race the delivered transition.
         $check = $db->prepare(
             "SELECT order_id
                FROM orders
@@ -397,7 +540,11 @@ function handleDelivered(PDO $db, int $riderId): array
 
         if ($check->fetchColumn() === false) {
             $db->rollBack();
-            return ['status' => 'error', 'message' => 'Order not eligible for delivery.'];
+            return [
+                'status'  => 'error',
+                'message' => 'Order is not eligible to be marked delivered. '
+                           . 'Confirm the pickup step first.',
+            ];
         }
 
         $update = $db->prepare(
@@ -419,10 +566,6 @@ function handleDelivered(PDO $db, int $riderId): array
             return ['status' => 'error', 'message' => 'Could not complete the delivery. Please try again.'];
         }
 
-        // Credit the rider. The trigger on `transaction` moves the
-        // balance; this call only inserts the row. If the order was
-        // already credited (e.g. an admin override ran first), the
-        // function returns false and nothing further happens.
         creditRiderForDelivery($db, $riderId, $orderId, RIDER_DELIVERY_PAYOUT);
 
         $db->commit();

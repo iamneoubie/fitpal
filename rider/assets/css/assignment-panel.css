@@ -17,9 +17,6 @@
  * Design tokens
  * -------------
  * Uses only the CSS variables defined in shared/assets/css/global.css.
- * No hard-coded colors beyond the overlays and the two confirm-tint
- * pairs that already existed in the previous revision. No external
- * fonts, no box shadows invented here.
  *
  * Textareas
  * ---------
@@ -34,6 +31,21 @@
  * down by calc(100% - 56px) so exactly the header bar remains on
  * screen.
  *
+ * Wrapper pointer-events contract
+ * -------------------------------
+ * The wrapper spans the full viewport width (left: 0; right: 0) so
+ * the inner panel can be centered by a max-width rule. That span
+ * means the wrapper's box covers the entire bottom strip of the
+ * viewport, including the empty areas to the left and right of the
+ * visible panel. If the wrapper captured pointer events, every
+ * click in that strip would hit the wrapper instead of the page
+ * underneath.
+ *
+ * The fix is to set pointer-events: none on the wrapper and
+ * pointer-events: auto on the inner panel. Clicks in the empty
+ * areas to the sides fall through to the page. Clicks on the
+ * visible panel still reach the panel.
+ *
  * Availability pill contract
  * --------------------------
  * The pill is a real <button>. It carries two label spans:
@@ -44,30 +56,36 @@
  *   - default / not hovered / not focused → base label
  *   - :hover or :focus-visible            → action label
  *
- * The width of the pill is allowed to change between the two
- * labels. The swap is instantaneous (display: none / inline), so
- * there is no fade or slide that would fight the state change.
- *
  * The action text itself is written by JS on every poll, because
  * the copy depends on BOTH the online flag and whether the rider
  * has a live assignment. CSS only decides which span is visible.
  *
- * @package FitPal
- * @version 7.0 — The availability pill is now a real <button>. Adds
- *                the button reset, the hover/focus label swap, and
- *                the availability modal rules. The modal carries
- *                data-variant and data-icon attributes and follows
- *                the same pattern the confirm modal on
- *                rider/pages/deliveries.php already uses: CSS picks
- *                the icon and the confirm button colour from those
- *                attributes. No change to the wrapper, the header,
- *                the toggle chevron, the panel body, the row
- *                layout, the empty state, the notification modal,
- *                the chat modal, or any responsive breakpoint.
+ * Action-button wrapping (v7.2)
+ * -----------------------------
+ * The action row on an assignment panel row now holds up to four
+ * buttons in the worst case (rider_pending: Decline, Accept,
+ * Message, Call). At normal widths all four fit on one line beside
+ * the status badge. On very narrow phones (≤ 360px) they wrap to a
+ * second line. flex-wrap: wrap on .assignment-row-actions lets
+ * that happen without any width calculation — the gap the rule
+ * already set keeps the wrapped line consistent with the unwrapped
+ * one.
  *
- *                (6.0: wrapper permanently visible. 5.0:
- *                notification modal fix. 4.0: click-to-navigate on
- *                .assignment-row-top. 3.0: three-zone header grid.)
+ * @package FitPal
+ * @version 7.2 — Adds explicit flex-wrap: wrap to
+ *                .assignment-row-actions so a row with three or
+ *                four action buttons wraps cleanly on narrow
+ *                phones. No other rule changed from 7.1.
+ *
+ *                The new picking_up row action (Mark Picked Up)
+ *                reuses the existing is-primary variant, so no
+ *                new button-style rule is required.
+ *
+ *                (7.1: wrapper pointer-events: none. 7.0: pill is
+ *                a real button. 6.0: wrapper permanently visible.
+ *                5.0: notification modal fix. 4.0: click-to-
+ *                navigate on .assignment-row-top. 3.0: three-zone
+ *                header grid.)
  */
 
 /* ============================================================
@@ -77,6 +95,11 @@
    inline display is set to 'block' once by assignment-panel.js in
    init() and never touched again; the CSS below owns every other
    property.
+
+   pointer-events: none on this element is what allows clicks in
+   the empty strip beside and above the visible panel to reach the
+   page underneath. The visible panel re-enables pointer events on
+   .assignment-panel-inner below.
    ============================================================ */
 
 .assignment-panel-wrapper {
@@ -86,7 +109,7 @@
     right: 0;
     z-index: 900;
     display: block;
-    pointer-events: auto;
+    pointer-events: none;
     transform: translateY(0);
     overflow: visible;
 }
@@ -176,15 +199,9 @@
 
 /* ============================================================
    AVAILABILITY BUTTON
-
-   Was a <div role="status">. Now a real <button>. The rules below
-   reset the browser's default button chrome and then re-apply the
-   pill's visual state so nothing about the resting appearance
-   changes.
    ============================================================ */
 
 .assignment-panel-status {
-    /* Button reset */
     appearance: none;
     -webkit-appearance: none;
     margin: 0;
@@ -197,7 +214,6 @@
     -webkit-tap-highlight-color: transparent;
     box-sizing: border-box;
 
-    /* Pill layout — identical to the previous revision */
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -238,12 +254,7 @@
     transition: background 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* ---- Label swap ----
-   Exactly one span is visible at a time:
-     not hovered / not focused → base state label
-     :hover or :focus-visible  → action label
-   The width of the pill is allowed to change between them, which
-   is what makes the hover affordance readable. */
+/* ---- Label swap ---- */
 
 .assignment-panel-status-text,
 .assignment-panel-status-action {
@@ -530,12 +541,23 @@
 .assignment-row-status.badge-warning { background: #fff3cd; color: #856404; }
 .assignment-row-status.badge-primary { background: #cce5ff; color: #004085; }
 
+/* ---- Actions slot ----
+ *
+ * Holds up to four icon buttons in the worst case
+ * (rider_pending: Decline, Accept, Message, Call). At normal
+ * widths they sit on one line beside the status badge; flex-wrap
+ * lets them fall to a second line on very narrow phones without
+ * any width arithmetic. The gap matches the row's own gap so a
+ * wrapped line is visually consistent with an unwrapped one.
+ */
 .assignment-row-actions {
     display: flex;
     align-items: center;
     gap: 6px;
     margin-left: auto;
     flex-shrink: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
 .assignment-row-meta {
@@ -983,19 +1005,6 @@
 
 /* ============================================================
    AVAILABILITY MODAL
-
-   Sibling of the notification modal. Same fixed-position
-   full-viewport centering pattern. The three shapes are expressed
-   entirely by the wrapper's data-variant and data-icon attributes:
-
-     data-variant="primary" data-icon="online"   → Go Online
-     data-variant="danger"  data-icon="offline"  → Go Offline
-     data-variant="neutral" data-icon="blocked"  → Blocked
-
-   The three SVGs are pre-rendered in the icon circle; only the one
-   whose class matches data-icon is shown. The confirm button's
-   colour follows data-variant. The Cancel button is hidden in the
-   blocked shape.
    ============================================================ */
 
 .assignment-availability-modal {
@@ -1046,10 +1055,6 @@
     opacity: 1;
 }
 
-/* ---- Icon circle ----
-   The circle's tint follows the modal's variant. The visible icon
-   inside follows data-icon. Only one of the three is shown. */
-
 .assignment-availability-icon {
     width: 64px;
     height: 64px;
@@ -1080,16 +1085,12 @@
     display: none;
 }
 
-/* Online icon: primary green tint */
-
 .assignment-availability-modal[data-icon="online"] .assignment-availability-icon-online {
     display: block;
     filter: brightness(0) saturate(100%)
             invert(48%) sepia(70%) saturate(450%)
             hue-rotate(75deg) brightness(95%) contrast(85%);
 }
-
-/* Offline icon: danger red tint */
 
 .assignment-availability-modal[data-icon="offline"] .assignment-availability-icon-offline {
     display: block;
@@ -1098,16 +1099,12 @@
             hue-rotate(330deg) brightness(90%) contrast(85%);
 }
 
-/* Blocked icon: warning amber tint */
-
 .assignment-availability-modal[data-icon="blocked"] .assignment-availability-icon-blocked {
     display: block;
     filter: brightness(0) saturate(100%)
             invert(70%) sepia(90%) saturate(1000%)
             hue-rotate(0deg) brightness(95%) contrast(90%);
 }
-
-/* ---- Title + body ---- */
 
 .assignment-availability-title {
     margin: 0 0 6px 0;
@@ -1126,8 +1123,6 @@
     text-align: center;
     max-width: 340px;
 }
-
-/* ---- Footer ---- */
 
 .assignment-availability-actions {
     display: flex;
@@ -1160,9 +1155,6 @@
     outline-offset: 2px;
 }
 
-/* Cancel button — neutral black on white, matching the general.md
-   rule for a neutral button. */
-
 .assignment-availability-btn-cancel {
     background: #1a1a1a;
     border-color: #1a1a1a;
@@ -1175,14 +1167,9 @@
     border-color: #000000;
 }
 
-/* Cancel is hidden in the blocked shape. When hidden, the confirm
-   button takes the full row. */
-
 .assignment-availability-btn-cancel[hidden] {
     display: none;
 }
-
-/* Confirm button colour follows the modal's variant. */
 
 .assignment-availability-modal[data-variant="primary"] .assignment-availability-btn-confirm {
     background: var(--primary);

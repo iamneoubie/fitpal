@@ -2,24 +2,52 @@
 /**
  * FitPal Customer Wallet Page
  *
- * Shows the customer's balance, transaction history, and the
- * recharge flow (amount entry → QR simulation → success).
+ * Two-tab layout:
+ *   - Credit        balance hero, Recharge button, wallet-only
+ *                   activity list (completed movements only)
+ *   - Transactions  full wallet-account activity list (every row,
+ *                   including pending COD and Online payments)
+ *
+ * Only the active tab's markup is rendered. The other panel is not
+ * in the DOM. The tab is selected by ?tab=credit or
+ * ?tab=transactions; anything else falls back to credit.
+ *
+ * Each tab paginates independently. The Credit tab's page count
+ * comes from countWalletTransactions(); the Transactions tab's
+ * comes from countWalletAccountActivity(). Both are scoped to the
+ * same customer but over different filters, so a page-2 link on one
+ * tab never lands on a page that belongs to the other.
  *
  * ---------------------------------------------------------------------
  * SCOPE RULES APPLIED
  * ---------------------------------------------------------------------
- *  - No SQL. getWalletAccount(), getWalletTransactions(), and
- *    countWalletTransactions() come from wallet-queries.php.
+ *  - No SQL. getWalletAccount(), getWalletTransactions(),
+ *    countWalletTransactions(), getWalletAccountActivity(), and
+ *    countWalletAccountActivity() come from wallet-queries.php.
  *  - No inline CSS. wallet.css is loaded via the customer header's
  *    $pageCssMap.
  *  - formatCurrency() comes from customer-queries.php. It is NOT
  *    declared here.
+ *  - No inline JS beyond the FITPAL_WALLET config block that
+ *    wallet.js already reads. That block is a data bag, not
+ *    behaviour.
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 3.1 — CSRF token now inherited from header.php; local
- *                generation removed. (3.0: local walletFmt() removed;
- *                uses formatCurrency() from customer-queries.php.)
+ * @version 5.0 — Both tabs now carry a wallet-transactions-card.
+ *                  - Credit tab lists completed wallet movements
+ *                    only (deposits, wallet payments, refunds,
+ *                    withdrawals).
+ *                  - Transactions tab lists every row on the
+ *                    wallet account, including pending and failed
+ *                    COD and Online payments, and labels each row
+ *                    with a status pill and a payment-method badge
+ *                    where those apply.
+ *                  - Pagination is per tab.
+ *
+ *                (4.0: split into two anchor tabs. 3.1: CSRF
+ *                inherited from header.php. 3.0: local walletFmt()
+ *                removed; uses formatCurrency().)
  */
 
 declare(strict_types=1);
@@ -43,9 +71,9 @@ require_once __DIR__ . '/../backend/database/wallet-queries.php';
 
 $customerId = (int)$_SESSION['customer_id'];
 
-// ============================================
-// ORIGIN RESOLUTION FOR THE BACK BUTTON
-// ============================================
+/* ============================================
+   ORIGIN RESOLUTION FOR THE BACK BUTTON
+   ============================================ */
 $walletBackMap = [
     'checkout'  => 'checkout.php',
     'orders'    => 'orders.php',
@@ -74,13 +102,50 @@ if ($fromParam !== '' && isset($walletBackMap[$fromParam])) {
     }
 }
 
-// ============================================
-// HELPERS (page-local; no DB access)
-// ============================================
+/* ============================================
+   ACTIVE TAB
+   ============================================
+   Two tabs. Anything other than 'transactions' lands on 'credit'.
+   The default is intentionally Credit, because the header's wallet
+   link arrives with no query string and the first thing a customer
+   usually wants is their balance.
+   ============================================ */
+$activeTab = isset($_GET['tab']) ? strtolower(trim((string)$_GET['tab'])) : 'credit';
+if (!in_array($activeTab, ['credit', 'transactions'], true)) {
+    $activeTab = 'credit';
+}
 
-function walletPageUrl(int $targetPage, string $fromParam, array $backMap): string
+/* ============================================
+   HELPERS (page-local; no DB access)
+   ============================================ */
+
+/**
+ * Build a wallet page URL that keeps the customer on the tab the
+ * link was clicked from.
+ *
+ * @param string $tab       'credit' | 'transactions'
+ * @param int    $targetPage 1-based
+ * @param string $fromParam  origin slug, or '' for none
+ * @param array<string,string> $backMap
+ */
+function walletPageUrl(string $tab, int $targetPage, string $fromParam, array $backMap): string
 {
-    $params = ['page' => $targetPage];
+    $params = [
+        'tab'  => $tab,
+        'page' => $targetPage,
+    ];
+    if ($fromParam !== '' && isset($backMap[$fromParam])) {
+        $params['from'] = $fromParam;
+    }
+    return 'wallet.php?' . http_build_query($params);
+}
+
+/**
+ * Build the tab href for a given tab, preserving the from= origin.
+ */
+function walletTabUrl(string $tab, string $fromParam, array $backMap): string
+{
+    $params = ['tab' => $tab];
     if ($fromParam !== '' && isset($backMap[$fromParam])) {
         $params['from'] = $fromParam;
     }
@@ -119,9 +184,25 @@ function walletDate(string $date): string
     return $ts !== false ? date('M d, Y • g:i A', $ts) : $date;
 }
 
-// ============================================
-// DATA
-// ============================================
+/**
+ * Human-readable label for the order payment method that produced
+ * a given transaction row. Returns '' when the row has no
+ * associated order (deposits, withdrawals, refunds on legacy
+ * orders) or when the value is unrecognized.
+ */
+function walletPaymentMethodLabel(?string $method): string
+{
+    return match ($method) {
+        'COD'    => 'COD',
+        'Wallet' => 'Wallet',
+        'Online' => 'Online',
+        default  => '',
+    };
+}
+
+/* ============================================
+   DATA
+   ============================================ */
 
 $account = getWalletAccount($database_connection, $customerId);
 if (!$account) {
@@ -131,31 +212,58 @@ if (!$account) {
 }
 
 $balance = (float)$account['balance'];
+
 $perPage = 5;
 $page    = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
 $offset  = ($page - 1) * $perPage;
 
-$transactions = getWalletTransactions($database_connection, $customerId, $perPage, $offset);
-$returnedRows = count($transactions);
+$transactions = [];
+$totalTxns    = 0;
+$totalPages   = 1;
 
-// ============================================
-// PAGINATION TOTALS
-// ============================================
-if ($returnedRows > 0 && $returnedRows < $perPage) {
-    $totalTxns  = $offset + $returnedRows;
-    $totalPages = max(1, $page);
-} elseif ($returnedRows === 0 && $page === 1) {
-    $totalTxns  = 0;
-    $totalPages = 1;
-} else {
-    $totalTxns  = countWalletTransactions($database_connection, $customerId);
-    $totalPages = max(1, (int)ceil($totalTxns / $perPage));
-}
-
-if ($page > $totalPages) {
-    $page         = $totalPages;
-    $offset       = ($page - 1) * $perPage;
+if ($activeTab === 'credit') {
+    // Credit tab: completed wallet movements only.
     $transactions = getWalletTransactions($database_connection, $customerId, $perPage, $offset);
+    $returnedRows = count($transactions);
+
+    if ($returnedRows > 0 && $returnedRows < $perPage) {
+        $totalTxns  = $offset + $returnedRows;
+        $totalPages = max(1, $page);
+    } elseif ($returnedRows === 0 && $page === 1) {
+        $totalTxns  = 0;
+        $totalPages = 1;
+    } else {
+        $totalTxns  = countWalletTransactions($database_connection, $customerId);
+        $totalPages = max(1, (int)ceil($totalTxns / $perPage));
+    }
+
+    if ($page > $totalPages) {
+        $page         = $totalPages;
+        $offset       = ($page - 1) * $perPage;
+        $transactions = getWalletTransactions($database_connection, $customerId, $perPage, $offset);
+    }
+
+} else {
+    // Transactions tab: every row on the wallet account.
+    $transactions = getWalletAccountActivity($database_connection, $customerId, $perPage, $offset);
+    $returnedRows = count($transactions);
+
+    if ($returnedRows > 0 && $returnedRows < $perPage) {
+        $totalTxns  = $offset + $returnedRows;
+        $totalPages = max(1, $page);
+    } elseif ($returnedRows === 0 && $page === 1) {
+        $totalTxns  = 0;
+        $totalPages = 1;
+    } else {
+        $totalTxns  = countWalletAccountActivity($database_connection, $customerId);
+        $totalPages = max(1, (int)ceil($totalTxns / $perPage));
+    }
+
+    if ($page > $totalPages) {
+        $page         = $totalPages;
+        $offset       = ($page - 1) * $perPage;
+        $transactions = getWalletAccountActivity($database_connection, $customerId, $perPage, $offset);
+    }
 }
 
 require_once __DIR__ . '/../includes/header.php';
@@ -200,158 +308,342 @@ require_once __DIR__ . '/../includes/header.php';
         <?php endif; ?>
 
         <!-- ============================================ -->
-        <!-- BALANCE CARD -->
+        <!-- TAB BAR -->
         <!-- ============================================ -->
-        <div class="wallet-balance-card">
-            <div class="wallet-balance-left">
-                <span class="wallet-balance-label">Available Balance</span>
-                <span class="wallet-balance-amount" id="walletBalanceAmount">
-                    <?php echo formatCurrency($balance); ?>
-                </span>
-                <span class="wallet-balance-note">Use your wallet to pay for orders instantly</span>
-            </div>
-            <div class="wallet-balance-right">
-                <button type="button" id="rechargeBtn" class="btn btn-primary btn-lg">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/add-line.svg" alt="" class="btn-icon"
-                        width="18" height="18">
-                    Recharge Wallet
-                </button>
-            </div>
-        </div>
+        <nav class="wallet-tabs" aria-label="Wallet sections">
+            <a href="<?php echo htmlspecialchars(walletTabUrl('credit', $fromParam, $walletBackMap), ENT_QUOTES, 'UTF-8'); ?>"
+                class="wallet-tab <?php echo $activeTab === 'credit' ? 'active' : ''; ?>"
+                <?php echo $activeTab === 'credit' ? 'aria-current="page"' : ''; ?>>
+                <img src="<?php echo $assetBase; ?>assets/images/icons/wallet-line.svg" alt="" class="wallet-tab-icon"
+                    width="16" height="16"
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/wallet-fill.svg'">
+                <span>Credit</span>
+            </a>
+
+            <a href="<?php echo htmlspecialchars(walletTabUrl('transactions', $fromParam, $walletBackMap), ENT_QUOTES, 'UTF-8'); ?>"
+                class="wallet-tab <?php echo $activeTab === 'transactions' ? 'active' : ''; ?>"
+                <?php echo $activeTab === 'transactions' ? 'aria-current="page"' : ''; ?>>
+                <img src="<?php echo $assetBase; ?>assets/images/icons/history-line.svg" alt="" class="wallet-tab-icon"
+                    width="16" height="16"
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/list-view.svg'">
+                <span>Transactions</span>
+            </a>
+        </nav>
+
+        <?php if ($activeTab === 'credit'): ?>
 
         <!-- ============================================ -->
-        <!-- TRANSACTIONS -->
+        <!-- CREDIT PANEL -->
+        <!-- Balance hero + Recharge button + wallet-only -->
+        <!-- activity card. No status pill, no method badge — -->
+        <!-- every row here is a completed wallet movement. -->
         <!-- ============================================ -->
-        <div class="wallet-transactions-card">
-            <div class="card-header">
-                <h3>Recent Transactions</h3>
-                <?php if ($totalTxns > 0): ?>
-                <span class="txn-count"><?php echo number_format($totalTxns); ?> total</span>
+        <section class="wallet-panel wallet-panel-credit" aria-label="Wallet credit">
+
+            <div class="wallet-balance-card">
+                <div class="wallet-balance-left">
+                    <span class="wallet-balance-label">Available Balance</span>
+                    <span class="wallet-balance-amount" id="walletBalanceAmount">
+                        <?php echo formatCurrency($balance); ?>
+                    </span>
+                    <span class="wallet-balance-note">Use your wallet to pay for orders instantly</span>
+                </div>
+                <div class="wallet-balance-right">
+                    <button type="button" id="rechargeBtn" class="btn btn-primary btn-lg">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/add-line.svg" alt="" class="btn-icon"
+                            width="18" height="18">
+                        Recharge Wallet
+                    </button>
+                </div>
+            </div>
+
+            <div class="wallet-transactions-card">
+                <div class="card-header">
+                    <h3>Wallet Activity</h3>
+                    <?php if ($totalTxns > 0): ?>
+                    <span class="txn-count"><?php echo number_format($totalTxns); ?> total</span>
+                    <?php endif; ?>
+                </div>
+
+                <?php if (empty($transactions)): ?>
+                <div class="wallet-empty-state">
+                    <div class="wallet-empty-icon">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/history-line.svg" alt="No transactions"
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
+                    </div>
+                    <p class="wallet-empty-title">No wallet activity yet</p>
+                    <p class="wallet-empty-text">
+                        Recharges, wallet payments, and refunds will appear here once they happen.
+                    </p>
+                </div>
+                <?php else: ?>
+                <ul class="wallet-txn-list">
+                    <?php foreach ($transactions as $txn):
+                        $type     = (string)$txn['transaction_type'];
+                        $amount   = (float)$txn['amount'];
+                        $isCredit = walletIsCredit($type);
+                        $iconFile = walletDirectionIcon($type);
+                        $iconAlt  = walletDirectionAlt($type);
+                    ?>
+                    <li class="wallet-txn-item">
+                        <div class="wallet-txn-icon <?php echo $isCredit ? 'credit' : 'debit'; ?>">
+                            <img src="<?php echo $assetBase; ?>assets/images/icons/<?php echo htmlspecialchars($iconFile, ENT_QUOTES, 'UTF-8'); ?>"
+                                alt="<?php echo htmlspecialchars($iconAlt, ENT_QUOTES, 'UTF-8'); ?>"
+                                onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
+                        </div>
+
+                        <div class="wallet-txn-info">
+                            <p class="wallet-txn-title">
+                                <?php echo htmlspecialchars(walletTypeLabel($type), ENT_QUOTES, 'UTF-8'); ?>
+                                <?php if ($txn['order_id']): ?>
+                                <span class="wallet-txn-order">#<?php echo (int)$txn['order_id']; ?></span>
+                                <?php endif; ?>
+                            </p>
+                            <p class="wallet-txn-desc">
+                                <?php echo htmlspecialchars($txn['description'] ?: '—', ENT_QUOTES, 'UTF-8'); ?>
+                            </p>
+                            <p class="wallet-txn-date">
+                                <?php echo walletDate((string)$txn['transaction_date']); ?>
+                            </p>
+                        </div>
+
+                        <div class="wallet-txn-amount-col">
+                            <span class="wallet-txn-amount <?php echo $isCredit ? 'credit' : 'debit'; ?>">
+                                <?php echo ($isCredit ? '+' : '−') . formatCurrency($amount); ?>
+                            </span>
+                        </div>
+                    </li>
+                    <?php endforeach; ?>
+                </ul>
+
+                <?php if ($totalPages > 1): ?>
+                <nav class="wallet-pagination" role="navigation" aria-label="Wallet activity pagination">
+                    <ul class="pagination-list">
+                        <?php if ($page > 1): ?>
+                        <li>
+                            <a href="<?php echo htmlspecialchars(walletPageUrl('credit', $page - 1, $fromParam, $walletBackMap), ENT_QUOTES, 'UTF-8'); ?>"
+                                class="pagination-link pagination-prev">Previous</a>
+                        </li>
+                        <?php else: ?>
+                        <li><span class="pagination-link pagination-prev disabled">Previous</span></li>
+                        <?php endif; ?>
+
+                        <?php
+                        $maxVisible = 5;
+                        $startPage  = max(1, $page - (int)floor($maxVisible / 2));
+                        $endPage    = min($totalPages, $startPage + $maxVisible - 1);
+                        if ($endPage - $startPage + 1 < $maxVisible) {
+                            $startPage = max(1, $endPage - $maxVisible + 1);
+                        }
+                        ?>
+
+                        <?php if ($startPage > 1): ?>
+                        <li>
+                            <a href="<?php echo htmlspecialchars(walletPageUrl('credit', 1, $fromParam, $walletBackMap), ENT_QUOTES, 'UTF-8'); ?>"
+                                class="pagination-link">1</a>
+                        </li>
+                        <?php if ($startPage > 2): ?>
+                        <li class="pagination-ellipsis"><span>...</span></li>
+                        <?php endif; ?>
+                        <?php endif; ?>
+
+                        <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
+                        <li>
+                            <?php if ($i === $page): ?>
+                            <span class="pagination-link active" aria-current="page"><?php echo $i; ?></span>
+                            <?php else: ?>
+                            <a href="<?php echo htmlspecialchars(walletPageUrl('credit', $i, $fromParam, $walletBackMap), ENT_QUOTES, 'UTF-8'); ?>"
+                                class="pagination-link"><?php echo $i; ?></a>
+                            <?php endif; ?>
+                        </li>
+                        <?php endfor; ?>
+
+                        <?php if ($endPage < $totalPages): ?>
+                        <?php if ($endPage < $totalPages - 1): ?>
+                        <li class="pagination-ellipsis"><span>...</span></li>
+                        <?php endif; ?>
+                        <li>
+                            <a href="<?php echo htmlspecialchars(walletPageUrl('credit', $totalPages, $fromParam, $walletBackMap), ENT_QUOTES, 'UTF-8'); ?>"
+                                class="pagination-link"><?php echo $totalPages; ?></a>
+                        </li>
+                        <?php endif; ?>
+
+                        <?php if ($page < $totalPages): ?>
+                        <li>
+                            <a href="<?php echo htmlspecialchars(walletPageUrl('credit', $page + 1, $fromParam, $walletBackMap), ENT_QUOTES, 'UTF-8'); ?>"
+                                class="pagination-link pagination-next">Next</a>
+                        </li>
+                        <?php else: ?>
+                        <li><span class="pagination-link pagination-next disabled">Next</span></li>
+                        <?php endif; ?>
+                    </ul>
+                </nav>
+                <?php endif; ?>
                 <?php endif; ?>
             </div>
 
-            <?php if (empty($transactions)): ?>
-            <div class="wallet-empty-state">
-                <div class="wallet-empty-icon">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/cart-shopping.svg" alt="No transactions"
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
-                </div>
-                <p class="wallet-empty-title">No transactions yet</p>
-                <p class="wallet-empty-text">Recharge your wallet to start ordering with instant payment.</p>
-            </div>
-            <?php else: ?>
-            <ul class="wallet-txn-list">
-                <?php foreach ($transactions as $txn):
-                    $type      = (string)$txn['transaction_type'];
-                    $status    = (string)$txn['status'];
-                    $amount    = (float)$txn['amount'];
-                    $isCredit  = walletIsCredit($type);
-                    $isPending = $status === 'pending';
-                    $isFailed  = $status === 'failed';
+        </section>
 
-                    $iconFile = walletDirectionIcon($type);
-                    $iconAlt  = walletDirectionAlt($type);
-                ?>
-                <li
-                    class="wallet-txn-item<?php echo $isPending ? ' is-pending' : ''; ?><?php echo $isFailed ? ' is-failed' : ''; ?>">
-                    <div class="wallet-txn-icon <?php echo $isCredit ? 'credit' : 'debit'; ?>">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/<?php echo htmlspecialchars($iconFile, ENT_QUOTES, 'UTF-8'); ?>"
-                            alt="<?php echo htmlspecialchars($iconAlt, ENT_QUOTES, 'UTF-8'); ?>"
+        <?php else: ?>
+
+        <!-- ============================================ -->
+        <!-- TRANSACTIONS PANEL -->
+        <!-- Full wallet-account activity. Every row, -->
+        <!-- including pending and failed COD / Online. -->
+        <!-- Status pill on non-completed rows. Payment- -->
+        <!-- method badge on rows with an associated order. -->
+        <!-- ============================================ -->
+        <section class="wallet-panel wallet-panel-transactions" aria-label="Wallet transactions">
+
+            <div class="wallet-transactions-card">
+                <div class="card-header">
+                    <h3>Account Activity</h3>
+                    <?php if ($totalTxns > 0): ?>
+                    <span class="txn-count"><?php echo number_format($totalTxns); ?> total</span>
+                    <?php endif; ?>
+                </div>
+
+                <?php if (empty($transactions)): ?>
+                <div class="wallet-empty-state">
+                    <div class="wallet-empty-icon">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/history-line.svg" alt="No activity"
                             onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
+                    <p class="wallet-empty-title">No account activity yet</p>
+                    <p class="wallet-empty-text">
+                        Orders, recharges, refunds, and withdrawals will appear here once they happen.
+                    </p>
+                </div>
+                <?php else: ?>
+                <ul class="wallet-txn-list">
+                    <?php foreach ($transactions as $txn):
+                        $type      = (string)$txn['transaction_type'];
+                        $status    = (string)$txn['status'];
+                        $amount    = (float)$txn['amount'];
+                        $isCredit  = walletIsCredit($type);
+                        $iconFile  = walletDirectionIcon($type);
+                        $iconAlt   = walletDirectionAlt($type);
+                        $isPending = $status === 'pending';
+                        $isFailed  = $status === 'failed';
 
-                    <div class="wallet-txn-info">
-                        <p class="wallet-txn-title">
-                            <?php echo htmlspecialchars(walletTypeLabel($type), ENT_QUOTES, 'UTF-8'); ?>
-                            <?php if ($txn['order_id']): ?>
-                            <span class="wallet-txn-order">#<?php echo (int)$txn['order_id']; ?></span>
-                            <?php endif; ?>
-                        </p>
-                        <p class="wallet-txn-desc">
-                            <?php echo htmlspecialchars($txn['description'] ?: '—', ENT_QUOTES, 'UTF-8'); ?>
-                        </p>
-                        <p class="wallet-txn-date"><?php echo walletDate((string)$txn['transaction_date']); ?></p>
-                    </div>
+                        $methodRaw   = isset($txn['order_payment_method'])
+                            ? (string)$txn['order_payment_method']
+                            : '';
+                        $methodLabel = walletPaymentMethodLabel($methodRaw);
 
-                    <div class="wallet-txn-amount-col">
-                        <span class="wallet-txn-amount <?php echo $isCredit ? 'credit' : 'debit'; ?>">
-                            <?php echo ($isCredit ? '+' : '−') . formatCurrency($amount); ?>
-                        </span>
-                        <?php if ($status !== 'completed'): ?>
-                        <span class="wallet-txn-status <?php echo $isPending ? 'pending' : 'failed'; ?>">
-                            <?php echo htmlspecialchars(ucfirst($status), ENT_QUOTES, 'UTF-8'); ?>
-                        </span>
-                        <?php endif; ?>
-                    </div>
-                </li>
-                <?php endforeach; ?>
-            </ul>
-
-            <?php if ($totalPages > 1): ?>
-            <nav class="wallet-pagination" role="navigation" aria-label="Transaction pagination">
-                <ul class="pagination-list">
-                    <?php if ($page > 1): ?>
-                    <li>
-                        <a href="<?php echo walletPageUrl($page - 1, $fromParam, $walletBackMap); ?>"
-                            class="pagination-link pagination-prev">Previous</a>
-                    </li>
-                    <?php else: ?>
-                    <li><span class="pagination-link pagination-prev disabled">Previous</span></li>
-                    <?php endif; ?>
-
-                    <?php
-                    $maxVisible = 5;
-                    $startPage  = max(1, $page - (int)floor($maxVisible / 2));
-                    $endPage    = min($totalPages, $startPage + $maxVisible - 1);
-                    if ($endPage - $startPage + 1 < $maxVisible) {
-                        $startPage = max(1, $endPage - $maxVisible + 1);
-                    }
+                        $itemClass = 'wallet-txn-item';
+                        if ($isPending) $itemClass .= ' is-pending';
+                        if ($isFailed)  $itemClass .= ' is-failed';
                     ?>
+                    <li class="<?php echo $itemClass; ?>">
+                        <div class="wallet-txn-icon <?php echo $isCredit ? 'credit' : 'debit'; ?>">
+                            <img src="<?php echo $assetBase; ?>assets/images/icons/<?php echo htmlspecialchars($iconFile, ENT_QUOTES, 'UTF-8'); ?>"
+                                alt="<?php echo htmlspecialchars($iconAlt, ENT_QUOTES, 'UTF-8'); ?>"
+                                onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
+                        </div>
 
-                    <?php if ($startPage > 1): ?>
-                    <li>
-                        <a href="<?php echo walletPageUrl(1, $fromParam, $walletBackMap); ?>"
-                            class="pagination-link">1</a>
-                    </li>
-                    <?php if ($startPage > 2): ?>
-                    <li class="pagination-ellipsis"><span>...</span></li>
-                    <?php endif; ?>
-                    <?php endif; ?>
+                        <div class="wallet-txn-info">
+                            <p class="wallet-txn-title">
+                                <?php echo htmlspecialchars(walletTypeLabel($type), ENT_QUOTES, 'UTF-8'); ?>
+                                <?php if ($txn['order_id']): ?>
+                                <span class="wallet-txn-order">#<?php echo (int)$txn['order_id']; ?></span>
+                                <?php endif; ?>
+                                <?php if ($methodLabel !== ''): ?>
+                                <span
+                                    class="wallet-txn-method wallet-txn-method-<?php echo strtolower($methodLabel); ?>">
+                                    <?php echo htmlspecialchars($methodLabel, ENT_QUOTES, 'UTF-8'); ?>
+                                </span>
+                                <?php endif; ?>
+                            </p>
+                            <p class="wallet-txn-desc">
+                                <?php echo htmlspecialchars($txn['description'] ?: '—', ENT_QUOTES, 'UTF-8'); ?>
+                            </p>
+                            <p class="wallet-txn-date">
+                                <?php echo walletDate((string)$txn['transaction_date']); ?>
+                            </p>
+                        </div>
 
-                    <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
-                    <li>
-                        <?php if ($i === $page): ?>
-                        <span class="pagination-link active"><?php echo $i; ?></span>
-                        <?php else: ?>
-                        <a href="<?php echo walletPageUrl($i, $fromParam, $walletBackMap); ?>"
-                            class="pagination-link"><?php echo $i; ?></a>
-                        <?php endif; ?>
+                        <div class="wallet-txn-amount-col">
+                            <span class="wallet-txn-amount <?php echo $isCredit ? 'credit' : 'debit'; ?>">
+                                <?php echo ($isCredit ? '+' : '−') . formatCurrency($amount); ?>
+                            </span>
+                            <?php if ($status !== 'completed'): ?>
+                            <?php endif; ?>
+                        </div>
                     </li>
-                    <?php endfor; ?>
-
-                    <?php if ($endPage < $totalPages): ?>
-                    <?php if ($endPage < $totalPages - 1): ?>
-                    <li class="pagination-ellipsis"><span>...</span></li>
-                    <?php endif; ?>
-                    <li>
-                        <a href="<?php echo walletPageUrl($totalPages, $fromParam, $walletBackMap); ?>"
-                            class="pagination-link"><?php echo $totalPages; ?></a>
-                    </li>
-                    <?php endif; ?>
-
-                    <?php if ($page < $totalPages): ?>
-                    <li>
-                        <a href="<?php echo walletPageUrl($page + 1, $fromParam, $walletBackMap); ?>"
-                            class="pagination-link pagination-next">Next</a>
-                    </li>
-                    <?php else: ?>
-                    <li><span class="pagination-link pagination-next disabled">Next</span></li>
-                    <?php endif; ?>
+                    <?php endforeach; ?>
                 </ul>
-            </nav>
-            <?php endif; ?>
-            <?php endif; ?>
-        </div>
+
+                <?php if ($totalPages > 1): ?>
+                <nav class="wallet-pagination" role="navigation" aria-label="Account activity pagination">
+                    <ul class="pagination-list">
+                        <?php if ($page > 1): ?>
+                        <li>
+                            <a href="<?php echo htmlspecialchars(walletPageUrl('transactions', $page - 1, $fromParam, $walletBackMap), ENT_QUOTES, 'UTF-8'); ?>"
+                                class="pagination-link pagination-prev">Previous</a>
+                        </li>
+                        <?php else: ?>
+                        <li><span class="pagination-link pagination-prev disabled">Previous</span></li>
+                        <?php endif; ?>
+
+                        <?php
+                        $maxVisible = 5;
+                        $startPage  = max(1, $page - (int)floor($maxVisible / 2));
+                        $endPage    = min($totalPages, $startPage + $maxVisible - 1);
+                        if ($endPage - $startPage + 1 < $maxVisible) {
+                            $startPage = max(1, $endPage - $maxVisible + 1);
+                        }
+                        ?>
+
+                        <?php if ($startPage > 1): ?>
+                        <li>
+                            <a href="<?php echo htmlspecialchars(walletPageUrl('transactions', 1, $fromParam, $walletBackMap), ENT_QUOTES, 'UTF-8'); ?>"
+                                class="pagination-link">1</a>
+                        </li>
+                        <?php if ($startPage > 2): ?>
+                        <li class="pagination-ellipsis"><span>...</span></li>
+                        <?php endif; ?>
+                        <?php endif; ?>
+
+                        <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
+                        <li>
+                            <?php if ($i === $page): ?>
+                            <span class="pagination-link active" aria-current="page"><?php echo $i; ?></span>
+                            <?php else: ?>
+                            <a href="<?php echo htmlspecialchars(walletPageUrl('transactions', $i, $fromParam, $walletBackMap), ENT_QUOTES, 'UTF-8'); ?>"
+                                class="pagination-link"><?php echo $i; ?></a>
+                            <?php endif; ?>
+                        </li>
+                        <?php endfor; ?>
+
+                        <?php if ($endPage < $totalPages): ?>
+                        <?php if ($endPage < $totalPages - 1): ?>
+                        <li class="pagination-ellipsis"><span>...</span></li>
+                        <?php endif; ?>
+                        <li>
+                            <a href="<?php echo htmlspecialchars(walletPageUrl('transactions', $totalPages, $fromParam, $walletBackMap), ENT_QUOTES, 'UTF-8'); ?>"
+                                class="pagination-link"><?php echo $totalPages; ?></a>
+                        </li>
+                        <?php endif; ?>
+
+                        <?php if ($page < $totalPages): ?>
+                        <li>
+                            <a href="<?php echo htmlspecialchars(walletPageUrl('transactions', $page + 1, $fromParam, $walletBackMap), ENT_QUOTES, 'UTF-8'); ?>"
+                                class="pagination-link pagination-next">Next</a>
+                        </li>
+                        <?php else: ?>
+                        <li><span class="pagination-link pagination-next disabled">Next</span></li>
+                        <?php endif; ?>
+                    </ul>
+                </nav>
+                <?php endif; ?>
+                <?php endif; ?>
+            </div>
+
+        </section>
+
+        <?php endif; ?>
+
     </div>
 </div>
 

@@ -1,13 +1,29 @@
 /**
  * FitPal Customer Cart Page Styles
- * Version 2.8 — Reserves the viewport scrollbar gutter on <html> so
- *                hiding the body scrollbar does not change the
- *                viewport width. Reverted the modal-content width
- *                experiments from v2.5–2.7: they were addressing a
- *                shift that the scrollbar gutter prevents at the root.
+ * Version 2.9 — The page shell now stretches to the viewport so the
+ *                empty state fills the vertical space between the
+ *                page header and the bottom of the page instead of
+ *                leaving dead white space beneath a short card.
+ *                Mirrors the chain used in menu.css v3.4 and
+ *                orders.css v3.6:
+ *
+ *                  .content          flex: 1
+ *                  .cart-page        flex: 1, flex-column
+ *                  .container        flex: 1, flex-column
+ *                  .empty-state      flex: 1 (stretch)
+ *                  .cart-container   flex: 1, flex-column
+ *
+ *                The non-empty path is unaffected: each .cart-section,
+ *                .cart-pagination, and .cart-summary keeps its natural
+ *                height via flex: 0 0 auto, so the container does not
+ *                stretch them. Only the empty state (rendered when the
+ *                cart has no rows) actually grows to fill the space.
+ *
+ *                Also carries forward the scrollbar-gutter guard from
+ *                v2.8 unchanged.
  *
  * @package FitPal
- * @version 2.8
+ * @version 2.9
  */
 
 /* Reserve the scrollbar gutter permanently. With this in place, the
@@ -34,6 +50,10 @@ html {
 
 .cart-page {
     padding: 24px 0 60px 0;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: calc(100vh - 70px);
 }
 
 .cart-page .container {
@@ -42,6 +62,9 @@ html {
     padding: 0 16px;
     width: 100%;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
 }
 
 /* ============================================
@@ -52,6 +75,7 @@ html {
     margin-bottom: 24px;
     padding-bottom: 12px;
     border-bottom: 2px solid var(--primary);
+    flex-shrink: 0;
 }
 
 .page-title-header .heading-2 {
@@ -82,6 +106,7 @@ html {
     border: 1px solid transparent;
     font-size: var(--font-size-sm);
     line-height: 1.5;
+    flex-shrink: 0;
 }
 
 .alert-success {
@@ -110,6 +135,7 @@ html {
     border: 1px solid var(--gray-200);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
+    flex: 1;
     min-height: 400px;
 }
 
@@ -168,7 +194,17 @@ html {
 .cart-container {
     display: flex;
     flex-direction: column;
+    flex: 1;
     gap: 20px;
+}
+
+/* Non-empty children keep their natural height. Only the empty
+   state (rendered outside the container) actually stretches. */
+.cart-container > .cart-section,
+.cart-container > .cart-pagination,
+.cart-container > .cart-summary,
+.cart-container > .cart-meta-row {
+    flex: 0 0 auto;
 }
 
 .cart-meta-row {

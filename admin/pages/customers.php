@@ -3,27 +3,28 @@
  * FitPal Admin — Customers List
  *
  * Paginated list of customer accounts with search, status tabs, and
- * a per-customer detail modal. All mutations go through
- * admin-handler.php via normal form POSTs.
+ * a per-customer detail modal that uses a nested navigation layout:
  *
- * No inline CSS. No inline JS. Styles come from customers.css.
- * Behavior comes from customers.js.
+ *   Top tabs (underlined):
+ *     Personal Info  — sub-tabs: Credentials | Profile | Preferences
+ *     Addresses      — flat list, no sub-tabs
+ *     Account        — sub-tabs: Account Summary | Transactions
+ *
+ *   Footer:
+ *     Centered horizontal action buttons (Activate / Deactivate).
+ *     The button matching the customer's current state is disabled
+ *     and greyed, so only the opposite action is clickable.
+ *
+ * No inline CSS. No inline JS. Styles come from admin-tables.css
+ * and customers.css. Behaviour comes from the shared admin-modal.js.
  *
  * @package FitPal
- * @version 3.3 — Version bump to match the CSRF consolidation in
- *                header.php v5.0 and includes/admin-csrf-token.php
- *                v1.0. No functional change: this page already reads
- *                $csrfToken from header.php and never generated the
- *                token itself. (3.2: Removed the local CSRF block
- *                that wrote to the shared 'csrf_token' session key.
- *                The admin role's token is now generated in
- *                header.php under 'admin_csrf_token' and exposed as
- *                $csrfToken, so the modal footer form's hidden field
- *                now carries the admin-scoped value. The form field
- *                name stays 'csrf_token'; admin-handler.php
- *                validates against the matching session key.)
+ * @version 9.0 — Sub-tabs are now directly clickable. Footer holds
+ *                a horizontal button group. Arrow buttons are
+ *                retained in markup for compatibility but hidden
+ *                by the shared modal controller whenever sub-tabs
+ *                are present.
  */
-
 declare(strict_types=1);
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -56,9 +57,9 @@ $data   = getCustomersPaginated($database_connection, $page, $perPage, $search, 
 $rows   = $data['rows'];
 $pagination = $data;
 
-$openCustomer = null;
+$openCustomer  = null;
 $openAddresses = [];
-$openOrders = [];
+$openOrders    = [];
 if ($openId > 0) {
     $openCustomer = getCustomerDetails($database_connection, $openId);
     if ($openCustomer) {
@@ -293,6 +294,9 @@ function buildCustomerUrl(array $overrides = []): string
     </div>
 </div>
 
+<!-- ============================================================
+     Modal: Customer Details — nested tabs + sub-tabs
+     ============================================================ -->
 <div class="admin-modal <?php echo $openCustomer ? 'is-open' : ''; ?>" id="customerDetailsModal"
     aria-hidden="<?php echo $openCustomer ? 'false' : 'true'; ?>" role="dialog">
     <div class="admin-modal-backdrop"
@@ -301,14 +305,10 @@ function buildCustomerUrl(array $overrides = []): string
     <div class="admin-modal-panel admin-modal-panel-wide" role="document">
         <div class="admin-modal-header">
             <div class="admin-modal-header-left">
-                <p class="admin-modal-title">
-                    <?php echo $openCustomer
-                        ? htmlspecialchars(adminName($openCustomer), ENT_QUOTES, 'UTF-8')
-                        : 'Customer Details'; ?>
-                </p>
+                <p class="admin-modal-title">Customer Details</p>
                 <p class="admin-modal-subtitle">
                     <?php echo $openCustomer
-                        ? htmlspecialchars((string)$openCustomer['email'], ENT_QUOTES, 'UTF-8')
+                        ? htmlspecialchars(adminName($openCustomer) . ' · ' . (string)$openCustomer['email'], ENT_QUOTES, 'UTF-8')
                         : 'Select a customer to view their details.'; ?>
                 </p>
             </div>
@@ -321,147 +321,169 @@ function buildCustomerUrl(array $overrides = []): string
             <p class="admin-detail-value admin-detail-value-muted">No customer selected.</p>
         </div>
         <?php else: ?>
-        <div class="admin-modal-tabs">
-            <button type="button" class="admin-modal-tab active" data-tab-target="cust-panel-info">
-                <img src="<?php echo $assetBase; ?>assets/images/icons/file-user-line.svg" alt="" width="14" height="14"
-                    class="btn-icon-no-filter">
-                <span>Info</span>
+
+        <?php $openIsActive = (int)$openCustomer['is_active'] === 1; ?>
+
+        <!-- Top-level tabs -->
+        <div class="admin-modal-tabs" role="tablist">
+            <button type="button" class="admin-modal-tab active" data-tab="personal" role="tab">
+                Personal Info
             </button>
-            <button type="button" class="admin-modal-tab" data-tab-target="cust-panel-addresses">
-                <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="" width="14" height="14"
-                    class="btn-icon-no-filter">
-                <span>Addresses</span>
-                <span class="tab-count"><?php echo count($openAddresses); ?></span>
+            <button type="button" class="admin-modal-tab" data-tab="addresses" role="tab">
+                Addresses <span class="tab-count"><?php echo count($openAddresses); ?></span>
             </button>
-            <button type="button" class="admin-modal-tab" data-tab-target="cust-panel-orders">
-                <img src="<?php echo $assetBase; ?>assets/images/icons/cart-shopping.svg" alt="" width="14" height="14"
-                    class="btn-icon-no-filter">
-                <span>Recent Orders</span>
-                <span class="tab-count"><?php echo count($openOrders); ?></span>
+            <button type="button" class="admin-modal-tab" data-tab="account" role="tab">
+                Account
             </button>
         </div>
 
         <div class="admin-modal-panel-body">
 
-            <div class="admin-modal-tab-panel active" id="cust-panel-info">
-                <div class="admin-detail-grid">
-                    <div class="admin-detail-item">
-                        <span class="admin-detail-label">Full Name</span>
-                        <span class="admin-detail-value">
-                            <?php echo htmlspecialchars(adminName($openCustomer), ENT_QUOTES, 'UTF-8'); ?>
-                        </span>
-                    </div>
-                    <div class="admin-detail-item">
-                        <span class="admin-detail-label">Username</span>
-                        <span class="admin-detail-value">
-                            @<?php echo htmlspecialchars((string)($openCustomer['username'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
-                        </span>
-                    </div>
-                    <div class="admin-detail-item">
-                        <span class="admin-detail-label">Email</span>
-                        <span class="admin-detail-value">
-                            <?php echo htmlspecialchars((string)($openCustomer['email'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
-                        </span>
-                    </div>
-                    <div class="admin-detail-item">
-                        <span class="admin-detail-label">Contact</span>
-                        <span class="admin-detail-value">
-                            <?php echo htmlspecialchars((string)($openCustomer['contact_number'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
-                        </span>
-                    </div>
-                    <div class="admin-detail-item">
-                        <span class="admin-detail-label">Gender</span>
-                        <span class="admin-detail-value">
-                            <?php echo htmlspecialchars((string)($openCustomer['gender'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
-                        </span>
-                    </div>
-                    <div class="admin-detail-item">
-                        <span class="admin-detail-label">Birthdate</span>
-                        <span class="admin-detail-value">
-                            <?php echo htmlspecialchars(formatAdminDateShort((string)($openCustomer['birthdate'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>
-                        </span>
-                    </div>
-                    <div class="admin-detail-item">
-                        <span class="admin-detail-label">Joined</span>
-                        <span class="admin-detail-value">
-                            <?php echo htmlspecialchars(formatAdminDate((string)($openCustomer['date_created'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>
-                        </span>
-                    </div>
-                    <div class="admin-detail-item">
-                        <span class="admin-detail-label">Status</span>
-                        <span class="admin-detail-value">
-                            <span
-                                class="badge <?php echo (int)$openCustomer['is_active'] === 1 ? 'badge-success' : 'badge-secondary'; ?>">
-                                <?php echo (int)$openCustomer['is_active'] === 1 ? 'Active' : 'Inactive'; ?>
+            <!-- ============================================
+                 Tab: Personal Info
+                 ============================================ -->
+            <div class="admin-modal-tab-panel active" data-tab-panel="personal" role="tabpanel">
+
+                <!-- Sub-tab row -->
+                <div class="admin-subtabs" role="tablist">
+                    <button type="button" class="admin-subtab active" data-subtab="credentials" role="tab">
+                        Credentials
+                    </button>
+                    <button type="button" class="admin-subtab" data-subtab="profile" role="tab">
+                        Profile
+                    </button>
+                    <button type="button" class="admin-subtab" data-subtab="preference" role="tab">
+                        Preferences
+                    </button>
+                </div>
+
+                <!-- Sub-phase: Credentials -->
+                <div class="admin-modal-phase active" data-phase="credentials" role="tabpanel">
+                    <div class="admin-detail-grid">
+                        <div class="admin-detail-item">
+                            <span class="admin-detail-label">Full Name</span>
+                            <span class="admin-detail-value">
+                                <?php echo htmlspecialchars(adminName($openCustomer), ENT_QUOTES, 'UTF-8'); ?>
                             </span>
-                        </span>
-                    </div>
-                    <div class="admin-detail-item">
-                        <span class="admin-detail-label">Wallet Balance</span>
-                        <span class="admin-detail-value">
-                            <?php echo formatAdminCurrency((float)($openCustomer['balance'] ?? 0)); ?>
-                        </span>
-                    </div>
-                    <div class="admin-detail-item">
-                        <span class="admin-detail-label">Orders Placed</span>
-                        <span class="admin-detail-value">
-                            <?php echo number_format((int)($openCustomer['order_count'] ?? 0)); ?>
-                        </span>
-                    </div>
-
-                    <div class="admin-detail-item admin-detail-item-full">
-                        <span class="admin-detail-label">Fitness Goal</span>
-                        <span class="admin-detail-value">
-                            <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', (string)($openCustomer['fitness_goal'] ?? '—'))), ENT_QUOTES, 'UTF-8'); ?>
-                        </span>
-                    </div>
-
-                    <div class="admin-detail-item">
-                        <span class="admin-detail-label">Height (cm)</span>
-                        <span class="admin-detail-value">
-                            <?php echo htmlspecialchars((string)($openCustomer['height_cm'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
-                        </span>
-                    </div>
-                    <div class="admin-detail-item">
-                        <span class="admin-detail-label">Weight (kg)</span>
-                        <span class="admin-detail-value">
-                            <?php echo htmlspecialchars((string)($openCustomer['weight_kg'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
-                        </span>
-                    </div>
-
-                    <div class="admin-detail-item admin-detail-item-full">
-                        <span class="admin-detail-label">Dietary Preferences</span>
-                        <span class="admin-detail-value">
-                            <?php
-                            $diet = parseAdminTagList((string)($openCustomer['dietary_preferences'] ?? ''));
-                            echo empty($diet)
-                                ? '—'
-                                : htmlspecialchars(implode(', ', array_map(
-                                    fn($t) => ucwords(str_replace('_', ' ', $t)),
-                                    $diet
-                                )), ENT_QUOTES, 'UTF-8');
-                            ?>
-                        </span>
-                    </div>
-
-                    <div class="admin-detail-item admin-detail-item-full">
-                        <span class="admin-detail-label">Allergies</span>
-                        <span class="admin-detail-value">
-                            <?php
-                            $alg = parseAdminTagList((string)($openCustomer['allergies'] ?? ''));
-                            echo empty($alg)
-                                ? '—'
-                                : htmlspecialchars(implode(', ', array_map(
-                                    fn($t) => ucwords(str_replace('_', ' ', $t)),
-                                    $alg
-                                )), ENT_QUOTES, 'UTF-8');
-                            ?>
-                        </span>
+                        </div>
+                        <div class="admin-detail-item">
+                            <span class="admin-detail-label">Username</span>
+                            <span class="admin-detail-value">
+                                @<?php echo htmlspecialchars((string)($openCustomer['username'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                        </div>
+                        <div class="admin-detail-item">
+                            <span class="admin-detail-label">Email</span>
+                            <span class="admin-detail-value">
+                                <?php echo htmlspecialchars((string)($openCustomer['email'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                        </div>
+                        <div class="admin-detail-item">
+                            <span class="admin-detail-label">Contact</span>
+                            <span class="admin-detail-value">
+                                <?php echo htmlspecialchars((string)($openCustomer['contact_number'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                        </div>
+                        <div class="admin-detail-item">
+                            <span class="admin-detail-label">Gender</span>
+                            <span class="admin-detail-value">
+                                <?php echo htmlspecialchars((string)($openCustomer['gender'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                        </div>
+                        <div class="admin-detail-item">
+                            <span class="admin-detail-label">Birthdate</span>
+                            <span class="admin-detail-value">
+                                <?php echo htmlspecialchars(formatAdminDateShort((string)($openCustomer['birthdate'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                        </div>
                     </div>
                 </div>
+
+                <!-- Sub-phase: Profile -->
+                <div class="admin-modal-phase" data-phase="profile" role="tabpanel">
+                    <div class="admin-detail-grid">
+                        <div class="admin-detail-item">
+                            <span class="admin-detail-label">Fitness Goal</span>
+                            <span class="admin-detail-value">
+                                <?php
+                                $goal = (string)($openCustomer['fitness_goal'] ?? '');
+                                echo $goal !== ''
+                                    ? htmlspecialchars(ucwords(str_replace('_', ' ', $goal)), ENT_QUOTES, 'UTF-8')
+                                    : '—';
+                                ?>
+                            </span>
+                        </div>
+                        <div class="admin-detail-item">
+                            <span class="admin-detail-label">Height (cm)</span>
+                            <span class="admin-detail-value">
+                                <?php
+                                $h = $openCustomer['height_cm'] ?? null;
+                                echo $h !== null && $h !== ''
+                                    ? htmlspecialchars(number_format((float)$h, 2), ENT_QUOTES, 'UTF-8')
+                                    : '—';
+                                ?>
+                            </span>
+                        </div>
+                        <div class="admin-detail-item">
+                            <span class="admin-detail-label">Weight (kg)</span>
+                            <span class="admin-detail-value">
+                                <?php
+                                $w = $openCustomer['weight_kg'] ?? null;
+                                echo $w !== null && $w !== ''
+                                    ? htmlspecialchars(number_format((float)$w, 2), ENT_QUOTES, 'UTF-8')
+                                    : '—';
+                                ?>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sub-phase: Preferences -->
+                <div class="admin-modal-phase" data-phase="preference" role="tabpanel">
+                    <div class="admin-detail-grid">
+                        <div class="admin-detail-item admin-detail-item-full">
+                            <span class="admin-detail-label">Dietary Preferences</span>
+                            <span class="admin-detail-value">
+                                <?php
+                                $diet = parseAdminTagList((string)($openCustomer['dietary_preferences'] ?? ''));
+                                echo empty($diet)
+                                    ? '—'
+                                    : htmlspecialchars(implode(', ', array_map(
+                                        fn($t) => ucwords(str_replace('_', ' ', $t)),
+                                        $diet
+                                    )), ENT_QUOTES, 'UTF-8');
+                                ?>
+                            </span>
+                        </div>
+                        <div class="admin-detail-item admin-detail-item-full">
+                            <span class="admin-detail-label">Allergies</span>
+                            <span class="admin-detail-value">
+                                <?php
+                                $alg = parseAdminTagList((string)($openCustomer['allergies'] ?? ''));
+                                echo empty($alg)
+                                    ? '—'
+                                    : htmlspecialchars(implode(', ', array_map(
+                                        fn($t) => ucwords(str_replace('_', ' ', $t)),
+                                        $alg
+                                    )), ENT_QUOTES, 'UTF-8');
+                                ?>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
             </div>
 
-            <div class="admin-modal-tab-panel" id="cust-panel-addresses">
+            <!-- ============================================
+                 Tab: Addresses (flat list, no sub-tabs)
+                 ============================================ -->
+            <div class="admin-modal-tab-panel" data-tab-panel="addresses" role="tabpanel">
+                <h3 class="admin-section-heading">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="" width="14"
+                        height="14" class="btn-icon-no-filter">
+                    Delivery Addresses
+                    <span class="section-count"><?php echo count($openAddresses); ?></span>
+                </h3>
                 <?php if (empty($openAddresses)): ?>
                 <div class="admin-doc-empty">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="">
@@ -486,56 +508,130 @@ function buildCustomerUrl(array $overrides = []): string
                 <?php endif; ?>
             </div>
 
-            <div class="admin-modal-tab-panel" id="cust-panel-orders">
-                <?php if (empty($openOrders)): ?>
-                <div class="admin-doc-empty">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/cart-shopping.svg" alt="">
-                    <span>No orders yet.</span>
+            <!-- ============================================
+                 Tab: Account
+                 ============================================ -->
+            <div class="admin-modal-tab-panel" data-tab-panel="account" role="tabpanel">
+
+                <!-- Sub-tab row -->
+                <div class="admin-subtabs" role="tablist">
+                    <button type="button" class="admin-subtab active" data-subtab="summary" role="tab">
+                        Account Summary
+                    </button>
+                    <button type="button" class="admin-subtab" data-subtab="transactions" role="tab">
+                        Transactions <span class="subtab-count"><?php echo count($openOrders); ?></span>
+                    </button>
                 </div>
-                <?php else: ?>
-                <div class="admin-orders-list">
-                    <?php foreach ($openOrders as $o): ?>
-                    <div class="admin-order-row">
-                        <div class="admin-order-id-block">
-                            <span class="admin-order-id">Order #<?php echo (int)$o['order_id']; ?></span>
-                            <span class="admin-order-customer">
-                                <?php echo htmlspecialchars(formatAdminDate((string)$o['order_date']), ENT_QUOTES, 'UTF-8'); ?>
+
+                <!-- Sub-phase: Account Summary -->
+                <div class="admin-modal-phase active" data-phase="summary" role="tabpanel">
+                    <div class="admin-detail-grid">
+                        <div class="admin-detail-item">
+                            <span class="admin-detail-label">Joined</span>
+                            <span class="admin-detail-value">
+                                <?php echo htmlspecialchars(formatAdminDate((string)($openCustomer['date_created'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>
                             </span>
                         </div>
-                        <span class="badge <?php echo adminOrderStatusBadgeClass((string)$o['order_status']); ?>">
-                            <?php echo adminOrderStatusLabel((string)$o['order_status']); ?>
-                        </span>
-                        <span class="admin-order-total">
-                            <?php echo formatAdminCurrency((float)$o['order_total']); ?>
-                        </span>
+                        <div class="admin-detail-item">
+                            <span class="admin-detail-label">Status</span>
+                            <span class="admin-detail-value">
+                                <span class="badge <?php echo $openIsActive ? 'badge-success' : 'badge-secondary'; ?>">
+                                    <?php echo $openIsActive ? 'Active' : 'Inactive'; ?>
+                                </span>
+                            </span>
+                        </div>
+                        <div class="admin-detail-item">
+                            <span class="admin-detail-label">Wallet Balance</span>
+                            <span class="admin-detail-value">
+                                <?php echo formatAdminCurrency((float)($openCustomer['balance'] ?? 0)); ?>
+                            </span>
+                        </div>
+                        <div class="admin-detail-item">
+                            <span class="admin-detail-label">Orders Placed</span>
+                            <span class="admin-detail-value">
+                                <?php echo number_format((int)($openCustomer['order_count'] ?? 0)); ?>
+                            </span>
+                        </div>
                     </div>
-                    <?php endforeach; ?>
                 </div>
-                <?php endif; ?>
+
+                <!-- Sub-phase: Transactions -->
+                <div class="admin-modal-phase" data-phase="transactions" role="tabpanel">
+                    <?php if (empty($openOrders)): ?>
+                    <div class="admin-doc-empty">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/history-line.svg" alt="">
+                        <span>No transactions yet.</span>
+                    </div>
+                    <?php else: ?>
+                    <div class="admin-orders-list">
+                        <?php foreach ($openOrders as $o): ?>
+                        <div class="admin-order-row">
+                            <div class="admin-order-id-block">
+                                <span class="admin-order-id">
+                                    Order #<?php echo (int)$o['order_id']; ?>
+                                </span>
+                                <span class="admin-order-customer">
+                                    <?php echo htmlspecialchars(formatAdminDate((string)$o['order_date']), ENT_QUOTES, 'UTF-8'); ?>
+                                    &middot;
+                                    <?php echo htmlspecialchars((string)($o['payment_method'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?>
+                                </span>
+                            </div>
+                            <span class="badge <?php echo adminOrderStatusBadgeClass((string)$o['order_status']); ?>">
+                                <?php echo adminOrderStatusLabel((string)$o['order_status']); ?>
+                            </span>
+                            <span class="admin-order-total">
+                                <?php echo formatAdminCurrency((float)$o['order_total']); ?>
+                            </span>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php endif; ?>
+                </div>
+
             </div>
 
         </div>
 
-        <div class="admin-modal-footer">
-            <form method="POST" action="../backend/handlers/admin-handler.php" class="form-inline">
-                <input type="hidden" name="csrf_token"
-                    value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
-                <input type="hidden" name="action" value="toggle_customer">
-                <input type="hidden" name="customer_id" value="<?php echo (int)$openCustomer['customer_id']; ?>">
-                <input type="hidden" name="activate"
-                    value="<?php echo (int)$openCustomer['is_active'] === 1 ? '0' : '1'; ?>">
-                <input type="hidden" name="redirect_to" value="customers.php">
-                <button type="submit"
-                    class="btn <?php echo (int)$openCustomer['is_active'] === 1 ? 'btn-danger' : 'btn-primary'; ?> btn-sm">
-                    <?php echo (int)$openCustomer['is_active'] === 1 ? 'Deactivate Customer' : 'Activate Customer'; ?>
-                </button>
-            </form>
-            <a href="<?php echo htmlspecialchars(buildCustomerUrl(['open' => null]), ENT_QUOTES, 'UTF-8'); ?>"
-                class="btn btn-outline btn-sm">Close</a>
+        <!-- ============================================
+             Footer: centered horizontal action buttons.
+             Arrows are hidden by the shared controller
+             whenever sub-tabs are present.
+             ============================================ -->
+        <div class="admin-modal-tab-footer">
+            <button type="button" class="tab-arrow" data-phase-prev aria-label="Previous">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-s-line.svg" alt="" width="16"
+                    height="16">
+            </button>
+
+            <div class="admin-modal-footer-center">
+                <form method="POST" action="../backend/handlers/admin-handler.php" class="admin-modal-footer-actions">
+                    <input type="hidden" name="csrf_token"
+                        value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                    <input type="hidden" name="action" value="toggle_customer">
+                    <input type="hidden" name="customer_id" value="<?php echo (int)$openCustomer['customer_id']; ?>">
+                    <input type="hidden" name="redirect_to" value="customers.php">
+
+                    <button type="submit" name="activate" value="1" class="btn btn-primary btn-sm"
+                        <?php echo $openIsActive ? 'disabled' : ''; ?>>
+                        Activate
+                    </button>
+                    <button type="submit" name="activate" value="0" class="btn btn-danger btn-sm"
+                        <?php echo $openIsActive ? '' : 'disabled'; ?>>
+                        Deactivate
+                    </button>
+                </form>
+            </div>
+
+            <button type="button" class="tab-arrow" data-phase-next aria-label="Next">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-right-s-line.svg" alt="" width="16"
+                    height="16">
+            </button>
         </div>
+
         <?php endif; ?>
     </div>
 </div>
 
+<script src="../assets/ui/js/admin-modal.js" defer></script>
 <script src="../assets/ui/js/customers.js" defer></script>
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>

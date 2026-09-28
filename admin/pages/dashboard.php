@@ -5,24 +5,12 @@
  * Overview of platform health and the moderation queue.
  *
  * All SQL lives in admin-queries.php. This page contains no SQL,
- * no inline CSS, and no inline JS. Per-bar chart geometry travels
- * as data-bar-height and is applied by dashboard.js on load, so no
- * style attribute ever appears in the markup.
+ * no inline CSS, and no inline JS.
  *
  * @package FitPal
- * @version 4.4 — Version bump to match the CSRF consolidation in
- *                header.php v5.0 and includes/admin-csrf-token.php
- *                v1.0. No functional change: this page already reads
- *                $csrfToken from header.php and never generated the
- *                token itself. (4.3: Removed the local CSRF block
- *                that wrote to the shared 'csrf_token' session key.
- *                The admin role's token is now generated in
- *                header.php under 'admin_csrf_token' and exposed as
- *                $csrfToken. The shared key was a collision hazard:
- *                the customer/rider/restaurant roles run on the same
- *                PHP session and can rotate or delete it.)
+ * @version 5.0 — Loads the shared admin-modal.js for consistency.
+ *                No other functional change from 4.4.
  */
-
 declare(strict_types=1);
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -366,5 +354,6 @@ $recentActivity = getRecentVerificationActivity($database_connection, 6);
     </div>
 </div>
 
+<script src="../assets/ui/js/admin-modal.js" defer></script>
 <script src="../assets/ui/js/dashboard.js" defer></script>
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>

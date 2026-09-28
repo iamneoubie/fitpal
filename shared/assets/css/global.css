@@ -20,6 +20,25 @@
  * --white: #ffffff
  * 
  * Font Stack: System fonts only - no external loading
+ * 
+ * @version 1.1 — Adds the .content page-shell class. Every role's
+ *                page wrapper previously re-declared this same
+ *                flex-column / flex-1 / min-height block in its own
+ *                page CSS (menu.css, kitchen.css, dashboard.css,
+ *                wallet.css, profile.css, orders.css, cart.css,
+ *                checkout.css, order-tracking.css, order-receipt.css,
+ *                sign-in.css, sign-up.css). The declaration is
+ *                identical in all of them because it is the shell
+ *                contract every authenticated page shares: it sits
+ *                directly inside <body>, which is a flex column with
+ *                min-height: 100vh, so it must stretch to fill the
+ *                viewport below the header. Centralizing it here
+ *                means future pages inherit the stretch for free and
+ *                the individual page CSS files no longer each carry
+ *                a duplicated block. The page-specific files can
+ *                keep their own `.content` declarations until they
+ *                are revised; those declarations are now redundant
+ *                but harmless (they resolve to the same values).
  */
 
 /* ============================================
@@ -224,6 +243,33 @@ textarea:disabled {
 /* Global textarea rule - NO RESIZE */
 textarea {
     resize: none;
+}
+
+
+/* ============================================
+   PAGE SHELL
+   ============================================
+   The standard content wrapper for every authenticated page.
+   Sits directly inside <body>, which is a flex column with
+   min-height: 100vh, so this element stretches to fill the
+   viewport below the header. Page-level content nests inside
+   a .container, which itself becomes a flex column when the
+   page needs to push a child (e.g. an empty state) to the
+   bottom.
+
+   Pages that already declare `.content` in their own CSS can
+   keep that declaration — it resolves to the same values and
+   is harmless. New pages should rely on this rule and not
+   redeclare it.
+   ============================================ */
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
 }
 
 

@@ -19,6 +19,7 @@ filesToCheck = [
     "/admin/assets/css/sign-in.css",
 
     # ===== admin/assets/ui/js =====
+    "/admin/assets/ui/js/admin-modal.js",
     "/admin/assets/ui/js/customers.js",
     "/admin/assets/ui/js/dashboard.js",
     "/admin/assets/ui/js/header.js",
@@ -108,6 +109,7 @@ filesToCheck = [
     "/customer/backend/handlers/message-handler.php",
     "/customer/backend/handlers/order-handler.php",
     "/customer/backend/handlers/place-order-handler.php",
+    "/customer/backend/handlers/profile-handler.php",
     "/customer/backend/handlers/queue-handler.php",
     "/customer/backend/handlers/sign-in-handler.php",
     "/customer/backend/handlers/sign-out-handler.php",

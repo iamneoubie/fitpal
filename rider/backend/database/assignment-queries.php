@@ -21,11 +21,26 @@
  * Assignment model (recap)
  * ------------------------
  * The kitchen sets orders.delivery_rider_id and moves the order to
- * 'rider_pending'. The rider accepts (order → 'delivering') or
- * declines (order → 'preparing', rider cleared). acceptOrder() and
- * declineOrder() in rider-queries.php are the write path; this file
- * re-exports them via a thin require so the panel handler has a
- * single include surface without duplicating the transition SQL.
+ * 'rider_pending'. The rider accepts — moving the order to
+ * 'picking_up' — or declines (order → 'preparing', rider cleared).
+ *
+ * The panel therefore surfaces three live statuses:
+ *
+ *   rider_pending  — awaiting the rider's accept / decline decision
+ *   picking_up     — accepted; rider is en route to or at the
+ *                    restaurant; not yet moving to the customer
+ *   delivering     — rider has the food; en route to the customer
+ *
+ * All three count as the rider's "live assignments" for the
+ * concurrent-order cap of 3.
+ *
+ * Accept/decline write path
+ * -------------------------
+ * acceptOrder(), declineOrder(), and markOrderPickedUp() in
+ * rider-queries.php are the write path. This file only reads. The
+ * panel handler in assignment-handler.php invokes the write
+ * functions after validating that the rider is eligible and
+ * online.
  *
  * Delta polling
  * -------------
@@ -37,7 +52,26 @@
  * orders.delivery_rider_id and transfers an empty array.
  *
  * @package FitPal
- * @version 1.0
+ * @version 1.1 — Adds 'picking_up' across every live-status list in
+ *                this file:
+ *                  - getPanelAssignments() and
+ *                    getPanelAssignmentsSince() include it.
+ *                  - getPanelAssignmentCounts() reports a separate
+ *                    'picking_up' bucket so the panel header badge
+ *                    can break the total down if it wants to.
+ *                  - panelStatusLabel() and panelStatusBadge() gain
+ *                    a 'picking_up' case.
+ *                  - panelMessageChannel() maps 'picking_up' to
+ *                    'restaurant_account' so the rider stays in
+ *                    contact with the kitchen during pickup, not
+ *                    the customer.
+ *                  - panelShouldNotify() is unchanged — the
+ *                    notification modal is still only for a NEW
+ *                    rider_pending offer, not for a status the
+ *                    rider already moved the order into
+ *                    themselves.
+ *
+ *                (1.0: initial assignment queries.)
  */
 
 declare(strict_types=1);
@@ -55,17 +89,19 @@ require_once __DIR__ . '/rider-queries.php';
  * right now:
  *   - 'rider_pending' — the kitchen has asked; the rider has not
  *     yet accepted or declined.
- *   - 'delivering'    — the rider has accepted and is on the road.
+ *   - 'picking_up'    — the rider accepted; en route to or at the
+ *     restaurant; food not yet in hand.
+ *   - 'delivering'    — the rider has the food and is en route to
+ *     the customer.
  *
  * Delivered / cancelled / refunded orders are not returned. Those
  * belong to the deliveries page's history section, not the panel.
  *
  * The return rows carry everything the panel needs to render a row
  * without a second round trip: order meta, customer name and
- * contact (for the Call button on a delivering order), kitchen name
- * and contact (for the Call button on a rider_pending order), the
- * per-order item count and order total, and the restaurant_branch_id
- * so the message routing can resolve the kitchen account server-side.
+ * contact, kitchen name and contact, the per-order item count and
+ * order total, and the restaurant_branch_id so the message routing
+ * can resolve the kitchen account server-side.
  *
  * @param PDO $db
  * @param int $riderId
@@ -118,10 +154,10 @@ function getPanelAssignments(PDO $db, int $riderId, int $limit = 20): array
          JOIN restaurant_branch rb ON qi0.branch_id = rb.restaurant_branch_id
          JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
          WHERE o.delivery_rider_id = :rider_id
-           AND o.order_status IN ('rider_pending', 'delivering')
+           AND o.order_status IN ('rider_pending', 'picking_up', 'delivering')
          GROUP BY o.order_id
          ORDER BY
-            FIELD(o.order_status, 'rider_pending', 'delivering') ASC,
+            FIELD(o.order_status, 'rider_pending', 'picking_up', 'delivering') ASC,
             o.order_date ASC
          LIMIT :limit"
     );
@@ -146,8 +182,7 @@ function getPanelAssignments(PDO $db, int $riderId, int $limit = 20): array
  *
  * The SELECT shape is deliberately identical to
  * getPanelAssignments() so a row fetched via the delta path renders
- * with the exact same JSON as one fetched via the full path. The
- * client never has to branch on where a row came from.
+ * with the exact same JSON as one fetched via the full path.
  *
  * @param PDO $db
  * @param int $riderId
@@ -201,7 +236,7 @@ function getPanelAssignmentsSince(PDO $db, int $riderId, int $sinceOrderId): arr
          JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
          WHERE o.delivery_rider_id = :rider_id
            AND o.order_id > :since_order_id
-           AND o.order_status IN ('rider_pending', 'delivering')
+           AND o.order_status IN ('rider_pending', 'picking_up', 'delivering')
          GROUP BY o.order_id
          ORDER BY o.order_id ASC"
     );
@@ -221,8 +256,8 @@ function getPanelAssignmentsSince(PDO $db, int $riderId, int $sinceOrderId): arr
  *
  * Returns false if the order is not currently assigned to this
  * rider, or if it is not in a live state. The panel uses this after
- * an accept or decline to build the response payload, so the row it
- * renders is always the row the server actually has.
+ * an accept, a decline, or a pickup to build the response payload,
+ * so the row it renders is always the row the server actually has.
  *
  * @param PDO $db
  * @param int $riderId
@@ -276,7 +311,7 @@ function getPanelAssignmentRow(PDO $db, int $riderId, int $orderId): array|false
          JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
          WHERE o.order_id = :order_id
            AND o.delivery_rider_id = :rider_id
-           AND o.order_status IN ('rider_pending', 'delivering')
+           AND o.order_status IN ('rider_pending', 'picking_up', 'delivering')
          GROUP BY o.order_id
          LIMIT 1"
     );
@@ -293,9 +328,8 @@ function getPanelAssignmentRow(PDO $db, int $riderId, int $orderId): array|false
  * state. 0 if the rider has no live assignments.
  *
  * Used by the panel to seed its delta cursor on first load without
- * an extra round trip. Also used after accept/decline to advance
- * the cursor locally so the next poll does not re-fetch the row the
- * rider just acted on.
+ * an extra round trip. Also used after accept / decline / pickup to
+ * advance the cursor locally.
  *
  * @param PDO $db
  * @param int $riderId
@@ -311,7 +345,7 @@ function getPanelMaxOrderId(PDO $db, int $riderId): int
         "SELECT COALESCE(MAX(order_id), 0)
            FROM orders
           WHERE delivery_rider_id = :rider_id
-            AND order_status IN ('rider_pending', 'delivering')"
+            AND order_status IN ('rider_pending', 'picking_up', 'delivering')"
     );
     $stmt->execute([':rider_id' => $riderId]);
     return (int)$stmt->fetchColumn();
@@ -320,32 +354,39 @@ function getPanelMaxOrderId(PDO $db, int $riderId): int
 /**
  * Total count of live assignments for the badge on the panel header.
  *
+ * The three buckets are broken out separately so the panel can
+ * render a per-bucket subtitle if it ever wants to (e.g.
+ * "1 pending • 2 in progress"). The 'total' bucket is the sum and
+ * is what the badge shows today.
+ *
  * @param PDO $db
  * @param int $riderId
- * @return array{pending:int, active:int, total:int}
+ * @return array{pending:int, picking_up:int, active:int, total:int}
  */
 function getPanelAssignmentCounts(PDO $db, int $riderId): array
 {
     if ($riderId <= 0) {
-        return ['pending' => 0, 'active' => 0, 'total' => 0];
+        return ['pending' => 0, 'picking_up' => 0, 'active' => 0, 'total' => 0];
     }
 
     $stmt = $db->prepare(
         "SELECT
             SUM(CASE WHEN order_status = 'rider_pending' THEN 1 ELSE 0 END) AS pending,
+            SUM(CASE WHEN order_status = 'picking_up'    THEN 1 ELSE 0 END) AS picking_up,
             SUM(CASE WHEN order_status = 'delivering'    THEN 1 ELSE 0 END) AS active,
             COUNT(*) AS total
          FROM orders
          WHERE delivery_rider_id = :rider_id
-           AND order_status IN ('rider_pending', 'delivering')"
+           AND order_status IN ('rider_pending', 'picking_up', 'delivering')"
     );
     $stmt->execute([':rider_id' => $riderId]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
     return [
-        'pending' => (int)($row['pending'] ?? 0),
-        'active'  => (int)($row['active']  ?? 0),
-        'total'   => (int)($row['total']   ?? 0),
+        'pending'    => (int)($row['pending']    ?? 0),
+        'picking_up' => (int)($row['picking_up'] ?? 0),
+        'active'     => (int)($row['active']     ?? 0),
+        'total'      => (int)($row['total']      ?? 0),
     ];
 }
 
@@ -361,12 +402,13 @@ function getPanelAssignmentCounts(PDO $db, int $riderId): array
  *
  *   - 'restaurant_account' → the first active restaurant account
  *     tied to the order's branch. Used when the rider needs to
- *     reach the kitchen about pickup (typically during
- *     'rider_pending').
+ *     reach the kitchen about pickup — during 'rider_pending',
+ *     'picking_up', and 'delivering' the kitchen is a valid
+ *     recipient.
  *
- *   - 'customer' → the customer on the order. Used when the rider
- *     is on the road and needs to coordinate drop-off (typically
- *     during 'delivering').
+ *   - 'customer' → the customer on the order. Used once the rider
+ *     is on the road and needs to coordinate drop-off
+ *     ('delivering').
  *
  * Returns 0 when the counterparty cannot be resolved. The panel
  * hides the Message button in that case, so the rider never sends
@@ -430,9 +472,12 @@ function resolvePanelMessageRecipient(PDO $db, int $orderId, string $channel): i
  * Rationale: an offline rider should never be interrupted. The
  * kitchen's own availability filter already prevents assigning to
  * an offline rider, but a race can still let one through; this
- * check closes that window. A rider who is online but already has
- * a different live assignment still gets the modal — the kitchen's
- * one-active-order rule is enforced at assignment time, not here.
+ * check closes that window.
+ *
+ * Note that 'picking_up' and 'delivering' are NOT notification
+ * triggers. Those statuses are ones the rider moved the order INTO
+ * themselves — no modal is appropriate. The notification is only
+ * for a fresh offer the kitchen just sent.
  *
  * @param PDO $db
  * @param int $riderId
@@ -525,6 +570,7 @@ function panelStatusLabel(string $status): string
 {
     return match ($status) {
         'rider_pending' => 'Awaiting Your Decision',
+        'picking_up'    => 'Head to Pickup',
         'delivering'    => 'In Transit',
         default         => ucfirst($status),
     };
@@ -533,6 +579,10 @@ function panelStatusLabel(string $status): string
 /**
  * Badge class for an order status as shown in the panel.
  *
+ * rider_pending and picking_up share badge-warning (they both need
+ * the rider's eye), delivering uses badge-primary (rider is
+ * executing).
+ *
  * @param string $status
  * @return string
  */
@@ -540,6 +590,7 @@ function panelStatusBadge(string $status): string
 {
     return match ($status) {
         'rider_pending' => 'badge-warning',
+        'picking_up'    => 'badge-warning',
         'delivering'    => 'badge-primary',
         default         => 'badge-secondary',
     };
@@ -549,8 +600,13 @@ function panelStatusBadge(string $status): string
  * Which message channel the panel should offer for a given order
  * status, or null if messaging is not appropriate.
  *
- *   - rider_pending → talk to the kitchen (pickup coordination)
- *   - delivering    → talk to the customer (drop-off coordination)
+ *   rider_pending → talk to the kitchen (accept/decline context)
+ *   picking_up    → talk to the kitchen (pickup coordination)
+ *   delivering    → talk to the customer (drop-off coordination)
+ *
+ * The panel currently shows only one channel per row. Once the
+ * rider has the food in hand, the customer becomes the useful
+ * contact; before that, the kitchen is.
  *
  * @param string $status
  * @return string|null
@@ -559,6 +615,7 @@ function panelMessageChannel(string $status): ?string
 {
     return match ($status) {
         'rider_pending' => 'restaurant_account',
+        'picking_up'    => 'restaurant_account',
         'delivering'    => 'customer',
         default         => null,
     };

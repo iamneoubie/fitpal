@@ -7,16 +7,22 @@
  *   - Title-case capitalization for vehicle make/model
  *   - Email lowercasing
  *   - Password rule feedback
- *   - File upload previews for the profile picture and driver's license
- *   - Vehicle-dependent plate validation
- *   - Emergency-contact validation
- *   - Required license issue/expiry dates (Step 4)
+ *   - File upload previews for the profile picture and identity document
+ *   - Vehicle-dependent identity-document block:
+ *       - bicycle       → "Valid Government ID" copy, no license dates
+ *       - any other     → "Driver's License" copy, license dates required
+ *   - Vehicle-dependent Step 2 layout:
+ *       - bicycle       → plate/make/model/year hidden and cleared
+ *       - any other     → plate/make/model/year visible
+ *   - Emergency-contact validation, including the rule that the
+ *     emergency contact number must differ from the rider's own
+ *     contact number
  *   - Review summary build on Step 5
  *   - Fetch-based submission with per-field server error routing
  *
  * IMPORTANT — WHERE THE UPLOADS LIVE
  * ----------------------------------
- * The profile-picture and driver's-license inputs live physically
+ * The profile-picture and identity-document inputs live physically
  * inside Step 4 in the markup. That means:
  *
  *   - validateStep1 / validateStep2 / validateStep3 must NOT check the
@@ -28,10 +34,80 @@
  * All real validation also runs server-side in sign-up-handler.php.
  * This file is a UX layer only.
  *
+ * Vehicle-type-driven UI
+ * ----------------------
+ * Two regions of the form respond to the vehicle type selected in
+ * Step 2. Both are driven by a single page-level data attribute that
+ * this file writes:
+ *
+ *     .register-page[data-vehicle-type="bicycle"]
+ *
+ * Region 1 — Step 2 motor-vehicle-only fields (#vehicleMotorOnlyFields)
+ *   When the vehicle is 'bicycle', the wrapper is hidden by a CSS
+ *   rule keyed on the attribute, and this file also clears the plate,
+ *   make, model, and year inputs. Clearing is necessary because
+ *   hiding an input via CSS does not empty it: a value typed while
+ *   'motorcycle' was selected would otherwise persist in the DOM
+ *   and be posted on submit. The handler drops those fields for a
+ *   bicycle anyway (the delivery_rider_profile schema has no
+ *   columns for them), but leaving stale values in the DOM would
+ *   also leak them into the Step 5 review summary. Clearing keeps
+ *   the DOM, the review, and the submission in agreement.
+ *
+ * Region 2 — Step 4 identity-document block + license dates
+ *   When the vehicle is 'bicycle', CSS swaps to the government-ID
+ *   heading and guidelines, and hides the license-date row. This
+ *   file toggles the `required` attribute on the two date inputs
+ *   (a DOM property, not a style) and clears any stale errors on
+ *   them. validateLicenseDates() short-circuits to true for
+ *   bicycle.
+ *
+ * `required` is toggled by JS, not CSS, because CSS cannot remove a
+ * DOM property and the browser will refuse to submit a form with an
+ * empty `required` input even when that input is hidden.
+ *
+ * Emergency-contact number must differ from the rider's own number
+ * -----------------------------------------------------------------
+ * The rider's own contact_number and the emergency contact's number
+ * are two different people's phone numbers. If an applicant enters
+ * the same digits in both fields, the emergency contact is not
+ * actually a distinct person and the field does not serve its
+ * purpose. Two layers enforce this:
+ *
+ *   - Client (this file): validateStep3() compares the two inputs
+ *     after stripping every non-digit character, so "0917 123 4567"
+ *     and "09171234567" are treated as the same number. On a match,
+ *     the error is attached to the emergency contact field and Step
+ *     3 fails. The check also fires implicitly on final submit via
+ *     goToStep()'s guard.
+ *
+ *   - Server (sign-up-handler.php): the same comparison runs against
+ *     the two normalized digit-only strings. A client that skips
+ *     JavaScript or posts directly to the handler cannot bypass the
+ *     rule. The server's refusal carries field='emergency_contact',
+ *     so the message lands on the right input.
+ *
+ * Comparing digit-only strings rather than raw values means the
+ * check is stable across the formatting the input filter allows
+ * (spaces are stripped live) and across any future mask that might
+ * admit hyphens or parentheses on the server side.
+ *
  * @package FitPal
- * @version 4.2 — Added setupTitleCaseInput() for vehicle make/model.
- *                Replaced the three-branch server error router with a
- *                fieldMap covering every field the handler can return.
+ * @version 5.3 — validateStep3() now rejects an emergency contact
+ *                number that normalizes to the same digits as the
+ *                rider's own contact number. A new helper
+ *                normalizeDigits() is the single place that rule is
+ *                expressed, so the client and the server stay in
+ *                agreement on what "the same number" means.
+ *
+ *                No other function, filter, or submission path
+ *                changed from v5.2.
+ *
+ *                (5.2: applyVehicleTypeDependentUI() clears the
+ *                plate/make/model/year inputs when the vehicle is a
+ *                bicycle. 5.1: plate group reached by id from CSS.
+ *                5.0: added applyVehicleTypeDependentUI() and the
+ *                vehicle-aware validateStep4() and review summary.)
  */
 
 (function () {
@@ -45,6 +121,7 @@
         const form = document.getElementById('registerForm');
         if (!form) return;
 
+        const pageRoot         = document.querySelector('.register-page');
         const steps            = document.querySelectorAll('.register-step');
         const progressSteps    = document.querySelectorAll('.progress-step');
         const progressLines    = document.querySelectorAll('.progress-line');
@@ -105,16 +182,19 @@
         const licenseRemove     = document.getElementById('licenseRemove');
         const licenseError      = document.getElementById('driversLicenseError');
 
-        const licenseIssue    = document.getElementById('license_issue_date');
-        const licenseExpiry   = document.getElementById('license_expiry_date');
+        const licenseIssue     = document.getElementById('license_issue_date');
+        const licenseExpiry    = document.getElementById('license_expiry_date');
         const licenseIssueError  = document.getElementById('licenseIssueError');
         const licenseExpiryError = document.getElementById('licenseExpiryError');
 
         // Step 5 — review + terms + submit
-        const termsCheckbox = document.getElementById('terms');
-        const termsGroup    = document.getElementById('termsGroup');
-        const termsError    = document.getElementById('termsError');
-        const registerBtn   = document.getElementById('registerBtn');
+        const termsCheckbox         = document.getElementById('terms');
+        const termsGroup            = document.getElementById('termsGroup');
+        const termsError            = document.getElementById('termsError');
+        const registerBtn           = document.getElementById('registerBtn');
+        const reviewIdDocLabel      = document.getElementById('reviewIdDocLabel');
+        const reviewLicenseDates    = document.getElementById('reviewLicenseDates');
+        const reviewLicenseDatesRow = document.getElementById('reviewLicenseDatesRow');
 
         // Error elements
         const firstNameError          = document.getElementById('firstNameError');
@@ -155,6 +235,26 @@
         // ============================================
         // HELPERS
         // ============================================
+
+        /**
+         * Reduce a phone number to its digit-only form.
+         *
+         * Used by the client-side emergency-contact comparison and by
+         * nothing else. The server has its own equivalent reduction
+         * in sign-up-handler.php ($cleanedContact / $cleanedEcContact),
+         * built on the same /[^0-9]/ rule so the two layers agree on
+         * what "the same number" means.
+         *
+         * "0917 123 4567" and "09171234567" both normalize to
+         * "09171234567". A future mask that admits hyphens or
+         * parentheses would also be covered by this rule.
+         *
+         * @param {string} value
+         * @returns {string}
+         */
+        function normalizeDigits(value) {
+            return String(value || '').replace(/[^0-9]/g, '');
+        }
 
         function isValidPhilippineMobile(number) {
             const cleaned = String(number).replace(/\s/g, '');
@@ -523,6 +623,127 @@
         });
 
         // ============================================
+        // VEHICLE-TYPE-DEPENDENT UI
+        //
+        // Keeps the whole form in sync with the vehicle the applicant
+        // selected in Step 2. The visual swaps live in sign-up.css:
+        //
+        //   .register-page[data-vehicle-type="bicycle"]        → bicycle shape
+        //   .register-page[data-vehicle-type="<other>|''"]     → motor-vehicle shape
+        //
+        // This function's jobs are:
+        //
+        //   1. write the data attribute on the page root, and
+        //   2. toggle the `required` attribute on the two license date
+        //      inputs, and
+        //   3. clear the plate/make/model/year inputs when the vehicle
+        //      becomes bicycle.
+        //
+        // Job 2 is JS-side, not CSS-side, because `required` is a DOM
+        // property. CSS cannot remove it, and the browser will refuse
+        // to submit the form if a `required` input is empty — even
+        // when the input is hidden by a CSS rule.
+        //
+        // Job 3 is JS-side because hiding an input via CSS does not
+        // empty it. A value typed while a motor-vehicle option was
+        // selected would persist in the DOM and would be posted on
+        // submit. The handler drops those fields for a bicycle, but
+        // the stale values would still leak into the Step 5 review
+        // summary. Clearing keeps the DOM, the review, and the
+        // submitted form in agreement.
+        // ============================================
+
+        function applyVehicleTypeDependentUI() {
+            if (!vehicleType || !pageRoot) return;
+
+            const selectedValue = vehicleType.value;
+            const isBicycle     = (selectedValue === 'bicycle');
+
+            // Page-level attribute drives every CSS swap. Empty
+            // string when nothing is selected yet — CSS treats an
+            // empty value the same as any non-bicycle value.
+            pageRoot.setAttribute('data-vehicle-type', selectedValue || '');
+
+            // License date inputs are required for any non-bicycle
+            // vehicle and skipped for bicycle. Toggling the attribute
+            // here (not just hiding the row) is what stops the browser
+            // from blocking a bicycle applicant's submit with a
+            // "please fill out this field" tooltip on an input they
+            // cannot see.
+            if (licenseIssue) {
+                if (isBicycle) {
+                    licenseIssue.removeAttribute('required');
+                } else {
+                    licenseIssue.setAttribute('required', 'required');
+                }
+            }
+            if (licenseExpiry) {
+                if (isBicycle) {
+                    licenseExpiry.removeAttribute('required');
+                } else {
+                    licenseExpiry.setAttribute('required', 'required');
+                }
+            }
+
+            // Motor-vehicle-only fields: when the vehicle is a
+            // bicycle, the whole #vehicleMotorOnlyFields container is
+            // hidden by CSS. This block empties the inputs so a
+            // value typed while a motor vehicle was selected does
+            // not persist in the DOM after the switch.
+            //
+            // The three optional inputs (make, model, year) are
+            // cleared along with the plate: none of them has a
+            // sensible value for a bicycle, and clearing them keeps
+            // the Step 5 review summary and the submitted form
+            // consistent with what the applicant actually sees.
+            if (isBicycle) {
+                if (vehiclePlate) vehiclePlate.value = '';
+                if (vehicleMake)  vehicleMake.value  = '';
+                if (vehicleModel) vehicleModel.value = '';
+                if (vehicleYear)  vehicleYear.value  = '';
+
+                // Clear any stale errors on those fields, since they
+                // are about to be hidden.
+                clearFieldError(vehiclePlate, vehiclePlateError);
+                clearFieldError(vehicleYear,  vehicleYearError);
+            }
+
+            // Clear any stale errors on the two license date fields
+            // when the applicant switches to bicycle, since the
+            // fields are about to be hidden.
+            if (isBicycle) {
+                clearFieldError(licenseIssue, licenseIssueError);
+                clearFieldError(licenseExpiry, licenseExpiryError);
+            }
+
+            // Step 5 review label — kept in sync so that the summary
+            // is correct even if the applicant never re-visits Step 4
+            // after changing Step 2.
+            if (reviewIdDocLabel) {
+                reviewIdDocLabel.textContent = isBicycle
+                    ? 'Valid Government ID'
+                    : "Driver's License";
+            }
+
+            // The license-validity row in the review summary is not
+            // applicable for a bicycle applicant. Hide it entirely
+            // rather than showing a placeholder dash.
+            if (reviewLicenseDatesRow) {
+                reviewLicenseDatesRow.style.display = isBicycle ? 'none' : '';
+            }
+        }
+
+        if (vehicleType) {
+            vehicleType.addEventListener('change', applyVehicleTypeDependentUI);
+            // Apply once on load so the DOM matches the initial
+            // select value. On a fresh page load the select is empty
+            // and the motor-vehicle shape is the default; the
+            // attribute is set to '' which the CSS treats the same
+            // as "motor-vehicle shape".
+            applyVehicleTypeDependentUI();
+        }
+
+        // ============================================
         // VALIDATION — STEP 1
         // ============================================
 
@@ -646,6 +867,14 @@
                 valid = false;
             }
 
+            // The plate is required for any non-bicycle vehicle. The
+            // entire motor-vehicle-only block (#vehicleMotorOnlyFields)
+            // is hidden by CSS when the vehicle is a bicycle, so a
+            // bicycle applicant never sees or fills the plate input.
+            // The rule below is the one that actually enforces
+            // "required for motor vehicles" — matching the markup's
+            // default `required` attribute and the server-side check
+            // in sign-up-handler.php.
             const isMotorVehicle = vehicleType && vehicleType.value && vehicleType.value !== 'bicycle';
             if (isMotorVehicle) {
                 const plateVal = vehiclePlate ? vehiclePlate.value.trim() : '';
@@ -717,6 +946,27 @@
                 if (!ph.valid) {
                     showFieldError(emergencyContact, emergencyContactError, ph.message);
                     valid = false;
+                } else {
+                    // The emergency contact number must differ from
+                    // the rider's own number. Both sides are reduced
+                    // to digit-only strings first, so a differently
+                    // spaced form of the same digits is still caught.
+                    // The rider's own number is validated in Step 1
+                    // and is available in the DOM here regardless of
+                    // which step is currently on screen.
+                    const ownDigits = normalizeDigits(
+                        contactNumber ? contactNumber.value : ''
+                    );
+                    const ecDigits  = normalizeDigits(ecVal);
+
+                    if (ownDigits !== '' && ownDigits === ecDigits) {
+                        showFieldError(
+                            emergencyContact,
+                            emergencyContactError,
+                            'Emergency contact number must be different from your own contact number.'
+                        );
+                        valid = false;
+                    }
                 }
             }
 
@@ -745,9 +995,18 @@
                 }
             }
 
-            // Driver's license
+            // Identity document.
+            //
+            // The field name is always 'drivers_license' regardless of
+            // vehicle type — the handler reads $_FILES['drivers_license']
+            // and decides the correct id_type from the posted
+            // vehicle_type. Only the user-facing error message is
+            // tailored to which document is expected.
+            const isBicycle = vehicleType && vehicleType.value === 'bicycle';
+            const idLabel = isBicycle ? 'a valid government-issued ID' : "your driver's license";
+
             if (!licenseInput || !licenseInput.files || !licenseInput.files[0]) {
-                showFieldError(licenseInput, licenseError, "Please upload a photo of your driver's license.");
+                showFieldError(licenseInput, licenseError, 'Please upload a photo of ' + idLabel + '.');
                 valid = false;
             } else {
                 const f = licenseInput.files[0];
@@ -765,6 +1024,19 @@
 
         function validateLicenseDates() {
             let valid = true;
+
+            // A bicycle applicant does not submit a driver's license,
+            // so neither date applies. The two inputs also lose their
+            // `required` attribute in applyVehicleTypeDependentUI(),
+            // so the browser will not block submission. Skipping this
+            // branch here keeps the JS-side validation consistent
+            // with what the DOM now says.
+            const isBicycle = vehicleType && vehicleType.value === 'bicycle';
+            if (isBicycle) {
+                clearFieldError(licenseIssue, licenseIssueError);
+                clearFieldError(licenseExpiry, licenseExpiryError);
+                return true;
+            }
 
             // Issue date — REQUIRED
             if (!licenseIssue || !licenseIssue.value) {
@@ -885,8 +1157,25 @@
                 ? licenseInput.files[0].name
                 : '—';
 
+            // Identity-document label reflects the vehicle type. A
+            // bicycle applicant submits a national ID or other
+            // government-issued ID rather than a driver's license.
+            const isBicycle = vehicleType && vehicleType.value === 'bicycle';
+            if (reviewIdDocLabel) {
+                reviewIdDocLabel.textContent = isBicycle
+                    ? 'Valid Government ID'
+                    : "Driver's License";
+            }
+
+            // License validity only applies when the applicant is
+            // submitting a driver's license. For a bicycle applicant
+            // the row is hidden and its text is left blank.
+            if (reviewLicenseDatesRow) {
+                reviewLicenseDatesRow.style.display = isBicycle ? 'none' : '';
+            }
+
             let licenseDatesText = '—';
-            if ((licenseIssue && licenseIssue.value) || (licenseExpiry && licenseExpiry.value)) {
+            if (!isBicycle && ((licenseIssue && licenseIssue.value) || (licenseExpiry && licenseExpiry.value))) {
                 const fmt = function (d) {
                     if (!d) return '?';
                     const t = new Date(d);
@@ -894,6 +1183,8 @@
                     return t.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
                 };
                 licenseDatesText = fmt(licenseIssue && licenseIssue.value) + ' → ' + fmt(licenseExpiry && licenseExpiry.value);
+            } else if (isBicycle) {
+                licenseDatesText = '';
             }
 
             setText('reviewName', fullName || '—');
@@ -1074,8 +1365,14 @@
 
         // ============================================
         // SERVER FIELD → INLINE SLOT MAP
+        //
         // Used by the submit handler to route every server-side
         // `field` value to its inline element and owning step.
+        //
+        // The `upload` entry is a generic bucket the handler uses
+        // for any validateUpload() failure. The submit handler
+        // inspects the message text to decide which of the two
+        // upload slots should receive it.
         // ============================================
 
         const SERVER_FIELD_MAP = {
@@ -1109,9 +1406,8 @@
             drivers_license:       { input: licenseInput,       errorEl: licenseError,            step: 4 },
             license_issue_date:    { input: licenseIssue,       errorEl: licenseIssueError,       step: 4 },
             license_expiry_date:   { input: licenseExpiry,      errorEl: licenseExpiryError,      step: 4 },
-            // `upload` is a generic bucket for both files; land it on
-            // the license slot only when the message mentions license,
-            // otherwise on the photo slot. Handled explicitly below.
+            // Generic upload bucket — routed explicitly in the submit
+            // handler by inspecting the message text.
             upload:                { input: null,               errorEl: null,                    step: 4 },
 
             // Step 5 — terms uses the group wrapper, handled explicitly.
@@ -1186,13 +1482,15 @@
                         // ---- Generic upload bucket ----
                         // The handler returns field="upload" for any
                         // validateUpload() failure. Route by inspecting
-                        // the message: if it mentions "license" land on
-                        // the license slot, otherwise on the photo slot.
+                        // the message: if it mentions the ID document,
+                        // land on the license slot, otherwise on the
+                        // photo slot.
                         if (data && data.field === 'upload') {
-                            if (/license/i.test(data.message || '')) {
-                                showFieldError(licenseInput, licenseError, data.message);
+                            const message = (data && data.message) || '';
+                            if (/license|ID|government/i.test(message)) {
+                                showFieldError(licenseInput, licenseError, message);
                             } else {
-                                showFieldError(profileInput, profilePicError, data.message);
+                                showFieldError(profileInput, profilePicError, message);
                             }
                             goToStep(4);
                             return;

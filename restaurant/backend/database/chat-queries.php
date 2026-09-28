@@ -42,11 +42,231 @@
  * message_id > :since_message_id. The two share a SELECT shape so
  * the client renders a row from either path with the same code.
  *
+ * Channel gating — when a channel is reachable
+ * --------------------------------------------
+ * restaurantChatChannelStatus() is the single source of truth for
+ * "which channels are open for an order in this status". It is a
+ * pure function: no DB access, no time-of-day awareness beyond the
+ * delivered-grace window, no side effects.
+ *
+ * The mapping as of v2.0:
+ *
+ *   pending         → customer open,   rider closed
+ *   preparing       → customer open,   rider closed
+ *   rider_pending   → both open
+ *   picking_up      → both open
+ *   delivering      → both open
+ *   delivered ≤ 1h  → both open
+ *   delivered > 1h  → both closed
+ *   cancelled       → both closed
+ *   refunded        → both closed
+ *
+ * Rationale for the two open-early cases:
+ *
+ *   pending and preparing are the two windows in which the kitchen
+ *   is actively deciding what to cook and how to cook it. The
+ *   kitchen may need to reach the customer about an out-of-stock
+ *   item, an ambiguous address, or an ETA question. Blocking the
+ *   customer channel on those two statuses was a bug.
+ *
+ * The rider channel stays closed until a rider is actually
+ * attached to the order. The handler's own "no rider attached"
+ * guard covers the case where a channel is conceptually open but
+ * the counterparty row does not yet exist — see gateChannel() in
+ * restaurant/backend/handlers/chat-handler.php.
+ *
+ * Delivered-grace window
+ * ----------------------
+ * Once an order reaches 'delivered', both channels stay open for
+ * exactly RESTAURANT_CHAT_DELIVERED_GRACE_SECONDS (one hour) after
+ * orders.delivered_at. This window exists so the customer can
+ * report a missing item or thank the kitchen without the order
+ * being effectively archived the instant the rider taps delivered.
+ *
+ * After the window elapses, both channels close. This keeps the
+ * kitchen's active conversation list focused on orders that are
+ * still in the restaurant's recent working memory.
+ *
+ * A NULL or unparsable delivered_at on a 'delivered' row fails
+ * closed for both channels. The before_order_delivered trigger in
+ * sql/database.sql sets the column on the transition, so a NULL
+ * here means the row is in an inconsistent state and should not be
+ * treated as reachable.
+ *
+ * Timezone handling
+ * -----------------
+ * orders.delivered_at is written by MySQL using the session's
+ * time_zone setting, which database-connect.php sets to '+08:00'
+ * (Philippine Time). When PHP reads that string back and converts
+ * it via strtotime(), PHP interprets the string in whatever
+ * timezone date.timezone is configured to — typically UTC on a
+ * default server. That mismatch makes a delivery timestamped at
+ * 00:54 PHT parse as 00:54 UTC, which is 08:54 PHT, eight hours in
+ * the future relative to the actual event.
+ *
+ * The result was the exact symptom this revision fixes: a delivery
+ * that happened five minutes ago (PHT) was computed as "eight
+ * hours ago" in PHP, which exceeded the one-hour grace window, so
+ * the chat gate refused every channel on a freshly delivered
+ * order.
+ *
+ * The fix is to anchor the parse to the same timezone the database
+ * is using. FITPAL_DB_TIMEZONE_OFFSET is defined here with the
+ * same value database-connect.php uses, and restaurantChatNow() and
+ * restaurantChatParseDeliveredAt() both convert through it so the
+ * comparison is apples-to-apples. There is no reliance on the
+ * server's default timezone.
+ *
  * @package FitPal
- * @version 1.0
+ * @version 2.1 — Timezone-aware grace window:
+ *                  - New constant FITPAL_DB_TIMEZONE_OFFSET ("+08:00"),
+ *                    matching the SET time_zone the database
+ *                    connection issues in
+ *                    shared/backend/database/database-connect.php.
+ *                  - New pure helpers restaurantChatParseDeliveredAt()
+ *                    and restaurantChatNow() that convert to and from
+ *                    an absolute Unix timestamp using that offset,
+ *                    regardless of date.timezone.
+ *                  - restaurantChatDeliveredWindow() now computes
+ *                    elapsed time from those helpers, so a freshly
+ *                    delivered order in PHT is measured against a
+ *                    PHT "now" and the one-hour window behaves as
+ *                    the constant implies.
+ *                  - No signature changed. No caller changed. The
+ *                    SQL-side chat_grace_open CASE in
+ *                    order-queries.php was already timezone-safe
+ *                    because it compares against MySQL's own NOW(),
+ *                    and is untouched.
+ *
+ *                (2.0: delivered grace window and open-early customer
+ *                channel. 1.1: added 'picking_up' to the open-window
+ *                set. 1.0: initial restaurant chat queries.)
  */
 
 declare(strict_types=1);
+
+/**
+ * The timezone offset the database connection is set to.
+ *
+ * Must match the $timezone_offset value in
+ * shared/backend/database/database-connect.php. That file issues
+ * `SET time_zone = '+08:00'` on every connection, so every
+ * TIMESTAMP / DATETIME value MySQL returns is expressed in
+ * Philippine Time regardless of the server's system clock.
+ *
+ * PHP has no way to know that from the returned string alone —
+ * strtotime() uses date.timezone — so this constant is the anchor
+ * that keeps the two sides in agreement.
+ */
+if (!defined('FITPAL_DB_TIMEZONE_OFFSET')) {
+    define('FITPAL_DB_TIMEZONE_OFFSET', '+08:00');
+}
+
+/**
+ * Length of the post-delivery grace window, in seconds.
+ *
+ * After this many seconds have elapsed since orders.delivered_at,
+ * both chat channels on the order close. Before it elapses, both
+ * remain open.
+ *
+ * Defined as a constant rather than a literal so the rule is
+ * expressed once. The handler never sees this value; it only sees
+ * the array restaurantChatDeliveredWindow() returns.
+ */
+if (!defined('RESTAURANT_CHAT_DELIVERED_GRACE_SECONDS')) {
+    define('RESTAURANT_CHAT_DELIVERED_GRACE_SECONDS', 3600);
+}
+
+/* =============================================================
+ * TIMEZONE-AWARE TIME HELPERS
+ *
+ * Every comparison between "now" and a value returned by MySQL
+ * must go through these helpers. Calling time() or strtotime()
+ * directly on a MySQL DATETIME string reintroduces the bug this
+ * revision fixes.
+ * ============================================================= */
+
+if (!function_exists('fitpalDbTimezone')) {
+    /**
+     * A DateTimeZone object for the database connection's offset.
+     *
+     * Cached per request so repeated calls are cheap.
+     *
+     * @return DateTimeZone
+     */
+    function fitpalDbTimezone(): DateTimeZone
+    {
+        static $tz = null;
+        if ($tz === null) {
+            try {
+                $tz = new DateTimeZone(FITPAL_DB_TIMEZONE_OFFSET);
+            } catch (Throwable $e) {
+                // A malformed offset is a programming error, but a
+                // hard failure inside a display path is worse than a
+                // degraded one. Fall back to UTC so the grace window
+                // still resolves to a definite value.
+                $tz = new DateTimeZone('UTC');
+            }
+        }
+        return $tz;
+    }
+}
+
+if (!function_exists('restaurantChatParseDeliveredAt')) {
+    /**
+     * Parse a MySQL DATETIME string into an absolute Unix timestamp,
+     * interpreting the string in the database connection's timezone.
+     *
+     * Returns null when the string is missing or unparsable. A null
+     * return is what restaurantChatDeliveredWindow() treats as a
+     * failure and closes both channels for.
+     *
+     * @param string|null $deliveredAt Raw orders.delivered_at value,
+     *                                 e.g. '2026-09-28 00:54:00'.
+     * @return int|null  Unix timestamp, or null on failure.
+     */
+    function restaurantChatParseDeliveredAt(?string $deliveredAt): ?int
+    {
+        if ($deliveredAt === null || $deliveredAt === '') {
+            return null;
+        }
+
+        $dt = DateTimeImmutable::createFromFormat(
+            'Y-m-d H:i:s',
+            $deliveredAt,
+            fitpalDbTimezone()
+        );
+
+        if ($dt === false) {
+            // Some MySQL configurations return microseconds or a
+            // trailing timezone. Fall back to a looser parse that
+            // still anchors to the database offset.
+            try {
+                $dt = new DateTimeImmutable($deliveredAt, fitpalDbTimezone());
+            } catch (Throwable $e) {
+                return null;
+            }
+        }
+
+        return $dt->getTimestamp();
+    }
+}
+
+if (!function_exists('restaurantChatNow')) {
+    /**
+     * The current time as a Unix timestamp. time() is already
+     * absolute — it does not depend on date.timezone — so this
+     * helper exists mainly so every call site in this file reads
+     * through the same name and a future change to the notion of
+     * "now" has one place to live.
+     *
+     * @return int
+     */
+    function restaurantChatNow(): int
+    {
+        return time();
+    }
+}
 
 /* =============================================================
  * SCOPE GUARD
@@ -486,12 +706,141 @@ function countRestaurantUnread(PDO $db, int $orderId, string $counterparty): int
 }
 
 /* =============================================================
- * PRESENTATION HELPERS (pure — no DB access)
+ * CHANNEL GATING
  * ============================================================= */
 
 /**
+ * Return the channel-availability rules for an order status.
+ *
+ * The handler uses this to decide which chat tabs are enabled for
+ * a given order. The mapping:
+ *
+ *   pending         → customer open,   rider closed
+ *   preparing       → customer open,   rider closed
+ *   rider_pending   → both open
+ *   picking_up      → both open
+ *   delivering      → both open
+ *   delivered       → depends on $deliveredAt, see below
+ *   cancelled       → both closed
+ *   refunded        → both closed
+ *
+ * The 'delivered' case is time-dependent. It routes through
+ * restaurantChatDeliveredWindow(), which opens both channels for
+ * exactly RESTAURANT_CHAT_DELIVERED_GRACE_SECONDS after
+ * orders.delivered_at and closes both after that. Passing NULL or
+ * an unparsable $deliveredAt to a 'delivered' order fails closed
+ * for both channels — a delivered order without a timestamp is a
+ * data-integrity problem and should not be treated as reachable.
+ *
+ * For any status other than 'delivered', $deliveredAt is ignored.
+ *
+ * The $deliveredAt parameter is the raw string from
+ * orders.delivered_at, in whatever format MySQL returned it
+ * (typically 'YYYY-MM-DD HH:MM:SS'). It is parsed with the
+ * database connection's timezone offset, not the PHP server's
+ * default, so the one-hour window is measured correctly.
+ *
+ * @param string      $orderStatus
+ * @param string|null $deliveredAt Raw orders.delivered_at value,
+ *                                 used only for the 'delivered'
+ *                                 case.
+ * @return array{customer:bool, delivery_rider:bool}
+ */
+function restaurantChatChannelStatus(
+    string $orderStatus,
+    ?string $deliveredAt = null
+): array {
+    $open   = ['customer' => true,  'delivery_rider' => true];
+    $closed = ['customer' => false, 'delivery_rider' => false];
+
+    return match ($orderStatus) {
+
+        // Live, kitchen-facing stages. The customer channel is
+        // open so the kitchen can raise an out-of-stock item, an
+        // address clarification, or an ETA question. The rider
+        // channel is conceptually open here as a shape but the
+        // handler's own "no rider attached" guard is what
+        // actually blocks it — no rider has been attached to the
+        // order yet.
+        'pending'       => ['customer' => true, 'delivery_rider' => false],
+        'preparing'     => ['customer' => true, 'delivery_rider' => false],
+
+        // Rider-facing stages. Both channels reachable.
+        'rider_pending' => $open,
+        'picking_up'    => $open,
+        'delivering'    => $open,
+
+        // Delivered. Both channels stay open for the grace
+        // window. After the window elapses, both close.
+        'delivered'     => restaurantChatDeliveredWindow($deliveredAt),
+
+        // Terminal states. Nothing left to say.
+        'cancelled'     => $closed,
+        'refunded'      => $closed,
+
+        default         => $closed,
+    };
+}
+
+/**
+ * Per-channel availability for an order in the 'delivered' state.
+ *
+ * Both channels are open for RESTAURANT_CHAT_DELIVERED_GRACE_SECONDS
+ * after orders.delivered_at. After that, both are closed.
+ *
+ * A NULL or unparsable timestamp fails closed for both channels.
+ * The before_order_delivered trigger in sql/database.sql sets
+ * delivered_at on the transition into 'delivered', so a NULL on a
+ * delivered row means something upstream is broken. Refusing the
+ * channel is the safe default.
+ *
+ * Timezone correctness
+ * --------------------
+ * orders.delivered_at is written by MySQL in the connection's
+ * time_zone (+08:00, set by database-connect.php). This function
+ * parses it through restaurantChatParseDeliveredAt(), which anchors
+ * the parse to that same offset, so the elapsed-seconds calculation
+ * is against an absolute "now" from restaurantChatNow() and is not
+ * affected by the PHP server's date.timezone.
+ *
+ * This function is pure: no DB access, no session access, no
+ * side effects. It exists so the grace-window rule lives in one
+ * place.
+ *
+ * @param string|null $deliveredAt Raw orders.delivered_at value.
+ * @return array{customer:bool, delivery_rider:bool}
+ */
+function restaurantChatDeliveredWindow(?string $deliveredAt): array
+{
+    $closed = ['customer' => false, 'delivery_rider' => false];
+
+    $deliveredTs = restaurantChatParseDeliveredAt($deliveredAt);
+    if ($deliveredTs === null) {
+        return $closed;
+    }
+
+    $elapsed = restaurantChatNow() - $deliveredTs;
+
+    // A negative elapsed value means delivered_at is in the
+    // future, which the schema never produces on a valid row.
+    // Treat it the same as an unparsable timestamp: fail closed.
+    if ($elapsed < 0) {
+        return $closed;
+    }
+
+    $withinGrace = $elapsed <= RESTAURANT_CHAT_DELIVERED_GRACE_SECONDS;
+
+    return [
+        'customer'       => $withinGrace,
+        'delivery_rider' => $withinGrace,
+    ];
+}
+
+/**
  * True when the given counterparty is a valid channel for the
- * restaurant chat modal.
+ * restaurant chat modal, regardless of order status. This is a
+ * shape check, not a status check — the handler combines it with
+ * restaurantChatChannelStatus() to decide reachability.
  *
  * @param string $counterparty
  * @return bool
@@ -500,6 +849,10 @@ function isRestaurantChatChannel(string $counterparty): bool
 {
     return in_array($counterparty, ['customer', 'delivery_rider'], true);
 }
+
+/* =============================================================
+ * PRESENTATION HELPERS (pure — no DB access)
+ * ============================================================= */
 
 /**
  * Display label for a sender_type value, as shown in the chat body.
@@ -522,11 +875,18 @@ function restaurantChatSenderLabel(string $senderType): string
 /**
  * Format a message timestamp as "g:i A".
  *
+ * Uses the database connection's timezone offset, not the PHP
+ * server's default, so a message timestamp returned by MySQL in
+ * +08:00 is displayed in +08:00.
+ *
  * @param string $date
  * @return string
  */
 function restaurantChatFormatTime(string $date): string
 {
-    $ts = strtotime($date);
-    return $ts !== false ? date('g:i A', $ts) : $date;
+    $ts = restaurantChatParseDeliveredAt($date);
+    if ($ts === null) {
+        return $date;
+    }
+    return date('g:i A', $ts);
 }

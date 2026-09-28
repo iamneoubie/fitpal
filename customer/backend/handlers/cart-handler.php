@@ -21,8 +21,35 @@
  * (e.g. getCartCustomizationBreakdown) live in cart-queries.php.
  *
  * @package FitPal
- * @version 6.2 — CSRF validation reads customer_csrf_token instead of
- *                the shared csrf_token.
+ * @version 6.3 — push_to_queue now writes every field that
+ *                createOrderFromQueue() requires onto each session
+ *                queue line. The previous revision omitted
+ *                restaurant_branch_id, which caused
+ *                createOrderFromQueue() to drop every cart-sourced
+ *                line and throw "Your order is empty." Every
+ *                payment method (COD, Wallet, Online) failed
+ *                identically because the failure happened before
+ *                the payment branch was ever reached.
+ *
+ *                Specifically:
+ *                  - New lines carry restaurant_branch_id,
+ *                    base_price, and the raw customization_data
+ *                    JSON, matching the shape queueEnrich()
+ *                    produces.
+ *                  - Merged lines refresh the same field set, so a
+ *                    second push of the same cart row cannot leave
+ *                    a stale price or drop a customization payload.
+ *                  - The merge key is product + customization
+ *                    signature, not product alone, so two cart
+ *                    rows for the same product with different
+ *                    customizations stay as two queue lines.
+ *                  - No SQL added or moved. getCartRowsForQueue()
+ *                    already selects rb.restaurant_branch_id and
+ *                    di.images.
+ *
+ *                (6.2: CSRF validation reads customer_csrf_token
+ *                instead of the shared csrf_token. 6.1: pure
+ *                helpers moved to cart-queries.php.)
  */
 declare(strict_types=1);
 
@@ -357,8 +384,43 @@ function handleGetCount(PDO $db, int $customerId): void
  *
  * Expects $_POST['cart_ids'] to be an array of cart_id integers.
  * Rows that are inactive or out of stock are skipped even if selected.
- * Merging rule: if a queue line already exists with the same product_id,
- * quantities are added together, capped at the product's stock.
+ *
+ * Session queue line shape
+ * ------------------------
+ * Every line written here carries the same fields that
+ * queue-handler.php's queueEnrich() produces, because
+ * createOrderFromQueue() in order-queries.php reads those fields and
+ * silently drops any line that is missing them. In particular,
+ * `restaurant_branch_id` is mandatory: without it,
+ * createOrderFromQueue() skips the line, the whole queue can drain
+ * to zero, and the customer is bounced back to checkout with
+ * "Your order is empty." regardless of which payment method was
+ * chosen.
+ *
+ * Fields written on a new line:
+ *   line_key               product + customization signature
+ *   product_id             int
+ *   name                   string
+ *   price                  float  effective unit price (server-authoritative)
+ *   base_price             float  product base price
+ *   quantity               int    capped at product stock
+ *   image                  string project-relative or absolute path
+ *   stock                  int
+ *   restaurant_branch_id   int    required by createOrderFromQueue()
+ *   restaurant_name        string
+ *   branch_name            string
+ *   customization_data     string|null  raw JSON from cart.customization_data
+ *
+ * Merge rule
+ * ----------
+ * A line merges with an existing queue line only when the
+ * customization payload is identical. Two cart rows for the same
+ * product with different customizations are two distinct queue
+ * lines, matching the cart table's own
+ * unique_cart_item (customer_id, product_id, customization_hash)
+ * constraint. When a merge happens, every mutable field is
+ * refreshed from the cart row so a stale price or a dropped
+ * customization cannot survive the merge.
  */
 function handlePushToQueue(PDO $db, int $customerId, bool $isAjax): void
 {
@@ -384,12 +446,17 @@ function handlePushToQueue(PDO $db, int $customerId, bool $isAjax): void
         $_SESSION['order_queue'] = [];
     }
 
-    // Index existing queue lines by product_id for O(1) merge lookup.
-    $indexByProduct = [];
+    // Index existing queue lines by their full signature (product_id
+    // plus the raw customization JSON the cart row carries) so a
+    // merge only fires when the customization actually matches.
+    // Indexing by product_id alone would collapse two cart rows for
+    // the same product with different customizations into one queue
+    // line, discarding the second customization set.
+    $indexBySignature = [];
     foreach ($_SESSION['order_queue'] as $i => $line) {
-        $pid = (int)($line['product_id'] ?? 0);
-        if ($pid > 0) {
-            $indexByProduct[$pid] = $i;
+        $signature = queueLineSignatureFromLine($line);
+        if ($signature !== '') {
+            $indexBySignature[$signature] = $i;
         }
     }
 
@@ -405,40 +472,62 @@ function handlePushToQueue(PDO $db, int $customerId, bool $isAjax): void
             continue;
         }
 
-        $productId = (int)$row['product_id'];
-        $quantity  = (int)$row['quantity'];
-        if ($productId <= 0 || $quantity <= 0) {
+        $productId = (int)($row['product_id'] ?? 0);
+        $branchId  = (int)($row['restaurant_branch_id'] ?? 0);
+        $quantity  = (int)($row['quantity'] ?? 0);
+
+        // A cart row that somehow lost its branch reference cannot
+        // become a valid queue line. Skip it rather than write a
+        // line createOrderFromQueue() will silently drop.
+        if ($productId <= 0 || $branchId <= 0 || $quantity <= 0) {
             $skippedCount++;
             continue;
         }
 
-        $lineKey = 'p::' . $productId;
+        $lineKey = 'p::' . $productId . '::' . sha1((string)($row['customization_data'] ?? ''));
 
-        if (isset($indexByProduct[$productId])) {
-            $idx = $indexByProduct[$productId];
+        $newLine = [
+            'line_key'             => $lineKey,
+            'product_id'           => $productId,
+            'name'                 => (string)($row['name'] ?? ''),
+            'price'                => (float)($row['price'] ?? 0),
+            'base_price'           => (float)($row['base_price'] ?? 0),
+            'quantity'             => $quantity,
+            'image'                => (string)($row['product_image'] ?? ''),
+            'stock'                => $stock,
+            'restaurant_branch_id' => $branchId,
+            'restaurant_name'      => (string)($row['business_name'] ?? ''),
+            'branch_name'          => (string)($row['branch_name'] ?? ''),
+            'customization_data'   => $row['customization_data'] ?? null,
+        ];
+
+        $signature = queueLineSignatureFromLine($newLine);
+
+        if ($signature !== '' && isset($indexBySignature[$signature])) {
+            $idx = $indexBySignature[$signature];
+
             $currentQty = (int)($_SESSION['order_queue'][$idx]['quantity'] ?? 0);
             $mergedQty  = $currentQty + $quantity;
             if ($mergedQty > $stock) {
                 $mergedQty = $stock;
             }
-            $_SESSION['order_queue'][$idx]['quantity'] = $mergedQty;
-            $_SESSION['order_queue'][$idx]['stock']    = $stock;
-            if (!empty($row['product_image'])) {
-                $_SESSION['order_queue'][$idx]['image'] = $row['product_image'];
-            }
+
+            // Refresh every mutable field from the cart row. The
+            // queue line must reflect the current price, image, and
+            // names, not whatever it carried on the first push.
+            $_SESSION['order_queue'][$idx]['quantity']             = $mergedQty;
+            $_SESSION['order_queue'][$idx]['price']                = $newLine['price'];
+            $_SESSION['order_queue'][$idx]['base_price']           = $newLine['base_price'];
+            $_SESSION['order_queue'][$idx]['stock']                = $stock;
+            $_SESSION['order_queue'][$idx]['image']                = $newLine['image'];
+            $_SESSION['order_queue'][$idx]['name']                 = $newLine['name'];
+            $_SESSION['order_queue'][$idx]['restaurant_branch_id'] = $branchId;
+            $_SESSION['order_queue'][$idx]['restaurant_name']      = $newLine['restaurant_name'];
+            $_SESSION['order_queue'][$idx]['branch_name']          = $newLine['branch_name'];
+            $_SESSION['order_queue'][$idx]['customization_data']   = $newLine['customization_data'];
         } else {
-            $_SESSION['order_queue'][] = [
-                'line_key'        => $lineKey,
-                'product_id'      => $productId,
-                'name'            => (string)($row['name'] ?? ''),
-                'price'           => (float)($row['price'] ?? 0),
-                'quantity'        => $quantity,
-                'image'           => (string)($row['product_image'] ?? ''),
-                'stock'           => $stock,
-                'restaurant_name' => (string)($row['business_name'] ?? ''),
-                'branch_name'     => (string)($row['branch_name'] ?? ''),
-            ];
-            $indexByProduct[$productId] = count($_SESSION['order_queue']) - 1;
+            $_SESSION['order_queue'][] = $newLine;
+            $indexBySignature[$signature] = count($_SESSION['order_queue']) - 1;
         }
 
         $addedCount++;
@@ -458,4 +547,43 @@ function handlePushToQueue(PDO $db, int $customerId, bool $isAjax): void
         $isAjax,
         '../../pages/menu.php'
     );
+}
+
+/**
+ * Build the merge signature for a queue line.
+ *
+ * The signature is the product id joined with the SHA-1 of the raw
+ * customization JSON. Two lines with the same product but different
+ * customization payloads therefore have different signatures and
+ * never merge. Two lines with the same product and the same
+ * customization payload always merge.
+ *
+ * The `line_key` field, when present on the line, is preferred —
+ * it is the same value computed by handlePushToQueue() and by
+ * queue-handler.php's add action.
+ *
+ * Returns '' when the line has no usable product id, which makes
+ * the caller treat the line as unindexable rather than merging it
+ * into an unrelated bucket.
+ *
+ * @param array<string, mixed> $line
+ * @return string
+ */
+function queueLineSignatureFromLine(array $line): string
+{
+    if (isset($line['line_key']) && is_string($line['line_key']) && $line['line_key'] !== '') {
+        return $line['line_key'];
+    }
+
+    $productId = (int)($line['product_id'] ?? 0);
+    if ($productId <= 0) {
+        return '';
+    }
+
+    $customRaw = $line['customization_data'] ?? null;
+    $customStr = is_string($customRaw)
+        ? $customRaw
+        : (is_array($customRaw) ? json_encode($customRaw) : '');
+
+    return 'p::' . $productId . '::' . sha1((string)$customStr);
 }

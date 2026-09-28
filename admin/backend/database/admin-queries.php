@@ -5,9 +5,7 @@
  * Pure data-access layer for the admin role. Owns every query against
  * the customer, delivery_rider, restaurant, financial_account, orders,
  * and queue_item tables. Also owns the presentation helpers that
- * operate on rows from those tables, matching the customer pattern
- * where role-specific formatters live alongside the queries that
- * produce their input.
+ * operate on rows from those tables.
  *
  * No $_POST, no header(), no echo.
  *
@@ -19,12 +17,10 @@
  * Default page size is 5 across every list.
  *
  * @package FitPal
- * @version 3.0 — Adds getAdminPasswordHash() so the handler no longer
- *                carries its own SQL. Removes the deprecated
- *                adminMediaUrl() shim; adminAssetUrl() is the only
- *                name now.
+ * @version 6.0 — Adds getRestaurantPermits() to back the new Permits
+ *                tab in the restaurant detail modal. Every other
+ *                function is unchanged from v5.0.
  */
-
 declare(strict_types=1);
 
 /* =============================================================
@@ -210,7 +206,7 @@ function getAdminDashboardStats(PDO $db): array
             COUNT(*) AS total_orders,
             SUM(CASE WHEN DATE(order_date) = CURDATE() THEN 1 ELSE 0 END) AS orders_today,
             SUM(CASE WHEN order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) THEN 1 ELSE 0 END) AS orders_this_week,
-            SUM(CASE WHEN order_status IN ('pending','preparing','delivering') THEN 1 ELSE 0 END) AS active_orders,
+            SUM(CASE WHEN order_status IN ('pending','preparing','rider_pending','picking_up','delivering') THEN 1 ELSE 0 END) AS active_orders,
             SUM(CASE WHEN order_status = 'delivered' THEN 1 ELSE 0 END) AS delivered_orders,
             SUM(CASE WHEN order_status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_orders
          FROM orders"
@@ -694,7 +690,7 @@ function getRiderEmergencyContacts(PDO $db, int $riderId): array
 function getRiderDocuments(PDO $db, int $riderId): array
 {
     $stmt = $db->prepare(
-        "SELECT document_id, drivers_license, issue_date, expiry_date,
+        "SELECT document_id, id_type, id_path, issue_date, expiry_date,
                 created_at, updated_at
          FROM delivery_rider_document
          WHERE delivery_rider_id = :rid
@@ -907,6 +903,30 @@ function getRestaurantAccounts(PDO $db, int $restaurantId): array
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
+/**
+ * Fetch the permit rows attached to a restaurant, in display order.
+ * Backs the Permits tab of the restaurant detail modal.
+ *
+ * @return array<int, array{
+ *   permit_id: int,
+ *   file_path: string,
+ *   original_name: string,
+ *   display_order: int,
+ *   created_at: string
+ * }>
+ */
+function getRestaurantPermits(PDO $db, int $restaurantId): array
+{
+    $stmt = $db->prepare(
+        "SELECT permit_id, file_path, original_name, display_order, created_at
+         FROM restaurant_permit
+         WHERE restaurant_id = :rid
+         ORDER BY display_order ASC, permit_id ASC"
+    );
+    $stmt->execute([':rid' => $restaurantId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
 function setRestaurantVerificationStatus(
     PDO $db,
     int $restaurantId,
@@ -1018,6 +1038,8 @@ function adminOrderStatusBadgeClass(string $status): string
     return match ($status) {
         'pending'    => 'badge-warning',
         'preparing'  => 'badge-info',
+        'picking_up' => 'badge-info',
+        'rider_pending' => 'badge-info',
         'delivering' => 'badge-primary',
         'delivered'  => 'badge-success',
         'cancelled'  => 'badge-danger',
@@ -1031,6 +1053,8 @@ function adminOrderStatusLabel(string $status): string
     return match ($status) {
         'pending'    => 'Pending',
         'preparing'  => 'Preparing',
+        'rider_pending' => 'Rider Pending',
+        'picking_up' => 'Picking Up',
         'delivering' => 'For Delivery',
         'delivered'  => 'Delivered',
         'cancelled'  => 'Cancelled',
@@ -1089,11 +1113,6 @@ function parseAdminTagList(?string $raw): array
 
 /**
  * Resolve a project-root-relative path into a browser URL.
- *
- * The DB stores paths like
- *   shared/uploads/rider-profiles/rider_12_profile_abc.jpg
- * and $assetBase ends with 'shared/'. Stripping that suffix gives
- * the project root; concatenating the stored path gives the URL.
  *
  * @param string $assetBase    Header-provided asset base ending in 'shared/'.
  * @param string $relativePath DB-stored path relative to the project root.

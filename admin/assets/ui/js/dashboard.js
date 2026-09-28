@@ -1,18 +1,14 @@
 /**
  * FitPal Admin Dashboard JavaScript
  *
- * - Chart bar height application from data-bar-height
- * - Chart tooltip on hover/focus/tap
- * - Modal open/close with body scroll lock
- * - Escape key closes the active modal
+ * This page loads the shared admin-modal.js module for any modal
+ * behaviour. This file only owns dashboard-specific logic.
  *
  * @package FitPal
- * @version 3.0 — Applies chart bar heights from data-bar-height so
- *                dashboard.php no longer emits an inline style
- *                attribute. Bar heights are set before tooltip
- *                wiring so tooltip positioning sees final geometry.
+ * @version 4.0 — Removed all modal logic. The page now relies on
+ *                the shared admin-modal.js module for any modal
+ *                interactions.
  */
-
 (function () {
     'use strict';
 
@@ -21,9 +17,6 @@
         // ============================================
         // CHART BAR HEIGHTS
         // ============================================
-        // Per-bar geometry travels as data-bar-height from PHP. This
-        // loop applies it before the tooltip wiring runs so the
-        // tooltip's bounding-rect math reflects the final heights.
         document.querySelectorAll('.admin-chart-bar[data-bar-height]').forEach(function (bar) {
             var value = bar.getAttribute('data-bar-height');
             if (value === null || value === '') return;
@@ -116,87 +109,5 @@
             window.addEventListener('resize', scheduleReposition, { passive: true });
             window.addEventListener('scroll', scheduleReposition, { passive: true });
         }
-
-        // ============================================
-        // MODAL OPEN / CLOSE
-        // ============================================
-        function lockScroll() {
-            document.body.style.overflow = 'hidden';
-        }
-
-        function unlockScroll() {
-            document.body.style.overflow = '';
-        }
-
-        function openModal(modal) {
-            if (!modal) return;
-            lockScroll();
-            modal.classList.add('is-open');
-            modal.setAttribute('aria-hidden', 'false');
-            var focusTarget = modal.querySelector('[data-autofocus]');
-            if (focusTarget && typeof focusTarget.focus === 'function') {
-                setTimeout(function () { focusTarget.focus(); }, 80);
-            }
-        }
-
-        function closeModal(modal) {
-            if (!modal) return;
-            modal.classList.remove('is-open');
-            modal.setAttribute('aria-hidden', 'true');
-            if (!document.querySelector('.admin-modal.is-open')) {
-                unlockScroll();
-            }
-        }
-
-        document.addEventListener('click', function (e) {
-            var opener = e.target.closest('[data-open-modal]');
-            if (opener) {
-                e.preventDefault();
-                var modalId = opener.getAttribute('data-open-modal');
-                openModal(document.getElementById(modalId));
-                return;
-            }
-
-            var closer = e.target.closest('[data-close-modal]');
-            if (closer) {
-                e.preventDefault();
-                closeModal(closer.closest('.admin-modal'));
-                return;
-            }
-
-            if (e.target.classList.contains('admin-modal-backdrop')) {
-                closeModal(e.target.closest('.admin-modal'));
-                return;
-            }
-        });
-
-        document.addEventListener('keydown', function (e) {
-            if (e.key !== 'Escape') return;
-            var open = document.querySelector('.admin-modal.is-open');
-            if (open) closeModal(open);
-        });
-
-        // ============================================
-        // TAB SWITCHING INSIDE MODALS
-        // ============================================
-        document.addEventListener('click', function (e) {
-            var tab = e.target.closest('.admin-modal-tab');
-            if (!tab) return;
-            e.preventDefault();
-
-            var tabsContainer = tab.closest('.admin-modal-tabs');
-            if (!tabsContainer) return;
-
-            var panelGroup = tabsContainer.parentElement;
-            var targetId = tab.getAttribute('data-tab-target');
-
-            tabsContainer.querySelectorAll('.admin-modal-tab').forEach(function (t) {
-                t.classList.toggle('active', t === tab);
-            });
-
-            panelGroup.querySelectorAll('.admin-modal-tab-panel').forEach(function (p) {
-                p.classList.toggle('active', p.id === targetId);
-            });
-        });
     });
 })();

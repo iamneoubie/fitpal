@@ -1,12 +1,31 @@
 /**
  * FitPal Customer Wallet Styles
- * Version 1.2 — Reserves the viewport scrollbar gutter on <html> and
- *                anchors the modal content via inset + fixed-pixel
- *                width, so hiding the body scrollbar does not shift
- *                either the page or the modal.
+ * Version 1.5 — Adds a payment-method badge to the Transactions tab.
+ *
+ *                Three variants on the badge — Wallet, COD, Online —
+ *                rendered as small pills next to the order id on
+ *                each row that carries an associated order.
+ *                Deposits, refunds, and withdrawals have no order
+ *                and no badge.
+ *
+ *                The existing .wallet-txn-item.is-pending /
+ *                .is-failed opacity treatments and the
+ *                .wallet-txn-status.pending / .failed pill rules
+ *                are preserved byte-for-byte from v1.4. They were
+ *                carried over when the two-tab layout was written.
+ *
+ *                Everything else — tab bar, tab states, tab icon
+ *                tinting, panel flex chain, balance card,
+ *                transactions card, row layout, pagination, empty
+ *                state, modals, responsive breakpoints,
+ *                reduced-motion — is unchanged from v1.4.
+ *
+ *                (1.4: two-tab layout. 1.3: page shell stretched
+ *                to viewport. 1.2: fixed-pixel modal width. 1.1:
+ *                initial wallet layout.)
  *
  * @package FitPal
- * @version 1.2
+ * @version 1.5
  */
 
 /* Reserve the scrollbar gutter permanently. When the body scrollbar
@@ -32,6 +51,10 @@ html {
 
 .wallet-page {
     padding: 20px 0 40px 0;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: calc(100vh - 70px);
 }
 
 .wallet-page .container {
@@ -40,6 +63,9 @@ html {
     padding: 0 16px;
     width: 100%;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
 }
 
 /* ============================================
@@ -49,6 +75,7 @@ html {
 
 .page-title-header {
     margin-bottom: 24px;
+    flex-shrink: 0;
 }
 
 .page-title-header-top {
@@ -102,6 +129,103 @@ html {
 }
 
 /* ============================================
+   TAB BAR
+   Horizontal flex row. Two anchor tabs split
+   the bar evenly. Tabs never stack vertically.
+   ============================================ */
+
+.wallet-tabs {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 4px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    padding: 4px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-sm);
+    flex-shrink: 0;
+}
+
+.wallet-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 10px 16px;
+    border-radius: var(--radius-base);
+    background: transparent;
+    color: var(--gray-600);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    text-decoration: none;
+    text-align: center;
+    white-space: nowrap;
+    transition: background 0.15s ease, color 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+    box-sizing: border-box;
+}
+
+.wallet-tab:hover {
+    background: var(--gray-50);
+    color: var(--text);
+}
+
+.wallet-tab:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.wallet-tab.active {
+    background: var(--primary);
+    color: var(--white);
+}
+
+.wallet-tab-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+    opacity: 0.7;
+    /* Neutral gray tint for the resting state, so the icon reads
+       the same color as the label. */
+    filter: brightness(0) saturate(100%)
+            invert(45%) sepia(8%) saturate(800%)
+            hue-rotate(50deg) brightness(95%) contrast(90%);
+    transition: opacity 0.15s ease, filter 0.15s ease;
+}
+
+.wallet-tab:hover .wallet-tab-icon {
+    opacity: 1;
+    filter: brightness(0) saturate(100%)
+            invert(20%) sepia(8%) saturate(800%)
+            hue-rotate(50deg) brightness(95%) contrast(95%);
+}
+
+.wallet-tab.active .wallet-tab-icon {
+    opacity: 1;
+    filter: brightness(0) invert(1);
+}
+
+/* ============================================
+   PANEL
+   The server renders exactly one panel — the
+   active one. flex: 1 makes it fill the space
+   between the tab bar and the footer.
+   ============================================ */
+
+.wallet-panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: 20px;
+    min-height: 0;
+}
+
+/* ============================================
    ALERTS
    ============================================ */
 
@@ -111,6 +235,7 @@ html {
     margin-bottom: 16px;
     border: 1px solid transparent;
     font-size: var(--font-size-sm);
+    flex-shrink: 0;
 }
 
 .alert-success {
@@ -138,9 +263,10 @@ html {
     color: #ffffff;
     border-radius: var(--radius-lg);
     padding: 28px 32px;
-    margin-bottom: 24px;
+    margin-bottom: 0;
     box-shadow: var(--shadow-lg);
     flex-wrap: wrap;
+    flex-shrink: 0;
 }
 
 .wallet-balance-left {
@@ -209,6 +335,8 @@ html {
 
 /* ============================================
    TRANSACTIONS CARD
+   Used by both tabs. Same shell, different
+   header title and different row content.
    ============================================ */
 
 .wallet-transactions-card {
@@ -217,6 +345,9 @@ html {
     border-radius: var(--radius-lg);
     overflow: hidden;
     box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    flex: 1;
 }
 
 .wallet-transactions-card .card-header {
@@ -227,6 +358,7 @@ html {
     justify-content: space-between;
     align-items: center;
     gap: 12px;
+    flex-shrink: 0;
 }
 
 .wallet-transactions-card .card-header h3 {
@@ -268,6 +400,10 @@ html {
     border-bottom: none;
 }
 
+/* Pending and failed rows are dimmed so the customer can tell at a
+   glance that the row did not move the wallet balance. These rules
+   are preserved from the pre-v1.4 layout; the Transactions tab
+   renders them via .is-pending and .is-failed on the <li>. */
 .wallet-txn-item.is-pending {
     opacity: 0.75;
 }
@@ -320,6 +456,51 @@ html {
     border-radius: var(--radius-full);
 }
 
+/* ---- Payment-method badge (Transactions tab) ----
+ *
+ * Sits next to .wallet-txn-order on the row title. It tells the
+ * customer HOW the order was paid, not what happened to the wallet
+ * balance. A completed row shows the method plus the amount; a
+ * pending COD or Online row shows the method plus the "Pending"
+ * status pill on the right side of the row.
+ *
+ * The three variants use distinct tints so they read at a glance:
+ *   Wallet  green   — money moved through the FitPal wallet
+ *   COD     gray    — cash collected on delivery, no wallet movement
+ *   Online  amber   — external payment, no wallet movement
+ * The tints are chosen to be distinct from the status pill colors
+ * (yellow for Pending, red for Failed) so a row that carries both
+ * never reads as one flat block of color.
+ */
+
+.wallet-txn-method {
+    display: inline-flex;
+    align-items: center;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    line-height: 1.6;
+    padding: 1px 8px;
+    border-radius: var(--radius-full);
+    white-space: nowrap;
+}
+
+.wallet-txn-method-wallet {
+    color: var(--primary-dark);
+    background: rgba(89, 193, 74, 0.12);
+}
+
+.wallet-txn-method-cod {
+    color: var(--gray-700);
+    background: var(--gray-100);
+}
+
+.wallet-txn-method-online {
+    color: #92400e;
+    background: #fef3c7;
+}
+
 .wallet-txn-desc {
     font-size: var(--font-size-xs);
     color: var(--gray-600);
@@ -355,6 +536,11 @@ html {
     color: var(--danger);
 }
 
+/* Status pill on non-completed rows (Transactions tab).
+   Preserved byte-for-byte from the pre-v1.4 layout. The Transactions
+   tab renders it via <?php if ($status !== 'completed') ?>. The
+   Credit tab never renders it because its rows are completed-only
+   by definition. */
 .wallet-txn-status {
     font-size: 10px;
     font-weight: 700;
@@ -384,7 +570,9 @@ html {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 8px;
+    flex: 1;
 }
 
 .wallet-empty-icon {
@@ -431,6 +619,7 @@ html {
     border-top: 1px solid var(--gray-100);
     display: flex;
     justify-content: center;
+    flex-shrink: 0;
 }
 
 .pagination-list {
@@ -984,6 +1173,23 @@ html {
         font-size: var(--font-size-xl);
     }
 
+    /* Tab bar: still horizontal, tabs shrink but never stack. */
+    .wallet-tabs {
+        padding: 3px;
+        gap: 3px;
+    }
+
+    .wallet-tab {
+        padding: 9px 10px;
+        font-size: var(--font-size-xs);
+        gap: 6px;
+    }
+
+    .wallet-tab-icon {
+        width: 14px;
+        height: 14px;
+    }
+
     .wallet-balance-card {
         padding: 20px;
         border-radius: var(--radius-base);
@@ -1017,6 +1223,11 @@ html {
         font-size: var(--font-size-xs);
     }
 
+    .wallet-txn-method {
+        font-size: 9px;
+        padding: 1px 6px;
+    }
+
     .qr-image-wrapper {
         width: 180px;
         height: 180px;
@@ -1041,5 +1252,50 @@ html {
 
     .modal-footer .btn {
         width: 100%;
+    }
+}
+
+/* ============================================
+   VERY SMALL MOBILE (≤ 360px)
+   Tabs stay horizontal — they may shrink the
+   icon but never stack.
+   ============================================ */
+
+@media (max-width: 360px) {
+    .wallet-tabs {
+        padding: 2px;
+        gap: 2px;
+    }
+
+    .wallet-tab {
+        padding: 8px 6px;
+        font-size: 11px;
+        gap: 4px;
+    }
+
+    .wallet-tab-icon {
+        width: 13px;
+        height: 13px;
+    }
+
+    .wallet-txn-method {
+        font-size: 8px;
+        padding: 1px 5px;
+    }
+}
+
+/* ============================================
+   REDUCED MOTION
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    .wallet-tab,
+    .wallet-tab-icon,
+    .modal,
+    .modal-content,
+    .modal-footer .btn,
+    .quick-amount-btn,
+    .pagination-link {
+        transition: none !important;
     }
 }

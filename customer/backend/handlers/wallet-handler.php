@@ -157,7 +157,7 @@ try {
                     $database_connection,
                     $accountId,
                     $amount,
-                    'Wallet recharge (QR pending)'
+                    'Wallet Recharge'
                 );
                 $database_connection->commit();
             } catch (Throwable $e) {

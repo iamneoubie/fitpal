@@ -8,24 +8,42 @@
  *
  * Actions
  * -------
- *   list     → full snapshot for a rider: counts + assignment rows
- *              + current delta cursor. Sent once when the panel is
- *              first rendered.
- *   poll     → delta fetch. The client sends since_order_id (the
- *              highest order_id it already holds) and the handler
- *              returns only rows above it. An idle poll returns an
- *              empty rows array after one indexed lookup.
- *   accept   → accept a rider_pending assignment. Delegates to
- *              acceptOrder() in rider-queries.php. No state
- *              transitions live here.
- *   decline  → decline a rider_pending assignment. Delegates to
- *              declineOrder() in rider-queries.php.
- *   dismiss  → client-side dismissal of the notification modal for
- *              one order. Recorded in the session so the same order
- *              does not re-open the modal on every subsequent poll
- *              for this browser session. Does NOT change the
- *              assignment — the row stays in the panel list until
- *              the rider accepts or declines it.
+ *   list            → full snapshot for a rider: counts + assignment
+ *                     rows + current delta cursor. Sent once when
+ *                     the panel is first rendered.
+ *   poll            → delta fetch. The client sends since_order_id
+ *                     (the highest order_id it already holds) and
+ *                     the handler returns only rows above it. An
+ *                     idle poll returns an empty rows array after
+ *                     one indexed lookup.
+ *   accept          → accept a rider_pending assignment. Delegates
+ *                     to acceptOrder() in rider-queries.php, which
+ *                     moves the order to 'picking_up'.
+ *   decline         → decline a rider_pending assignment. Delegates
+ *                     to declineOrder().
+ *   mark_picked_up  → move a picking_up order to 'delivering'.
+ *                     Delegates to markOrderPickedUp() in
+ *                     rider-queries.php.
+ *   dismiss         → client-side dismissal of the notification
+ *                     modal for one order. Recorded in the session
+ *                     so the same order does not re-open the modal
+ *                     on every subsequent poll for this browser
+ *                     session. Does NOT change the assignment.
+ *
+ * Concurrent-order cap (v1.2)
+ * ---------------------------
+ * The cap of 3 applies to the orders the rider has ACTUALLY
+ * ACCEPTED — the ones in 'picking_up' and 'delivering'. An order in
+ * 'rider_pending' is a kitchen offer the rider has not yet decided
+ * on; it does not occupy a delivery slot. This is what lets a rider
+ * with 3 pending offers accept all 3.
+ *
+ * handleAccept()'s guard calls riderAtConcurrentCap(), which now
+ * counts committed orders only. The same cap number is enforced by
+ * the restaurant's assignRiderToOrder() and by the SQL trigger
+ * before_order_rider_assign — but only for committed orders, so a
+ * rider can be assigned pending offers above the cap without the
+ * trigger refusing.
  *
  * Conventions
  * -----------
@@ -36,22 +54,33 @@
  *     returns 401 and CSRF failure returns 403.
  *   - No SQL lives in this file. All data access goes through
  *     rider/backend/database/assignment-queries.php, which in turn
- *     re-exports acceptOrder() and declineOrder() from
- *     rider-queries.php so the write path is a single source of
- *     truth.
+ *     re-exports the write functions from rider-queries.php.
  *
  * Session contract
  * ----------------
  * This handler writes exactly one session key of its own:
  *   $_SESSION['rider_dismissed_assignment_ids'] — array of order_id
- *   values the rider has dismissed the modal for. Cleared on
- *   sign-out (see rider/backend/handlers/sign-out-handler.php).
+ *   values the rider has dismissed the modal for.
  *
  * It never touches `delivery_rider_id`, `rider_csrf_token`, or any
  * other role's keys.
  *
  * @package FitPal
- * @version 1.0
+ * @version 1.2 — The accept guard now uses the committed-order cap,
+ *                so a rider can accept all of their pending offers.
+ *
+ *                - handleAccept() calls riderAtConcurrentCap(),
+ *                  which now counts only 'picking_up' + 'delivering'.
+ *                  A rider with 3 'rider_pending' offers but no
+ *                  accepted orders is no longer refused.
+ *                - The refusal message now names the cap as
+ *                  "accepted orders" rather than "active orders",
+ *                  so the copy matches what the count actually is.
+ *                - No change to list, poll, decline, mark_picked_up,
+ *                  or dismiss.
+ *
+ *                (1.1: added the picking_up status. 1.0: initial
+ *                assignment handler.)
  */
 
 declare(strict_types=1);
@@ -96,8 +125,6 @@ if (
     $givenToken === '' ||
     !hash_equals($sessToken, $givenToken)
 ) {
-    // Rotate the rider's own token so the next render generates a
-    // fresh one. Never touch the shared 'csrf_token' key.
     unset($_SESSION['rider_csrf_token']);
 
     ob_end_clean();
@@ -110,7 +137,7 @@ if (
  * DISPATCH
  * -------------------------------------------------------------- */
 
-$action = (string)($_POST['action'] ?? '');
+$action   = (string)($_POST['action'] ?? '');
 $response = ['status' => 'error', 'message' => 'Invalid action'];
 
 try {
@@ -130,6 +157,10 @@ try {
 
         case 'decline':
             $response = handleDecline($database_connection, $riderId);
+            break;
+
+        case 'mark_picked_up':
+            $response = handleMarkPickedUp($database_connection, $riderId);
             break;
 
         case 'dismiss':
@@ -158,29 +189,23 @@ exit;
  * Returns:
  *   - eligible:   bool — whether the rider can see the panel list
  *                 at all (verified + active account).
- *   - online:     bool — current availability flag, so the panel
- *                 can render the "you are offline" hint without a
- *                 second request.
- *   - counts:     {pending, active, total} for the header badge.
+ *   - online:     bool — current availability flag.
+ *   - counts:     {pending, picking_up, active, total}.
  *   - rows:       every live assignment.
  *   - max_id:     highest order_id in rows — the client's initial
  *                 delta cursor.
- *
- * One round trip on panel mount. After this the client uses `poll`.
+ *   - dismissed:  order_ids the rider has dismissed the modal for.
  */
 function handleList(PDO $db, int $riderId): array
 {
     $eligible = panelRiderIsEligible($db, $riderId);
 
-    $counts = ['pending' => 0, 'active' => 0, 'total' => 0];
+    $counts = ['pending' => 0, 'picking_up' => 0, 'active' => 0, 'total' => 0];
     $rows   = [];
     $maxId  = 0;
     $online = false;
 
     if ($eligible) {
-        // Read the rider's availability so the panel can show the
-        // "offline" hint without a separate call. This is a READ —
-        // the panel never writes is_available.
         $profile = getRiderProfile($db, $riderId);
         $online  = $profile && (int)($profile['is_available'] ?? 0) === 1;
 
@@ -193,10 +218,10 @@ function handleList(PDO $db, int $riderId): array
     if (!is_array($dismissed)) {
         $dismissed = [];
     }
+
     // Prune dismissed ids that no longer correspond to a live
-    // rider_pending assignment. The list stays small; a stale id
-    // cannot suppress a future modal for an unrelated order because
-    // order_ids are unique.
+    // rider_pending assignment. A dismissed id for an order that
+    // has since been accepted, declined, or delivered is stale.
     $livePendingIds = [];
     foreach ($rows as $r) {
         if ((string)$r['order_status'] === 'rider_pending') {
@@ -224,12 +249,9 @@ function handleList(PDO $db, int $riderId): array
  * Delta poll.
  *
  * The client sends since_order_id = the highest order_id it already
- * holds. The handler returns only rows above it. An idle poll
- * returns rows: [] and max_id unchanged — the client draws nothing.
- *
- * Also returns the current counts and online flag so the panel can
- * keep the header badge and the offline hint in sync without
- * needing its own separate polling endpoint.
+ * holds. The handler returns only rows above it, plus current
+ * counts and the online flag so the panel header stays in sync
+ * without needing a separate polling endpoint.
  */
 function handlePoll(PDO $db, int $riderId): array
 {
@@ -240,7 +262,7 @@ function handlePoll(PDO $db, int $riderId): array
             'status'   => 'success',
             'eligible' => false,
             'online'   => false,
-            'counts'   => ['pending' => 0, 'active' => 0, 'total' => 0],
+            'counts'   => ['pending' => 0, 'picking_up' => 0, 'active' => 0, 'total' => 0],
             'rows'     => [],
             'max_id'   => $sinceOrderId,
         ];
@@ -252,9 +274,6 @@ function handlePoll(PDO $db, int $riderId): array
     $counts = getPanelAssignmentCounts($db, $riderId);
     $rows   = getPanelAssignmentsSince($db, $riderId, $sinceOrderId);
 
-    // Compute the client's next cursor. Start from its current one
-    // and raise it to the highest order_id in this batch. If the
-    // batch is empty, the cursor stays where the client had it.
     $maxId = $sinceOrderId;
     foreach ($rows as $r) {
         $oid = (int)$r['order_id'];
@@ -276,13 +295,19 @@ function handlePoll(PDO $db, int $riderId): array
 /**
  * Accept a rider_pending assignment.
  *
- * Delegates the state transition to acceptOrder() from
- * rider-queries.php — the same function the rider's own deliveries
- * page uses. This handler owns no transition SQL.
+ * The order moves to 'picking_up' — NOT to 'delivering'. The rider
+ * must then call mark_picked_up to advance it.
  *
- * Runs inside a transaction so the read-back after the transition
- * sees a consistent row and the response is shaped from the same
- * snapshot the DB now holds.
+ * Guards (in order):
+ *   - rider must be eligible (verified + active account)
+ *   - rider must be online
+ *   - rider must not already be at the concurrent-order cap of 3
+ *     COMMITTED orders ('picking_up' + 'delivering').
+ *
+ * A rider with 3 pending offers but no accepted orders is NOT at
+ * the cap. The rider can accept all 3. Once all 3 are accepted
+ * (and therefore in 'picking_up'), the rider is at the cap and
+ * must finish at least one before accepting a 4th.
  */
 function handleAccept(PDO $db, int $riderId): array
 {
@@ -303,6 +328,16 @@ function handleAccept(PDO $db, int $riderId): array
         return [
             'status'  => 'error',
             'message' => 'Go online first to accept orders.',
+        ];
+    }
+
+    if (riderAtConcurrentCap($db, $riderId)) {
+        return [
+            'status'  => 'error',
+            'message' => 'You already have '
+                       . RIDER_CONCURRENT_CAP
+                       . ' accepted orders in progress. '
+                       . 'Finish at least one before accepting another.',
         ];
     }
 
@@ -329,23 +364,17 @@ function handleAccept(PDO $db, int $riderId): array
         throw $e;
     }
 
-    // The rider has now decided, so any past dismissal of this
-    // order's modal is moot. Clear it.
     clearDismissedId($orderId);
 
     return [
         'status'  => 'success',
-        'message' => 'Assignment accepted. Head to the restaurant for pickup.',
+        'message' => 'Assignment accepted. Head to the restaurant to pick up the order.',
         'row'     => $row ? shapeAssignmentRow($row) : null,
     ];
 }
 
 /**
  * Decline a rider_pending assignment.
- *
- * Delegates to declineOrder(). The row disappears from the panel
- * on the next render because the order returns to 'preparing' with
- * no rider attached.
  */
 function handleDecline(PDO $db, int $riderId): array
 {
@@ -378,9 +407,57 @@ function handleDecline(PDO $db, int $riderId): array
     clearDismissedId($orderId);
 
     return [
-        'status'  => 'success',
-        'message' => 'Assignment declined. The kitchen will choose another rider.',
+        'status'   => 'success',
+        'message'  => 'Assignment declined. The kitchen will choose another rider.',
         'order_id' => $orderId,
+    ];
+}
+
+/**
+ * Move a picking_up order to delivering.
+ *
+ * The rider tapped "Mark Picked Up" on the panel row. Delegates to
+ * markOrderPickedUp(), which only fires from 'picking_up'.
+ *
+ * A rider at the concurrent-order cap is unaffected — an order in
+ * 'picking_up' and the same order in 'delivering' count the same
+ * way against the cap. Only the bucket label changes.
+ */
+function handleMarkPickedUp(PDO $db, int $riderId): array
+{
+    $orderId = (int)($_POST['order_id'] ?? 0);
+    if ($orderId <= 0) {
+        return ['status' => 'error', 'message' => 'Invalid order.'];
+    }
+
+    $db->beginTransaction();
+
+    try {
+        $picked = markOrderPickedUp($db, $riderId, $orderId);
+
+        if (!$picked) {
+            $db->rollBack();
+            return [
+                'status'  => 'error',
+                'message' => 'Could not mark this order as picked up. '
+                           . 'It may already be in transit or was reassigned.',
+            ];
+        }
+
+        $row = getPanelAssignmentRow($db, $riderId, $orderId);
+
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
+    }
+
+    return [
+        'status'  => 'success',
+        'message' => 'Order picked up. Head to the customer.',
+        'row'     => $row ? shapeAssignmentRow($row) : null,
     ];
 }
 
@@ -390,12 +467,7 @@ function handleDecline(PDO $db, int $riderId): array
  * Recorded in the session so the modal does not re-open on every
  * subsequent poll for this browser session. The assignment itself is
  * untouched — the row remains in the panel list until the rider
- * accepts or declines it. If the rider later opens the panel by hand
- * they can still act on it from there.
- *
- * The dismissal is per-order, so two different assignments in the
- * same poll both need their own dismiss call (the modal only ever
- * shows one at a time).
+ * accepts or declines it.
  */
 function handleDismiss(int $riderId): array
 {
@@ -413,8 +485,6 @@ function handleDismiss(int $riderId): array
         $_SESSION['rider_dismissed_assignment_ids'][] = $orderId;
     }
 
-    // Keep the array small. Even in a pathological session, we never
-    // need more than a handful.
     if (count($_SESSION['rider_dismissed_assignment_ids']) > 50) {
         $_SESSION['rider_dismissed_assignment_ids'] =
             array_slice($_SESSION['rider_dismissed_assignment_ids'], -50);
@@ -432,6 +502,16 @@ function handleDismiss(int $riderId): array
  * consumes. Keeps the mapping in one place so list and poll return
  * identical objects.
  *
+ * Chat / call affordances per status:
+ *
+ *   rider_pending  → Message Kitchen  + Call Kitchen
+ *   picking_up     → Message Kitchen  + Call Kitchen
+ *   delivering     → Message Customer + Call Customer
+ *
+ * The panel does not currently show both a customer and a kitchen
+ * contact on the same row. Once the rider has the food in hand, the
+ * customer becomes the useful contact; before that, the kitchen is.
+ *
  * @param array<string, mixed> $row
  * @return array<string, mixed>
  */
@@ -444,7 +524,7 @@ function shapeAssignmentRow(array $row): array
     $callNumber     = '';
     $callLabel      = '';
 
-    if ($status === 'rider_pending') {
+    if ($status === 'rider_pending' || $status === 'picking_up') {
         // Before pickup, the useful contact is the kitchen. Chat is
         // available; Call uses the kitchen's number when present.
         $messageEnabled = ($messageChannel !== null);
@@ -489,9 +569,6 @@ function shapeAssignmentRow(array $row): array
  *
  * Called after accept and after decline, so a stale dismissal does
  * not linger in the session after the rider has actually decided.
- * The order_id being dismissed and then accepted is a normal flow —
- * the rider closes the modal to think, opens the panel, and accepts
- * from there.
  */
 function clearDismissedId(int $orderId): void
 {

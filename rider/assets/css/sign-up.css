@@ -8,11 +8,46 @@
  *
  * Uses only shared global CSS variables from global.css.
  *
+ * Vehicle-type-driven visibility
+ * ------------------------------
+ * Two regions of the form depend on the vehicle type selected in
+ * Step 2. Both are driven by a single attribute on the page root:
+ *
+ *   .register-page[data-vehicle-type="bicycle"]  → bicycle shape
+ *   .register-page (any other value or empty)    → motor-vehicle shape
+ *
+ * Region 1 — Step 2 motor-vehicle-only fields
+ *   The whole #vehicleMotorOnlyFields container holds the plate,
+ *   make, model, and year inputs. It is hidden entirely when the
+ *   vehicle is a bicycle. A bicycle has no plate and no make/model/
+ *   year to record for the purpose of this form.
+ *
+ * Region 2 — Step 4 identity-document block and license-date row
+ *   The identity block renders both shapes at once:
+ *     .upload-block-heading-drivers-license
+ *     .upload-block-heading-government-id
+ *     .upload-guidelines-drivers-license
+ *     .upload-guidelines-government-id
+ *   Exactly one heading/subtitle pair and exactly one guidelines
+ *   list are visible at a time. The license-date row
+ *   (#licenseDatesRow) is hidden for bicycle because a national ID
+ *   carries neither date on its face.
+ *
+ * No inline style is ever written by the JS. The swaps are entirely
+ * a product of these selectors and the data attribute.
+ *
  * @package FitPal
- * @version 5.0 — Five-step flow. Step 4 holds only the two-column
- *                upload grid. Step 5 holds the review summary,
- *                terms, and submit. Progress bar accommodates the
- *                fifth step.
+ * @version 6.1 — Step 2's motor-vehicle-only fields are now wrapped in
+ *                a single #vehicleMotorOnlyFields container and hidden
+ *                as a group when the vehicle is a bicycle. Removed
+ *                the previous per-input #vehiclePlateGroup rule, which
+ *                hid only the plate and left make/model/year visible.
+ *
+ *                No other rule changed from 6.0.
+ *
+ *                (6.0: added the vehicle-type-driven visibility rules
+ *                for the Step 4 identity block and license-date row.
+ *                5.0: five-step flow. 4.0: three-step flow.)
  */
 
 /* ============================================
@@ -276,6 +311,13 @@
 .register-form .form-control::placeholder {
     color: var(--gray-400);
     font-size: var(--font-size-sm);
+}
+
+.register-form .form-control:disabled {
+    background: var(--gray-50);
+    color: var(--gray-500);
+    cursor: not-allowed;
+    border-color: var(--gray-200);
 }
 
 .register-form .form-control[type="number"]::-webkit-outer-spin-button,
@@ -673,7 +715,7 @@
     }
     to {
         opacity: 1;
-        transform: scale(1) translateY(0);
+        transform: translateY(0);
     }
 }
 
@@ -948,8 +990,6 @@
     min-width: 0;
 }
 
-/* Dropzone inside a two-column block: shorter than the 170px
-   default so the pair stays balanced. */
 .upload-block-body .upload-dropzone {
     height: 180px;
     flex-shrink: 0;
@@ -985,10 +1025,82 @@
     font-weight: 700;
 }
 
-/* Full-width row of license issue/expiry dates, under the pair */
 .upload-block-dates {
     margin-top: 0;
     margin-bottom: 20px;
+}
+
+/* ============================================
+   VEHICLE-TYPE-DRIVEN VISIBILITY
+   ============================================ */
+
+/*
+ * Region 1 — Step 2 motor-vehicle-only fields.
+ *
+ * The #vehicleMotorOnlyFields container holds the plate, make,
+ * model, and year inputs. Every one of those applies only to a
+ * motor vehicle. When the applicant selects 'bicycle' in Step 2,
+ * sign-up.js sets data-vehicle-type="bicycle" on .register-page and
+ * this rule hides the whole container. Nothing inside it renders.
+ *
+ * The container is a plain <div> with no layout of its own — its
+ * children are the .form-row blocks that carry the actual spacing.
+ * Hiding it removes both rows cleanly.
+ */
+.register-page[data-vehicle-type="bicycle"] #vehicleMotorOnlyFields {
+    display: none;
+}
+
+/*
+ * Region 2 — Step 4 identity-document block and license-date row.
+ *
+ * The block renders both document shapes at once. Each pair of
+ * shapes — heading + subtitle, guidelines list — is shown or hidden
+ * by exactly one of the rules below.
+ *
+ * Default (no vehicle type yet, or any non-bicycle type):
+ *   driver's-license shape visible, government-ID shape hidden.
+ *
+ * When the applicant selects 'bicycle' in Step 2:
+ *   government-ID shape visible, driver's-license shape hidden,
+ *   license-date row hidden.
+ */
+
+/* Default: license shape */
+.upload-block-heading-government-id {
+    display: none;
+}
+
+.upload-guidelines-government-id {
+    display: none;
+}
+
+/* Default: license dates row visible */
+#licenseDatesRow {
+    display: flex;
+}
+
+/* When the vehicle is a bicycle, swap the two shapes. */
+.register-page[data-vehicle-type="bicycle"] .upload-block-heading-drivers-license {
+    display: none;
+}
+
+.register-page[data-vehicle-type="bicycle"] .upload-block-heading-government-id {
+    display: block;
+}
+
+.register-page[data-vehicle-type="bicycle"] .upload-guidelines-drivers-license {
+    display: none;
+}
+
+.register-page[data-vehicle-type="bicycle"] .upload-guidelines-government-id {
+    display: flex;
+}
+
+/* The license dates row does not apply to a bicycle rider. A
+   national ID carries neither date on its face. */
+.register-page[data-vehicle-type="bicycle"] #licenseDatesRow {
+    display: none;
 }
 
 /* ============================================
@@ -1059,7 +1171,6 @@
         font-size: var(--font-size-xs);
     }
 
-    /* Upload grid collapses to one column */
     .upload-block-grid {
         grid-template-columns: 1fr;
         gap: 16px;

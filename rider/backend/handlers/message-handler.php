@@ -32,20 +32,64 @@
  * columns and produce the same JSON, so the client renders either
  * response with the same code.
  *
- * @package FitPal
- * @version 1.2 — Aligns the response shape with the shared rider
- *                chat modal:
- *                  - Adds `direction`, `sender`, `time`, and a
- *                    top-level `max_id` to every message.
- *                  - Accepts optional `since_id` on get_messages
- *                    for delta polling.
- *                The old fields (is_own, is_sent, sender_type,
- *                sender_label, created_at) are kept for backwards
- *                compatibility with any other caller, but the
- *                modal reads the new fields exclusively.
+ * Messaging windows
+ * -----------------
+ * Two channels, each with its own window.
  *
- *                (1.1: CSRF validated against rider_csrf_token;
- *                rotates the rider token on mismatch.)
+ * KITCHEN (restaurant_account)
+ *
+ *   Open in all three live delivery-facing statuses:
+ *
+ *       rider_pending  — kitchen asked; rider has not yet decided
+ *       picking_up     — rider accepted; en route to / at the
+ *                        restaurant; food not yet in hand
+ *       delivering     — rider has the food; en route to the customer
+ *
+ *   'picking_up' was added in v1.3. Before that revision a rider
+ *   who accepted a rider_pending offer landed in 'picking_up' and
+ *   was then refused when trying to reach the kitchen about the
+ *   pickup — even though the order was assigned to them and they
+ *   were physically on the way. The read path (handleGetMessages)
+ *   has no status gate at all, which is why the modal opened and
+ *   showed the conversation but every send came back rejected.
+ *
+ * CUSTOMER
+ *
+ *   Open in all three post-accept statuses:
+ *
+ *       picking_up     — rider accepted; en route to / at the
+ *                        restaurant; food not yet in hand
+ *       delivering     — rider has the food; en route to the customer
+ *       delivered      — order arrived; the customer may still need
+ *                        to report a missing item
+ *
+ *   'picking_up' was added in v1.4. Before that revision the
+ *   customer window started at 'delivering', which meant a rider
+ *   who had accepted an order could not reach the customer at all
+ *   until after the food was in hand — even though the customer
+ *   already saw the rider's name on the tracking timeline's
+ *   "Picking Up" step. A rider may legitimately need to confirm a
+ *   gate code, an apartment number, or an address note before
+ *   leaving the restaurant, and that conversation has to be
+ *   possible during 'picking_up'.
+ *
+ *   'rider_pending' stays excluded on the customer side. During
+ *   'rider_pending' the rider has not accepted yet — they may
+ *   still decline — and messaging the customer before accepting
+ *   would let an unconfirmed rider contact a customer about an
+ *   order they may not take.
+ *
+ * @package FitPal
+ * @version 1.4 — Adds 'picking_up' to the allowed statuses for
+ *                customer messaging. Before this revision the
+ *                customer window started at 'delivering', so a
+ *                rider who had accepted an order could message the
+ *                kitchen about the pickup but not the customer.
+ *
+ *                (1.3: added 'picking_up' to the restaurant_account
+ *                allow-list. 1.2: aligned the response shape with
+ *                the shared rider chat modal. 1.1: CSRF validated
+ *                against rider_csrf_token.)
  */
 
 declare(strict_types=1);
@@ -261,22 +305,43 @@ function handleSendMessage(PDO $db, int $riderId): array
         return ['status' => 'error', 'message' => 'Order not found.'];
     }
 
-    // Riders can talk to the kitchen during rider_pending and while
-    // delivering. Talk to the customer only once the order is
-    // actually in transit or delivered.
     $status = (string)$order['order_status'];
+
+    // Kitchen messaging window.
+    //
+    // Open in all three live delivery-facing statuses. A rider who
+    // accepted a rider_pending offer is in 'picking_up' — assigned
+    // to the order, on the way to or at the restaurant — and must
+    // be able to reach the kitchen about the pickup. 'delivering'
+    // remains allowed: a question about the order that the kitchen
+    // can answer is still a valid reason to reach them.
     if ($recipientType === 'restaurant_account') {
-        if (!in_array($status, ['rider_pending', 'delivering'], true)) {
+        if (!in_array($status, ['rider_pending', 'picking_up', 'delivering'], true)) {
             return [
                 'status'  => 'error',
                 'message' => 'You can only message the kitchen for an order that is assigned to you.',
             ];
         }
-    } elseif ($recipientType === 'customer') {
-        if (!in_array($status, ['delivering', 'delivered'], true)) {
+    }
+
+    // Customer messaging window.
+    //
+    // Open from the moment the rider accepts — the order is in
+    // 'picking_up' — all the way through 'delivered'. The customer
+    // already sees the rider's name on the tracking timeline during
+    // 'picking_up', and the rider may need to confirm a gate code,
+    // an apartment number, or an address note before leaving the
+    // restaurant.
+    //
+    // 'rider_pending' stays excluded. The rider has not accepted
+    // yet and may still decline; messaging the customer before
+    // accepting would let an unconfirmed rider contact a customer
+    // about an order they may not take.
+    elseif ($recipientType === 'customer') {
+        if (!in_array($status, ['picking_up', 'delivering', 'delivered'], true)) {
             return [
                 'status'  => 'error',
-                'message' => 'You can only message the customer once you have accepted their order.',
+                'message' => 'You can only message the customer after you have accepted their order.',
             ];
         }
     }

@@ -1,22 +1,22 @@
 /**
  * FitPal Customer Profile JavaScript
- * Version 3.3 — Prefer window.FITPAL_CSRF_TOKEN over the DOM query
- *                when resolving the customer role's CSRF token. The
- *                page now bootstraps that global from $csrfToken,
- *                which comes from header.php (via includes/csrf_token.php)
- *                and is the customer role's own session key,
- *                customer_csrf_token — never the shared csrf_token.
+ * Version 7.1 — After a successful picture upload, build the avatar
+ *                URL from the returned project-root-relative `path`
+ *                and the page's own `assetBase`, instead of using the
+ *                handler's resolved `url`. The handler's URL is
+ *                computed from $_SERVER['SCRIPT_NAME'] arithmetic and
+ *                resolves to /customer/shared/uploads/... when the
+ *                browser applies it relative to the current page,
+ *                which 404s and causes the avatar to fall back to the
+ *                initial letter. Reloading the page worked because
+ *                profile.php computes the URL itself from $assetBase,
+ *                which is the source of truth. This revision does the
+ *                same thing on the client.
  *
- * - Tabs, profile edit mode
- * - Multi-step address modal (add / edit)
- * - Delete confirmation
- * - Deep-link hash is consumed once on load and stripped from the URL
- * - Back navigation wired to a whitelisted origin slug, with a
- *   history.back() fallback when no origin was recorded
- * - Field-level input filters ported from sign-up.js
+ *                All other behavior is unchanged from v7.0.
  *
  * @package FitPal
- * @version 3.3
+ * @version 7.1
  */
 
 (function() {
@@ -25,16 +25,32 @@
     document.addEventListener('DOMContentLoaded', function() {
 
         // ============================================
+        // CONFIG
+        // ============================================
+        var CFG        = window.FITPAL_CUSTOMER_PROFILE || {};
+        var CSRF_TOKEN = CFG.csrfToken || '';
+
+        // Literal endpoints. Never computed from the DOM. The PHP page
+        // bootstraps these into FITPAL_CUSTOMER_PROFILE; the hard-coded
+        // fallbacks keep the script working if the bootstrap is ever
+        // missing.
+        var UPDATE_ENDPOINT = CFG.updateEndpoint || '../backend/handlers/profile-handler.php';
+        var UPLOAD_ENDPOINT = CFG.uploadEndpoint || '../backend/handlers/profile-handler.php';
+
+        // ============================================
         // DOM ELEMENTS
         // ============================================
+        var pageRoot     = document.querySelector('.profile-page');
+
         var tabs         = document.querySelectorAll('.profile-tab');
         var tabContents  = document.querySelectorAll('.profile-tab-content');
 
-        var editProfileBtn = document.getElementById('editProfileBtn');
-        var cancelEditBtn  = document.getElementById('cancelEditBtn');
-        var profileActions = document.getElementById('profileActions');
-        var profileForm    = document.getElementById('profileForm');
-        var formInputs     = profileForm ? profileForm.querySelectorAll('input, select') : [];
+        var editProfileBtn     = document.getElementById('editProfileBtn');
+        var profileEditActions = document.getElementById('profileEditActions');
+        var cancelEditBtn      = document.getElementById('cancelEditBtn');
+        var saveProfileBtn     = document.getElementById('saveProfileBtn');
+        var profileForm        = document.getElementById('profileForm');
+        var formInputs         = profileForm ? profileForm.querySelectorAll('input, select, textarea') : [];
 
         var addAddressBtn       = document.getElementById('addAddressBtn');
         var addressModal        = document.getElementById('addressModal');
@@ -70,75 +86,282 @@
         ];
         var postalCodeField = document.getElementById('postal_code');
 
+        var confirmEditModal   = document.getElementById('confirmEditModal');
+        var confirmEditProceed = document.getElementById('confirmEditProceed');
+
+        var unsavedChangesModal = document.getElementById('unsavedChangesModal');
+        var unsavedStayBtn      = document.getElementById('unsavedStayBtn');
+        var unsavedSaveBtn      = document.getElementById('unsavedSaveBtn');
+
+        // Avatar elements
+        var uploadPictureBtn     = document.getElementById('uploadPictureBtn');
+        var profilePictureInput  = document.getElementById('profilePictureInput');
+        var profileAvatarImg     = document.getElementById('profileAvatarImg');
+        var profileAvatarInitial = document.getElementById('profileAvatarInitial');
+
         // ============================================
         // STATE
         // ============================================
         var isEditing        = false;
+        var isSaving         = false;
+        var suppressLeaveGuard = false;
+        var pendingLeaveHref = '';
         var deleteAddressId  = null;
         var currentModalStep = 1;
         var totalModalSteps  = 3;
 
+        // Pending picture: a File object the customer has chosen but
+        // not yet saved, plus the blob URL used for the local preview.
+        // Cleared on save success, on cancel, and on rollback.
+        var pendingPictureFile = null;
+        var pendingPictureUrl  = '';
+
+        // The URL of the picture the server rendered on page load.
+        // Used as the rollback target when Cancel is pressed after a
+        // preview. Falls back to a straight read of the current <img>
+        // if the bootstrap object is missing.
+        var initialAvatarSrc = '';
+        if (CFG
+            && typeof CFG.initialAvatarSrc === 'string') {
+            initialAvatarSrc = CFG.initialAvatarSrc;
+        } else if (profileAvatarImg) {
+            initialAvatarSrc = profileAvatarImg.getAttribute('src') || '';
+        }
+
+        // Snapshot of the form's starting values.
+        var formSnapshot = {};
+
+        function takeFormSnapshot() {
+            formSnapshot = {};
+            formInputs.forEach(function(input) {
+                if (!input.name) return;
+                formSnapshot[input.name] = input.value;
+            });
+        }
+
+        function formFieldsHaveChanged() {
+            var changed = false;
+            formInputs.forEach(function(input) {
+                if (!input.name || changed) return;
+                if (!(input.name in formSnapshot)) return;
+                if (input.value !== formSnapshot[input.name]) {
+                    changed = true;
+                }
+            });
+            return changed;
+        }
+
+        // The unsaved-changes guard fires if EITHER the fields changed
+        // OR a new picture is pending.
+        function formHasChanged() {
+            return formFieldsHaveChanged() || pendingPictureFile !== null;
+        }
+
+        function restoreFormSnapshot() {
+            formInputs.forEach(function(input) {
+                if (!input.name) return;
+                if (!(input.name in formSnapshot)) return;
+                input.value = formSnapshot[input.name];
+            });
+        }
+
+        takeFormSnapshot();
+
         // ============================================
-        // CSRF TOKEN RESOLUTION
-        //
-        // Priority:
-        //   1. window.FITPAL_CSRF_TOKEN — bootstrapped by profile.php
-        //      from $csrfToken (customer role's own session key,
-        //      customer_csrf_token, set via header.php).
-        //   2. The address form's own hidden csrf_token input.
-        //   3. The first csrf_token input on the page.
-        //
-        // This never reads the shared csrf_token session key — the
-        // customer role is not allowed to touch it. See general.md.
+        // AVATAR PREVIEW HELPERS
+        // ============================================
+
+        /**
+         * Apply a URL to the avatar image. When the URL is empty, the
+         * image is hidden and the initial placeholder is shown.
+         */
+        function applyAvatarSrc(url) {
+            if (!profileAvatarImg || !profileAvatarInitial) return;
+
+            if (url && url !== '') {
+                profileAvatarImg.src = url;
+                profileAvatarImg.style.display = 'block';
+                profileAvatarInitial.style.display = 'none';
+            } else {
+                profileAvatarImg.removeAttribute('src');
+                profileAvatarImg.style.display = 'none';
+                profileAvatarInitial.style.display = 'flex';
+            }
+        }
+
+        /**
+         * Clear any pending picture and revert the avatar to the
+         * server-rendered state.
+         */
+        function clearPendingPicture() {
+            if (pendingPictureUrl !== '') {
+                URL.revokeObjectURL(pendingPictureUrl);
+                pendingPictureUrl = '';
+            }
+            pendingPictureFile = null;
+            if (profilePictureInput) profilePictureInput.value = '';
+            applyAvatarSrc(initialAvatarSrc);
+        }
+
+        // ============================================
+        // CSRF / ASSET RESOLUTION
         // ============================================
         function resolveCsrfToken() {
+            if (typeof CSRF_TOKEN === 'string' && CSRF_TOKEN !== '') {
+                return CSRF_TOKEN;
+            }
+
             if (typeof window.FITPAL_CSRF_TOKEN === 'string' && window.FITPAL_CSRF_TOKEN !== '') {
                 return window.FITPAL_CSRF_TOKEN;
             }
 
             if (addressForm) {
                 var formInput = addressForm.querySelector('input[name="csrf_token"]');
-                if (formInput && formInput.value) {
-                    return formInput.value;
-                }
+                if (formInput && formInput.value) return formInput.value;
             }
 
             var fallback = document.querySelector('input[name="csrf_token"]');
             return fallback ? fallback.value : '';
         }
 
+        /**
+         * Return the asset base the page was rendered with. Always
+         * ends with 'shared/'. E.g. '../../shared/'.
+         */
+        function resolveAssetBase() {
+            if (CFG
+                && typeof CFG.assetBase === 'string'
+                && CFG.assetBase !== '') {
+                return CFG.assetBase;
+            }
+            return '../../shared/';
+        }
+
+        /**
+         * Build a browser-loadable URL for a project-root-relative
+         * path stored in the DB (e.g. 'shared/uploads/customer-
+         * profiles/customer_1_xxx.jpg').
+         *
+         * The page renders with an $assetBase that ends in 'shared/'.
+         * Trimming that suffix yields the project root URL, which the
+         * stored path can be appended to directly. This mirrors
+         * exactly what customer/pages/profile.php does on first
+         * render, so a URL built here is identical to the one the
+         * server would compute on the next page load.
+         *
+         * Returns '' when the path is empty or the asset base cannot
+         * be resolved.
+         */
+        function buildProfilePictureUrl(storedPath) {
+            if (!storedPath || typeof storedPath !== 'string') return '';
+
+            var base = resolveAssetBase();
+            if (!base) return '';
+
+            // Strip the trailing 'shared/' so the base becomes the
+            // project root URL.
+            var projectRootUrl = base.replace(/shared\/$/, '');
+
+            return projectRootUrl + storedPath;
+        }
+
         // ============================================
         // BODY SCROLL LOCK
         // ============================================
-        function lockBodyScroll() {
-            document.body.style.overflow = 'hidden';
-        }
-
-        function unlockBodyScroll() {
-            document.body.style.overflow = '';
-        }
+        function lockBodyScroll()   { document.body.style.overflow = 'hidden'; }
+        function unlockBodyScroll() { document.body.style.overflow = ''; }
 
         // ============================================
-        // BACK NAVIGATION
+        // MODAL HELPERS
+        // ============================================
+        function openModal(modal) {
+            if (!modal) return;
+            lockBodyScroll();
+            modal.style.display = 'flex';
+            void modal.offsetWidth;
+            modal.classList.add('active');
+        }
+
+        function closeModal(modal) {
+            if (!modal) return;
+            modal.classList.remove('active');
+            setTimeout(function() {
+                if (!modal.classList.contains('active')) {
+                    modal.style.display = '';
+                    unlockBodyScroll();
+                }
+            }, 0);
+        }
+
+        [confirmEditModal, unsavedChangesModal].forEach(function(modal) {
+            if (!modal) return;
+            modal.querySelectorAll('[data-modal-dismiss]').forEach(function(el) {
+                el.addEventListener('click', function() {
+                    closeModal(modal);
+                });
+            });
+        });
+
+        // ============================================
+        // BACK NAVIGATION + LEAVE GUARD
         // ============================================
         var profileBackBtn = document.getElementById('profileBackBtn');
+
+        function navigateAway(href) {
+            suppressLeaveGuard = true;
+            if (href) {
+                window.location.href = href;
+            } else if (window.history.length > 1 && document.referrer !== '') {
+                window.history.back();
+            } else {
+                window.location.href = 'menu.php';
+            }
+        }
+
+        function requestLeave(href) {
+            pendingLeaveHref = href || '';
+
+            if (isEditing && formHasChanged()) {
+                openModal(unsavedChangesModal);
+                return;
+            }
+
+            navigateAway(pendingLeaveHref);
+        }
+
         if (profileBackBtn) {
             profileBackBtn.addEventListener('click', function(e) {
                 e.preventDefault();
-
                 var fallback = this.getAttribute('data-fallback-href') || '';
-                if (fallback !== '') {
-                    window.location.href = fallback;
-                    return;
-                }
-
-                if (window.history.length > 1 && document.referrer !== '') {
-                    window.history.back();
-                } else {
-                    window.location.href = 'menu.php';
-                }
+                requestLeave(fallback);
             });
         }
+
+        document.querySelectorAll(
+            '.customer-header a[href], .mobile-nav a[href]'
+        ).forEach(function(link) {
+            link.addEventListener('click', function(e) {
+                if (suppressLeaveGuard) return;
+                if (this.target === '_blank') return;
+
+                var href = this.getAttribute('href') || '';
+                if (href === '' || href.charAt(0) === '#') return;
+
+                if (isEditing && formHasChanged()) {
+                    e.preventDefault();
+                    requestLeave(this.href);
+                }
+            });
+        });
+
+        window.addEventListener('beforeunload', function(e) {
+            if (suppressLeaveGuard) return;
+            if (!isEditing) return;
+            if (!formHasChanged()) return;
+
+            e.preventDefault();
+            e.returnValue = '';
+        });
 
         // ============================================
         // TABS
@@ -146,16 +369,12 @@
         function switchTab(tabId) {
             tabs.forEach(function(tab) {
                 tab.classList.remove('active');
-                if (tab.dataset.tab === tabId) {
-                    tab.classList.add('active');
-                }
+                if (tab.dataset.tab === tabId) tab.classList.add('active');
             });
 
             tabContents.forEach(function(content) {
                 content.classList.remove('active');
-                if (content.id === 'tab-' + tabId) {
-                    content.classList.add('active');
-                }
+                if (content.id === 'tab-' + tabId) content.classList.add('active');
             });
         }
 
@@ -166,28 +385,302 @@
         });
 
         // ============================================
-        // PROFILE EDIT MODE
+        // EDIT MODE
         // ============================================
+
+        function enterEditMode() {
+            if (isEditing) return;
+
+            isEditing = true;
+            if (pageRoot) pageRoot.classList.add('is-editing');
+
+            if (editProfileBtn)     editProfileBtn.style.display = 'none';
+            if (profileEditActions) profileEditActions.classList.remove('is-hidden');
+
+            // Reveal the avatar edit button now that edits are allowed.
+            if (uploadPictureBtn) uploadPictureBtn.classList.remove('is-hidden');
+
+            formInputs.forEach(function(input) { input.disabled = false; });
+
+            takeFormSnapshot();
+        }
+
+        function exitEditMode(opts) {
+            opts = opts || {};
+            var restoreValues = opts.restoreValues !== false;
+
+            isEditing = false;
+            if (pageRoot) pageRoot.classList.remove('is-editing');
+
+            if (editProfileBtn)     editProfileBtn.style.display = '';
+            if (profileEditActions) profileEditActions.classList.add('is-hidden');
+
+            // Hide the avatar edit button again.
+            if (uploadPictureBtn) uploadPictureBtn.classList.add('is-hidden');
+
+            if (restoreValues) {
+                restoreFormSnapshot();
+                clearPendingPicture();
+            }
+
+            formInputs.forEach(function(input) { input.disabled = true; });
+        }
+
         if (editProfileBtn) {
             editProfileBtn.addEventListener('click', function() {
-                isEditing = true;
-                this.style.display = 'none';
-                if (profileActions) profileActions.classList.remove('is-hidden');
-                formInputs.forEach(function(input) {
-                    input.disabled = false;
-                });
+                openModal(confirmEditModal);
+            });
+        }
+
+        if (confirmEditProceed) {
+            confirmEditProceed.addEventListener('click', function() {
+                closeModal(confirmEditModal);
+                enterEditMode();
             });
         }
 
         if (cancelEditBtn) {
-            cancelEditBtn.addEventListener('click', function() {
-                isEditing = false;
-                if (editProfileBtn) editProfileBtn.style.display = 'inline-flex';
-                if (profileActions) profileActions.classList.add('is-hidden');
-                formInputs.forEach(function(input) {
-                    input.disabled = true;
+            cancelEditBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                exitEditMode({ restoreValues: true });
+                showNotification('Changes discarded.', 'success');
+            });
+        }
+
+        // Any field change updates nothing on its own — the dirty
+        // check reads the DOM directly on demand. This listener only
+        // exists so a future "live dirty indicator" has a hook.
+        formInputs.forEach(function(input) {
+            input.addEventListener('input', function() {});
+            input.addEventListener('change', function() {});
+        });
+
+        // ============================================
+        // PROFILE PICTURE — PREVIEW ONLY ON PICK
+        //
+        // Picking a file does NOT fire a network request. It only
+        // captures the File object and shows a local preview. The
+        // actual upload happens in the save pipeline below.
+        // ============================================
+        var ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+        var MAX_UPLOAD_BYTES    = 2 * 1024 * 1024;
+
+        if (uploadPictureBtn && profilePictureInput) {
+            uploadPictureBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (uploadPictureBtn.disabled) return;
+                profilePictureInput.click();
+            });
+
+            profilePictureInput.addEventListener('change', function() {
+                if (!this.files || !this.files[0]) return;
+
+                var file = this.files[0];
+
+                if (!file.type || ALLOWED_IMAGE_TYPES.indexOf(file.type) === -1) {
+                    showNotification('Unsupported file type. Use JPG, PNG, or WEBP.', 'error');
+                    profilePictureInput.value = '';
+                    return;
+                }
+
+                if (file.size > MAX_UPLOAD_BYTES) {
+                    showNotification('File must be under 2 MB.', 'error');
+                    profilePictureInput.value = '';
+                    return;
+                }
+
+                // Discard any earlier pending pick first.
+                if (pendingPictureUrl !== '') {
+                    URL.revokeObjectURL(pendingPictureUrl);
+                    pendingPictureUrl = '';
+                }
+
+                pendingPictureFile = file;
+                pendingPictureUrl  = URL.createObjectURL(file);
+
+                applyAvatarSrc(pendingPictureUrl);
+                showNotification('Picture selected. Press Save Changes to upload.', 'success');
+            });
+        }
+
+        // ============================================
+        // SAVE PIPELINE
+        //
+        // The single entry point for both the Save Changes button and
+        // the unsaved-changes modal's Save button. Both fetches use
+        // LITERAL URLs read from the config object. Nothing reads
+        // profileForm.action.
+        //
+        // Two sequential steps:
+        //   1. POST to UPDATE_ENDPOINT with action=update_profile
+        //      (FormData built from the form).
+        //   2. If a pending picture exists, POST to UPLOAD_ENDPOINT
+        //      with action=upload_picture as a separate request.
+        //
+        // Step 2 only runs when step 1 succeeded.
+        //
+        // On both-step success, the avatar URL is rebuilt from the
+        // returned project-root-relative `path` using the page's own
+        // assetBase, NOT from the handler's resolved `url`. The
+        // handler's URL is computed from $_SERVER['SCRIPT_NAME'] and
+        // resolves relative to the current page, which prefixes it
+        // with /customer/ and 404s. Reloading the page worked because
+        // profile.php computes the URL itself from $assetBase — this
+        // revision matches that behavior on the client so no reload
+        // is needed.
+        // ============================================
+
+        function runSave() {
+            if (isSaving) return;
+            if (!profileForm) return;
+            if (!isEditing) return;
+
+            isSaving = true;
+
+            if (saveProfileBtn) {
+                saveProfileBtn.disabled = true;
+                saveProfileBtn.textContent = 'Saving...';
+            }
+
+            var formData = new FormData(profileForm);
+
+            fetch(UPDATE_ENDPOINT, {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin'
+            })
+            .then(parseJsonResponse)
+            .then(function(data) {
+                if (!data || data.status !== 'success') {
+                    throw new Error((data && data.message) || 'Could not update profile.');
+                }
+                return data;
+            })
+            .then(function() {
+                // Step 2: upload the pending picture, if any.
+                if (pendingPictureFile === null) {
+                    return null;
+                }
+
+                var pictureData = new FormData();
+                pictureData.append('csrf_token', resolveCsrfToken());
+                pictureData.append('action', 'upload_picture');
+                pictureData.append('profile_picture', pendingPictureFile);
+
+                return fetch(UPLOAD_ENDPOINT, {
+                    method: 'POST',
+                    body: pictureData,
+                    credentials: 'same-origin'
+                })
+                .then(parseJsonResponse)
+                .then(function(picData) {
+                    if (!picData || picData.status !== 'success') {
+                        throw new Error(
+                            (picData && picData.message) || 'Could not upload the picture.'
+                        );
+                    }
+                    return picData;
                 });
-                window.location.reload();
+            })
+            .then(function(picData) {
+                // Both steps succeeded. If the upload returned a
+                // project-root-relative path, build the browser URL
+                // from it using the page's own assetBase. This is the
+                // same computation profile.php performs on initial
+                // render, so the URL is stable across reloads.
+                if (picData && typeof picData.path === 'string' && picData.path !== '') {
+                    var resolvedUrl = buildProfilePictureUrl(picData.path);
+                    if (resolvedUrl !== '') {
+                        initialAvatarSrc = resolvedUrl;
+                        applyAvatarSrc(initialAvatarSrc);
+                    }
+                }
+
+                if (pendingPictureUrl !== '') {
+                    URL.revokeObjectURL(pendingPictureUrl);
+                    pendingPictureUrl = '';
+                }
+                pendingPictureFile = null;
+                if (profilePictureInput) profilePictureInput.value = '';
+
+                takeFormSnapshot();
+                exitEditMode({ restoreValues: false });
+                showNotification('Profile updated.', 'success');
+            })
+            .catch(function(error) {
+                console.error('[profile.js] Save failed:', error);
+                showNotification(
+                    error && error.message ? error.message : 'Could not save changes.',
+                    'error'
+                );
+            })
+            .finally(function() {
+                isSaving = false;
+                if (saveProfileBtn) {
+                    saveProfileBtn.disabled = false;
+                    saveProfileBtn.textContent = 'Save Changes';
+                }
+            });
+        }
+
+        // Save button is type="button" — bind click directly. This is
+        // the single entry point into runSave().
+        if (saveProfileBtn) {
+            saveProfileBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                runSave();
+            });
+        }
+
+        // Form submit is kept as a safety net. The form no longer has
+        // a type="submit" button targeting it, so a native submission
+        // can only fire from an implicit submit (e.g., Enter key in a
+        // field). That path still routes through runSave() and never
+        // navigates.
+        if (profileForm) {
+            profileForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                runSave();
+            });
+        }
+
+        /**
+         * Read a fetch response and parse it as JSON. On a non-JSON
+         * body, resolves to an error object shaped like the server's
+         * own error responses so the caller's checks stay uniform.
+         */
+        function parseJsonResponse(response) {
+            return response.text().then(function(text) {
+                try {
+                    return JSON.parse(text);
+                } catch (parseError) {
+                    console.error('[profile.js] Non-JSON response:',
+                        '\n  status:', response.status,
+                        '\n  body  :', text.slice(0, 500));
+                    return {
+                        status: 'error',
+                        message: 'Server returned a non-JSON response (' + response.status + ').'
+                    };
+                }
+            });
+        }
+
+        // ============================================
+        // UNSAVED-CHANGES MODAL BUTTONS
+        // ============================================
+        if (unsavedStayBtn) {
+            unsavedStayBtn.addEventListener('click', function() {
+                closeModal(unsavedChangesModal);
+                pendingLeaveHref = '';
+            });
+        }
+
+        if (unsavedSaveBtn) {
+            unsavedSaveBtn.addEventListener('click', function() {
+                closeModal(unsavedChangesModal);
+                runSave();
             });
         }
 
@@ -195,19 +688,11 @@
         // INPUT FILTERS
         // ============================================
 
-        /**
-         * Restrict a text field to letters, spaces, hyphens and
-         * apostrophes, and auto-capitalize the first letter of each word.
-         *
-         * @param {HTMLElement|null} input
-         */
         function setupNameField(input) {
             if (!input) return;
 
             input.addEventListener('input', function() {
                 var start = this.selectionStart;
-                var end   = this.selectionEnd;
-
                 var filtered    = this.value.replace(/[^A-Za-z\s\-']/g, '');
                 var capitalized = filtered.replace(/\b\w/g, function(ch) {
                     return ch.toUpperCase();
@@ -225,26 +710,17 @@
                     var capitalized = this.value.replace(/\b\w/g, function(ch) {
                         return ch.toUpperCase();
                     });
-                    if (this.value !== capitalized) {
-                        this.value = capitalized;
-                    }
+                    if (this.value !== capitalized) this.value = capitalized;
                 }
             });
         }
 
-        /**
-         * Restrict a field to digits only.
-         *
-         * @param {HTMLElement|null} input
-         */
         function setupDigitsOnlyField(input) {
             if (!input) return;
 
             input.addEventListener('input', function() {
                 var cleaned = this.value.replace(/[^0-9]/g, '');
-                if (this.value !== cleaned) {
-                    this.value = cleaned;
-                }
+                if (this.value !== cleaned) this.value = cleaned;
             });
 
             input.addEventListener('paste', function(e) {
@@ -252,9 +728,7 @@
                 if (!/^[0-9]+$/.test(paste)) {
                     e.preventDefault();
                     var cleaned = paste.replace(/[^0-9]/g, '');
-                    if (cleaned) {
-                        document.execCommand('insertText', false, cleaned);
-                    }
+                    if (cleaned) document.execCommand('insertText', false, cleaned);
                 }
             });
         }
@@ -263,12 +737,10 @@
         setupDigitsOnlyField(postalCodeField);
 
         // ============================================
-        // MODAL STEP NAVIGATION
+        // MODAL STEP NAVIGATION (address)
         // ============================================
         function goToModalStep(step) {
-            if (step > currentModalStep && !validateModalStep(currentModalStep)) {
-                return;
-            }
+            if (step > currentModalStep && !validateModalStep(currentModalStep)) return;
 
             currentModalStep = step;
 
@@ -287,30 +759,21 @@
             progressSteps.forEach(function(el, index) {
                 var n = index + 1;
                 el.classList.remove('active', 'completed');
-                if (n === step) {
-                    el.classList.add('active');
-                } else if (n < step) {
-                    el.classList.add('completed');
-                }
+                if (n === step) el.classList.add('active');
+                else if (n < step) el.classList.add('completed');
             });
 
             progressLines.forEach(function(el, index) {
                 el.classList.remove('completed');
-                if (index + 1 < step) {
-                    el.classList.add('completed');
-                }
+                if (index + 1 < step) el.classList.add('completed');
             });
 
-            if (step === 3) {
-                updateAddressPreview();
-            }
+            if (step === 3) updateAddressPreview();
 
             var currentStepEl = document.getElementById('modalStep' + step);
             if (currentStepEl) {
                 var firstInput = currentStepEl.querySelector('input, select');
-                if (firstInput) {
-                    setTimeout(function() { firstInput.focus(); }, 100);
-                }
+                if (firstInput) setTimeout(function() { firstInput.focus(); }, 100);
             }
         }
 
@@ -372,28 +835,19 @@
         nextStepBtns.forEach(function(btn) {
             btn.addEventListener('click', function() {
                 var nextStep = parseInt(this.dataset.next, 10);
-                if (nextStep <= totalModalSteps) {
-                    goToModalStep(nextStep);
-                }
+                if (nextStep <= totalModalSteps) goToModalStep(nextStep);
             });
         });
 
         prevStepBtns.forEach(function(btn) {
             btn.addEventListener('click', function() {
                 var prevStep = parseInt(this.dataset.prev, 10);
-                if (prevStep >= 1) {
-                    goToModalStep(prevStep);
-                }
+                if (prevStep >= 1) goToModalStep(prevStep);
             });
         });
 
         // ============================================
         // ADDRESS MODAL OPEN/CLOSE
-        //
-        // Lock scroll FIRST, while the modal is hidden, so the page
-        // reflows to fill the space the scrollbar was using before
-        // anything is visible. On close, unlock only after the modal
-        // is fully hidden so the reverse reflow is not visible either.
         // ============================================
         function openAddressModal(title, addressData) {
             addressData = addressData || null;
@@ -426,10 +880,7 @@
                 }
             }
 
-            lockBodyScroll();
-
-            if (addressModal) addressModal.classList.add('active');
-
+            openModal(addressModal);
             setTimeout(updateAddressPreview, 100);
         }
 
@@ -439,15 +890,7 @@
         }
 
         function closeAddressModalHandler() {
-            if (addressModal) addressModal.classList.remove('active');
-
-            setTimeout(function() {
-                if (!addressModal || !addressModal.classList.contains('active')) {
-                    if (addressModal) addressModal.style.display = '';
-                    unlockBodyScroll();
-                }
-            }, 0);
-
+            closeModal(addressModal);
             if (addressForm) addressForm.reset();
             setFieldValue('country', 'Philippines');
             goToModalStep(1);
@@ -466,9 +909,7 @@
 
         if (addressModal) {
             addressModal.addEventListener('click', function(e) {
-                if (e.target === this) {
-                    closeAddressModalHandler();
-                }
+                if (e.target === this) closeAddressModalHandler();
             });
         }
 
@@ -480,6 +921,13 @@
             }
             if (deleteAddressModal && deleteAddressModal.classList.contains('active')) {
                 closeDeleteModal();
+            }
+            if (confirmEditModal && confirmEditModal.classList.contains('active')) {
+                closeModal(confirmEditModal);
+            }
+            if (unsavedChangesModal && unsavedChangesModal.classList.contains('active')) {
+                closeModal(unsavedChangesModal);
+                pendingLeaveHref = '';
             }
         });
 
@@ -507,21 +955,11 @@
         // ============================================
         function openDeleteModal(addressIdValue) {
             deleteAddressId = addressIdValue;
-
-            lockBodyScroll();
-
-            if (deleteAddressModal) deleteAddressModal.classList.add('active');
+            openModal(deleteAddressModal);
         }
 
         function closeDeleteModal() {
-            if (deleteAddressModal) deleteAddressModal.classList.remove('active');
-
-            setTimeout(function() {
-                if (!deleteAddressModal || !deleteAddressModal.classList.contains('active')) {
-                    unlockBodyScroll();
-                }
-            }, 0);
-
+            closeModal(deleteAddressModal);
             deleteAddressId = null;
         }
 
@@ -538,9 +976,7 @@
 
         if (deleteAddressModal) {
             deleteAddressModal.addEventListener('click', function(e) {
-                if (e.target === this) {
-                    closeDeleteModal();
-                }
+                if (e.target === this) closeDeleteModal();
             });
         }
 
@@ -564,15 +1000,12 @@
 
                         if (window.location.hash) {
                             history.replaceState(
-                                null,
-                                '',
+                                null, '',
                                 window.location.pathname + window.location.search
                             );
                         }
 
-                        setTimeout(function() {
-                            window.location.reload();
-                        }, 1000);
+                        setTimeout(function() { window.location.reload(); }, 1000);
                     } else {
                         showNotification(data.message || 'Failed to delete address', 'error');
                     }
@@ -581,9 +1014,7 @@
                     console.error('Error:', error);
                     showNotification('Network error. Please try again.', 'error');
                 })
-                .finally(function() {
-                    closeDeleteModal();
-                });
+                .finally(function() { closeDeleteModal(); });
             });
         }
 
@@ -629,15 +1060,12 @@
 
                         if (window.location.hash) {
                             history.replaceState(
-                                null,
-                                '',
+                                null, '',
                                 window.location.pathname + window.location.search
                             );
                         }
 
-                        setTimeout(function() {
-                            window.location.reload();
-                        }, 1000);
+                        setTimeout(function() { window.location.reload(); }, 1000);
                     } else {
                         showNotification(data.message || 'Failed to save address', 'error');
                     }
@@ -672,7 +1100,7 @@
             iconSpan.className = 'notification-icon';
 
             var iconImg = document.createElement('img');
-            iconImg.src = '../../shared/assets/images/icons/' + iconFile;
+            iconImg.src = resolveAssetBase() + 'assets/images/icons/' + iconFile;
             iconImg.alt = type;
 
             iconSpan.appendChild(iconImg);
@@ -687,9 +1115,7 @@
 
             setTimeout(function() {
                 notification.style.animation = 'fadeOut 0.3s ease';
-                setTimeout(function() {
-                    notification.remove();
-                }, 300);
+                setTimeout(function() { notification.remove(); }, 300);
             }, 3000);
         }
 
@@ -714,6 +1140,14 @@
         if (modalStep2) modalStep2.style.display = 'none';
         if (modalStep3) modalStep3.style.display = 'none';
 
+        formInputs.forEach(function(input) { input.disabled = true; });
+
+        // The avatar edit button ships with .is-hidden in the markup;
+        // confirm it is set on load in case a browser strips it.
+        if (uploadPictureBtn) {
+            uploadPictureBtn.classList.add('is-hidden');
+        }
+
         // ============================================
         // DEEP-LINK HANDLING (consumed once)
         // ============================================
@@ -732,15 +1166,13 @@
             if (!isAddressesHash) return;
 
             history.replaceState(
-                null,
-                '',
+                null, '',
                 window.location.pathname + window.location.search
             );
 
             var addressesTab = document.getElementById('tabBtnAddresses');
-            if (addressesTab) {
-                addressesTab.click();
-            } else {
+            if (addressesTab) addressesTab.click();
+            else {
                 var fallback = document.querySelector('.profile-tab[data-tab="addresses"]');
                 if (fallback) fallback.click();
             }
@@ -753,4 +1185,4 @@
             }
         })();
     });
-})();
+})();s

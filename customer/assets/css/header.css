@@ -10,20 +10,33 @@
  * Reserves the scrollbar gutter on <html> so hiding the body
  * scrollbar when the logout modal opens does not shift the page.
  *
+ * Avatar circle
+ * -------------
+ * .user-profile-circle is a 36px circle in the header, filled by one
+ * of three children:
+ *
+ *   - .user-initial         the initial letter, white on green
+ *   - .profile-icon         the fallback user glyph, filtered to white
+ *   - .profile-icon-image   a real customer photo
+ *
+ * .profile-icon and .profile-icon-image share the same 20px footprint
+ * so the circle's appearance is stable across all three states. Only
+ * the photo variant carries a filter override: the fallback glyph is
+ * tinted white to sit on the green circle, but a real photo must
+ * render at full color.
+ *
+ * The mobile greeting reuses the same class names inside its own
+ * .mobile-user-avatar circle.
+ *
  * @package FitPal
- * @version 2.3 - Logout modal buttons now split the row exactly
- *                50/50 on desktop/tablet. The confirm button is
- *                wrapped in a <form> so the customer role's CSRF
- *                token rides in a POST body, but that form was
- *                acting as a layout box between the flex container
- *                and the button — so .logout-btn-confirm never got
- *                the same flex share as .logout-btn-cancel. The
- *                form now uses display: contents, which removes it
- *                from the box tree entirely: its button becomes a
- *                direct flex child of .logout-modal-actions and
- *                both buttons carry flex: 1 1 0 for a true even
- *                split. The mobile breakpoint still stacks them
- *                full-width via column-reverse.
+ * @version 2.4 — Adds .profile-icon-image so the avatar circle can
+ *                display a real customer photo at full color, and
+ *                widens the mobile greeting avatar selector to match
+ *                the same class. Existing rules are untouched.
+ *
+ *                (2.3: Logout modal buttons split the row exactly
+ *                50/50 on desktop. 2.2: Logout modal added.
+ *                2.1: Mobile user greeting centred.)
  */
 
 /* Reserve the scrollbar gutter permanently. With this in place, the
@@ -353,6 +366,7 @@ html {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    overflow: hidden;
 }
 
 .mobile-user-avatar .user-initial-large {
@@ -362,10 +376,23 @@ html {
     text-transform: uppercase;
 }
 
+/* Fallback icon inside the mobile greeting circle. The base selector
+   is widened to match the photo variant so the same sizing applies
+   before the dedicated .profile-icon-image override below runs. */
 .mobile-user-avatar img {
     width: 24px;
     height: 24px;
-    filter: brightness(0) saturate(100%) invert(100%);
+    display: block;
+}
+
+/* Real customer photo inside the mobile greeting circle. Fills the
+   44px circle edge-to-edge; object-fit keeps the aspect ratio while
+   cropping the longer side rather than distorting. */
+.mobile-user-avatar .profile-icon-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
 }
 
 .mobile-user-name {
@@ -420,7 +447,8 @@ html {
     flex-shrink: 0;
     border: 2px solid var(--primary);
     transition: all var(--transition-fast);
-    cursor: default;
+    text-decoration: none;
+    overflow: hidden;
 }
 
 .user-profile-circle:hover {
@@ -435,10 +463,23 @@ html {
     text-transform: uppercase;
 }
 
+/* Fallback user glyph. Tinted white so it sits on the green circle. */
 .user-profile-circle .profile-icon {
     width: 20px;
     height: 20px;
     filter: brightness(0) saturate(100%) invert(100%);
+}
+
+/* Real customer photo inside the desktop circle. Fills the 36px
+   circle edge-to-edge; object-fit crops rather than distorts. The
+   filter is explicitly reset — the base .profile-icon rule above
+   would otherwise invert a real photo to a negative. */
+.user-profile-circle .profile-icon-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    filter: none;
 }
 
 /* ============================================
@@ -619,15 +660,10 @@ html {
 
    The <form> exists only so the customer role's CSRF token can
    travel in a POST request body — it is not a layout element.
-   Left as a normal block it becomes the flex child instead of
-   the button, shrink-wraps to the button's intrinsic width, and
-   the row never splits 50/50 (the earlier bug).
-
-   display: contents removes the form's box from the tree
-   entirely, so .logout-btn-confirm becomes a direct flex child
-   of .logout-modal-actions alongside .logout-btn-cancel. Both
-   buttons then carry flex: 1 1 0 and split the row exactly in
-   half, gap included.
+   display: contents removes the form's box from the tree, so
+   .logout-btn-confirm becomes a direct flex child of
+   .logout-modal-actions alongside .logout-btn-cancel. Both buttons
+   then carry flex: 1 1 0 and split the row exactly in half.
    ------------------------------------------------------------ */
 .logout-modal-actions {
     display: flex;
@@ -636,10 +672,7 @@ html {
 }
 
 .logout-modal-actions .logout-form {
-    /* The form is a CSRF carrier, not a layout box. Removing it
-       from the box tree promotes the confirm button to a direct
-       flex child of .logout-modal-actions. Form submission and
-       DOM structure are unchanged. */
+    /* The form is a CSRF carrier, not a layout box. */
     display: contents;
 }
 

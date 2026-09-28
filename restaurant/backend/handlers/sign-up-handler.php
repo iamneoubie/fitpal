@@ -9,37 +9,93 @@
  *   4. restaurant_account           (role = 'owner', branch_id = NULL)
  *   5. restaurant_permit × 1..5     (permit photos)
  *
+ * ---------------------------------------------------------------------
+ * UPLOAD LAYOUT (v3.0)
+ * ---------------------------------------------------------------------
+ * Permit files are written to:
+ *
+ *     shared/uploads/restaurant/permits/<restaurant_account_id>/MM_DD_YYYY_<n>.<ext>
+ *
+ * The <n> counter is scoped to the account and the day. On the first
+ * upload of a given day for a given account it is 0; on each
+ * subsequent upload on the same day it increments. The counter is
+ * derived by scanning the destination folder for files whose names
+ * begin with today's MM_DD_YYYY prefix and picking the smallest
+ * non-negative integer that is not already in use.
+ *
+ * This mirrors the rider role's per-account, per-day layout exactly
+ * (see rider/backend/handlers/rider-handler.php and
+ * rider/backend/handlers/sign-up-handler.php).
+ *
+ * ---------------------------------------------------------------------
+ * CHICKEN-AND-EGG ORDERING
+ * ---------------------------------------------------------------------
+ * The per-account folder name depends on $ownerAccountId, which does
+ * not exist until createRestaurantOwnerAccount() commits. So the
+ * permit files are moved AFTER the owner account is created and
+ * BEFORE the restaurant_permit rows are inserted.
+ *
+ * The full write order is:
+ *
+ *   1. createRestaurant()
+ *   2. createRestaurantFinancialAccount()
+ *   3. createRestaurantBranch()
+ *   4. createRestaurantOwnerAccount()   → $ownerAccountId now exists
+ *   5. storePermitFile() × N            → files land under
+ *                                          permits/<ownerAccountId>/
+ *   6. createRestaurantPermit() × N     → rows point at those paths
+ *   7. COMMIT
+ *
+ * If any step after 5 fails, the moved files are unlinked and the
+ * transaction is rolled back, so the account row never survives
+ * without its permits.
+ *
+ * The previous revision created the owner account AFTER moving the
+ * files, which is why it could not key the folder on the account id
+ * — it did not have one yet. The reorder above is what makes the
+ * per-account layout possible.
+ *
+ * ---------------------------------------------------------------------
+ * PROFILE PICTURE PATH (RESERVED)
+ * ---------------------------------------------------------------------
+ * The schema has no profile_picture column on any restaurant table
+ * (restaurant, restaurant_account, restaurant_branch). The rider role
+ * has one on delivery_rider_profile; the restaurant role does not.
+ *
+ * The intended location for a restaurant profile picture, if the
+ * schema is later extended, is:
+ *
+ *     shared/uploads/restaurant/profiles/<restaurant_account_id>/MM_DD_YYYY_<n>.<ext>
+ *
+ * That path is the same shape as the permit path, one level of
+ * "kind" apart, and matches the rider role's profiles/documents
+ * split. No code here writes to it, because there is no column to
+ * record the resulting path.
+ *
+ * A helper, storeAccountUpload(), is provided below and is ready to
+ * serve either kind ('permits' or 'profiles') once the schema has
+ * somewhere to store the profile result.
+ *
  * @package FitPal
- * @version 2.0 — Owns its own CSRF bootstrap and rotates the
- *                restaurant token on mismatch.
+ * @version 3.0 — Per-account, per-day permit layout:
+ *                  - storePermitFile() replaced by
+ *                    storeAccountUpload(), which takes the account id
+ *                    and a kind ('permits' or 'profiles') and writes
+ *                    under shared/uploads/restaurant/<kind>/<id>/.
+ *                  - The MM_DD_YYYY_<n> counter logic is lifted
+ *                    verbatim from the rider role's
+ *                    buildRiderUploadFilename().
+ *                  - createRestaurantOwnerAccount() is now called
+ *                    BEFORE the permits are stored, so the account id
+ *                    is available as the folder key.
+ *                  - On failure, moved files are unlinked and the
+ *                    transaction is rolled back.
+ *                  - No other behavior changed. CSRF still validated
+ *                    against restaurant_csrf_token; response shape
+ *                    unchanged.
  *
- *                require_once on includes/restaurant-csrf-token.php
- *                makes this handler the authoritative reader of
- *                'restaurant_csrf_token' rather than an incidental
- *                one that only worked because the page which
- *                rendered the form had already called
- *                getRestaurantCsrfToken().
- *
- *                On the CSRF-mismatch branch the restaurant's token
- *                is now unset before responding. Without that
- *                rotation, getRestaurantCsrfToken() on the next
- *                render of sign-up.php saw the key still set and
- *                returned the same stale value, so a user who hit a
- *                mismatch was stuck re-submitting the dead token
- *                until the session was cleared manually.
- *
- *                Uses isset() on both keys before hash_equals() so an
- *                unset session key can never be coerced to an empty
- *                string and pass validation against an empty POST
- *                value.
- *
- *                Only the restaurant's own key is touched. The shared
- *                'csrf_token' key is never read, written, or cleared
- *                by this file.
- *
- *                (1.2: Validated against restaurant_csrf_token (own
- *                key) instead of the shared csrf_token, matching the
- *                sign-in handler and the restaurant sign-up.php form.)
+ *                (2.0: own CSRF bootstrap, rotate on mismatch.
+ *                1.2: restaurant_csrf_token. 1.0: initial.)
  */
 
 declare(strict_types=1);
@@ -72,6 +128,13 @@ function respondError(string $message, string $field = ''): void
     exit;
 }
 
+/**
+ * Validate an uploaded image file and return its extension.
+ *
+ * @param array $file  $_FILES entry
+ * @return string      Lowercase extension without a dot
+ * @throws RuntimeException
+ */
 function validatePermitFile(array $file): string
 {
     if (!isset($file['error']) || is_array($file['error'])) {
@@ -105,21 +168,123 @@ function validatePermitFile(array $file): string
     return ALLOWED_PERMIT_MIME[$mime];
 }
 
-function storePermitFile(array $file, string $projectRoot, string $ext, int $index): string
+/**
+ * Build the next MM_DD_YYYY_<n>.<ext> filename for a destination
+ * folder.
+ *
+ * The counter is scoped to the folder and the day. Files from
+ * previous days are excluded by the prefix match and never enter the
+ * count, so the counter restarts at 0 on the next calendar day.
+ *
+ * This is the same shape the rider role uses in
+ * rider/backend/handlers/rider-handler.php's buildRiderUploadFilename().
+ *
+ * @param string $uploadDir  Absolute path to the destination folder.
+ * @param string $ext        Lowercase extension without a dot.
+ * @return string            Filename, e.g. "09_28_2026_0.jpg".
+ */
+function buildAccountUploadFilename(string $uploadDir, string $ext): string
 {
-    $dir = $projectRoot . '/shared/uploads/restaurant-permits';
-    if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
-        throw new RuntimeException('Could not create upload directory.');
+    $dayPrefix = date('m_d_Y');
+
+    $existing = @scandir($uploadDir);
+    if ($existing === false) {
+        $existing = [];
     }
 
-    $filename = 'permit_' . time() . '_' . $index . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
-    $fullPath = $dir . '/' . $filename;
+    $usedIndexes  = [];
+    $prefixLength = strlen($dayPrefix) + 1; // include trailing '_'
+
+    foreach ($existing as $entry) {
+        if ($entry === '.' || $entry === '..') {
+            continue;
+        }
+        if (strpos($entry, $dayPrefix . '_') !== 0) {
+            continue;
+        }
+
+        $rest   = substr($entry, $prefixLength);
+        $dotPos = strpos($rest, '.');
+        if ($dotPos === false) {
+            continue;
+        }
+
+        $counterPart = substr($rest, 0, $dotPos);
+        if ($counterPart === '' || !ctype_digit($counterPart)) {
+            continue;
+        }
+
+        $usedIndexes[(int)$counterPart] = true;
+    }
+
+    $nextIndex = 0;
+    while (isset($usedIndexes[$nextIndex])) {
+        $nextIndex++;
+    }
+
+    return $dayPrefix . '_' . $nextIndex . '.' . $ext;
+}
+
+/**
+ * Move an uploaded image into its final per-account folder and return
+ * the project-root-relative path stored in the DB.
+ *
+ * Layout:
+ *
+ *     <projectRoot>/shared/uploads/restaurant/<kind>/<accountId>/
+ *         MM_DD_YYYY_<n>.<ext>
+ *
+ * $kind is either 'permits' or 'profiles'. The per-account
+ * subdirectory is created on demand with mkdir(..., 0755, true). The
+ * recursive flag creates the intermediate `restaurant/` and `<kind>/`
+ * segments the first time any restaurant uploads, and the per-account
+ * leaf when that account first uploads.
+ *
+ * The per-account segment is a plain integer taken from a caller-
+ * supplied argument, so it cannot contain traversal characters.
+ * Every path segment below is either a literal or a caller-derived
+ * integer — nothing from $_FILES or $_POST reaches the path.
+ *
+ * @param array  $file        $_FILES entry (already validated)
+ * @param string $projectRoot Absolute path to the project root
+ * @param string $kind        'permits' or 'profiles'
+ * @param int    $accountId   restaurant_account_id (positive integer)
+ * @param string $ext         Lowercase extension without a dot
+ * @return string             Project-root-relative path
+ * @throws RuntimeException
+ */
+function storeAccountUpload(
+    array $file,
+    string $projectRoot,
+    string $kind,
+    int $accountId,
+    string $ext
+): string {
+    if (!in_array($kind, ['permits', 'profiles'], true)) {
+        throw new RuntimeException('Invalid upload kind.');
+    }
+    if ($accountId <= 0) {
+        throw new RuntimeException('Invalid account id for upload.');
+    }
+
+    $relativeDir = 'shared/uploads/restaurant/' . $kind . '/' . $accountId;
+    $uploadDir   = $projectRoot . '/' . $relativeDir;
+
+    if (!is_dir($uploadDir)) {
+        if (!mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
+            throw new RuntimeException('Could not create upload directory.');
+        }
+    }
+
+    $filename = buildAccountUploadFilename($uploadDir, $ext);
+
+    $fullPath = $uploadDir . '/' . $filename;
 
     if (!move_uploaded_file($file['tmp_name'], $fullPath)) {
-        throw new RuntimeException('Could not save permit file.');
+        throw new RuntimeException('Could not save file.');
     }
 
-    return 'shared/uploads/restaurant-permits/' . $filename;
+    return $relativeDir . '/' . $filename;
 }
 
 /* -------------------------------------------------------------- */
@@ -243,7 +408,7 @@ if (empty($terms)) {
 }
 
 /* --------------------------------------------------------------
- * PERMIT FILE VALIDATION
+ * PERMIT FILE VALIDATION (validation only — files not moved yet)
  * -------------------------------------------------------------- */
 
 $permitFiles = [];
@@ -283,7 +448,7 @@ if (empty($permitFiles)) {
 }
 
 /* --------------------------------------------------------------
- * DATABASE TRANSACTION
+ * DATABASE TRANSACTION + FILE MOVES
  * -------------------------------------------------------------- */
 
 $movedFiles = [];
@@ -309,6 +474,7 @@ try {
 
     $database_connection->beginTransaction();
 
+    // 1. Restaurant row
     $restaurantId = createRestaurant($database_connection, [
         'business_name' => $businessName,
         'description'   => $businessDescription,
@@ -316,8 +482,10 @@ try {
         'dietary_tags'  => $dietaryTags,
     ]);
 
+    // 2. Financial account for the branch
     $financialAccountId = createRestaurantFinancialAccount($database_connection);
 
+    // 3. Branch
     $branchCode = generateBranchCode($database_connection, $businessName);
     createRestaurantBranch(
         $database_connection,
@@ -335,27 +503,37 @@ try {
         ]
     );
 
-    $hashed = password_hash($password, PASSWORD_BCRYPT);
-    createRestaurantOwnerAccount($database_connection, $restaurantId, [
+    // 4. Owner account — this is what gives us the folder key.
+    $hashedPassword = password_hash($password, PASSWORD_BCRYPT);
+    $ownerAccountId = createRestaurantOwnerAccount($database_connection, $restaurantId, [
         'first_name'     => $firstName,
         'middle_name'    => $middleName,
         'last_name'      => $lastName,
         'email'          => $email,
         'contact_number' => (string)$cleanedContact,
         'username'       => $username,
-        'password'       => $hashed,
+        'password'       => $hashedPassword,
     ]);
 
-    foreach ($permitFiles as $index => $p) {
-        $path = storePermitFile($p['file'], $projectRoot, $p['ext'], $index);
+    // 5. Move the permit files into the per-account folder.
+    //    Layout: shared/uploads/restaurant/permits/<ownerAccountId>/
+    foreach ($permitFiles as $p) {
+        $path = storeAccountUpload(
+            $p['file'],
+            $projectRoot,
+            'permits',
+            $ownerAccountId,
+            $p['ext']
+        );
         $movedFiles[] = $projectRoot . '/' . $path;
 
+        // 6. Record the permit row pointing at the moved file.
         createRestaurantPermit(
             $database_connection,
             $restaurantId,
             $path,
             (string)$p['file']['name'],
-            $index
+            count($movedFiles) - 1
         );
     }
 

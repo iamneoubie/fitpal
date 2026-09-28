@@ -2,11 +2,41 @@
  * FitPal Customer Checkout JavaScript
  *
  * Handles:
- *   - Payment method selection (Wallet balance check, Online QR modal)
+ *   - Payment method selection with a committed-state model.
+ *     A click on Wallet or Online opens a confirmation modal BEFORE
+ *     the choice is committed. Cancelling the modal reverts the
+ *     radio group to the last committed method, so the visible
+ *     selection never disagrees with what will be submitted.
  *   - Address selection modal (persists choice to session)
  *   - Place Order → confirmation modal → hidden form submit
  *   - Back-forward-cache restore forces a reload so the server
  *     re-renders against the current session's checkout address
+ *
+ * ---------------------------------------------------------------------
+ * PAYMENT METHOD COMMIT MODEL
+ * ---------------------------------------------------------------------
+ * The radio group is a controlled input. The browser's native label
+ * click toggles the radio visually before any JS runs, which means
+ * an early return from a validation branch would leave the radio
+ * showing a method that was never accepted.
+ *
+ * Two pieces of state resolve this:
+ *
+ *   committedPaymentMethod
+ *     The method that will actually be submitted. Only ever set by
+ *     a code path that has fully accepted the choice.
+ *
+ *   The DOM
+ *     Kept in sync with committedPaymentMethod by commitPaymentMethod()
+ *     and revertPaymentMethod().
+ *
+ * Clicking a payment option does not commit. It opens the appropriate
+ * modal when the method needs confirmation (Wallet balance check,
+ * Online QR). Cancelling any of those modals calls revertPaymentMethod(),
+ * which restores the radio group to the committed value. Confirming
+ * calls commitPaymentMethod().
+ *
+ * COD needs no confirmation and commits immediately.
  *
  * ---------------------------------------------------------------------
  * SCOPE RULES APPLIED
@@ -17,11 +47,19 @@
  *    addresses are written via .textContent.
  *  - Click and change handling on the address list are not duplicated;
  *    a single delegated handler covers both.
- *  - Console noise reduced to actionable warnings.
+ *  - No window.alert, confirm, or prompt. Every message goes through
+ *    a modal or a toast.
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 7.0
+ * @version 8.0 — Payment-method radio group is now a controlled
+ *                input. Cancelling the Wallet-insufficient or Online
+ *                QR modal reverts the visible selection to the last
+ *                committed method, so the radio group and the hidden
+ *                #hiddenPaymentMethod field can never disagree.
+ *
+ *                (7.0: config moved to data-* attributes; address
+ *                delegated handler; textContent-only writes.)
  */
 
 (function () {
@@ -35,10 +73,11 @@
         var page = document.getElementById('checkoutPage');
         if (!page) return;
 
-        var ORDER_TOTAL    = parseFloat(page.dataset.total)         || 0;
-        var WALLET_BALANCE = parseFloat(page.dataset.walletBalance) || 0;
-        var HAS_ADDRESS    = page.dataset.hasAddress === '1';
-        var CSRF_TOKEN     = page.dataset.csrfToken || '';
+        var ORDER_TOTAL         = parseFloat(page.dataset.total)         || 0;
+        var WALLET_BALANCE      = parseFloat(page.dataset.walletBalance) || 0;
+        var HAS_ADDRESS         = page.dataset.hasAddress === '1';
+        var CSRF_TOKEN          = page.dataset.csrfToken || '';
+        var INITIAL_PAYMENT     = page.dataset.initialPaymentMethod || 'COD';
 
         // ============================================
         // DOM REFERENCES
@@ -80,6 +119,14 @@
         var isWalletOpen  = false;
         var isConfirmOpen = false;
 
+        // The payment method that will be submitted. Only ever set by
+        // a code path that has fully accepted the choice. The radio
+        // group is kept in sync with this value by the two helpers
+        // below, not by the browser's native label click.
+        var committedPaymentMethod = 'COD';
+
+        var paymentOptions = document.querySelectorAll('.payment-option');
+
         // ============================================
         // GENERIC MODAL HELPERS
         // ============================================
@@ -100,6 +147,103 @@
                     modal.style.display = 'none';
                 }
             }, 250);
+        }
+
+        // ============================================
+        // PAYMENT METHOD — COMMIT / REVERT
+        //
+        // The single source of truth for what is selected. Every code
+        // path that changes the payment method goes through one of
+        // these two functions. Nothing else writes radio.checked or
+        // touches the .selected class on a payment option.
+        // ============================================
+
+        /**
+         * Commit a payment method. Updates the hidden field and forces
+         * the radio group and the option cards into the state that
+         * matches this method.
+         */
+        function commitPaymentMethod(method) {
+            if (!method) return;
+
+            committedPaymentMethod = method;
+
+            if (hiddenPaymentMethod) {
+                hiddenPaymentMethod.value = method;
+            }
+
+            var i, opt, radio;
+            for (i = 0; i < paymentOptions.length; i++) {
+                opt = paymentOptions[i];
+                radio = opt.querySelector('input[type="radio"]');
+                if (!radio) continue;
+
+                if (radio.value === method) {
+                    radio.checked = true;
+                    opt.classList.add('selected');
+                } else {
+                    radio.checked = false;
+                    opt.classList.remove('selected');
+                }
+            }
+        }
+
+        /**
+         * Revert the visible selection to the committed method.
+         *
+         * Called whenever a confirmation modal is dismissed without
+         * committing — the user changed their mind, or the method
+         * could not be used (insufficient wallet balance) and the
+         * modal is being closed.
+         */
+        function revertPaymentMethod() {
+            commitPaymentMethod(committedPaymentMethod);
+        }
+
+        // ============================================
+        // PAYMENT METHOD — CLICK HANDLING
+        //
+        // A click on a payment option never commits by itself. It
+        // decides whether the method needs confirmation, and either
+        // commits immediately (COD) or opens the relevant modal.
+        //
+        // Any modal that opens as a result is responsible for calling
+        // commitPaymentMethod() on confirm or revertPaymentMethod() on
+        // cancel. Until one of those fires, the visible radio group is
+        // forced back to the committed method so the click's native
+        // toggle cannot leak through.
+        // ============================================
+        for (var p = 0; p < paymentOptions.length; p++) {
+            (function (option) {
+                option.addEventListener('click', function () {
+                    var radio = this.querySelector('input[type="radio"]');
+                    if (!radio) return;
+
+                    var method = radio.value;
+
+                    // The native label click has already toggled the
+                    // radio and the option's visual state by the time
+                    // this handler runs. Force the DOM back to the
+                    // committed method immediately. Each branch below
+                    // is then free to either commit the new choice or
+                    // open a modal that will commit or revert later.
+                    revertPaymentMethod();
+
+                    if (method === 'Wallet' && WALLET_BALANCE < ORDER_TOTAL) {
+                        openWalletModal();
+                        return;
+                    }
+
+                    if (method === 'Online') {
+                        openQrModal();
+                        return;
+                    }
+
+                    // COD and Wallet-with-sufficient-balance need no
+                    // confirmation. Commit immediately.
+                    commitPaymentMethod(method);
+                });
+            })(paymentOptions[p]);
         }
 
         // ============================================
@@ -262,6 +406,8 @@
 
         // ============================================
         // QR MODAL
+        //
+        // Confirming commits 'Online'. Cancelling reverts.
         // ============================================
         function openQrModal() {
             if (!qrModal || isQrOpen) return;
@@ -269,28 +415,34 @@
             isQrOpen = true;
         }
 
-        function closeQrModalHandler() {
+        function closeQrModalHandler(commit) {
             if (!qrModal || !isQrOpen) return;
             closeModal(qrModal);
             isQrOpen = false;
+
+            if (commit) {
+                commitPaymentMethod('Online');
+            } else {
+                revertPaymentMethod();
+            }
         }
 
         if (closeQrModal) {
             closeQrModal.addEventListener('click', function (e) {
                 e.preventDefault();
-                closeQrModalHandler();
+                closeQrModalHandler(false);
             });
         }
         if (cancelQrModal) {
             cancelQrModal.addEventListener('click', function (e) {
                 e.preventDefault();
-                closeQrModalHandler();
+                closeQrModalHandler(false);
             });
         }
         if (qrModal) {
             qrModal.addEventListener('click', function (e) {
                 if (e.target === qrModal || e.target.classList.contains('modal-overlay')) {
-                    closeQrModalHandler();
+                    closeQrModalHandler(false);
                 }
             });
         }
@@ -298,13 +450,19 @@
         if (confirmQrPayment) {
             confirmQrPayment.addEventListener('click', function (e) {
                 e.preventDefault();
-                closeQrModalHandler();
+                closeQrModalHandler(true);
                 openConfirmModal();
             });
         }
 
         // ============================================
         // WALLET MODAL
+        //
+        // This modal only opens when the wallet cannot cover the
+        // order, so there is no confirm path. Every way of closing
+        // it reverts the payment method to whatever was committed
+        // before the click. The "Recharge Wallet" anchor navigates
+        // away, which is a full page unload — no revert needed there.
         // ============================================
         function openWalletModal() {
             if (!walletModal || isWalletOpen) return;
@@ -316,6 +474,7 @@
             if (!walletModal || !isWalletOpen) return;
             closeModal(walletModal);
             isWalletOpen = false;
+            revertPaymentMethod();
         }
 
         if (closeWalletModal) {
@@ -337,11 +496,6 @@
                 }
             });
         }
-
-        // NOTE: The "Recharge Wallet" anchor navigates to wallet.php.
-        // We intentionally do NOT bind a click handler that closes the
-        // modal — navigation would happen anyway, and the previous
-        // handler was dead code.
 
         // ============================================
         // CONFIRM ORDER MODAL
@@ -383,58 +537,6 @@
         }
 
         // ============================================
-        // PAYMENT METHOD SELECTION
-        // ============================================
-        var paymentOptions = document.querySelectorAll('.payment-option');
-
-        function selectPaymentMethod(value) {
-            if (hiddenPaymentMethod) hiddenPaymentMethod.value = value;
-        }
-
-        function markSelected(selectedOption) {
-            for (var i = 0; i < paymentOptions.length; i++) {
-                paymentOptions[i].classList.remove('selected');
-            }
-            selectedOption.classList.add('selected');
-        }
-
-        for (var p = 0; p < paymentOptions.length; p++) {
-            (function (option) {
-                option.addEventListener('click', function () {
-                    var radio = this.querySelector('input[type="radio"]');
-                    if (!radio) return;
-
-                    var method = radio.value;
-
-                    if (method === 'Wallet' && WALLET_BALANCE < ORDER_TOTAL) {
-                        // Leave the previous selection intact so a modal
-                        // cancel does not silently change the method.
-                        openWalletModal();
-                        return;
-                    }
-
-                    if (method === 'Online') {
-                        radio.checked = true;
-                        markSelected(this);
-                        selectPaymentMethod(method);
-                        openQrModal();
-                        return;
-                    }
-
-                    radio.checked = true;
-                    markSelected(this);
-                    selectPaymentMethod(method);
-                });
-            })(paymentOptions[p]);
-        }
-
-        var checkedRadio = document.querySelector('.payment-option input[type="radio"]:checked');
-        if (checkedRadio) {
-            checkedRadio.closest('.payment-option').classList.add('selected');
-            selectPaymentMethod(checkedRadio.value);
-        }
-
-        // ============================================
         // PLACE ORDER BUTTON
         // ============================================
         if (placeOrderBtn) {
@@ -452,7 +554,7 @@
                     return;
                 }
 
-                var method = hiddenPaymentMethod ? hiddenPaymentMethod.value : 'COD';
+                var method = committedPaymentMethod;
 
                 if (method === 'Wallet' && WALLET_BALANCE < ORDER_TOTAL) {
                     openWalletModal();
@@ -474,7 +576,7 @@
         document.addEventListener('keydown', function (e) {
             if (e.key !== 'Escape') return;
             if (isModalOpen)   closeAddressModalHandler();
-            if (isQrOpen)      closeQrModalHandler();
+            if (isQrOpen)      closeQrModalHandler(false);
             if (isWalletOpen)  closeWalletModalHandler();
             if (isConfirmOpen) closeConfirmModalHandler();
         });
@@ -490,9 +592,18 @@
 
         // ============================================
         // INITIAL SETUP
+        //
+        // The server renders the payment group with COD checked. The
+        // committed state is seeded from the same server-rendered
+        // value (data-initial-payment-method) and forced onto the DOM
+        // so the visible state and the committed state start in
+        // agreement even if a browser restore or a stale form value
+        // left the radio group in a different position.
         // ============================================
         if (currentAddressId) {
             updateAddressDisplay(currentAddressId);
         }
+
+        commitPaymentMethod(INITIAL_PAYMENT);
     });
 })();

@@ -4,38 +4,104 @@
  * Two responsibilities, both scoped to the kitchen page.
  *
  * 1. LIVE ORDER LIST
- *    Polls order-handler.php with a delta cursor (lastOrderId) and
- *    updates the DOM as orders change:
- *      - New orders are prepended to the list.
- *      - Changed statuses are reflected on the existing card (its
- *        data-order-status is updated, the badge and tab counts are
- *        redrawn, and the card slides under the correct tab).
- *      - Orders that leave the live set (delivered / cancelled /
- *        refunded) are removed from the live list. They will appear
- *        under the Recent tab on the next full page load.
+ *    Polls order-handler.php with a delta cursor and a tab/page
+ *    context. The handler returns:
+ *
+ *      rows     — new orders above since_order_id
+ *      updated  — cards whose status changed
+ *      removed  — order_ids that are no longer live
+ *      counts   — per-tab bucket counts
+ *      page     — the current tab's paginated slice
+ *      max_id   — the highest order_id in the live set
+ *
+ *    What this file does with that payload:
+ *
+ *      - Tab badges are updated in place from `counts`.
+ *      - New orders are counted into a "N new orders" pill. The
+ *        pill does NOT force-prepend cards — that would shift the
+ *        current page under the user's cursor. Clicking the pill
+ *        reloads the current tab at page 1.
+ *      - Status changes on already-rendered cards are swapped in
+ *        place. If the new status does not belong to the current
+ *        tab, the card is removed from the current tab's DOM
+ *        (the tab's badge count already reflects the move).
+ *      - Cards in `removed` are dropped. If the list becomes
+ *        empty, the empty-state block is restored.
  *
  *    Cadence:
  *      - 5s while the tab is visible and there are live orders.
  *      - 15s while visible and the board is empty.
  *      - Paused entirely while document.hidden.
- *      - One immediate poll on visibilitychange → visible.
- *
- *    The delta shape is defined server-side in order-handler.php's
- *    `poll` action. The client only needs `order_id`, `order_status`,
- *    and a rendered card payload. To keep the JS from having to
- *    re-render the whole card markup, the server sends the same
- *    order object that the initial page render would have produced
- *    — the JS only swaps the DOM node. That means the card HTML is
- *    assembled in PHP, once, and both the initial render and every
- *    poll share the same builder.
+ *      - One immediate poll on visibilitychange → visible, and on
+ *        pageshow when the page is restored from bfcache.
  *
  * 2. CHAT MODAL
- *    Open/close/tabs/send/read for #restaurantChatModal. Delta
- *    polling of messages by message_id, same contract as the
- *    customer and rider chat modals.
+ *    Open/close/tabs/send/read for #restaurantChatModal, plus a
+ *    per-channel delta poll of messages. Same contract as the
+ *    customer chat modal: the server returns new messages only,
+ *    the client appends them without re-rendering, and the
+ *    read-marker fires when a channel is on screen.
+ *
+ * -----------------------------------------------------------------
+ * CARD COLLAPSE STATE — THE IMPORTANT PART
+ * -----------------------------------------------------------------
+ * Every poll re-renders card HTML from the server. The server has
+ * no idea which cards the user has expanded, so the fresh HTML
+ * always ships the details band collapsed.
+ *
+ * The fix is snapshot-and-reapply, performed by this file, around
+ * the entire DOM-mutation phase of applyOrderPollResponse():
+ *
+ *   1. BEFORE any DOM mutation, snapshotExpandedCards() reads the
+ *      data-order-id of every card that currently carries the
+ *      .is-expanded class, and returns that set.
+ *
+ *   2. The existing code performs its normal mutations — remove
+ *      closed cards, swap cards whose status changed, insert new
+ *      page-slice cards, restore the empty state.
+ *
+ *   3. AFTER all mutations, reapplyExpandedCards(set) walks the
+ *      DOM, and for every card whose order_id is in the snapshot,
+ *      re-applies .is-expanded and unhides the details band.
+ *
+ * Because the snapshot is taken from the live DOM and the reapply
+ * happens after every mutation, the state is preserved regardless
+ * of which specific code path touched which card. There is no
+ * per-node bookkeeping to drift out of sync and no race with the
+ * user's click handlers — the snapshot runs synchronously before
+ * the mutations, the reapply runs synchronously after them, and no
+ * user input can land in between.
+ *
+ * This file is the sole owner of preserving the collapse state
+ * across a poll. orders.js only toggles the class in response to a
+ * click and never needs to know a poll happened.
+ * -----------------------------------------------------------------
  *
  * @package FitPal
- * @version 1.0
+ * @version 4.0 — Snapshot-and-reapply collapse preservation:
+ *                  - New snapshotExpandedCards() reads the current
+ *                    .is-expanded set straight from the DOM.
+ *                  - New reapplyExpandedCards() re-applies that set
+ *                    after every mutation pass.
+ *                  - applyOrderPollResponse() now wraps its whole
+ *                    mutation phase in a snapshot/reapply pair, so
+ *                    state is preserved across every path
+ *                    uniformly.
+ *                  - swapCard() no longer reads or writes card
+ *                    state. It is a plain DOM swap.
+ *                  - applyPageSlice() now guards its insert loop
+ *                    against inserting a duplicate card for an
+ *                    order_id that is already in the DOM, and no
+ *                    longer carries its own state-preservation
+ *                    logic.
+ *                  - A new isPolling flag prevents a second poll
+ *                    from firing while the previous one is still in
+ *                    flight.
+ *
+ *                (3.0: poll-owned per-node state preservation.
+ *                2.1: poll delegated state preservation to a hook
+ *                in orders.js. 2.0: paginated kitchen page. 1.0:
+ *                initial realtime script.)
  */
 
 (function () {
@@ -50,176 +116,161 @@
         var CSRF_TOKEN = page.dataset.csrfToken || '';
         var HANDLER    = page.dataset.handlerUrl || '../backend/handlers/order-handler.php';
         var CHAT_URL   = page.dataset.chatUrl    || '../backend/handlers/chat-handler.php';
-        var ASSET_BASE = page.dataset.assetBase  || '../../shared/';
 
-        // The owner view has no interactive elements and no live
-        // updates — the summary is a read-only cross-branch view.
+        // The owner view has no live list and no chat. Exit early.
         if (SCOPE !== 'branch') return;
 
-        // ============================================================
-        // CHAT MODAL STATE
-        // ============================================================
-        var chatModal          = document.getElementById('restaurantChatModal');
-        var chatCloseBtn       = document.getElementById('restaurantChatClose');
-        var chatSubtitleEl     = document.getElementById('restaurantChatSubtitle');
-        var chatOrderIdInput   = document.getElementById('restaurantChatOrderId');
-        var chatChannelInput   = document.getElementById('restaurantChatCounterparty');
-        var chatBody           = document.getElementById('restaurantChatMessages');
-        var chatForm           = document.getElementById('restaurantChatForm');
-        var chatInput          = document.getElementById('restaurantChatInput');
-        var chatTabs           = document.querySelectorAll('.restaurant-chat-tab');
-        var customerBadgeEl    = document.getElementById('restaurantChatCustomerBadge');
-        var riderBadgeEl       = document.getElementById('restaurantChatRiderBadge');
+        /* ============================================================
+           CARD COLLAPSE SNAPSHOT HELPERS
+           ============================================================
+           These are the single source of truth for preserving the
+           user's expanded cards across a poll. They read and write
+           only the DOM, never a JS-side set that could drift.
+           ============================================================ */
 
-        var activeChannel = 'customer';
-        var activeOrderId = 0;
+        /**
+         * Read every card in the current DOM that is expanded and
+         * return the set of their order_ids.
+         *
+         * @return {Set<number>}
+         */
+        function snapshotExpandedCards() {
+            var expanded = new Set();
+            if (!orderList) return expanded;
 
-        var channelCursor = {
-            customer: 0,
-            delivery_rider: 0
-        };
-
-        var renderedIds = {
-            customer: Object.create(null),
-            delivery_rider: Object.create(null)
-        };
-
-        var fetching = {
-            customer: false,
-            delivery_rider: false
-        };
-
-        var chatPollTimer = null;
-        var CHAT_POLL_MS  = 5000;
-
-        // ============================================================
-        // ORDER LIST STATE
-        // ============================================================
-        var orderList      = document.getElementById('kitchenOrderList');
-        var tabs           = document.querySelectorAll('.kitchen-tab');
-
-        var lastOrderId    = parseInt(page.dataset.maxOrderId, 10) || 0;
-        var liveCount      = parseInt(page.dataset.liveCount, 10) || 0;
-
-        var orderPollTimer = null;
-        var ORDER_POLL_MS  = 5000;
-        var ORDER_IDLE_MS  = 15000;
-        var lastOrderPollAt = 0;
-
-        // ============================================================
-        // HELPERS
-        // ============================================================
-        function escapeHtml(text) {
-            var d = document.createElement('div');
-            d.textContent = String(text == null ? '' : text);
-            return d.innerHTML;
-        }
-
-        function getActiveFilter() {
-            var active = document.querySelector('.kitchen-tab.active');
-            return active ? (active.dataset.filter || 'pending') : 'pending';
-        }
-
-        function applyFilter(filter) {
-            if (!orderList) return;
-
-            var cards = orderList.querySelectorAll('.kitchen-order-card');
-            var closedStatuses = ['delivered', 'cancelled', 'refunded'];
-            var visible = 0;
-
-            cards.forEach(function (card) {
-                var status = card.dataset.orderStatus || '';
-                var show;
-
-                if (filter === 'recent') {
-                    show = closedStatuses.indexOf(status) !== -1;
-                } else {
-                    show = (status === filter);
-                }
-
-                card.classList.toggle('is-hidden', !show);
-                if (show) visible++;
+            orderList.querySelectorAll('.kitchen-order-card.is-expanded').forEach(function (card) {
+                var oid = parseInt(card.dataset.orderId, 10) || 0;
+                if (oid > 0) expanded.add(oid);
             });
-
-            // Empty state for the currently active tab.
-            var emptyState = document.getElementById('kitchenEmptyFilterState');
-            if (!emptyState && orderList) {
-                emptyState = document.createElement('div');
-                emptyState.id = 'kitchenEmptyFilterState';
-                emptyState.className = 'kitchen-empty-state';
-                emptyState.innerHTML =
-                    '<p class="kitchen-empty-title">Nothing here</p>' +
-                    '<p class="kitchen-empty-text">No orders currently match this tab.</p>';
-                orderList.appendChild(emptyState);
-            }
-            if (emptyState) {
-                emptyState.style.display = (visible === 0 && cards.length > 0) ? 'block' : 'none';
-            }
+            return expanded;
         }
 
-        // ============================================================
-        // TAB COUNTS
-        // Recompute from the DOM after every list change so the
-        // badges match what the user sees without a round trip.
-        // ============================================================
-        function refreshTabCounts() {
+        /**
+         * Re-apply the snapshot to every card currently in the DOM.
+         *
+         * Idempotent. Safe to call with an empty set — that simply
+         * ensures every card is collapsed, which is the default the
+         * server emits anyway.
+         *
+         * @param {Set<number>} expandedSet
+         */
+        function reapplyExpandedCards(expandedSet) {
             if (!orderList) return;
-
-            var counts = {
-                pending: 0,
-                preparing: 0,
-                rider_pending: 0,
-                delivering: 0,
-                recent: 0
-            };
-
-            var closedStatuses = ['delivered', 'cancelled', 'refunded'];
 
             orderList.querySelectorAll('.kitchen-order-card').forEach(function (card) {
-                var status = card.dataset.orderStatus || '';
-                if (counts.hasOwnProperty(status)) {
-                    counts[status]++;
-                } else if (closedStatuses.indexOf(status) !== -1) {
-                    counts.recent++;
+                var oid = parseInt(card.dataset.orderId, 10) || 0;
+                if (oid <= 0) return;
+
+                var details = card.querySelector('.kitchen-order-details');
+                var toggle  = card.querySelector('.kitchen-order-toggle');
+
+                if (expandedSet.has(oid)) {
+                    card.classList.add('is-expanded');
+                    if (details) details.hidden = false;
+                    if (toggle)  toggle.setAttribute('aria-expanded', 'true');
+                } else {
+                    card.classList.remove('is-expanded');
+                    if (details) details.hidden = true;
+                    if (toggle)  toggle.setAttribute('aria-expanded', 'false');
                 }
             });
-
-            tabs.forEach(function (tab) {
-                var filter = tab.dataset.filter;
-                var badge = tab.querySelector('.kitchen-tab-count');
-                if (!badge || !filter) return;
-                if (counts.hasOwnProperty(filter)) {
-                    badge.textContent = String(counts[filter]);
-                }
-            });
-
-            liveCount = counts.pending + counts.preparing
-                      + counts.rider_pending + counts.delivering;
         }
 
-        // ============================================================
-        // LIVE ORDER POLL
-        // ============================================================
+        /* ============================================================
+           ORDER LIST STATE
+           ============================================================ */
+
+        var orderList       = document.getElementById('kitchenOrderList');
+        var tabCountEls     = document.querySelectorAll('[data-tab-count]');
+        var newOrderPill    = document.getElementById('kitchenNewOrderPill');
+        var newOrderCountEl = document.getElementById('kitchenNewOrderCount');
+        var newOrderPlural  = document.getElementById('kitchenNewOrderPlural');
+
+        var activeTab  = orderList ? (orderList.dataset.activeTab || 'new') : 'new';
+        var activePage = orderList ? (parseInt(orderList.dataset.activePage, 10) || 1) : 1;
+
+        var lastOrderId    = parseInt(page.dataset.maxOrderId, 10) || 0;
+        var liveCount      = 0;
+        var newOrderCount  = 0;
+
+        // Cache of the empty-state block, so we can restore it when a
+        // list empties. The page renders exactly one empty state; we
+        // capture it once at init.
+        var emptyStateHtml = '';
+        var emptyStateTab  = '';
+        if (orderList) {
+            var existingEmpty = orderList.querySelector('.kitchen-empty-state');
+            if (existingEmpty) {
+                emptyStateHtml = existingEmpty.outerHTML;
+                emptyStateTab  = existingEmpty.dataset.emptyTab || activeTab;
+            }
+        }
+
+        var orderPollTimer  = null;
+        var ORDER_POLL_MS   = 5000;
+        var ORDER_IDLE_MS   = 15000;
+        var lastOrderPollAt = 0;
+
+        // Guards against overlapping polls. A slow response must not
+        // allow a second poll to fire while the first is in flight.
+        var isPolling = false;
+
+        // Set of order_ids currently rendered in the DOM for the
+        // active tab. Used only to count new arrivals for the pill.
+        // Rebuilt from the DOM whenever the list changes.
+        var renderedOrderIds = Object.create(null);
+
+        function rebuildRenderedSet() {
+            renderedOrderIds = Object.create(null);
+            if (!orderList) return;
+            orderList.querySelectorAll('.kitchen-order-card').forEach(function (card) {
+                var oid = parseInt(card.dataset.orderId, 10) || 0;
+                if (oid > 0) renderedOrderIds[oid] = true;
+            });
+        }
+
+        if (orderList) {
+            rebuildRenderedSet();
+        }
+
+        /* ============================================================
+           ORDER POLL
+           ============================================================ */
+
         function startOrderPolling() {
             if (orderPollTimer) return;
             lastOrderPollAt = 0;
-            // 1s tick; the actual poll fires only at the current
-            // cadence, decided per tick from liveCount and page
-            // visibility.
             orderPollTimer = setInterval(orderPollTick, 1000);
+        }
+
+        function stopOrderPolling() {
+            if (orderPollTimer) {
+                clearInterval(orderPollTimer);
+                orderPollTimer = null;
+            }
         }
 
         function orderPollTick() {
             if (document.hidden) return;
+            if (isPolling) return;
 
             var now = Date.now();
             var interval = liveCount > 0 ? ORDER_POLL_MS : ORDER_IDLE_MS;
             if (now - lastOrderPollAt < interval) return;
 
             lastOrderPollAt = now;
-            postOrder('poll', { since_order_id: lastOrderId })
+            isPolling = true;
+
+            postOrder('poll', {
+                since_order_id: lastOrderId,
+                tab:            activeTab,
+                page:           activePage
+            })
                 .then(applyOrderPollResponse)
-                .catch(function () { /* transient; next tick retries */ });
+                .catch(function () { /* transient; next tick retries */ })
+                .finally(function () {
+                    isPolling = false;
+                });
         }
 
         function postOrder(action, extra) {
@@ -249,121 +300,325 @@
         function applyOrderPollResponse(data) {
             if (!data || data.status !== 'success') return;
 
+            // ---------------------------------------------------------
+            // SNAPSHOT: read the user's expanded cards BEFORE any DOM
+            // mutation. This is the state that must survive the poll.
+            // ---------------------------------------------------------
+            var expandedSnapshot = snapshotExpandedCards();
+
             var rows    = data.rows    || [];
+            var updated = data.updated || [];
             var removed = data.removed || [];
             var counts  = data.counts  || null;
+            var pageData = data.page   || null;
             var maxId   = parseInt(data.max_id, 10) || lastOrderId;
 
-            // Remove orders the server says are no longer live.
-            removed.forEach(function (oid) {
-                var existing = orderList.querySelector(
-                    '.kitchen-order-card[data-order-id="' + oid + '"]'
-                );
-                if (existing) existing.remove();
-            });
+            // 1. Update tab badge counts in place.
+            if (counts) {
+                updateTabCounts(counts);
+                liveCount = parseInt(counts.total_live, 10) || 0;
+            }
 
-            // Update existing rows: the server sends the full card
-            // payload again, so we just swap the node in place if
-            // the status changed.
+            // 2. Count new orders that arrived and are not already
+            //    rendered on this page.
             rows.forEach(function (row) {
                 if (!row || !row.order_id) return;
-
-                var oid     = parseInt(row.order_id, 10);
-                var newHtml = row.html || '';
-                var existing = orderList.querySelector(
-                    '.kitchen-order-card[data-order-id="' + oid + '"]'
-                );
-
-                if (existing) {
-                    var newStatus = row.order_status || '';
-                    var oldStatus = existing.dataset.orderStatus || '';
-                    if (newStatus !== oldStatus) {
-                        // Swap the card markup in place. Keep its DOM
-                        // position so the user's eye does not jump.
-                        var temp = document.createElement('div');
-                        temp.innerHTML = newHtml;
-                        var replacement = temp.firstElementChild;
-                        if (replacement) {
-                            existing.parentNode.replaceChild(replacement, existing);
-                        }
-                    }
-                } else {
-                    // New order. Prepend so it appears at the top of
-                    // whichever tab it belongs to.
-                    var temp = document.createElement('div');
-                    temp.innerHTML = newHtml;
-                    var newNode = temp.firstElementChild;
-                    if (newNode) {
-                        // Remove the static empty state if present.
-                        var empty = document.getElementById('kitchenEmptyFilterState');
-                        if (empty) empty.remove();
-
-                        orderList.insertBefore(newNode, orderList.firstChild);
-                    }
+                var oid = parseInt(row.order_id, 10) || 0;
+                if (oid <= 0) return;
+                if (renderedOrderIds[oid]) return;
+                if (oid > lastOrderId) {
+                    newOrderCount++;
                 }
             });
 
-            if (maxId > lastOrderId) lastOrderId = maxId;
-
-            if (counts) {
-                // Server-provided counts are authoritative. Fall
-                // back to DOM-derived counts if the response does
-                // not carry them.
-                liveCount = (parseInt(counts.pending, 10) || 0)
-                          + (parseInt(counts.preparing, 10) || 0)
-                          + (parseInt(counts.rider_pending, 10) || 0)
-                          + (parseInt(counts.delivering, 10) || 0);
-            } else {
-                refreshTabCounts();
+            if (newOrderCount > 0 && newOrderPill) {
+                showNewOrderPill(newOrderCount);
             }
 
-            applyFilter(getActiveFilter());
+            // 3. Drop orders the server says are no longer live.
+            removed.forEach(function (oid) {
+                removeCard(oid);
+            });
+
+            // 4. Apply status changes in place.
+            updated.forEach(function (row) {
+                if (!row || !row.order_id) return;
+                var oid = parseInt(row.order_id, 10) || 0;
+                if (oid <= 0) return;
+
+                var existing = orderList
+                    ? orderList.querySelector(
+                        '.kitchen-order-card[data-order-id="' + oid + '"]'
+                    )
+                    : null;
+
+                if (!existing) return;
+
+                var newStatus = row.order_status || '';
+                var oldStatus = existing.dataset.orderStatus || '';
+
+                if (newStatus === oldStatus) return;
+
+                if (!statusBelongsToTab(newStatus, activeTab)) {
+                    existing.remove();
+                    delete renderedOrderIds[oid];
+                    return;
+                }
+
+                if (row.html) {
+                    swapCard(existing, row.html);
+                } else {
+                    existing.dataset.orderStatus = newStatus;
+                }
+            });
+
+            // 5. If the current page's slice changed, replace the list
+            //    content with the fresh slice the handler returned.
+            if (pageData && Array.isArray(pageData.items)) {
+                applyPageSlice(pageData);
+            }
+
+            if (maxId > lastOrderId) lastOrderId = maxId;
+
+            // 6. If the tab's list is empty, ensure the empty-state
+            //    block is rendered.
+            ensureEmptyState();
+
+            // ---------------------------------------------------------
+            // REAPPLY: restore the user's expanded cards. Every node
+            // in the DOM now gets its state re-set from the
+            // snapshot. Cards that were expanded stay expanded.
+            // ---------------------------------------------------------
+            reapplyExpandedCards(expandedSnapshot);
+
+            // The DOM has changed, so the rendered-id set may have
+            // too. Rebuild it from the live DOM.
+            rebuildRenderedSet();
         }
 
-        // Kick off the poll on page load for the branch view.
+        function applyPageSlice(pageData) {
+            if (!orderList) return;
+
+            var serverItems = pageData.items || [];
+            var serverIds   = Object.create(null);
+            serverItems.forEach(function (item) {
+                var oid = parseInt(item.order_id, 10) || 0;
+                if (oid > 0) serverIds[oid] = true;
+            });
+
+            // Remove cards that are no longer on this page.
+            orderList.querySelectorAll('.kitchen-order-card').forEach(function (card) {
+                var oid = parseInt(card.dataset.orderId, 10) || 0;
+                if (oid > 0 && !serverIds[oid]) {
+                    card.remove();
+                    delete renderedOrderIds[oid];
+                }
+            });
+
+            // Insert any cards the server says belong on this page
+            // but that are not yet in the DOM. Checked against the
+            // live DOM rather than a JS mirror so a stale mirror
+            // cannot produce a duplicate card.
+            serverItems.forEach(function (item) {
+                var oid = parseInt(item.order_id, 10) || 0;
+                if (oid <= 0) return;
+
+                var alreadyInDom = orderList.querySelector(
+                    '.kitchen-order-card[data-order-id="' + oid + '"]'
+                );
+                if (alreadyInDom) return;
+
+                if (!item.html) return;
+
+                var temp = document.createElement('div');
+                temp.innerHTML = item.html;
+                var newNode = temp.firstElementChild;
+                if (!newNode) return;
+
+                orderList.appendChild(newNode);
+                renderedOrderIds[oid] = true;
+            });
+
+            // The active page number can change server-side (a page
+            // clamp). Keep our local copy in sync.
+            if (typeof pageData.page === 'number' && pageData.page > 0) {
+                activePage = pageData.page;
+                if (orderList) orderList.dataset.activePage = String(activePage);
+            }
+        }
+
+        function statusBelongsToTab(status, tab) {
+            switch (tab) {
+                case 'new':              return status === 'pending';
+                case 'preparing':        return status === 'preparing';
+                case 'waiting_on_rider': return status === 'rider_pending' || status === 'picking_up';
+                case 'out_for_delivery': return status === 'delivering';
+                case 'recent':           return status === 'delivered' || status === 'cancelled' || status === 'refunded';
+                default:                 return false;
+            }
+        }
+
+        function updateTabCounts(counts) {
+            tabCountEls.forEach(function (el) {
+                var key = el.dataset.tabCount;
+                if (!key) return;
+                if (typeof counts[key] === 'number') {
+                    el.textContent = String(counts[key]);
+                }
+            });
+        }
+
+        /**
+         * Replace a card node with a fresh HTML fragment.
+         *
+         * This is a plain DOM swap. It does NOT read or write the
+         * card's expanded state. The outer applyOrderPollResponse()
+         * snapshot/reapply pair is what preserves state across this
+         * swap.
+         */
+        function swapCard(existingEl, html) {
+            var temp = document.createElement('div');
+            temp.innerHTML = html;
+            var replacement = temp.firstElementChild;
+            if (!replacement) return;
+            existingEl.parentNode.replaceChild(replacement, existingEl);
+        }
+
+        function removeCard(orderId) {
+            var oid = parseInt(orderId, 10) || 0;
+            if (oid <= 0 || !orderList) return;
+
+            var existing = orderList.querySelector(
+                '.kitchen-order-card[data-order-id="' + oid + '"]'
+            );
+            if (existing) existing.remove();
+            delete renderedOrderIds[oid];
+        }
+
+        function ensureEmptyState() {
+            if (!orderList) return;
+
+            var hasCards = orderList.querySelector('.kitchen-order-card');
+            var hasEmpty = orderList.querySelector('.kitchen-empty-state');
+
+            if (hasCards && hasEmpty) {
+                hasEmpty.remove();
+                return;
+            }
+
+            if (!hasCards && !hasEmpty && emptyStateHtml !== '') {
+                if (emptyStateTab === activeTab) {
+                    var temp = document.createElement('div');
+                    temp.innerHTML = emptyStateHtml;
+                    var node = temp.firstElementChild;
+                    if (node) orderList.appendChild(node);
+                }
+            }
+        }
+
+        function showNewOrderPill(count) {
+            if (!newOrderPill || !newOrderCountEl) return;
+
+            newOrderCountEl.textContent = String(count);
+            if (newOrderPlural) {
+                newOrderPlural.textContent = count === 1 ? '' : 's';
+            }
+            newOrderPill.hidden = false;
+        }
+
+        /* ============================================================
+           POLL LIFECYCLE
+           ============================================================ */
+
         startOrderPolling();
 
-        // ============================================================
-        // TAB CLICK — reuse the existing behaviour, then reapply the
-        // filter against the current DOM.
-        // ============================================================
-        tabs.forEach(function (tab) {
-            tab.addEventListener('click', function () {
-                var filter = this.dataset.filter || 'pending';
-                tabs.forEach(function (t) {
-                    var isActive = t === tab;
-                    t.classList.toggle('active', isActive);
-                    t.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState !== 'visible') return;
+            if (isPolling) return;
+
+            lastOrderPollAt = 0;
+            isPolling = true;
+
+            postOrder('poll', {
+                since_order_id: lastOrderId,
+                tab:            activeTab,
+                page:           activePage
+            })
+                .then(applyOrderPollResponse)
+                .catch(function () { /* silent */ })
+                .finally(function () {
+                    isPolling = false;
                 });
-                applyFilter(filter);
-            });
         });
 
-        // Run once so the initial tab is honoured after the server
-        // render.
-        applyFilter(getActiveFilter());
-        refreshTabCounts();
+        window.addEventListener('pageshow', function (e) {
+            if (!e.persisted) return;
+            if (isPolling) return;
 
-        // ============================================================
-        // CHAT MODAL — delegated open
-        // ============================================================
-        document.addEventListener('click', function (e) {
-            var trigger = e.target.closest('[data-restaurant-chat-open]');
-            if (!trigger) return;
-            if (trigger.disabled || trigger.getAttribute('aria-disabled') === 'true') return;
+            lastOrderPollAt = 0;
+            isPolling = true;
 
-            e.preventDefault();
-
-            var orderId     = parseInt(trigger.getAttribute('data-restaurant-chat-order-id'), 10) || 0;
-            var counterparty = trigger.getAttribute('data-restaurant-chat-counterparty') || 'customer';
-            var subtitle    = trigger.getAttribute('data-restaurant-chat-subtitle') || '';
-
-            openChatModal(orderId, counterparty, subtitle);
+            postOrder('poll', {
+                since_order_id: lastOrderId,
+                tab:            activeTab,
+                page:           activePage
+            })
+                .then(applyOrderPollResponse)
+                .catch(function () { /* silent */ })
+                .finally(function () {
+                    isPolling = false;
+                });
         });
 
-        // ============================================================
-        // CHAT MODAL — open / close
-        // ============================================================
+        /* ============================================================
+           CHAT MODAL
+           Open, close, tabs, send, read, delta poll.
+           ============================================================ */
+
+        var chatModal          = document.getElementById('restaurantChatModal');
+        var chatCloseBtn       = document.getElementById('restaurantChatClose');
+        var chatSubtitleEl     = document.getElementById('restaurantChatSubtitle');
+        var chatOrderIdInput   = document.getElementById('restaurantChatOrderId');
+        var chatChannelInput   = document.getElementById('restaurantChatCounterparty');
+        var chatBody           = document.getElementById('restaurantChatMessages');
+        var chatForm           = document.getElementById('restaurantChatForm');
+        var chatInput          = document.getElementById('restaurantChatInput');
+        var chatTabs           = document.querySelectorAll('.restaurant-chat-tab');
+        var customerBadgeEl    = document.getElementById('restaurantChatCustomerBadge');
+        var riderBadgeEl       = document.getElementById('restaurantChatRiderBadge');
+
+        var activeChannel = 'customer';
+        var activeOrderId = 0;
+
+        var channelCursor = {
+            customer:       0,
+            delivery_rider: 0
+        };
+
+        var renderedIds = {
+            customer:       Object.create(null),
+            delivery_rider: Object.create(null)
+        };
+
+        var fetching = {
+            customer:       false,
+            delivery_rider: false
+        };
+
+        var chatPollTimer = null;
+        var CHAT_POLL_MS  = 5000;
+
+        function escapeHtml(text) {
+            var d = document.createElement('div');
+            d.textContent = String(text == null ? '' : text);
+            return d.innerHTML;
+        }
+
+        function normaliseChannel(channel) {
+            if (channel === 'delivery_rider') return 'delivery_rider';
+            return 'customer';
+        }
+
         function openChatModal(orderId, counterparty, subtitle) {
             if (!chatModal || orderId <= 0) return;
 
@@ -372,35 +627,26 @@
             activeOrderId = orderId;
             activeChannel = counterparty;
 
-            chatOrderIdInput.value = String(orderId);
-            chatChannelInput.value = counterparty;
-            chatSubtitleEl.textContent = subtitle || ('Order #' + orderId);
+            if (chatOrderIdInput) chatOrderIdInput.value = String(orderId);
+            if (chatChannelInput) chatChannelInput.value = counterparty;
+            if (chatSubtitleEl)   chatSubtitleEl.textContent = subtitle || ('Order #' + orderId);
 
-            setActiveTab(counterparty);
+            setActiveChatTab(counterparty);
 
-            // Reset visible body but preserve the cursor only if the
-            // channel was already loaded for this same order. A new
-            // order means new conversations; wipe the cursors.
-            var key = orderId + ':' + counterparty;
-            if (channelCursor[counterparty] === 0 || currentCursorKey !== key) {
-                channelCursor[counterparty] = 0;
-                renderedIds[counterparty] = Object.create(null);
-                renderLoading();
-            }
-            currentCursorKey = key;
+            renderChatLoading();
 
             document.body.style.overflow = 'hidden';
             chatModal.style.display = 'flex';
             void chatModal.offsetWidth;
             chatModal.classList.add('active');
 
-            loadMessages(counterparty);
+            loadChatMessages(counterparty);
             startChatPolling();
 
-            setTimeout(function () { chatInput.focus(); }, 120);
+            setTimeout(function () {
+                if (chatInput) chatInput.focus();
+            }, 120);
         }
-
-        var currentCursorKey = '';
 
         function closeChatModal() {
             if (!chatModal) return;
@@ -425,8 +671,8 @@
         }
 
         if (chatModal) {
-            var overlay = chatModal.querySelector('.modal-overlay');
-            if (overlay) overlay.addEventListener('click', closeChatModal);
+            var chatOverlay = chatModal.querySelector('.modal-overlay');
+            if (chatOverlay) chatOverlay.addEventListener('click', closeChatModal);
         }
 
         document.addEventListener('keydown', function (e) {
@@ -436,28 +682,7 @@
             }
         });
 
-        // ============================================================
-        // CHAT MODAL — tabs
-        // ============================================================
-        chatTabs.forEach(function (tab) {
-            tab.addEventListener('click', function () {
-                if (this.disabled) return;
-                var channel = this.dataset.counterparty || 'customer';
-                if (channel === activeChannel) return;
-
-                activeChannel = channel;
-                chatChannelInput.value = channel;
-                setActiveTab(channel);
-
-                channelCursor[channel] = 0;
-                renderedIds[channel] = Object.create(null);
-                renderLoading();
-
-                loadMessages(channel);
-            });
-        });
-
-        function setActiveTab(channel) {
+        function setActiveChatTab(channel) {
             chatTabs.forEach(function (t) {
                 var isActive = t.dataset.counterparty === channel;
                 t.classList.toggle('active', isActive);
@@ -465,31 +690,41 @@
             });
         }
 
-        function normaliseChannel(channel) {
-            if (channel === 'delivery_rider') return 'delivery_rider';
-            return 'customer';
-        }
+        chatTabs.forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                if (this.disabled) return;
+                var channel = this.dataset.counterparty || 'customer';
+                if (channel === activeChannel) return;
 
-        // ============================================================
-        // CHAT MODAL — rendering
-        // ============================================================
-        function renderLoading() {
+                activeChannel = channel;
+                if (chatChannelInput) chatChannelInput.value = channel;
+                setActiveChatTab(channel);
+
+                renderChatLoading();
+                loadChatMessages(channel);
+            });
+        });
+
+        function renderChatLoading() {
             if (!chatBody) return;
-            chatBody.innerHTML = '<div class="restaurant-chat-loading"><span>Loading messages…</span></div>';
+            chatBody.innerHTML =
+                '<div class="restaurant-chat-loading"><span>Loading messages…</span></div>';
         }
 
-        function renderEmpty(text) {
+        function renderChatEmpty(text) {
             if (!chatBody) return;
-            chatBody.innerHTML = '<div class="restaurant-chat-empty">' + escapeHtml(text) + '</div>';
+            chatBody.innerHTML = '<div class="restaurant-chat-empty">' +
+                escapeHtml(text) + '</div>';
         }
 
-        function scrollToBottom() {
+        function scrollChatToBottom() {
+            if (!chatBody) return;
             requestAnimationFrame(function () {
                 chatBody.scrollTop = chatBody.scrollHeight;
             });
         }
 
-        function appendMessage(channel, msg, skipScroll) {
+        function appendChatMessage(channel, msg, skipScroll) {
             if (!chatBody || !msg) return false;
 
             var mid = parseInt(msg.message_id, 10) || 0;
@@ -530,29 +765,26 @@
             if (placeholder) placeholder.remove();
 
             chatBody.appendChild(div);
-            if (!skipScroll) scrollToBottom();
+            if (!skipScroll) scrollChatToBottom();
             return true;
         }
 
-        function renderFull(channel, messages, maxId) {
+        function renderChatFull(channel, messages, maxId) {
             if (!chatBody) return;
             chatBody.innerHTML = '';
 
             if (!messages || messages.length === 0) {
-                renderEmpty('No messages yet. Start the conversation.');
+                renderChatEmpty('No messages yet. Start the conversation.');
             } else {
                 messages.forEach(function (m) {
-                    appendMessage(channel, m, true);
+                    appendChatMessage(channel, m, true);
                 });
-                scrollToBottom();
+                scrollChatToBottom();
             }
 
             if (maxId > 0) channelCursor[channel] = maxId;
         }
 
-        // ============================================================
-        // CHAT MODAL — server calls
-        // ============================================================
         function postChat(action, extra) {
             var fd = new FormData();
             fd.append('csrf_token', CSRF_TOKEN);
@@ -575,7 +807,7 @@
             });
         }
 
-        function loadMessages(channel) {
+        function loadChatMessages(channel) {
             if (fetching[channel]) return;
             fetching[channel] = true;
 
@@ -589,7 +821,7 @@
                 .then(function (data) {
                     if (!data || data.status !== 'success') {
                         if (isFirst) {
-                            renderEmpty((data && data.message) || 'Could not load messages.');
+                            renderChatEmpty((data && data.message) || 'Could not load messages.');
                         }
                         return;
                     }
@@ -598,12 +830,12 @@
                     var maxId = parseInt(data.max_id, 10) || sinceId;
 
                     if (isFirst) {
-                        renderFull(channel, msgs, maxId);
+                        renderChatFull(channel, msgs, maxId);
                     } else if (msgs.length > 0) {
                         msgs.forEach(function (m) {
-                            appendMessage(channel, m, true);
+                            appendChatMessage(channel, m, true);
                         });
-                        scrollToBottom();
+                        scrollChatToBottom();
                         if (maxId > channelCursor[channel]) {
                             channelCursor[channel] = maxId;
                         }
@@ -612,7 +844,7 @@
                     }
 
                     if (channel === activeChannel) {
-                        markRead(channel);
+                        markChatRead(channel);
                     }
                 })
                 .finally(function () {
@@ -620,7 +852,7 @@
                 });
         }
 
-        function markRead(channel) {
+        function markChatRead(channel) {
             var fd = new FormData();
             fd.append('csrf_token', CSRF_TOKEN);
             fd.append('action', 'read');
@@ -634,14 +866,11 @@
             }).catch(function () { /* silent */ });
         }
 
-        // ============================================================
-        // CHAT MODAL — send
-        // ============================================================
         if (chatForm) {
             chatForm.addEventListener('submit', function (e) {
                 e.preventDefault();
 
-                var content = chatInput.value.trim();
+                var content = chatInput ? chatInput.value.trim() : '';
                 if (content === '') return;
 
                 var submitBtn = chatForm.querySelector('.restaurant-chat-send');
@@ -650,14 +879,17 @@
                 postChat('send', { content: content })
                     .then(function (data) {
                         if (!data || data.status !== 'success') {
-                            showChatToast((data && data.message) || 'Could not send message.', 'error');
+                            showChatToast(
+                                (data && data.message) || 'Could not send message.',
+                                'error'
+                            );
                             return;
                         }
 
-                        chatInput.value = '';
+                        if (chatInput) chatInput.value = '';
 
                         if (data.message_data) {
-                            appendMessage(activeChannel, data.message_data, false);
+                            appendChatMessage(activeChannel, data.message_data, false);
                         }
 
                         var newMax = parseInt(data.max_id, 10) || 0;
@@ -670,22 +902,19 @@
                     })
                     .finally(function () {
                         if (submitBtn) submitBtn.disabled = false;
-                        chatInput.focus();
+                        if (chatInput) chatInput.focus();
                     });
             });
         }
 
-        // ============================================================
-        // CHAT POLLING
-        // ============================================================
         function startChatPolling() {
             stopChatPolling();
             chatPollTimer = setInterval(function () {
                 if (!chatModal || !chatModal.classList.contains('active')) return;
                 if (document.hidden) return;
-                if (chatInput.value.trim() !== '') return;
+                if (chatInput && chatInput.value.trim() !== '') return;
                 if (fetching[activeChannel]) return;
-                loadMessages(activeChannel);
+                loadChatMessages(activeChannel);
             }, CHAT_POLL_MS);
         }
 
@@ -696,26 +925,10 @@
             }
         }
 
-        // ============================================================
-        // VISIBILITY
-        // ============================================================
-        document.addEventListener('visibilitychange', function () {
-            if (document.visibilityState !== 'visible') return;
+        /* ============================================================
+           CHAT TOAST
+           ============================================================ */
 
-            // Immediate catch-up poll for the order list.
-            postOrder('poll', { since_order_id: lastOrderId })
-                .then(applyOrderPollResponse)
-                .catch(function () { /* silent */ });
-
-            // Immediate catch-up poll for the open chat, if any.
-            if (chatModal && chatModal.classList.contains('active')) {
-                loadMessages(activeChannel);
-            }
-        });
-
-        // ============================================================
-        // TOAST
-        // ============================================================
         function showChatToast(message, type) {
             var toast = document.getElementById('kitchenChatToast');
             if (!toast) {
@@ -751,5 +964,27 @@
                 toast.style.transform = 'translateX(120%)';
             }, 2800);
         }
+
+        /* ============================================================
+           DELEGATED CHAT OPENER
+           Any element carrying [data-restaurant-chat-open] opens
+           the chat modal. The listener lives on document so it
+           works regardless of which script or template rendered
+           the trigger.
+           ============================================================ */
+
+        document.addEventListener('click', function (e) {
+            var trigger = e.target.closest('[data-restaurant-chat-open]');
+            if (!trigger) return;
+            if (trigger.disabled || trigger.getAttribute('aria-disabled') === 'true') return;
+
+            e.preventDefault();
+
+            var orderId      = parseInt(trigger.getAttribute('data-restaurant-chat-order-id'), 10) || 0;
+            var counterparty = trigger.getAttribute('data-restaurant-chat-counterparty') || 'customer';
+            var subtitle     = trigger.getAttribute('data-restaurant-chat-subtitle') || '';
+
+            openChatModal(orderId, counterparty, subtitle);
+        });
     });
 })();

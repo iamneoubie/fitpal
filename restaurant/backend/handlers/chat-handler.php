@@ -41,17 +41,37 @@
  *
  * Channel gating
  * --------------
- *   - 'customer'       → allowed while the order is any status the
- *                        customer might still be involved in:
- *                        pending, preparing, rider_pending,
- *                        delivering, delivered.
- *                        Refused on cancelled / refunded.
- *   - 'delivery_rider' → allowed only when the order actually has a
- *                        rider attached. That means delivery_rider_id
- *                        IS NOT NULL and the status is
- *                        rider_pending, delivering, or delivered.
- *                        Refused otherwise, with a specific message
- *                        the client can show.
+ * Which channels are reachable for a given order is decided by
+ * restaurantChatChannelStatus() in restaurant/backend/database/
+ * chat-queries.php. That function is the single source of truth
+ * for the status-to-channels mapping. This handler calls it and
+ * refuses any channel the mapping reports as closed.
+ *
+ * The mapping as of v1.2:
+ *
+ *   pending         → customer open,   rider closed
+ *   preparing       → customer open,   rider closed
+ *   rider_pending   → customer + rider
+ *   picking_up      → customer + rider
+ *   delivering      → customer + rider
+ *   delivered ≤ 1h  → customer + rider
+ *   delivered > 1h  → both closed
+ *   cancelled       → both closed
+ *   refunded        → both closed
+ *
+ * The customer channel is open from the moment the order is placed
+ * until one hour after it is delivered. That covers the whole
+ * window in which the kitchen might need to raise an out-of-stock
+ * item, an address clarification, or an ETA question. The rider
+ * channel is open only while a rider is actually attached — from
+ * the moment the kitchen assigns a rider until one hour after
+ * delivery.
+ *
+ * Keeping the mapping in the query layer means a future status
+ * addition changes one file, not two. Before v1.1 this handler
+ * carried its own hardcoded set, and adding 'picking_up' would
+ * have required editing both files in lockstep — an easy source of
+ * drift.
  *
  * Response shape
  * --------------
@@ -67,12 +87,25 @@
  * message_id in the batch — so the client can advance its cursor
  * without scanning the array.
  *
- * The shape matches customer/backend/handlers/message-handler.php
- * and rider/backend/handlers/message-handler.php so all three roles
- * render their chat through the same JS pattern.
- *
  * @package FitPal
- * @version 1.0
+ * @version 1.2 — Delivered grace window and open-early customer
+ *                channel:
+ *                  - gateChannel() now reads delivered_at from the
+ *                    order row and passes it into
+ *                    restaurantChatChannelStatus(), so the
+ *                    one-hour post-delivery window is honored.
+ *                  - The customer-channel error message is now
+ *                    conditional on the actual reason (closed
+ *                    order, expired delivery window, missing
+ *                    counterparty).
+ *                  - The rider-channel error message gains the
+ *                    same expired-window branch and a distinct
+ *                    message for a closed order.
+ *
+ *                (1.1: delegated channel gating to
+ *                restaurantChatChannelStatus() so 'picking_up' is
+ *                handled in one place. 1.0: initial restaurant
+ *                chat handler.)
  */
 
 declare(strict_types=1);
@@ -106,9 +139,8 @@ if ($restaurantId <= 0) {
     exit;
 }
 
-// Any active restaurant account can chat. This mirrors the roles
-// the kitchen page already allows and keeps the check simple: the
-// ownership gate below is the actual security boundary.
+// Any active restaurant account can chat. The ownership gate below
+// is the actual security boundary.
 $allowedRoles = ['owner', 'partner', 'manager', 'staff', 'kitchen'];
 if (!in_array($accountRole, $allowedRoles, true)) {
     echo json_encode([
@@ -216,14 +248,14 @@ function handleList(PDO $db, int $restaurantId, string $counterparty): array
     $meta  = getRestaurantChatPartyMeta($db, $orderId, $counterparty);
 
     return [
-        'status'         => 'success',
-        'counterparty'   => $counterparty,
+        'status'            => 'success',
+        'counterparty'      => $counterparty,
         'counterparty_meta' => $meta,
-        'messages'       => array_map(
+        'messages'          => array_map(
             static fn(array $r) => shapeMessage($r, $counterparty),
             $rows
         ),
-        'max_id'         => $maxId,
+        'max_id'            => $maxId,
     ];
 }
 
@@ -386,12 +418,35 @@ function handleMarkRead(PDO $db, int $restaurantId, string $counterparty): array
  * Returns null when the channel is allowed. Returns an error
  * response array when it is not — the caller echoes that back.
  *
+ * The status-to-channels mapping is owned by
+ * restaurantChatChannelStatus() in the query layer. This function
+ * fetches the order's current status AND its delivered_at
+ * timestamp, then consults the map. The delivered_at value is
+ * only meaningful for a 'delivered' order; for any other status
+ * the mapping ignores it.
+ *
+ * The error copy is selected from the actual reason rather than
+ * a single catch-all string, so the user sees the right message:
+ *
+ *   - cancelled / refunded            → "order is closed"
+ *   - delivered past the grace window → "the message window ended"
+ *   - no rider attached               → "no rider yet"
+ *   - anything else (defensive)       → "not reachable"
+ *
+ * The "anything else" branches are defensive. After the v1.2
+ * mapping, the customer channel is only ever off for closed
+ * orders or an expired delivered window, and the rider channel
+ * is only ever off for those same two reasons plus a missing
+ * rider. The defensive branches should never fire in practice;
+ * they exist so an unexpected future status change produces a
+ * sane message rather than a null.
+ *
  * @return array<string, mixed>|null
  */
 function gateChannel(PDO $db, int $orderId, string $counterparty): ?array
 {
     $stmt = $db->prepare(
-        "SELECT order_status, delivery_rider_id
+        "SELECT order_status, delivery_rider_id, delivered_at
            FROM orders
           WHERE order_id = :order_id
           LIMIT 1"
@@ -403,27 +458,71 @@ function gateChannel(PDO $db, int $orderId, string $counterparty): ?array
         return ['status' => 'error', 'message' => 'Order not found.'];
     }
 
-    $status        = (string)$row['order_status'];
-    $hasRider      = $row['delivery_rider_id'] !== null;
-    $closedStatuses = ['cancelled', 'refunded'];
+    $status      = (string)$row['order_status'];
+    $hasRider    = $row['delivery_rider_id'] !== null;
+    $deliveredAt = $row['delivered_at'] !== null
+        ? (string)$row['delivered_at']
+        : null;
 
-    if ($counterparty === 'customer') {
-        if (in_array($status, $closedStatuses, true)) {
-            return [
-                'status'  => 'error',
-                'message' => 'This order is closed and the customer can no longer be messaged.',
-            ];
-        }
-        return null;
-    }
+    // Single source of truth for the mapping. Pass the delivered
+    // timestamp so the one-hour grace window is honored.
+    $channels = restaurantChatChannelStatus($status, $deliveredAt);
+
+    // Helper predicate: the order is closed and the message window
+    // (if any) has ended. A delivered order past the grace window
+    // is treated the same as a cancelled order for copy purposes.
+    $isClosed = (
+        in_array($status, ['cancelled', 'refunded'], true)
+        || ($status === 'delivered' && !$channels['customer'] && !$channels['delivery_rider'])
+    );
 
     if ($counterparty === 'delivery_rider') {
-        if (!$hasRider || in_array($status, $closedStatuses, true)) {
+        // No rider attached yet is a distinct, useful message.
+        // Check it before the "closed" branch so a pending order
+        // with no rider says "no rider yet" rather than "closed".
+        if (!$hasRider) {
             return [
                 'status'  => 'error',
                 'message' => 'No rider is attached to this order yet.',
             ];
         }
+
+        if ($isClosed) {
+            return [
+                'status'  => 'error',
+                'message' => $status === 'delivered'
+                    ? 'The one-hour message window for this delivered order has ended.'
+                    : 'This order is closed and the rider is no longer reachable.',
+            ];
+        }
+
+        if (!$channels['delivery_rider']) {
+            return [
+                'status'  => 'error',
+                'message' => 'The rider is not reachable for this order.',
+            ];
+        }
+
+        return null;
+    }
+
+    if ($counterparty === 'customer') {
+        if ($isClosed) {
+            return [
+                'status'  => 'error',
+                'message' => $status === 'delivered'
+                    ? 'The one-hour message window for this delivered order has ended.'
+                    : 'This order is closed and the customer can no longer be messaged.',
+            ];
+        }
+
+        if (!$channels['customer']) {
+            return [
+                'status'  => 'error',
+                'message' => 'The customer is not reachable on this order right now.',
+            ];
+        }
+
         return null;
     }
 

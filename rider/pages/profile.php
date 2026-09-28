@@ -11,25 +11,59 @@
  *   - edit-in-place contact number
  *   - vehicle snapshot (read-only)
  *   - address snapshot (read-only, contact support to change)
- *   - logout row (uses confirmation modal via header's logout.js)
  *
- * No inline SQL. All reads go through rider-queries.php.
+ * Page flow
+ * ---------
+ *   1. The rider opens the page in view mode. The contact field is
+ *      disabled, the Save/Cancel row is hidden, the Edit Profile
+ *      button is visible, and the avatar edit button is hidden.
+ *
+ *   2. Clicking "Edit Profile" opens a confirmation modal. Confirming
+ *      enters edit mode: the contact field enables, the avatar edit
+ *      button appears, and the header card's right side swaps from
+ *      the Edit button to Save Changes + Cancel.
+ *
+ *   3. Picking a file only produces a LOCAL PREVIEW. The upload is
+ *      deferred until the rider presses Save Changes. Cancel reverts
+ *      the preview to the server-rendered picture.
+ *
+ *   4. Save runs a single pipeline:
+ *        a. POST action=update_profile to rider-handler.php.
+ *        b. If a picture is pending, POST action=upload_picture to the
+ *           same endpoint with the file as FormData.
+ *      Both fetches use literal URLs so no DOM node is ever read to
+ *      compute a request target.
+ *
+ *   5. Leaving the page while in edit mode with pending changes
+ *      triggers an unsaved-changes modal with "Keep Editing" and
+ *      "Save Changes".
+ *
+ * Save button contract
+ * --------------------
+ * The Save button is type="button", not type="submit". It is bound in
+ * JS to the same handler the form's submit event runs. This page never
+ * performs a native form submission. That removes the possibility of
+ * the browser navigating away from the page to a URL that was
+ * computed from a DOM property, which is what produced the spurious
+ * POST /rider/pages/[object HTMLInputElement] in the server log.
+ *
  * $assetBase is defined by rider/includes/header.php, so the header
  * is required before any code that depends on it.
  *
  * @package FitPal
- * @version 3.3 — Corrected the docblock reference from
- *                includes/csrf-token.php to
- *                includes/rider-csrf-token.php, which is the file the
- *                header actually requires. No code change. (3.2:
- *                Removed the local CSRF block that wrote to the
- *                shared 'csrf_token' session key. The rider role's
- *                token is now generated in includes/header.php via
- *                includes/rider-csrf-token.php under
- *                'rider_csrf_token' and exposed as $csrfToken, so the
- *                FITPAL_RIDER_PROFILE inline config and the hidden
- *                form field on the edit form both carry the
- *                rider-scoped value.)
+ * @version 4.1 — Save button is now type="button" and is bound
+ *                explicitly. No native form submission path remains.
+ *                The form still carries action and enctype so the
+ *                markup is semantically complete, but nothing relies
+ *                on the browser using them. No other structural
+ *                change from 4.0.
+ *
+ *                (4.0: unified rider profile with customer profile —
+ *                avatar wrap, edit-confirm modal, unsaved-changes
+ *                modal, Save / Cancel in header card, deferred
+ *                upload. 3.3: docblock reference to
+ *                rider-csrf-token.php. 3.2: local CSRF block
+ *                removed. 3.0: three-tab layout.)
  */
 
 declare(strict_types=1);
@@ -153,7 +187,7 @@ $plateLabel   = $plate !== '' ? $plate : 'No plate recorded';
              ============================================ -->
         <div class="page-title-header">
             <div class="page-title-header-top">
-                <a href="dashboard.php" class="back-btn">
+                <a href="dashboard.php" class="back-btn" id="profileBackBtn" data-fallback-href="dashboard.php">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt="Back"
                         class="back-btn-icon" width="20" height="20">
                     <span>Back to Dashboard</span>
@@ -182,12 +216,15 @@ $plateLabel   = $plate !== '' ? $plate : 'No plate recorded';
         <!-- ============================================
              PROFILE HEADER CARD
              ============================================ -->
-        <div class="profile-header-card">
+        <div class="profile-header-card" id="profileHeaderCard">
             <div class="profile-header-left">
+
+                <!-- Avatar wrap: image or initial + edit button -->
                 <div class="profile-avatar-wrap">
+
                     <?php if ($profilePicUrl !== ''): ?>
-                    <img src="<?php echo htmlspecialchars($profilePicUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="Profile"
-                        id="profileAvatarImg" class="profile-avatar-image"
+                    <img src="<?php echo htmlspecialchars($profilePicUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                        alt="Profile picture" id="profileAvatarImg" class="profile-avatar-image"
                         onerror="this.onerror=null; this.style.display='none'; var el=document.getElementById('profileAvatarInitial'); if(el){el.style.display='flex';}">
                     <span class="profile-avatar-placeholder" id="profileAvatarInitial" style="display: none;">
                         <?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>
@@ -196,13 +233,15 @@ $plateLabel   = $plate !== '' ? $plate : 'No plate recorded';
                     <span class="profile-avatar-placeholder" id="profileAvatarInitial" style="display: flex;">
                         <?php echo htmlspecialchars($initial, ENT_QUOTES, 'UTF-8'); ?>
                     </span>
-                    <img src="" alt="Profile" id="profileAvatarImg" class="profile-avatar-image" style="display: none;">
+                    <img src="" alt="Profile picture" id="profileAvatarImg" class="profile-avatar-image"
+                        style="display: none;">
                     <?php endif; ?>
 
-                    <button type="button" class="profile-avatar-edit" id="uploadPictureBtn"
+                    <button type="button" class="profile-avatar-edit is-hidden" id="uploadPictureBtn"
                         aria-label="Change profile picture">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/edit.svg" alt="">
                     </button>
+
                     <input type="file" id="profilePictureInput" accept="image/jpeg,image/png,image/webp" hidden>
                 </div>
 
@@ -228,18 +267,25 @@ $plateLabel   = $plate !== '' ? $plate : 'No plate recorded';
             </div>
 
             <div class="profile-header-right">
-                <div class="profile-stat">
-                    <span class="profile-stat-value"><?php echo number_format($rating, 1); ?></span>
-                    <span class="profile-stat-label">Rating</span>
-                </div>
-                <div class="profile-stat">
-                    <span class="profile-stat-value"><?php echo number_format($deliveries); ?></span>
-                    <span class="profile-stat-label">Deliveries</span>
-                </div>
-                <button type="button" id="editProfileBtn" class="btn-edit">
+
+                <!-- View state: Edit Profile -->
+                <button type="button" id="editProfileBtn" class="btn btn-edit">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/edit.svg" alt="" class="btn-icon">
-                    Edit Profile
+                    <span>Edit Profile</span>
                 </button>
+
+                <!-- Edit state: Cancel + Save Changes.
+                     Save is type="button" and is bound in profile.js to
+                     the same submit pipeline the form's submit event
+                     runs. Nothing relies on native form submission, so
+                     no URL is ever computed from a DOM property. -->
+                <div class="profile-edit-actions is-hidden" id="profileEditActions">
+                    <button type="button" id="cancelEditBtn" class="btn btn-cancel">Cancel</button>
+                    <button type="button" id="saveProfileBtn" class="btn btn-primary">
+                        Save Changes
+                    </button>
+                </div>
+
             </div>
         </div>
 
@@ -267,7 +313,8 @@ $plateLabel   = $plate !== '' ? $plate : 'No plate recorded';
                     <h3>Personal Information</h3>
                 </div>
                 <div class="card-body">
-                    <form id="riderProfileForm" method="POST" action="../backend/handlers/rider-handler.php">
+                    <form id="riderProfileForm" method="POST" action="../backend/handlers/rider-handler.php"
+                        enctype="multipart/form-data" novalidate>
                         <input type="hidden" name="csrf_token"
                             value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                         <input type="hidden" name="action" value="update_profile">
@@ -313,11 +360,6 @@ $plateLabel   = $plate !== '' ? $plate : 'No plate recorded';
                                     value="<?php echo htmlspecialchars($contact, ENT_QUOTES, 'UTF-8'); ?>" disabled
                                     placeholder="09XXXXXXXXX" maxlength="11" inputmode="numeric">
                             </div>
-                        </div>
-
-                        <div class="profile-actions is-hidden" id="profileActions">
-                            <button type="button" id="cancelEditBtn" class="btn btn-cancel">Cancel</button>
-                            <button type="submit" class="btn btn-primary" id="saveProfileBtn">Save Changes</button>
                         </div>
                     </form>
                 </div>
@@ -397,10 +439,57 @@ $plateLabel   = $plate !== '' ? $plate : 'No plate recorded';
     </div>
 </div>
 
+<!-- ============================================
+     EDIT-CONFIRM MODAL
+     ============================================ -->
+<div id="confirmEditModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmEditModalTitle">
+    <div class="modal-overlay" data-modal-dismiss></div>
+    <div class="modal-content confirm-modal-content">
+        <div class="modal-icon confirm-modal-icon">
+            <img src="<?php echo $assetBase; ?>assets/images/icons/edit.svg" alt="">
+        </div>
+        <h3 id="confirmEditModalTitle">Edit Profile?</h3>
+        <p class="text-muted">
+            You are about to edit your profile. Changes you make are only saved once you press
+            <strong>Save Changes</strong>.
+        </p>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-cancel" data-modal-dismiss>Not Now</button>
+            <button type="button" class="btn btn-primary" id="confirmEditProceed">Continue</button>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================
+     UNSAVED-CHANGES MODAL
+     ============================================ -->
+<div id="unsavedChangesModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="unsavedChangesTitle">
+    <div class="modal-overlay" data-modal-dismiss></div>
+    <div class="modal-content confirm-modal-content">
+        <div class="modal-icon confirm-modal-icon">
+            <img src="<?php echo $assetBase; ?>assets/images/icons/error-warning-line.svg" alt="">
+        </div>
+        <h3 id="unsavedChangesTitle">Unsaved Changes</h3>
+        <p class="text-muted">
+            You have unsaved changes on your profile. What would you like to do?
+        </p>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-cancel" id="unsavedStayBtn">Keep Editing</button>
+            <button type="button" class="btn btn-primary" id="unsavedSaveBtn">Save Changes</button>
+        </div>
+    </div>
+</div>
+
 <script>
+window.FITPAL_CSRF_TOKEN = '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>';
+
 window.FITPAL_RIDER_PROFILE = {
     csrfToken: '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>',
-    assetBase: '<?php echo $assetBase; ?>'
+    assetBase: '<?php echo $assetBase; ?>',
+    hasPicture: <?php echo $profilePicUrl !== '' ? 'true' : 'false'; ?>,
+    initialAvatarSrc: '<?php echo htmlspecialchars($profilePicUrl, ENT_QUOTES, 'UTF-8'); ?>',
+    updateEndpoint: '../backend/handlers/rider-handler.php',
+    uploadEndpoint: '../backend/handlers/rider-handler.php'
 };
 </script>
 <script src="../assets/ui/js/profile.js" defer></script>
