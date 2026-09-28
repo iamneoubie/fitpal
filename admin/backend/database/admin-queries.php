@@ -17,9 +17,13 @@
  * Default page size is 5 across every list.
  *
  * @package FitPal
- * @version 6.0 — Adds getRestaurantPermits() to back the new Permits
- *                tab in the restaurant detail modal. Every other
- *                function is unchanged from v5.0.
+ * @version 6.0 — Adds getRestaurantPermits() to back the Permits
+ *                tab in the restaurant detail modal. The
+ *                restaurant_permit table has existed since schema
+ *                v1.1.0 and is written by the restaurant sign-up
+ *                handler; only the admin-side reader was missing,
+ *                which made the new modal tab call an undefined
+ *                function. No other function is changed.
  */
 declare(strict_types=1);
 
@@ -904,21 +908,39 @@ function getRestaurantAccounts(PDO $db, int $restaurantId): array
 }
 
 /**
- * Fetch the permit rows attached to a restaurant, in display order.
- * Backs the Permits tab of the restaurant detail modal.
+ * Fetch every permit row for a restaurant, in upload order.
  *
+ * Rows are written by the restaurant sign-up handler inside the
+ * registration transaction. display_order preserves the sequence
+ * the applicant uploaded them in; permit_id breaks ties if two
+ * rows share a display_order. The admin modal renders one image
+ * preview per row using file_path, with original_name as the
+ * block title and display_order as a small badge.
+ *
+ * The order of the ORDER BY mirrors the schema's
+ * idx_restaurant_order index (restaurant_id, display_order).
+ *
+ * @param PDO $db
+ * @param int $restaurantId
  * @return array<int, array{
- *   permit_id: int,
- *   file_path: string,
- *   original_name: string,
- *   display_order: int,
- *   created_at: string
+ *     permit_id:int,
+ *     restaurant_id:int,
+ *     file_path:string,
+ *     original_name:string,
+ *     display_order:int,
+ *     created_at:string
  * }>
  */
 function getRestaurantPermits(PDO $db, int $restaurantId): array
 {
     $stmt = $db->prepare(
-        "SELECT permit_id, file_path, original_name, display_order, created_at
+        "SELECT
+            permit_id,
+            restaurant_id,
+            file_path,
+            original_name,
+            display_order,
+            created_at
          FROM restaurant_permit
          WHERE restaurant_id = :rid
          ORDER BY display_order ASC, permit_id ASC"

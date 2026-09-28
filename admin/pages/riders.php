@@ -2,20 +2,41 @@
 /**
  * FitPal Admin — Riders List
  *
- * Paginated rider list with verification tabs, search, and a tabbed
+ * Paginated rider list with verification tabs, search, and a nested
  * detail modal.
  *
  * Modal layout:
- *   Personal Info tab → 3 phases (Credentials, Vehicle & Performance, Address + Contacts)
- *   Documents tab     → 2 phases (Profile Picture, ID Documents)
- *   Account tab       → 2 phases (Summary, Recent Deliveries)
+ *   Personal Info tab → sub-tabs: Credentials · Vehicle · Address & Contacts
+ *   Documents tab     → sub-tabs: Profile Picture · ID Documents
+ *   Account tab       → sub-tabs: Summary · Recent Deliveries
  *
- * Footer: [<] [Approve] [Deny] [>]
+ *   Footer: state-driven verification actions.
+ *     The buttons rendered depend on the rider's current
+ *     verification_status. Only the actions that make sense for the
+ *     current state are shown.
+ *
+ *       pending   → [Verify] [Deny]
+ *       verified  → [Suspend]
+ *       denied    → [Verify] [Suspend]
+ *       suspended → [Remove Suspension]     (returns to 'pending')
+ *
+ *     Arrows WRAP at the ends of the current walk set.
+ *
+ * Every rider identity document is rendered as an image preview
+ * (id_path). The formal profile picture is surfaced as its own
+ * phase under Documents.
+ *
+ * No inline CSS. No inline JS. Styles come from admin-tables.css
+ * plus the compact-override block at the end of riders.css.
+ * Behaviour comes from the shared admin-modal.js.
  *
  * @package FitPal
- * @version 8.0 — Corrected file (was a mis-copy of restaurants.php).
- *                Now loads rider data, shows id_path and
- *                profile_picture, and uses the two-level wizard.
+ * @version 10.0 — Footer is now state-driven. Previously it always
+ *                 rendered Approve/Deny. The button set is now a
+ *                 function of the rider's current verification_status,
+ *                 matching the schema's four states (pending,
+ *                 verified, denied, suspended). Remove Suspension
+ *                 returns the rider to pending, not to verified.
  */
 declare(strict_types=1);
 
@@ -306,8 +327,8 @@ function buildRiderUrl(array $overrides = []): string
 
 <!-- ============================================================
      MODAL: Rider Details
-     Tabs: Personal Info (3 phases) / Documents (2 phases) / Account (2 phases)
-     Footer: [<] [Approve] [Deny] [>]
+     Tabs: Personal Info (3 sub-tabs) / Documents (2 sub-tabs) / Account (2 sub-tabs)
+     Footer: state-driven verification actions (see file header)
      ============================================================ -->
 <div class="admin-modal <?php echo $openRider ? 'is-open' : ''; ?>" id="riderDetailsModal"
     aria-hidden="<?php echo $openRider ? 'false' : 'true'; ?>" role="dialog">
@@ -341,20 +362,36 @@ function buildRiderUrl(array $overrides = []): string
         ?>
 
         <div class="admin-modal-tabs" role="tablist">
-            <button type="button" class="admin-modal-tab active" data-tab="personal" role="tab">Personal Info</button>
+            <button type="button" class="admin-modal-tab active" data-tab="personal" role="tab">
+                Personal Info
+            </button>
             <button type="button" class="admin-modal-tab" data-tab="documents" role="tab">
                 Documents <span class="tab-count"><?php echo count($openDocuments); ?></span>
             </button>
-            <button type="button" class="admin-modal-tab" data-tab="account" role="tab">Account</button>
+            <button type="button" class="admin-modal-tab" data-tab="account" role="tab">
+                Account
+            </button>
         </div>
 
         <div class="admin-modal-panel-body">
 
-            <!-- ============ TAB: Personal Info ============ -->
-            <div class="admin-modal-tab-panel active" data-tab-panel="personal">
+            <!-- ============ Tab: Personal Info ============ -->
+            <div class="admin-modal-tab-panel active" data-tab-panel="personal" role="tabpanel">
 
-                <!-- Phase 1: Credentials -->
-                <div class="admin-modal-phase active" data-phase="1">
+                <div class="admin-subtabs" role="tablist">
+                    <button type="button" class="admin-subtab active" data-subtab="credentials" role="tab">
+                        Credentials
+                    </button>
+                    <button type="button" class="admin-subtab" data-subtab="vehicle" role="tab">
+                        Vehicle
+                    </button>
+                    <button type="button" class="admin-subtab" data-subtab="contact" role="tab">
+                        Address &amp; Contacts
+                    </button>
+                </div>
+
+                <!-- Sub-phase: Credentials -->
+                <div class="admin-modal-phase active" data-phase="credentials" role="tabpanel">
                     <h3 class="admin-section-heading">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/id-card-fill.svg" alt="" width="14"
                             height="14" class="btn-icon-no-filter">
@@ -394,8 +431,8 @@ function buildRiderUrl(array $overrides = []): string
                     </div>
                 </div>
 
-                <!-- Phase 2: Vehicle & Performance -->
-                <div class="admin-modal-phase" data-phase="2">
+                <!-- Sub-phase: Vehicle -->
+                <div class="admin-modal-phase" data-phase="vehicle" role="tabpanel">
                     <h3 class="admin-section-heading">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/car-fill.svg" alt="" width="14"
                             height="14" class="btn-icon-no-filter">
@@ -403,12 +440,12 @@ function buildRiderUrl(array $overrides = []): string
                     </h3>
                     <div class="admin-detail-grid">
                         <div class="admin-detail-item">
-                            <span class="admin-detail-label">Vehicle</span>
+                            <span class="admin-detail-label">Vehicle Type</span>
                             <span
                                 class="admin-detail-value"><?php echo htmlspecialchars(ucfirst((string)($openRider['vehicle_type'] ?? '—')), ENT_QUOTES, 'UTF-8'); ?></span>
                         </div>
                         <div class="admin-detail-item">
-                            <span class="admin-detail-label">Plate</span>
+                            <span class="admin-detail-label">Plate Number</span>
                             <span
                                 class="admin-detail-value"><?php echo htmlspecialchars((string)($openRider['vehicle_plate'] ?? '—'), ENT_QUOTES, 'UTF-8'); ?></span>
                         </div>
@@ -423,7 +460,7 @@ function buildRiderUrl(array $overrides = []): string
                                 class="admin-detail-value"><?php echo number_format((int)($openRider['total_deliveries'] ?? 0)); ?></span>
                         </div>
                         <div class="admin-detail-item">
-                            <span class="admin-detail-label">Available</span>
+                            <span class="admin-detail-label">Currently Available</span>
                             <span class="admin-detail-value">
                                 <span
                                     class="badge <?php echo (int)($openRider['is_available'] ?? 0) === 1 ? 'badge-success' : 'badge-secondary'; ?>">
@@ -442,8 +479,8 @@ function buildRiderUrl(array $overrides = []): string
                     </div>
                 </div>
 
-                <!-- Phase 3: Address + Emergency Contacts -->
-                <div class="admin-modal-phase" data-phase="3">
+                <!-- Sub-phase: Address & Contacts -->
+                <div class="admin-modal-phase" data-phase="contact" role="tabpanel">
                     <h3 class="admin-section-heading">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg" alt="" width="14"
                             height="14" class="btn-icon-no-filter">
@@ -509,22 +546,35 @@ function buildRiderUrl(array $overrides = []): string
 
             </div><!-- /personal -->
 
-            <!-- ============ TAB: Documents ============ -->
-            <div class="admin-modal-tab-panel" data-tab-panel="documents">
+            <!-- ============ Tab: Documents ============ -->
+            <div class="admin-modal-tab-panel" data-tab-panel="documents" role="tabpanel">
 
-                <!-- Phase 1: Profile Picture -->
-                <div class="admin-modal-phase active" data-phase="1">
+                <div class="admin-subtabs" role="tablist">
+                    <button type="button" class="admin-subtab active" data-subtab="photo" role="tab">
+                        Profile Picture
+                    </button>
+                    <button type="button" class="admin-subtab" data-subtab="ids" role="tab">
+                        ID Documents <span class="subtab-count"><?php echo count($openDocuments); ?></span>
+                    </button>
+                </div>
+
+                <!-- Sub-phase: Profile Picture -->
+                <div class="admin-modal-phase active" data-phase="photo" role="tabpanel">
                     <h3 class="admin-section-heading">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/image-fill.svg" alt="" width="14"
                             height="14" class="btn-icon-no-filter">
-                        Profile Picture
+                        Formal Photo
                     </h3>
                     <div class="admin-doc-block">
                         <div class="admin-doc-head">
-                            <p class="admin-doc-title">Formal Photo</p>
-                            <span class="admin-doc-meta">
-                                <?php echo $picUrl !== '' ? 'Uploaded' : 'Not uploaded'; ?>
-                            </span>
+                            <p class="admin-doc-title">Profile Picture</p>
+                            <div class="admin-doc-meta">
+                                <?php if ($picUrl !== ''): ?>
+                                <span>Uploaded</span>
+                                <?php else: ?>
+                                <span class="badge badge-secondary">Not uploaded</span>
+                                <?php endif; ?>
+                            </div>
                         </div>
                         <div class="admin-doc-image">
                             <?php if ($picUrl !== ''): ?>
@@ -541,8 +591,8 @@ function buildRiderUrl(array $overrides = []): string
                     </div>
                 </div>
 
-                <!-- Phase 2: ID Documents -->
-                <div class="admin-modal-phase" data-phase="2">
+                <!-- Sub-phase: ID Documents -->
+                <div class="admin-modal-phase" data-phase="ids" role="tabpanel">
                     <h3 class="admin-section-heading">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/id-card-fill.svg" alt="" width="14"
                             height="14" class="btn-icon-no-filter">
@@ -587,11 +637,20 @@ function buildRiderUrl(array $overrides = []): string
 
             </div><!-- /documents -->
 
-            <!-- ============ TAB: Account ============ -->
-            <div class="admin-modal-tab-panel" data-tab-panel="account">
+            <!-- ============ Tab: Account ============ -->
+            <div class="admin-modal-tab-panel" data-tab-panel="account" role="tabpanel">
 
-                <!-- Phase 1: Summary -->
-                <div class="admin-modal-phase active" data-phase="1">
+                <div class="admin-subtabs" role="tablist">
+                    <button type="button" class="admin-subtab active" data-subtab="summary" role="tab">
+                        Summary
+                    </button>
+                    <button type="button" class="admin-subtab" data-subtab="deliveries" role="tab">
+                        Recent Deliveries <span class="subtab-count"><?php echo count($openDeliveries); ?></span>
+                    </button>
+                </div>
+
+                <!-- Sub-phase: Summary -->
+                <div class="admin-modal-phase active" data-phase="summary" role="tabpanel">
                     <h3 class="admin-section-heading">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/list-settings-fill.svg" alt="" width="14"
                             height="14" class="btn-icon-no-filter">
@@ -624,8 +683,8 @@ function buildRiderUrl(array $overrides = []): string
                     </div>
                 </div>
 
-                <!-- Phase 2: Recent Deliveries -->
-                <div class="admin-modal-phase" data-phase="2">
+                <!-- Sub-phase: Recent Deliveries -->
+                <div class="admin-modal-phase" data-phase="deliveries" role="tabpanel">
                     <h3 class="admin-section-heading">
                         <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt="" width="14" height="14"
                             class="btn-icon-no-filter">
@@ -663,45 +722,110 @@ function buildRiderUrl(array $overrides = []): string
 
         </div>
 
+        <!-- ============================================================
+             Footer — state-driven verification actions
+
+             Buttons rendered depend on $verification:
+               pending   → [Verify] [Deny]
+               verified  → [Suspend]
+               denied    → [Verify] [Suspend]
+               suspended → [Remove Suspension]
+
+             Each button posts status=<target> to set_rider_verification.
+             Remove Suspension posts status=pending (returns to pending,
+             not verified, so the reviewer can choose again).
+             ============================================================ -->
         <div class="admin-modal-tab-footer">
-            <button type="button" class="tab-arrow" data-phase-prev aria-label="Previous phase">
+            <button type="button" class="tab-arrow" data-phase-prev aria-label="Previous">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-s-line.svg" alt="" width="16"
-                    height="16"
-                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg'">
+                    height="16">
             </button>
 
-            <div class="admin-modal-footer-actions">
-                <form method="POST" action="../backend/handlers/admin-handler.php">
-                    <input type="hidden" name="csrf_token"
-                        value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
-                    <input type="hidden" name="action" value="set_rider_verification">
-                    <input type="hidden" name="rider_id" value="<?php echo (int)$openRider['delivery_rider_id']; ?>">
-                    <input type="hidden" name="status" value="verified">
-                    <input type="hidden" name="redirect_to" value="riders.php">
-                    <button type="submit" class="btn btn-primary btn-sm"
-                        <?php echo $verification === 'verified' ? 'disabled' : ''; ?>>
-                        Approve
-                    </button>
-                </form>
+            <div class="admin-modal-footer-center">
+                <div class="admin-modal-footer-actions">
 
-                <form method="POST" action="../backend/handlers/admin-handler.php">
-                    <input type="hidden" name="csrf_token"
-                        value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
-                    <input type="hidden" name="action" value="set_rider_verification">
-                    <input type="hidden" name="rider_id" value="<?php echo (int)$openRider['delivery_rider_id']; ?>">
-                    <input type="hidden" name="status" value="denied">
-                    <input type="hidden" name="redirect_to" value="riders.php">
-                    <button type="submit" class="btn btn-danger btn-sm"
-                        <?php echo $verification === 'denied' ? 'disabled' : ''; ?>>
-                        Deny
-                    </button>
-                </form>
+                    <?php if ($verification === 'pending'): ?>
+
+                    <form method="POST" action="../backend/handlers/admin-handler.php">
+                        <input type="hidden" name="csrf_token"
+                            value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="set_rider_verification">
+                        <input type="hidden" name="rider_id"
+                            value="<?php echo (int)$openRider['delivery_rider_id']; ?>">
+                        <input type="hidden" name="status" value="verified">
+                        <input type="hidden" name="redirect_to" value="riders.php">
+                        <button type="submit" class="btn btn-primary btn-sm">Verify</button>
+                    </form>
+
+                    <form method="POST" action="../backend/handlers/admin-handler.php">
+                        <input type="hidden" name="csrf_token"
+                            value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="set_rider_verification">
+                        <input type="hidden" name="rider_id"
+                            value="<?php echo (int)$openRider['delivery_rider_id']; ?>">
+                        <input type="hidden" name="status" value="denied">
+                        <input type="hidden" name="redirect_to" value="riders.php">
+                        <button type="submit" class="btn btn-danger btn-sm">Deny</button>
+                    </form>
+
+                    <?php elseif ($verification === 'verified'): ?>
+
+                    <form method="POST" action="../backend/handlers/admin-handler.php">
+                        <input type="hidden" name="csrf_token"
+                            value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="set_rider_verification">
+                        <input type="hidden" name="rider_id"
+                            value="<?php echo (int)$openRider['delivery_rider_id']; ?>">
+                        <input type="hidden" name="status" value="suspended">
+                        <input type="hidden" name="redirect_to" value="riders.php">
+                        <button type="submit" class="btn btn-danger btn-sm">Suspend</button>
+                    </form>
+
+                    <?php elseif ($verification === 'denied'): ?>
+
+                    <form method="POST" action="../backend/handlers/admin-handler.php">
+                        <input type="hidden" name="csrf_token"
+                            value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="set_rider_verification">
+                        <input type="hidden" name="rider_id"
+                            value="<?php echo (int)$openRider['delivery_rider_id']; ?>">
+                        <input type="hidden" name="status" value="verified">
+                        <input type="hidden" name="redirect_to" value="riders.php">
+                        <button type="submit" class="btn btn-primary btn-sm">Verify</button>
+                    </form>
+
+                    <form method="POST" action="../backend/handlers/admin-handler.php">
+                        <input type="hidden" name="csrf_token"
+                            value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="set_rider_verification">
+                        <input type="hidden" name="rider_id"
+                            value="<?php echo (int)$openRider['delivery_rider_id']; ?>">
+                        <input type="hidden" name="status" value="suspended">
+                        <input type="hidden" name="redirect_to" value="riders.php">
+                        <button type="submit" class="btn btn-danger btn-sm">Suspend</button>
+                    </form>
+
+                    <?php elseif ($verification === 'suspended'): ?>
+
+                    <form method="POST" action="../backend/handlers/admin-handler.php">
+                        <input type="hidden" name="csrf_token"
+                            value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="set_rider_verification">
+                        <input type="hidden" name="rider_id"
+                            value="<?php echo (int)$openRider['delivery_rider_id']; ?>">
+                        <input type="hidden" name="status" value="pending">
+                        <input type="hidden" name="redirect_to" value="riders.php">
+                        <button type="submit" class="btn btn-primary btn-sm">Remove Suspension</button>
+                    </form>
+
+                    <?php endif; ?>
+
+                </div>
             </div>
 
-            <button type="button" class="tab-arrow" data-phase-next aria-label="Next phase">
+            <button type="button" class="tab-arrow" data-phase-next aria-label="Next">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-right-s-line.svg" alt="" width="16"
-                    height="16"
-                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/arrow-right-long-line.svg'">
+                    height="16">
             </button>
         </div>
         <?php endif; ?>

@@ -6,24 +6,27 @@
  * a per-customer detail modal that uses a nested navigation layout:
  *
  *   Top tabs (underlined):
- *     Personal Info  — sub-tabs: Credentials | Profile | Preferences
+ *     Personal Info  — sub-tabs: Photo | Credentials | Profile | Preferences
  *     Addresses      — flat list, no sub-tabs
  *     Account        — sub-tabs: Account Summary | Transactions
  *
  *   Footer:
- *     Centered horizontal action buttons (Activate / Deactivate).
- *     The button matching the customer's current state is disabled
- *     and greyed, so only the opposite action is clickable.
+ *     The button rendered depends on the customer's current state:
+ *       Active   → [Deactivate]
+ *       Inactive → [Activate]
+ *
+ *     Arrows WRAP at the ends of the current walk set.
  *
  * No inline CSS. No inline JS. Styles come from admin-tables.css
- * and customers.css. Behaviour comes from the shared admin-modal.js.
+ * plus the compact-override block at the end of customers.css.
+ * Behaviour comes from the shared admin-modal.js.
  *
  * @package FitPal
- * @version 9.0 — Sub-tabs are now directly clickable. Footer holds
- *                a horizontal button group. Arrow buttons are
- *                retained in markup for compatibility but hidden
- *                by the shared modal controller whenever sub-tabs
- *                are present.
+ * @version 12.0 — Footer is now state-driven. Instead of showing both
+ *                 Activate and Deactivate with one disabled, only the
+ *                 action that applies to the current state is shown.
+ *                 Active customers show Deactivate; inactive customers
+ *                 show Activate.
  */
 declare(strict_types=1);
 
@@ -322,7 +325,13 @@ function buildCustomerUrl(array $overrides = []): string
         </div>
         <?php else: ?>
 
-        <?php $openIsActive = (int)$openCustomer['is_active'] === 1; ?>
+        <?php
+        $openIsActive = (int)$openCustomer['is_active'] === 1;
+        $openInitial  = adminInitial($openCustomer);
+        $openName     = adminName($openCustomer);
+        $openPic      = (string)($openCustomer['profile_picture'] ?? '');
+        $openPicUrl   = $openPic !== '' ? adminAssetUrl($assetBase, $openPic) : '';
+        ?>
 
         <!-- Top-level tabs -->
         <div class="admin-modal-tabs" role="tablist">
@@ -346,7 +355,10 @@ function buildCustomerUrl(array $overrides = []): string
 
                 <!-- Sub-tab row -->
                 <div class="admin-subtabs" role="tablist">
-                    <button type="button" class="admin-subtab active" data-subtab="credentials" role="tab">
+                    <button type="button" class="admin-subtab active" data-subtab="photo" role="tab">
+                        Photo
+                    </button>
+                    <button type="button" class="admin-subtab" data-subtab="credentials" role="tab">
                         Credentials
                     </button>
                     <button type="button" class="admin-subtab" data-subtab="profile" role="tab">
@@ -357,13 +369,42 @@ function buildCustomerUrl(array $overrides = []): string
                     </button>
                 </div>
 
+                <!-- Sub-phase: Photo -->
+                <div class="admin-modal-phase active" data-phase="photo" role="tabpanel">
+                    <div class="admin-photo-block">
+                        <div class="admin-photo-frame">
+                            <?php if ($openPicUrl !== ''): ?>
+                            <img src="<?php echo htmlspecialchars($openPicUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                                alt="<?php echo htmlspecialchars($openName, ENT_QUOTES, 'UTF-8'); ?>"
+                                class="admin-photo-image">
+                            <?php else: ?>
+                            <div class="admin-photo-fallback" aria-label="No profile picture">
+                                <?php echo htmlspecialchars($openInitial, ENT_QUOTES, 'UTF-8'); ?>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+                        <div class="admin-photo-meta">
+                            <p class="admin-photo-name">
+                                <?php echo htmlspecialchars($openName, ENT_QUOTES, 'UTF-8'); ?>
+                            </p>
+                            <p class="admin-photo-subtitle">
+                                <?php if ($openPicUrl !== ''): ?>
+                                Profile picture on file
+                                <?php else: ?>
+                                No profile picture uploaded
+                                <?php endif; ?>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Sub-phase: Credentials -->
-                <div class="admin-modal-phase active" data-phase="credentials" role="tabpanel">
+                <div class="admin-modal-phase" data-phase="credentials" role="tabpanel">
                     <div class="admin-detail-grid">
                         <div class="admin-detail-item">
                             <span class="admin-detail-label">Full Name</span>
                             <span class="admin-detail-value">
-                                <?php echo htmlspecialchars(adminName($openCustomer), ENT_QUOTES, 'UTF-8'); ?>
+                                <?php echo htmlspecialchars($openName, ENT_QUOTES, 'UTF-8'); ?>
                             </span>
                         </div>
                         <div class="admin-detail-item">
@@ -592,11 +633,13 @@ function buildCustomerUrl(array $overrides = []): string
 
         </div>
 
-        <!-- ============================================
-             Footer: centered horizontal action buttons.
-             Arrows are hidden by the shared controller
-             whenever sub-tabs are present.
-             ============================================ -->
+        <!-- ============================================================
+             Footer — state-driven account action
+
+             Only the action that applies to the current state is shown:
+               Active   → [Deactivate]
+               Inactive → [Activate]
+             ============================================================ -->
         <div class="admin-modal-tab-footer">
             <button type="button" class="tab-arrow" data-phase-prev aria-label="Previous">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-s-line.svg" alt="" width="16"
@@ -611,14 +654,13 @@ function buildCustomerUrl(array $overrides = []): string
                     <input type="hidden" name="customer_id" value="<?php echo (int)$openCustomer['customer_id']; ?>">
                     <input type="hidden" name="redirect_to" value="customers.php">
 
-                    <button type="submit" name="activate" value="1" class="btn btn-primary btn-sm"
-                        <?php echo $openIsActive ? 'disabled' : ''; ?>>
-                        Activate
-                    </button>
-                    <button type="submit" name="activate" value="0" class="btn btn-danger btn-sm"
-                        <?php echo $openIsActive ? '' : 'disabled'; ?>>
-                        Deactivate
-                    </button>
+                    <?php if ($openIsActive): ?>
+                    <input type="hidden" name="activate" value="0">
+                    <button type="submit" class="btn btn-danger btn-sm">Deactivate</button>
+                    <?php else: ?>
+                    <input type="hidden" name="activate" value="1">
+                    <button type="submit" class="btn btn-primary btn-sm">Activate</button>
+                    <?php endif; ?>
                 </form>
             </div>
 

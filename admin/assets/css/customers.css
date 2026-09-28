@@ -1,26 +1,18 @@
 /**
  * FitPal Admin — Customers List Page Styles
- * Version 7.0 — Self-contained, matches admin-tables.css v10.
+ * Version 9.0 — Adds a scoped override block for the compacted
+ *               wide-panel width, the unified footer control row,
+ *               and the tightened sub-tab strip. Everything else
+ *               is unchanged from v8.0.
  *
- * This file is intentionally complete. It renders the entire
- * customers list page — shell, header, filter bar, table, modal,
- * tab bar, sub-tab strip, footer action bar — without depending
- * on load order. Every rule that also lives in admin-tables.css
- * is repeated here with the same values, so the page looks
- * correct whether or not the shared module loads first.
- *
- * Structure the modal renders:
- *
- *   .admin-modal-header
- *   .admin-modal-tabs            — underlined top tabs
- *   .admin-modal-panel-body
- *     .admin-modal-tab-panel     — one per top tab
- *       .admin-subtabs           — segmented sub-tab strip
- *       .admin-modal-phase       — one per sub-tab
- *   .admin-modal-tab-footer      — right-aligned action buttons
+ * The base modal chrome still comes from admin-tables.css. This
+ * file re-declares the shared rules it needs (so the page renders
+ * even if admin-tables.css fails to load) and then layers the
+ * compact layout on top of that chrome via the OVERRIDE block at
+ * the end of the file.
  *
  * @package FitPal
- * @version 7.0
+ * @version 9.0
  */
 
 /* ============================================
@@ -563,7 +555,7 @@ html {
 }
 
 .admin-modal-panel-wide {
-  width: 820px;
+  width: 720px;
 }
 
 .admin-modal-header {
@@ -619,10 +611,6 @@ html {
 
 /* ============================================
    MODAL — TOP TAB BAR
-   ============================================
-   Underlined tabs on a tinted strip. The active tab gets a
-   primary-coloured label and a 2px underline inset from the
-   tab's edges.
    ============================================ */
 
 .admin-modal-tabs {
@@ -769,25 +757,30 @@ html {
 
 /* ============================================
    MODAL — SUB-TAB ROW
-   ============================================
-   A segmented-control strip. The row sits on a tinted track
-   with a rounded corner. Each sub-tab is a pill; the active
-   one is a raised white pill with a primary-tinted label.
    ============================================ */
 
 .admin-subtabs {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
-  margin: -6px -6px 20px -6px;
-  padding: 6px;
+  margin: 0 0 20px 0;
+  padding: 5px;
   background: var(--gray-100);
   border-radius: var(--radius-lg);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.admin-subtabs::-webkit-scrollbar {
+  display: none;
 }
 
 .admin-subtab {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   padding: 8px 16px;
   border-radius: var(--radius-base);
@@ -799,6 +792,7 @@ html {
   font-family: inherit;
   cursor: pointer;
   white-space: nowrap;
+  flex: 0 0 auto;
   transition:
     background 0.15s ease,
     color 0.15s ease,
@@ -854,35 +848,95 @@ html {
 }
 
 /* ============================================
+   MODAL — PHOTO BLOCK
+   ============================================ */
+
+.admin-photo-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+  padding: 24px 16px 8px 16px;
+}
+
+.admin-photo-frame {
+  width: 128px;
+  height: 128px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--primary);
+  color: var(--white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(89, 193, 74, 0.18);
+}
+
+.admin-photo-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.admin-photo-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 52px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.admin-photo-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.admin-photo-name {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.admin-photo-subtitle {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--gray-500);
+}
+
+/* ============================================
    MODAL — FOOTER
-   ============================================
-   Tinted strip matching the top tab bar. Actions are
-   right-aligned. When arrows are present, the first arrow is
-   pushed left with margin-right: auto.
    ============================================ */
 
 .admin-modal-tab-footer {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 12px;
   padding: 14px 22px;
   border-top: 1px solid var(--gray-200);
   background: var(--gray-50);
   flex-shrink: 0;
-  flex-wrap: wrap;
-}
-
-.admin-modal-tab-footer .tab-arrow:first-child {
-  margin-right: auto;
+  flex-wrap: nowrap;
 }
 
 .admin-modal-footer-center {
   display: flex;
   flex-direction: row;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 10px;
+  flex: 1;
   min-width: 0;
 }
 
@@ -890,7 +944,7 @@ html {
   display: inline-flex;
   flex-direction: row;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 10px;
   flex-wrap: wrap;
 }
@@ -950,25 +1004,6 @@ html {
   height: 16px;
   display: block;
   flex-shrink: 0;
-}
-
-.admin-modal-tab-nav {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.admin-modal-tab-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.admin-modal-tab-actions .btn {
-  min-width: 120px;
-  justify-content: center;
-  padding: 10px 18px;
 }
 
 /* ============================================
@@ -1426,7 +1461,7 @@ html {
   }
 
   .admin-subtabs {
-    margin: -4px -4px 16px -4px;
+    margin: 0 0 16px 0;
     padding: 4px;
     gap: 3px;
   }
@@ -1435,25 +1470,33 @@ html {
     font-size: var(--font-size-xs);
   }
 
+  .admin-photo-frame {
+    width: 104px;
+    height: 104px;
+  }
+
+  .admin-photo-fallback {
+    font-size: 42px;
+  }
+
+  .admin-photo-name {
+    font-size: var(--font-size-base);
+  }
+
   .admin-modal-tab-footer {
     padding: 12px 16px;
     gap: 8px;
-    justify-content: stretch;
-  }
-  .admin-modal-tab-footer .tab-arrow:first-child {
-    margin-right: 0;
+    flex-wrap: nowrap;
   }
   .admin-modal-footer-center {
-    flex: 1;
-    justify-content: stretch;
+    gap: 8px;
   }
   .admin-modal-footer-actions {
-    flex: 1;
-    justify-content: stretch;
+    gap: 8px;
   }
   .admin-modal-footer-actions .btn {
-    flex: 1 1 0;
     min-width: 0;
+    flex: 1 1 0;
     padding: 9px 12px;
     font-size: var(--font-size-xs);
   }
@@ -1512,6 +1555,10 @@ html {
   }
   .admin-modal-tab-footer {
     padding: 10px 12px;
+    gap: 6px;
+  }
+  .admin-modal-footer-actions {
+    gap: 6px;
   }
   .admin-modal-footer-actions .btn {
     padding: 8px 10px;
@@ -1557,5 +1604,162 @@ html {
   .admin-modal-tab-nav .tab-arrow {
     animation: none !important;
     transition: none !important;
+  }
+}
+
+/* ============================================================
+   OVERRIDE BLOCK — COMPACT MODAL FOOTER + SUB-TAB SPACING
+   ============================================================
+   These rules are scoped to the customers modal on purpose.
+   They refine the shared chrome so that:
+
+     1. The wide panel (720px, set above) does not waste
+        horizontal space. The base admin-tables.css ships 820px;
+        the customers page overrides that down to 720px so the
+        detail grid and sub-tab strip stay balanced.
+
+     2. The footer reads as one connected control row:
+        [<] [Activate] [Deactivate] [>]. Arrows and buttons share
+        the same height and are laid out with a tight, even gap
+        instead of the space-between layout inherited from
+        admin-tables.css.
+
+     3. The sub-tab strip sits flush against the panel padding
+        instead of leaving unbalanced whitespace on the right
+        when the strip has fewer than the maximum number of pills.
+
+   Nothing here changes the structure of the page markup. It only
+   re-tunes the spacing once the panel is narrower.
+   ============================================================ */
+
+/* --- 1. Compact wide panel --- */
+.admin-modal-panel.admin-modal-panel-wide {
+  width: 720px;
+}
+
+/* --- 2. Unified footer control row --- */
+.admin-modal-tab-footer {
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 18px;
+}
+
+.admin-modal-tab-footer .tab-arrow {
+  width: 40px;
+  height: 40px;
+}
+
+.admin-modal-tab-footer .admin-modal-footer-center {
+  flex: 0 1 auto;
+  gap: 8px;
+}
+
+.admin-modal-tab-footer .admin-modal-footer-actions {
+  gap: 8px;
+}
+
+.admin-modal-tab-footer .admin-modal-footer-actions .btn {
+  /* Identical width for Activate and Deactivate so the pair reads
+     as a matched set instead of one wide / one narrow. Height is
+     matched to the arrows so the full row aligns on one baseline. */
+  min-width: 128px;
+  height: 40px;
+  padding: 0 18px;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  border-radius: var(--radius-base);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+/* --- 3. Tighter sub-tab strip --- */
+.admin-modal-tab-panel > .admin-subtabs {
+  /* Align the strip flush with the panel edges. The pills stretch
+     to fill the row evenly so no trailing white gap is left on
+     the right when the strip has fewer pills than the row can
+     hold. Wrapping is disabled in the base rule; with flex: 1 on
+     each pill the visible count determines the pill width. */
+  gap: 4px;
+  padding: 5px;
+  margin: 0 0 18px 0;
+}
+
+.admin-modal-tab-panel > .admin-subtabs > .admin-subtab {
+  flex: 1 1 0;
+  padding: 8px 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* When the sub-tab strip has a count badge, keep it tight so the
+   pill text stays readable inside the equal-width pills. */
+.admin-modal-tab-panel > .admin-subtabs > .admin-subtab .subtab-count {
+  flex-shrink: 0;
+}
+
+/* --- 4. Narrow the detail grid gutter slightly to match --- */
+.admin-modal-panel-wide .admin-detail-grid {
+  gap: 14px 20px;
+}
+
+/* --- 5. On small screens, restore arrow size to match the
+       full-width action buttons that stack beneath. --- */
+@media (max-width: 768px) {
+  .admin-modal-panel.admin-modal-panel-wide {
+    width: 100%;
+  }
+
+  .admin-modal-tab-footer {
+    flex-wrap: nowrap;
+    padding: 12px 14px;
+    gap: 6px;
+  }
+
+  .admin-modal-tab-footer .tab-arrow {
+    width: 38px;
+    height: 38px;
+  }
+
+  .admin-modal-tab-footer .admin-modal-footer-actions .btn {
+    min-width: 0;
+    flex: 1 1 0;
+    height: 38px;
+    padding: 0 12px;
+    font-size: var(--font-size-xs);
+  }
+
+  .admin-modal-tab-panel > .admin-subtabs {
+    margin: 0 0 14px 0;
+  }
+
+  .admin-modal-tab-panel > .admin-subtabs > .admin-subtab {
+    padding: 7px 10px;
+    font-size: var(--font-size-xs);
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-modal-tab-footer {
+    padding: 10px 12px;
+    gap: 5px;
+  }
+
+  .admin-modal-tab-footer .tab-arrow {
+    width: 34px;
+    height: 34px;
+  }
+
+  .admin-modal-tab-footer .admin-modal-footer-actions .btn {
+    height: 34px;
+    padding: 0 10px;
+    font-size: 11px;
+  }
+
+  .admin-modal-tab-panel > .admin-subtabs > .admin-subtab {
+    padding: 6px 8px;
+    font-size: 11px;
   }
 }

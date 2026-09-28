@@ -9,55 +9,28 @@
  *   Level 2 — sub-tabs       .admin-subtab[data-subtab]
  *                             .admin-modal-phase[data-phase]
  *
- * Both levels are directly clickable. The footer arrows are kept
- * only as an optional previous/next aid for modals that declare
- * top tabs without sub-tabs (the not-yet-migrated restaurants and
- * riders modals). Modals that declare sub-tabs hide the footer
- * arrows, since the sub-tab row is the primary navigation.
+ * Both levels are directly clickable. The footer arrows now WRAP:
+ * reaching the last item advances to the first, and reaching the
+ * first item steps back to the last. This applies to whichever
+ * walk set is currently active:
  *
- * Modal contract
- * --------------
- *   <div class="admin-modal">
- *     <div class="admin-modal-backdrop" data-close-url="..."></div>
- *     <div class="admin-modal-panel">
- *       <div class="admin-modal-header">...</div>
+ *   - If the active top tab has sub-tabs, the arrows walk the
+ *     sub-tabs and wrap within that strip.
+ *   - If the active top tab has no sub-tabs (like Addresses),
+ *     the arrows walk the top tabs and wrap within that strip.
  *
- *       <div class="admin-modal-tabs">
- *         <button class="admin-modal-tab active" data-tab="personal">Personal Info</button>
- *         <button class="admin-modal-tab" data-tab="addresses">Addresses</button>
- *       </div>
- *
- *       <div class="admin-modal-panel-body">
- *         <div class="admin-modal-tab-panel active" data-tab-panel="personal">
- *           <div class="admin-subtabs">
- *             <button class="admin-subtab active" data-subtab="credentials">Credentials</button>
- *             <button class="admin-subtab" data-subtab="profile">Profile</button>
- *           </div>
- *           <div class="admin-modal-phase active" data-phase="credentials">...</div>
- *           <div class="admin-modal-phase" data-phase="profile">...</div>
- *         </div>
- *         <div class="admin-modal-tab-panel" data-tab-panel="addresses">
- *           ... (no subtabs — flat list)
- *         </div>
- *       </div>
- *
- *       <div class="admin-modal-tab-footer">
- *         <button class="tab-arrow" data-phase-prev>...</button>
- *         <div class="admin-modal-footer-center">
- *           <form class="admin-modal-footer-actions">...</form>
- *         </div>
- *         <button class="tab-arrow" data-phase-next>...</button>
- *       </div>
- *     </div>
- *   </div>
+ * Arrows are only disabled when the walk set has fewer than two
+ * items, because wrapping makes the ends no longer terminal.
  *
  * @package FitPal
- * @version 8.0 — Sub-phases are driven by directly-clickable
- *                sub-tabs. The footer arrows are hidden whenever a
- *                modal declares any sub-tabs, and are only used as
- *                a top-tab fallback on modals that do not.
+ * @version 10.0 — Arrows wrap instead of clamping at the ends.
+ *                Previously prev was disabled at index 0 and next
+ *                was disabled at the last index. Now both arrows
+ *                step cyclically, so a reviewer can loop through
+ *                every phase without having to reverse direction
+ *                at the end. Arrows are only disabled when the
+ *                active walk set has zero or one item.
  */
-
 (function () {
   "use strict";
 
@@ -86,22 +59,28 @@
         return;
       }
 
-      // Does the modal use sub-tabs anywhere?
-      var subtabRows = modal.querySelectorAll(".admin-subtabs");
-      var usesSubTabs = subtabRows.length > 0;
-
-      // Hide the footer arrows when sub-tabs are in play — the
-      // sub-tab row is the primary navigation and the arrows would
-      // just be visual noise.
-      if (usesSubTabs) {
-        if (prevArrow) prevArrow.style.display = "none";
-        if (nextArrow) nextArrow.style.display = "none";
-      }
-
       var activeTabIndex = 0;
 
+      function getActivePanel() {
+        var panels = panelBody.querySelectorAll("[data-tab-panel]");
+        return panels[activeTabIndex] || null;
+      }
+
+      function getActiveSubtabIndex(panel) {
+        if (!panel) return -1;
+        var subs = panel.querySelectorAll(".admin-subtab");
+        for (var i = 0; i < subs.length; i++) {
+          if (subs[i].classList.contains("active")) return i;
+        }
+        return -1;
+      }
+
       function activateTab(index) {
-        if (index < 0 || index >= tabButtons.length) return;
+        var count = tabButtons.length;
+        if (count === 0) return;
+
+        // Wrap into range rather than clamping.
+        index = ((index % count) + count) % count;
         activeTabIndex = index;
 
         tabButtons.forEach(function (btn, i) {
@@ -114,6 +93,7 @@
         });
 
         panelBody.scrollTop = 0;
+        updateArrowState();
       }
 
       function activateSubtab(panel, subtabKey) {
@@ -136,6 +116,73 @@
         });
 
         panelBody.scrollTop = 0;
+        updateArrowState();
+      }
+
+      // Decide what the arrows should do right now.
+      //
+      // Because arrows wrap, they are only disabled when the
+      // current walk set has fewer than two items — there is
+      // nothing to wrap between in that case.
+      function updateArrowState() {
+        var panel = getActivePanel();
+        var subs = panel ? panel.querySelectorAll(".admin-subtab") : [];
+        var walkCount = subs.length > 0 ? subs.length : tabButtons.length;
+        var canWalk = walkCount > 1;
+
+        if (prevArrow) prevArrow.disabled = !canWalk;
+        if (nextArrow) nextArrow.disabled = !canWalk;
+      }
+
+      // Determine which walk set is active right now and return
+      // a descriptor so prev/next share the same dispatch logic.
+      function getWalkSet() {
+        var panel = getActivePanel();
+        var subs = panel ? panel.querySelectorAll(".admin-subtab") : [];
+        if (subs.length > 0) {
+          return {
+            kind: "subtab",
+            panel: panel,
+            items: subs,
+            index: getActiveSubtabIndex(panel),
+          };
+        }
+        return {
+          kind: "tab",
+          panel: null,
+          items: tabButtons,
+          index: activeTabIndex,
+        };
+      }
+
+      function arrowPrev() {
+        var walk = getWalkSet();
+        var count = walk.items.length;
+        if (count < 2) return;
+
+        var target = ((walk.index - 1) % count + count) % count;
+
+        if (walk.kind === "subtab") {
+          var btn = walk.items[target];
+          activateSubtab(walk.panel, btn.getAttribute("data-subtab"));
+        } else {
+          activateTab(target);
+        }
+      }
+
+      function arrowNext() {
+        var walk = getWalkSet();
+        var count = walk.items.length;
+        if (count < 2) return;
+
+        var target = (walk.index + 1) % count;
+
+        if (walk.kind === "subtab") {
+          var btn = walk.items[target];
+          activateSubtab(walk.panel, btn.getAttribute("data-subtab"));
+        } else {
+          activateTab(target);
+        }
       }
 
       // Top tab clicks
@@ -159,23 +206,17 @@
         });
       });
 
-      // Footer arrows are top-tab navigation only (used when the
-      // modal has no sub-tabs at all).
-      if (!usesSubTabs) {
-        if (prevArrow) {
-          prevArrow.addEventListener("click", function (e) {
-            e.preventDefault();
-            activateTab(activeTabIndex - 1);
-          });
-          prevArrow.disabled = activeTabIndex === 0;
-        }
-        if (nextArrow) {
-          nextArrow.addEventListener("click", function (e) {
-            e.preventDefault();
-            activateTab(activeTabIndex + 1);
-          });
-          nextArrow.disabled = activeTabIndex === tabButtons.length - 1;
-        }
+      if (prevArrow) {
+        prevArrow.addEventListener("click", function (e) {
+          e.preventDefault();
+          arrowPrev();
+        });
+      }
+      if (nextArrow) {
+        nextArrow.addEventListener("click", function (e) {
+          e.preventDefault();
+          arrowNext();
+        });
       }
 
       modal.goToPhase = function (index) {
