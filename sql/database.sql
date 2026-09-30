@@ -1,11 +1,52 @@
 -- =====================================================
--- DATABASE: fitpal_food_delivery v.1.3.1
+-- DATABASE: fitpal_food_delivery v.1.4.0
 -- Dietary Meal Ordering and Restaurant Nutrition Analytics System
 -- WITH FULL CUSTOMIZABLE MEAL SUPPORT
 -- ACID Compliant with Proper Constraints
 --
--- v1.3.1 changes
+-- v1.4.0 changes
 -- --------------
+--   ~ Table 23: feedback remodeled as a polymorphic
+--     per-order review stream.
+--
+--     Old shape: one row per order, customer-only, with two
+--     fixed rating dimensions (restaurant_rating,
+--     delivery_rider_rating) and real FKs on customer_id,
+--     restaurant_branch_id, and delivery_rider_id.
+--
+--     New shape: one row per author per order. Any party on
+--     the order (customer, restaurant, rider) may author a
+--     row. Author is polymorphic via feedback_from_type +
+--     feedback_from_id, mirroring the message table's
+--     sender_type / sender_id pair. A single `rating`
+--     column replaces the two fixed dimensions, and
+--     feedback_content carries the written comment that
+--     previously lived on feedback_product.
+--
+--     FK trade-off: feedback_from_id has no FK because it
+--     points at three different parent tables. Referential
+--     integrity for the author reference is the
+--     application layer's job, same as message.sender_id.
+--     order_id keeps its real FK and cascades, so deleting
+--     an order still removes its feedback.
+--
+--     UNIQUE KEY unique_feedback_per_author
+--     (order_id, feedback_from_type, feedback_from_id)
+--     replaces unique_feedback_per_order. A customer, the
+--     restaurant, and the rider can each post exactly one
+--     row on the same order.
+--
+--   ~ Views rewritten to match the new shape:
+--       - restaurant_performance
+--       - customer_dietary_analysis
+--       - rider_performance (new)
+--
+--   ~ feedback_product is retained unchanged. It is no
+--     longer the only home for written comments, but
+--     per-product comments keep their own table.
+--
+-- v1.3.1 changes (retained)
+-- -------------------------
 --   ~ Table 9: administrator_profile now includes a
 --     `profile_picture` column. This allows the admin role
 --     to upload and display a profile picture, matching the
@@ -734,55 +775,79 @@ CREATE TABLE transaction (
 ) COMMENT = 'Financial transaction history';
 
 -- =====================================================
--- 23. FEEDBACK (parent — one row per order)
+-- 23. FEEDBACK (polymorphic per-order review stream)
 --
 -- Cardinality:
---     one order     ->  at most one feedback row
+--     one order     ->  0..3 feedback rows
+--                        (at most one per author role)
 --     one feedback  ->  zero or more feedback_product rows
 --
--- Rating dimensions on this row:
---     restaurant_rating       — rates the BRANCH the order came from
---                               (branch_id is denormalized here so
---                               AVG-per-branch does not need to join
---                               through queue_item)
---     delivery_rider_rating   — rates whoever orders.delivery_rider_id
---                               was at 'delivered' time. NULL when the
---                               order had no rider (pickup) or the
---                               rider has since been deleted.
+-- Author is polymorphic. feedback_from_type identifies the
+-- role and feedback_from_id identifies the specific account:
 --
--- Written comments live on feedback_product, one per product.
+--     'customer'   -> customer.customer_id
+--     'restaurant' -> restaurant_account.restaurant_account_id
+--     'rider'      -> delivery_rider.delivery_rider_id
+--
+-- feedback_from_type is free-form VARCHAR(30), matching the
+-- delivery_rider_document.id_type precedent: validation
+-- against a known set of roles happens at the application
+-- layer, so adding a new role later does not require an
+-- ALTER.
+--
+-- There is no feedback_to_* pair. The subject of a row is
+-- implied by the author's role and by the order: a
+-- customer's row is about the branch and the rider, a
+-- restaurant's row is about the customer, a rider's row is
+-- about the customer and the branch. Add the two to-columns
+-- in a later migration if a feature ever needs to name the
+-- subject explicitly.
+--
+-- rating is NULL-able so a party may leave a written reply
+-- with no score (the "thank you" / "we'll improve" case).
+-- feedback_content is NULL-able so a party may leave a
+-- score with no text. The CHECK below forbids an empty row.
+--
+-- feedback_from_id has no FK because it points at three
+-- different parent tables. Deleting a customer, restaurant
+-- account, or rider does NOT cascade to their reviews; the
+-- row survives with a dangling author id and the
+-- application renders it as "deleted user". Reviews are
+-- historical records and outlive the account that wrote
+-- them — same reasoning that made orders.destination_
+-- address a snapshot rather than an FK to customer_address.
 -- =====================================================
 
 CREATE TABLE feedback (
     feedback_id INT AUTO_INCREMENT PRIMARY KEY,
     order_id INT NOT NULL,
-    customer_id INT NOT NULL,
-    restaurant_branch_id INT NOT NULL,
-    delivery_rider_id INT NULL,
-    restaurant_rating TINYINT NULL CHECK (
-        restaurant_rating IS NULL
-        OR restaurant_rating BETWEEN 1 AND 5
-    ),
-    delivery_rider_rating TINYINT NULL CHECK (
-        delivery_rider_rating IS NULL
-        OR delivery_rider_rating BETWEEN 1 AND 5
+    feedback_from_type VARCHAR(30) NOT NULL,
+    feedback_from_id INT NOT NULL,
+    feedback_content TEXT NULL,
+    rating TINYINT NULL CHECK (
+        rating IS NULL
+        OR rating BETWEEN 1 AND 5
     ),
     date_posted TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (order_id) REFERENCES orders (order_id) ON DELETE CASCADE,
-    FOREIGN KEY (customer_id) REFERENCES customer (customer_id) ON DELETE CASCADE,
-    FOREIGN KEY (restaurant_branch_id) REFERENCES restaurant_branch (restaurant_branch_id) ON DELETE CASCADE,
-    FOREIGN KEY (delivery_rider_id) REFERENCES delivery_rider (delivery_rider_id) ON DELETE SET NULL,
-    UNIQUE KEY unique_feedback_per_order (order_id),
-    INDEX idx_customer_id (customer_id),
-    INDEX idx_branch_id (restaurant_branch_id),
-    INDEX idx_rider_id (delivery_rider_id),
-    INDEX idx_date_posted (date_posted),
-    CONSTRAINT chk_feedback_has_a_rating CHECK (
-        restaurant_rating IS NOT NULL
-        OR delivery_rider_rating IS NOT NULL
+    UNIQUE KEY unique_feedback_per_author (
+        order_id,
+        feedback_from_type,
+        feedback_from_id
+    ),
+    INDEX idx_order (order_id),
+    INDEX idx_from (
+        feedback_from_type,
+        feedback_from_id
+    ),
+    INDEX idx_posted (date_posted),
+    INDEX idx_rating (rating),
+    CONSTRAINT chk_feedback_has_content_or_rating CHECK (
+        feedback_content IS NOT NULL
+        OR rating IS NOT NULL
     )
-) COMMENT = 'Per-order feedback: restaurant (branch) and rider ratings';
+) COMMENT = 'Polymorphic per-order feedback: one row per author';
 
 -- =====================================================
 -- 24. NOTIFICATION
@@ -1547,6 +1612,12 @@ GROUP BY
     qi.queue_item_id
 ORDER BY o.order_date ASC;
 
+-- restaurant_performance — v1.4.0
+--
+-- Rating rollup now filters by feedback_from_type so the
+-- restaurant's own "thank you" rows and the rider's rows on
+-- the same order do not pollute the branch's average. Only
+-- rows a CUSTOMER authored carry a rating that counts.
 CREATE OR REPLACE VIEW restaurant_performance AS
 SELECT
     r.restaurant_id,
@@ -1558,8 +1629,19 @@ SELECT
     COALESCE(SUM(it.subtotal), 0) AS total_revenue,
     COALESCE(AVG(it.subtotal), 0) AS average_order_value,
     COUNT(DISTINCT o.customer_id) AS unique_customers,
-    COALESCE(AVG(f.rating), 0) AS average_rating,
-    COUNT(f.feedback_id) AS total_reviews,
+    COALESCE(
+        AVG(
+            CASE
+                WHEN f.feedback_from_type = 'customer' THEN f.rating
+            END
+        ),
+        0
+    ) AS average_rating,
+    COUNT(
+        CASE
+            WHEN f.feedback_from_type = 'customer' THEN 1
+        END
+    ) AS total_reviews,
     COALESCE(
         AVG(
             CASE
@@ -1588,6 +1670,15 @@ GROUP BY
     r.restaurant_id,
     rb.restaurant_branch_id;
 
+-- customer_dietary_analysis — v1.4.0
+--
+-- The old single average_rating column is split into
+-- average_rating_received (how restaurants and riders rated
+-- this customer) and average_rating_given (how this customer
+-- rated others). The feedback join is anchored on
+-- feedback_from_id = c.customer_id so only rows that concern
+-- this customer are joined; the CASE expressions then split
+-- them by author role.
 CREATE OR REPLACE VIEW customer_dietary_analysis AS
 SELECT
     c.customer_id,
@@ -1596,7 +1687,22 @@ SELECT
     cp.allergies,
     cp.fitness_goal,
     COUNT(DISTINCT o.order_id) AS total_orders,
-    COALESCE(AVG(f.rating), 0) AS average_rating,
+    COALESCE(
+        AVG(
+            CASE
+                WHEN f.feedback_from_type <> 'customer' THEN f.rating
+            END
+        ),
+        0
+    ) AS average_rating_received,
+    COALESCE(
+        AVG(
+            CASE
+                WHEN f.feedback_from_type = 'customer' THEN f.rating
+            END
+        ),
+        0
+    ) AS average_rating_given,
     GROUP_CONCAT(DISTINCT di.dietary_tags) AS ordered_dietary_tags,
     COALESCE(
         AVG(
@@ -1616,6 +1722,7 @@ FROM
     LEFT JOIN product p ON qi.product_id = p.product_id
     LEFT JOIN dietary_information di ON p.dietary_information_id = di.dietary_information_id
     LEFT JOIN feedback f ON o.order_id = f.order_id
+    AND f.feedback_from_id = c.customer_id
 GROUP BY
     c.customer_id;
 
@@ -1726,6 +1833,49 @@ FROM
     delivery_rider dr
     LEFT JOIN delivery_rider_profile drp ON dr.delivery_rider_id = drp.delivery_rider_id
     LEFT JOIN delivery_rider_document drd ON dr.delivery_rider_id = drd.delivery_rider_id;
+
+-- rider_performance — v1.4.0 (new)
+--
+-- Rollup that the old schema could not express, because rider
+-- ratings lived as a column inside customer-only feedback rows.
+-- Counts and averages only the reviews a CUSTOMER wrote about
+-- the rider on an order where the rider was the assigned
+-- delivery_rider_id at delivery time. Restaurant- and
+-- rider-authored rows on the same order are excluded by the
+-- author-type filter.
+CREATE OR REPLACE VIEW rider_performance AS
+SELECT
+    dr.delivery_rider_id,
+    CONCAT(
+        dr.first_name,
+        ' ',
+        COALESCE(dr.middle_name, ''),
+        ' ',
+        dr.last_name
+    ) AS rider_name,
+    COUNT(DISTINCT o.order_id) AS total_orders,
+    COALESCE(AVG(f.rating), 0) AS average_rating,
+    COUNT(f.feedback_id) AS total_reviews,
+    SUM(
+        CASE
+            WHEN f.rating = 5 THEN 1
+            ELSE 0
+        END
+    ) AS five_star_reviews,
+    SUM(
+        CASE
+            WHEN f.rating = 1 THEN 1
+            ELSE 0
+        END
+    ) AS one_star_reviews
+FROM
+    delivery_rider dr
+    LEFT JOIN orders o ON o.delivery_rider_id = dr.delivery_rider_id
+    AND o.order_status = 'delivered'
+    LEFT JOIN feedback f ON f.order_id = o.order_id
+    AND f.feedback_from_type = 'customer'
+GROUP BY
+    dr.delivery_rider_id;
 
 -- =====================================================
 -- END OF SCHEMA

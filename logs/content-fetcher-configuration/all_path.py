@@ -3,13 +3,14 @@ filesToCheck = [
     "/logs/instructions/general.md",
     "/logs/output/project_structure.md",
     "/sql/database.sql",
-    "/sql/sample/seed-data.sql",
+    "/sql/seed/all-in-one.sql",
 
     # ===== Root =====
+    "/admin-moderation-buttons.js",
     "/index.php",
 
     # ===== admin/assets/css =====
-    "/admin/assets/css/admin-tables.css",
+    "/admin/assets/css/admin-shared.css",
     "/admin/assets/css/customers.css",
     "/admin/assets/css/dashboard.css",
     "/admin/assets/css/header.css",
