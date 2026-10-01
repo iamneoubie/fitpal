@@ -2,43 +2,97 @@
 /**
  * FitPal Customer Orders Page
  *
- * Displays customer order history with per-product detail expansion
- * and one-click reorder.
+ * Displays customer order history with per-product detail expansion,
+ * a dropdown fee breakdown, and one-click reorder.
  *
  * Totals are computed from queue_item + the fee schedule — never read
  * from the orders table.
  *
- * Button visibility by status
- * ---------------------------
- *   pending                      → Track Order, Cancel
- *   preparing                    → Track Order
- *   rider_pending                → Track Order
- *   picking_up                   → Track Order
- *   delivering                   → Track Order
- *   delivered, within 1h grace   → Message (primary), View Receipt, Reorder
- *   delivered, past 1h grace     → View Tracking (secondary), View Receipt, Reorder
- *   cancelled                    → View Tracking (secondary), Reorder
- *   refunded                     → View Tracking (secondary), Reorder
- *   failed                       → View Tracking (secondary), Reorder
+ * ---------------------------------------------------------------------
+ * CARD LAYOUT (top to bottom)
+ * ---------------------------------------------------------------------
+ *   .order-card-header
+ *       left    — Order # and date
+ *       center  — payment pill
+ *       right   — status badge
  *
- * Two concepts, deliberately separated
- * ------------------------------------
- *   The tracking page is reachable for every order regardless of
- *   chat grace window.
+ *   .order-card-body
+ *       per-item rows, each independently expandable
  *
- *   The chat is reachable for a narrower set of states, governed by
- *   customerOrderHasOpenChatWindow().
+ *   .order-card-totals
+ *       a single button row showing "Total ₱X.XX" + chevron
+ *       clicking it reveals .order-totals-detail in place
  *
- * Cancel and its ledger rules
- * ---------------------------
- * The Cancel button submits to the customer's own order handler
- * (customer-order-handler.php) with action=cancel_order. That handler
- * forwards the request to the shared order-transaction handler,
- * which owns the status decision and the refund ledger for all three
- * customer scenarios.
+ *   .order-card-footer
+ *       action buttons only — no payment pill here
  *
- * Config for JS
- * -------------
+ * ---------------------------------------------------------------------
+ * FILTER TABS
+ * ---------------------------------------------------------------------
+ * Eight tabs, wallet-style (rectangular, full-width row, no count
+ * badges). Order left to right:
+ *
+ *     Active | All | Pending | Preparing | For Delivery |
+ *     Delivered | Cancelled | Refunded | Failed
+ *
+ * "Active" is the default tab and matches every non-terminal
+ * status:
+ *
+ *     pending, preparing, rider_pending, picking_up, delivering
+ *
+ * A customer landing on the page with a live order sees it first.
+ * The other tabs match one exact status, or 'all' for no filter.
+ *
+ * The Active tab is a client-side filter: the markup carries every
+ * order card and customer-order.js hides the ones that do not
+ * match. A card is "active" when its data-status is one of the
+ * five live statuses; the tab does not depend on a server round
+ * trip.
+ *
+ * ---------------------------------------------------------------------
+ * TERMINAL-STATUS ACTIONS (delivered / cancelled / refunded / failed)
+ * ---------------------------------------------------------------------
+ * Every terminal order renders the same actions in the same order
+ * so a customer scanning their history sees one consistent shape
+ * regardless of how the order ended:
+ *
+ *     delivered:
+ *         1. Message OR Track History   (neutral black)
+ *         2. Review                     (primary green)
+ *         3. View Receipt               (neutral black)
+ *         4. Reorder                    (primary green)
+ *
+ *     cancelled / refunded / failed:
+ *         1. Track History              (neutral black)
+ *         2. View Receipt               (neutral black)
+ *         3. Reorder                    (primary green)
+ *
+ * Review is offered only on delivered orders. A cancelled, refunded,
+ * or failed order has no food to review.
+ *
+ * ---------------------------------------------------------------------
+ * REVIEW FLOW
+ * ---------------------------------------------------------------------
+ * The Review button links to review.php?order_id=X. The review page
+ * owns the feedback form; the modal that used to live on this page
+ * has been removed because the page covers the same flow with more
+ * room. feedback-handler.php is unchanged and still serves the
+ * submit_review action that review.php posts to.
+ *
+ * ---------------------------------------------------------------------
+ * BUTTON COLORS (§7)
+ * ---------------------------------------------------------------------
+ *   Message / Track Order / Track History / View Receipt
+ *                                              → btn-neutral  (black)
+ *   Reorder                                    → btn-primary  (green)
+ *   Review                                     → btn-primary  (green)
+ *   Cancel Order                               → btn-danger   (red)
+ *
+ * No action button uses outline or transparent styling.
+ *
+ * ---------------------------------------------------------------------
+ * CLIENT CONFIG
+ * ---------------------------------------------------------------------
  *   window.FITPAL_ORDERS.csrfToken      the customer's own token
  *   window.FITPAL_ORDERS.assetBase      project-root-relative
  *   window.FITPAL_ORDERS.handlerUrl     customer-order-handler.php
@@ -46,22 +100,19 @@
  * The page's client script is customer-order.js.
  *
  * @package FitPal
- * @version 6.0 — The config object's handlerUrl now names
- *                customer-order-handler.php. The page no longer
- *                carries the old order-handler.php name in any
- *                form action, config value, or docblock reference.
+ * @version 9.0 — Filter tabs rewritten wallet-style with an Active
+ *                default. Review footer button added for delivered
+ *                orders. The review modal removed — review.php
+ *                owns the feedback form now.
  *
- *                No markup change beyond the handlerUrl value.
- *                Every button, every form, every link, and every
- *                PHP block is byte-identical to v5.1.
- *
- *                (5.1: script tag points at customer-order.js.
- *                5.0: renamed customer order query layer and
- *                handler. 4.1: tracking reachable for every order.
- *                4.0: Message button stays for the grace window.
- *                3.6: Track covers 'picking_up'. 3.5: cancel
- *                restricted to 'pending' only. 3.3: CSRF inherited
- *                from header. 3.2: expand icon from shared icons.)
+ *                (8.0: three-column card header; chevron totals
+ *                dropdown; footer actions only. 7.0: consistent
+ *                terminal-status layout; option-B tracking label.
+ *                6.0: config object's handlerUrl names
+ *                customer-order-handler.php. 5.1: script tag
+ *                points at customer-order.js. 5.0: renamed
+ *                customer order query layer and handler.
+ *                3.5: cancel restricted to 'pending' only.)
  */
 declare(strict_types=1);
 
@@ -83,16 +134,6 @@ $customerId = (int)$_SESSION['customer_id'];
 // FETCH ORDERS
 // ============================================
 $orders = [];
-$statusCounts = [
-    'all'        => 0,
-    'pending'    => 0,
-    'preparing'  => 0,
-    'delivering' => 0,
-    'delivered'  => 0,
-    'cancelled'  => 0,
-    'refunded'   => 0,
-    'failed'     => 0,
-];
 
 try {
     $stmt = $database_connection->prepare(
@@ -125,24 +166,11 @@ try {
         $order['items'] = getOrderItemsWithCustomizations($database_connection, $orderId);
         $order['item_count'] = count($order['items']);
 
-        $status = $order['order_status'];
-        $statusCounts['all']++;
-        if (isset($statusCounts[$status])) {
-            $statusCounts[$status]++;
-        }
-
         $orders[] = $order;
     }
 } catch (PDOException $e) {
     error_log('Orders page error: ' . $e->getMessage());
 }
-
-// ============================================
-// CSRF
-// ============================================
-// Provided by header.php (via includes/customer-csrf-token.php),
-// stored under the customer role's own session key
-// 'customer_csrf_token'.
 
 // ============================================
 // HELPERS
@@ -156,32 +184,32 @@ function formatOrderCurrency(float|string|null $amount): string
 function getOrderStatusBadgeClass(string $status): string
 {
     return match ($status) {
-        'pending'    => 'badge-warning',
-        'preparing'  => 'badge-info',
-        'picking_up' => 'badge-info',
+        'pending'       => 'badge-warning',
+        'preparing'     => 'badge-info',
+        'picking_up'    => 'badge-info',
         'rider_pending' => 'badge-info',
-        'delivering' => 'badge-primary',
-        'delivered'  => 'badge-success',
-        'cancelled'  => 'badge-danger',
-        'refunded'   => 'badge-secondary',
-        'failed'     => 'badge-danger',
-        default      => 'badge-secondary',
+        'delivering'    => 'badge-primary',
+        'delivered'     => 'badge-success',
+        'cancelled'     => 'badge-danger',
+        'refunded'      => 'badge-secondary',
+        'failed'        => 'badge-danger',
+        default         => 'badge-secondary',
     };
 }
 
 function getOrderStatusLabel(string $status): string
 {
     return match ($status) {
-        'pending'    => 'Pending',
-        'preparing'  => 'Preparing',
+        'pending'       => 'Pending',
+        'preparing'     => 'Preparing',
         'rider_pending' => 'Rider Pending',
-        'picking_up' => 'Picking Up',
-        'delivering' => 'For Delivery',
-        'delivered'  => 'Delivered',
-        'cancelled'  => 'Cancelled',
-        'refunded'   => 'Refunded',
-        'failed'     => 'Failed',
-        default      => ucfirst($status),
+        'picking_up'    => 'Picking Up',
+        'delivering'    => 'For Delivery',
+        'delivered'     => 'Delivered',
+        'cancelled'     => 'Cancelled',
+        'refunded'      => 'Refunded',
+        'failed'        => 'Failed',
+        default         => ucfirst($status),
     };
 }
 
@@ -237,31 +265,71 @@ function formatCustomizationLine(array $cust): ?string
     return $line;
 }
 
+function isTerminalStatus(string $status): bool
+{
+    return in_array($status, ['delivered', 'cancelled', 'refunded', 'failed'], true);
+}
+
+/**
+ * Live statuses — the ones the Active tab collects.
+ *
+ * Kept as a function so the list lives in exactly one place. The
+ * same five statuses are what orders.php renders as "Track Order"
+ * rather than "Track History", and what the customer can still
+ * cancel from (for the 'pending' subset).
+ */
+function isActiveStatus(string $status): bool
+{
+    return in_array(
+        $status,
+        ['pending', 'preparing', 'rider_pending', 'picking_up', 'delivering'],
+        true
+    );
+}
+
+/**
+ * Build the tracking-button descriptor for an order row.
+ *
+ * Option B:
+ *   delivered, inside grace        → "Message"       (neutral)
+ *   delivered, past grace          → "Track History" (neutral)
+ *   cancelled / refunded / failed  → "Track History" (neutral)
+ *   live statuses                  → "Track Order"   (neutral)
+ */
 function getTrackingButtonDescriptor(string $status, ?string $deliveredAt): array
 {
-    $chatOpen = customerOrderHasOpenChatWindow($status, $deliveredAt);
+    $graceOpen = customerOrderHasOpenChatWindow($status, $deliveredAt);
 
-    if ($chatOpen) {
-        $label = ($status === 'delivered') ? 'Message' : 'Track Order';
-
+    if ($status === 'delivered' && $graceOpen) {
         return [
-            'canOpen' => true,
-            'label'   => $label,
-            'primary' => true,
+            'show'    => true,
+            'label'   => 'Message',
+            'neutral' => true,
+            'kind'    => 'message',
+        ];
+    }
+
+    if (isTerminalStatus($status)) {
+        return [
+            'show'    => true,
+            'label'   => 'Track History',
+            'neutral' => true,
+            'kind'    => 'history',
         ];
     }
 
     return [
-        'canOpen' => true,
+        'show'    => true,
         'label'   => 'Track Order',
-        'primary' => false,
+        'neutral' => true,
+        'kind'    => 'track',
     ];
 }
 
 $hasOrders = !empty($orders);
 ?>
 
-<link rel="stylesheet" href="../assets/css/orders.css">
+<link rel="stylesheet" href="../assets/css/customer-orders.css">
 
 <div class="content orders-page">
     <div class="container">
@@ -291,6 +359,13 @@ $hasOrders = !empty($orders);
         </div>
         <?php endif; ?>
 
+        <?php if (isset($_SESSION['review_success'])): ?>
+        <div class="alert alert-success" role="alert">
+            <?php echo htmlspecialchars($_SESSION['review_success'], ENT_QUOTES, 'UTF-8'); ?>
+            <?php unset($_SESSION['review_success']); ?>
+        </div>
+        <?php endif; ?>
+
         <?php if (!$hasOrders): ?>
 
         <!-- ============================================
@@ -312,34 +387,49 @@ $hasOrders = !empty($orders);
         <?php else: ?>
 
         <!-- ============================================
-             FILTER TABS
+             FILTER TABS — wallet-style, no count badges
+             Left to right:
+                 Active  (default — every non-terminal status)
+                 All
+                 Pending
+                 Preparing
+                 For Delivery
+                 Delivered
+                 Cancelled
+                 Refunded
+                 Failed
+             The Active tab matches a set of statuses; every other
+             tab matches one exact status, or 'all' for no filter.
              ============================================ -->
-        <div class="filter-tabs" id="filterTabs">
-            <button type="button" class="filter-tab active" data-filter="all">
-                All <span class="filter-count"><?php echo $statusCounts['all']; ?></span>
+        <nav class="filter-tabs" id="filterTabs" aria-label="Order filters">
+            <button type="button" class="filter-tab active" data-filter="active" aria-current="page">
+                Active
+            </button>
+            <button type="button" class="filter-tab" data-filter="all">
+                All
             </button>
             <button type="button" class="filter-tab" data-filter="pending">
-                Pending <span class="filter-count"><?php echo $statusCounts['pending']; ?></span>
+                Pending
             </button>
             <button type="button" class="filter-tab" data-filter="preparing">
-                Preparing <span class="filter-count"><?php echo $statusCounts['preparing']; ?></span>
+                Preparing
             </button>
             <button type="button" class="filter-tab" data-filter="delivering">
-                For Delivery <span class="filter-count"><?php echo $statusCounts['delivering']; ?></span>
+                For Delivery
             </button>
             <button type="button" class="filter-tab" data-filter="delivered">
-                Delivered <span class="filter-count"><?php echo $statusCounts['delivered']; ?></span>
+                Delivered
             </button>
             <button type="button" class="filter-tab" data-filter="cancelled">
-                Cancelled <span class="filter-count"><?php echo $statusCounts['cancelled']; ?></span>
+                Cancelled
             </button>
             <button type="button" class="filter-tab" data-filter="refunded">
-                Refunded <span class="filter-count"><?php echo $statusCounts['refunded']; ?></span>
+                Refunded
             </button>
             <button type="button" class="filter-tab" data-filter="failed">
-                Failed <span class="filter-count"><?php echo $statusCounts['failed']; ?></span>
+                Failed
             </button>
-        </div>
+        </nav>
 
         <!-- ============================================
              ORDERS LIST
@@ -354,24 +444,45 @@ $hasOrders = !empty($orders);
                 $totalAmt    = (float)$order['total_amount'];
                 $orderDate   = $order['order_date'];
 
-                $trackBtn = getTrackingButtonDescriptor($status, $deliveredAt);
+                $trackBtn   = getTrackingButtonDescriptor($status, $deliveredAt);
+                $terminal   = isTerminalStatus($status);
+                $active     = isActiveStatus($status);
+                $graceOpen  = customerOrderHasOpenChatWindow($status, $deliveredAt);
 
-                $canCancel = ($status === 'pending');
-
+                $canCancel  = ($status === 'pending');
                 $canReview  = ($status === 'delivered');
-                $canReorder = in_array($status, ['delivered', 'cancelled', 'refunded', 'failed'], true);
+                $canReorder = $terminal;
 
                 $paymentMeta = getPaymentMethodMeta((string)$order['payment_method']);
+
+                $totalsId = 'order-totals-' . $orderId;
             ?>
             <div class="order-card" data-order-id="<?php echo $orderId; ?>"
-                data-status="<?php echo htmlspecialchars($status, ENT_QUOTES, 'UTF-8'); ?>">
+                data-status="<?php echo htmlspecialchars($status, ENT_QUOTES, 'UTF-8'); ?>"
+                data-active="<?php echo $active ? '1' : '0'; ?>" data-terminal="<?php echo $terminal ? '1' : '0'; ?>"
+                data-grace-open="<?php echo $graceOpen ? '1' : '0'; ?>">
 
-                <!-- ========== Order Header ========== -->
+                <!-- ============================================
+                     ORDER CARD HEADER
+                     [ Order # + date ]   [ Payment pill ]   [ Badge ]
+                     ============================================ -->
                 <div class="order-card-header">
                     <div class="order-header-left">
                         <p class="order-id">Order #<?php echo $orderId; ?></p>
                         <p class="order-date"><?php echo formatOrderDateTime($orderDate); ?></p>
                     </div>
+
+                    <div class="order-header-center">
+                        <span class="payment-pill payment-pill-<?php echo $paymentMeta['slug']; ?>">
+                            <img src="<?php echo $assetBase; ?>assets/images/icons/<?php echo $paymentMeta['icon']; ?>"
+                                alt="" aria-hidden="true" class="payment-pill-icon"
+                                onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
+                            <span class="payment-pill-label">
+                                <?php echo htmlspecialchars($paymentMeta['label'], ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                        </span>
+                    </div>
+
                     <div class="order-header-right">
                         <span class="badge <?php echo getOrderStatusBadgeClass($status); ?>">
                             <?php echo getOrderStatusLabel($status); ?>
@@ -379,7 +490,9 @@ $hasOrders = !empty($orders);
                     </div>
                 </div>
 
-                <!-- ========== Order Items (expandable) ========== -->
+                <!-- ============================================
+                     ORDER CARD BODY — items
+                     ============================================ -->
                 <div class="order-card-body">
                     <p class="order-items-heading">
                         <?php echo $itemCount; ?> item<?php echo $itemCount !== 1 ? 's' : ''; ?>
@@ -492,16 +605,7 @@ $hasOrders = !empty($orders);
                                     </div>
                                 </div>
 
-                                <?php if ($canReview && !$isReviewed): ?>
-                                <div class="order-item-details-actions">
-                                    <button type="button" class="btn btn-outline btn-sm review-item-btn"
-                                        data-order-id="<?php echo $orderId; ?>"
-                                        data-product-id="<?php echo $productId; ?>"
-                                        data-product-name="<?php echo htmlspecialchars($item['product_name'], ENT_QUOTES, 'UTF-8'); ?>">
-                                        Write Review
-                                    </button>
-                                </div>
-                                <?php elseif ($canReview && $isReviewed): ?>
+                                <?php if ($canReview && $isReviewed): ?>
                                 <div class="order-item-details-actions">
                                     <span class="reviewed-badge">✓ Reviewed</span>
                                 </div>
@@ -514,65 +618,90 @@ $hasOrders = !empty($orders);
                     </div>
                 </div>
 
-                <!-- ========== Order Totals ========== -->
-                <div class="order-card-totals">
-                    <div class="order-total-row">
-                        <span>Subtotal</span>
-                        <span><?php echo formatOrderCurrency($order['subtotal']); ?></span>
-                    </div>
-                    <div class="order-total-row">
-                        <span>
-                            Delivery Fee
-                            <?php if (($order['branch_count'] ?? 0) > 1): ?>
-                            <small class="order-total-note">(<?php echo (int)$order['branch_count']; ?>
-                                branches)</small>
-                            <?php endif; ?>
+                <!-- ============================================
+                     ORDER CARD TOTALS — DROPDOWN
+                     The whole row is a button: "Total ₱X.XX ⌄".
+                     Clicking it reveals the fee breakdown below.
+                     The chevron rotates 180° via
+                     [aria-expanded="true"].
+                     ============================================ -->
+                <div class="order-card-totals" data-collapsed="true">
+                    <button type="button" class="order-totals-toggle" aria-expanded="false"
+                        aria-controls="<?php echo $totalsId; ?>">
+                        <span class="order-totals-toggle-label">Total</span>
+                        <span class="order-totals-toggle-value">
+                            <?php echo formatOrderCurrency($totalAmt); ?>
                         </span>
-                        <span><?php echo formatOrderCurrency($order['delivery_fee']); ?></span>
-                    </div>
-                    <div class="order-total-row">
-                        <span>Service Fee</span>
-                        <span><?php echo formatOrderCurrency($order['service_fee']); ?></span>
-                    </div>
-                    <div class="order-total-row">
-                        <span>VAT</span>
-                        <span><?php echo formatOrderCurrency($order['vat']); ?></span>
-                    </div>
-                    <div class="order-total-row grand-total">
-                        <span>Total</span>
-                        <span><?php echo formatOrderCurrency($totalAmt); ?></span>
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-drop-down-line.svg" alt=""
+                            aria-hidden="true" class="order-totals-toggle-icon" width="20" height="20"
+                            onerror="this.onerror=null; this.style.display='none';">
+                    </button>
+
+                    <div class="order-totals-detail" id="<?php echo $totalsId; ?>" hidden>
+                        <div class="order-total-row">
+                            <span>Subtotal</span>
+                            <span><?php echo formatOrderCurrency($order['subtotal']); ?></span>
+                        </div>
+                        <div class="order-total-row">
+                            <span>
+                                Delivery Fee
+                                <?php if (($order['branch_count'] ?? 0) > 1): ?>
+                                <small class="order-total-note">(<?php echo (int)$order['branch_count']; ?>
+                                    branches)</small>
+                                <?php endif; ?>
+                            </span>
+                            <span><?php echo formatOrderCurrency($order['delivery_fee']); ?></span>
+                        </div>
+                        <div class="order-total-row">
+                            <span>Service Fee</span>
+                            <span><?php echo formatOrderCurrency($order['service_fee']); ?></span>
+                        </div>
+                        <div class="order-total-row">
+                            <span>VAT</span>
+                            <span><?php echo formatOrderCurrency($order['vat']); ?></span>
+                        </div>
                     </div>
                 </div>
 
-                <!-- ========== Footer: Payment pill + actions ========== -->
+                <!-- ============================================
+                     ORDER CARD FOOTER — ACTIONS ONLY
+                     Order (delivered):
+                         [Message | Track History]  [Review]
+                         [View Receipt]  [Reorder]
+                     Order (cancelled / refunded / failed):
+                         [Track History]  [View Receipt]  [Reorder]
+                     Order (live):
+                         [Track Order]  [Cancel Order]
+                     ============================================ -->
                 <div class="order-card-footer">
-                    <span class="payment-pill payment-pill-<?php echo $paymentMeta['slug']; ?>">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/<?php echo $paymentMeta['icon']; ?>"
-                            alt="" aria-hidden="true" class="payment-pill-icon"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
-                        <span class="payment-pill-label">
-                            <?php echo htmlspecialchars($paymentMeta['label'], ENT_QUOTES, 'UTF-8'); ?>
-                        </span>
-                    </span>
-
                     <div class="order-footer-actions">
                         <?php if ($canCancel): ?>
-                        <button type="button" class="btn btn-outline btn-sm cancel-order-btn"
+                        <button type="button" class="btn btn-danger btn-sm cancel-order-btn"
                             data-order-id="<?php echo $orderId; ?>"
                             data-order-status="<?php echo htmlspecialchars($status, ENT_QUOTES, 'UTF-8'); ?>">
                             Cancel Order
                         </button>
                         <?php endif; ?>
 
-                        <?php if ($trackBtn['canOpen']): ?>
+                        <?php if ($trackBtn['show']): ?>
                         <a href="order-tracking.php?id=<?php echo $orderId; ?>"
-                            class="btn <?php echo $trackBtn['primary'] ? 'btn-primary' : 'btn-outline'; ?> btn-sm">
-                            <?php echo htmlspecialchars($trackBtn['label'], ENT_QUOTES, 'UTF-8'); ?>
+                            class="btn btn-neutral btn-sm tracking-btn"
+                            data-tracking-label="<?php echo htmlspecialchars($trackBtn['label'], ENT_QUOTES, 'UTF-8'); ?>"
+                            data-tracking-kind="<?php echo htmlspecialchars($trackBtn['kind'], ENT_QUOTES, 'UTF-8'); ?>">
+                            <span
+                                class="tracking-btn-label"><?php echo htmlspecialchars($trackBtn['label'], ENT_QUOTES, 'UTF-8'); ?></span>
                         </a>
                         <?php endif; ?>
 
-                        <?php if ($status === 'delivered'): ?>
-                        <a href="order-receipt.php?id=<?php echo $orderId; ?>" class="btn btn-outline btn-sm">
+                        <?php if ($canReview): ?>
+                        <a href="review.php?order_id=<?php echo $orderId; ?>"
+                            class="btn btn-primary btn-sm review-order-btn">
+                            Review
+                        </a>
+                        <?php endif; ?>
+
+                        <?php if ($terminal): ?>
+                        <a href="order-receipt.php?id=<?php echo $orderId; ?>" class="btn btn-neutral btn-sm">
                             View Receipt
                         </a>
                         <?php endif; ?>
@@ -623,55 +752,6 @@ $hasOrders = !empty($orders);
             <button type="button" class="modal-btn modal-btn-cancel" id="cancelModalNo">Keep Order</button>
             <button type="button" class="modal-btn modal-btn-confirm" id="cancelModalYes">Cancel Order</button>
         </div>
-    </div>
-</div>
-
-<!-- ============================================
-     REVIEW MODAL
-     ============================================ -->
-<div id="reviewModal" class="modal" style="display: none;">
-    <div class="modal-overlay"></div>
-    <div class="modal-content">
-        <div class="modal-header">
-            <div>
-                <p class="heading-5 modal-title">Write a Review</p>
-                <p class="modal-subtitle" id="reviewProductName"></p>
-            </div>
-            <button type="button" class="modal-close" id="closeReviewModal">&times;</button>
-        </div>
-
-        <form id="reviewForm" method="POST" action="../backend/handlers/feedback-handler.php">
-            <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
-            <input type="hidden" name="action" value="submit_review">
-            <input type="hidden" name="order_id" id="reviewOrderId" value="">
-            <input type="hidden" name="product_id" id="reviewProductId" value="">
-
-            <div class="modal-body">
-                <div class="form-group">
-                    <label class="form-label">Rating</label>
-                    <div class="star-rating" id="starRatingContainer">
-                        <button type="button" class="star" data-value="1" aria-label="1 star">★</button>
-                        <button type="button" class="star" data-value="2" aria-label="2 stars">★</button>
-                        <button type="button" class="star" data-value="3" aria-label="3 stars">★</button>
-                        <button type="button" class="star" data-value="4" aria-label="4 stars">★</button>
-                        <button type="button" class="star" data-value="5" aria-label="5 stars">★</button>
-                    </div>
-                    <input type="hidden" name="rating" id="ratingValue" required>
-                    <div class="rating-error" id="ratingError"></div>
-                </div>
-
-                <div class="form-group">
-                    <label for="comment" class="form-label">Review (Optional)</label>
-                    <textarea id="comment" name="comment" class="form-textarea" rows="4"
-                        placeholder="Share your experience with this product..."></textarea>
-                </div>
-            </div>
-
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" id="cancelReviewBtn">Cancel</button>
-                <button type="submit" class="btn btn-primary" id="submitReviewBtn">Submit Review</button>
-            </div>
-        </form>
     </div>
 </div>
 

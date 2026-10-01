@@ -6,8 +6,16 @@
  * dietary_information. No $_POST, no header(), no echo.
  *
  * @package FitPal
- * @version 5.1 — Removed stale `max_quantity_per_item` column reference
- *                (not present in current schema; use `max_quantity`).
+ * @version 5.4 — No behavioural change. The docblock on
+ *                getProductReviews() now states that callers who
+ *                want client-side paging should pass a limit large
+ *                enough to cover the page's expected total (the
+ *                product detail page passes 50).
+ *
+ *                (5.3: getProductReviews decodes the comment
+ *                envelope and joins customer_profile. 5.2: added
+ *                getProductReviews(). 5.1: removed stale
+ *                `max_quantity_per_item` reference.)
  */
 
 declare(strict_types=1);
@@ -62,11 +70,7 @@ function getProductById(PDO $db, int $productId): ?array
 
 /**
  * Fetch customization components for a product and group them into
- * presentation-ready shapes (static / choice / modifier / multi).
- *
- * Rows are grouped by `display_order`; the kind is derived from the
- * shape of each group. Per-ingredient maximums come from
- * `product_composition.max_quantity`.
+ * presentation-ready shapes (static / choice / choice / modifier / multi).
  *
  * @param PDO $db
  * @param int $productId
@@ -507,4 +511,141 @@ function getRelatedProducts(PDO $db, int $productId, int $branchId, int $limit =
     $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
     $stmt->execute();
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Decode a feedback_content JSON envelope and return the comment
+ * for a specific subject, or an empty string when no comment
+ * exists for that subject.
+ *
+ * @param string|null $content
+ * @param string      $subjectKey  e.g. "product:45"
+ * @return string
+ */
+function productDecodeCommentForSubject(?string $content, string $subjectKey): string
+{
+    if ($content === null || trim($content) === '') {
+        return '';
+    }
+
+    $decoded = json_decode($content, true);
+    if (!is_array($decoded)) {
+        return '';
+    }
+
+    $comments = $decoded['comments'] ?? null;
+    if (!is_array($comments)) {
+        return '';
+    }
+
+    if (!isset($comments[$subjectKey])) {
+        return '';
+    }
+
+    $text = $comments[$subjectKey];
+    if (!is_string($text)) {
+        return '';
+    }
+
+    return trim($text);
+}
+
+/**
+ * Get customer reviews for a product.
+ *
+ * The path from a product to a review goes through queue_item:
+ *
+ *     product → queue_item → rating → feedback → customer
+ *
+ * A `rating` row with rating_type='product' anchors on the queue_item
+ * the customer actually received. That queue_item carries the
+ * product_id. The `feedback` row that the rating belongs to carries
+ * the comment envelope and the author. The `customer` and
+ * `customer_profile` rows carry the name and picture to display.
+ *
+ * The comment the customer wrote for THIS subject is stored inside
+ * the envelope as JSON keyed by "product:<queue_item_id>". This
+ * function selects the rating row's queue_item_id, decodes the
+ * envelope, and returns the string at that key. A review that
+ * carried no comment for this product comes back with comment = ''.
+ *
+ * Paging
+ * ------
+ * This function returns a flat list. The caller controls how many
+ * rows come back through $limit. The product detail page passes a
+ * limit large enough to carry the full review set for one product,
+ * then splits that list client-side into pages of 5 for the "Load
+ * More" button. A product with 12 reviews therefore makes one
+ * request of 50 rows, renders 5, and stores the remaining 7 in a
+ * data attribute for the client to reveal on demand.
+ *
+ * @param PDO $db
+ * @param int $productId
+ * @param int $limit
+ * @return array<int, array{
+ *     comment:string,
+ *     date_posted:string,
+ *     score:int,
+ *     first_name:string,
+ *     last_name:string,
+ *     profile_picture:string
+ * }>
+ */
+function getProductReviews(PDO $db, int $productId, int $limit = 50): array
+{
+    if ($productId <= 0 || $limit <= 0) {
+        return [];
+    }
+
+    $stmt = $db->prepare(
+        "SELECT
+            r.queue_item_id,
+            f.feedback_content,
+            f.date_posted,
+            r.score,
+            c.first_name,
+            c.last_name,
+            cp.profile_picture
+         FROM rating r
+         JOIN feedback f ON r.feedback_id = f.feedback_id
+         JOIN customer c ON f.feedback_from_id = c.customer_id
+         LEFT JOIN customer_profile cp ON c.customer_id = cp.customer_id
+         JOIN queue_item qi ON r.queue_item_id = qi.queue_item_id
+         WHERE
+            qi.product_id = :product_id
+            AND r.rating_type = 'product'
+            AND f.feedback_from_type = 'customer'
+         ORDER BY f.date_posted DESC
+         LIMIT :limit"
+    );
+    $stmt->bindValue(':product_id', $productId, PDO::PARAM_INT);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $out = [];
+    foreach ($rows as $row) {
+        $queueItemId = (int)($row['queue_item_id'] ?? 0);
+        if ($queueItemId <= 0) {
+            continue;
+        }
+
+        $subjectKey = 'product:' . $queueItemId;
+
+        $comment = productDecodeCommentForSubject(
+            $row['feedback_content'] !== null ? (string)$row['feedback_content'] : null,
+            $subjectKey
+        );
+
+        $out[] = [
+            'comment'         => $comment,
+            'date_posted'     => (string)($row['date_posted']     ?? ''),
+            'score'           => (int)   ($row['score']           ?? 0),
+            'first_name'      => (string)($row['first_name']      ?? ''),
+            'last_name'       => (string)($row['last_name']       ?? ''),
+            'profile_picture' => (string)($row['profile_picture'] ?? ''),
+        ];
+    }
+    return $out;
 }

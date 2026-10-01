@@ -1,6 +1,7 @@
 /**
  * FitPal Product Detail
- * Version 9.3 — Add-to-cart from customize step.
+ * Version 10.0 — Adds client-side "Load More" for the reviews
+ *                section.
  *
  * Routing:
  *   Main view:
@@ -11,8 +12,19 @@
  *     "Add to Cart"       → AJAX POST → cart-handler.php   (action=add) → stays on page
  *     "Apply and Add"     → AJAX POST → queue-handler.php  (action=add) → redirect to menu.php
  *
+ * Reviews section
+ * ---------------
+ * The first 5 reviews are server-rendered by product-detail.php.
+ * The remaining reviews are embedded as JSON on the list wrapper's
+ * data-reviews-more attribute. This file reads that payload,
+ * appends 5 more cards per click of #reviewsLoadMoreBtn, and
+ * removes the button once the payload is exhausted.
+ *
+ * Card markup is built with document.createElement and textContent.
+ * No innerHTML writes with user-supplied strings.
+ *
  * @package FitPal
- * @version 9.3
+ * @version 10.0
  */
 (function () {
     'use strict';
@@ -52,7 +64,7 @@
         }
 
         // ------------------------------------------------------
-        // ENDPOINTS — read from data attributes with sane fallbacks
+        // ENDPOINTS
         // ------------------------------------------------------
         const CART_URL  = form.dataset.cartUrl
             || '../backend/handlers/cart-handler.php';
@@ -434,10 +446,9 @@
         }
 
         // ------------------------------------------------------
-        // HANDLERS
+        // HANDLERS — Cart / Order
         // ------------------------------------------------------
 
-        // ---- Add to Cart (main view) ----
         if (addToCartBtn) {
             addToCartBtn.addEventListener('click', async e => {
                 e.preventDefault();
@@ -460,7 +471,6 @@
             });
         }
 
-        // ---- Add to Cart (customize view) ----
         if (customizeAddToCartBtn) {
             customizeAddToCartBtn.addEventListener('click', async e => {
                 e.preventDefault();
@@ -471,8 +481,6 @@
                     const data = await postForm(CART_URL, form, { action: 'add' });
                     if (data && data.status === 'success') {
                         showToast(data.message || 'Added to cart', 'success');
-                        // Stay on customize step so the customer can also
-                        // add to order if they want. Do NOT navigate away.
                     } else {
                         showToast((data && data.message) || 'Could not add to cart', 'error');
                     }
@@ -485,7 +493,6 @@
             });
         }
 
-        // ---- Add to Order (main view) ----
         if (addToOrderBtn) {
             addToOrderBtn.addEventListener('click', async e => {
                 e.preventDefault();
@@ -509,7 +516,6 @@
             });
         }
 
-        // ---- Apply Customize (add to order from customize view) ----
         if (applyCustomizeBtn) {
             applyCustomizeBtn.addEventListener('click', async e => {
                 e.preventDefault();
@@ -531,6 +537,214 @@
                     restoreButton(applyCustomizeBtn);
                 }
             });
+        }
+
+        // ------------------------------------------------------
+        // REVIEWS — LOAD MORE
+        // ------------------------------------------------------
+        function initReviewsLoadMore() {
+            const list = document.getElementById('reviewsList');
+            const btn  = document.getElementById('reviewsLoadMoreBtn');
+            if (!list || !btn) return;
+
+            const section = list.closest('.product-reviews-section');
+            const perPage = section
+                ? (parseInt(section.getAttribute('data-reviews-per-page'), 10) || 5)
+                : 5;
+
+            let more = [];
+            try {
+                const raw = list.getAttribute('data-reviews-more') || '[]';
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                    more = parsed;
+                }
+            } catch (err) {
+                console.warn('[product-detail] Could not parse reviews payload:', err);
+                more = [];
+            }
+
+            if (more.length === 0) {
+                btn.remove();
+                return;
+            }
+
+            let nextIndex = 0;
+
+            btn.addEventListener('click', function () {
+                const slice = more.slice(nextIndex, nextIndex + perPage);
+                nextIndex += slice.length;
+
+                slice.forEach(review => {
+                    list.appendChild(buildReviewCard(review));
+                });
+
+                if (nextIndex >= more.length) {
+                    btn.remove();
+                }
+            });
+        }
+
+        /**
+         * Build a review card node from a payload entry. Uses
+         * document.createElement and textContent only.
+         */
+        function buildReviewCard(review) {
+            const firstName = String(review.first_name || '');
+            const lastName  = String(review.last_name  || '');
+
+            let displayName = (firstName + ' ' + lastName).trim();
+            if (displayName === '') displayName = 'Customer';
+
+            let initial = 'U';
+            if (firstName !== '') {
+                initial = firstName.charAt(0).toUpperCase();
+            } else if (lastName !== '') {
+                initial = lastName.charAt(0).toUpperCase();
+            }
+
+            const picture = String(review.profile_picture || '');
+            const score   = parseInt(review.score, 10) || 0;
+            const comment = String(review.comment || '');
+            const dateRaw = String(review.date_posted || '');
+
+            const dateOut = formatReviewDate(dateRaw);
+
+            const card = document.createElement('article');
+            card.className = 'review-item';
+
+            const avatar = document.createElement('div');
+            avatar.className = 'review-avatar';
+            avatar.setAttribute('aria-hidden', 'true');
+
+            if (picture !== '') {
+                const assetBase = list_dataset_asset_base();
+                const url = buildAvatarUrl(picture, assetBase);
+                const img = document.createElement('img');
+                img.className = 'review-avatar-image';
+                img.alt = '';
+                img.src = url;
+                img.addEventListener('error', function () {
+                    img.style.display = 'none';
+                    initialSpan.style.display = 'flex';
+                });
+                const initialSpan = document.createElement('span');
+                initialSpan.className = 'review-avatar-initial';
+                initialSpan.style.display = 'none';
+                initialSpan.textContent = initial;
+                avatar.appendChild(img);
+                avatar.appendChild(initialSpan);
+            } else {
+                const initialSpan = document.createElement('span');
+                initialSpan.className = 'review-avatar-initial';
+                initialSpan.textContent = initial;
+                avatar.appendChild(initialSpan);
+            }
+
+            const body = document.createElement('div');
+            body.className = 'review-body';
+
+            const header = document.createElement('header');
+            header.className = 'review-header';
+
+            const author = document.createElement('span');
+            author.className = 'review-author';
+            author.textContent = displayName;
+
+            const date = document.createElement('span');
+            date.className = 'review-date';
+            date.textContent = dateOut;
+
+            header.appendChild(author);
+            header.appendChild(date);
+
+            const rating = document.createElement('div');
+            rating.className = 'review-rating';
+            rating.setAttribute('aria-label', score + ' out of 5 stars');
+
+            for (let i = 1; i <= 5; i++) {
+                const star = document.createElement('span');
+                star.className = 'star' + (i <= score ? ' filled' : '');
+                star.textContent = '★';
+                rating.appendChild(star);
+            }
+
+            body.appendChild(header);
+            body.appendChild(rating);
+
+            if (comment !== '') {
+                const p = document.createElement('p');
+                p.className = 'review-comment';
+                // Preserve line breaks from nl2br on the server-rendered cards.
+                const lines = comment.split(/\r?\n/);
+                lines.forEach((line, idx) => {
+                    if (idx > 0) {
+                        p.appendChild(document.createElement('br'));
+                    }
+                    p.appendChild(document.createTextNode(line));
+                });
+                body.appendChild(p);
+            }
+
+            card.appendChild(avatar);
+            card.appendChild(body);
+
+            return card;
+        }
+
+        /**
+         * Format a MySQL DATETIME string into "Mmm dd, yyyy".
+         * Falls back to the raw string when the value cannot be
+         * parsed, matching the server-rendered path.
+         */
+        function formatReviewDate(dateRaw) {
+            if (dateRaw === '') return '';
+
+            // MySQL returns 'YYYY-MM-DD HH:MM:SS'. Parse it as a
+            // local time rather than relying on the browser's
+            // locale-specific Date(string) parsing.
+            const m = dateRaw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (!m) return dateRaw;
+
+            const yyyy = m[1];
+            const mm   = parseInt(m[2], 10);
+            const dd   = m[3];
+
+            const monthNames = [
+                'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+            ];
+            const monthName = monthNames[mm - 1] || m[2];
+
+            return monthName + ' ' + dd + ', ' + yyyy;
+        }
+
+        /**
+         * Build a browser-loadable URL for a stored profile_picture
+         * path. Mirrors buildReviewAvatarUrl() in the PHP.
+         */
+        function buildAvatarUrl(storedPath, assetBase) {
+            if (storedPath === '') return '';
+
+            let base = assetBase;
+            if (base === '') {
+                base = '../../shared/';
+            }
+
+            const projectRoot = base.replace(/shared\/$/, '');
+            return projectRoot + storedPath;
+        }
+
+        /**
+         * Read the page's asset base from window.FITPAL_ASSET_BASE,
+         * falling back to the standard ../../shared/ used by every
+         * customer page.
+         */
+        function list_dataset_asset_base() {
+            if (typeof window.FITPAL_ASSET_BASE === 'string' && window.FITPAL_ASSET_BASE !== '') {
+                return window.FITPAL_ASSET_BASE;
+            }
+            return '../../shared/';
         }
 
         // ------------------------------------------------------
@@ -592,7 +806,8 @@
         syncDomFromDefaults();
         updateMainTotals();
         updateCustomizeTotals();
+        initReviewsLoadMore();
 
-        console.log('Product Detail JS v9.3 initialized');
+        console.log('Product Detail JS v10.0 initialized');
     });
 })();

@@ -1,54 +1,40 @@
 /**
  * FitPal Customer Order Receipt Styles
- * Version 1.3
+ * Version 2.0 — Adds a status banner and status-tinted meta cell so
+ *                the receipt renders correctly for every terminal
+ *                status (delivered, cancelled, refunded, failed),
+ *                not just delivered.
  *
- * Read-only receipt view for a delivered order. Single-column layout,
- * print-friendly, styled with the same tokens used across the customer
- * role (see global.css). No interactive components, no modals, no JS.
+ * New rules in this revision
+ * --------------------------
+ *   .receipt-status-banner       container below the header
+ *   .receipt-status-icon         circular tinted icon
+ *   .receipt-status-body         text column
+ *   .receipt-status-label        heading line
+ *   .receipt-status-description  secondary line
  *
- * v1.3 changes
- * ------------
- *   + Rider block restructured. The flat meta line is replaced by a
- *     two-part layout:
+ *   .receipt-status-delivered    green tint
+ *   .receipt-status-cancelled    red tint
+ *   .receipt-status-refunded     blue tint
+ *   .receipt-status-failed       red tint
  *
- *       .receipt-rider-top        avatar + "Delivered by" + name
- *       .receipt-rider-grid       labeled key/value grid for contact,
- *                                 vehicle, rating, and deliveries
+ *   .receipt-meta-value-status-delivered   green text + icon tint
+ *   .receipt-meta-value-status-cancelled   red text + icon tint
+ *   .receipt-meta-value-status-refunded    blue text + icon tint
+ *   .receipt-meta-value-status-failed      red text + icon tint
  *
- *   + New .receipt-rider-contact rule. The rider's phone number is a
- *     tel: link with a phone icon, on its own line, in the primary
- *     tint so it reads as actionable on first glance. The icon is
- *     tinted to match the link color.
+ * Everything from v1.3 — outer container width, inner receipt
+ * shell, rider block, meta grid, items table, totals, footer note,
+ * responsive breakpoints — is retained byte-for-byte.
  *
- *   + New .receipt-rider-grid rules. Two-column key/value grid on
- *     desktop, single column on mobile. Each label is a small
- *     uppercase caption; each value is body text. This replaces the
- *     single dense meta line that made vehicle, plate, rating, and
- *     deliveries run together.
- *
- *   + New .receipt-meta-value-status rule and .receipt-meta-status-icon
- *     for the "Delivered" status cell, so the success state reads at
- *     a glance.
- *
- *   + Totals row labels get a slightly wider gap and the grand-total
- *     row gets a touch more separation from the rows above it, so the
- *     fee stack reads as a clear column rather than a block.
- *
- *   + Everything from v1.2 — outer container width, inner receipt
- *     shell, and the base .receipt-rider block padding — is retained.
- *
- * v1.2 changes (retained)
- * -----------------------
- *   + New .receipt-rider block between the restaurant block and the
- *     meta grid.
- *
- * v1.1 changes (retained)
- * -----------------------
- *   ~ Outer .container matches the header container width (1200px).
- *   + .receipt-shell wrapper constrains the receipt card to 800px.
+ * The page that renders this stylesheet is
+ * customer/pages/order-receipt.php. It gates on terminal status
+ * (delivered / cancelled / refunded / failed) and renders the
+ * banner for every one of those statuses. There is no delivered-
+ * only path anymore.
  *
  * @package FitPal
- * @version 1.3
+ * @version 2.0
  */
 
 /* ============================================
@@ -234,6 +220,168 @@
 }
 
 /* ============================================
+   STATUS BANNER
+   ---------------------------------------------------------------
+   Rendered directly below the receipt header for every terminal
+   status. Four tinted variants key on the status name; the base
+   rule declares layout only so a new status can be added without
+   touching the base.
+   ============================================ */
+
+.receipt-status-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 16px 18px;
+    margin: 18px 0;
+    border-radius: var(--radius-base);
+    border-left: 4px solid var(--gray-400);
+    background: var(--gray-50);
+    box-sizing: border-box;
+}
+
+.receipt-status-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 9px;
+    box-sizing: border-box;
+    background: var(--gray-100);
+}
+
+.receipt-status-icon img {
+    width: 100%;
+    height: 100%;
+    max-width: 22px;
+    max-height: 22px;
+    display: block;
+    object-fit: contain;
+    /* Default tint: neutral gray. Overridden per variant. */
+    filter: brightness(0) saturate(100%)
+            invert(45%) sepia(8%) saturate(800%)
+            hue-rotate(50deg) brightness(95%) contrast(90%);
+}
+
+.receipt-status-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.receipt-status-label {
+    margin: 0;
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.3;
+}
+
+.receipt-status-description {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    line-height: 1.5;
+}
+
+/* ---------------------------------------------------------------
+   Status variants
+   Each variant sets:
+     - the banner's left border and background
+     - the icon circle's background
+     - the icon's tint
+     - the label's color
+   The description stays a neutral gray so body copy remains
+   readable on any tint.
+   --------------------------------------------------------------- */
+
+/* Delivered — success green */
+.receipt-status-delivered {
+    border-left-color: var(--primary);
+    background: rgba(89, 193, 74, 0.08);
+}
+
+.receipt-status-delivered .receipt-status-icon {
+    background: rgba(89, 193, 74, 0.16);
+}
+
+.receipt-status-delivered .receipt-status-icon img {
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.receipt-status-delivered .receipt-status-label {
+    color: var(--primary-dark);
+}
+
+/* Cancelled — danger red */
+.receipt-status-cancelled {
+    border-left-color: var(--danger);
+    background: rgba(220, 53, 69, 0.08);
+}
+
+.receipt-status-cancelled .receipt-status-icon {
+    background: rgba(220, 53, 69, 0.16);
+}
+
+.receipt-status-cancelled .receipt-status-icon img {
+    filter: brightness(0) saturate(100%)
+            invert(40%) sepia(90%) saturate(600%)
+            hue-rotate(330deg) brightness(90%) contrast(85%);
+}
+
+.receipt-status-cancelled .receipt-status-label {
+    color: var(--danger);
+}
+
+/* Refunded — informational blue */
+.receipt-status-refunded {
+    border-left-color: #2563eb;
+    background: rgba(37, 99, 235, 0.08);
+}
+
+.receipt-status-refunded .receipt-status-icon {
+    background: rgba(37, 99, 235, 0.16);
+}
+
+.receipt-status-refunded .receipt-status-icon img {
+    filter: brightness(0) saturate(100%)
+            invert(30%) sepia(80%) saturate(1500%)
+            hue-rotate(210deg) brightness(90%) contrast(95%);
+}
+
+.receipt-status-refunded .receipt-status-label {
+    color: #1d4ed8;
+}
+
+/* Failed — danger red, slightly deeper than cancelled so the two
+   are distinguishable when both appear in the same account. */
+.receipt-status-failed {
+    border-left-color: #991b1b;
+    background: rgba(153, 27, 27, 0.08);
+}
+
+.receipt-status-failed .receipt-status-icon {
+    background: rgba(153, 27, 27, 0.16);
+}
+
+.receipt-status-failed .receipt-status-icon img {
+    filter: brightness(0) saturate(100%)
+            invert(24%) sepia(70%) saturate(500%)
+            hue-rotate(330deg) brightness(80%) contrast(95%);
+}
+
+.receipt-status-failed .receipt-status-label {
+    color: #991b1b;
+}
+
+/* ============================================
    RESTAURANT BLOCK
    ============================================ */
 
@@ -262,15 +410,14 @@
 /* ============================================
    RIDER BLOCK
 
-   Two-part layout:
+   Rendered only for a delivered order. Two-part layout:
 
      .receipt-rider-top       avatar square + "Delivered by" + name
      .receipt-rider-grid      labeled key/value grid for the rider's
                               contact, vehicle, rating, and deliveries
 
-   The block is omitted entirely by the PHP when no rider is attached
-   to the order. The "grid" is a definition list so each value carries
-   its own label rather than running together with its neighbors.
+   The block is omitted by the PHP for every other terminal status,
+   so no rule here needs to know which status is being rendered.
    ============================================ */
 
 .receipt-rider {
@@ -341,12 +488,6 @@
 
 /* ------------------------------------------------------------
    Rider key/value grid
-   ------------------------------------------------------------
-   Two-column grid on wider viewports, single column on narrow.
-   dt is a small uppercase caption, dd is the value. The grid
-   collapses to one column below 480px so a long phone number or a
-   long vehicle line never has to compete with a neighboring cell
-   for width.
    ------------------------------------------------------------ */
 
 .receipt-rider-grid {
@@ -389,11 +530,6 @@
 
 /* ------------------------------------------------------------
    Rider contact — the tap-to-call link
-   ------------------------------------------------------------
-   The phone number is its own row in the grid, styled as a link in
-   the primary tint. The icon is tinted to match. On mobile the row
-   spans both columns so a long number never wraps awkwardly next to
-   an unrelated field.
    ------------------------------------------------------------ */
 
 .receipt-rider-contact {
@@ -419,7 +555,6 @@
     height: 14px;
     display: block;
     flex-shrink: 0;
-    /* Tint to primary. Overridden to primary-dark on hover. */
     filter: brightness(0) saturate(100%)
             invert(48%) sepia(70%) saturate(450%)
             hue-rotate(75deg) brightness(95%) contrast(85%);
@@ -448,7 +583,6 @@
     height: 14px;
     display: block;
     flex-shrink: 0;
-    /* Warm gold tint to match the star's meaning. */
     filter: brightness(0) saturate(100%)
             invert(72%) sepia(65%) saturate(750%)
             hue-rotate(1deg) brightness(98%) contrast(90%);
@@ -490,13 +624,14 @@
     word-break: break-word;
 }
 
-/* Success state cell — "Delivered" with a check icon. */
+/* Status cell — inline icon + label. The default tint is the
+   delivered green; each variant below overrides it. */
 .receipt-meta-value-status {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    color: var(--primary-dark);
     font-weight: 600;
+    color: var(--primary-dark);
 }
 
 .receipt-meta-status-icon {
@@ -507,6 +642,46 @@
     filter: brightness(0) saturate(100%)
             invert(48%) sepia(70%) saturate(450%)
             hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.receipt-meta-value-status-delivered {
+    color: var(--primary-dark);
+}
+
+.receipt-meta-value-status-delivered .receipt-meta-status-icon {
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.receipt-meta-value-status-cancelled {
+    color: var(--danger);
+}
+
+.receipt-meta-value-status-cancelled .receipt-meta-status-icon {
+    filter: brightness(0) saturate(100%)
+            invert(40%) sepia(90%) saturate(600%)
+            hue-rotate(330deg) brightness(90%) contrast(85%);
+}
+
+.receipt-meta-value-status-refunded {
+    color: #1d4ed8;
+}
+
+.receipt-meta-value-status-refunded .receipt-meta-status-icon {
+    filter: brightness(0) saturate(100%)
+            invert(30%) sepia(80%) saturate(1500%)
+            hue-rotate(210deg) brightness(90%) contrast(95%);
+}
+
+.receipt-meta-value-status-failed {
+    color: #991b1b;
+}
+
+.receipt-meta-value-status-failed .receipt-meta-status-icon {
+    filter: brightness(0) saturate(100%)
+            invert(24%) sepia(70%) saturate(500%)
+            hue-rotate(330deg) brightness(80%) contrast(95%);
 }
 
 /* ============================================
@@ -749,14 +924,34 @@
         text-align: left;
     }
 
+    .receipt-status-banner {
+        padding: 14px 16px;
+    }
+
+    .receipt-status-icon {
+        width: 36px;
+        height: 36px;
+        padding: 8px;
+    }
+
+    .receipt-status-icon img {
+        max-width: 20px;
+        max-height: 20px;
+    }
+
+    .receipt-status-label {
+        font-size: var(--font-size-sm);
+    }
+
+    .receipt-status-description {
+        font-size: var(--font-size-xs);
+    }
+
     .receipt-meta-grid {
         grid-template-columns: 1fr;
         gap: 12px;
     }
 
-    /* Rider grid stays two columns at this width — a tablet has
-       room for two short values side by side. Only mobile drops
-       to a single column. */
     .receipt-rider-grid {
         gap: 10px 16px;
     }
@@ -800,9 +995,31 @@
         height: 34px;
     }
 
-    /* Rider block on mobile: avatar stays fixed, text column takes
-       the rest. The key/value grid collapses to a single column so
-       each labeled value owns its own row. */
+    .receipt-status-banner {
+        padding: 12px 14px;
+        gap: 10px;
+    }
+
+    .receipt-status-icon {
+        width: 32px;
+        height: 32px;
+        padding: 7px;
+    }
+
+    .receipt-status-icon img {
+        max-width: 18px;
+        max-height: 18px;
+    }
+
+    .receipt-status-label {
+        font-size: var(--font-size-sm);
+    }
+
+    .receipt-status-description {
+        font-size: var(--font-size-xs);
+        line-height: 1.45;
+    }
+
     .receipt-rider {
         gap: 12px;
     }
@@ -890,5 +1107,16 @@
         color: var(--gray-500);
         font-weight: 500;
         font-size: var(--font-size-xs);
+    }
+}
+
+/* ============================================
+   REDUCED MOTION
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    .receipt-rider-contact,
+    .receipt-rider-contact-icon {
+        transition: none !important;
     }
 }

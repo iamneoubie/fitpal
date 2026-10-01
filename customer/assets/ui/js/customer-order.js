@@ -3,24 +3,28 @@
  *
  * Owns everything interactive on customer/pages/orders.php:
  *
- *   - Filter tabs (All / Pending / Preparing / Delivering /
- *     Delivered / Cancelled / Refunded / Failed) that hide or show
- *     order cards without a page reload.
+ *   - Filter tabs (Active / All / Pending / Preparing /
+ *     For Delivery / Delivered / Cancelled / Refunded / Failed)
+ *     that hide or show order cards without a page reload.
+ *
+ *     "Active" is the default tab and matches every non-terminal
+ *     status: pending, preparing, rider_pending, picking_up,
+ *     delivering. The matcher reads the card's data-active
+ *     attribute for this filter and data-status for every other.
  *
  *   - Per-item expansion on every order card. Clicking a row's
  *     summary toggles its details block; the chevron rotates in
  *     sync with the expanded state.
  *
+ *   - Collapsible order totals. Each order card shows the grand
+ *     total in a single button row ("Total ₱X.XX" + chevron).
+ *     Clicking the button reveals the fee breakdown below it. The
+ *     chevron rotation is driven by the button's aria-expanded
+ *     attribute, which this file flips.
+ *
  *   - The Cancel Order modal. Submitting it POSTs to the customer
  *     order handler (customer-order-handler.php) with
- *     action=cancel_order. That handler forwards the request to
- *     the shared order-transaction handler, which decides the
- *     final status (COD → 'cancelled', Wallet or Online →
- *     'refunded') and issues the refund ledger for Wallet and
- *     Online orders.
- *
- *   - The Write Review modal. Submitting it POSTs to
- *     feedback-handler.php with action=submit_review.
+ *     action=cancel_order.
  *
  *   - The Reorder button on a past order. POSTs to the customer
  *     order handler with action=reorder and redirects to
@@ -30,6 +34,64 @@
  *     order placement, the header sets a session flag and this
  *     file scrolls the matching card into view and flashes it.
  *
+ *   - Tracking-label reconciliation. The tracking button's label
+ *     is rendered server-side from the option-B rule (Message in
+ *     grace, Track History otherwise). This file re-derives the
+ *     label from the card's data-* attributes so a future
+ *     in-place status update does not desynchronize the label
+ *     from the state.
+ *
+ * The review flow no longer lives on this page. The "Review"
+ * footer button on a delivered order links to review.php, and
+ * that page owns its own client script. The review modal and the
+ * per-item review button were removed from orders.php in v9.0 of
+ * that page, and the corresponding initializers were removed from
+ * this file in v7.0.
+ *
+ * ---------------------------------------------------------------------
+ * FILTER MATCHING
+ * ---------------------------------------------------------------------
+ * The filter tabs use two attributes on each .order-card:
+ *
+ *     data-status   the exact order_status (pending, delivered, …)
+ *     data-active   "1" when the status is one of the five live
+ *                   statuses, "0" otherwise
+ *
+ * The matcher is:
+ *
+ *     filter === 'all'      → show every card
+ *     filter === 'active'   → show cards whose data-active is "1"
+ *     anything else         → show cards whose data-status equals
+ *                             the filter
+ *
+ * The server computes data-active so the client and the server
+ * agree on which statuses count as live. Adding a status to the
+ * live set is a change to isActiveStatus() in orders.php, and this
+ * file needs no change to follow.
+ *
+ * ---------------------------------------------------------------------
+ * TOTALS TOGGLE CONTRACT
+ * ---------------------------------------------------------------------
+ * The markup on orders.php is:
+ *
+ *     .order-card-totals[data-collapsed="true|false"]
+ *       button.order-totals-toggle[aria-expanded="true|false"]
+ *         span.order-totals-toggle-label    "Total"
+ *         span.order-totals-toggle-value    ₱X.XX
+ *         img.order-totals-toggle-icon      chevron
+ *       .order-totals-detail[hidden]
+ *         .order-total-row  × N
+ *
+ * This file is the single writer of three things:
+ *
+ *     1. the detail block's `hidden` attribute
+ *     2. the button's `aria-expanded` attribute
+ *     3. the container's `data-collapsed` attribute
+ *
+ * The chevron rotation is a CSS rule in orders.css keyed on
+ * [aria-expanded="true"]. This file does not write any inline style
+ * and does not touch the chevron. It only flips the attribute.
+ *
  * ---------------------------------------------------------------------
  * HANDLER TARGETS
  * ---------------------------------------------------------------------
@@ -37,24 +99,20 @@
  * the current tree:
  *
  *     customer-order-handler.php   ← cancel_order, reorder
- *     feedback-handler.php         ← submit_review
  *
  * The customer order handler URL is read from
  * window.FITPAL_ORDERS.handlerUrl, which customer/pages/orders.php
  * publishes. When that object is absent — which only happens on a
  * page that was rendered without it — the fallback names the same
- * file the page's own markup names. The feedback form's action is
- * read from its own markup via form.getAttribute('action').
+ * file the page's own markup names.
  *
  * This file does not reference order-handler.php or any other
- * retired filename in any fetch, form submit, or window.location
- * assignment.
+ * retired filename in any fetch or window.location assignment.
  *
  * ---------------------------------------------------------------------
  * MODAL VISIBILITY
  * ---------------------------------------------------------------------
- * orders.css defines the modal's visible state behind a class, not
- * behind a bare inline `display` flip:
+ * orders.css defines the modal's visible state behind a class:
  *
  *     .modal             { display: none; opacity: 0; }
  *     .modal.active      { display: flex !important; opacity: 1; }
@@ -63,27 +121,13 @@
  *     .modal-content     { opacity: 0; transform: scale(0.95) …; }
  *     .modal.active .modal-content { opacity: 1; transform: none; }
  *
- * Setting `modal.style.display = 'flex'` alone overrides the
- * `.modal { display: none }` rule, but every opacity and transform
- * transition is still keyed on `.active`. Without that class the
- * modal is in the DOM at full size and full pointer-events, but
- * completely transparent — the user sees nothing happen.
- *
- * Every modal in this file therefore goes through one pair of
- * helpers, `openModal` / `closeModal`, that:
- *
- *   - set `display: flex` inline (so the element enters the layout)
- *   - force a reflow (`void modal.offsetWidth`) so the class change
- *     is applied to a settled layout
- *   - toggle `.active` (so the CSS-driven opacity and transform
- *     transitions run)
- *
- * closeModal additionally waits for the fade-out transition before
- * restoring `display: none`, so the modal does not snap out mid-
- * animation.
+ * Every modal in this file goes through one pair of helpers,
+ * `openModal` / `closeModal`, that set `display: flex` inline, force
+ * a reflow, and toggle `.active`. closeModal waits for the fade-out
+ * transition before restoring `display: none`.
  *
  * ---------------------------------------------------------------------
- * Config
+ * CONFIG
  * ---------------------------------------------------------------------
  * The page writes window.FITPAL_ORDERS before loading this script:
  *
@@ -92,11 +136,6 @@
  *         assetBase:  '<project-root-relative asset prefix>',
  *         handlerUrl: '../backend/handlers/customer-order-handler.php'
  *     };
- *
- * The handlerUrl is the customer role's own handler; the page does
- * not talk to the shared order-transaction handler directly, because
- * the shared handler is role-aware and the customer role's own
- * handler already forwards cancel and reorder to it.
  *
  * ---------------------------------------------------------------------
  * Rules honored
@@ -108,33 +147,21 @@
  *     page-rendered modal with a matching SVG, per §9.
  *
  * @package FitPal
- * @version 4.0 — Modal open/close now toggles the `.active` class
- *                in addition to the inline `display` property.
+ * @version 7.0 — Filter tabs support an "Active" filter that reads
+ *                data-active. The review-modal initializer and the
+ *                per-item review button handler are removed —
+ *                orders.php no longer renders either, and the
+ *                review flow lives on review.php.
  *
- *                Before this revision, openModal() set
- *                `modal.style.display = 'flex'` and stopped. The
- *                Cancel modal, the Review modal, and the Reorder
- *                error path were therefore all silently invisible:
- *                the CSS rule `.modal { opacity: 0 }` remained in
- *                force because `.modal.active { opacity: 1 }` was
- *                never triggered, so the user clicked Cancel and
- *                nothing visible happened.
- *
- *                One pair of helpers, `openModal` / `closeModal`,
- *                now owns every modal transition in this file. All
- *                three call sites route through them, so no future
- *                modal can reintroduce the missing-class defect.
- *
- *                Every handler target, every filter, every
- *                expansion rule, and every fetch body is unchanged
- *                from v3.0.
- *
- *                (3.0: handler targets re-verified against the
- *                tree. 2.0: renamed from orders.js. 1.6: docblock
- *                noted the handler URL comes from the page's config
- *                object. 1.5: reading csrfToken from FITPAL_ORDERS.
- *                1.4: auto-highlight. 1.3: star rating. 1.2: cancel
- *                + reorder.)
+ *                (6.0: totals toggle rewritten for the chevron
+ *                dropdown. 5.0: collapsible totals and tracking-
+ *                label sync added. 4.0: modal open/close toggles
+ *                .active. 3.0: handler targets re-verified against
+ *                the tree. 2.0: renamed from orders.js. 1.6:
+ *                docblock noted the handler URL comes from the
+ *                page's config object. 1.5: reading csrfToken
+ *                from FITPAL_ORDERS. 1.4: auto-highlight. 1.3:
+ *                star rating. 1.2: cancel + reorder.)
  */
 (function () {
     'use strict';
@@ -163,11 +190,7 @@
     // MODAL VISIBILITY
     //
     // The single entry point for every modal transition in this file.
-    // Both helpers are defined once and used by the Cancel modal, the
-    // Review modal, and the Reorder error path.
-    //
-    // See the file header for why `.active` must be toggled in
-    // addition to the inline `display` flip.
+    // Used by the Cancel modal and by the Reorder error path.
     // -----------------------------------------------------------------
 
     function openModal(modal) {
@@ -204,7 +227,30 @@
 
     // -----------------------------------------------------------------
     // FILTER TABS
+    //
+    // Two matchers, one code path:
+    //
+    //   'all'    → show every card
+    //   'active' → show cards whose data-active is "1"
+    //   other    → show cards whose data-status equals the filter
+    //
+    // A card that does not match is hidden with display: none inline.
+    // The card keeps its layout (it is not removed from the DOM), so
+    // re-filtering is a style write, not a re-render.
     // -----------------------------------------------------------------
+
+    function cardMatchesFilter(card, filter) {
+        if (filter === 'all') {
+            return true;
+        }
+
+        if (filter === 'active') {
+            return card.getAttribute('data-active') === '1';
+        }
+
+        var status = (card.getAttribute('data-status') || '').trim();
+        return status === filter;
+    }
 
     function initFilterTabs() {
         var tabsRoot = qs('#filterTabs');
@@ -219,10 +265,7 @@
             var visibleCount = 0;
 
             cards.forEach(function (card) {
-                var status = (card.getAttribute('data-status') || '').trim();
-                var matches = (filter === 'all') || (status === filter);
-
-                if (matches) {
+                if (cardMatchesFilter(card, filter)) {
                     card.style.display = '';
                     visibleCount++;
                 } else {
@@ -231,7 +274,7 @@
             });
 
             if (noResults) {
-                noResults.style.display = (visibleCount === 0 && filter !== 'all') ? '' : 'none';
+                noResults.style.display = (visibleCount === 0) ? '' : 'none';
             }
         }
 
@@ -239,12 +282,24 @@
             tab.addEventListener('click', function () {
                 tabs.forEach(function (other) {
                     other.classList.remove('active');
+                    other.removeAttribute('aria-current');
                 });
                 tab.classList.add('active');
+                tab.setAttribute('aria-current', 'page');
 
                 applyFilter(tab.getAttribute('data-filter') || 'all');
             });
         });
+
+        // The server renders Active as the default tab (it carries
+        // class="filter-tab active" and aria-current="page"). Apply
+        // it once on bootstrap so a customer with a live order sees
+        // only their live orders first.
+        var initial = tabsRoot.querySelector('.filter-tab.active');
+        var initialFilter = initial
+            ? (initial.getAttribute('data-filter') || 'active')
+            : 'active';
+        applyFilter(initialFilter);
     }
 
     // -----------------------------------------------------------------
@@ -273,7 +328,7 @@
 
             summary.addEventListener('click', function (event) {
                 // Do not toggle when the click originated inside a
-                // link or a button (e.g. the Write Review button).
+                // link or a button.
                 if (event.target.closest('a, button')) return;
                 toggle();
             });
@@ -285,6 +340,92 @@
                 toggle();
             });
         });
+    }
+
+    // -----------------------------------------------------------------
+    // COLLAPSIBLE ORDER TOTALS — CHEVRON DROPDOWN
+    //
+    // The markup ships collapsed. On click this function flips the
+    // button's aria-expanded, the detail block's hidden, and the
+    // container's data-collapsed. The chevron rotation is a CSS rule
+    // keyed on [aria-expanded="true"].
+    // -----------------------------------------------------------------
+
+    function initTotalsToggle() {
+        var toggles = qsa('.order-totals-toggle');
+
+        toggles.forEach(function (button) {
+            var targetId = button.getAttribute('aria-controls');
+            if (!targetId) return;
+
+            var detail = document.getElementById(targetId);
+            if (!detail) return;
+
+            var container = button.closest('.order-card-totals');
+
+            button.addEventListener('click', function () {
+                var isExpanded = button.getAttribute('aria-expanded') === 'true';
+                var nextExpanded = !isExpanded;
+
+                button.setAttribute('aria-expanded', nextExpanded ? 'true' : 'false');
+                detail.hidden = !nextExpanded;
+
+                if (container) {
+                    container.setAttribute('data-collapsed', nextExpanded ? 'false' : 'true');
+                }
+            });
+        });
+    }
+
+    // -----------------------------------------------------------------
+    // TRACKING-LABEL RECONCILIATION
+    //
+    // The tracking button's visible label is rendered server-side
+    // from the option-B rule:
+    //
+    //     delivered, inside grace   → "Message"
+    //     delivered, past grace     → "Track History"
+    //     cancelled/refunded/failed → "Track History"
+    //     live statuses             → "Track Order"
+    //
+    // On page load the label already matches the data-* attributes.
+    // This function exists so that if a future revision updates a
+    // card's data-status, data-terminal, or data-grace-open in
+    // place, the label is re-derived from those attributes instead
+    // of being left stale.
+    // -----------------------------------------------------------------
+
+    function deriveTrackingLabel(kind) {
+        if (kind === 'message') return 'Message';
+        if (kind === 'history') return 'Track History';
+        if (kind === 'track')   return 'Track Order';
+        return null;
+    }
+
+    function syncTrackingLabelForCard(card) {
+        if (!card) return;
+
+        var button = qs('.tracking-btn', card);
+        if (!button) return;
+
+        var labelEl = qs('.tracking-btn-label', button);
+        if (!labelEl) return;
+
+        var kind = button.getAttribute('data-tracking-kind') || '';
+
+        var label = deriveTrackingLabel(kind);
+        if (label === null) return;
+
+        if (labelEl.textContent !== label) {
+            labelEl.textContent = label;
+        }
+
+        button.setAttribute('data-tracking-label', label);
+    }
+
+    function initTrackingLabelSync() {
+        var cards = qsa('.order-card');
+        cards.forEach(syncTrackingLabelForCard);
     }
 
     // -----------------------------------------------------------------
@@ -370,130 +511,6 @@
 
                     if (message) {
                         message.textContent =
-                            'A network error occurred. Please try again.';
-                    }
-                });
-        });
-    }
-
-    // -----------------------------------------------------------------
-    // REVIEW MODAL
-    // -----------------------------------------------------------------
-
-    function initReviewModal() {
-        var modal = qs('#reviewModal');
-        var closeBtn = qs('#closeReviewModal');
-        var cancelBtn = qs('#cancelReviewBtn');
-        var form = qs('#reviewForm');
-        var productNameEl = qs('#reviewProductName');
-        var orderIdInput = qs('#reviewOrderId');
-        var productIdInput = qs('#reviewProductId');
-        var ratingInput = qs('#ratingValue');
-        var starContainer = qs('#starRatingContainer');
-        var ratingError = qs('#ratingError');
-        var submitBtn = qs('#submitReviewBtn');
-        if (!modal || !form || !starContainer) return;
-
-        function openReviewModal(orderId, productId, productName) {
-            if (orderIdInput) orderIdInput.value = String(orderId);
-            if (productIdInput) productIdInput.value = String(productId);
-            if (productNameEl) productNameEl.textContent = productName || '';
-            if (ratingInput) ratingInput.value = '';
-            if (ratingError) ratingError.textContent = '';
-
-            var stars = qsa('.star', starContainer);
-            stars.forEach(function (s) { s.classList.remove('active'); });
-
-            openModal(modal);
-        }
-
-        function closeReviewModal() {
-            closeModal(modal);
-        }
-
-        qsa('.review-item-btn').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                var orderId = parseInt(btn.getAttribute('data-order-id') || '0', 10);
-                var productId = parseInt(btn.getAttribute('data-product-id') || '0', 10);
-                var productName = btn.getAttribute('data-product-name') || '';
-
-                if (orderId <= 0 || productId <= 0) return;
-
-                openReviewModal(orderId, productId, productName);
-            });
-        });
-
-        if (closeBtn) closeBtn.addEventListener('click', closeReviewModal);
-        if (cancelBtn) cancelBtn.addEventListener('click', closeReviewModal);
-
-        var overlay = qs('.modal-overlay', modal);
-        if (overlay) overlay.addEventListener('click', closeReviewModal);
-
-        qsa('.star', starContainer).forEach(function (star) {
-            star.addEventListener('click', function () {
-                var value = parseInt(star.getAttribute('data-value') || '0', 10);
-                if (value < 1 || value > 5) return;
-
-                if (ratingInput) ratingInput.value = String(value);
-                if (ratingError) ratingError.textContent = '';
-
-                qsa('.star', starContainer).forEach(function (s) {
-                    var sVal = parseInt(s.getAttribute('data-value') || '0', 10);
-                    if (sVal <= value) {
-                        s.classList.add('active');
-                    } else {
-                        s.classList.remove('active');
-                    }
-                });
-            });
-        });
-
-        form.addEventListener('submit', function (event) {
-            event.preventDefault();
-
-            if (ratingInput && !ratingInput.value) {
-                if (ratingError) ratingError.textContent = 'Please select a rating.';
-                return;
-            }
-
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.textContent = 'Submitting…';
-            }
-
-            var body = new FormData(form);
-
-            fetch(form.getAttribute('action'), {
-                method: 'POST',
-                body: body,
-                credentials: 'same-origin'
-            })
-                .then(function (res) { return res.json(); })
-                .then(function (data) {
-                    if (data && data.status === 'success') {
-                        window.location.reload();
-                        return;
-                    }
-
-                    if (submitBtn) {
-                        submitBtn.disabled = false;
-                        submitBtn.textContent = 'Submit Review';
-                    }
-
-                    if (ratingError) {
-                        ratingError.textContent = (data && data.message)
-                            ? data.message
-                            : 'Could not submit the review. Please try again.';
-                    }
-                })
-                .catch(function () {
-                    if (submitBtn) {
-                        submitBtn.disabled = false;
-                        submitBtn.textContent = 'Submit Review';
-                    }
-
-                    if (ratingError) {
-                        ratingError.textContent =
                             'A network error occurred. Please try again.';
                     }
                 });
@@ -607,9 +624,19 @@
     document.addEventListener('DOMContentLoaded', function () {
         initFilterTabs();
         initItemExpansion();
+        initTotalsToggle();
+        initTrackingLabelSync();
         initCancelModal();
-        initReviewModal();
         initReorder();
         initAutoHighlight();
+
+        // Expose the tracking-label sync so any future in-place
+        // status update path can call it after changing a card's
+        // data-* attributes.
+        if (window.FITPAL_ORDERS) {
+            window.FITPAL_ORDERS.syncTrackingLabels = function () {
+                qsa('.order-card').forEach(syncTrackingLabelForCard);
+            };
+        }
     });
 })();

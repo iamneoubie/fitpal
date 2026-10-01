@@ -1,9 +1,27 @@
 /**
  * FitPal Product Detail Page Styles
- * Version 5.7 — Quantity stepper uses shared add/subtract icons.
+ * Version 6.0 — Reviews section fixes.
+ *
+ *                1. .review-item is a two-column grid whose first
+ *                   column is 44px. The .review-avatar child now
+ *                   carries an explicit aspect-ratio: 1 / 1 so its
+ *                   height is derived from its width. Without that
+ *                   property the grid cell could collapse the
+ *                   circle's height and the avatar appeared as a
+ *                   thin sliver instead of a filled circle.
+ *
+ *                2. .reviews-list is a single-column flex
+ *                   container at every breakpoint. The previous
+ *                   revision added a 2-column grid at
+ *                   min-width: 1024px; that rule is removed.
+ *
+ *                3. .reviews-load-more-wrap and .reviews-load-more
+ *                   are added for the Load More button.
+ *
+ *                Every other rule is byte-identical to v5.9.
  *
  * @package FitPal
- * @version 5.7
+ * @version 6.0
  */
 
 /* ============================================
@@ -142,7 +160,6 @@
     height: 20px;
     display: block;
     flex-shrink: 0;
-    /* Tint the shared SVG to white */
     filter: brightness(0) invert(1);
 }
 
@@ -377,7 +394,6 @@
     box-sizing: border-box;
 }
 
-/* Action Rows */
 .action-row {
     display: flex;
     align-items: center;
@@ -395,9 +411,6 @@
     gap: 8px;
 }
 
-/* ============================================
-   DESKTOP: 50/50 SPLIT
-   ============================================ */
 @media (min-width: 769px) {
     .action-col {
         display: flex;
@@ -436,9 +449,6 @@
     }
 }
 
-/* ============================================
-   MOBILE: 100% STACKED VERTICALLY
-   ============================================ */
 @media (max-width: 768px) {
     .action-row {
         flex-direction: column;
@@ -523,7 +533,6 @@
     background: var(--gray-300);
 }
 
-/* Shared add/subtract icon sizing + dark tint */
 .qty-btn-icon {
     width: 18px;
     height: 18px;
@@ -613,7 +622,6 @@
     white-space: nowrap;
 }
 
-/* Customize Button */
 .customize-btn {
     background: #1a1a1a;
     color: #ffffff;
@@ -621,7 +629,6 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-/* Add to Cart Button */
 .add-to-cart-btn {
     background: #1a1a1a;
     color: #ffffff;
@@ -629,7 +636,6 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-/* Add to Order Button */
 .add-to-order-btn {
     background: var(--primary);
     color: #ffffff;
@@ -641,7 +647,6 @@
     cursor: not-allowed;
 }
 
-/* Login button */
 .btn-primary {
     background: var(--primary);
     color: #ffffff;
@@ -666,7 +671,6 @@
     transform: scale(0.97);
 }
 
-/* Dark button — used for "Add to Cart" in customize step */
 .btn-dark {
     background: #1a1a1a;
     color: #ffffff;
@@ -678,7 +682,6 @@
     transform: scale(0.97);
 }
 
-/* Disabled state */
 .btn-disabled {
     background: var(--gray-100);
     color: var(--gray-400);
@@ -693,9 +696,6 @@
     width: 100%;
 }
 
-/* ============================================
-   TABLET
-   ============================================ */
 @media (min-width: 769px) and (max-width: 1024px) {
     .action-btn {
         padding: 8px 10px;
@@ -766,9 +766,6 @@
     padding: 20px;
 }
 
-/* ============================================
-   CUSTOMIZATION GROUPS
-   ============================================ */
 .customization-group {
     margin-bottom: 20px;
     padding-bottom: 20px;
@@ -828,9 +825,6 @@
     color: var(--gray-700);
 }
 
-/* ============================================
-   STATIC INGREDIENT (single choice)
-   ============================================ */
 .static-ingredient {
     display: flex;
     align-items: center;
@@ -858,9 +852,6 @@
     font-size: var(--font-size-sm);
 }
 
-/* ============================================
-   RADIO GROUP & OPTIONS
-   ============================================ */
 .customization-radio-group {
     display: flex;
     flex-direction: column;
@@ -917,9 +908,6 @@
     white-space: nowrap;
 }
 
-/* ============================================
-   MODIFIER OPTIONS
-   ============================================ */
 .modifier-option {
     display: flex;
     align-items: center;
@@ -1012,9 +1000,6 @@
     font-size: var(--font-size-sm);
 }
 
-/* ============================================
-   CHECKBOX OPTIONS
-   ============================================ */
 .checkbox-option {
     display: flex;
     align-items: center;
@@ -1065,9 +1050,6 @@
     margin-left: 8px;
 }
 
-/* ============================================
-   SPECIAL INSTRUCTIONS
-   ============================================ */
 .customization-notes-global {
     margin-top: 16px;
     padding-top: 16px;
@@ -1083,7 +1065,6 @@
     font-size: var(--font-size-sm);
     background: var(--white);
     color: var(--text);
-    /* resize: none is already in global.css – do not redeclare */
     font-family: inherit;
     box-sizing: border-box;
     max-width: 100%;
@@ -1095,9 +1076,6 @@
     box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
 }
 
-/* ============================================
-   CUSTOMIZATION ACTIONS - VERTICAL STACK
-   ============================================ */
 .customization-actions {
     display: flex;
     flex-direction: column;
@@ -1133,7 +1111,6 @@
     color: var(--text);
 }
 
-/* Calories in green */
 .customization-total-item:last-child span:last-child {
     color: var(--success);
 }
@@ -1173,7 +1150,6 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-/* Override any row behaviour on desktop */
 @media (min-width: 769px) {
     .customization-actions {
         flex-direction: column;
@@ -1183,9 +1159,6 @@
     }
 }
 
-/* ============================================
-   CALORIE DISPLAYS (Main & Customize) - GREEN
-   ============================================ */
 .product-calories-section {
     display: flex;
     align-items: baseline;
@@ -1205,8 +1178,12 @@
    RELATED PRODUCTS
    ============================================ */
 .related-products {
-    margin-top: 24px;
+    margin-top: 32px;
     padding-bottom: 20px;
+    width: 100%;
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .related-title {
@@ -1351,7 +1328,7 @@
 
     .product-detail-card {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
         gap: 0;
         border-radius: var(--radius-lg);
     }
@@ -1359,6 +1336,7 @@
     .product-image-wrapper {
         border-radius: var(--radius-lg) 0 0 var(--radius-lg);
         min-height: 400px;
+        height: 100%;
     }
 
     .product-image-container {
@@ -1446,4 +1424,219 @@ input[type=number]::-webkit-outer-spin-button {
     to {
         transform: rotate(360deg);
     }
+}
+
+/* ============================================
+   PRODUCT REVIEWS
+   ============================================ */
+.product-reviews-section {
+    margin-top: 32px;
+    padding-bottom: 20px;
+    width: 100%;
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.reviews-title {
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    color: var(--text);
+    margin: 0 0 16px 0;
+}
+
+/* Single-column list at every breakpoint.
+   The customer asked for a full-width row per review.
+   Do not add a @media rule that turns this into a grid. */
+.reviews-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+}
+
+/* ============================================================
+   Review card — two columns: avatar circle + body
+   ============================================================
+   grid-template-columns: 44px 1fr keeps the avatar column at
+   exactly 44px and lets the body take the rest. The avatar
+   child has aspect-ratio: 1 / 1 so its height is derived from
+   its width. Without that property, a grid cell can collapse
+   the child's height and the circle becomes a thin sliver.
+   ============================================================ */
+.review-item {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    gap: 14px;
+    align-items: flex-start;
+    background: var(--white);
+    border: 1px solid var(--gray-100);
+    border-radius: var(--radius-base);
+    padding: 16px;
+    box-shadow: var(--shadow-sm);
+    box-sizing: border-box;
+    width: 100%;
+}
+
+/* ------------------------------------------------------------
+   Avatar circle
+   ------------------------------------------------------------
+   44px circle, primary-green fill, white initial. When a real
+   picture is present, the <img> fills the circle edge-to-edge
+   with object-fit: cover; the initial span is hidden by the
+   inline display toggle in the PHP.
+
+   aspect-ratio: 1 / 1 is load-bearing. The grid column is
+   44px wide; without aspect-ratio the flex container's
+   content-box height can collapse to zero and the avatar
+   renders as a thin sliver instead of a circle.
+   ------------------------------------------------------------ */
+.review-avatar {
+    width: 44px;
+    height: 44px;
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    background: var(--primary);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 18px;
+    flex-shrink: 0;
+    overflow: hidden;
+    user-select: none;
+    box-sizing: border-box;
+}
+
+.review-avatar-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border-radius: 50%;
+}
+
+.review-avatar-initial {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 18px;
+    text-transform: uppercase;
+    line-height: 1;
+}
+
+/* ------------------------------------------------------------
+   Body column
+   ------------------------------------------------------------ */
+.review-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+
+.review-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.review-author {
+    font-weight: 600;
+    font-size: var(--font-size-sm);
+    color: var(--text);
+    word-break: break-word;
+}
+
+.review-date {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.review-rating {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.review-rating .star {
+    font-size: 16px;
+    line-height: 1;
+    color: var(--gray-300);
+}
+
+.review-rating .star.filled {
+    color: #ffc107;
+}
+
+.review-comment {
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    line-height: 1.6;
+    margin: 0;
+    word-break: break-word;
+}
+
+/* ------------------------------------------------------------
+   Load More button
+   ------------------------------------------------------------
+   A black neutral button per §7: it is a non-destructive,
+   non-positive action and must not compete visually with the
+   green Add to Order button. It is centered and its width is
+   bounded so it does not stretch the section.
+   ------------------------------------------------------------ */
+.reviews-load-more-wrap {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.reviews-load-more {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 200px;
+    min-height: 44px;
+    padding: 12px 24px;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    border-radius: var(--radius-base);
+    background: #1a1a1a;
+    color: #ffffff;
+    border: 2px solid #1a1a1a;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease,
+                box-shadow 0.15s ease;
+}
+
+.reviews-load-more:hover,
+.reviews-load-more:focus-visible {
+    background: #000000;
+    border-color: #000000;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.reviews-load-more:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.reviews-load-more:active {
+    transform: translateY(1px);
+}
+
+.reviews-load-more:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
 }

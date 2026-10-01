@@ -8,85 +8,47 @@
  * the same order-placement flow.
  *
  * ---------------------------------------------------------------------
- * WHERE THE MONEY MOVEMENT GOES FROM HERE
+ * CUSTOMER REVIEWS SECTION
  * ---------------------------------------------------------------------
- * Two staging surfaces, both leading to the shared order-transaction
- * layer when the order is finally placed:
+ * Below the "You might also like" grid, the page renders up to 50
+ * reviews as a single-column list, shows the first 5, and reveals
+ * the rest five at a time when the customer clicks Load More. The
+ * remaining reviews are embedded as JSON on the wrapper's
+ * data-reviews-more attribute; product-detail.js reads that payload
+ * and appends cards. No HTTP requests are made after the initial
+ * page load.
  *
- *   Add to Cart    → cart-handler.php writes a cart row. Selected
- *                    cart rows are later copied into the session
- *                    order queue by cart-handler.php's
- *                    push_to_queue action.
+ * Each review card carries:
  *
- *   Add to Order   → queue-handler.php writes a session queue line
- *                    directly.
+ *   - the reviewer's avatar circle, either their profile picture or
+ *     the first letter of their first name on a primary-green
+ *     background, matching the header's .user-profile-circle
+ *   - their display name
+ *   - the date they submitted the review
+ *   - their star score
+ *   - their comment text for THIS product, when they wrote one
  *
- * Either path ends at place-order-handler.php, which calls
- * createOrderFromQueue() in the shared order-transaction layer.
- *
- * The customization payload this page builds is transmitted as JSON
- * and revalidated server-side. The page never computes a price the
- * server trusts: the server recomputes the effective unit price from
- * product.base_price plus the product_composition modifiers, ignoring
- * any price the client sends.
- *
- * ---------------------------------------------------------------------
- * HANDLER TARGETS
- * ---------------------------------------------------------------------
- * Every fetch and form action this page emits targets a file that
- * exists on disk in the current tree:
- *
- *     cart-handler.php    ← add to cart (AJAX, from #actionControlForm's
- *                            data-cart-url or cart.js's fallback)
- *     queue-handler.php   ← add to order (AJAX, from #actionControlForm's
- *                            data-queue-url or queue-panel.js's fallback)
- *
- * Both files exist on disk and were not renamed during the sequence.
- * The form's own action attribute is cart-handler.php, which is the
- * default POST target if JS is disabled. The two data attributes
- * give the AJAX layer its explicit endpoints. Both point at files
- * that exist.
- *
- * This page does not reference order-handler.php or any other
- * retired filename.
+ * The section is omitted entirely when there are no reviews.
  *
  * ---------------------------------------------------------------------
- * SCOPE RULES APPLIED
+ * AVATAR URL CONSTRUCTION
  * ---------------------------------------------------------------------
- *  - No SQL in this file. getProductById(),
- *    getProductComponentsGrouped(), and getRelatedProducts() come
- *    from customer/backend/database/product-queries.php.
- *  - No inline CSS. product-detail.css is loaded via <link> at the
- *    top.
- *  - No inline style attributes.
- *  - No inline SVG. Icons come from shared/assets/images/icons/.
- *  - No window.alert / confirm / prompt. Errors and confirmations
- *    route through a page-rendered modal or a toast, per §6.
- *  - Buttons follow §7: Customize and Add to Cart are neutral
- *    (black-and-white); Add to Order is confirm (primary);
- *    Cancel is neutral (black-and-white).
- * ---------------------------------------------------------------------
+ * The stored profile_picture column holds a project-root-relative
+ * path like "shared/uploads/customer/profiles/12/07_18_2026_0.jpg".
+ * The page builds the browser URL by trimming the trailing "shared/"
+ * from $assetBase and appending the stored path. When the stored
+ * path is empty, the page renders the first letter of the reviewer's
+ * first name inside the avatar circle.
  *
  * @package FitPal
- * @version 10.0 — Handler targets verified against the tree.
+ * @version 13.0 — Reviews section now: single-column, first 5
+ *                 visible, Load More reveals 5 at a time. The full
+ *                 remaining set is embedded on the list wrapper's
+ *                 data-reviews-more attribute.
  *
- *                 #actionControlForm's action is
- *                 ../backend/handlers/cart-handler.php. Its
- *                 data-cart-url is ../backend/handlers/cart-handler.php
- *                 and its data-queue-url is
- *                 ../backend/handlers/queue-handler.php. Both files
- *                 exist on disk. product-detail.js reads the two
- *                 data attributes with a fallback to the same paths.
- *
- *                 No markup change from the previous revision. The
- *                 customization component rendering, the static
- *                 ingredient block, the radio group, the modifier
- *                 block, the multi-select block, the notes
- *                 textarea, the related-products section, and the
- *                 second-step customize card are byte-identical.
- *
- *                 (9.4: docblock records the money-flow path. 9.3:
- *                 CSRF token inherited from header.php.)
+ *                 (12.0: decoded comment + avatar with fallback
+ *                 initial. 11.0: reviews section. 10.0: handler
+ *                 targets verified. 9.4: money-flow docblock.)
  */
 declare(strict_types=1);
 
@@ -123,16 +85,23 @@ $relatedProducts = getRelatedProducts(
     4
 );
 
+// Read up to 50 reviews, split into the first page (5) and the
+// remainder (the rest) for client-side Load More.
+$allReviews = getProductReviews($database_connection, $productId, 50);
+
+$reviewsPerPage = 5;
+$reviewsFirst   = array_slice($allReviews, 0, $reviewsPerPage);
+$reviewsMore    = array_slice($allReviews, $reviewsPerPage);
+
 require_once __DIR__ . '/../includes/header.php';
 
-// $csrfToken is provided by header.php (via includes/customer-csrf-token.php),
-// stored under the customer role's own session key 'customer_csrf_token'.
+// $csrfToken and $assetBase are provided by header.php.
+// $assetBase always ends with 'shared/'.
 
 $isLoggedIn = isset($_SESSION['customer_id']) && !empty($_SESSION['customer_id']);
 
 $dietaryTags = $product['dietary_tags'] !== '' ? explode(',', $product['dietary_tags']) : [];
 $allergens   = $product['allergens']    !== '' ? explode(',', $product['allergens'])    : [];
-
 
 $basePrice = (float)$product['base_price'];
 $inStock   = (int)$product['stock'] > 0 && (int)$product['is_active'] === 1;
@@ -182,6 +151,130 @@ if (!$hasCustomizations || $baseCalories === 0) {
 }
 
 $formattedPrice = '₱' . number_format($basePrice, 2);
+
+/**
+ * Build a browser-loadable URL for a profile picture path stored in
+ * customer_profile.profile_picture.
+ *
+ * Returns '' when the stored path is empty.
+ */
+function buildReviewAvatarUrl(string $storedPath, string $assetBase): string
+{
+    if ($storedPath === '' || $assetBase === '') {
+        return '';
+    }
+
+    $projectRootUrl = preg_replace('#shared/$#', '', $assetBase);
+    if (!is_string($projectRootUrl)) {
+        return '';
+    }
+
+    return $projectRootUrl . $storedPath;
+}
+
+/**
+ * Resolve the initial letter to draw inside an avatar circle.
+ */
+function buildReviewInitial(string $firstName, string $lastName): string
+{
+    if ($firstName !== '') {
+        return strtoupper(substr($firstName, 0, 1));
+    }
+    if ($lastName !== '') {
+        return strtoupper(substr($lastName, 0, 1));
+    }
+    return 'U';
+}
+
+/**
+ * Render a single review card.
+ *
+ * Declared as a function so the first-page render and the
+ * serialized "more" payload render use exactly the same markup. A
+ * change to the card shape is a change to one function.
+ *
+ * @param array<string, mixed> $review
+ * @param string $assetBase
+ */
+function renderReviewCard(array $review, string $assetBase): string
+{
+    $firstName = (string)($review['first_name'] ?? '');
+    $lastName  = (string)($review['last_name']  ?? '');
+
+    $displayName = trim($firstName . ' ' . $lastName);
+    if ($displayName === '') {
+        $displayName = 'Customer';
+    }
+
+    $initial = buildReviewInitial($firstName, $lastName);
+
+    $avatarUrl = buildReviewAvatarUrl(
+        (string)($review['profile_picture'] ?? ''),
+        $assetBase
+    );
+
+    $score   = (int)($review['score'] ?? 0);
+    $comment = (string)($review['comment'] ?? '');
+
+    $dateRaw = (string)($review['date_posted'] ?? '');
+    $dateTs  = strtotime($dateRaw);
+    $dateOut = $dateTs !== false ? date('M d, Y', $dateTs) : $dateRaw;
+
+    $avatarHtml = $avatarUrl !== ''
+        ? '<img src="' . htmlspecialchars($avatarUrl, ENT_QUOTES, 'UTF-8') . '" alt="" class="review-avatar-image" '
+          . 'onerror="this.onerror=null; this.style.display=\'none\'; if (this.nextElementSibling) { this.nextElementSibling.style.display=\'flex\'; }">'
+          . '<span class="review-avatar-initial" style="display: none;">'
+          . htmlspecialchars($initial, ENT_QUOTES, 'UTF-8')
+          . '</span>'
+        : '<span class="review-avatar-initial">'
+          . htmlspecialchars($initial, ENT_QUOTES, 'UTF-8')
+          . '</span>';
+
+    $starsHtml = '';
+    for ($i = 1; $i <= 5; $i++) {
+        $starsHtml .= '<span class="star ' . ($i <= $score ? 'filled' : '') . '">★</span>';
+    }
+
+    $commentHtml = $comment !== ''
+        ? '<p class="review-comment">' . nl2br(htmlspecialchars($comment, ENT_QUOTES, 'UTF-8')) . '</p>'
+        : '';
+
+    return
+        '<article class="review-item">'
+        . '<div class="review-avatar" aria-hidden="true">' . $avatarHtml . '</div>'
+        . '<div class="review-body">'
+        . '<header class="review-header">'
+        . '<span class="review-author">' . htmlspecialchars($displayName, ENT_QUOTES, 'UTF-8') . '</span>'
+        . '<span class="review-date">' . htmlspecialchars($dateOut, ENT_QUOTES, 'UTF-8') . '</span>'
+        . '</header>'
+        . '<div class="review-rating" aria-label="' . $score . ' out of 5 stars">' . $starsHtml . '</div>'
+        . $commentHtml
+        . '</div>'
+        . '</article>';
+}
+
+// Serialize the "more" set as JSON for the client. Each entry
+// carries only the fields the JS needs to build a card.
+$reviewsMoreJson = json_encode(
+    array_map(
+        static function (array $r): array {
+            return [
+                'comment'         => (string)($r['comment']         ?? ''),
+                'date_posted'     => (string)($r['date_posted']     ?? ''),
+                'score'           => (int)   ($r['score']           ?? 0),
+                'first_name'      => (string)($r['first_name']      ?? ''),
+                'last_name'       => (string)($r['last_name']       ?? ''),
+                'profile_picture' => (string)($r['profile_picture'] ?? ''),
+            ];
+        },
+        $reviewsMore
+    ),
+    JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+);
+
+if ($reviewsMoreJson === false) {
+    $reviewsMoreJson = '[]';
+}
 ?>
 
 <link rel="stylesheet" href="../assets/css/product-detail.css">
@@ -378,6 +471,29 @@ $formattedPrice = '₱' . number_format($basePrice, 2);
                 </div>
             </section>
             <?php endif; ?>
+
+            <?php if (!empty($allReviews)): ?>
+            <section class="product-reviews-section" aria-label="Customer reviews"
+                data-reviews-per-page="<?php echo $reviewsPerPage; ?>">
+                <h2 class="reviews-title">Customer Reviews</h2>
+
+                <div class="reviews-list" id="reviewsList"
+                    data-reviews-more="<?php echo htmlspecialchars($reviewsMoreJson, ENT_QUOTES, 'UTF-8'); ?>">
+                    <?php foreach ($reviewsFirst as $review): ?>
+                    <?php echo renderReviewCard($review, $assetBase); ?>
+                    <?php endforeach; ?>
+                </div>
+
+                <?php if (!empty($reviewsMore)): ?>
+                <div class="reviews-load-more-wrap">
+                    <button type="button" class="btn btn-neutral reviews-load-more" id="reviewsLoadMoreBtn">
+                        Load More Reviews
+                    </button>
+                </div>
+                <?php endif; ?>
+            </section>
+            <?php endif; ?>
+
         </div>
     </div>
 

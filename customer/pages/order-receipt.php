@@ -2,10 +2,39 @@
 /**
  * FitPal Customer Order Receipt Page
  *
- * Read-only receipt view for a single delivered order. Renders the
- * order header, restaurant, rider, customer, delivery address,
- * per-item breakdown with customizations, fee-derived totals, and a
- * footer note. No mutations, no forms, no JS.
+ * Read-only receipt view for a single terminal order — one that has
+ * reached one of: delivered, cancelled, refunded, or failed. Renders
+ * the order header, restaurant, rider (when delivered), customer,
+ * delivery address, per-item breakdown with customizations, fee-
+ * derived totals, and a footer note. No mutations, no forms, no JS.
+ *
+ * ---------------------------------------------------------------------
+ * WHY TERMINAL, NOT DELIVERED-ONLY
+ * ---------------------------------------------------------------------
+ * The Orders page renders "View Receipt" for every terminal status,
+ * not just delivered. A cancelled order still has a record of what
+ * was ordered, what it would have cost, and who cancelled it. A
+ * refunded order has the same record plus the refund row on the
+ * wallet. A failed order has the same record plus the failed-
+ * delivery note. All four deserve a receipt.
+ *
+ * The page therefore gates on isTerminalStatus() rather than on
+ * 'delivered'. Anything earlier — pending, preparing, rider_pending,
+ * picking_up, delivering — is still in motion and does not yet have
+ * a final record to hand the customer. Those are bounced back to
+ * orders.php with a clear message.
+ *
+ * Sections that only make sense for a delivered order are rendered
+ * conditionally:
+ *
+ *     "Delivered At" meta cell      → delivered only
+ *     Rider block                    → delivered only
+ *     Footer "Thank you" line        → delivered only
+ *     Status banner                  → every terminal status
+ *     "Cancelled by" line            → cancelled / refunded only
+ *
+ * Everything else — restaurant, customer, address, items, totals —
+ * applies to every terminal order and is rendered unconditionally.
  *
  * ---------------------------------------------------------------------
  * SCOPE RULES APPLIED
@@ -29,42 +58,32 @@
  *   - Session must have customer_id; otherwise redirect to sign-in.php.
  *   - ?id must be a positive integer; otherwise redirect to orders.php.
  *   - The order must belong to the authenticated customer.
- *   - The order must be in the 'delivered' state.
- *
- * Rider block
- * -----------
- * A "Delivered by" section sits between the restaurant block and the
- * meta grid. It is omitted entirely when getOrderRiderDetails()
- * returns false — the schema's ON DELETE SET NULL behavior on the FK
- * to delivery_rider means an old order can lose its rider reference
- * if that rider's row is later deleted. A delivered order in that
- * state is still a valid receipt; it simply has no rider to show.
- *
- * ---------------------------------------------------------------------
- * HANDLER TARGETS
- * ---------------------------------------------------------------------
- * This file renders no forms and posts to no handler. Every link it
- * emits targets a page under customer/pages/, and every image it
- * emits targets an icon under shared/assets/images/icons/ or a
- * brand asset under shared/assets/images/brand/. No handler path
- * appears anywhere in this file.
- *
- * ---------------------------------------------------------------------
+ *   - The order must be in a terminal state.
  *
  * @package FitPal
- * @version 3.0 — Handler targets verified. The file contains no
- *                form, no fetch, and no handler URL. Every link
- *                targets a customer page; every image targets the
- *                shared asset folder. No reference to
- *                order-handler.php or any other retired filename
- *                exists in this file.
+ * @version 4.0 — Terminal-status receipts.
  *
- *                No markup change from the previous revision.
+ *                The gate is now isTerminalStatus() rather than
+ *                'delivered'. Cancelled, refunded, and failed
+ *                orders render a receipt. Delivered-only sections
+ *                (Delivered At meta cell, rider block, thank-you
+ *                footer) are conditional.
  *
- *                (2.0: renamed customer order query layer.
- *                1.2: rider block surfaces the rider's contact
- *                number as a tap-to-call tel: link. 1.1: rider
- *                block added. 1.0: initial receipt.)
+ *                A status banner renders near the top of the
+ *                receipt so the customer sees at a glance how the
+ *                order ended. For cancelled and refunded orders a
+ *                "Cancelled by" line is added to the meta grid.
+ *
+ *                No other section changed. Every icon reference,
+ *                every item row, every totals row, and the entire
+ *                rider block (when rendered) are byte-identical to
+ *                v3.0.
+ *
+ *                (3.0: handler targets verified — the file contains
+ *                no form, no fetch, and no handler URL. 2.0:
+ *                renamed customer order query layer. 1.2: rider
+ *                contact surface as tel: link. 1.1: rider block.
+ *                1.0: initial receipt.)
  */
 
 declare(strict_types=1);
@@ -103,9 +122,20 @@ if (!$ownership) {
     exit;
 }
 
-// Receipt is only offered for delivered orders.
-if ($ownership['order_status'] !== 'delivered') {
-    $_SESSION['order_error'] = 'A receipt is only available for delivered orders.';
+/**
+ * Terminal statuses render a receipt. Live statuses do not.
+ *
+ * Declared here so the page is self-contained: no page-level helper
+ * file needs to be loaded for this page to make its own gate
+ * decision.
+ */
+function receiptIsTerminal(string $status): bool
+{
+    return in_array($status, ['delivered', 'cancelled', 'refunded', 'failed'], true);
+}
+
+if (!receiptIsTerminal($ownership['order_status'])) {
+    $_SESSION['order_error'] = 'A receipt is only available for completed, cancelled, refunded, or failed orders.';
     header('Location: orders.php');
     exit;
 }
@@ -117,7 +147,16 @@ if (!$order) {
     exit;
 }
 
-$rider = getOrderRiderDetails($database_connection, $orderId);
+$orderStatus = (string)($order['order_status'] ?? '');
+$isDelivered = ($orderStatus === 'delivered');
+
+// The rider block only makes sense for a delivered order: a
+// cancelled or failed order has no rider who completed the trip,
+// and a refunded order's rider involvement is already captured by
+// the "Cancelled by" line.
+$rider = $isDelivered
+    ? getOrderRiderDetails($database_connection, $orderId)
+    : false;
 
 // ---------------------------------------------------------------------
 // Order fields
@@ -126,7 +165,7 @@ $orderDate      = (string)($order['order_date']          ?? '');
 $deliveredAt    = (string)($order['delivered_at']        ?? '');
 $paymentMethod  = (string)($order['payment_method']      ?? '');
 $destination    = (string)($order['destination_address'] ?? '');
-$orderStatus    = (string)($order['order_status']        ?? '');
+$cancelledBy    = (string)($order['cancelled_by']        ?? '');
 
 $customerFirstName = (string)($order['first_name']     ?? '');
 $customerLastName  = (string)($order['last_name']      ?? '');
@@ -170,9 +209,58 @@ $paymentLabel = match ($paymentMethod) {
 };
 
 // ---------------------------------------------------------------------
-// Rider normalization
+// Status presentation
+//
+// Every terminal status gets a label, a short description, and a
+// CSS modifier that tints the banner. The modifier values are
+// derived from the status name and are read by
+// order-receipt.css.
 // ---------------------------------------------------------------------
-$hasRider = ($rider !== false && is_array($rider));
+$statusLabel = match ($orderStatus) {
+    'delivered' => 'Delivered',
+    'cancelled' => 'Cancelled',
+    'refunded'  => 'Refunded',
+    'failed'    => 'Failed',
+    default     => ucfirst($orderStatus),
+};
+
+$statusDescription = match ($orderStatus) {
+    'delivered' => 'This order was delivered successfully.',
+    'cancelled' => 'This order was cancelled before it was completed.',
+    'refunded'  => 'This order was cancelled and refunded to your wallet.',
+    'failed'    => 'This order could not be completed and was closed.',
+    default     => '',
+};
+
+$statusIconFile = match ($orderStatus) {
+    'delivered' => 'verified-fill.svg',
+    'cancelled' => 'close-circle-fill.svg',
+    'refunded'  => 'coin-fill.svg',
+    'failed'    => 'error-warning-fill.svg',
+    default     => 'information-fill.svg',
+};
+
+// Human-readable "cancelled by" line, used only for cancelled and
+// refunded orders where the schema has set orders.cancelled_by.
+$cancelledByLabel = '';
+if (in_array($orderStatus, ['cancelled', 'refunded'], true) && $cancelledBy !== '') {
+    $cancelledByLabel = match ($cancelledBy) {
+        'customer'   => 'Customer',
+        'restaurant' => 'Restaurant',
+        'rider'      => 'Rider',
+        'admin'      => 'Admin',
+        default      => ucfirst($cancelledBy),
+    };
+}
+
+// ---------------------------------------------------------------------
+// Rider normalization
+//
+// Only runs when $rider is a real row. For every other terminal
+// status the block is skipped entirely; the "Delivered by" section
+// never renders.
+// ---------------------------------------------------------------------
+$hasRider = ($isDelivered && $rider !== false && is_array($rider));
 
 $riderName        = '';
 $riderContact     = '';
@@ -260,6 +348,32 @@ require_once __DIR__ . '/../includes/header.php';
                 </div>
             </header>
 
+            <!-- ============================================
+                 STATUS BANNER
+                 Renders for every terminal status so the
+                 customer sees at a glance how the order
+                 ended before scrolling into the detail.
+                 ============================================ -->
+            <section
+                class="receipt-status-banner receipt-status-<?php echo htmlspecialchars($orderStatus, ENT_QUOTES, 'UTF-8'); ?>"
+                aria-label="Order status">
+
+                <div class="receipt-status-icon" aria-hidden="true">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/<?php echo htmlspecialchars($statusIconFile, ENT_QUOTES, 'UTF-8'); ?>"
+                        alt=""
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/information-fill.svg'">
+                </div>
+
+                <div class="receipt-status-body">
+                    <p class="receipt-status-label">
+                        <?php echo htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8'); ?>
+                    </p>
+                    <p class="receipt-status-description">
+                        <?php echo htmlspecialchars($statusDescription, ENT_QUOTES, 'UTF-8'); ?>
+                    </p>
+                </div>
+            </section>
+
             <?php if ($restaurantName !== '' || $branchName !== ''): ?>
             <section class="receipt-restaurant" aria-label="Restaurant">
                 <?php if ($restaurantName !== ''): ?>
@@ -282,6 +396,11 @@ require_once __DIR__ . '/../includes/header.php';
             </section>
             <?php endif; ?>
 
+            <!-- ============================================
+                 RIDER BLOCK
+                 Delivered orders only. Every other terminal
+                 status skips this section entirely.
+                 ============================================ -->
             <?php if ($hasRider): ?>
             <section class="receipt-rider" aria-label="Delivery rider">
                 <div class="receipt-rider-top">
@@ -363,12 +482,14 @@ require_once __DIR__ . '/../includes/header.php';
                     </p>
                 </div>
 
+                <?php if ($isDelivered): ?>
                 <div class="receipt-meta-block">
                     <p class="receipt-meta-label">Delivered At</p>
                     <p class="receipt-meta-value">
                         <?php echo htmlspecialchars(receiptDate($deliveredAt), ENT_QUOTES, 'UTF-8'); ?>
                     </p>
                 </div>
+                <?php endif; ?>
 
                 <div class="receipt-meta-block">
                     <p class="receipt-meta-label">Payment Method</p>
@@ -379,13 +500,23 @@ require_once __DIR__ . '/../includes/header.php';
 
                 <div class="receipt-meta-block">
                     <p class="receipt-meta-label">Status</p>
-                    <p class="receipt-meta-value receipt-meta-value-status">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/verified-fill.svg" alt=""
-                            class="receipt-meta-status-icon" width="14" height="14"
+                    <p
+                        class="receipt-meta-value receipt-meta-value-status receipt-meta-value-status-<?php echo htmlspecialchars($orderStatus, ENT_QUOTES, 'UTF-8'); ?>">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/<?php echo htmlspecialchars($statusIconFile, ENT_QUOTES, 'UTF-8'); ?>"
+                            alt="" class="receipt-meta-status-icon" width="14" height="14"
                             onerror="this.onerror=null; this.style.display='none';">
-                        <span><?php echo htmlspecialchars(ucfirst($orderStatus), ENT_QUOTES, 'UTF-8'); ?></span>
+                        <span><?php echo htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8'); ?></span>
                     </p>
                 </div>
+
+                <?php if ($cancelledByLabel !== ''): ?>
+                <div class="receipt-meta-block">
+                    <p class="receipt-meta-label">Cancelled By</p>
+                    <p class="receipt-meta-value">
+                        <?php echo htmlspecialchars($cancelledByLabel, ENT_QUOTES, 'UTF-8'); ?>
+                    </p>
+                </div>
+                <?php endif; ?>
             </section>
 
             <section class="receipt-block" aria-label="Customer">
@@ -523,8 +654,20 @@ require_once __DIR__ . '/../includes/header.php';
             </section>
 
             <footer class="receipt-footer-note">
+                <?php if ($isDelivered): ?>
                 <p class="thanks">Thank you for ordering with FitPal.</p>
                 <p>This receipt is a record of your completed order.</p>
+                <?php else: ?>
+                <p class="thanks">Order record.</p>
+                <p>This receipt is a record of an order that <?php
+                    echo htmlspecialchars(
+                        $orderStatus === 'cancelled' ? 'was cancelled' :
+                        ($orderStatus === 'refunded' ? 'was cancelled and refunded' :
+                        ($orderStatus === 'failed' ? 'could not be completed' : 'is closed')),
+                        ENT_QUOTES, 'UTF-8'
+                    );
+                ?>.</p>
+                <?php endif; ?>
             </footer>
 
         </article>

@@ -24,6 +24,34 @@
  *   3. Origin-aware chat modal opening.
  *
  * ---------------------------------------------------------------------
+ * CLOSED-CHAT FORM SWAP
+ * ---------------------------------------------------------------------
+ * When the customer opens the chat modal on an order whose grace
+ * window has expired — or whose status is terminal — the
+ * message-handler's `get` action returns:
+ *
+ *     { status: 'error', message: '…', reason: 'window_closed' }
+ *     { status: 'error', message: '…', reason: 'terminal' }
+ *
+ * When that happens, the message form is replaced by a static
+ * notice inside the modal body. The form is hidden with the
+ * `hidden` attribute (not `display: none` inline), so no inline
+ * style is written and the swap is a pure DOM operation.
+ *
+ * The swap is:
+ *   - idempotent: re-applying for the same channel is a no-op.
+ *   - reversible: switching to a channel that is still open
+ *     restores the form.
+ *   - final when both channels are closed: the form stays hidden
+ *     for the rest of the modal's lifetime in this page view.
+ *
+ * The notice text is fixed:
+ *
+ *     "This conversation is closed. This order is available for
+ *      history only. You can no longer send messages on this
+ *      order."
+ *
+ * ---------------------------------------------------------------------
  * CLASS-NAME CONTRACT
  * ---------------------------------------------------------------------
  * This file emits three shapes of node. The exact class strings are
@@ -51,18 +79,19 @@
  *
  *   <div class="customer-chat-system">…</div>
  *
- * The previous revision of this file emitted the bare classes
- * `sent` and `received`, which the CSS at the time did not target.
- * The two files drifted and both bubbles rendered identically. This
- * revision pins the modifier to the base class as a compound
- * class name, which is the exact string order-tracking.css now
- * targets.
+ * Closed-chat form swap (this revision):
  *
- * The `direction` field on every entry the server returns is set
- * by message-handler.php's shapeMessage(). This file trusts it
- * verbatim. A `direction === 'sent'` entry is rendered with the
- * sent modifier; every other entry is rendered with the received
- * modifier.
+ *   <div class="customer-chat-closed-notice">
+ *     <img class="customer-chat-closed-icon" src="…" alt="">
+ *     <p class="customer-chat-closed-text">…</p>
+ *   </div>
+ *
+ * The `.customer-chat-closed-notice`, `.customer-chat-closed-icon`,
+ * and `.customer-chat-closed-text` classes already exist in
+ * order-tracking.css for the page-level notice. This file reuses
+ * them so no new CSS is required. The modal-scoped instance is
+ * distinguished by its parent (`#customerChatMessages`), which
+ * carries its own layout; no additional class is introduced.
  *
  * ---------------------------------------------------------------------
  * MODAL VISIBILITY
@@ -108,7 +137,7 @@
  * DOM and the modal switches to the other channel (or closes).
  *
  * ---------------------------------------------------------------------
- * Config
+ * CONFIG
  * ---------------------------------------------------------------------
  * The tracking page writes these data attributes on #trackingPage:
  *
@@ -126,44 +155,37 @@
  * Rules honored
  * ---------------------------------------------------------------------
  *   - No CSS in this file.
- *   - No <svg> injection.
+ *   - No <svg> injection. The closed-chat icon is loaded as an
+ *     <img> from shared/assets/images/icons/; the asset base is
+ *     read from window.FITPAL_ASSET_BASE or a documented fallback.
  *   - No window.alert / confirm / prompt.
  *
  * @package FitPal
- * @version 5.0 — Class names emitted by appendMessageNode() are now
- *                the exact strings order-tracking.css targets:
- *                `customer-chat-message-sent` and
- *                `customer-chat-message-received`, each on the same
- *                node as the base `.customer-chat-message` class.
+ * @version 6.0 — Adds the closed-chat form swap. When the
+ *                message-handler's `get` action returns
+ *                reason='window_closed' or reason='terminal', the
+ *                message form is hidden and a static notice is
+ *                inserted inside the modal body. The swap is
+ *                idempotent, reversible on channel switch, and
+ *                final once both channels are closed.
  *
- *                The inner nodes are now `customer-chat-message-sender`,
- *                `customer-chat-message-text`, and
- *                `customer-chat-message-time`, which the CSS has
- *                rules for. The previous revision emitted
- *                `customer-chat-bubble` and `customer-chat-text`,
- *                which had no CSS rules of their own.
+ *                Every other surface — the message node class
+ *                names, the loading-state fix, the real-time
+ *                status poll, the channel-availability tracking,
+ *                the modal open/close helpers, the system message
+ *                styling — is byte-identical to v5.0.
  *
- *                This is the fix for the rider channel also
- *                mis-anchoring: the handler now returns
- *                `direction = 'sent'` for the customer's own
- *                messages on both channels, and this file renders
- *                every `direction === 'sent'` entry with the sent
- *                modifier.
- *
- *                The loading-state fix from v4.1 is retained:
- *                hasLoadedMessages[channel] and
- *                pollInFlight[channel] gate the placeholder so it
- *                can only appear once per channel.
- *
- *                (4.1: loading-state fix. 4.0: modal open/close
- *                toggles .active; real-time poll no longer
- *                reloads; channel availability tracked in local
- *                state; send refusals rendered as system
- *                messages; Escape handler added. 3.0: poll
- *                endpoint fallback renamed. 2.0: origin-aware
- *                open. 1.5: chat-modal origin opening. 1.4: chat
- *                polling. 1.3: chat gating by order status. 1.2:
- *                real-time poll. 1.1: initial tracking JS.)
+ *                (5.0: fixed the runtime class-name contract on
+ *                sent and received messages. 4.1: loading-state
+ *                fix. 4.0: modal open/close toggles .active;
+ *                real-time poll no longer reloads; channel
+ *                availability tracked in local state; send
+ *                refusals rendered as system messages; Escape
+ *                handler added. 3.0: poll endpoint fallback
+ *                renamed. 2.0: origin-aware open. 1.5: chat-modal
+ *                origin opening. 1.4: chat polling. 1.3: chat
+ *                gating by order status. 1.2: real-time poll.
+ *                1.1: initial tracking JS.)
  */
 (function () {
     'use strict';
@@ -190,6 +212,20 @@
 
     var currentRevision = page.getAttribute('data-revision') || '';
 
+    // Asset base for the closed-chat icon. The tracking page
+    // publishes window.FITPAL_ASSET_BASE from header.php; the
+    // fallback names the same folder the rest of the customer
+    // role uses when resolving shared/ from customer/pages/.
+    var ASSET_BASE = window.FITPAL_ASSET_BASE
+        || window.FITPAL_ORDERS && window.FITPAL_ORDERS.assetBase
+        || '../../shared/';
+
+    // Text of the closed-chat notice. Kept as a single constant so
+    // the copy lives in exactly one place.
+    var CLOSED_NOTICE_TEXT =
+        'This conversation is closed. This order is available for ' +
+        'history only. You can no longer send messages on this order.';
+
     // -----------------------------------------------------------------
     // ELEMENT HANDLES
     // -----------------------------------------------------------------
@@ -215,15 +251,6 @@
 
     function qsa(selector, root) {
         return Array.prototype.slice.call((root || document).querySelectorAll(selector));
-    }
-
-    function escapeHtml(str) {
-        return String(str == null ? '' : str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
     }
 
     function fetchJson(url, body) {
@@ -261,6 +288,138 @@
                 document.body.style.overflow = '';
             }
         }, 260);
+    }
+
+    // -----------------------------------------------------------------
+    // CLOSED-CHAT FORM SWAP
+    //
+    // When a channel is closed by the server, the message form is
+    // hidden and a static notice is inserted at the bottom of the
+    // modal body. The form is never removed from the DOM, so
+    // switching to a still-open channel can restore it without a
+    // re-render.
+    //
+    // State is tracked per channel so a channel that was observed
+    // closed stays closed even if the customer navigates away from
+    // it and back. This matches the server's own state: once the
+    // grace window has elapsed, the server will keep refusing
+    // sends on that channel for the rest of the page's lifetime.
+    // -----------------------------------------------------------------
+
+    var closedChannels = { restaurant_account: false, delivery_rider: false };
+
+    /**
+     * Ensure a closed-chat notice node exists in the modal body.
+     * Returns the node. The node is created once and reused.
+     */
+    function ensureClosedNoticeNode() {
+        if (!chatMessages) return null;
+
+        var existing = qs('.customer-chat-closed-notice', chatMessages);
+        if (existing) return existing;
+
+        var notice = document.createElement('div');
+        notice.className = 'customer-chat-closed-notice';
+
+        var icon = document.createElement('img');
+        icon.className = 'customer-chat-closed-icon';
+        icon.alt = '';
+        icon.width = 18;
+        icon.height = 18;
+        icon.src = ASSET_BASE + 'assets/images/icons/information-fill.svg';
+        icon.onerror = function () {
+            // If the information icon is missing, fall back to the
+            // warning icon. If that is missing too, remove the img
+            // entirely so the notice still reads as text.
+            if (this.getAttribute('data-fallback-applied') === '1') {
+                this.parentNode && this.parentNode.removeChild(this);
+                return;
+            }
+            this.setAttribute('data-fallback-applied', '1');
+            this.src = ASSET_BASE + 'assets/images/icons/file-warning-fill.svg';
+        };
+
+        var text = document.createElement('p');
+        text.className = 'customer-chat-closed-text';
+        text.textContent = CLOSED_NOTICE_TEXT;
+
+        notice.appendChild(icon);
+        notice.appendChild(text);
+
+        chatMessages.appendChild(notice);
+
+        if (chatMessages.scrollTop !== undefined) {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        return notice;
+    }
+
+    /**
+     * Remove the closed-chat notice node if it exists.
+     */
+    function removeClosedNoticeNode() {
+        if (!chatMessages) return;
+        var node = qs('.customer-chat-closed-notice', chatMessages);
+        if (node && node.parentNode) {
+            node.parentNode.removeChild(node);
+        }
+    }
+
+    /**
+     * Apply the closed state for a channel:
+     *   - hide the message form (hidden attribute, no inline style)
+     *   - insert the closed notice inside the modal body
+     *   - remember the channel so it stays closed on return
+     */
+    function applyClosedState(channel) {
+        if (!channel) return;
+
+        if (closedChannels[channel] === true) return;
+        closedChannels[channel] = true;
+
+        if (chatForm) {
+            chatForm.hidden = true;
+        }
+
+        ensureClosedNoticeNode();
+    }
+
+    /**
+     * Clear the closed state for a channel:
+     *   - remove the closed notice (only when no other channel is
+     *     also closed)
+     *   - unhide the message form
+     *
+     * Called when the modal switches to a channel that is not in
+     * the closed set.
+     */
+    function clearClosedStateForOpenChannel(channel) {
+        if (!channel) return;
+
+        if (chatForm) {
+            chatForm.hidden = false;
+        }
+
+        // Remove the notice only if no other channel is currently
+        // marked closed. If the other channel is still closed, the
+        // notice stays visible behind whichever channel the user
+        // is looking at, which is the desired behaviour: the
+        // modal is still a closed conversation overall.
+        var anyOtherClosed = Object.keys(closedChannels).some(function (key) {
+            return key !== channel && closedChannels[key] === true;
+        });
+
+        if (!anyOtherClosed) {
+            removeClosedNoticeNode();
+        }
+    }
+
+    /**
+     * True when the get-response body carries a closed reason.
+     */
+    function isClosedReason(reason) {
+        return reason === 'window_closed' || reason === 'terminal';
     }
 
     // -----------------------------------------------------------------
@@ -525,6 +684,17 @@
                 hasLoadedMessages[channel] = true;
 
                 if (!data || data.status !== 'success') {
+                    // If the handler refused the channel with a
+                    // closed reason, hide the form and show the
+                    // closed notice instead of the usual message
+                    // list. This is the moment the swap is
+                    // applied.
+                    if (data && isClosedReason(data.reason)) {
+                        if (chatMessages) chatMessages.innerHTML = '';
+                        applyClosedState(channel);
+                        return;
+                    }
+
                     if (data && data.message) {
                         if (sinceId && sinceId > 0) {
                             appendSystemMessage(data.message);
@@ -566,6 +736,10 @@
             return;
         }
 
+        // Do not poll a channel the client has already been told
+        // is closed. There is nothing to poll for.
+        if (closedChannels[activeChannel] === true) return;
+
         if (pollInFlight[activeChannel]) return;
         pollInFlight[activeChannel] = true;
 
@@ -588,6 +762,14 @@
         fetchJson(endpoint, body)
             .then(function (data) {
                 if (!data || data.status !== 'success') {
+                    // A closed reason arriving on the poll means
+                    // the grace window expired while the modal was
+                    // open. Apply the swap.
+                    if (data && isClosedReason(data.reason)) {
+                        applyClosedState(channel);
+                        return;
+                    }
+
                     if (data && data.message) {
                         appendSystemMessage(data.message);
                     }
@@ -639,6 +821,16 @@
         if (chatSubtitle) {
             var label = (channel === 'delivery_rider') ? 'Rider' : 'Restaurant';
             chatSubtitle.textContent = 'Order #' + ORDER_ID + ' • ' + label;
+        }
+
+        // If this channel is known to be closed, hide the form
+        // and show the notice. If it is not closed, ensure the
+        // form is visible and the notice is gone (unless the
+        // other channel is still closed).
+        if (closedChannels[channel] === true) {
+            applyClosedState(channel);
+        } else {
+            clearClosedStateForOpenChannel(channel);
         }
 
         if (!hasLoadedMessages[channel]) {
@@ -720,6 +912,15 @@
             chatForm.addEventListener('submit', function (event) {
                 event.preventDefault();
 
+                // If the channel is known to be closed, refuse
+                // the send locally and re-apply the closed state
+                // (belt and braces — the form is hidden, but a
+                // programmatic submit could still reach here).
+                if (closedChannels[activeChannel] === true) {
+                    applyClosedState(activeChannel);
+                    return;
+                }
+
                 var content = (chatInput && chatInput.value) ? chatInput.value.trim() : '';
                 if (content === '') return;
 
@@ -751,6 +952,17 @@
 
                         if (!data || data.status !== 'success') {
                             if (chatInput) chatInput.value = content;
+
+                            // A closed reason on the send path
+                            // means the window shut between the
+                            // last load and this send. Apply the
+                            // swap rather than just appending a
+                            // system message.
+                            if (data && isClosedReason(data.reason)) {
+                                applyClosedState(activeChannel);
+                                return;
+                            }
+
                             appendSystemMessage(
                                 (data && data.message)
                                     ? data.message
