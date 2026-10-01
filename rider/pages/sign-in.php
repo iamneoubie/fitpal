@@ -2,49 +2,26 @@
 /**
  * FitPal Rider Sign-In Page
  *
- * Uses the shared rider header + footer. All icons and images come
- * from the shared assets folder so nothing loads from an external
- * host.
- *
- * A password visibility toggle is present on the password field,
- * matching the customer sign-in page.
- *
- * IMPORTANT — ORDER OF OPERATIONS
- * -------------------------------
- * The redirect for an already-logged-in rider MUST happen before the
- * header is included. The header emits <!DOCTYPE html> and starts
- * buffering output, at which point any subsequent header() call in
- * this file would fail with the "headers already sent" warning.
- *
  * @package FitPal
- * @version 6.4 — Dropped the page-local CSRF bootstrap. The rider
- *                role's token is now assigned unconditionally by
- *                includes/header.php via rider-csrf-token.php, so
- *                this page no longer requires the helper or assigns
- *                $csrfToken itself. It simply includes the header and
- *                reads $csrfToken from it. Behavior is unchanged:
- *                the form's POST field stays named csrf_token, and
- *                sign-in-handler.php still validates against
- *                $_SESSION['rider_csrf_token'].
+ * @version 7.0 — Removed the $_SESSION['created'] = time() pin. That
+ *                key belonged to the old global-rotation policy, which
+ *                has been replaced by the per-role activity gate in
+ *                shared/includes/session-activity.php. No other
+ *                behavior changed: the form's POST field stays named
+ *                csrf_token, and sign-in-handler.php still validates
+ *                against $_SESSION['rider_csrf_token'].
  *
- *                (6.3: Replaced the inline rider_csrf_token
- *                generation block with a require_once on the helper.
- *                6.2: Uses its own session key, rider_csrf_token,
- *                instead of the shared csrf_token. The rider,
- *                customer, and restaurant roles all run on the same
- *                PHP session (same cookie), so a single shared
- *                csrf_token meant a successful sign-in by one role
- *                unset the token another role's already-rendered
- *                form was relying on. Splitting the key per role
- *                removes the collision entirely.)
+ *                (6.4: the header assigns $csrfToken
+ *                unconditionally via rider-csrf-token.php. 6.3:
+ *                require_once on the helper. 6.2: own session key,
+ *                rider_csrf_token.)
  */
 
 declare(strict_types=1);
 
 // ===== SESSION =====
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('rider');
 
 // ===== REDIRECT IF ALREADY LOGGED IN =====
 if (!empty($_SESSION['delivery_rider_id'])) {
@@ -55,10 +32,6 @@ if (!empty($_SESSION['delivery_rider_id'])) {
 // Never let the browser or bfcache serve a stale copy of this form.
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
-
-// Pin the session's "created" marker to now so header.php's 30-minute
-// rotation check can never fire while the sign-in form is on screen.
-$_SESSION['created'] = time();
 
 // ===== HEADER (starts DB, assigns $csrfToken, renders <head> + <header>) =====
 require_once __DIR__ . '/../includes/header.php';

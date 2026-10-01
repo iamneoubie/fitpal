@@ -3,40 +3,72 @@
  * FitPal Customer Feedback Handler
  *
  * AJAX endpoint for product reviews submitted from the Orders page's
- * review modal. One action is supported:
+ * review modal. Runs on the customer session (PHPSESSID_CUSTOMER),
+ * separate from every other role's session.
+ *
+ * One action is supported:
  *
  *   submit_review → insert a feedback row for a delivered order
  *
  * The gate is canReviewProduct(), which lives in
- * customer/backend/database/order-queries.php and enforces all three
+ * customer/backend/database/customer-order-queries.php (renamed from
+ * order-queries.php in this revision) and enforces all three
  * preconditions in one place:
  *   - the order belongs to this customer
  *   - the order is in the 'delivered' state
- *   - this customer has not already reviewed this product for this order
+ *   - this customer has not already reviewed this product for this
+ *     order
  *
- * This handler contains NO SQL of its own. All data access goes
- * through order-queries.php.
+ * This handler contains NO SQL of its own beyond the single INSERT
+ * for the feedback row itself. Every read that gates the insert goes
+ * through customer-order-queries.php.
  *
  * This file is NOT safe to require from a page — it runs a full
  * request dispatch at load time.
  *
+ * ---------------------------------------------------------------------
+ * PER-ROLE SESSION MODEL
+ * ---------------------------------------------------------------------
+ * The handler bootstraps the customer session before doing anything
+ * else. The auth guard reads $_SESSION['customer_id'] and the CSRF
+ * check reads $_SESSION['customer_csrf_token'], both inside the
+ * customer session and guaranteed to be the customer's own.
+ *
+ * ---------------------------------------------------------------------
+ * NOTE ON THE feedback TABLE
+ * ---------------------------------------------------------------------
+ * A customer review is a customer-only write. It does not move money,
+ * does not change order status, and does not affect any other role's
+ * ledger. It therefore belongs here and not in the shared
+ * order-transaction layer.
+ *
  * @package FitPal
- * @version 2.0 — Full rewrite. The previous file contents were
- *                orphaned query functions with no request dispatch,
- *                no auth guard, and no CSRF validation. Those
- *                functions already exist in order-queries.php and
- *                were removed here. This version is a proper
- *                handler that validates against the customer role's
- *                own session key, customer_csrf_token.
+ * @version 4.0 — Requires the renamed customer order query layer
+ *                (customer-order-queries.php). The previous revision
+ *                required order-queries.php, which has been renamed
+ *                and stripped of cross-role money movement. No
+ *                behavioural change.
+ *
+ *                (3.0: per-role session migration. 2.0: full
+ *                rewrite. The previous file contents were orphaned
+ *                query functions with no request dispatch, no auth
+ *                guard, and no CSRF validation.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('customer');
+
+// ---------------------------------------------------------------------
+// RESPONSE HEADERS
+// ---------------------------------------------------------------------
 
 header('Content-Type: application/json; charset=utf-8');
+
+// ---------------------------------------------------------------------
+// AUTHENTICATION
+// ---------------------------------------------------------------------
 
 if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     http_response_code(401);
@@ -44,19 +76,28 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     exit;
 }
 
-require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
-require_once __DIR__ . '/../database/order-queries.php';
+// ---------------------------------------------------------------------
+// DEPENDENCIES
+// ---------------------------------------------------------------------
 
-// Per-role CSRF check. The customer role validates against its own
-// session key, 'customer_csrf_token', never the shared 'csrf_token'.
-// Another role in the same browser session could have unset or
-// rotated the shared key on its own sign-in, which would otherwise
-// invalidate the token this review form was issued under. See
-// general.md.
+require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
+require_once __DIR__ . '/../database/customer-order-queries.php';
+
+// ---------------------------------------------------------------------
+// CSRF
+//
+// Validated against the customer context's own key,
+// 'customer_csrf_token', inside the customer session.
+// ---------------------------------------------------------------------
+
 $givenToken = (string)($_POST['csrf_token'] ?? '');
 $sessToken  = (string)($_SESSION['customer_csrf_token'] ?? '');
 
-if ($sessToken === '' || $givenToken === '' || !hash_equals($sessToken, $givenToken)) {
+if (
+    $sessToken === ''
+    || $givenToken === ''
+    || !hash_equals($sessToken, $givenToken)
+) {
     http_response_code(403);
     echo json_encode(['status' => 'error', 'message' => 'Security validation failed']);
     exit;
@@ -64,6 +105,10 @@ if ($sessToken === '' || $givenToken === '' || !hash_equals($sessToken, $givenTo
 
 $customerId = (int)$_SESSION['customer_id'];
 $action     = (string)($_POST['action'] ?? '');
+
+// ---------------------------------------------------------------------
+// DISPATCH
+// ---------------------------------------------------------------------
 
 try {
     switch ($action) {

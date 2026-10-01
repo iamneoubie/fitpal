@@ -14,15 +14,89 @@
  *   time. This file only declares functions. It is safe to require
  *   from anywhere.
  *
+ * ---------------------------------------------------------------------
+ * WHERE getOrderItemsWithCustomizations AND getOrderTotals LIVE
+ * ---------------------------------------------------------------------
+ * This file does not declare those two functions. It re-exports them
+ * by requiring the customer order query layer, which is where they
+ * are declared:
+ *
+ *     customer/backend/database/customer-order-queries.php
+ *
+ * That file in turn requires the shared order-transaction layer, so
+ * the customer-scoped reads and the shared cross-role functions are
+ * both available after this file's single require_once at the top.
+ *
+ * Every caller of this file continues to call
+ * getOrderItemsWithCustomizations() and getOrderTotals() by name;
+ * only the file that declares them changed.
+ *
+ * ---------------------------------------------------------------------
+ * RIDER MESSAGING STATE — ONE PREDICATE, FOUR CALLERS
+ * ---------------------------------------------------------------------
+ * getRiderMessagingState() answers a single question with a single
+ * return value: can the customer use the rider channel on this order
+ * right now, and if not, what closed it?
+ *
+ * The four callers, all of which must agree:
+ *
+ *   order-tracking.php          decides whether to render the rider
+ *                               tab and whether the Message button
+ *                               is live or disabled
+ *   customer-order-handler.php  reports the state to the tracking
+ *                               page's real-time poll so the client
+ *                               can reconcile an open chat modal
+ *   message-handler.php         gates the read path and the send
+ *                               path on the rider channel
+ *   orders.php                  decides the tracking-button label
+ *                               ("Message" vs "Track Order")
+ *
+ * The four cannot drift. riderHasAcceptedOrder() is a thin wrapper
+ * over getRiderMessagingState(), so any existing caller of the
+ * older bool function keeps working and keeps agreeing with the
+ * newer state function by construction.
+ *
+ * The possible return values:
+ *
+ *   'open'          rider assigned, order in picking_up or
+ *                   delivering, or delivered within the one-hour
+ *                   grace window. Messages flow both ways.
+ *
+ *   'not_accepted'  rider assigned, order still in rider_pending.
+ *                   The kitchen has proposed a rider but the rider
+ *                   has not yet agreed. Messaging before accept is
+ *                   noise; the rider might decline.
+ *
+ *   'no_rider'      no rider on the order. Defensive: the page
+ *                   would not render a rider tab for this state,
+ *                   but a direct caller could reach it.
+ *
+ *   'terminal'      order is cancelled, refunded, or failed. The
+ *                   order is closed; the ledger is settled; no
+ *                   further conversation is possible.
+ *
+ *   'window_closed' order is delivered and more than one hour has
+ *                   passed. The post-delivery thank-you /
+ *                   missing-item window has ended.
+ *
+ *   'not_found'     order does not exist.
+ *
+ * The 'failed' status is produced by the shared order-transaction
+ * layer's sweepFailedDeliveries() when a rider does not complete a
+ * delivery within FITPAL_RIDER_FAILED_DELIVERY_GRACE_SECONDS of the
+ * order entering 'delivering'. A failed order is terminal.
+ *
+ * ---------------------------------------------------------------------
  * PDO PLACEHOLDER RULE
- * --------------------
+ * ---------------------------------------------------------------------
  * This project sets PDO::ATTR_EMULATE_PREPARES => false. With native
  * prepares, a named placeholder may be bound only once per statement.
  * Every query here that needs the same value in more than one
  * position uses distinct placeholder names.
  *
- * Timezone handling
- * -----------------
+ * ---------------------------------------------------------------------
+ * TIMEZONE ROUND TRIP
+ * ---------------------------------------------------------------------
  * Two independent facts about this project:
  *
  *   1. MySQL is connected with the session time_zone set to '+08:00'
@@ -30,51 +104,36 @@
  *      DATETIME value returned to PHP is a Philippine wall-clock
  *      string regardless of the server's system clock.
  *
- *   2. PHP's date.timezone is UTC on the deployed server. This means
- *      that when PHP's date() function formats a Unix timestamp
- *      without an explicit timezone, it renders in UTC — eight hours
- *      behind the Philippine wall-clock moment the timestamp
- *      actually represents.
+ *   2. PHP's date.timezone is UTC on the deployed server, so
+ *      date() renders a Unix timestamp eight hours behind the
+ *      Philippine wall-clock moment that timestamp represents.
  *
- * The parse side is already correct: customerChatParseTimestamp()
- * anchors a MySQL DATETIME string to '+08:00' so the resulting Unix
- * timestamp is the true absolute moment of the event.
- *
- * The display side must therefore render that timestamp back in
- * '+08:00' as well, or the customer sees a time shifted eight hours
- * behind the real moment. Every format helper in this file goes
- * through customerChatFormatTimestamp() so the round trip
- * string → timestamp → string is timezone-stable regardless of what
- * date.timezone happens to be on the server.
+ * The parse side and the render side of the round trip both go
+ * through customerChatParseTimestamp() and
+ * customerChatFormatTimestamp(), which anchor to
+ * FITPAL_CUSTOMER_DB_TIMEZONE_OFFSET ('+08:00'). The result is that
+ * a MySQL DATETIME string survives the round trip unchanged
+ * regardless of what date.timezone happens to be on the server.
  *
  * No $_POST, no header(), no echo.
  *
  * @package FitPal
- * @version 2.3 — Fixes the display side of the timezone round trip:
- *                  - New helper customerChatFormatTimestamp() renders
- *                    an absolute Unix timestamp in the database
- *                    connection's timezone ('+08:00').
- *                  - formatTrackingTimestamp() and formatMessageTime()
- *                    now route through that helper instead of calling
- *                    date() directly, which was inheriting the PHP
- *                    server's date.timezone (UTC on the deployed
- *                    server) and printing every timestamp eight
- *                    hours behind the real moment.
- *                  - No query, no grace-window helper, and no
- *                    signature changed. The parse side of the
- *                    round trip (customerChatParseTimestamp) was
- *                    already correct and is untouched.
+ * @version 4.0 — Adds getRiderMessagingState(). Rewrites
+ *                riderHasAcceptedOrder() as a thin delegate to it so
+ *                the two cannot disagree. Every other function is
+ *                byte-identical to the previous revision.
  *
- *                (2.2: timezone-correct grace window — parse side.
- *                2.1: customerOrderHasOpenChatWindow() wrapper. 2.0:
- *                'picking_up' support and 1-hour grace. 1.2: two
- *                chat-gating helpers and a delta fetch. 1.1:
+ *                (3.0: requires the renamed customer order query
+ *                layer. 2.3: timezone round trip. 2.2: grace window
+ *                in the customer's timezone. 2.1: open-chat-window
+ *                wrapper. 2.0: 'picking_up' support and one-hour
+ *                grace. 1.2: chat gating and delta fetch. 1.1:
  *                distinct placeholders in getOrderMessages.)
  */
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/order-queries.php';
+require_once __DIR__ . '/customer-order-queries.php';
 
 /**
  * The timezone offset the database connection is set to.
@@ -84,10 +143,6 @@ require_once __DIR__ . '/order-queries.php';
  * `SET time_zone = '+08:00'` on every connection, so every
  * TIMESTAMP / DATETIME value MySQL returns is expressed in
  * Philippine Time regardless of the server's system clock.
- *
- * PHP has no way to know that from the returned string alone —
- * strtotime() uses date.timezone — so this constant is the anchor
- * that keeps the two sides in agreement.
  *
  * Named with a customer- prefix so it can coexist with the
  * restaurant-side FITPAL_DB_TIMEZONE_OFFSET if a future page ever
@@ -102,12 +157,7 @@ if (!defined('FITPAL_CUSTOMER_DB_TIMEZONE_OFFSET')) {
  *
  * Both chat channels on the customer's order tracking page stay
  * reachable for this long after orders.delivered_at, matching the
- * restaurant-side restaurant_chat_delivered_window() window. After
- * the window elapses, both channels close.
- *
- * Must stay in sync with RESTAURANT_CHAT_DELIVERED_GRACE_SECONDS
- * in restaurant/backend/database/chat-queries.php so the two roles
- * agree on when a delivered order's conversation ends.
+ * restaurant-side restaurant_chat_delivered_window() window.
  */
 if (!defined('CUSTOMER_CHAT_DELIVERED_GRACE_SECONDS')) {
     define('CUSTOMER_CHAT_DELIVERED_GRACE_SECONDS', 3600);
@@ -118,8 +168,8 @@ if (!defined('CUSTOMER_CHAT_DELIVERED_GRACE_SECONDS')) {
  *
  * Every comparison or render of a value returned by MySQL must go
  * through these helpers. Calling time(), strtotime(), or date()
- * directly on a MySQL DATETIME string reintroduces the bug this
- * revision fixes.
+ * directly on a MySQL DATETIME string reintroduces the display bug
+ * that a previous revision fixed.
  * ============================================================= */
 
 if (!function_exists('fitpalCustomerDbTimezone')) {
@@ -200,17 +250,11 @@ if (!function_exists('customerChatFormatTimestamp')) {
      * Format an absolute Unix timestamp as a MySQL-shaped DATETIME
      * string expressed in the database connection's timezone.
      *
-     * This is the RENDER side of the round trip and the fix for the
-     * "sep 27 7:10 PM" bug. PHP's date() function defaults to the
-     * server's date.timezone — UTC on this deployment — so a Unix
-     * timestamp that correctly represents 2026-09-28 01:10 PHT
-     * prints as 2026-09-27 17:10 UTC when handed to date() directly.
-     *
-     * Rendering through this helper instead converts the timestamp
-     * into the '+08:00' offset before formatting, so the printed
-     * string matches the wall-clock moment the timestamp actually
-     * represents, regardless of what date.timezone is set to on the
-     * server.
+     * This is the RENDER side of the round trip. Rendering through
+     * this helper converts the timestamp into the '+08:00' offset
+     * before formatting, so the printed string matches the
+     * wall-clock moment the timestamp actually represents,
+     * regardless of what date.timezone is set to on the server.
      *
      * @param int    $timestamp  Unix timestamp.
      * @param string $format     date() format string.
@@ -234,11 +278,12 @@ if (!function_exists('customerChatFormatTimestamp')) {
 
 if (!function_exists('customerChatNow')) {
     /**
-     * The current time as a Unix timestamp. time() is already
-     * absolute — it does not depend on date.timezone — so this
-     * helper exists mainly so every call site in this file reads
-     * through the same name and a future change to the notion of
-     * "now" has one place to live.
+     * The current time as a Unix timestamp.
+     *
+     * time() is already absolute — it does not depend on
+     * date.timezone — so this helper exists mainly so every call
+     * site in this file reads through the same name and a future
+     * change to the notion of "now" has one place to live.
      *
      * @return int
      */
@@ -247,6 +292,10 @@ if (!function_exists('customerChatNow')) {
         return time();
     }
 }
+
+/* =============================================================
+ * SCOPE GUARD
+ * ============================================================= */
 
 /**
  * Fetch an order for tracking, scoped to the owning customer.
@@ -283,6 +332,10 @@ function getTrackableOrder(PDO $db, int $orderId, int $customerId): array|false
     ]);
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
+
+/* =============================================================
+ * TRACKING READS
+ * ============================================================= */
 
 /**
  * Fetch the rider assigned to an order, with profile and contact info.
@@ -347,6 +400,9 @@ function getOrderRestaurants(PDO $db, int $orderId): array
 /**
  * Fetch the order's items with their customizations.
  *
+ * Delegates to the customer order query layer, which declares this
+ * function and re-exports it.
+ *
  * @param PDO $db
  * @param int $orderId
  * @return array<int, array<string, mixed>>
@@ -359,6 +415,9 @@ function getTrackingOrderItems(PDO $db, int $orderId): array
 /**
  * Fetch the order totals (subtotal, delivery, service, VAT, total).
  *
+ * Delegates to the customer order query layer, which declares this
+ * function and re-exports it.
+ *
  * @param PDO $db
  * @param int $orderId
  * @return array<string, mixed>|false
@@ -368,9 +427,9 @@ function getTrackingOrderTotals(PDO $db, int $orderId): array|false
     return getOrderTotals($db, $orderId);
 }
 
-/* ---------------------------------------------------------------
+/* =============================================================
  * CHAT GATING
- * --------------------------------------------------------------- */
+ * ============================================================= */
 
 /**
  * True when a delivered order is still inside the one-hour grace
@@ -386,31 +445,14 @@ function getTrackingOrderTotals(PDO $db, int $orderId): array|false
  *     render: "Message" while the chat is still open, "View
  *     Tracking" once it has closed.
  *
- * The check is:
- *
- *   1. order_status must be 'delivered'. Every other status is a
- *      live order (open for the whole lifecycle) or a terminal
- *      cancelled/refunded order (closed immediately). Only a
- *      delivered order has a window that opens and then closes.
- *
- *   2. delivered_at must be present and parsable. A NULL delivered_at
- *      on a delivered row is a data-integrity problem — the
- *      before_order_delivered trigger in sql/database.sql sets the
- *      column on the transition — so the safe default is to fail
- *      closed rather than guess at a window start.
- *
- *   3. The elapsed time since delivered_at must be non-negative and
- *      at most CUSTOMER_CHAT_DELIVERED_GRACE_SECONDS. A negative
- *      elapsed (a delivered_at in the future) also fails closed.
- *
  * Timezone correctness
  * --------------------
  * delivered_at is written by MySQL in the connection's time_zone
- * ('+08:00' via database-connect.php). This function parses it
- * through customerChatParseTimestamp(), which anchors the parse to
- * that same offset, so the elapsed-seconds calculation is against
- * an absolute "now" from customerChatNow() and is not affected by
- * the PHP server's date.timezone.
+ * ('+08:00'). This function parses it through
+ * customerChatParseTimestamp(), which anchors the parse to that
+ * same offset, so the elapsed-seconds calculation is against an
+ * absolute "now" from customerChatNow() and is not affected by the
+ * PHP server's date.timezone.
  *
  * @param array<string, mixed> $order  Row from getTrackableOrder()
  *                                     or the equivalent columns from
@@ -446,9 +488,6 @@ function customerOrderDeliveredWithinGrace(array $order): bool
  *
  * orders.php iterates over a list of orders and needs to ask, per
  * row, "is this delivered order still inside its chat window?".
- * It has the status string and the delivered_at value in hand, but
- * not a pre-built row in the shape the primary helper expects.
- *
  * This wrapper takes the two values directly so the call site reads
  * naturally and does not have to fabricate an array. It delegates
  * to the single canonical function above so the two can never
@@ -469,20 +508,116 @@ function customerOrderHasOpenChatWindow(
 }
 
 /**
+ * The single predicate for the rider channel.
+ *
+ * Returns one of:
+ *
+ *   'open'          rider assigned, order in picking_up or
+ *                   delivering, or delivered within the grace
+ *                   window. Both read and send are permitted.
+ *   'not_accepted'  rider assigned, order still in rider_pending.
+ *                   The rider has not agreed yet.
+ *   'no_rider'      no rider assigned to the order.
+ *   'terminal'      order is cancelled, refunded, or failed.
+ *   'window_closed' order is delivered and the grace window has
+ *                   passed.
+ *   'not_found'     order does not exist.
+ *
+ * This function is the authoritative answer to "can the customer
+ * use the rider channel on this order right now?". Every caller
+ * that needs that answer reads it from here, so the tab rendering,
+ * the read gate, the send gate, the button label, and the client's
+ * real-time reconciliation all agree by construction.
+ *
+ * The read is a single indexed lookup on the primary key. No joins
+ * are needed because the three inputs to the decision — status,
+ * delivery_rider_id, delivered_at — all live on the orders row.
+ *
+ * Timezone correctness
+ * --------------------
+ * The grace-window decision routes through
+ * customerOrderDeliveredWithinGrace(), which parses delivered_at
+ * in the database connection's '+08:00' offset. This function does
+ * not re-implement that check.
+ *
+ * @param PDO $db
+ * @param int $orderId
+ * @return string
+ */
+function getRiderMessagingState(PDO $db, int $orderId): string
+{
+    if ($orderId <= 0) {
+        return 'not_found';
+    }
+
+    $stmt = $db->prepare(
+        "SELECT order_id, order_status, delivery_rider_id, delivered_at
+           FROM orders
+          WHERE order_id = :order_id
+          LIMIT 1"
+    );
+    $stmt->execute([':order_id' => $orderId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$row) {
+        return 'not_found';
+    }
+
+    $status       = (string)$row['order_status'];
+    $hasRider     = $row['delivery_rider_id'] !== null
+        && (int)$row['delivery_rider_id'] > 0;
+
+    // ---- Terminal states first ----
+
+    if (in_array($status, ['cancelled', 'refunded', 'failed'], true)) {
+        return 'terminal';
+    }
+
+    // ---- No rider ----
+
+    if (!$hasRider) {
+        return 'no_rider';
+    }
+
+    // ---- Live rider states ----
+
+    if (in_array($status, ['picking_up', 'delivering'], true)) {
+        return 'open';
+    }
+
+    // ---- Delivered: depends on the grace window ----
+
+    if ($status === 'delivered') {
+        $within = customerOrderDeliveredWithinGrace([
+            'order_status' => $status,
+            'delivered_at' => $row['delivered_at'],
+        ]);
+        return $within ? 'open' : 'window_closed';
+    }
+
+    // ---- rider_pending, and any status not otherwise handled ----
+    //
+    // 'rider_pending' is the only non-terminal, non-live status the
+    // rider channel reaches. Every other non-terminal status
+    // ('pending', 'preparing') has no rider on the order by the
+    // schema's own design and would have been caught by the
+    // hasRider check above. A status that reaches this point
+    // without matching one of the earlier branches is therefore
+    // rider_pending.
+    return 'not_accepted';
+}
+
+/**
  * True when the assigned rider has actually accepted the order.
  *
- * A rider is considered to have accepted when the order has moved
- * out of 'rider_pending' into one of the live in-transit statuses:
+ * A thin delegate to getRiderMessagingState(), so the two cannot
+ * disagree. Retained because several callers were written against
+ * this bool and rewriting them would broaden the change for no
+ * benefit.
  *
- *     picking_up   — rider accepted; en route to / at the restaurant
- *     delivering   — rider has the food; en route to the customer
- *
- * 'delivered' is also reachable, but only for the one-hour post-
- * delivery grace window, so a delivered order stays open for a short
- * thank-you or a "missing item" message and then closes.
- *
- * During 'rider_pending' the kitchen has proposed a rider but the
- * rider may still decline, so messaging is refused.
+ * Prefer getRiderMessagingState() in new code: it carries the
+ * reason a channel is closed, which the client uses to choose the
+ * right copy for the refusal system line.
  *
  * @param PDO $db
  * @param int $orderId
@@ -490,49 +625,18 @@ function customerOrderHasOpenChatWindow(
  */
 function riderHasAcceptedOrder(PDO $db, int $orderId): bool
 {
-    if ($orderId <= 0) {
-        return false;
-    }
-
-    $stmt = $db->prepare(
-        "SELECT order_id, order_status, delivery_rider_id, delivered_at
-           FROM orders
-          WHERE order_id = :order_id
-            AND delivery_rider_id IS NOT NULL
-          LIMIT 1"
-    );
-    $stmt->execute([':order_id' => $orderId]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    if (!$row) {
-        return false;
-    }
-
-    $status = (string)$row['order_status'];
-
-    if (in_array($status, ['picking_up', 'delivering'], true)) {
-        return true;
-    }
-
-    if ($status === 'delivered') {
-        return customerOrderDeliveredWithinGrace($row);
-    }
-
-    return false;
+    return getRiderMessagingState($db, $orderId) === 'open';
 }
 
 /**
  * True when the order is in a state that still permits messages to
  * the kitchen.
  *
- * Cancelled and refunded orders are closed: the kitchen has no reason
- * to keep talking to the customer and the customer has no reason to
- * keep talking to the kitchen. A delivered order stays open for the
- * one-hour grace window so a customer can report a missing item or
- * thank the kitchen, then closes.
- *
- * Every other status — from 'pending' through 'delivering' — is open
- * for kitchen messaging.
+ * Cancelled and refunded orders are closed. A delivered order stays
+ * open for the one-hour grace window, then closes. Every other
+ * status — from 'pending' through 'delivering' — is open for
+ * kitchen messaging. A 'failed' order is closed: the ledger for the
+ * order is settled and no further conversation is possible.
  *
  * @param PDO $db
  * @param int $orderId
@@ -559,7 +663,7 @@ function orderAllowsKitchenMessaging(PDO $db, int $orderId): bool
 
     $status = (string)$row['order_status'];
 
-    if (in_array($status, ['cancelled', 'refunded'], true)) {
+    if (in_array($status, ['cancelled', 'refunded', 'failed'], true)) {
         return false;
     }
 
@@ -570,35 +674,34 @@ function orderAllowsKitchenMessaging(PDO $db, int $orderId): bool
     return true;
 }
 
-/* ---------------------------------------------------------------
+/* =============================================================
  * LIVE STATUS SNAPSHOT (real-time polling)
- * --------------------------------------------------------------- */
+ * ============================================================= */
 
 /**
- * Return the four fields the tracking page's poll needs to decide
- * whether anything has changed.
+ * Return the fields the tracking page's poll needs to decide
+ * whether anything has changed, plus the current chat gating
+ * flags so the client can reconcile an open chat modal.
  *
  * The poll is deliberately small — a single indexed read on the
  * primary key. The client compares the returned `revision` to what
- * it already has, and only reloads the page when the revision
- * changes. A poll that finds nothing new costs one round trip and
- * one indexed lookup, with no JSON body of any size.
+ * it already has, and only re-reads the tracking state when the
+ * revision changes.
  *
- * The revision is a string derived from order_status, delivered_at,
- * and delivery_rider_id. Any of the following events changes it:
+ * The revision is derived from order_status, delivered_at, and
+ * delivery_rider_id, so it changes on any event the customer cares
+ * about: the kitchen moving the order forward, a rider being
+ * assigned or reassigned, the rider accepting, the rider picking
+ * up, the order being delivered, or the order being
+ * cancelled/refunded.
  *
- *   - the kitchen moves the order forward (pending → preparing, etc.)
- *   - a rider is assigned or reassigned
- *   - the rider accepts (order moves to picking_up)
- *   - the rider picks up (picking_up → delivering)
- *   - the order is delivered (delivered_at is set)
- *   - the order is cancelled or refunded
+ * `updated_at` is deliberately excluded. It is touched by transient
+ * bookkeeping writes that do not change what the customer sees.
  *
- * It deliberately does not include updated_at, because updated_at is
- * touched by transient bookkeeping writes that the customer does not
- * care about. A revision built from the fields the customer actually
- * sees will only change when something the customer cares about
- * changed.
+ * The `tracking_state` sub-array carries the two channel flags and
+ * the order status, so the client does not need a second request
+ * to reconcile an open chat modal. This is the data the poll's
+ * caller passes to applyTrackingState().
  *
  * Returns null when the order does not belong to the customer or
  * does not exist.
@@ -606,7 +709,17 @@ function orderAllowsKitchenMessaging(PDO $db, int $orderId): bool
  * @param PDO $db
  * @param int $orderId
  * @param int $customerId
- * @return array{order_id:int, order_status:string, revision:string}|null
+ * @return array{
+ *     order_id:int,
+ *     order_status:string,
+ *     revision:string,
+ *     tracking_state:array{
+ *         order_status:string,
+ *         can_message_kitchen:bool,
+ *         can_message_rider:bool,
+ *         rider_state:string
+ *     }
+ * }|null
  */
 function getOrderLiveSnapshot(PDO $db, int $orderId, int $customerId): ?array
 {
@@ -635,22 +748,40 @@ function getOrderLiveSnapshot(PDO $db, int $orderId, int $customerId): ?array
         return null;
     }
 
+    $status = (string)$row['order_status'];
+
     $revision = sha1(implode('|', [
-        (string)$row['order_status'],
+        $status,
         (string)($row['delivered_at'] ?? ''),
         (string)($row['delivery_rider_id'] ?? ''),
     ]));
 
+    // Kitchen flag: same predicate order-tracking.php uses to
+    // decide whether to render the kitchen tab.
+    $kitchenOpen = !in_array($status, ['cancelled', 'refunded', 'failed'], true)
+        && ($status !== 'delivered'
+            || customerOrderDeliveredWithinGrace($row));
+
+    // Rider flag: the state function is the single authority.
+    $riderState = getRiderMessagingState($db, $orderId);
+    $riderOpen  = ($riderState === 'open');
+
     return [
         'order_id'     => (int)$row['order_id'],
-        'order_status' => (string)$row['order_status'],
+        'order_status' => $status,
         'revision'     => $revision,
+        'tracking_state' => [
+            'order_status'        => $status,
+            'can_message_kitchen' => $kitchenOpen,
+            'can_message_rider'   => $riderOpen,
+            'rider_state'         => $riderState,
+        ],
     ];
 }
 
-/* ---------------------------------------------------------------
+/* =============================================================
  * MESSAGES — FULL LOAD
- * --------------------------------------------------------------- */
+ * ============================================================= */
 
 /**
  * Fetch messages for an order, filtered by recipient channel.
@@ -704,27 +835,22 @@ function getOrderMessages(
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-/* ---------------------------------------------------------------
+/* =============================================================
  * MESSAGES — DELTA FETCH
- * --------------------------------------------------------------- */
+ * ============================================================= */
 
 /**
  * Fetch only the messages for a channel whose message_id is strictly
  * greater than $sinceId.
  *
  * This is the polling path. The client sends the highest message_id
- * it already holds; the handler returns only rows that came after
+ * it already holds; the server returns only rows that came after
  * it. An idle conversation with no new messages returns an empty
- * array after a single indexed lookup on message_id — no GROUP BY,
- * no JOIN, no full-table scan. That is what keeps the 5-second poll
- * cheap enough to run while the modal is open without the tab
- * competing with the rest of the page for query time.
+ * array after a single indexed lookup.
  *
  * When $sinceId is 0 the function returns the whole conversation,
  * which is why the initial fetch can also route through this
- * function and get a full list in one call. The two code paths
- * share the same SELECT shape so message JSON is identical either
- * way.
+ * function and get a full list in one call.
  *
  * Distinct placeholder names because native PDO prepares reject a
  * repeated named placeholder.
@@ -772,9 +898,9 @@ function getOrderMessagesSince(
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-/* ---------------------------------------------------------------
+/* =============================================================
  * MESSAGES — WRITES AND READS
- * --------------------------------------------------------------- */
+ * ============================================================= */
 
 /**
  * Insert a message from the customer to a counterparty.
@@ -898,26 +1024,15 @@ function countUnreadOrderMessages(PDO $db, int $orderId, string $recipientType):
     return (int)$stmt->fetchColumn();
 }
 
-/* ---------------------------------------------------------------
+/* =============================================================
  * STATUS TIMELINE (pure — no DB access)
- * --------------------------------------------------------------- */
+ * ============================================================= */
 
 /**
  * Ordered list of tracking steps for the progress bar.
  *
- * Six steps:
- *
- *   1. pending        order placed
- *   2. preparing      kitchen accepted
- *   3. rider_pending  kitchen assigned a rider; rider deciding
- *   4. picking_up     rider accepted; en route to / at the restaurant
- *   5. delivering     rider has the food; en route to the customer
- *   6. delivered      order arrived
- *
- * The 'picking_up' step was added in v1.3.0 of the schema. Prior to
- * this revision the tracking page jumped directly from rider_pending
- * to delivering with no visual indication that the rider had
- * accepted and was on the way to pick up.
+ * Six steps: pending, preparing, rider_pending, picking_up,
+ * delivering, delivered.
  *
  * @return array<int, array{key:string, label:string, description:string}>
  */
@@ -1014,6 +1129,12 @@ function getTrackingStatusMeta(string $status): array
             'icon'        => 'coin-fill.svg',
             'description' => 'This order was cancelled and refunded.',
         ],
+        'failed' => [
+            'label'       => 'Failed',
+            'badge'       => 'badge-danger',
+            'icon'        => 'error-warning-fill.svg',
+            'description' => 'This order could not be completed.',
+        ],
         default => [
             'label'       => ucfirst($status),
             'badge'       => 'badge-secondary',
@@ -1071,9 +1192,7 @@ function getRestaurantDisplayName(array $restaurant): string
  * the string is anchored to the database connection's '+08:00'
  * offset, then renders through customerChatFormatTimestamp() so the
  * printed string is expressed in the same offset rather than the
- * PHP server's date.timezone. Without the render step, a message
- * sent at 01:10 PHT would display as 17:10 of the previous day on
- * a UTC PHP server.
+ * PHP server's date.timezone.
  *
  * @param string $date
  * @return string
@@ -1091,9 +1210,7 @@ function formatMessageTime(string $date): string
  * Format a full timestamp for the tracking header.
  *
  * Same round trip as formatMessageTime(): parse through the DB
- * offset, render through the DB offset. This is the display side of
- * the fix that keeps a MySQL DATETIME string timezone-stable no
- * matter what date.timezone is set to on the server.
+ * offset, render through the DB offset.
  *
  * @param string $date
  * @return string

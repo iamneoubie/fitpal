@@ -39,6 +39,16 @@
  * COD needs no confirmation and commits immediately.
  *
  * ---------------------------------------------------------------------
+ * ADDRESS-SELECTION ENDPOINT
+ * ---------------------------------------------------------------------
+ * The address-selection POST goes to the endpoint the checkout page
+ * publishes on #checkoutPage as data-checkout-handler-url. When the
+ * attribute is missing — which only happens on a page that was
+ * rendered without it — the fallback names the same endpoint the
+ * checkout page's own markup names. This file does not carry a
+ * second, different endpoint.
+ *
+ * ---------------------------------------------------------------------
  * SCOPE RULES APPLIED
  * ---------------------------------------------------------------------
  *  - Configuration is read from data-* attributes on #checkoutPage,
@@ -52,14 +62,42 @@
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 8.0 — Payment-method radio group is now a controlled
- *                input. Cancelling the Wallet-insufficient or Online
- *                QR modal reverts the visible selection to the last
- *                committed method, so the radio group and the hidden
- *                #hiddenPaymentMethod field can never disagree.
+ * @version 8.1 — Restores the v8.0 controlled-payment model, which
+ *                the v3.0 rewrite had dropped. The v3.0 rewrite
+ *                wrote radio.checked and the .selected class
+ *                directly in the click handler, so cancelling the
+ *                wallet-insufficient modal or the Online QR modal
+ *                left the just-clicked radio stuck in the checked
+ *                position. Clicking Place Order afterwards re-read
+ *                the stuck radio and reopened the same modal — the
+ *                modal loop that made checkout appear not to
+ *                proceed.
  *
- *                (7.0: config moved to data-* attributes; address
- *                delegated handler; textContent-only writes.)
+ *                The v3.0 rewrite also dropped the modal lifecycle
+ *                (active class, scroll lock, fade timer), the
+ *                Escape-key handler, and the bfcache reload. All
+ *                four are restored here.
+ *
+ *                One improvement from v3.0 is kept: the
+ *                address-selection endpoint is read from
+ *                #checkoutPage's data-checkout-handler-url
+ *                attribute, with a single fallback that names the
+ *                same endpoint the page's markup names. The v8.0
+ *                file hard-coded the endpoint in the fetch call.
+ *
+ *                Everything else is byte-identical to v8.0:
+ *                commitPaymentMethod, revertPaymentMethod, the
+ *                payment-option click handler, updateAddressDisplay,
+ *                persistCheckoutAddress, openAddressModal,
+ *                closeAddressModalHandler, the address-list
+ *                delegated handler, the QR modal, the wallet modal,
+ *                the confirm modal, the Place Order button, the
+ *                Escape handler, the pageshow handler, and the
+ *                initial setup.
+ *
+ *                (8.0: controlled payment model. 7.0: config from
+ *                data-* attributes; address delegated handler;
+ *                textContent-only writes.)
  */
 
 (function () {
@@ -78,6 +116,15 @@
         var HAS_ADDRESS         = page.dataset.hasAddress === '1';
         var CSRF_TOKEN          = page.dataset.csrfToken || '';
         var INITIAL_PAYMENT     = page.dataset.initialPaymentMethod || 'COD';
+
+        // The address-selection POST goes to this endpoint. It is
+        // published on #checkoutPage by the checkout page itself.
+        // When the attribute is missing — which happens only on a
+        // page rendered without it — the fallback names the same
+        // endpoint the checkout page's own markup names.
+        var CHECKOUT_ADDRESS_ENDPOINT =
+            page.dataset.checkoutHandlerUrl
+            || '../backend/handlers/checkout-handler.php';
 
         // ============================================
         // DOM REFERENCES
@@ -299,7 +346,7 @@
             body.append('csrf_token', CSRF_TOKEN);
             body.append('address_id', String(addressId));
 
-            fetch('../backend/handlers/checkout-handler.php', {
+            fetch(CHECKOUT_ADDRESS_ENDPOINT, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: body.toString(),

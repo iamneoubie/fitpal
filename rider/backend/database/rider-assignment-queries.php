@@ -1,182 +1,89 @@
 <?php
 /**
- * FitPal Rider Database Queries
+ * FitPal Rider Assignment Queries
  *
- * Pure data-access layer for the delivery_rider,
- * delivery_rider_profile, delivery_rider_address,
- * delivery_rider_emergency_contact, delivery_rider_document,
- * orders, and transaction tables.
- *
- * No $_POST, no header(), no echo, no session writes.
+ * The merged rider data-access layer.
  *
  * ---------------------------------------------------------------------
- * Order lifecycle (v7.5)
+ * RIDER LIABILITY MODEL (v2.5.0)
  * ---------------------------------------------------------------------
- * The rider's delivery lifecycle is a two-step accept:
+ * Every order a rider accepts gets a liability figure written to
+ * orders.rider_liability_amount, regardless of payment method.
+ * The write is performed by acceptOrder() calling
+ * recordRiderLiability() from the shared query layer, in the same
+ * transaction as the status transition.
  *
- *     rider_pending  --acceptOrder()-->  picking_up
- *     picking_up     --markOrderPickedUp()-->  delivering
- *     delivering     --(delivered by handleDelivered)-->  delivered
+ * The COD cash-custody row in rider_collection is still written at
+ * the same moment, by the same function, via recordRiderCollection().
+ * The two records are now complementary:
  *
- * Accepting no longer puts the order in transit. The rider must take
- * a second explicit action ("Mark Picked Up") to move from
- * picking_up to delivering. No step may be skipped:
+ *   orders.rider_liability_amount — uniform exposure, every method
+ *   rider_collection              — physical cash custody, COD only
  *
- *   - markOrderPickedUp() only accepts from 'picking_up'
- *   - handleDelivered() (in rider-handler.php) only accepts from
- *     'delivering'
+ * On successful delivery, creditDeliveryPayouts() clears the
+ * liability column and settles the collection row. On failure,
+ * sweepFailedDeliveries() writes the liability debit and voids the
+ * collection row.
  *
- * ---------------------------------------------------------------------
- * Availability model
- * ---------------------------------------------------------------------
- * `delivery_rider_profile.is_available` is the rider's OWN toggle.
- * It is set at sign-in (forced offline), flipped by the rider from
- * the dashboard, and cleared on sign-out. It is NOT touched by the
- * accept path, the pickup path, the deliver path, or the kitchen's
- * assign/reassign paths.
- *
- * Going offline is refused while the rider has any order in
- * 'rider_pending', 'picking_up', or 'delivering'. The rider must
- * finish all in-flight work before they can go offline. The refusal
- * is enforced by setRiderAvailability().
+ * The reader getRiderOutstandingCollections() reads the new column.
+ * Its name is retained for call-site stability: the earnings page
+ * and dashboard call it and consume its 'total' and 'count' fields
+ * without change. The name now means "rider's outstanding
+ * liability" rather than "rider's outstanding COD collections," but
+ * the shape is identical.
  *
  * ---------------------------------------------------------------------
- * Concurrent-order cap (v7.5)
+ * PANEL ROW PICKUP ADDRESS
  * ---------------------------------------------------------------------
- * A rider may hold at most 3 orders at once. The cap counts the
- * orders the rider has ACTUALLY COMMITTED TO:
+ * The panel row and the notification modal both show the restaurant's
+ * pickup location. `restaurant_branch` has no single address column;
+ * the pickup address is assembled from block + barangay + city +
+ * province + region + postal_code on the row, exactly the way the
+ * customer page assembles its destination address. The three panel
+ * readers below select every one of those fields so the JS shaper can
+ * concatenate them.
  *
- *     picking_up   accepted; en route to or at the restaurant
- *     delivering   rider has the food; en route to the customer
+ * `destination_address` on `orders` is already a free-form string
+ * supplied at checkout, so no concatenation is needed on the
+ * customer side — it is read directly.
  *
- * 'rider_pending' is deliberately EXCLUDED. An order in
- * 'rider_pending' is a kitchen offer the rider has not yet accepted
- * or declined. It does not occupy a delivery slot. The rider may
- * accept all of the pending offers the kitchen sends; the cap only
- * applies once the rider has actually accepted.
+ * @package FitPal
+ * @version 10.0 — acceptOrder() now writes the uniform rider
+ *                 liability column via recordRiderLiability() in
+ *                 addition to the COD collection row.
+ *                 getRiderOutstandingCollections() reads the new
+ *                 column instead of rider_collection. No other
+ *                 function changed.
  *
- * This is what lets a rider with 3 pending offers accept all 3.
- * Before the accept, the rider holds zero committed orders. After
- * the accept, each order becomes 'picking_up' and starts counting.
- * To accept a 4th, the rider must finish at least one of the three
- * already accepted — dropping the committed count back to 2, which
- * leaves room for one more.
- *
- * The cap number lives in RIDER_CONCURRENT_CAP in this file. The
- * same number is enforced by:
- *
- *   - acceptOrder()'s caller (handleAccept in assignment-handler.php,
- *     and handleAcceptAssignment in rider-handler.php),
- *   - the restaurant's assignRiderToOrder() / reassignRiderToOrder()
- *     under a FOR UPDATE lock on the rider's profile row,
- *   - the SQL trigger before_order_rider_assign (which also counts
- *     only the committed statuses — see the schema trigger body).
- *
- * ---------------------------------------------------------------------
- * Payout model
- * ---------------------------------------------------------------------
- * A completed delivery credits the rider's financial_account via a
- * `deposit` transaction. The database trigger
- * `after_transaction_insert` moves the balance — this file never
- * writes financial_account.balance directly. creditRiderForDelivery()
- * is the single write path and is idempotent per order.
- *
- * ---------------------------------------------------------------------
- * Change log
- * ---------------------------------------------------------------------
- * v7.5 — The concurrent-order cap now counts only the orders the
- *        rider has actually accepted:
- *
- *        - COMMITTED_RIDER_STATUSES replaces LIVE_RIDER_STATUSES as
- *          the set that hasActiveOrder() and riderAtConcurrentCap()
- *          count against the cap. It is ['picking_up','delivering'].
- *          'rider_pending' is excluded.
- *
- *        - LIVE_RIDER_STATUSES is retained and still used by
- *          setRiderAvailability() — a rider cannot go offline while
- *          any order is still assigned to them, whether they have
- *          accepted it or not. This is a different rule with a
- *          different purpose, so it keeps a different set.
- *
- *        - hasActiveOrder() now counts committed orders only.
- *
- *        - riderAtConcurrentCap() now checks against the committed
- *          count.
- *
- *        - getRiderDeliveryCounts()'s 'active' bucket, which is what
- *          the deliveries page tab badge shows, now counts committed
- *          orders only as well. 'rider_pending' offers are shown on
- *          the Assigned tab, and their count lives in the Assigned
- *          tab badge, not the Active tab badge.
- *
- *        Rationale: a kitchen offer the rider has not accepted must
- *        not occupy a delivery slot. A rider with 3 pending offers
- *        was blocked from accepting any of them because the old
- *        cap counted 'rider_pending' against the limit. The new cap
- *        lets the rider accept all 3, and only starts refusing once
- *        the rider actually holds 3 accepted orders.
- *
- *        No other function changed from v7.4. The write functions
- *        (acceptOrder, markOrderPickedUp, declineOrder) are
- *        unchanged, because they already transition through the
- *        right statuses and do not themselves read the cap.
- *
- * v7.4 — Added 'picking_up' between 'rider_pending' and 'delivering'.
- *        Retained.
- *
- * v7.3 — insertRiderDocument() rewritten for the generalized
- *        schema (id_type + id_path). Retained.
- *
- * v7.2 — Adds updateRiderProfilePicture(). Retained.
- *
- * v7.1 — DELTA-FRIENDLY ACTIVE DELIVERIES. Retained.
- *
- * v7.0 — DELIVERY PAYOUT + AVAILABILITY CLEANUP. Retained.
- *
- * v6.0 — REGISTRATION SQL CONSOLIDATED HERE. Retained.
- *
- * v5.0 — RIDER ACCEPT / DECLINE FOR THE RIDER_PENDING HANDOFF.
+ *                 (9.2: the three panel readers select the full
+ *                 restaurant_branch address. 9.1: acceptOrder()
+ *                 writes the COD collection. 9.0: rider collection
+ *                 model reads. 8.0: merged.)
  */
 
 declare(strict_types=1);
+
+require_once __DIR__ . '/../../../shared/backend/database/order-transaction-queries.php';
+
+/* =============================================================
+ * CONSTANTS
+ * ============================================================= */
 
 if (!defined('RIDER_CONCURRENT_CAP')) {
     define('RIDER_CONCURRENT_CAP', 3);
 }
 
-/**
- * Statuses that count against the concurrent-order cap.
- *
- * These are the statuses the rider has ACTUALLY COMMITTED TO. Once
- * an order enters one of them, the rider owns it and it occupies a
- * delivery slot until it reaches a closed state.
- *
- * 'rider_pending' is deliberately absent. An order in
- * 'rider_pending' is a kitchen offer the rider has not yet accepted
- * or declined. It is not yet the rider's order, so it must not
- * occupy a slot. Excluding it is what lets a rider with several
- * pending offers accept all of them.
- */
 if (!defined('COMMITTED_RIDER_STATUSES')) {
     define('COMMITTED_RIDER_STATUSES', ['picking_up', 'delivering']);
 }
 
-/**
- * Statuses that block a rider from going offline.
- *
- * This is a broader set than COMMITTED_RIDER_STATUSES. A rider must
- * not be allowed to go offline while ANY order is still assigned to
- * them — including a 'rider_pending' offer they have not yet
- * decided on. An offer sitting in 'rider_pending' needs the rider's
- * decision; going offline would strand it.
- */
 if (!defined('LIVE_RIDER_STATUSES')) {
     define('LIVE_RIDER_STATUSES', ['rider_pending', 'picking_up', 'delivering']);
 }
 
-// ============================================
-// AUTHENTICATION
-// ============================================
+/* =============================================================
+ * SECTION 1 — AUTHENTICATION
+ * ============================================================= */
 
 function findRiderByIdentifier(PDO $db, string $identifier): array|false
 {
@@ -246,30 +153,10 @@ function isRiderActive(PDO $db, int $riderId): bool
     return (bool)$stmt->fetchColumn();
 }
 
-// ============================================
-// AVAILABILITY
-// ============================================
+/* =============================================================
+ * SECTION 2 — AVAILABILITY
+ * ============================================================= */
 
-/**
- * Set the rider's own availability flag.
- *
- * Going offline (isAvailable = 0) is refused while the rider has
- * any order in 'rider_pending', 'picking_up', or 'delivering'. The
- * rider must finish all in-flight work — and decide on every
- * pending offer — before they can go offline. Going online
- * (isAvailable = 1) has no guard.
- *
- * Note this guard uses the BROADER LIVE_RIDER_STATUSES set, not
- * COMMITTED_RIDER_STATUSES. A 'rider_pending' offer the rider has
- * not yet answered still blocks sign-out, because leaving it
- * unanswered would strand the order. The cap, by contrast, uses the
- * narrower committed set — the two rules are deliberately different.
- *
- * @param PDO $db
- * @param int $riderId
- * @param int $isAvailable
- * @return bool  false when the offline transition is refused
- */
 function setRiderAvailability(PDO $db, int $riderId, int $isAvailable): bool
 {
     if ($isAvailable === 0) {
@@ -311,25 +198,6 @@ function updateRiderContact(PDO $db, int $riderId, string $contactNumber): bool
     return true;
 }
 
-/**
- * Update the rider's profile picture path.
- *
- * Scoped to the owning rider — the WHERE clause pins delivery_rider_id,
- * so a call can only ever change the picture on the row that belongs
- * to the authenticated rider.
- *
- * Returns true when a row was actually written, false when the
- * submitted path equals the stored one (MySQL reports 0 affected rows
- * on a no-op UPDATE). The handler must not treat that false as a
- * failure: from the rider's point of view the picture they chose is
- * now on file, and the response should still be status: success.
- *
- * @param PDO    $db
- * @param int    $riderId
- * @param string $relativePath
- *        e.g. 'shared/uploads/rider/profiles/12/09_27_2026_0.jpg'
- * @return bool
- */
 function updateRiderProfilePicture(PDO $db, int $riderId, string $relativePath): bool
 {
     $stmt = $db->prepare(
@@ -345,9 +213,9 @@ function updateRiderProfilePicture(PDO $db, int $riderId, string $relativePath):
     return $stmt->rowCount() > 0;
 }
 
-// ============================================
-// ASSIGNED ORDERS (kitchen handoff)
-// ============================================
+/* =============================================================
+ * SECTION 3 — ASSIGNED ORDERS AND TRANSITIONS
+ * ============================================================= */
 
 function getAssignedOrders(PDO $db, int $riderId, int $limit = 20): array
 {
@@ -380,26 +248,6 @@ function getAssignedOrders(PDO $db, int $riderId, int $limit = 20): array
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-/**
- * Count the rider's committed concurrent orders.
- *
- * Counts ONLY 'picking_up' and 'delivering'. These are the orders
- * the rider has actually accepted and is now responsible for.
- *
- * 'rider_pending' is excluded. An order in 'rider_pending' is a
- * kitchen offer the rider has not yet decided on; it does not
- * occupy a delivery slot. Excluding it is what lets a rider with
- * several pending offers accept all of them.
- *
- * Closed work ('delivered', 'cancelled', 'refunded') does not
- * count. The current order is not excluded — callers who want to
- * exclude a specific order should subtract it themselves or use a
- * dedicated helper.
- *
- * @param PDO $db
- * @param int $riderId
- * @return int
- */
 function hasActiveOrder(PDO $db, int $riderId): int
 {
     $stmt = $db->prepare(
@@ -412,20 +260,6 @@ function hasActiveOrder(PDO $db, int $riderId): int
     return (int)$stmt->fetchColumn();
 }
 
-/**
- * Convenience: true when the rider is at or above the concurrent
- * order cap of 3.
- *
- * Checks the committed count from hasActiveOrder() — the orders the
- * rider has accepted. A rider with 3 'rider_pending' offers but no
- * accepted orders is NOT at the cap and can accept all of them.
- * Once 3 orders are accepted, the rider is at the cap and must
- * finish at least one before accepting a 4th.
- *
- * @param PDO $db
- * @param int $riderId
- * @return bool
- */
 function riderAtConcurrentCap(PDO $db, int $riderId): bool
 {
     return hasActiveOrder($db, $riderId) >= RIDER_CONCURRENT_CAP;
@@ -434,20 +268,29 @@ function riderAtConcurrentCap(PDO $db, int $riderId): bool
 /**
  * Accept a rider_pending assignment.
  *
- * Moves the order to 'picking_up' — NOT to 'delivering'. The rider
- * must then call markOrderPickedUp() once they have the food in
- * hand. This two-step flow means the order is visible to the
- * kitchen as "picking up" until the rider explicitly confirms the
- * pickup.
+ * THREE writes inside the caller's transaction:
  *
- * Returns true on a successful transition, false if the order was
- * not in 'rider_pending' for this rider (already accepted,
- * declined, or reassigned by the kitchen).
+ *   1. Status transition: rider_pending → picking_up.
+ *
+ *   2. Rider liability column. recordRiderLiability() sets
+ *      orders.rider_liability_amount to the order total. This is
+ *      written for EVERY payment method. It is the figure the
+ *      rider's earnings page reads as "Order liability" for the
+ *      duration of the order.
+ *
+ *   3. COD cash custody row. recordRiderCollection() writes the
+ *      COD-only rider_collection row. This is a no-op for Wallet
+ *      and Online orders; the function reads the payment method
+ *      itself and returns false without writing.
+ *
+ * All three commit or roll back together.
+ *
+ * Requires: caller-owned transaction.
  *
  * @param PDO $db
  * @param int $riderId
  * @param int $orderId
- * @return bool
+ * @return bool True when the accept succeeded.
  */
 function acceptOrder(PDO $db, int $riderId, int $orderId): bool
 {
@@ -464,22 +307,20 @@ function acceptOrder(PDO $db, int $riderId, int $orderId): bool
         ':rider_id' => $riderId,
     ]);
 
-    return $orderStmt->rowCount() === 1;
+    if ($orderStmt->rowCount() !== 1) {
+        return false;
+    }
+
+    // v2.5.0: uniform liability across every payment method.
+    recordRiderLiability($db, $riderId, $orderId);
+
+    // v2.4.0: COD-only cash custody row. No-op for Wallet and
+    // Online orders.
+    recordRiderCollection($db, $riderId, $orderId);
+
+    return true;
 }
 
-/**
- * Mark the order as physically picked up: 'picking_up' → 'delivering'.
- *
- * Only fires from 'picking_up' for this rider. A rider who never
- * accepted, or whose order was already moved to 'delivering', will
- * get a false return. This is the only way to enter 'delivering'
- * via the rider side.
- *
- * @param PDO $db
- * @param int $riderId
- * @param int $orderId
- * @return bool
- */
 function markOrderPickedUp(PDO $db, int $riderId, int $orderId): bool
 {
     $stmt = $db->prepare(
@@ -517,99 +358,30 @@ function declineOrder(PDO $db, int $riderId, int $orderId): bool
     return $stmt->rowCount() === 1;
 }
 
-// ============================================
-// DELIVERY PAYOUT
-// ============================================
-
-function creditRiderForDelivery(PDO $db, int $riderId, int $orderId, float $amount): bool
-{
-    if ($riderId <= 0 || $orderId <= 0 || $amount <= 0) {
-        return false;
-    }
-
-    $acct = $db->prepare(
-        "SELECT financial_account_id
-           FROM delivery_rider_profile
-          WHERE delivery_rider_id = :rider_id
-          LIMIT 1"
-    );
-    $acct->execute([':rider_id' => $riderId]);
-    $accountId = (int)$acct->fetchColumn();
-
-    if ($accountId <= 0) {
-        return false;
-    }
-
-    $dup = $db->prepare(
-        "SELECT 1
-           FROM transaction
-          WHERE financial_account_id = :account_id
-            AND order_id = :order_id
-            AND transaction_type = 'deposit'
-            AND status = 'completed'
-          LIMIT 1"
-    );
-    $dup->execute([
-        ':account_id' => $accountId,
-        ':order_id'   => $orderId,
-    ]);
-
-    if ($dup->fetchColumn() !== false) {
-        return false;
-    }
-
-    $ins = $db->prepare(
-        "INSERT INTO transaction
-            (financial_account_id, order_id, amount, transaction_type,
-             status, description, transaction_date)
-         VALUES
-            (:account_id, :order_id, :amount, 'deposit',
-             'completed', :description, NOW())"
-    );
-    $ins->execute([
-        ':account_id'  => $accountId,
-        ':order_id'    => $orderId,
-        ':amount'      => round($amount, 2),
-        ':description' => 'Delivery earnings for order #' . $orderId,
-    ]);
-
-    return true;
-}
-
-// ============================================
-// REGISTRATION LOOKUPS
-// ============================================
+/* =============================================================
+ * SECTION 4 — REGISTRATION LOOKUPS AND WRITES
+ * ============================================================= */
 
 function riderEmailExists(PDO $db, string $email): bool
 {
-    $stmt = $db->prepare(
-        "SELECT 1 FROM delivery_rider WHERE email = ? LIMIT 1"
-    );
+    $stmt = $db->prepare("SELECT 1 FROM delivery_rider WHERE email = ? LIMIT 1");
     $stmt->execute([$email]);
     return $stmt->fetchColumn() !== false;
 }
 
 function riderUsernameExists(PDO $db, string $username): bool
 {
-    $stmt = $db->prepare(
-        "SELECT 1 FROM delivery_rider WHERE username = ? LIMIT 1"
-    );
+    $stmt = $db->prepare("SELECT 1 FROM delivery_rider WHERE username = ? LIMIT 1");
     $stmt->execute([$username]);
     return $stmt->fetchColumn() !== false;
 }
 
 function riderContactExists(PDO $db, string $contact): bool
 {
-    $stmt = $db->prepare(
-        "SELECT 1 FROM delivery_rider WHERE contact_number = ? LIMIT 1"
-    );
+    $stmt = $db->prepare("SELECT 1 FROM delivery_rider WHERE contact_number = ? LIMIT 1");
     $stmt->execute([$contact]);
     return $stmt->fetchColumn() !== false;
 }
-
-// ============================================
-// REGISTRATION WRITES
-// ============================================
 
 function createRiderAccount(PDO $db, array $account, array $profile, array $address): array
 {
@@ -722,23 +494,6 @@ function insertRiderEmergencyContact(PDO $db, int $riderId, array $data): int
     return (int)$db->lastInsertId();
 }
 
-/**
- * Insert a rider identity document row.
- *
- * The generalized delivery_rider_document schema (v1.2.0) uses
- * id_type + id_path. issue_date and expiry_date are optional; an
- * empty string is coerced to SQL NULL.
- *
- * @param PDO    $db
- * @param int    $riderId
- * @param array{
- *     id_type:    string,
- *     id_path:    string,
- *     issue_date: string,
- *     expiry_date: string
- * } $data
- * @return int   Inserted document_id.
- */
 function insertRiderDocument(PDO $db, int $riderId, array $data): int
 {
     $stmt = $db->prepare(
@@ -758,9 +513,9 @@ function insertRiderDocument(PDO $db, int $riderId, array $data): int
     return (int)$db->lastInsertId();
 }
 
-// ============================================
-// DASHBOARD STATISTICS
-// ============================================
+/* =============================================================
+ * SECTION 5 — DASHBOARD AGGREGATES
+ * ============================================================= */
 
 function getRiderDashboardStats(PDO $db, int $riderId): array
 {
@@ -778,64 +533,60 @@ function getRiderDashboardStats(PDO $db, int $riderId): array
         'completion_rate'   => 100.0,
     ];
 
+    $payout = FITPAL_DELIVERY_BASE_FEE;
+
     $stmt = $db->prepare(
         "SELECT
             COALESCE(SUM(CASE
                 WHEN o.order_status = 'delivered'
                  AND DATE(o.delivered_at) = CURDATE()
-                THEN 50.00 ELSE 0 END), 0) AS today_earnings,
-
+                THEN :p1 ELSE 0 END), 0) AS today_earnings,
             COUNT(DISTINCT CASE
                 WHEN o.order_status = 'delivered'
                  AND DATE(o.delivered_at) = CURDATE()
                 THEN o.order_id END) AS today_deliveries,
-
             COALESCE(SUM(CASE
                 WHEN o.order_status = 'delivered'
                  AND o.delivered_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
-                THEN 50.00 ELSE 0 END), 0) AS week_earnings,
-
+                THEN :p2 ELSE 0 END), 0) AS week_earnings,
             COUNT(DISTINCT CASE
                 WHEN o.order_status = 'delivered'
                  AND o.delivered_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
                 THEN o.order_id END) AS week_deliveries,
-
             COALESCE(SUM(CASE
                 WHEN o.order_status = 'delivered'
                  AND o.delivered_at >= DATE_SUB(CURDATE(), INTERVAL 29 DAY)
-                THEN 50.00 ELSE 0 END), 0) AS month_earnings,
-
+                THEN :p3 ELSE 0 END), 0) AS month_earnings,
             COUNT(DISTINCT CASE
                 WHEN o.order_status = 'delivered'
                  AND o.delivered_at >= DATE_SUB(CURDATE(), INTERVAL 29 DAY)
                 THEN o.order_id END) AS month_deliveries,
-
             COALESCE(SUM(CASE
                 WHEN o.order_status = 'delivered'
-                THEN 50.00 ELSE 0 END), 0) AS total_earnings,
-
+                THEN :p4 ELSE 0 END), 0) AS total_earnings,
             COUNT(DISTINCT CASE
                 WHEN o.order_status = 'delivered'
                 THEN o.order_id END) AS total_deliveries,
-
             COUNT(DISTINCT CASE
                 WHEN o.delivery_rider_id IS NOT NULL
                 THEN o.order_id END) AS total_assigned,
-
             COUNT(DISTINCT CASE
                 WHEN o.order_status = 'delivered'
                  AND o.delivery_rider_id IS NOT NULL
                 THEN o.order_id END) AS total_completed,
-
             COUNT(DISTINCT CASE
-                WHEN o.order_status = 'cancelled'
+                WHEN o.order_status IN ('cancelled','failed')
                  AND o.delivery_rider_id IS NOT NULL
                 THEN o.order_id END) AS total_cancelled
-
          FROM orders o
          WHERE o.delivery_rider_id = :rider_id"
     );
-    $stmt->execute([':rider_id' => $riderId]);
+    $stmt->bindValue(':p1', $payout);
+    $stmt->bindValue(':p2', $payout);
+    $stmt->bindValue(':p3', $payout);
+    $stmt->bindValue(':p4', $payout);
+    $stmt->bindValue(':rider_id', $riderId, PDO::PARAM_INT);
+    $stmt->execute();
     $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
     $stats['today_earnings']   = (float)($row['today_earnings'] ?? 0);
@@ -861,7 +612,7 @@ function getRiderDashboardStats(PDO $db, int $riderId): array
         "SELECT COALESCE(MAX(daily_earnings), 0) AS max_daily
          FROM (
             SELECT DATE(o.delivered_at) AS delivery_day,
-                   SUM(50.00) AS daily_earnings
+                   SUM(:payout) AS daily_earnings
             FROM orders o
             WHERE o.delivery_rider_id = :rider_id
               AND o.order_status = 'delivered'
@@ -869,7 +620,9 @@ function getRiderDashboardStats(PDO $db, int $riderId): array
             GROUP BY DATE(o.delivered_at)
          ) AS daily"
     );
-    $stmt->execute([':rider_id' => $riderId]);
+    $stmt->bindValue(':payout', $payout);
+    $stmt->bindValue(':rider_id', $riderId, PDO::PARAM_INT);
+    $stmt->execute();
     $stats['week_earnings_max'] = (float)$stmt->fetchColumn();
 
     return $stats;
@@ -877,11 +630,13 @@ function getRiderDashboardStats(PDO $db, int $riderId): array
 
 function getRiderWeeklyEarnings(PDO $db, int $riderId, int $days = 7): array
 {
+    $payout = FITPAL_DELIVERY_BASE_FEE;
+
     $stmt = $db->prepare(
         "SELECT
             DATE(o.delivered_at) AS day,
             COUNT(DISTINCT o.order_id) AS deliveries,
-            SUM(50.00) AS amount
+            SUM(:payout) AS amount
          FROM orders o
          WHERE o.delivery_rider_id = :rider_id
            AND o.order_status = 'delivered'
@@ -889,6 +644,7 @@ function getRiderWeeklyEarnings(PDO $db, int $riderId, int $days = 7): array
          GROUP BY DATE(o.delivered_at)
          ORDER BY day ASC"
     );
+    $stmt->bindValue(':payout', $payout);
     $stmt->bindValue(':rider_id', $riderId, PDO::PARAM_INT);
     $stmt->bindValue(':days', $days - 1, PDO::PARAM_INT);
     $stmt->execute();
@@ -944,8 +700,10 @@ function getRiderRecentDeliveries(PDO $db, int $riderId, int $limit = 5): array
     $stmt->execute();
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    $payout = FITPAL_DELIVERY_BASE_FEE;
+
     foreach ($rows as &$row) {
-        $row['rider_earning'] = 50.00;
+        $row['rider_earning'] = $payout;
     }
     unset($row);
 
@@ -991,29 +749,90 @@ function getRiderChartScale(float $maxAmount): array
     ];
 }
 
-// ============================================
-// DELIVERIES
-// ============================================
+/* =============================================================
+ * SECTION 5b — RIDER OUTSTANDING LIABILITY (v2.5.0)
+ * ============================================================= */
 
 /**
- * Fetch the rider's active deliveries — orders in either
- * 'picking_up' or 'delivering'.
+ * Return the rider's total outstanding liability across every
+ * order they currently hold, regardless of payment method.
  *
- * The rider's "Active" tab on deliveries.php shows both statuses,
- * so this query returns both. A 'picking_up' order and a
- * 'delivering' order appear side by side with different action
- * buttons on each card.
+ * Reads orders.rider_liability_amount. The column is populated
+ * on accept and cleared on successful delivery or failure. A
+ * non-null value on an in-flight order means the rider is
+ * currently exposed to that amount.
  *
- * Delta support: when $sinceOrderId > 0, only rows with order_id
- * greater than it are returned. The client uses the delta path to
- * poll for newly accepted orders without re-fetching the whole
- * list.
+ * The function name is retained from the v2.4.0 rider collection
+ * model for call-site stability. Its shape is unchanged: a
+ * 'total' float and a 'count' int. The meaning of 'count' shifted
+ * from "number of collected COD orders" to "number of orders with
+ * an outstanding liability," which is what the earnings page and
+ * dashboard have always displayed.
  *
  * @param PDO $db
  * @param int $riderId
- * @param int $sinceOrderId
+ * @return array{total: float, count: int}
+ */
+function getRiderOutstandingCollections(PDO $db, int $riderId): array
+{
+    $stmt = $db->prepare(
+        "SELECT
+            COALESCE(SUM(rider_liability_amount), 0) AS total,
+            COUNT(*) AS count
+         FROM orders
+         WHERE delivery_rider_id = :rider_id
+           AND rider_liability_amount IS NOT NULL
+           AND order_status IN ('picking_up', 'delivering')"
+    );
+    $stmt->execute([':rider_id' => $riderId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    return [
+        'total' => (float)($row['total'] ?? 0),
+        'count' => (int)($row['count'] ?? 0),
+    ];
+}
+
+/**
+ * Return the rider's COD cash-custody history.
+ *
+ * Reads rider_collection. This remains COD-only by design: it is
+ * the audit trail of physical cash the rider has handled. The
+ * earnings page shows it in a dedicated "Collection History"
+ * section that is separate from the order liability figure.
+ *
+ * @param PDO $db
+ * @param int $riderId
+ * @param int $limit
  * @return array<int, array<string, mixed>>
  */
+function getRiderCollectionHistory(PDO $db, int $riderId, int $limit = 20): array
+{
+    $stmt = $db->prepare(
+        "SELECT
+            rc.rider_collection_id,
+            rc.order_id,
+            rc.amount,
+            rc.status,
+            rc.collected_at,
+            rc.settled_at,
+            rc.notes,
+            rc.created_at,
+            rc.updated_at
+         FROM rider_collection rc
+         WHERE rc.delivery_rider_id = :rider_id
+         ORDER BY rc.created_at DESC, rc.rider_collection_id DESC
+         LIMIT :limit"
+    );
+    $stmt->bindValue(':rider_id', $riderId, PDO::PARAM_INT);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/* =============================================================
+ * SECTION 6 — DELIVERIES LIST * ============================================================= */
+
 function getRiderActiveDeliveries(PDO $db, int $riderId, int $sinceOrderId = 0): array
 {
     if ($riderId <= 0) {
@@ -1095,7 +914,7 @@ function getRiderDeliveryHistory(PDO $db, int $riderId, int $limit = 10): array
          FROM orders o
          JOIN customer c ON o.customer_id = c.customer_id
          WHERE o.delivery_rider_id = :rider_id
-           AND o.order_status IN ('delivered', 'cancelled', 'refunded')
+           AND o.order_status IN ('delivered', 'cancelled', 'refunded', 'failed')
          ORDER BY COALESCE(o.delivered_at, o.order_date) DESC
          LIMIT :limit"
     );
@@ -1105,27 +924,6 @@ function getRiderDeliveryHistory(PDO $db, int $riderId, int $limit = 10): array
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-/**
- * Counts of the rider's orders grouped by the buckets that matter
- * to the deliveries page.
- *
- *   'active'  → order_status IN ('picking_up','delivering').
- *               These are the orders the rider has actually
- *               accepted and is now responsible for. This bucket
- *               matches the concurrent-order cap's committed set,
- *               so the Active tab badge shows the same count the
- *               cap enforces against.
- *               'rider_pending' offers are shown on the Assigned
- *               tab, and their count lives in the Assigned tab
- *               badge (assignedOrders.length), not here.
- *   'today'   → delivered today
- *   'week'    → delivered in the last 7 days (including today)
- *   'total'   → total delivered
- *
- * @param PDO $db
- * @param int $riderId
- * @return array{active:int, today:int, week:int, total:int}
- */
 function getRiderDeliveryCounts(PDO $db, int $riderId): array
 {
     $stmt = $db->prepare(
@@ -1150,9 +948,9 @@ function getRiderDeliveryCounts(PDO $db, int $riderId): array
     ];
 }
 
-// ============================================
-// EARNINGS / TRANSACTIONS
-// ============================================
+/* =============================================================
+ * SECTION 7 — TRANSACTIONS AND EARNINGS
+ * ============================================================= */
 
 function getRiderTransactions(PDO $db, int $riderId, int $limit = 10, int $offset = 0): array
 {
@@ -1229,9 +1027,9 @@ function requestRiderWithdrawal(PDO $db, int $riderId, float $amount): int|false
     return (int)$db->lastInsertId();
 }
 
-// ============================================
-// ADDRESS
-// ============================================
+/* =============================================================
+ * SECTION 8 — ADDRESS
+ * ============================================================= */
 
 function getRiderDefaultAddress(PDO $db, int $riderId): array|false
 {
@@ -1255,9 +1053,9 @@ function getRiderDefaultAddress(PDO $db, int $riderId): array|false
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
-// ============================================
-// FORMATTING HELPERS
-// ============================================
+/* =============================================================
+ * SECTION 9 — FORMATTING HELPERS
+ * ============================================================= */
 
 function formatRiderCurrency(int|float|string|null $amount): string
 {
@@ -1273,4 +1071,375 @@ if (!function_exists('truncateText')) {
         }
         return substr($text, 0, $length) . '...';
     }
+}
+
+/* =============================================================
+ * SECTION 10 — ASSIGNMENT PANEL
+ * ============================================================= */
+
+function getPanelAssignments(PDO $db, int $riderId, int $limit = 20): array
+{
+    if ($riderId <= 0) {
+        return [];
+    }
+
+    $stmt = $db->prepare(
+        "SELECT
+            o.order_id,
+            o.order_status,
+            o.order_date,
+            o.destination_address,
+            o.payment_method,
+            c.customer_id,
+            CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
+            c.contact_number AS customer_contact,
+            rb.restaurant_branch_id,
+            rb.branch_name,
+            rb.block        AS branch_block,
+            rb.barangay     AS branch_barangay,
+            rb.city         AS branch_city,
+            rb.province     AS branch_province,
+            rb.region       AS branch_region,
+            rb.postal_code  AS branch_postal_code,
+            rb.country      AS branch_country,
+            r.restaurant_id,
+            r.business_name AS restaurant_name,
+            (
+                SELECT ra.contact_number
+                  FROM restaurant_account ra
+                 WHERE ra.restaurant_id = r.restaurant_id
+                   AND ra.is_active = 1
+                 ORDER BY FIELD(ra.role, 'owner', 'manager', 'staff') ASC,
+                          ra.restaurant_account_id ASC
+                 LIMIT 1
+            ) AS kitchen_contact,
+            (
+                SELECT COUNT(*)
+                  FROM queue_item qi
+                 WHERE qi.order_id = o.order_id
+            ) AS item_count,
+            (
+                SELECT COALESCE(SUM(qi.queue_quantity
+                                    * COALESCE(qi.final_price, qi.unit_price)), 0)
+                  FROM queue_item qi
+                 WHERE qi.order_id = o.order_id
+            ) AS order_total
+         FROM orders o
+         JOIN customer c ON o.customer_id = c.customer_id
+         JOIN queue_item qi0 ON qi0.order_id = o.order_id
+         JOIN restaurant_branch rb ON qi0.branch_id = rb.restaurant_branch_id
+         JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
+         WHERE o.delivery_rider_id = :rider_id
+           AND o.order_status IN ('rider_pending', 'picking_up', 'delivering')
+         GROUP BY o.order_id
+         ORDER BY
+            FIELD(o.order_status, 'rider_pending', 'picking_up', 'delivering') ASC,
+            o.order_date ASC
+         LIMIT :limit"
+    );
+    $stmt->bindValue(':rider_id', $riderId, PDO::PARAM_INT);
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function getPanelAssignmentsSince(PDO $db, int $riderId, int $sinceOrderId): array
+{
+    if ($riderId <= 0) {
+        return [];
+    }
+
+    $stmt = $db->prepare(
+        "SELECT
+            o.order_id,
+            o.order_status,
+            o.order_date,
+            o.destination_address,
+            o.payment_method,
+            c.customer_id,
+            CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
+            c.contact_number AS customer_contact,
+            rb.restaurant_branch_id,
+            rb.branch_name,
+            rb.block        AS branch_block,
+            rb.barangay     AS branch_barangay,
+            rb.city         AS branch_city,
+            rb.province     AS branch_province,
+            rb.region       AS branch_region,
+            rb.postal_code  AS branch_postal_code,
+            rb.country      AS branch_country,
+            r.restaurant_id,
+            r.business_name AS restaurant_name,
+            (
+                SELECT ra.contact_number
+                  FROM restaurant_account ra
+                 WHERE ra.restaurant_id = r.restaurant_id
+                   AND ra.is_active = 1
+                 ORDER BY FIELD(ra.role, 'owner', 'manager', 'staff') ASC,
+                          ra.restaurant_account_id ASC
+                 LIMIT 1
+            ) AS kitchen_contact,
+            (
+                SELECT COUNT(*)
+                  FROM queue_item qi
+                 WHERE qi.order_id = o.order_id
+            ) AS item_count,
+            (
+                SELECT COALESCE(SUM(qi.queue_quantity
+                                    * COALESCE(qi.final_price, qi.unit_price)), 0)
+                  FROM queue_item qi
+                 WHERE qi.order_id = o.order_id
+            ) AS order_total
+         FROM orders o
+         JOIN customer c ON o.customer_id = c.customer_id
+         JOIN queue_item qi0 ON qi0.order_id = o.order_id
+         JOIN restaurant_branch rb ON qi0.branch_id = rb.restaurant_branch_id
+         JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
+         WHERE o.delivery_rider_id = :rider_id
+           AND o.order_id > :since_order_id
+           AND o.order_status IN ('rider_pending', 'picking_up', 'delivering')
+         GROUP BY o.order_id
+         ORDER BY o.order_id ASC"
+    );
+    $stmt->execute([
+        ':rider_id'       => $riderId,
+        ':since_order_id' => $sinceOrderId,
+    ]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function getPanelAssignmentRow(PDO $db, int $riderId, int $orderId): array|false
+{
+    if ($riderId <= 0 || $orderId <= 0) {
+        return false;
+    }
+
+    $stmt = $db->prepare(
+        "SELECT
+            o.order_id,
+            o.order_status,
+            o.order_date,
+            o.destination_address,
+            o.payment_method,
+            c.customer_id,
+            CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
+            c.contact_number AS customer_contact,
+            rb.restaurant_branch_id,
+            rb.branch_name,
+            rb.block        AS branch_block,
+            rb.barangay     AS branch_barangay,
+            rb.city         AS branch_city,
+            rb.province     AS branch_province,
+            rb.region       AS branch_region,
+            rb.postal_code  AS branch_postal_code,
+            rb.country      AS branch_country,
+            r.restaurant_id,
+            r.business_name AS restaurant_name,
+            (
+                SELECT ra.contact_number
+                  FROM restaurant_account ra
+                 WHERE ra.restaurant_id = r.restaurant_id
+                   AND ra.is_active = 1
+                 ORDER BY FIELD(ra.role, 'owner', 'manager', 'staff') ASC,
+                          ra.restaurant_account_id ASC
+                 LIMIT 1
+            ) AS kitchen_contact,
+            (
+                SELECT COUNT(*)
+                  FROM queue_item qi
+                 WHERE qi.order_id = o.order_id
+            ) AS item_count,
+            (
+                SELECT COALESCE(SUM(qi.queue_quantity
+                                    * COALESCE(qi.final_price, qi.unit_price)), 0)
+                  FROM queue_item qi
+                 WHERE qi.order_id = o.order_id
+            ) AS order_total
+         FROM orders o
+         JOIN customer c ON o.customer_id = c.customer_id
+         JOIN queue_item qi0 ON qi0.order_id = o.order_id
+         JOIN restaurant_branch rb ON qi0.branch_id = rb.restaurant_branch_id
+         JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
+         WHERE o.order_id = :order_id
+           AND o.delivery_rider_id = :rider_id
+           AND o.order_status IN ('rider_pending', 'picking_up', 'delivering')
+         GROUP BY o.order_id
+         LIMIT 1"
+    );
+    $stmt->execute([
+        ':order_id' => $orderId,
+        ':rider_id' => $riderId,
+    ]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: false;
+}
+
+function getPanelMaxOrderId(PDO $db, int $riderId): int
+{
+    if ($riderId <= 0) {
+        return 0;
+    }
+
+    $stmt = $db->prepare(
+        "SELECT COALESCE(MAX(order_id), 0)
+           FROM orders
+          WHERE delivery_rider_id = :rider_id
+            AND order_status IN ('rider_pending', 'picking_up', 'delivering')"
+    );
+    $stmt->execute([':rider_id' => $riderId]);
+    return (int)$stmt->fetchColumn();
+}
+
+function getPanelAssignmentCounts(PDO $db, int $riderId): array
+{
+    if ($riderId <= 0) {
+        return ['pending' => 0, 'picking_up' => 0, 'active' => 0, 'total' => 0];
+    }
+
+    $stmt = $db->prepare(
+        "SELECT
+            SUM(CASE WHEN order_status = 'rider_pending' THEN 1 ELSE 0 END) AS pending,
+            SUM(CASE WHEN order_status = 'picking_up'    THEN 1 ELSE 0 END) AS picking_up,
+            SUM(CASE WHEN order_status = 'delivering'    THEN 1 ELSE 0 END) AS active,
+            COUNT(*) AS total
+         FROM orders
+         WHERE delivery_rider_id = :rider_id
+           AND order_status IN ('rider_pending', 'picking_up', 'delivering')"
+    );
+    $stmt->execute([':rider_id' => $riderId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    return [
+        'pending'    => (int)($row['pending']    ?? 0),
+        'picking_up' => (int)($row['picking_up'] ?? 0),
+        'active'     => (int)($row['active']     ?? 0),
+        'total'      => (int)($row['total']      ?? 0),
+    ];
+}
+
+function resolvePanelMessageRecipient(PDO $db, int $orderId, string $channel): int
+{
+    if ($orderId <= 0) {
+        return 0;
+    }
+
+    if ($channel === 'customer') {
+        $stmt = $db->prepare(
+            "SELECT customer_id
+               FROM orders
+              WHERE order_id = :order_id
+              LIMIT 1"
+        );
+        $stmt->execute([':order_id' => $orderId]);
+        return (int)($stmt->fetchColumn() ?: 0);
+    }
+
+    if ($channel === 'restaurant_account') {
+        $stmt = $db->prepare(
+            "SELECT ra.restaurant_account_id
+               FROM queue_item qi
+               JOIN restaurant_branch rb ON rb.restaurant_branch_id = qi.branch_id
+               JOIN restaurant_account ra ON ra.restaurant_id = rb.restaurant_id
+              WHERE qi.order_id = :order_id
+                AND ra.is_active = 1
+              ORDER BY FIELD(ra.role, 'owner', 'manager', 'staff', 'cashier', 'kitchen') ASC,
+                       ra.restaurant_account_id ASC
+              LIMIT 1"
+        );
+        $stmt->execute([':order_id' => $orderId]);
+        return (int)($stmt->fetchColumn() ?: 0);
+    }
+
+    return 0;
+}
+
+function panelShouldNotify(PDO $db, int $riderId, int $orderId): bool
+{
+    if ($riderId <= 0 || $orderId <= 0) {
+        return false;
+    }
+
+    $stmt = $db->prepare(
+        "SELECT
+            o.order_status,
+            drp.verification_status,
+            drp.is_available
+         FROM orders o
+         JOIN delivery_rider_profile drp
+              ON drp.delivery_rider_id = o.delivery_rider_id
+         WHERE o.order_id = :order_id
+           AND o.delivery_rider_id = :rider_id
+         LIMIT 1"
+    );
+    $stmt->execute([
+        ':order_id' => $orderId,
+        ':rider_id' => $riderId,
+    ]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$row) {
+        return false;
+    }
+
+    if ((string)$row['order_status'] !== 'rider_pending') {
+        return false;
+    }
+    if ((string)$row['verification_status'] !== 'verified') {
+        return false;
+    }
+    if ((int)$row['is_available'] !== 1) {
+        return false;
+    }
+
+    return true;
+}
+
+function panelRiderIsEligible(PDO $db, int $riderId): bool
+{
+    if ($riderId <= 0) {
+        return false;
+    }
+
+    $stmt = $db->prepare(
+        "SELECT 1
+           FROM delivery_rider dr
+           JOIN delivery_rider_profile drp
+                ON dr.delivery_rider_id = drp.delivery_rider_id
+          WHERE dr.delivery_rider_id = :rider_id
+            AND dr.is_active = 1
+            AND drp.verification_status = 'verified'
+          LIMIT 1"
+    );
+    $stmt->execute([':rider_id' => $riderId]);
+    return $stmt->fetchColumn() !== false;
+}
+
+function panelStatusLabel(string $status): string
+{
+    return match ($status) {
+        'rider_pending' => 'Awaiting Your Decision',
+        'picking_up'    => 'Head to Pickup',
+        'delivering'    => 'In Transit',
+        default         => ucfirst($status),
+    };
+}
+
+function panelStatusBadge(string $status): string
+{
+    return match ($status) {
+        'rider_pending' => 'badge-warning',
+        'picking_up'    => 'badge-warning',
+        'delivering'    => 'badge-primary',
+        default         => 'badge-secondary',
+    };
+}
+
+function panelMessageChannel(string $status): ?string
+{
+    return match ($status) {
+        'rider_pending' => 'restaurant_account',
+        'picking_up'    => 'restaurant_account',
+        'delivering'    => 'customer',
+        default         => null,
+    };
 }

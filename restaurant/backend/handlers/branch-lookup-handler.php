@@ -19,6 +19,9 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('restaurant');
+
 header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';

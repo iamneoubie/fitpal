@@ -1,12 +1,12 @@
 filesToCheck = [
     # ===== File Structure =====
     "/logs/instructions/general.md",
-    "/logs/output/project_structure.md",
+    "/logs/tree-mapper/project_structure.md",
+    "/logs/logic/business-logic.md",
     "/sql/database.sql",
     "/sql/seed/all-in-one.sql",
 
     # ===== Root =====
-    "/admin-moderation-buttons.js",
     "/index.php",
 
     # ===== admin/assets/css =====
@@ -21,6 +21,7 @@ filesToCheck = [
 
     # ===== admin/assets/ui/js =====
     "/admin/assets/ui/js/admin-modal.js",
+    "/admin/assets/ui/js/admin-moderation-buttons.js",
     "/admin/assets/ui/js/customers.js",
     "/admin/assets/ui/js/dashboard.js",
     "/admin/assets/ui/js/header.js",
@@ -72,12 +73,12 @@ filesToCheck = [
     # ===== customer/assets/ui/js =====
     "/customer/assets/ui/js/cart.js",
     "/customer/assets/ui/js/checkout.js",
+    "/customer/assets/ui/js/customer-order.js",
     "/customer/assets/ui/js/dashboard.js",
     "/customer/assets/ui/js/header.js",
     "/customer/assets/ui/js/logout.js",
     "/customer/assets/ui/js/menu.js",
     "/customer/assets/ui/js/order-tracking.js",
-    "/customer/assets/ui/js/orders.js",
     "/customer/assets/ui/js/product-detail.js",
     "/customer/assets/ui/js/profile.js",
     "/customer/assets/ui/js/queue-panel.js",
@@ -91,10 +92,9 @@ filesToCheck = [
     "/customer/backend/database/branch-queries.php",
     "/customer/backend/database/cart-queries.php",
     "/customer/backend/database/customer-connect.php",
+    "/customer/backend/database/customer-order-queries.php",
     "/customer/backend/database/customer-queries.php",
     "/customer/backend/database/dashboard-queries.php",
-    "/customer/backend/database/fee-queries.php",
-    "/customer/backend/database/order-queries.php",
     "/customer/backend/database/product-queries.php",
     "/customer/backend/database/queue-queries.php",
     "/customer/backend/database/rider-queries.php",
@@ -105,10 +105,10 @@ filesToCheck = [
     "/customer/backend/handlers/address-handler.php",
     "/customer/backend/handlers/cart-handler.php",
     "/customer/backend/handlers/checkout-handler.php",
+    "/customer/backend/handlers/customer-order-handler.php",
     "/customer/backend/handlers/feedback-handler.php",
     "/customer/backend/handlers/get-branch-handler.php",
     "/customer/backend/handlers/message-handler.php",
-    "/customer/backend/handlers/order-handler.php",
     "/customer/backend/handlers/place-order-handler.php",
     "/customer/backend/handlers/profile-handler.php",
     "/customer/backend/handlers/queue-handler.php",
@@ -146,23 +146,24 @@ filesToCheck = [
     # ===== restaurant/assets/ui/js =====
     "/restaurant/assets/ui/js/dashboard.js",
     "/restaurant/assets/ui/js/header.js",
+    "/restaurant/assets/ui/js/kitchen-order.js",
     "/restaurant/assets/ui/js/kitchen-realtime.js",
     "/restaurant/assets/ui/js/logout.js",
-    "/restaurant/assets/ui/js/orders.js",
     "/restaurant/assets/ui/js/profile.js",
+    "/restaurant/assets/ui/js/restaurant-chat-modal.js",
     "/restaurant/assets/ui/js/sign-in.js",
     "/restaurant/assets/ui/js/sign-up.js",
 
     # ===== restaurant/backend/database =====
     "/restaurant/backend/database/chat-queries.php",
-    "/restaurant/backend/database/order-queries.php",
+    "/restaurant/backend/database/kitchen-order-queries.php",
     "/restaurant/backend/database/restaurant-connect.php",
     "/restaurant/backend/database/restaurant-queries.php",
 
     # ===== restaurant/backend/handlers =====
     "/restaurant/backend/handlers/branch-lookup-handler.php",
     "/restaurant/backend/handlers/chat-handler.php",
-    "/restaurant/backend/handlers/order-handler.php",
+    "/restaurant/backend/handlers/kitchen-order-handler.php",
     "/restaurant/backend/handlers/profile-handler.php",
     "/restaurant/backend/handlers/sign-in-handler.php",
     "/restaurant/backend/handlers/sign-out-handler.php",
@@ -203,9 +204,8 @@ filesToCheck = [
     "/rider/assets/ui/js/sign-up.js",
 
     # ===== rider/backend/database =====
-    "/rider/backend/database/assignment-queries.php",
+    "/rider/backend/database/rider-assignment-queries.php",
     "/rider/backend/database/rider-connect.php",
-    "/rider/backend/database/rider-queries.php",
 
     # ===== rider/backend/handlers =====
     "/rider/backend/handlers/assignment-handler.php",
@@ -246,11 +246,19 @@ filesToCheck = [
 
     # ===== shared/backend/database =====
     "/shared/backend/database/database-connect.php",
+    "/shared/backend/database/fee-queries.php",
     "/shared/backend/database/landing-queries.php",
+    "/shared/backend/database/order-transaction-queries.php",
+
+    # ===== shared/backend/handlers =====
+    "/shared/backend/handlers/order-transaction-handler.php",
 
     # ===== shared/includes =====
     "/shared/includes/footer.php",
     "/shared/includes/header.php",
+    "/shared/includes/public-csrf-token.php",
+    "/shared/includes/session-activity.php",
+    "/shared/includes/session-bootstrap.php",
     "/shared/includes/view-helpers.php",
 
     # ===== shared/pages =====

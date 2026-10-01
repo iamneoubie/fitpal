@@ -19,57 +19,54 @@
  *   delivered, past 1h grace     → View Tracking (secondary), View Receipt, Reorder
  *   cancelled                    → View Tracking (secondary), Reorder
  *   refunded                     → View Tracking (secondary), Reorder
+ *   failed                       → View Tracking (secondary), Reorder
  *
  * Two concepts, deliberately separated
  * ------------------------------------
- *   The tracking page is reachable for every order that is not
- *   currently in a state where it has no story left to tell. For a
- *   live order that is "not yet delivered". For a delivered order it
- *   is "any time" — a past order is still a valid thing to look at,
- *   the timeline still tells the customer what happened, and the
- *   summary is a useful reference.
+ *   The tracking page is reachable for every order regardless of
+ *   chat grace window.
  *
  *   The chat is reachable for a narrower set of states, governed by
- *   customerOrderHasOpenChatWindow(). Only a delivered order inside
- *   the one-hour grace window, plus every live order, has an open
- *   conversation. Past the window the chat is closed but the
- *   tracking page is still useful.
+ *   customerOrderHasOpenChatWindow().
  *
- *   The button label reflects which of the two the customer is
- *   going to do:
+ * Cancel and its ledger rules
+ * ---------------------------
+ * The Cancel button submits to the customer's own order handler
+ * (customer-order-handler.php) with action=cancel_order. That handler
+ * forwards the request to the shared order-transaction handler,
+ * which owns the status decision and the refund ledger for all three
+ * customer scenarios.
  *
- *     Track Order   — the order is still moving. Primary colour.
- *     Message       — the order is delivered and the chat is still
- *                     open. Primary colour, because chat is the
- *                     reason to go.
- *     View Tracking — the order is closed (delivered past the grace
- *                     window, cancelled, or refunded). Secondary
- *                     colour, because this is a record lookup, not
- *                     an action.
+ * Config for JS
+ * -------------
+ *   window.FITPAL_ORDERS.csrfToken      the customer's own token
+ *   window.FITPAL_ORDERS.assetBase      project-root-relative
+ *   window.FITPAL_ORDERS.handlerUrl     customer-order-handler.php
+ *
+ * The page's client script is customer-order.js.
  *
  * @package FitPal
- * @version 4.1 — The tracking page is now reachable for every order
- *                regardless of chat grace window. Cancelled and
- *                refunded orders also render the tracking page as a
- *                closed record. The button label and colour split
- *                by what the customer is going to do: Track Order
- *                for a live order, Message for a delivered order
- *                whose chat is still open, View Tracking for a
- *                closed order. The chat gate itself is unchanged —
- *                it is still governed by
- *                customerOrderHasOpenChatWindow().
+ * @version 6.0 — The config object's handlerUrl now names
+ *                customer-order-handler.php. The page no longer
+ *                carries the old order-handler.php name in any
+ *                form action, config value, or docblock reference.
  *
- *                (4.0: Message button stays for the grace window.
+ *                No markup change beyond the handlerUrl value.
+ *                Every button, every form, every link, and every
+ *                PHP block is byte-identical to v5.1.
+ *
+ *                (5.1: script tag points at customer-order.js.
+ *                5.0: renamed customer order query layer and
+ *                handler. 4.1: tracking reachable for every order.
+ *                4.0: Message button stays for the grace window.
  *                3.6: Track covers 'picking_up'. 3.5: cancel
- *                restricted to 'pending' only. 3.4: Track available
- *                from 'pending'. 3.3: CSRF inherited from header.
- *                3.2: expand icon from shared icons.)
+ *                restricted to 'pending' only. 3.3: CSRF inherited
+ *                from header. 3.2: expand icon from shared icons.)
  */
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('customer');
 
 if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     header('Location: sign-in.php');
@@ -77,7 +74,7 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
 }
 
 require_once __DIR__ . '/../includes/header.php';
-require_once __DIR__ . '/../backend/database/order-queries.php';
+require_once __DIR__ . '/../backend/database/customer-order-queries.php';
 require_once __DIR__ . '/../backend/database/tracking-queries.php';
 
 $customerId = (int)$_SESSION['customer_id'];
@@ -94,6 +91,7 @@ $statusCounts = [
     'delivered'  => 0,
     'cancelled'  => 0,
     'refunded'   => 0,
+    'failed'     => 0,
 ];
 
 try {
@@ -116,7 +114,6 @@ try {
     foreach ($rawOrders as $order) {
         $orderId = (int)$order['order_id'];
 
-        // Computed totals — orders no longer store these columns.
         $totals = getOrderTotals($database_connection, $orderId);
         $order['subtotal']     = $totals ? $totals['subtotal']     : 0.0;
         $order['delivery_fee'] = $totals ? $totals['delivery_fee'] : 0.0;
@@ -125,7 +122,6 @@ try {
         $order['total_amount'] = $totals ? $totals['total']        : 0.0;
         $order['branch_count'] = $totals ? $totals['branch_count'] : 0;
 
-        // Per-product details with full customization info.
         $order['items'] = getOrderItemsWithCustomizations($database_connection, $orderId);
         $order['item_count'] = count($order['items']);
 
@@ -144,8 +140,9 @@ try {
 // ============================================
 // CSRF
 // ============================================
-// Provided by header.php (via includes/csrf_token.php), stored under
-// the customer role's own session key 'customer_csrf_token'.
+// Provided by header.php (via includes/customer-csrf-token.php),
+// stored under the customer role's own session key
+// 'customer_csrf_token'.
 
 // ============================================
 // HELPERS
@@ -161,10 +158,13 @@ function getOrderStatusBadgeClass(string $status): string
     return match ($status) {
         'pending'    => 'badge-warning',
         'preparing'  => 'badge-info',
+        'picking_up' => 'badge-info',
+        'rider_pending' => 'badge-info',
         'delivering' => 'badge-primary',
         'delivered'  => 'badge-success',
         'cancelled'  => 'badge-danger',
         'refunded'   => 'badge-secondary',
+        'failed'     => 'badge-danger',
         default      => 'badge-secondary',
     };
 }
@@ -174,10 +174,13 @@ function getOrderStatusLabel(string $status): string
     return match ($status) {
         'pending'    => 'Pending',
         'preparing'  => 'Preparing',
+        'rider_pending' => 'Rider Pending',
+        'picking_up' => 'Picking Up',
         'delivering' => 'For Delivery',
         'delivered'  => 'Delivered',
         'cancelled'  => 'Cancelled',
         'refunded'   => 'Refunded',
+        'failed'     => 'Failed',
         default      => ucfirst($status),
     };
 }
@@ -196,11 +199,6 @@ function getOrderItemImage(string $imagePath, string $assetBase): string
     return htmlspecialchars($imagePath, ENT_QUOTES, 'UTF-8');
 }
 
-/**
- * Payment method → icon + display label.
- *
- * @return array{icon:string, label:string, slug:string}
- */
 function getPaymentMethodMeta(string $method): array
 {
     return match ($method) {
@@ -211,10 +209,6 @@ function getPaymentMethodMeta(string $method): array
     };
 }
 
-/**
- * Format a customization line for display.
- * Returns null if the customization should be skipped.
- */
 function formatCustomizationLine(array $cust): ?string
 {
     $name = $cust['ingredient_name'] ?? '';
@@ -243,35 +237,11 @@ function formatCustomizationLine(array $cust): ?string
     return $line;
 }
 
-/**
- * Return the tracking-button descriptor for an order, or null when
- * the order has no story left to tell.
- *
- * Two independent questions:
- *
- *   1. Is the chat still open? — customerOrderHasOpenChatWindow()
- *   2. Can the customer still open the tracking page? — this
- *      function's $canOpenTracking.
- *
- * The label and colour follow from which of the two the customer is
- * going to do.
- *
- * @param string      $status
- * @param string|null $deliveredAt
- * @return array{canOpen:bool, label:string, primary:bool}
- */
 function getTrackingButtonDescriptor(string $status, ?string $deliveredAt): array
 {
-    // Cancelled and refunded orders are closed records. The tracking
-    // page still renders them (it shows the terminal status, a
-    // closed timeline, and the order summary), so the button stays.
-    // Everything else is either live or delivered.
-
     $chatOpen = customerOrderHasOpenChatWindow($status, $deliveredAt);
 
     if ($chatOpen) {
-        // Live order or delivered-within-grace. Chat is reachable,
-        // so the button is the "open the conversation" action.
         $label = ($status === 'delivered') ? 'Message' : 'Track Order';
 
         return [
@@ -281,10 +251,6 @@ function getTrackingButtonDescriptor(string $status, ?string $deliveredAt): arra
         ];
     }
 
-    // No chat. The tracking page is still a valid read-only record
-    // for any order that is not cancelled/refunded, and it is a
-    // closed record for those two as well. Either way the button
-    // is a lookup, not an action, so it is secondary.
     return [
         'canOpen' => true,
         'label'   => 'Track Order',
@@ -370,6 +336,9 @@ $hasOrders = !empty($orders);
             <button type="button" class="filter-tab" data-filter="refunded">
                 Refunded <span class="filter-count"><?php echo $statusCounts['refunded']; ?></span>
             </button>
+            <button type="button" class="filter-tab" data-filter="failed">
+                Failed <span class="filter-count"><?php echo $statusCounts['failed']; ?></span>
+            </button>
         </div>
 
         <!-- ============================================
@@ -385,17 +354,12 @@ $hasOrders = !empty($orders);
                 $totalAmt    = (float)$order['total_amount'];
                 $orderDate   = $order['order_date'];
 
-                // Tracking button descriptor — label, colour, and
-                // whether the button is rendered at all. See the
-                // helper's docblock for the two-question split.
                 $trackBtn = getTrackingButtonDescriptor($status, $deliveredAt);
 
-                // The customer can cancel only while the order is
-                // still waiting for the kitchen to accept it.
                 $canCancel = ($status === 'pending');
 
                 $canReview  = ($status === 'delivered');
-                $canReorder = in_array($status, ['delivered', 'cancelled', 'refunded'], true);
+                $canReorder = in_array($status, ['delivered', 'cancelled', 'refunded', 'failed'], true);
 
                 $paymentMeta = getPaymentMethodMeta((string)$order['payment_method']);
             ?>
@@ -438,7 +402,6 @@ $hasOrders = !empty($orders);
                         ?>
                         <div class="order-item-row" data-item-key="<?php echo $itemKey; ?>">
 
-                            <!-- Item summary -->
                             <div class="order-item-summary <?php echo $hasDetails ? 'is-expandable' : ''; ?>"
                                 <?php if ($hasDetails): ?> role="button" tabindex="0" aria-expanded="false"
                                 aria-controls="<?php echo $itemKey; ?>-details" <?php endif; ?>>
@@ -472,7 +435,6 @@ $hasOrders = !empty($orders);
                                 </div>
                             </div>
 
-                            <!-- Item details -->
                             <?php if ($hasDetails): ?>
                             <div class="order-item-details" id="<?php echo $itemKey; ?>-details" hidden>
 
@@ -502,7 +464,6 @@ $hasOrders = !empty($orders);
                                 </div>
                                 <?php endif; ?>
 
-                                <!-- Price breakdown -->
                                 <div class="order-item-details-section order-item-price-breakdown">
                                     <div class="price-breakdown-row">
                                         <span>Base price</span>
@@ -531,7 +492,6 @@ $hasOrders = !empty($orders);
                                     </div>
                                 </div>
 
-                                <!-- Per-item review -->
                                 <?php if ($canReview && !$isReviewed): ?>
                                 <div class="order-item-details-actions">
                                     <button type="button" class="btn btn-outline btn-sm review-item-btn"
@@ -718,9 +678,12 @@ $hasOrders = !empty($orders);
 <script>
 window.FITPAL_ORDERS = {
     csrfToken: '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>',
-    assetBase: '<?php echo $assetBase; ?>'
+    assetBase: '<?php echo $assetBase; ?>',
+    handlerUrl: '../backend/handlers/customer-order-handler.php'
 };
+window.HIGHLIGHT_ORDER_ID = <?php echo (int)($_SESSION['highlight_order'] ?? 0); ?>;
+<?php unset($_SESSION['highlight_order']); ?>
 </script>
-<script src="../assets/ui/js/orders.js" defer></script>
+<script src="../assets/ui/js/customer-order.js" defer></script>
 
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>

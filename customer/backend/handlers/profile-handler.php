@@ -2,6 +2,9 @@
 /**
  * FitPal Customer Profile Handler
  *
+ * Runs on the customer session (PHPSESSID_CUSTOMER), separate from
+ * every other role's session.
+ *
  * Actions:
  *   update_profile   — save the customer's editable contact field
  *   upload_picture   — receive a new profile picture and store its path
@@ -12,9 +15,8 @@
  *   - Every SQL statement lives in customer-queries.php. This file
  *     contains no prepare() calls, no SQL strings, and no direct
  *     writes to customer_profile.
- *   - CSRF is validated against customer_csrf_token — the customer
- *     role's own session key. The shared 'csrf_token' key is never
- *     read, written, or cleared here.
+ *   - CSRF is validated against customer_csrf_token, the customer
+ *     context's own session key.
  *   - JSON responses follow the same shape as rider-handler.php and
  *     the other customer handlers:
  *         { status: 'success'|'error', message: string, ... }
@@ -24,11 +26,12 @@
  *
  * Why the file is safe to leave out of pages
  * ------------------------------------------
- * This file runs a full request dispatch at load time: session_start,
- * the auth guard, the CSRF check, the switch, and the echo/exit. It
- * is therefore NOT safe to require_once from a page. Pages that need
- * the same read helpers (getCustomerProfile, formatCurrency) include
- * customer-queries.php instead, which only declares functions.
+ * This file runs a full request dispatch at load time: session
+ * bootstrap, the auth guard, the CSRF check, the switch, and the
+ * echo/exit. It is therefore NOT safe to require_once from a page.
+ * Pages that need the same read helpers (getCustomerProfile,
+ * formatCurrency) include customer-queries.php instead, which only
+ * declares functions.
  *
  * Sign-out guard contract
  * -----------------------
@@ -60,41 +63,58 @@
  *     which is created on demand with mode 0755.
  *   - The path stored in the DB is project-root-relative.
  *
+ * ---------------------------------------------------------------------
+ * PER-ROLE SESSION MODEL (Option B)
+ * ---------------------------------------------------------------------
+ * The handler bootstraps the customer session before doing
+ * anything else. Because the request that reaches this handler
+ * carries only the customer cookie, the customer session is the
+ * only session this code can see. Every $_SESSION read and write
+ * in this file targets the customer session.
+ *
  * @package FitPal
- * @version 1.7 — Sign-out guard no longer blocks on cart or queue
- *                contents. Only live orders (pending, preparing,
- *                rider_pending, picking_up, delivering) can block
- *                sign-out. The cart and session order queue counts
- *                are still reported in the response so a future
- *                client-side notice can reference them, but neither
- *                value influences can_sign_out.
+ * @version 2.0 — Per-role session migration (Option B). The
+ *                handler bootstraps the customer session as its
+ *                first executable statement. The obsolete
+ *                cross-role commentary in the CSRF block is
+ *                replaced with a note about the structural
+ *                isolation that per-role sessions provide. No
+ *                logic changed; no SQL moved.
  *
- *                The active-orders SQL is unchanged. The queue-count
- *                SQL is unchanged. Only the boolean that combines
- *                them changed.
- *
- *                (1.6: adds the check_sign_out action. 1.5: random
- *                hex suffix removed from the filename. 1.4: filename
- *                format MM_DD_YYYY_<n>. 1.3: upload path changed to
- *                shared/uploads/customer/profiles/<customer_id>/.
- *                1.2: URL built from document-root comparison.
- *                1.1: session sync + absolute URL in response.
- *                1.0: initial version.)
+ *                (1.7: sign-out guard no longer blocks on cart or
+ *                queue contents. 1.6: added check_sign_out.
+ *                1.5: random hex suffix removed from the filename.
+ *                1.4: filename format MM_DD_YYYY_<n>.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+// ---------------------------------------------------------------------
+// SESSION BOOTSTRAP
+//
+// Must run before any other include that might touch the session.
+// This handler belongs to the customer context.
+// ---------------------------------------------------------------------
+
+require_once __DIR__ . '/../../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('customer');
+
+// ---------------------------------------------------------------------
+// OUTPUT BUFFER
+//
+// A stray warning or notice anywhere below would corrupt the JSON
+// response. The buffer is drained before the response is emitted
+// and the buffer's contents are discarded. This keeps the
+// Content-Type contract honest.
+// ---------------------------------------------------------------------
 
 ob_start();
 
 header('Content-Type: application/json; charset=utf-8');
 
-/* --------------------------------------------------------------
- * AUTH
- * -------------------------------------------------------------- */
+// ---------------------------------------------------------------------
+// AUTHENTICATION
+// ---------------------------------------------------------------------
 
 if (empty($_SESSION['customer_id'])) {
     ob_end_clean();
@@ -103,18 +123,21 @@ if (empty($_SESSION['customer_id'])) {
     exit;
 }
 
+// ---------------------------------------------------------------------
+// DEPENDENCIES
+// ---------------------------------------------------------------------
+
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/customer-queries.php';
 
-/* --------------------------------------------------------------
- * CSRF
- *
- * Per-role check. The customer role validates against its own
- * session key, 'customer_csrf_token', never the shared 'csrf_token'.
- * On mismatch the customer's own token is rotated so the next page
- * render generates a fresh one — the shared key is deliberately
- * left alone.
- * -------------------------------------------------------------- */
+// ---------------------------------------------------------------------
+// CSRF
+//
+// Validated against the customer context's own key,
+// 'customer_csrf_token', inside the customer session. On mismatch
+// the customer's own token is rotated so the next page render
+// generates a fresh one.
+// ---------------------------------------------------------------------
 
 $givenToken = (string)($_POST['csrf_token'] ?? '');
 $sessToken  = (string)($_SESSION['customer_csrf_token'] ?? '');
@@ -132,6 +155,10 @@ $customerId = (int)$_SESSION['customer_id'];
 $action     = (string)($_POST['action'] ?? '');
 
 $response = ['status' => 'error', 'message' => 'Invalid action'];
+
+// ---------------------------------------------------------------------
+// DISPATCH
+// ---------------------------------------------------------------------
 
 try {
     switch ($action) {
@@ -221,10 +248,7 @@ function handleUpdateProfile(PDO $db, int $customerId): array
  * The cart and the session order queue are reported but do NOT
  * block sign-out. A saved-but-unordered item is not an active
  * order, and a customer with items sitting in the cart has not
- * committed to anything. Forcing them to clear the cart or empty
- * the queue before they can leave their session conflates two
- * different ideas — "unfinished business" and "not yet started" —
- * that the guard was supposed to keep separate.
+ * committed to anything.
  *
  * Does not change state. Does not clear anything.
  *

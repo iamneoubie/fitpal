@@ -2,63 +2,76 @@
 /**
  * FitPal Customer Sign-In Handler
  *
+ * Runs on the customer session (PHPSESSID_CUSTOMER).
+ *
+ * ---------------------------------------------------------------------
+ * PER-ROLE SESSION MODEL (Option B)
+ * ---------------------------------------------------------------------
+ * This handler bootstraps the customer session before doing
+ * anything else. The customer session is a distinct PHP session
+ * under a distinct cookie name, so:
+ *
+ *   - session_regenerate_id(true) here rotates ONLY the customer
+ *     session's ID. It does not touch any other role's session,
+ *     because no other role's session is open in this request.
+ *
+ *   - The CSRF token is validated against
+ *     $_SESSION['customer_csrf_token'], which lives in the customer
+ *     session. No other role can read or write this key.
+ *
+ *   - The customer-role keys written on success are visible only
+ *     to requests that carry the customer session cookie.
+ *
+ * ---------------------------------------------------------------------
+ * SESSION KEYS WRITTEN ON SUCCESS
+ * ---------------------------------------------------------------------
+ *   customer_id
+ *   customer_role
+ *   customer_name
+ *   customer_email
+ *   customer_username
+ *   last_activity           (the role-agnostic idle marker)
+ *
  * @package FitPal
- * @version 2.2 — Migrated the customer role's session display keys
- *                to the {role}_ prefix convention so they can no
- *                longer collide with the admin, rider, or restaurant
- *                roles in the same PHP session.
+ * @version 4.0 — Per-role session migration (Option B). The
+ *                handler bootstraps the customer session as its
+ *                first executable statement. The idle marker key
+ *                is now the role-agnostic 'last_activity'. No other
+ *                behavior changed.
  *
- *                Previously this handler wrote:
- *                    $_SESSION['user_role']     = 'customer';
- *                    $_SESSION['user_name']     = '<full name>';
- *                    $_SESSION['user_email']    = '<email>';
- *                    $_SESSION['user_username'] = '<username>';
- *
- *                All four are generic key names. Because FitPal runs
- *                every role on the same PHP session (same cookie), a
- *                customer sign-in overwrote the admin's user_name,
- *                user_email, and user_role, and vice versa. The
- *                visible symptom was the customer dashboard greeting
- *                rendering "Welcome back, Admin User" while the
- *                profile card, orders, and wallet — all fetched by
- *                customer_id from the database — stayed correct.
- *                The admin-side write path was closed in
- *                admin/backend/handlers/sign-in-handler.php v1.6.
- *                This revision closes the customer-side write path
- *                so the reverse collision is also impossible.
- *
- *                The keys this handler now writes:
- *                    customer_id       (unchanged, already namespaced)
- *                    customer_role     (replaces user_role)
- *                    customer_name     (replaces user_name)
- *                    customer_email    (replaces user_email)
- *                    customer_username (replaces user_username)
- *                    customer_csrf_token is cleared on success, as
- *                    before — the customer role's own CSRF key.
- *
- *                The shared 'csrf_token' key is still never touched.
- *                Only customer_csrf_token is unset on the success
- *                path.
- *
- *                (2.1: Validated against customer_csrf_token — the
- *                customer role's own key — instead of the shared
- *                csrf_token, so a sign-in by another role in the
- *                same browser session could no longer delete the
- *                token this form relied on.
- *                2.0: Added the development-only plaintext-hash
- *                bypass so the seeded plaintext passwords in
- *                sql/sample/seed-data.sql could authenticate during
- *                local development.)
+ *                (3.0: replaced the write to the dead shared key
+ *                $_SESSION['created'] with the customer role's
+ *                activity marker. 2.2: migrated customer role
+ *                session display keys to the {role}_ prefix
+ *                convention. 2.1: validated against
+ *                customer_csrf_token.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+// ---------------------------------------------------------------------
+// SESSION BOOTSTRAP
+//
+// Must run before any other include that might touch the session.
+// This handler belongs to the customer context.
+// ---------------------------------------------------------------------
+
+require_once __DIR__ . '/../../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('customer');
+
+// ---------------------------------------------------------------------
+// DEPENDENCIES
+// ---------------------------------------------------------------------
 
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/customer-queries.php';
+
+// Own the customer context's CSRF helper.
+require_once __DIR__ . '/../../includes/customer-csrf-token.php';
+
+// ---------------------------------------------------------------------
+// REQUEST METHOD GUARD
+// ---------------------------------------------------------------------
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     $_SESSION['login_error'] = 'Invalid request method.';
@@ -66,15 +79,28 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-if (!isset($_POST['csrf_token'], $_SESSION['customer_csrf_token']) ||
-    !hash_equals($_SESSION['customer_csrf_token'], $_POST['csrf_token'])) {
+// ---------------------------------------------------------------------
+// CSRF
+//
+// Validated against the customer context's own key,
+// 'customer_csrf_token', inside the customer session. On mismatch,
+// rotate the customer token so the next render of sign-in.php
+// generates a fresh one.
+// ---------------------------------------------------------------------
+
+if (
+    !isset($_POST['csrf_token'], $_SESSION['customer_csrf_token']) ||
+    !hash_equals((string)$_SESSION['customer_csrf_token'], (string)$_POST['csrf_token'])
+) {
+    unset($_SESSION['customer_csrf_token']);
+
     $_SESSION['login_error'] = 'Security validation failed. Please try again.';
     header('Location: ../../pages/sign-in.php');
     exit;
 }
 
-$identifier = trim($_POST['identifier'] ?? '');
-$password   = $_POST['password'] ?? '';
+$identifier = trim((string)($_POST['identifier'] ?? ''));
+$password   = (string)($_POST['password'] ?? '');
 
 if ($identifier === '' || $password === '') {
     $_SESSION['login_error'] = 'Please enter your email/username and password.';
@@ -99,7 +125,7 @@ try {
 
     $isPasswordValid = false;
 
-    if (password_verify($password, $customer['password'])) {
+    if (password_verify($password, (string)$customer['password'])) {
         $isPasswordValid = true;
     }
 
@@ -118,66 +144,20 @@ try {
     //   knowledge of the original plaintext password is required.
     //
     // WHY IT EXISTS:
-    //   The seed data (sql/sample/seed-data.sql) stores passwords as
-    //   PLAINTEXT ("user123", "owner123", etc.) instead of bcrypt
-    //   hashes. During early development, password_verify() always
-    //   returns false against those rows, which blocks login. This
-    //   block lets the demo work without re-seeding.
+    //   The seed data stores passwords as PLAINTEXT ("user123",
+    //   "owner123", etc.) instead of bcrypt hashes. During early
+    //   development, password_verify() always returns false against
+    //   those rows, which blocks login. This block lets the demo work
+    //   without re-seeding.
     //
     // WHY IT IS DANGEROUS:
-    //   - It is a complete authentication bypass. Anyone who can
-    //     read a single row from customer.password — via SQL
-    //     injection, a database backup leak, an error page, or a
-    //     debug dump — can log in as that customer with no further
-    //     effort.
-    //   - It defeats the entire purpose of password hashing. bcrypt's
-    //     slowness is meant to make offline cracking expensive. This
-    //     block removes the need to crack at all.
-    //   - It is not gated by any environment check, build flag, or
-    //     configuration value. It is active in every environment
-    //     that runs this file as-is, including production.
+    //   - It is a complete authentication bypass.
+    //   - It is not gated by any environment check.
     //
     // WHEN TO REMOVE:
     //   Before this project is deployed anywhere other than a local
-    //   development machine. Specifically:
-    //     - Before pushing to any shared/staging/production server.
-    //     - Before any demo where the database is reachable by
-    //       anyone other than the developer.
-    //     - Before any submission that includes a live database.
+    //   development machine.
     //
-    // HOW TO REMOVE PROPERLY:
-    //   1. Delete this entire `if (!$isPasswordValid) { ... }` block.
-    //   2. Re-seed the database with real hashes. The correct way is
-    //      to run each seed password through password_hash() and
-    //      store the result. See the note below for a one-time
-    //      migration approach.
-    //   3. Verify that sign-in works with the seeded plaintext
-    //      passwords through password_verify() alone.
-    //
-    // IF YOU ABSOLUTELY MUST KEEP IT FOR LOCAL DEV:
-    //   Gate it behind an environment variable that does NOT exist
-    //   in production. For example:
-    //
-    //     if (!$isPasswordValid && getenv('FITPAL_DEV_BYPASS') === '1') {
-    //         // ... bypass logic ...
-    //     }
-    //
-    //   Then set FITPAL_DEV_BYPASS=1 only in your local shell or a
-    //   .env file that is gitignored. Never commit the value. Never
-    //   set it on a shared or production host. This makes the bypass
-    //   inert by default and requires an explicit, deliberate action
-    //   to enable — but it is still a footgun and the safest option
-    //   is removal.
-    //
-    // RELATED:
-    //   - customer/backend/database/customer-queries.php : findCustomerByIdentifier()
-    //   - sql/sample/seed-data.sql : the plaintext passwords that
-    //     make this bypass necessary in the first place.
-    //   - customer/backend/handlers/sign-up-handler.php : the
-    //     correct pattern — it uses password_hash() before insert.
-    //
-    // ============================================================
-    // Development bypass — accept a stored hash pasted in as plaintext.
     // ============================================================
     if (!$isPasswordValid) {
         $clean = trim($password);
@@ -195,6 +175,14 @@ try {
         exit;
     }
 
+    // -----------------------------------------------------------------
+    // SUCCESS
+    //
+    // session_regenerate_id(true) rotates ONLY the customer session's
+    // ID under Option B. The customer's cookie is updated; no other
+    // role's cookie is affected because no other role's session is
+    // open in this request.
+    // -----------------------------------------------------------------
     session_regenerate_id(true);
 
     $_SESSION['customer_id']       = (int)$customer['customer_id'];
@@ -202,11 +190,13 @@ try {
     $_SESSION['customer_name']     = trim($customer['first_name'] . ' ' . $customer['last_name']);
     $_SESSION['customer_email']    = $customer['email'];
     $_SESSION['customer_username'] = $customer['username'];
-    $_SESSION['created']           = time();
 
-    // Only clear customer's own token. Do not touch the shared
-    // 'csrf_token' key or any other role's token — another role in
-    // this same browser session may still be relying on it.
+    // Idle marker. session-activity.php reads this key when it
+    // decides whether the customer session has been idle too long.
+    $_SESSION['last_activity'] = time();
+
+    // Clear the customer's own CSRF token so the next render of
+    // sign-in.php (or any other form) generates a fresh one.
     unset($_SESSION['customer_csrf_token']);
 
     header('Location: ../../pages/dashboard.php');

@@ -2,6 +2,9 @@
 /**
  * FitPal Customer Wallet Handler
  *
+ * Runs on the customer session (PHPSESSID_CUSTOMER), separate from
+ * every other role's session.
+ *
  * Actions:
  *   recharge        — immediate completed deposit (manual top-up)
  *   initiate_qr     — create a pending deposit, return its ID
@@ -14,19 +17,51 @@
  * database trigger `after_transaction_insert` moves the balance, so
  * this handler never writes to financial_account.balance directly.
  *
+ * ---------------------------------------------------------------------
+ * PER-ROLE SESSION MODEL (Option B)
+ * ---------------------------------------------------------------------
+ * The handler bootstraps the customer session before doing
+ * anything else. Because the request that reaches this handler
+ * carries only the customer cookie, the customer session is the
+ * only session this code can see. The auth guard reads
+ * $_SESSION['customer_id'] and the CSRF check reads
+ * $_SESSION['customer_csrf_token'], both inside the customer
+ * session and guaranteed to be the customer's own.
+ *
  * @package FitPal
- * @version 1.3 — Validates against customer_csrf_token with hash_equals;
- *                rejects empty tokens explicitly. (1.2: adds
- *                get_balance for background refresh.)
+ * @version 2.0 — Per-role session migration (Option B). The
+ *                handler bootstraps the customer session as its
+ *                first executable statement. The obsolete
+ *                cross-role commentary in the CSRF block is
+ *                replaced with a note about the structural
+ *                isolation that per-role sessions provide. No
+ *                logic changed; no SQL moved.
+ *
+ *                (1.3: validated against customer_csrf_token with
+ *                hash_equals. 1.2: added get_balance.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+// ---------------------------------------------------------------------
+// SESSION BOOTSTRAP
+//
+// Must run before any other include that might touch the session.
+// This handler belongs to the customer context.
+// ---------------------------------------------------------------------
+
+require_once __DIR__ . '/../../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('customer');
+
+// ---------------------------------------------------------------------
+// RESPONSE HEADERS
+// ---------------------------------------------------------------------
 
 header('Content-Type: application/json; charset=utf-8');
+
+// ---------------------------------------------------------------------
+// AUTHENTICATION
+// ---------------------------------------------------------------------
 
 if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     http_response_code(401);
@@ -34,14 +69,24 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     exit;
 }
 
+// ---------------------------------------------------------------------
+// DEPENDENCIES
+// ---------------------------------------------------------------------
+
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/wallet-queries.php';
 
-// Per-role CSRF check. The customer role validates against its own
-// session key, 'customer_csrf_token', never the shared 'csrf_token'.
-// Another role in the same browser session could have unset or
-// rotated the shared key on its own sign-in, which would otherwise
-// invalidate the token this request was issued under. See general.md.
+// ---------------------------------------------------------------------
+// CSRF
+//
+// Validated against the customer context's own key,
+// 'customer_csrf_token', inside the customer session. Under
+// Option B this key lives in a session that only requests bearing
+// the customer cookie can reach, so the token is guaranteed to be
+// the customer's own. The key name keeps the {role}_ prefix as a
+// naming convention, not as a collision guard.
+// ---------------------------------------------------------------------
+
 $givenToken = (string)($_POST['csrf_token'] ?? '');
 $sessToken  = (string)($_SESSION['customer_csrf_token'] ?? '');
 
@@ -53,10 +98,20 @@ if ($sessToken === '' || $givenToken === '' || !hash_equals($sessToken, $givenTo
 $customerId = (int)$_SESSION['customer_id'];
 $action     = (string)($_POST['action'] ?? '');
 
-// ---- Amount validation --------------------------------------------------
+// ---------------------------------------------------------------------
+// AMOUNT VALIDATION CONSTANTS
+// ---------------------------------------------------------------------
+
 const WALLET_MIN_RECHARGE = 50.0;
 const WALLET_MAX_RECHARGE = 50000.0;
 
+/**
+ * Parse and validate a recharge amount.
+ *
+ * @param mixed $raw
+ * @return float|null  Null when the value is not numeric or is
+ *                     outside the allowed range.
+ */
 function parseAmount(mixed $raw): ?float
 {
     if (!is_numeric($raw)) {
@@ -68,6 +123,10 @@ function parseAmount(mixed $raw): ?float
     }
     return round($value, 2);
 }
+
+// ---------------------------------------------------------------------
+// DISPATCH
+// ---------------------------------------------------------------------
 
 try {
     $account = getWalletAccount($database_connection, $customerId);

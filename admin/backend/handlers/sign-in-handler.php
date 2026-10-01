@@ -3,70 +3,33 @@
  * FitPal Admin Sign-In Handler
  *
  * @package FitPal
- * @version 1.6 — Renamed the admin role's session display keys to
- *                the {role}_ prefix convention so they can no longer
- *                collide with the customer, rider, or restaurant
- *                roles in the same PHP session.
+ * @version 2.0 — Replaced the write to the dead shared key
+ *                $_SESSION['created'] with the per-role activity
+ *                marker $_SESSION['admin_last_activity']. The header's
+ *                idle gate reads this key; the shared $_SESSION['created']
+ *                key is no longer used anywhere.
  *
- *                Previously this handler wrote:
- *                    $_SESSION['user_role']
- *                    $_SESSION['user_name']
- *                    $_SESSION['user_email']
- *                All three are generic key names that every other role
- *                also wrote. Because FitPal uses a single shared PHP
- *                session across roles (same cookie), an admin sign-in
- *                overwrote the customer's $_SESSION['user_name'], and
- *                the customer dashboard — which reads
- *                $_SESSION['user_name'] for its greeting — rendered
- *                "Welcome back, Admin User" while its profile card,
- *                orders, and wallet (all fetched by customer_id from
- *                the database) stayed correct. The same collision ran
- *                in reverse when the customer signed in after the
- *                admin.
+ *                session_regenerate_id(true) remains — it is the one
+ *                legal rotation point for the admin role and happens
+ *                exactly once per sign-in, before the user is
+ *                authenticated into any other role's flow.
  *
- *                The fix follows the same pattern already applied to
- *                the CSRF token in v1.5 and to the ID keys from the
- *                start:
- *                    administrator_id  (already namespaced)
- *                    admin_role        (already namespaced)
- *                    admin_name        (new — replaces user_name)
- *                    admin_email       (new — replaces user_email)
- *                    admin_csrf_token  (already namespaced, v1.4)
- *
- *                user_role was dropped entirely. The admin role never
- *                needed it: administrator_id is the authentication
- *                check every admin page performs, and admin_role is
- *                the authorization value every admin page reads. A
- *                separate user_role key was redundant and only
- *                existed to match the customer role's session shape.
- *
- *                Nothing in the admin role reads admin_name or
- *                admin_email yet. They are written for parity with
- *                the other roles' session shape and so a future admin
- *                page can render the signed-in administrator's name
- *                without a database round-trip. admin/includes/header.php
- *                currently loads the name via a query and is
- *                deliberately left unchanged.
- *
- *                (1.5: Rotated admin_csrf_token on the CSRF-mismatch
- *                branch before redirecting back to sign-in.php so a
- *                browser that followed the redirect was no longer
- *                stuck in a validation loop with a stale token.
- *                1.4: Cleared admin_csrf_token on the success path so
- *                the next admin sign-in generates a fresh token.
- *                Earlier revisions switched validation from the
- *                shared csrf_token key to admin's own
- *                admin_csrf_token.)
+ *                (1.6: renamed admin role session display keys to the
+ *                {role}_ prefix convention. 1.5: rotated
+ *                admin_csrf_token on the CSRF-mismatch branch. 1.4:
+ *                cleared admin_csrf_token on the success path.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('admin');
 
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/admin-queries.php';
+
+// Own the admin role's CSRF bootstrap.
+require_once __DIR__ . '/../../includes/admin-csrf-token.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     $_SESSION['login_error'] = 'Invalid request method.';
@@ -131,7 +94,10 @@ try {
     $_SESSION['admin_name']       = trim(($admin['first_name'] ?? '') . ' ' . ($admin['last_name'] ?? ''));
     $_SESSION['admin_email']      = (string)($admin['email'] ?? '');
 
-    $_SESSION['created'] = time();
+    // Per-role activity marker. The header's idle gate reads this key.
+    // The shared $_SESSION['created'] key is dead and must not be
+    // written here.
+    $_SESSION['last_activity'] = time();
 
     recordAdminLogin($database_connection, (int)$admin['administrator_id']);
 

@@ -8,12 +8,11 @@
  *
  * Why queueEnrich() lives here and not in queue-handler.php:
  *
- *   Pages that render queue data, or future handlers that want to
- *   reuse the enrichment logic (reorder already re-implements it in
- *   order-queries.php — this is the canonical version), cannot
- *   require queue-handler.php. That file runs a full request
- *   dispatch at load time — the switch, the CSRF check, the
- *   exit path. Including it from a page would hijack the request.
+ *   Pages that render queue data, and any future handler that wants
+ *   to reuse the enrichment logic, cannot require
+ *   queue-handler.php. That file runs a full request dispatch at
+ *   load time — the switch, the CSRF check, the exit path.
+ *   Including it from a page would hijack the request.
  *
  *   This file only declares functions. It is safe to require from
  *   anywhere.
@@ -22,10 +21,57 @@
  * is a request-layer concern and is NOT touched by this file. The
  * handler reads and writes it.
  *
+ * ---------------------------------------------------------------------
+ * QUEUE SHAPE CONTRACT (shared with the order-transaction layer)
+ * ---------------------------------------------------------------------
+ * queueEnrich() is the canonical producer of a session queue line.
+ * Every writer of $_SESSION['order_queue'] — the customer queue
+ * handler's `add` and `sync` actions, and the cart handler's
+ * `push_to_queue` action — derives the line it writes from what
+ * this function returns, or from an exact-shape reproduction of it.
+ *
+ * The shared order-transaction layer reads those lines back through
+ * createOrderFromQueue() in
+ * shared/backend/database/order-transaction-queries.php. That
+ * function expects, at minimum, the following fields on every line:
+ *
+ *     product_id              int
+ *     restaurant_branch_id    int   ← required; a line missing it is
+ *                                     silently dropped by the shared
+ *                                     layer, which can leave the whole
+ *                                     queue empty
+ *     quantity                int
+ *     price                   float effective unit price
+ *     base_price              float
+ *     customization_data      string|null raw JSON of the customer's
+ *                                     selections
+ *
+ * queueEnrich() produces every one of those fields, plus four
+ * additional presentational fields (name, image, stock,
+ * restaurant_name, branch_name) that the menu page's queue panel
+ * renders but that the shared layer ignores.
+ *
+ * The queue line is written into a session whose ownership belongs
+ * to the caller. Two callers with the same (product_id, raw
+ * customization JSON) signature must merge into one line; two
+ * callers with the same product_id but different customizations
+ * must not merge. That merge rule is the caller's, not this file's.
+ *
+ * If createOrderFromQueue() ever requires a field that this function
+ * does not produce, that field belongs here — not in the individual
+ * writers — so both writers and the shared layer stay consistent by
+ * construction.
+ *
  * @package FitPal
- * @version 2.0 — Raw SQL from queue-handler.php moved here; enrichment
- *                function relocated because this file is safe to
- *                require from pages.
+ * @version 3.0 — Docblock records the queue shape contract against
+ *                the shared order-transaction layer. No behavioural
+ *                change: getProductForQueue(),
+ *                getProductCompositionRules(), and queueEnrich()
+ *                are byte-for-byte the same as the previous revision.
+ *
+ *                (2.0: raw SQL from queue-handler.php moved here;
+ *                enrichment function relocated because this file is
+ *                safe to require from pages.)
  */
 
 declare(strict_types=1);
@@ -102,13 +148,33 @@ function getProductCompositionRules(PDO $db, int $productId): array
  * Effective price is computed as:
  *     product.base_price
  *   + Σ(composition.price_modifier × requested_quantity)
- * for every composition row where the client indicated the ingredient
- * is present. The client sends {ingredient_id, quantity, selected_option}
- * and we ignore its price_modifier entirely — the server is the single
- * source of truth for money.
+ * for every composition row where the client indicated the
+ * ingredient is present. The client sends
+ * {ingredient_id, quantity, selected_option} and we ignore its
+ * price_modifier entirely — the server is the single source of
+ * truth for money.
  *
  * Returns null when the product is missing, inactive, or the
  * requested quantity cannot be satisfied by the current stock.
+ *
+ * ---------------------------------------------------------------------
+ * WHAT THIS FUNCTION PRODUCES
+ * ---------------------------------------------------------------------
+ * The returned array is a session queue line. It carries every
+ * field the shared order-transaction layer's
+ * createOrderFromQueue() reads (product_id, restaurant_branch_id,
+ * quantity, price, base_price, customization_data), plus four
+ * presentational fields (name, image, stock, restaurant_name,
+ * branch_name) that the menu page's queue panel renders.
+ *
+ * Every writer of $_SESSION['order_queue'] builds its line from
+ * this return value. Any change to the field set here is a change
+ * to the shared contract; the callers in
+ * customer/backend/handlers/queue-handler.php and
+ * customer/backend/handlers/cart-handler.php must be reviewed in
+ * the same commit.
+ *
+ * ---------------------------------------------------------------------
  *
  * @param PDO $db
  * @param array<string, mixed> $item

@@ -3,27 +3,43 @@
  * FitPal Rider Header
  *
  * Renders the rider chrome (nav, user block, logout modal, sign-out
- * block modal) and bootstraps the rider role's request-scoped needs:
+ * block modal) and bootstraps the rider role's request-scoped
+ * needs.
  *
- *   - Starts or resumes the PHP session.
- *   - Requires includes/rider-csrf-token.php and assigns $csrfToken
- *     on every request, authenticated or not.
- *   - Requires the shared PDO connection via rider-connect.php.
- *   - Computes $assetBase and $pageCssPath for the current page.
- *   - Loads the signed-in rider's display name, initial,
- *     verification status, and profile picture URL.
+ * ---------------------------------------------------------------------
+ * PER-ROLE SESSION MODEL (Option B)
+ * ---------------------------------------------------------------------
+ * This header is included by an entry-point file under
+ * rider/pages/ after that file has run:
  *
- * Shared rider chrome
- * -------------------
- * On every authenticated rider page, this header pulls in FOUR things:
+ *     require_once '<...>/shared/includes/session-bootstrap.php';
+ *     fitpal_session_bootstrap('rider');
+ *
+ * If that precondition is not met, this header emits a minimal
+ * error page and exits. It does NOT call session_start() itself,
+ * because doing so would open PHP's default PHPSESSID session and
+ * silently break isolation.
+ *
+ * ---------------------------------------------------------------------
+ * SESSION ACTIVITY
+ * ---------------------------------------------------------------------
+ * The last-activity timestamp is recorded for reference, but it is
+ * not used to expire the session. Sign-out is a manual action.
+ *
+ * ---------------------------------------------------------------------
+ * SHARED RIDER CHROME
+ * ---------------------------------------------------------------------
+ * On every authenticated rider page, this header pulls in FOUR
+ * things:
  *
  *   1. rider/includes/rider-chat-modal.php
  *   2. rider/includes/assignment-panel.php
  *   3. <script src="../assets/ui/js/rider-chat-modal.js">
  *   4. <script src="../assets/ui/js/assignment-panel.js">
  *
- * Sign-out guard
- * --------------
+ * ---------------------------------------------------------------------
+ * SIGN-OUT GUARD
+ * ---------------------------------------------------------------------
  * The header renders TWO modals:
  *
  *   #logoutModal
@@ -34,19 +50,13 @@
  *   #riderBlockSignOutModal
  *     The blocking modal. Shown when the pre-flight check reports
  *     the rider is NOT eligible — either because they still have
- *     live orders, or because they are still online.
+ *     live orders, or because they are still online. Single OK
+ *     button; informational only. logout.js writes the body text
+ *     because the correct copy depends on WHICH condition failed.
  *
- *     It has a single OK button. It does not offer a "Go Offline"
- *     shortcut, because going offline is a deliberate state change
- *     that belongs to the assignment panel, not to the sign-out
- *     flow. The rider reads the modal, does what it says, and tries
- *     again.
- *
- *     The body text is written by logout.js, because the correct
- *     copy depends on WHICH condition failed.
- *
- * Avatar
- * ------
+ * ---------------------------------------------------------------------
+ * AVATAR
+ * ---------------------------------------------------------------------
  * Both the desktop .user-profile-circle and the mobile
  * .mobile-user-avatar render the same three-way fallback:
  *
@@ -55,55 +65,124 @@
  *   2. The initial letter, when there is no picture.
  *   3. The fallback user glyph, when the initial is also empty.
  *
- * Cache busting
- * -------------
+ * ---------------------------------------------------------------------
+ * CACHE BUSTING
+ * ---------------------------------------------------------------------
  * Every stylesheet link and every script tag carries a
  * ?v=<version> query string built from the file's modification
  * time AND its byte size. When APP_ENV=development is set, the
  * version is a fresh time() on every request.
  *
  * @package FitPal
- * @version 2.8 — Adds the #riderBlockSignOutModal and wires it into
- *                the sign-out guard. The modal is informational with
- *                a single OK button; logout.js writes the body text
- *                and decides which modal to open. No other rule
- *                changed from 2.7.
+ * @version 4.0 — Automatic idle logout removed. The header no
+ *                longer calls trackSessionActivity()'s return
+ *                value to decide whether to expire the session.
+ *                It records the timestamp for reference and
+ *                proceeds. Sign-out is now manual only.
  *
- *                (2.7: docblock-only update for the per-rider
- *                upload layout. 2.6: avatar picture support. 2.5:
- *                version helper appends filesize(). 2.4: shared
- *                include script tags documented. 2.3: every script
- *                mtime-busted. 2.2: every stylesheet mtime-busted.
- *                2.1: shared rider chrome.)
+ *                (3.0: per-role session migration. 2.8: added
+ *                #riderBlockSignOutModal. 2.7: docblock-only
+ *                update. 2.6: avatar picture support. 2.5: version
+ *                helper appends filesize().)
  */
 
 declare(strict_types=1);
 
-// ===== SESSION =====
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+// ---------------------------------------------------------------------
+// PRECONDITION CHECK
+//
+// Under Option B, the rider session must be the active session
+// before this header can render. If it is not, the entry-point
+// file forgot to bootstrap — refuse to render rather than emit
+// rider chrome against the wrong session.
+// ---------------------------------------------------------------------
+
+if (!function_exists('fitpal_session_current_context')) {
+    require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
 }
 
-if (!isset($_SESSION['created'])) {
-    $_SESSION['created'] = time();
-} elseif (time() - $_SESSION['created'] > 1800) {
-    session_regenerate_id(true);
-    $_SESSION['created'] = time();
+if (fitpal_session_current_context() !== 'rider') {
+    error_log(
+        'rider/includes/header.php: included without the rider session '
+        . 'being bootstrapped. Current context: "'
+        . fitpal_session_current_context() . '". '
+        . 'The entry-point file must call fitpal_session_bootstrap(\'rider\') '
+        . 'before including this header.'
+    );
+
+    http_response_code(500);
+    ?>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>FitPal — Configuration Error</title>
+</head>
+
+<body
+    style="font-family:system-ui,sans-serif;max-width:640px;margin:80px auto;padding:0 24px;line-height:1.5;color:#111;">
+    <h1 style="font-size:20px;margin:0 0 12px;">Configuration Error</h1>
+    <p style="margin:0 0 12px;">
+        This page was reached without a rider session being started.
+        The entry-point file must call
+        <code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;">fitpal_session_bootstrap('rider')</code>
+        before including the rider header.
+    </p>
+    <p style="margin:0;color:#6b7280;font-size:14px;">
+        If you are a developer, check the server error log for details.
+    </p>
+</body>
+
+</html>
+<?php
+    exit;
 }
 
-// ===== CSRF TOKEN (rider role) =====
+// ---------------------------------------------------------------------
+// SESSION ACTIVITY
+//
+// The last-activity timestamp is recorded for reference, but it is
+// not used to expire the session. Sign-out is a manual action:
+// the user presses the logout button, the sign-out handler runs,
+// and the rider session is destroyed. The browser's own session-
+// cookie lifetime is the only other mechanism that ends this
+// session.
+// ---------------------------------------------------------------------
+
+require_once __DIR__ . '/../../shared/includes/session-activity.php';
+
+if (!empty($_SESSION['delivery_rider_id'])) {
+    trackSessionActivity();
+}
+
+// ---------------------------------------------------------------------
+// CSRF TOKEN (rider context)
+//
+// getRiderCsrfToken() verifies the active session is the rider
+// session before returning a token, so the value here is always
+// the rider's token and never any other role's.
+// ---------------------------------------------------------------------
+
 require_once __DIR__ . '/rider-csrf-token.php';
 
-// ===== DATABASE =====
+// ---------------------------------------------------------------------
+// DATABASE
+// ---------------------------------------------------------------------
+
 require_once __DIR__ . '/../backend/database/rider-connect.php';
 
-// ===== PATH DETECTION =====
+// ---------------------------------------------------------------------
+// PATH DETECTION
+// ---------------------------------------------------------------------
+
 /**
  * Get the base path to shared/ from the currently executing page.
  *
  * @return string Asset base path ending with 'shared/'
  */
-function getRiderAssetBase(): string {
+function getRiderAssetBase(): string
+{
     $scriptPath = $_SERVER['SCRIPT_NAME'];
     $dirPath    = dirname($scriptPath);
     $segments   = array_filter(explode('/', $dirPath));
@@ -113,7 +192,10 @@ function getRiderAssetBase(): string {
 
 $assetBase = getRiderAssetBase();
 
-// ===== ASSET VERSION HELPER =====
+// ---------------------------------------------------------------------
+// ASSET VERSION HELPER
+// ---------------------------------------------------------------------
+
 $isDevEnv = (getenv('APP_ENV') === 'development');
 
 /**
@@ -142,29 +224,38 @@ function riderAssetVersion(string $absolutePath, bool $isDevEnv): string
     return $mtime . '-' . $size;
 }
 
-// ===== ASSET PATHS =====
-$sharedGlobalCss  = __DIR__ . '/../../shared/assets/css/global.css';
-$sharedHeaderCss  = __DIR__ . '/../../shared/assets/css/header.css';
-$riderHeaderCss   = __DIR__ . '/../assets/css/header.css';
-$riderPanelCss    = __DIR__ . '/../assets/css/assignment-panel.css';
+// ---------------------------------------------------------------------
+// ASSET PATHS
+// ---------------------------------------------------------------------
 
-$riderHeaderJs    = __DIR__ . '/../assets/ui/js/header.js';
-$riderLogoutJs    = __DIR__ . '/../assets/ui/js/logout.js';
-$riderChatJs      = __DIR__ . '/../assets/ui/js/rider-chat-modal.js';
-$riderPanelJs     = __DIR__ . '/../assets/ui/js/assignment-panel.js';
+$sharedGlobalCss = __DIR__ . '/../../shared/assets/css/global.css';
+$sharedHeaderCss = __DIR__ . '/../../shared/assets/css/header.css';
+$riderHeaderCss  = __DIR__ . '/../assets/css/header.css';
+$riderPanelCss   = __DIR__ . '/../assets/css/assignment-panel.css';
 
-// ===== ASSET VERSIONS =====
-$sharedGlobalVer  = riderAssetVersion($sharedGlobalCss,  $isDevEnv);
-$sharedHeaderVer  = riderAssetVersion($sharedHeaderCss,  $isDevEnv);
-$riderHeaderVer   = riderAssetVersion($riderHeaderCss,   $isDevEnv);
-$riderPanelVer    = riderAssetVersion($riderPanelCss,    $isDevEnv);
+$riderHeaderJs = __DIR__ . '/../assets/ui/js/header.js';
+$riderLogoutJs = __DIR__ . '/../assets/ui/js/logout.js';
+$riderChatJs   = __DIR__ . '/../assets/ui/js/rider-chat-modal.js';
+$riderPanelJs  = __DIR__ . '/../assets/ui/js/assignment-panel.js';
 
-$riderHeaderJsVer = riderAssetVersion($riderHeaderJs,    $isDevEnv);
-$riderLogoutJsVer = riderAssetVersion($riderLogoutJs,    $isDevEnv);
-$riderChatJsVer   = riderAssetVersion($riderChatJs,      $isDevEnv);
-$riderPanelJsVer  = riderAssetVersion($riderPanelJs,     $isDevEnv);
+// ---------------------------------------------------------------------
+// ASSET VERSIONS
+// ---------------------------------------------------------------------
 
-// ===== FETCH RIDER DATA (if logged in) =====
+$sharedGlobalVer = riderAssetVersion($sharedGlobalCss, $isDevEnv);
+$sharedHeaderVer = riderAssetVersion($sharedHeaderCss, $isDevEnv);
+$riderHeaderVer  = riderAssetVersion($riderHeaderCss,  $isDevEnv);
+$riderPanelVer   = riderAssetVersion($riderPanelCss,   $isDevEnv);
+
+$riderHeaderJsVer = riderAssetVersion($riderHeaderJs, $isDevEnv);
+$riderLogoutJsVer = riderAssetVersion($riderLogoutJs, $isDevEnv);
+$riderChatJsVer   = riderAssetVersion($riderChatJs,   $isDevEnv);
+$riderPanelJsVer  = riderAssetVersion($riderPanelJs,  $isDevEnv);
+
+// ---------------------------------------------------------------------
+// FETCH RIDER DATA (if logged in)
+// ---------------------------------------------------------------------
+
 $isLoggedIn      = false;
 $riderName       = '';
 $riderInitial    = '';
@@ -210,10 +301,16 @@ if (!empty($_SESSION['delivery_rider_id'])) {
     }
 }
 
-// ===== CURRENT PAGE =====
+// ---------------------------------------------------------------------
+// CURRENT PAGE
+// ---------------------------------------------------------------------
+
 $currentPage = basename($_SERVER['PHP_SELF']);
 
-// ===== PAGE-SPECIFIC CSS PRELOADING =====
+// ---------------------------------------------------------------------
+// PAGE-SPECIFIC CSS PRELOADING
+// ---------------------------------------------------------------------
+
 $pageCssMap = [
     'sign-in.php'    => 'sign-in.css',
     'sign-up.php'    => 'sign-up.css',
@@ -232,7 +329,10 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
     $pageCssVer  = riderAssetVersion($pageCssFull, $isDevEnv);
 }
 
-// ===== EXPLICIT ENDPOINT PATHS =====
+// ---------------------------------------------------------------------
+// EXPLICIT ENDPOINT PATHS
+// ---------------------------------------------------------------------
+
 $riderChatEndpoint       = '../../rider/backend/handlers/message-handler.php';
 $riderAssignmentEndpoint = '../../rider/backend/handlers/assignment-handler.php';
 ?>
@@ -423,10 +523,6 @@ $riderAssignmentEndpoint = '../../rider/backend/handlers/assignment-handler.php'
 
     <!-- ============================================
          LOGOUT CONFIRMATION MODAL
-
-         Shown only after the pre-flight check in logout.js
-         reports the rider is eligible to sign out. See the
-         blocking modal below for the other path.
          ============================================ -->
     <div class="logout-modal" id="logoutModal" style="display: none;" role="dialog" aria-modal="true"
         aria-labelledby="logoutModalTitle">
@@ -449,20 +545,6 @@ $riderAssignmentEndpoint = '../../rider/backend/handlers/assignment-handler.php'
 
     <!-- ============================================
          SIGN-OUT BLOCK MODAL
-
-         Shown when the rider is NOT eligible to sign out.
-         Two reasons, one modal:
-
-           - the rider still has live orders
-           - the rider is still online
-
-         logout.js writes the body text, because the copy
-         depends on which condition failed. The modal has a
-         single OK button: it is informational. The rider
-         reads it, does what it says, and tries again.
-
-         The icon is the same warning glyph the rest of the
-         rider chrome uses for a refusal.
          ============================================ -->
     <div class="logout-modal" id="riderBlockSignOutModal" style="display: none;" role="dialog" aria-modal="true"
         aria-labelledby="riderBlockSignOutTitle">

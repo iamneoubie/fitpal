@@ -2,100 +2,121 @@
 /**
  * FitPal Rider Handler
  *
- * Actions:
- *   toggle_availability, update_profile, upload_picture,
- *   accept_assignment, decline_assignment,
- *   mark_picked_up, delivered,
- *   request_withdrawal,
- *   check_sign_out
+ * The rider-side dispatch endpoint for every rider action that is
+ * not the assignment panel's own flow:
  *
- * Order lifecycle
- * ---------------
- *     rider_pending  --accept_assignment-->  picking_up
- *     picking_up     --mark_picked_up----->  delivering
- *     delivering     --delivered---------->  delivered
+ *   toggle_availability   → rider's own online / offline flag
+ *   update_profile        → contact number
+ *   upload_picture        → profile picture
+ *   accept_assignment     → rider_pending → picking_up, then forward
+ *                           to the shared handler
+ *   accept_order          → legacy alias for accept_assignment
+ *   decline_assignment    → rider_pending → preparing, rider cleared
+ *   mark_picked_up        → picking_up → delivering, then forward to
+ *                           the shared handler for the COD
+ *                           collection write
+ *   delivered             → forward to the shared handler, which runs
+ *                           the delivered transition and writes the
+ *                           credit pair
+ *   request_withdrawal    → asks for a payout of the rider's balance
+ *   check_sign_out        → read-only guard for the sign-out button
  *
- * Accepting no longer puts the order in transit. The rider must
- * take a second explicit action ("Mark Picked Up") once they have
- * the food in hand. No step may be skipped:
+ * ---------------------------------------------------------------------
+ * TWO ACCEPT PATHS, ONE SHAPE
+ * ---------------------------------------------------------------------
+ * There are two accept endpoints in the rider role:
  *
- *   - accept_assignment only accepts from 'rider_pending'
- *   - mark_picked_up    only accepts from 'picking_up'
- *   - delivered         only accepts from 'delivering'
+ *   rider/backend/handlers/assignment-handler.php   (panel path)
+ *   rider/backend/handlers/rider-handler.php        (deliveries path,
+ *                                                    this file)
  *
- * Concurrent-order cap
- * --------------------
+ * Both must do the same thing, in the same order:
+ *
+ *   1. Run the four local guards.
+ *   2. Verify the order is in rider_pending for this rider.
+ *   3. Open a transaction.
+ *   4. Call acceptOrder() to move the order to picking_up.
+ *   5. Commit.
+ *   6. Forward to the shared handler for the (no-op under v2.4.0)
+ *      shared-handler record.
+ *
+ * The previous revision of this file performed steps 1, 2, and 6,
+ * and skipped 3, 4, and 5. The order stayed at rider_pending forever
+ * when accepted from the deliveries page, and every retry returned
+ * success without moving anything. The panel's accept path had the
+ * same bug and was fixed in file 2 of the v2.4.0 revision. This file
+ * closes the second half.
+ *
+ * ---------------------------------------------------------------------
+ * TWO PICKUP PATHS, ONE SHAPE
+ * ---------------------------------------------------------------------
+ * Same two endpoints, same reasoning. The pickup action moves the
+ * order from picking_up to delivering and then forwards to the
+ * shared handler so the COD collection row is written.
+ *
+ * ---------------------------------------------------------------------
+ * WHERE THE MONEY RULES LIVE
+ * ---------------------------------------------------------------------
+ * This file does not write any ledger row.
+ *
+ * The accept path writes no ledger row at all under v2.4.0.
+ * The delivery credit pair and the COD collection write are both
+ * written by:
+ *
+ *     shared/backend/handlers/order-transaction-handler.php
+ *
+ * which reads the fee schedule in:
+ *
+ *     shared/backend/database/fee-queries.php
+ *
+ * ---------------------------------------------------------------------
+ * CONCURRENT-ORDER CAP
+ * ---------------------------------------------------------------------
  * The cap of 3 applies to the orders the rider has ACTUALLY
- * ACCEPTED — the ones in 'picking_up' and 'delivering'. An order in
- * 'rider_pending' is a kitchen offer the rider has not yet decided
- * on; it does not occupy a delivery slot. A rider with 3 pending
- * offers can accept all 3. Once all 3 are accepted, the rider is at
- * the cap and must finish at least one before accepting a 4th.
+ * ACCEPTED — the ones in picking_up and delivering. An order in
+ * rider_pending is a kitchen offer the rider has not yet decided on.
  *
- * The same cap is enforced by the restaurant's assignRiderToOrder()
- * under a FOR UPDATE lock and by the SQL trigger
- * before_order_rider_assign — but only for committed orders.
- *
- * Availability model
- * ------------------
+ * ---------------------------------------------------------------------
+ * AVAILABILITY MODEL
+ * ---------------------------------------------------------------------
  * toggle_availability is the ONLY action in this file that writes
  * delivery_rider_profile.is_available. accept_assignment,
- * mark_picked_up, and delivered deliberately do NOT touch it: a
- * rider who was online when they accepted an order stays online
- * when they finish it. Going offline is refused while the rider
- * has any order in 'rider_pending', 'picking_up', or 'delivering'
- * — enforced by setRiderAvailability() in rider-queries.php.
+ * mark_picked_up, and delivered do NOT touch it.
  *
- * Sign-out eligibility
- * --------------------
- * check_sign_out is a read-only action. It answers two questions:
- *
- *   1. Does the rider have any live order right now?
- *   2. Is the rider currently online?
- *
- * A rider may only sign out when BOTH are false:
- *
- *   - every order is finished (no 'rider_pending', no 'picking_up',
- *     no 'delivering'), and
- *   - the rider is offline (is_available = 0).
- *
- * The client calls this before opening the sign-out confirmation
- * modal. When the answer is "not yet", the client opens a blocking
- * modal instead and tells the rider exactly which condition is
- * unmet.
- *
- * The check is deliberately read-only. It does NOT flip the rider
- * offline on the way out. Sign-out must never be a hidden state
- * change — the rider decides when to go offline, and they do that
- * from the assignment panel, not from the sign-out button.
+ * ---------------------------------------------------------------------
+ * PER-ROLE SESSION MODEL
+ * ---------------------------------------------------------------------
+ * The handler bootstraps the rider session before doing anything
+ * else. The auth guard reads $_SESSION['delivery_rider_id'] and the
+ * CSRF check reads $_SESSION['rider_csrf_token'].
  *
  * @package FitPal
- * @version 7.2 — The accept_assignment guard message now names the
- *                cap as "accepted orders" to match the committed-
- *                order count riderAtConcurrentCap() enforces.
- *                A rider with 3 pending offers but no accepted
- *                orders is no longer refused. No other action
- *                changed.
+ * @version 9.0 — The deliveries-page accept, pickup, and delivered
+ *                paths are now shaped the same way the panel's
+ *                paths are shaped:
  *
- *                (7.1: adds check_sign_out. 7.0: picking_up
- *                intermediate status. 6.1: per-rider, per-day
- *                upload layout. 6.0: upload URL resolution.
- *                5.2: upload UPDATE delegated to rider-queries.php.
- *                5.1: delivery payout constant at file scope.
- *                5.0: delivery payout. 4.1: rider_csrf_token.
- *                4.0: accept + decline.)
+ *                - handleAcceptAssignment() runs the transition
+ *                  itself before forwarding to the shared handler.
+ *                - handleMarkPickedUp() runs the transition, then
+ *                  forwards so the COD collection row is written.
+ *                - handleDelivered() forwards to the shared handler
+ *                  for both the transition and the credit pair. The
+ *                  local call to creditRiderForDelivery() is gone;
+ *                  that function no longer exists under v2.4.0.
+ *
+ *                (8.0: accept_assignment and delivered delegated
+ *                their money movement to the shared handler. 7.2:
+ *                committed-order cap on accept. 7.1: added
+ *                check_sign_out. 7.0: picking_up intermediate
+ *                status. 6.x: upload layout. 5.1: delivery payout
+ *                constant at file scope. 5.0: delivery payout.
+ *                4.1: rider_csrf_token. 4.0: accept + decline.)
  */
 
 declare(strict_types=1);
 
-/**
- * Flat amount credited to a rider for each completed delivery.
- */
-const RIDER_DELIVERY_PAYOUT = 50.00;
-
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('rider');
 
 ob_start();
 
@@ -109,11 +130,9 @@ if (empty($_SESSION['delivery_rider_id'])) {
 }
 
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
-require_once __DIR__ . '/../database/rider-queries.php';
+require_once __DIR__ . '/../database/rider-assignment-queries.php';
 
-// Own the rider role's CSRF bootstrap. The helper is idempotent and
-// stores the token under 'rider_csrf_token' — never the shared
-// 'csrf_token' key.
+// Own the rider role's CSRF bootstrap.
 require_once __DIR__ . '/../../includes/rider-csrf-token.php';
 
 if (
@@ -160,7 +179,7 @@ try {
             break;
 
         case 'delivered':
-            $response = handleDelivered($database_connection, $riderId);
+            handleDeliveredDelegation();
             break;
 
         case 'request_withdrawal':
@@ -184,21 +203,18 @@ echo json_encode($response);
 exit;
 
 // ----------------------------------------------------------------
+// HANDLERS
+// ----------------------------------------------------------------
 
 /**
  * Answer the two questions the sign-out button needs before it can
- * let the rider leave:
+ * let the rider leave.
  *
- *   can_sign_out  true only when the rider has no live orders AND
- *                 is offline.
- *   is_online     the rider's current availability flag.
- *   active_count  number of orders in rider_pending / picking_up /
- *                 delivering.
+ * Read-only. Does not change availability, does not touch any order.
  *
- * Read-only. Does not change availability, does not touch any
- * order. The client uses the three fields to decide whether to
- * open the normal sign-out confirmation or a blocking modal that
- * names the unmet condition.
+ * @param PDO $db
+ * @param int $riderId
+ * @return array<string, mixed>
  */
 function handleCheckSignOut(PDO $db, int $riderId): array
 {
@@ -260,6 +276,10 @@ function handleUpdateProfile(PDO $db, int $riderId): array
 /**
  * Build the next MM_DD_YYYY_<n>.<ext> filename for a destination
  * folder.
+ *
+ * @param string $uploadDir
+ * @param string $ext
+ * @return string
  */
 function buildRiderUploadFilename(string $uploadDir, string $ext): string
 {
@@ -306,6 +326,10 @@ function buildRiderUploadFilename(string $uploadDir, string $ext): string
 /**
  * Receive a profile picture upload, move the file into place, and
  * store its project-root-relative path.
+ *
+ * @param PDO $db
+ * @param int $riderId
+ * @return array<string, mixed>
  */
 function handleUploadPicture(PDO $db, int $riderId): array
 {
@@ -411,8 +435,6 @@ function handleUploadPicture(PDO $db, int $riderId): array
             $urlPrefix = '';
         } elseif (strpos($projectRootFs, $documentRootFs . '/') === 0) {
             $urlPrefix = substr($projectRootFs, strlen($documentRootFs));
-        } else {
-            $urlPrefix = '';
         }
 
         $url = $urlPrefix . '/' . ltrim($relativePath, '/');
@@ -426,6 +448,26 @@ function handleUploadPicture(PDO $db, int $riderId): array
     ];
 }
 
+/**
+ * Accept a rider_pending assignment.
+ *
+ * Three writes, in order:
+ *
+ *   1. Local guards — verified, online, not at cap, order still in
+ *      rider_pending for this rider.
+ *   2. Status transition, in this handler's own transaction.
+ *      acceptOrder() moves the order from rider_pending to
+ *      picking_up. If it returns false, the transaction rolls back
+ *      and this handler refuses.
+ *   3. Shared-handler handoff. Under v2.4.0 the shared handler's
+ *      accept branch performs no ledger write; it verifies and
+ *      returns. The forward keeps the client-visible response shape
+ *      stable.
+ *
+ * @param PDO $db
+ * @param int $riderId
+ * @return array<string, mixed>
+ */
 function handleAcceptAssignment(PDO $db, int $riderId): array
 {
     $orderId = (int)($_POST['order_id'] ?? 0);
@@ -452,20 +494,53 @@ function handleAcceptAssignment(PDO $db, int $riderId): array
         ];
     }
 
-    $accepted = acceptOrder($db, $riderId, $orderId);
-
-    if (!$accepted) {
+    $check = $db->prepare(
+        "SELECT 1 FROM orders
+          WHERE order_id = :order_id
+            AND delivery_rider_id = :rider_id
+            AND order_status = 'rider_pending'
+          LIMIT 1"
+    );
+    $check->execute([
+        ':order_id' => $orderId,
+        ':rider_id' => $riderId,
+    ]);
+    if ($check->fetchColumn() === false) {
         return [
             'status'  => 'error',
             'message' => 'This assignment is no longer available. The kitchen may have reassigned or cancelled it.',
         ];
     }
 
-    return [
-        'status'  => 'success',
-        'message' => 'Assignment accepted. Head to the restaurant to pick up the order.',
-        'order_status' => 'picking_up',
-    ];
+    $db->beginTransaction();
+
+    try {
+        $accepted = acceptOrder($db, $riderId, $orderId);
+
+        if (!$accepted) {
+            $db->rollBack();
+            return [
+                'status'  => 'error',
+                'message' => 'This assignment is no longer available. The kitchen may have reassigned or cancelled it.',
+            ];
+        }
+
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
+    }
+
+    // The shared handler runs in this same process and the same
+    // rider session. Under v2.4.0 its accept branch is a no-op on
+    // the ledger; it verifies and returns. The forward keeps the
+    // client-visible response shape stable.
+    forwardToSharedHandler('rider_accept_assignment', $orderId);
+
+    // forwardToSharedHandler always exits; this line is unreachable.
+    return ['status' => 'error', 'message' => 'Unexpected state.'];
 }
 
 function handleDeclineAssignment(PDO $db, int $riderId): array
@@ -475,13 +550,25 @@ function handleDeclineAssignment(PDO $db, int $riderId): array
         return ['status' => 'error', 'message' => 'Invalid order.'];
     }
 
-    $declined = declineOrder($db, $riderId, $orderId);
+    $db->beginTransaction();
 
-    if (!$declined) {
-        return [
-            'status'  => 'error',
-            'message' => 'This assignment is no longer available to decline.',
-        ];
+    try {
+        $declined = declineOrder($db, $riderId, $orderId);
+
+        if (!$declined) {
+            $db->rollBack();
+            return [
+                'status'  => 'error',
+                'message' => 'This assignment is no longer available to decline.',
+            ];
+        }
+
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        throw $e;
     }
 
     return [
@@ -490,31 +577,23 @@ function handleDeclineAssignment(PDO $db, int $riderId): array
     ];
 }
 
+/**
+ * Mark the order as physically picked up.
+ *
+ * Two writes, in order:
+ *
+ *   1. Status transition, in this handler's own transaction.
+ *      markOrderPickedUp() moves the order from picking_up to
+ *      delivering.
+ *   2. Shared-handler handoff. The shared handler writes the COD
+ *      collection row for this order (and skips the write for
+ *      Online and Wallet orders).
+ *
+ * @param PDO $db
+ * @param int $riderId
+ * @return array<string, mixed>
+ */
 function handleMarkPickedUp(PDO $db, int $riderId): array
-{
-    $orderId = (int)($_POST['order_id'] ?? 0);
-    if ($orderId <= 0) {
-        return ['status' => 'error', 'message' => 'Invalid order.'];
-    }
-
-    $picked = markOrderPickedUp($db, $riderId, $orderId);
-
-    if (!$picked) {
-        return [
-            'status'  => 'error',
-            'message' => 'Could not mark this order as picked up. '
-                       . 'It may already be in transit or was reassigned.',
-        ];
-    }
-
-    return [
-        'status'       => 'success',
-        'message'      => 'Order picked up. Head to the customer.',
-        'order_status' => 'delivering',
-    ];
-}
-
-function handleDelivered(PDO $db, int $riderId): array
 {
     $orderId = (int)($_POST['order_id'] ?? 0);
     if ($orderId <= 0) {
@@ -524,65 +603,52 @@ function handleDelivered(PDO $db, int $riderId): array
     $db->beginTransaction();
 
     try {
-        $check = $db->prepare(
-            "SELECT order_id
-               FROM orders
-              WHERE order_id = :order_id
-                AND delivery_rider_id = :rider_id
-                AND order_status = 'delivering'
-              LIMIT 1
-              FOR UPDATE"
-        );
-        $check->execute([
-            ':order_id' => $orderId,
-            ':rider_id' => $riderId,
-        ]);
+        $picked = markOrderPickedUp($db, $riderId, $orderId);
 
-        if ($check->fetchColumn() === false) {
+        if (!$picked) {
             $db->rollBack();
             return [
                 'status'  => 'error',
-                'message' => 'Order is not eligible to be marked delivered. '
-                           . 'Confirm the pickup step first.',
+                'message' => 'Could not mark this order as picked up. '
+                           . 'It may already be in transit or was reassigned.',
             ];
         }
 
-        $update = $db->prepare(
-            "UPDATE orders
-                SET order_status = 'delivered',
-                    delivered_at = NOW(),
-                    updated_at   = NOW()
-              WHERE order_id = :order_id
-                AND delivery_rider_id = :rider_id
-                AND order_status = 'delivering'"
-        );
-        $update->execute([
-            ':order_id' => $orderId,
-            ':rider_id' => $riderId,
-        ]);
-
-        if ($update->rowCount() === 0) {
-            $db->rollBack();
-            return ['status' => 'error', 'message' => 'Could not complete the delivery. Please try again.'];
-        }
-
-        creditRiderForDelivery($db, $riderId, $orderId, RIDER_DELIVERY_PAYOUT);
-
         $db->commit();
-
-        return [
-            'status'  => 'success',
-            'message' => 'Delivery marked as complete! '
-                       . '₱' . number_format(RIDER_DELIVERY_PAYOUT, 2)
-                       . ' added to your wallet.',
-        ];
-
     } catch (Throwable $e) {
         if ($db->inTransaction()) {
             $db->rollBack();
         }
         throw $e;
     }
+
+    forwardToSharedHandler('rider_mark_picked_up', $orderId);
+
+    // forwardToSharedHandler always exits; this line is unreachable.
+    return ['status' => 'error', 'message' => 'Unexpected state.'];
+}
+
+/**
+ * Close a delivering order as delivered.
+ *
+ * Delegates the transition and the credit pair to the shared handler.
+ * The local credit call that existed before v2.4.0 is gone; that
+ * function no longer exists in the query layer.
+ *
+ * @return never
+ */
+function handleDeliveredDelegation(): never
+{
+    $orderId = (int)($_POST['order_id'] ?? 0);
+    if ($orderId <= 0) {
+        echo json_encode(['status' => 'error', 'message' => 'Invalid order.']);
+        exit;
+    }
+
+    forwardToSharedHandler('rider_mark_delivered', $orderId);
+
+    // forwardToSharedHandler always exits; this line is unreachable.
+    exit;
 }
 
 function handleWithdrawal(PDO $db, int $riderId): array
@@ -617,4 +683,40 @@ function handleWithdrawal(PDO $db, int $riderId): array
         }
         throw $e;
     }
+}
+
+/**
+ * Forward the current request to the shared order-transaction
+ * handler with a specific shared-action name.
+ *
+ * The shared handler runs in this same process and the same rider
+ * session. It re-validates the rider role, re-checks the CSRF token,
+ * performs its own guards, and terminates the request with a JSON
+ * body.
+ *
+ * @param string $sharedAction
+ * @param int    $orderId
+ * @return never
+ */
+function forwardToSharedHandler(string $sharedAction, int $orderId): never
+{
+    $endpoint = __DIR__ . '/../../../shared/backend/handlers/order-transaction-handler.php';
+
+    if (!is_file($endpoint)) {
+        error_log('Rider handler: shared order-transaction handler is missing at ' . $endpoint);
+        echo json_encode([
+            'status'  => 'error',
+            'message' => 'The order service is temporarily unavailable. Please try again.',
+        ]);
+        exit;
+    }
+
+    // The shared handler reads $_POST directly. Set the action name
+    // it dispatches on.
+    $_POST['action'] = $sharedAction;
+
+    require $endpoint;
+
+    // The shared handler always exits; this line is unreachable.
+    exit;
 }

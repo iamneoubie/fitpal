@@ -1,568 +1,801 @@
 /**
- * FitPal Customer Order Tracking JavaScript
- * Version 3.0 — Real-time status polling on top of chat delta polling.
+ * FitPal Customer Order Tracking — client behaviour.
  *
- * Two independent concerns live in this file:
+ * Owns three surfaces on customer/pages/order-tracking.php:
  *
- *   1. LIVE ORDER STATUS
- *      Polls order-handler.php's `get_tracking_status` action every
- *      few seconds. The server returns the order's current status
- *      plus a revision hash derived from order_status, delivered_at,
- *      and delivery_rider_id. When the revision differs from the one
- *      the page was rendered with, the page reloads once and picks
- *      up the new server-rendered state.
+ *   1. The customer chat modal.
+ *      Two channels:
+ *        - 'restaurant_account' — talk to the kitchen.
+ *        - 'delivery_rider'     — talk to the rider; only becomes
+ *                                 live once the rider has accepted.
+ *      Each channel is loaded once on first open (a full fetch
+ *      through message-handler.php's `get` action), then polled
+ *      with `since_id` to pick up new messages. Sending posts to
+ *      message-handler.php's `send` action; marking read posts to
+ *      the `read` action.
  *
- *      Why reload rather than patch the DOM in place: the tracking
- *      page's DOM is coupled to the order status in ways a small
- *      patch would have to mirror — the timeline step classes, the
- *      rider card's Message button enablement, the chat tab
- *      availability, the alert banners. Reloading once on an actual
- *      status change is simpler, always correct, and cheap because
- *      the page itself is a single indexed read with one small join.
+ *   2. The real-time status poll.
+ *      Every few seconds, sends `get_tracking_status` to the
+ *      customer order handler with the client's current revision.
+ *      When the server reports that the revision has changed, the
+ *      client reconciles the chat modal's gating flags in place —
+ *      it does NOT reload the page.
  *
- *      The polling loop:
- *        - Uses a 6-second interval.
- *        - Pauses while document.hidden.
- *        - Resumes with one immediate fetch on visibilitychange to
- *          visible.
- *        - Stops entirely after a reload is triggered.
+ *   3. Origin-aware chat modal opening.
  *
- *   2. CHAT DELTA POLLING
- *      Per-channel cursor, initial full load, delta fetch, send with
- *      optimistic append, mark-read on channel focus. Same contract
- *      as the previous revision; unchanged below.
+ * ---------------------------------------------------------------------
+ * CLASS-NAME CONTRACT
+ * ---------------------------------------------------------------------
+ * This file emits three shapes of node. The exact class strings are
+ * the boundary between this file and order-tracking.css. Both must
+ * agree, and both must agree with the docblock in
+ * customer/pages/order-tracking.php.
  *
- * Cadence rationale:
- *   Status changes are infrequent (a handful per order) but the user
- *   is watching the page. 6 seconds is fast enough to feel live and
- *   slow enough that a ten-minute track session costs about a
- *   hundred shallow reads, not a thousand.
+ * Sent (customer's own message):
+ *
+ *   <div class="customer-chat-message customer-chat-message-sent">
+ *     <span class="customer-chat-message-sender">You</span>
+ *     <span class="customer-chat-message-text">…</span>
+ *     <span class="customer-chat-message-time">…</span>
+ *   </div>
+ *
+ * Received (from the restaurant or the rider):
+ *
+ *   <div class="customer-chat-message customer-chat-message-received">
+ *     <span class="customer-chat-message-sender">Restaurant</span>
+ *     <span class="customer-chat-message-text">…</span>
+ *     <span class="customer-chat-message-time">…</span>
+ *   </div>
+ *
+ * System (server refusal, channel-closed notice):
+ *
+ *   <div class="customer-chat-system">…</div>
+ *
+ * The previous revision of this file emitted the bare classes
+ * `sent` and `received`, which the CSS at the time did not target.
+ * The two files drifted and both bubbles rendered identically. This
+ * revision pins the modifier to the base class as a compound
+ * class name, which is the exact string order-tracking.css now
+ * targets.
+ *
+ * The `direction` field on every entry the server returns is set
+ * by message-handler.php's shapeMessage(). This file trusts it
+ * verbatim. A `direction === 'sent'` entry is rendered with the
+ * sent modifier; every other entry is rendered with the received
+ * modifier.
+ *
+ * ---------------------------------------------------------------------
+ * MODAL VISIBILITY
+ * ---------------------------------------------------------------------
+ * order-tracking.css defines the modal's visible state behind a
+ * class, not behind a bare inline `display` flip:
+ *
+ *     .modal             { display: none; opacity: 0; }
+ *     .modal.active      { display: flex !important; opacity: 1; }
+ *
+ * Every open in this file goes through one pair of helpers,
+ * `openModal` / `closeModal`, that set `display: flex` inline, force
+ * a reflow, and toggle `.active`. closeModal waits for the fade-out
+ * transition before restoring `display: none`.
+ *
+ * ---------------------------------------------------------------------
+ * LOADING STATE
+ * ---------------------------------------------------------------------
+ * The loading placeholder is shown exactly once per channel: on the
+ * very first load for that channel. After that, the modal never
+ * returns to the loading placeholder.
+ *
+ * Two pieces of state drive this:
+ *
+ *   hasLoadedMessages  — an object keyed by channel. Set to true
+ *                        the first time a `get` response arrives,
+ *                        success or failure.
+ *   messageCursor      — the highest message_id the client holds
+ *                        per channel.
+ *
+ * ---------------------------------------------------------------------
+ * CHANNEL GATING (client side)
+ * ---------------------------------------------------------------------
+ * The tracking page publishes two data attributes on #trackingPage:
+ *
+ *     data-can-message-kitchen="1|0"
+ *     data-can-message-rider="1|0"
+ *
+ * The chat modal's tab bar only ever renders tabs whose flag is 1.
+ * The real-time status poll re-reads the flags on every revision
+ * change and updates the local state. If a channel becomes
+ * unavailable while the modal is open, the tab is removed from the
+ * DOM and the modal switches to the other channel (or closes).
+ *
+ * ---------------------------------------------------------------------
+ * Config
+ * ---------------------------------------------------------------------
+ * The tracking page writes these data attributes on #trackingPage:
+ *
+ *     data-order-id            the order this page tracks
+ *     data-csrf-token          the customer's own CSRF token
+ *     data-default-chat-tab    'restaurant_account' or
+ *                              'delivery_rider'
+ *     data-can-message-kitchen '1' or '0'
+ *     data-can-message-rider   '1' or '0'
+ *     data-order-status        the current order_status
+ *     data-revision            the initial poll revision
+ *     data-handler-url         the customer order handler
+ *
+ * ---------------------------------------------------------------------
+ * Rules honored
+ * ---------------------------------------------------------------------
+ *   - No CSS in this file.
+ *   - No <svg> injection.
+ *   - No window.alert / confirm / prompt.
  *
  * @package FitPal
- * @version 3.0
+ * @version 5.0 — Class names emitted by appendMessageNode() are now
+ *                the exact strings order-tracking.css targets:
+ *                `customer-chat-message-sent` and
+ *                `customer-chat-message-received`, each on the same
+ *                node as the base `.customer-chat-message` class.
+ *
+ *                The inner nodes are now `customer-chat-message-sender`,
+ *                `customer-chat-message-text`, and
+ *                `customer-chat-message-time`, which the CSS has
+ *                rules for. The previous revision emitted
+ *                `customer-chat-bubble` and `customer-chat-text`,
+ *                which had no CSS rules of their own.
+ *
+ *                This is the fix for the rider channel also
+ *                mis-anchoring: the handler now returns
+ *                `direction = 'sent'` for the customer's own
+ *                messages on both channels, and this file renders
+ *                every `direction === 'sent'` entry with the sent
+ *                modifier.
+ *
+ *                The loading-state fix from v4.1 is retained:
+ *                hasLoadedMessages[channel] and
+ *                pollInFlight[channel] gate the placeholder so it
+ *                can only appear once per channel.
+ *
+ *                (4.1: loading-state fix. 4.0: modal open/close
+ *                toggles .active; real-time poll no longer
+ *                reloads; channel availability tracked in local
+ *                state; send refusals rendered as system
+ *                messages; Escape handler added. 3.0: poll
+ *                endpoint fallback renamed. 2.0: origin-aware
+ *                open. 1.5: chat-modal origin opening. 1.4: chat
+ *                polling. 1.3: chat gating by order status. 1.2:
+ *                real-time poll. 1.1: initial tracking JS.)
  */
-
 (function () {
     'use strict';
 
-    document.addEventListener('DOMContentLoaded', function () {
+    var page = document.getElementById('trackingPage');
+    if (!page) return;
 
-        // ============================================
-        // CONFIG / DOM
-        // ============================================
-        var page = document.getElementById('trackingPage');
-        if (!page) return;
+    // -----------------------------------------------------------------
+    // CONFIG
+    // -----------------------------------------------------------------
 
-        var CSRF_TOKEN    = page.dataset.csrfToken    || '';
-        var ORDER_ID      = parseInt(page.dataset.orderId, 10) || 0;
-        var HANDLER_URL   = page.dataset.handlerUrl   || '../backend/handlers/order-handler.php';
-        var DEFAULT_TAB   = page.dataset.defaultChatTab || 'restaurant_account';
-        var CAN_MSG_KITCHEN = page.dataset.canMessageKitchen === '1';
-        var CAN_MSG_RIDER   = page.dataset.canMessageRider === '1';
+    var ORDER_ID    = parseInt(page.getAttribute('data-order-id') || '0', 10);
+    var CSRF_TOKEN  = page.getAttribute('data-csrf-token') || '';
+    var ORDER_STATUS = page.getAttribute('data-order-status') || '';
+    var DEFAULT_CHAT_TAB = page.getAttribute('data-default-chat-tab') || 'restaurant_account';
 
-        var currentRevision = page.dataset.revision || '';
-        var currentStatus   = page.dataset.orderStatus || '';
+    var canMessageKitchen = page.getAttribute('data-can-message-kitchen') === '1';
+    var canMessageRider   = page.getAttribute('data-can-message-rider') === '1';
 
-        // ---- Chat DOM ----
-        var modal          = document.getElementById('customerChatModal');
-        var chatCloseBtn   = document.getElementById('customerChatClose');
-        var tabs           = document.querySelectorAll('.customer-chat-tab');
-        var body           = document.getElementById('customerChatMessages');
-        var form           = document.getElementById('customerChatForm');
-        var recipientInput = document.getElementById('customerChatRecipient');
-        var input          = document.getElementById('customerChatInput');
+    var POLL_ENDPOINT = page.getAttribute('data-handler-url')
+        || '../backend/handlers/customer-order-handler.php';
 
-        var riderOpenBtn      = document.getElementById('chatOpenBtn');
-        var restaurantOpenBtn = document.getElementById('chatOpenBtnRestaurant');
+    var POLL_INTERVAL_MS = 6000;
 
-        // ============================================
-        // LIVE STATUS POLL
-        // ============================================
+    var currentRevision = page.getAttribute('data-revision') || '';
 
-        var STATUS_POLL_MS = 6000;
-        var statusPollTimer = null;
-        var statusFetchInFlight = false;
-        var hasReloaded = false;
+    // -----------------------------------------------------------------
+    // ELEMENT HANDLES
+    // -----------------------------------------------------------------
 
-        function fetchTrackingStatus() {
-            if (statusFetchInFlight || hasReloaded) return;
-            statusFetchInFlight = true;
+    var chatOpenBtn           = document.getElementById('chatOpenBtn');
+    var chatOpenBtnRestaurant = document.getElementById('chatOpenBtnRestaurant');
+    var chatModal             = document.getElementById('customerChatModal');
+    var chatCloseBtn          = document.getElementById('customerChatClose');
+    var chatSubtitle          = document.getElementById('customerChatSubtitle');
+    var chatMessages          = document.getElementById('customerChatMessages');
+    var chatForm              = document.getElementById('customerChatForm');
+    var chatInput             = document.getElementById('customerChatInput');
+    var chatRecipientField    = document.getElementById('customerChatRecipient');
+    var chatOrderIdField      = document.getElementById('customerChatOrderId');
 
-            var body = new URLSearchParams();
-            body.append('csrf_token', CSRF_TOKEN);
-            body.append('action', 'get_tracking_status');
-            body.append('order_id', String(ORDER_ID));
-            body.append('current_revision', currentRevision);
+    // -----------------------------------------------------------------
+    // HELPERS
+    // -----------------------------------------------------------------
 
-            fetch(HANDLER_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: body.toString(),
-                credentials: 'same-origin',
-                cache: 'no-store'
-            })
-            .then(function (res) {
-                return res.json().catch(function () {
-                    return { status: 'error' };
-                });
-            })
+    function qs(selector, root) {
+        return (root || document).querySelector(selector);
+    }
+
+    function qsa(selector, root) {
+        return Array.prototype.slice.call((root || document).querySelectorAll(selector));
+    }
+
+    function escapeHtml(str) {
+        return String(str == null ? '' : str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function fetchJson(url, body) {
+        return fetch(url, {
+            method: 'POST',
+            body: body,
+            credentials: 'same-origin'
+        }).then(function (res) { return res.json(); });
+    }
+
+    // -----------------------------------------------------------------
+    // MODAL VISIBILITY
+    // -----------------------------------------------------------------
+
+    function openModal(modal) {
+        if (!modal) return;
+
+        document.body.style.overflow = 'hidden';
+
+        modal.style.display = 'flex';
+
+        void modal.offsetWidth;
+
+        modal.classList.add('active');
+    }
+
+    function closeModal(modal) {
+        if (!modal) return;
+
+        modal.classList.remove('active');
+
+        setTimeout(function () {
+            if (!modal.classList.contains('active')) {
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+            }
+        }, 260);
+    }
+
+    // -----------------------------------------------------------------
+    // REAL-TIME STATUS POLL
+    // -----------------------------------------------------------------
+
+    function applyTrackingState(state) {
+        if (!state || typeof state !== 'object') return;
+
+        if (typeof state.can_message_kitchen === 'boolean') {
+            canMessageKitchen = state.can_message_kitchen;
+        }
+        if (typeof state.can_message_rider === 'boolean') {
+            canMessageRider = state.can_message_rider;
+        }
+
+        if (typeof state.order_status === 'string' && state.order_status !== '') {
+            ORDER_STATUS = state.order_status;
+        }
+
+        page.setAttribute('data-can-message-kitchen', canMessageKitchen ? '1' : '0');
+        page.setAttribute('data-can-message-rider',   canMessageRider   ? '1' : '0');
+        page.setAttribute('data-order-status', ORDER_STATUS);
+
+        if (chatOpen) {
+            reconcileOpenChat();
+        }
+    }
+
+    function pollStatus() {
+        var body = new FormData();
+        body.append('action', 'get_tracking_status');
+        body.append('csrf_token', CSRF_TOKEN);
+        body.append('order_id', String(ORDER_ID));
+        body.append('current_revision', currentRevision);
+
+        fetchJson(POLL_ENDPOINT, body)
             .then(function (data) {
                 if (!data || data.status !== 'success') return;
 
-                // Server reports the order's current status and a
-                // revision hash. If they match what the page was
-                // rendered with, nothing visible changed and there is
-                // nothing to do.
-                if (data.revision && data.revision !== currentRevision) {
-                    currentRevision = data.revision;
-                    hasReloaded = true;
-                    window.location.reload();
+                if (typeof data.revision === 'string' && data.revision !== '') {
+                    if (currentRevision !== '' && data.revision !== currentRevision) {
+                        currentRevision = data.revision;
+                        if (data.tracking_state) {
+                            applyTrackingState(data.tracking_state);
+                        } else if (typeof data.order_status === 'string') {
+                            applyTrackingState({
+                                order_status: data.order_status
+                            });
+                        }
+                    } else {
+                        currentRevision = data.revision;
+                    }
+                }
+
+                if (data.tracking_state) {
+                    applyTrackingState(data.tracking_state);
+                }
+            })
+            .catch(function () {
+                // Silent fail. The next tick retries.
+            });
+    }
+
+    function initStatusPoll() {
+        if (ORDER_STATUS === 'delivered'
+            || ORDER_STATUS === 'cancelled'
+            || ORDER_STATUS === 'refunded'
+            || ORDER_STATUS === 'failed') {
+            if (ORDER_STATUS !== 'delivered') {
+                return;
+            }
+        }
+
+        setInterval(pollStatus, POLL_INTERVAL_MS);
+    }
+
+    // -----------------------------------------------------------------
+    // CHAT MODAL
+    // -----------------------------------------------------------------
+
+    var activeChannel = DEFAULT_CHAT_TAB;
+    var messageCursor = { restaurant_account: 0, delivery_rider: 0 };
+    var messagePollerTimer = null;
+    var chatOpen = false;
+
+    var hasLoadedMessages = { restaurant_account: false, delivery_rider: false };
+    var pollInFlight      = { restaurant_account: false, delivery_rider: false };
+
+    function channelIsAvailable(channel) {
+        if (channel === 'restaurant_account') return canMessageKitchen;
+        if (channel === 'delivery_rider')     return canMessageRider;
+        return false;
+    }
+
+    function availableChannels() {
+        var out = [];
+        if (canMessageKitchen) out.push('restaurant_account');
+        if (canMessageRider)   out.push('delivery_rider');
+        return out;
+    }
+
+    function removeChannelTab(channel) {
+        if (!chatModal) return;
+        var tab = chatModal.querySelector(
+            '.customer-chat-tab[data-recipient="' + channel + '"]'
+        );
+        if (tab && tab.parentNode) {
+            tab.parentNode.removeChild(tab);
+        }
+    }
+
+    function setActiveTabClasses() {
+        if (!chatModal) return;
+        qsa('.customer-chat-tab', chatModal).forEach(function (tab) {
+            var isActive = tab.getAttribute('data-recipient') === activeChannel;
+            tab.classList.toggle('active', isActive);
+            tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+    }
+
+    function reconcileOpenChat() {
+        if (!canMessageKitchen) removeChannelTab('restaurant_account');
+        if (!canMessageRider)   removeChannelTab('delivery_rider');
+
+        if (channelIsAvailable(activeChannel)) {
+            setActiveTabClasses();
+            return;
+        }
+
+        var remaining = availableChannels();
+        if (remaining.length === 0) {
+            closeChatModal();
+            return;
+        }
+
+        switchChannel(remaining[0]);
+    }
+
+    function setModalOpen(open) {
+        if (!chatModal) return;
+
+        if (open) {
+            openModal(chatModal);
+        } else {
+            closeModal(chatModal);
+        }
+
+        chatOpen = !!open;
+    }
+
+    function showLoading() {
+        if (!chatMessages) return;
+        chatMessages.innerHTML =
+            '<div class="customer-chat-loading"><span>Loading messages…</span></div>';
+    }
+
+    function showEmpty() {
+        if (!chatMessages) return;
+        chatMessages.innerHTML =
+            '<div class="customer-chat-empty"><span>No messages yet.</span></div>';
+    }
+
+    /**
+     * Append one message node to the chat body.
+     *
+     * The outer node carries two class names:
+     *   - .customer-chat-message
+     *   - .customer-chat-message-sent OR .customer-chat-message-received
+     *
+     * The inner nodes are:
+     *   - .customer-chat-message-sender
+     *   - .customer-chat-message-text
+     *   - .customer-chat-message-time
+     *
+     * These strings are the boundary between this file and
+     * order-tracking.css. Both files must agree.
+     *
+     * @param {{direction:string, sender:string, content:string, time:string}} entry
+     */
+    function appendMessageNode(entry) {
+        if (!chatMessages) return;
+
+        var placeholder = qs('.customer-chat-loading, .customer-chat-empty', chatMessages);
+        if (placeholder) placeholder.remove();
+
+        var isSent = entry.direction === 'sent';
+        var modifier = isSent
+            ? 'customer-chat-message-sent'
+            : 'customer-chat-message-received';
+
+        var node = document.createElement('div');
+        node.className = 'customer-chat-message ' + modifier;
+
+        var sender = document.createElement('span');
+        sender.className = 'customer-chat-message-sender';
+        sender.textContent = entry.sender || (isSent ? 'You' : '');
+        node.appendChild(sender);
+
+        var text = document.createElement('span');
+        text.className = 'customer-chat-message-text';
+        text.textContent = entry.content || '';
+        node.appendChild(text);
+
+        var time = document.createElement('span');
+        time.className = 'customer-chat-message-time';
+        time.textContent = entry.time || '';
+        node.appendChild(time);
+
+        chatMessages.appendChild(node);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function appendSystemMessage(text) {
+        if (!chatMessages) return;
+
+        var placeholder = qs('.customer-chat-loading, .customer-chat-empty', chatMessages);
+        if (placeholder) placeholder.remove();
+
+        var node = document.createElement('div');
+        node.className = 'customer-chat-system';
+        node.textContent = text;
+
+        chatMessages.appendChild(node);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function replaceMessages(entries) {
+        if (!chatMessages) return;
+        chatMessages.innerHTML = '';
+
+        if (!entries || entries.length === 0) {
+            showEmpty();
+            return;
+        }
+
+        entries.forEach(appendMessageNode);
+    }
+
+    function loadMessages(channel, sinceId) {
+        var body = new FormData();
+        body.append('action', 'get');
+        body.append('csrf_token', CSRF_TOKEN);
+        body.append('order_id', String(ORDER_ID));
+        body.append('channel', channel);
+        if (sinceId && sinceId > 0) {
+            body.append('since_id', String(sinceId));
+        }
+
+        var endpoint = (chatForm && chatForm.getAttribute('action'))
+            ? chatForm.getAttribute('action')
+            : '../backend/handlers/message-handler.php';
+
+        var isFirstLoad = !hasLoadedMessages[channel];
+
+        if (isFirstLoad) {
+            showLoading();
+        }
+
+        fetchJson(endpoint, body)
+            .then(function (data) {
+                hasLoadedMessages[channel] = true;
+
+                if (!data || data.status !== 'success') {
+                    if (data && data.message) {
+                        if (sinceId && sinceId > 0) {
+                            appendSystemMessage(data.message);
+                        } else {
+                            if (chatMessages) chatMessages.innerHTML = '';
+                            appendSystemMessage(data.message);
+                        }
+                    } else if (isFirstLoad) {
+                        replaceMessages([]);
+                    }
                     return;
                 }
 
-                // Revision unchanged but status string differs (can
-                // happen if the revision formula changes in a future
-                // release). Reload defensively so the page's visible
-                // status never drifts from the server.
-                if (data.order_status && data.order_status !== currentStatus) {
-                    currentStatus = data.order_status;
-                    hasReloaded = true;
-                    window.location.reload();
+                var entries = data.messages || [];
+
+                if (sinceId && sinceId > 0) {
+                    entries.forEach(appendMessageNode);
+                } else {
+                    replaceMessages(entries);
+                }
+
+                if (typeof data.max_id === 'number' && data.max_id > (messageCursor[channel] || 0)) {
+                    messageCursor[channel] = data.max_id;
+                }
+            })
+            .catch(function () {
+                hasLoadedMessages[channel] = true;
+
+                if (isFirstLoad) {
+                    replaceMessages([]);
+                }
+            });
+    }
+
+    function pollMessages() {
+        if (!chatOpen) return;
+        if (!channelIsAvailable(activeChannel)) {
+            reconcileOpenChat();
+            return;
+        }
+
+        if (pollInFlight[activeChannel]) return;
+        pollInFlight[activeChannel] = true;
+
+        var channel = activeChannel;
+        var sinceId = messageCursor[channel] || 0;
+
+        var body = new FormData();
+        body.append('action', 'get');
+        body.append('csrf_token', CSRF_TOKEN);
+        body.append('order_id', String(ORDER_ID));
+        body.append('channel', channel);
+        if (sinceId > 0) {
+            body.append('since_id', String(sinceId));
+        }
+
+        var endpoint = (chatForm && chatForm.getAttribute('action'))
+            ? chatForm.getAttribute('action')
+            : '../backend/handlers/message-handler.php';
+
+        fetchJson(endpoint, body)
+            .then(function (data) {
+                if (!data || data.status !== 'success') {
+                    if (data && data.message) {
+                        appendSystemMessage(data.message);
+                    }
+                    return;
+                }
+
+                var entries = data.messages || [];
+                entries.forEach(appendMessageNode);
+
+                if (typeof data.max_id === 'number' && data.max_id > (messageCursor[channel] || 0)) {
+                    messageCursor[channel] = data.max_id;
                 }
             })
             .catch(function () {
                 // Silent. The next tick retries.
             })
             .finally(function () {
-                statusFetchInFlight = false;
+                pollInFlight[channel] = false;
             });
-        }
+    }
 
-        function startStatusPolling() {
-            if (statusPollTimer) return;
-            statusPollTimer = setInterval(function () {
-                if (document.hidden) return;
-                fetchTrackingStatus();
-            }, STATUS_POLL_MS);
-        }
+    function startMessagePolling() {
+        stopMessagePolling();
+        messagePollerTimer = setInterval(pollMessages, 5000);
+    }
 
-        function stopStatusPolling() {
-            if (statusPollTimer) {
-                clearInterval(statusPollTimer);
-                statusPollTimer = null;
+    function stopMessagePolling() {
+        if (messagePollerTimer !== null) {
+            clearInterval(messagePollerTimer);
+            messagePollerTimer = null;
+        }
+    }
+
+    function switchChannel(channel) {
+        if (!channelIsAvailable(channel)) {
+            var remaining = availableChannels();
+            if (remaining.length === 0) {
+                closeChatModal();
+                return;
             }
+            channel = remaining[0];
         }
 
-        startStatusPolling();
+        activeChannel = channel;
+        if (chatRecipientField) chatRecipientField.value = channel;
 
-        document.addEventListener('visibilitychange', function () {
-            if (document.visibilityState !== 'visible') return;
-            fetchTrackingStatus();
+        setActiveTabClasses();
+
+        if (chatSubtitle) {
+            var label = (channel === 'delivery_rider') ? 'Rider' : 'Restaurant';
+            chatSubtitle.textContent = 'Order #' + ORDER_ID + ' • ' + label;
+        }
+
+        if (!hasLoadedMessages[channel]) {
+            showLoading();
+        }
+
+        loadMessages(activeChannel, messageCursor[activeChannel] || 0);
+
+        var readBody = new FormData();
+        readBody.append('action', 'read');
+        readBody.append('csrf_token', CSRF_TOKEN);
+        readBody.append('order_id', String(ORDER_ID));
+        readBody.append('channel', channel);
+
+        var endpoint = (chatForm && chatForm.getAttribute('action'))
+            ? chatForm.getAttribute('action')
+            : '../backend/handlers/message-handler.php';
+
+        fetchJson(endpoint, readBody).catch(function () {
+            // Silent fail. Read marking is best-effort.
         });
+    }
 
-        window.addEventListener('pageshow', function (e) {
-            if (!e.persisted) return;
-            fetchTrackingStatus();
-        });
+    function openChatModal(channel) {
+        if (!chatModal) return;
 
-        window.addEventListener('beforeunload', function () {
-            stopStatusPolling();
-        });
-
-        // ============================================
-        // CHAT MODAL
-        // ============================================
-        if (!modal || !body || !form || !input) return;
-
-        var activeChannel = DEFAULT_TAB;
-
-        var channelCursor = {
-            restaurant_account: 0,
-            delivery_rider:     0,
-        };
-
-        var fetching = {
-            restaurant_account: false,
-            delivery_rider:     false,
-        };
-
-        var renderedIds = {
-            restaurant_account: Object.create(null),
-            delivery_rider:     Object.create(null),
-        };
-
-        var pollTimer = null;
-        var POLL_INTERVAL_MS = 5000;
-
-        function tabIsAvailable(channel) {
-            if (channel === 'restaurant_account') return CAN_MSG_KITCHEN;
-            if (channel === 'delivery_rider')     return CAN_MSG_RIDER;
-            return false;
+        if (!channelIsAvailable(channel)) {
+            var remaining = availableChannels();
+            if (remaining.length === 0) {
+                return;
+            }
+            channel = remaining[0];
         }
 
-        function setActiveTabButton(channel) {
-            tabs.forEach(function (tab) {
-                var isActive = tab.dataset.recipient === channel;
-                tab.classList.toggle('active', isActive);
-                tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        setModalOpen(true);
+        switchChannel(channel);
+        startMessagePolling();
+    }
+
+    function closeChatModal() {
+        setModalOpen(false);
+        stopMessagePolling();
+    }
+
+    function initChatModal() {
+        if (!chatModal) return;
+
+        if (chatOrderIdField) chatOrderIdField.value = String(ORDER_ID);
+
+        if (chatOpenBtn) {
+            chatOpenBtn.addEventListener('click', function () {
+                openChatModal(chatOpenBtn.getAttribute('data-open-tab') || 'delivery_rider');
             });
         }
-
-        function scrollToBottom() {
-            requestAnimationFrame(function () {
-                body.scrollTop = body.scrollHeight;
-            });
-        }
-
-        function escapeHtml(text) {
-            var d = document.createElement('div');
-            d.textContent = String(text == null ? '' : text);
-            return d.innerHTML;
-        }
-
-        function renderEmpty(text) {
-            body.innerHTML = '<div class="customer-chat-empty"><span>' +
-                escapeHtml(text) + '</span></div>';
-        }
-
-        function renderLoading() {
-            body.innerHTML = '<div class="customer-chat-loading"><span>Loading messages…</span></div>';
-        }
-
-        function appendMessage(channel, msg, skipScroll) {
-            if (!msg) return false;
-
-            var mid = parseInt(msg.message_id, 10) || 0;
-            if (mid > 0 && renderedIds[channel][mid]) {
-                return false;
-            }
-
-            var wrapper = document.createElement('div');
-            wrapper.className = 'customer-chat-message customer-chat-message-' +
-                (msg.direction === 'sent' ? 'sent' : 'received');
-            if (mid > 0) {
-                wrapper.setAttribute('data-message-id', String(mid));
-                renderedIds[channel][mid] = true;
-            }
-
-            var sender = document.createElement('span');
-            sender.className = 'customer-chat-message-sender';
-            sender.textContent = msg.sender || '';
-
-            var content = document.createElement('span');
-            content.textContent = msg.content || '';
-
-            var time = document.createElement('span');
-            time.className = 'customer-chat-message-time';
-            time.textContent = msg.time || '';
-
-            wrapper.appendChild(sender);
-            wrapper.appendChild(content);
-            wrapper.appendChild(time);
-            body.appendChild(wrapper);
-
-            if (!skipScroll) scrollToBottom();
-            return true;
-        }
-
-        function renderFull(channel, messages, maxId) {
-            body.innerHTML = '';
-
-            if (!messages.length) {
-                renderEmpty('No messages yet. Say hello!');
-            } else {
-                messages.forEach(function (msg) {
-                    appendMessage(channel, msg, true);
-                });
-                scrollToBottom();
-            }
-
-            if (maxId > 0) {
-                channelCursor[channel] = maxId;
-            }
-        }
-
-        function fetchMessages(channel, sinceId) {
-            var formData = new FormData();
-            formData.append('csrf_token', CSRF_TOKEN);
-            formData.append('action', 'get');
-            formData.append('order_id', String(ORDER_ID));
-            formData.append('channel', channel);
-            if (sinceId > 0) {
-                formData.append('since_id', String(sinceId));
-            }
-
-            return fetch('../backend/handlers/message-handler.php', {
-                method: 'POST',
-                body: formData,
-                credentials: 'same-origin'
-            })
-            .then(function (res) { return res.json(); })
-            .catch(function () {
-                return { status: 'error', message: 'Network error.' };
-            });
-        }
-
-        function loadMessages(channel, opts) {
-            opts = opts || {};
-            if (fetching[channel]) return;
-            fetching[channel] = true;
-
-            var isFirstLoad = channelCursor[channel] === 0;
-
-            if (isFirstLoad && opts.showLoading) {
-                renderLoading();
-            }
-
-            fetchMessages(channel, channelCursor[channel])
-                .then(function (data) {
-                    if (!data || data.status !== 'success') {
-                        if (isFirstLoad) {
-                            renderEmpty((data && data.message) || 'Could not load messages.');
-                        }
-                        return;
-                    }
-
-                    var msgs = data.messages || [];
-                    var maxId = parseInt(data.max_id, 10) || channelCursor[channel];
-
-                    if (isFirstLoad) {
-                        renderFull(channel, msgs, maxId);
-                    } else if (msgs.length > 0) {
-                        msgs.forEach(function (msg) {
-                            appendMessage(channel, msg, true);
-                        });
-                        scrollToBottom();
-                        if (maxId > channelCursor[channel]) {
-                            channelCursor[channel] = maxId;
-                        }
-                    } else if (maxId > channelCursor[channel]) {
-                        channelCursor[channel] = maxId;
-                    }
-
-                    if (channel === activeChannel) {
-                        markRead(channel);
-                    }
-                })
-                .finally(function () {
-                    fetching[channel] = false;
-                });
-        }
-
-        function markRead(channel) {
-            var formData = new FormData();
-            formData.append('csrf_token', CSRF_TOKEN);
-            formData.append('action', 'read');
-            formData.append('order_id', String(ORDER_ID));
-            formData.append('channel', channel);
-
-            fetch('../backend/handlers/message-handler.php', {
-                method: 'POST',
-                body: formData,
-                credentials: 'same-origin'
-            }).catch(function () { /* silent */ });
-        }
-
-        function openModal(channel) {
-            if (!tabIsAvailable(channel)) {
-                channel = tabIsAvailable('restaurant_account')
-                    ? 'restaurant_account'
-                    : 'delivery_rider';
-            }
-
-            activeChannel = channel;
-            recipientInput.value = channel;
-            setActiveTabButton(channel);
-
-            document.body.style.overflow = 'hidden';
-            modal.style.display = 'flex';
-            void modal.offsetWidth;
-            modal.classList.add('active');
-
-            loadMessages(channel, { showLoading: true });
-            startPolling();
-
-            setTimeout(function () { input.focus(); }, 120);
-        }
-
-        function closeModal() {
-            modal.classList.remove('active');
-            setTimeout(function () {
-                if (!modal.classList.contains('active')) {
-                    modal.style.display = 'none';
-                    document.body.style.overflow = '';
-                }
-            }, 220);
-
-            stopPolling();
-        }
-
-        if (riderOpenBtn) {
-            riderOpenBtn.addEventListener('click', function (e) {
-                e.preventDefault();
-                openModal(this.dataset.openTab || 'delivery_rider');
-            });
-        }
-
-        if (restaurantOpenBtn) {
-            restaurantOpenBtn.addEventListener('click', function (e) {
-                e.preventDefault();
-                openModal(this.dataset.openTab || 'restaurant_account');
+        if (chatOpenBtnRestaurant) {
+            chatOpenBtnRestaurant.addEventListener('click', function () {
+                openChatModal(
+                    chatOpenBtnRestaurant.getAttribute('data-open-tab') || 'restaurant_account'
+                );
             });
         }
 
         if (chatCloseBtn) {
-            chatCloseBtn.addEventListener('click', function (e) {
-                e.preventDefault();
-                closeModal();
+            chatCloseBtn.addEventListener('click', closeChatModal);
+        }
+
+        var overlay = qs('.modal-overlay', chatModal);
+        if (overlay) {
+            overlay.addEventListener('click', closeChatModal);
+        }
+
+        qsa('.customer-chat-tab', chatModal).forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                switchChannel(tab.getAttribute('data-recipient') || 'restaurant_account');
             });
-        }
-
-        if (modal) {
-            var overlay = modal.querySelector('.modal-overlay');
-            if (overlay) {
-                overlay.addEventListener('click', closeModal);
-            }
-        }
-
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape' && modal.classList.contains('active')) {
-                closeModal();
-            }
         });
 
-        tabs.forEach(function (tab) {
-            tab.addEventListener('click', function () {
-                var channel = this.dataset.recipient || 'restaurant_account';
-                if (channel === activeChannel) return;
-                if (!tabIsAvailable(channel)) return;
+        if (chatForm) {
+            chatForm.addEventListener('submit', function (event) {
+                event.preventDefault();
 
-                activeChannel = channel;
-                recipientInput.value = channel;
-                setActiveTabButton(channel);
+                var content = (chatInput && chatInput.value) ? chatInput.value.trim() : '';
+                if (content === '') return;
 
-                if (channelCursor[channel] === 0) {
-                    renderLoading();
-                } else {
-                    channelCursor[channel] = 0;
-                    renderedIds[channel] = Object.create(null);
-                    renderLoading();
+                if (!channelIsAvailable(activeChannel)) {
+                    appendSystemMessage(
+                        'This conversation is closed and can no longer receive messages.'
+                    );
+                    return;
                 }
 
-                loadMessages(channel, { showLoading: false });
-            });
-        });
+                var body = new FormData();
+                body.append('action', 'send');
+                body.append('csrf_token', CSRF_TOKEN);
+                body.append('order_id', String(ORDER_ID));
+                body.append('channel', activeChannel);
+                body.append('content', content);
 
-        form.addEventListener('submit', function (e) {
-            e.preventDefault();
+                var endpoint = chatForm.getAttribute('action')
+                    || '../backend/handlers/message-handler.php';
 
-            var content = input.value.trim();
-            if (content === '') return;
+                var sendBtn = qs('.customer-chat-send', chatForm);
+                if (sendBtn) sendBtn.disabled = true;
 
-            if (!tabIsAvailable(activeChannel)) {
-                return;
-            }
+                if (chatInput) chatInput.value = '';
 
-            var submitBtn = form.querySelector('.customer-chat-send');
-            if (submitBtn) submitBtn.disabled = true;
+                fetchJson(endpoint, body)
+                    .then(function (data) {
+                        if (sendBtn) sendBtn.disabled = false;
 
-            var formData = new FormData();
-            formData.append('csrf_token', CSRF_TOKEN);
-            formData.append('action', 'send');
-            formData.append('order_id', String(ORDER_ID));
-            formData.append('channel', activeChannel);
-            formData.append('content', content);
-
-            fetch('../backend/handlers/message-handler.php', {
-                method: 'POST',
-                body: formData,
-                credentials: 'same-origin'
-            })
-                .then(function (res) { return res.json(); })
-                .then(function (data) {
-                    if (data && data.status === 'success') {
-                        input.value = '';
-
-                        var placeholder = body.querySelector('.customer-chat-empty');
-                        if (placeholder) placeholder.remove();
+                        if (!data || data.status !== 'success') {
+                            if (chatInput) chatInput.value = content;
+                            appendSystemMessage(
+                                (data && data.message)
+                                    ? data.message
+                                    : 'Your message could not be sent.'
+                            );
+                            return;
+                        }
 
                         if (data.message_data) {
-                            appendMessage(activeChannel, data.message_data, false);
+                            appendMessageNode(data.message_data);
                         }
 
-                        var newMax = parseInt(data.max_id, 10) || 0;
-                        if (newMax > channelCursor[activeChannel]) {
-                            channelCursor[activeChannel] = newMax;
+                        if (typeof data.max_id === 'number'
+                            && data.max_id > (messageCursor[activeChannel] || 0)) {
+                            messageCursor[activeChannel] = data.max_id;
                         }
-                    } else {
-                        showInlineError((data && data.message) || 'Could not send message.');
-                    }
-                })
-                .catch(function () {
-                    showInlineError('Network error. Please try again.');
-                })
-                .finally(function () {
-                    if (submitBtn) submitBtn.disabled = false;
-                    input.focus();
-                });
-        });
-
-        function showInlineError(message) {
-            var toast = document.getElementById('trackingToast');
-            if (!toast) {
-                toast = document.createElement('div');
-                toast.id = 'trackingToast';
-                toast.style.cssText = [
-                    'position:fixed', 'top:80px', 'right:20px',
-                    'padding:12px 20px', 'border-radius:8px',
-                    'font-size:14px', 'font-weight:500', 'z-index:9999',
-                    'max-width:360px', 'box-shadow:0 4px 16px rgba(0,0,0,.15)',
-                    'transform:translateX(120%)',
-                    'transition:transform .3s cubic-bezier(.4,0,.2,1)'
-                ].join(';');
-                document.body.appendChild(toast);
-            }
-
-            toast.style.background = '#fee2e2';
-            toast.style.color      = '#991b1b';
-            toast.textContent      = message;
-
-            void toast.offsetWidth;
-            toast.style.transform = 'translateX(0)';
-
-            clearTimeout(toast._timer);
-            toast._timer = setTimeout(function () {
-                toast.style.transform = 'translateX(120%)';
-            }, 2800);
+                    })
+                    .catch(function () {
+                        if (sendBtn) sendBtn.disabled = false;
+                        if (chatInput) chatInput.value = content;
+                        appendSystemMessage(
+                            'A network error occurred. Please try again.'
+                        );
+                    });
+            });
         }
+    }
 
-        function startPolling() {
-            stopPolling();
-            pollTimer = setInterval(function () {
-                if (!modal.classList.contains('active')) return;
-                if (document.hidden) return;
-                if (input.value.trim() !== '') return;
-                if (fetching[activeChannel]) return;
+    // -----------------------------------------------------------------
+    // ESCAPE HANDLER
+    // -----------------------------------------------------------------
 
-                loadMessages(activeChannel, { showLoading: false });
-            }, POLL_INTERVAL_MS);
+    document.addEventListener('keydown', function (event) {
+        if (event.key !== 'Escape') return;
+        if (chatOpen) {
+            closeChatModal();
         }
+    });
 
-        function stopPolling() {
-            if (pollTimer) {
-                clearInterval(pollTimer);
-                pollTimer = null;
-            }
-        }
+    // -----------------------------------------------------------------
+    // BOOTSTRAP
+    // -----------------------------------------------------------------
 
-        document.addEventListener('visibilitychange', function () {
-            if (document.visibilityState === 'visible' &&
-                modal.classList.contains('active')) {
-                loadMessages(activeChannel, { showLoading: false });
-            }
-        });
+    document.addEventListener('DOMContentLoaded', function () {
+        initStatusPoll();
+        initChatModal();
     });
 })();

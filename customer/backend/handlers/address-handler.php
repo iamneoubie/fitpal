@@ -2,27 +2,65 @@
 /**
  * FitPal Address Handler
  *
- * AJAX endpoint for customer_address mutations. Validates the request,
- * delegates all data access to address-queries.php, and responds with
- * JSON. Contains no SQL of its own.
+ * AJAX endpoint for customer_address mutations. Runs on the
+ * customer session (PHPSESSID_CUSTOMER), separate from every other
+ * role's session.
+ *
+ * Validates the request, delegates all data access to
+ * address-queries.php, and responds with JSON. Contains no SQL of
+ * its own.
  *
  * Response convention: validation and business-rule failures return
- * HTTP 200 with {status: 'error', message: '...'}. The client's fetch
- * wrapper reads the body, not the status code. Only authentication
- * failures return a non-200 status (401).
+ * HTTP 200 with {status: 'error', message: '...'}. The client's
+ * fetch wrapper reads the body, not the status code. Only
+ * authentication failures return a non-200 status (401) and CSRF
+ * mismatches return 403.
+ *
+ * ---------------------------------------------------------------------
+ * PER-ROLE SESSION MODEL (Option B)
+ * ---------------------------------------------------------------------
+ * The handler bootstraps the customer session before doing
+ * anything else. Because the request that reaches this handler
+ * carries only the customer cookie, the customer session is the
+ * only session this code can see. The CSRF check reads
+ * $_SESSION['customer_csrf_token'], which is guaranteed to be the
+ * customer's own token — no other context can write to this key
+ * because no other context can open this session.
  *
  * @package FitPal
- * @version 2.4 — Validates against customer_csrf_token with hash_equals;
- *                rejects empty tokens explicitly. (2.3: explicit
- *                termination on every branch; catch Throwable.)
+ * @version 3.0 — Per-role session migration (Option B). The
+ *                handler bootstraps the customer session as its
+ *                first executable statement. The obsolete
+ *                cross-role commentary in the CSRF block is
+ *                replaced with a note about the structural
+ *                isolation that per-role sessions provide. No
+ *                logic changed; no SQL moved.
+ *
+ *                (2.4: validated against customer_csrf_token with
+ *                hash_equals; explicit empty-token rejection.)
  */
+
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+// ---------------------------------------------------------------------
+// SESSION BOOTSTRAP
+//
+// Must run before any other include that might touch the session.
+// This handler belongs to the customer context.
+// ---------------------------------------------------------------------
+
+require_once __DIR__ . '/../../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('customer');
+
+// ---------------------------------------------------------------------
+// RESPONSE HEADERS
+// ---------------------------------------------------------------------
 
 header('Content-Type: application/json');
+
+// ---------------------------------------------------------------------
+// AUTHENTICATION
+// ---------------------------------------------------------------------
 
 if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     http_response_code(401);
@@ -30,24 +68,39 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     exit;
 }
 
+// ---------------------------------------------------------------------
+// DEPENDENCIES
+// ---------------------------------------------------------------------
+
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/address-queries.php';
 
-// Per-role CSRF check. The customer role validates against its own
-// session key, 'customer_csrf_token', never the shared 'csrf_token'.
-// Another role in the same browser session could have unset or
-// rotated the shared key on its own sign-in, which would otherwise
-// invalidate this form's token. See general.md.
+// ---------------------------------------------------------------------
+// CSRF
+//
+// Validated against the customer context's own key,
+// 'customer_csrf_token', inside the customer session. Under
+// Option B this key lives in a session that only requests bearing
+// the customer cookie can reach, so the token is guaranteed to be
+// the customer's own. The key name keeps the {role}_ prefix as a
+// naming convention, not as a collision guard.
+// ---------------------------------------------------------------------
+
 $givenToken = (string)($_POST['csrf_token'] ?? '');
 $sessToken  = (string)($_SESSION['customer_csrf_token'] ?? '');
 
 if ($sessToken === '' || $givenToken === '' || !hash_equals($sessToken, $givenToken)) {
+    http_response_code(403);
     echo json_encode(['status' => 'error', 'message' => 'Security validation failed']);
     exit;
 }
 
 $customerId = (int)$_SESSION['customer_id'];
 $action     = (string)($_POST['action'] ?? '');
+
+// ---------------------------------------------------------------------
+// DISPATCH
+// ---------------------------------------------------------------------
 
 try {
     switch ($action) {

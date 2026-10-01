@@ -1,9 +1,6 @@
 /**
  * FitPal Customer Cart Page JavaScript
- * Version 1.9 — Scroll lock applied before the modal is shown, and
- *                released after it is hidden. This prevents the page
- *                from visibly reflowing when the body scrollbar
- *                disappears and reappears around the modal fade.
+ * Version 2.0 — Cart handler URL now read from window.FITPAL_CART.
  *
  * Handles:
  *  - Quantity stepper (+ / −) with min/max clamping
@@ -15,33 +12,104 @@
  *  - "Add to Order" — pushes only the SELECTED cart rows to the
  *    session queue, then redirects to menu.php.
  *
+ * ---------------------------------------------------------------------
+ * HANDLER TARGET
+ * ---------------------------------------------------------------------
+ * Every POST this file makes targets a file that exists on disk:
+ *
+ *     cart-handler.php   ← update_quantity, remove_item, push_to_queue
+ *
+ * The URL is read from window.FITPAL_CART.handlerUrl, which
+ * customer/pages/cart.php publishes. When that object is absent —
+ * which only happens on a page rendered without it — the fallback
+ * names the same file the page's markup names. The
+ * #cartPushToQueueForm's own action attribute is also used as a
+ * last resort if the config object is missing AND the form is
+ * present.
+ *
+ * This file does not reference order-handler.php or any other
+ * retired filename in any fetch call.
+ *
+ * ---------------------------------------------------------------------
+ * Config
+ * ---------------------------------------------------------------------
+ * window.FITPAL_CART = {
+ *     csrfToken:  '<the customer's own csrf token>',
+ *     handlerUrl: '../backend/handlers/cart-handler.php'
+ * };
+ *
+ * The fallback CSRF token source is window.FITPAL_CSRF_TOKEN, which
+ * the same page publishes.
+ *
+ * ---------------------------------------------------------------------
+ * Rules honored
+ * ---------------------------------------------------------------------
+ *   - No CSS in this file.
+ *   - No <svg> injection.
+ *   - No window.alert / confirm / prompt. Every confirmation is a
+ *     page-rendered modal.
+ *   - Scroll lock is applied before the modal is shown and released
+ *     after it is hidden, so the page does not reflow around the
+ *     body scrollbar.
+ *
  * @package FitPal
- * @version 1.9
+ * @version 2.0 — The cart handler URL is now read from
+ *                window.FITPAL_CART.handlerUrl. The previous
+ *                revision hard-coded '../backend/handlers/
+ *                cart-handler.php' at each fetch site. The endpoint
+ *                is now declared in exactly one place — the page —
+ *                and this file reads it.
+ *
+ *                When FITPAL_CART is absent, the file falls back to
+ *                the form's own action attribute, then to the same
+ *                literal path the page's markup names.
+ *
+ *                No behavioural change to the quantity stepper, the
+ *                remove modal, the selection summary, the
+ *                customization toggle, or the push-to-queue
+ *                submission.
+ *
+ *                (1.9: scroll lock ordering around the modal fade.
+ *                1.8: customization toggle. 1.7: selection summary.
+ *                1.6: remove modal. 1.5: server sync debounce.)
  */
-
 (function () {
     'use strict';
 
     document.addEventListener('DOMContentLoaded', function () {
 
-        const cartSubtotalEl     = document.getElementById('cartSubtotal');
-        const cartItemsContainer = document.getElementById('cartItems');
+        // ============================================
+        // CONFIG
+        // ============================================
+        var CFG = window.FITPAL_CART || {};
 
-        const removeModal        = document.getElementById('cartRemoveModal');
-        const removeModalName    = document.getElementById('cartModalItemName');
-        const removeModalCancel  = document.getElementById('cartModalCancel');
-        const removeModalConfirm = document.getElementById('cartModalConfirm');
+        var CSRF_TOKEN = CFG.csrfToken
+            || window.FITPAL_CSRF_TOKEN
+            || '';
 
-        const pushToQueueForm    = document.getElementById('cartPushToQueueForm');
-        const addToOrderBtn      = document.getElementById('cartAddToOrderBtn');
-        const selectedIdsBox     = document.getElementById('cartSelectedIds');
-        const selectAllPage      = document.getElementById('cartSelectAllPage');
-        const selectionCountEl   = document.getElementById('cartSelectionCount');
+        var cartSubtotalEl     = document.getElementById('cartSubtotal');
+        var cartItemsContainer = document.getElementById('cartItems');
 
-        const csrfToken = window.FITPAL_CSRF_TOKEN || '';
+        var removeModal        = document.getElementById('cartRemoveModal');
+        var removeModalName    = document.getElementById('cartModalItemName');
+        var removeModalCancel  = document.getElementById('cartModalCancel');
+        var removeModalConfirm = document.getElementById('cartModalConfirm');
 
-        let pendingRemoveCartId = null;
-        let pendingRemoveEl     = null;
+        var pushToQueueForm    = document.getElementById('cartPushToQueueForm');
+        var addToOrderBtn      = document.getElementById('cartAddToOrderBtn');
+        var selectedIdsBox     = document.getElementById('cartSelectedIds');
+        var selectAllPage      = document.getElementById('cartSelectAllPage');
+        var selectionCountEl   = document.getElementById('cartSelectionCount');
+
+        // The cart handler URL. Read from the page's config object,
+        // then from the form's own action attribute, then from the
+        // literal fallback that names the same file.
+        var CART_URL = CFG.handlerUrl
+            || (pushToQueueForm && pushToQueueForm.getAttribute('action'))
+            || '../backend/handlers/cart-handler.php';
+
+        var pendingRemoveCartId = null;
+        var pendingRemoveEl     = null;
 
         // ============================================
         // HELPERS
@@ -121,10 +189,10 @@
                 action: 'update_quantity',
                 cart_id: String(cartId),
                 quantity: String(quantity),
-                csrf_token: csrfToken
+                csrf_token: CSRF_TOKEN
             });
 
-            return fetch('../backend/handlers/cart-handler.php', {
+            return fetch(CART_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: body.toString(),
@@ -143,10 +211,10 @@
             const body = new URLSearchParams({
                 action: 'remove_item',
                 cart_id: String(cartId),
-                csrf_token: csrfToken
+                csrf_token: CSRF_TOKEN
             });
 
-            return fetch('../backend/handlers/cart-handler.php', {
+            return fetch(CART_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: body.toString(),
@@ -304,14 +372,10 @@
         // REMOVE MODAL
         //
         // Ordering matters. Lock scroll FIRST, while the modal is still
-        // off-screen — the page reflows to fill the space the scrollbar
-        // was using, but nobody sees it because the modal isn't visible
-        // yet. Then show the modal on an already-stable page.
+        // off-screen. Then show the modal on an already-stable page.
         //
         // On close, hide the modal first, and release the scroll lock
-        // only AFTER the fade-out completes. Releasing it earlier would
-        // reflow the page behind the fading modal, which the user would
-        // see as a jump.
+        // only AFTER the fade-out completes.
         // ============================================
 
         function openRemoveModal(cartId, productName, itemEl) {
@@ -322,10 +386,8 @@
 
             if (removeModalName) removeModalName.textContent = productName;
 
-            // 1. Lock scroll while the modal is hidden.
             document.body.style.overflow = 'hidden';
 
-            // 2. Show the modal on the now-stable page.
             removeModal.style.display = 'flex';
             void removeModal.offsetWidth;
             removeModal.classList.add('active');
@@ -334,10 +396,8 @@
         function closeRemoveModal() {
             if (!removeModal) return;
 
-            // 1. Start the fade-out. Page stays locked.
             removeModal.classList.remove('active');
 
-            // 2. After the fade completes, hide and release the lock.
             setTimeout(function () {
                 if (!removeModal.classList.contains('active')) {
                     removeModal.style.display = 'none';
@@ -433,11 +493,7 @@
 
                 const body = new URLSearchParams(new FormData(pushToQueueForm));
 
-                const formAction =
-                    pushToQueueForm.getAttribute('action') ||
-                    '../backend/handlers/cart-handler.php';
-
-                fetch(formAction, {
+                fetch(CART_URL, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',

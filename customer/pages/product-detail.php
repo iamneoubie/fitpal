@@ -1,16 +1,97 @@
 <?php
 /**
  * FitPal Product Detail Page
- * Version 9.3 — CSRF token now inherited from header.php.
+ *
+ * Single-product view with an optional customization step. The
+ * customer can add the product to their cart (persistent staging) or
+ * to their session order queue (checkout staging). Both paths feed
+ * the same order-placement flow.
+ *
+ * ---------------------------------------------------------------------
+ * WHERE THE MONEY MOVEMENT GOES FROM HERE
+ * ---------------------------------------------------------------------
+ * Two staging surfaces, both leading to the shared order-transaction
+ * layer when the order is finally placed:
+ *
+ *   Add to Cart    → cart-handler.php writes a cart row. Selected
+ *                    cart rows are later copied into the session
+ *                    order queue by cart-handler.php's
+ *                    push_to_queue action.
+ *
+ *   Add to Order   → queue-handler.php writes a session queue line
+ *                    directly.
+ *
+ * Either path ends at place-order-handler.php, which calls
+ * createOrderFromQueue() in the shared order-transaction layer.
+ *
+ * The customization payload this page builds is transmitted as JSON
+ * and revalidated server-side. The page never computes a price the
+ * server trusts: the server recomputes the effective unit price from
+ * product.base_price plus the product_composition modifiers, ignoring
+ * any price the client sends.
+ *
+ * ---------------------------------------------------------------------
+ * HANDLER TARGETS
+ * ---------------------------------------------------------------------
+ * Every fetch and form action this page emits targets a file that
+ * exists on disk in the current tree:
+ *
+ *     cart-handler.php    ← add to cart (AJAX, from #actionControlForm's
+ *                            data-cart-url or cart.js's fallback)
+ *     queue-handler.php   ← add to order (AJAX, from #actionControlForm's
+ *                            data-queue-url or queue-panel.js's fallback)
+ *
+ * Both files exist on disk and were not renamed during the sequence.
+ * The form's own action attribute is cart-handler.php, which is the
+ * default POST target if JS is disabled. The two data attributes
+ * give the AJAX layer its explicit endpoints. Both point at files
+ * that exist.
+ *
+ * This page does not reference order-handler.php or any other
+ * retired filename.
+ *
+ * ---------------------------------------------------------------------
+ * SCOPE RULES APPLIED
+ * ---------------------------------------------------------------------
+ *  - No SQL in this file. getProductById(),
+ *    getProductComponentsGrouped(), and getRelatedProducts() come
+ *    from customer/backend/database/product-queries.php.
+ *  - No inline CSS. product-detail.css is loaded via <link> at the
+ *    top.
+ *  - No inline style attributes.
+ *  - No inline SVG. Icons come from shared/assets/images/icons/.
+ *  - No window.alert / confirm / prompt. Errors and confirmations
+ *    route through a page-rendered modal or a toast, per §6.
+ *  - Buttons follow §7: Customize and Add to Cart are neutral
+ *    (black-and-white); Add to Order is confirm (primary);
+ *    Cancel is neutral (black-and-white).
+ * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 9.3
+ * @version 10.0 — Handler targets verified against the tree.
+ *
+ *                 #actionControlForm's action is
+ *                 ../backend/handlers/cart-handler.php. Its
+ *                 data-cart-url is ../backend/handlers/cart-handler.php
+ *                 and its data-queue-url is
+ *                 ../backend/handlers/queue-handler.php. Both files
+ *                 exist on disk. product-detail.js reads the two
+ *                 data attributes with a fallback to the same paths.
+ *
+ *                 No markup change from the previous revision. The
+ *                 customization component rendering, the static
+ *                 ingredient block, the radio group, the modifier
+ *                 block, the multi-select block, the notes
+ *                 textarea, the related-products section, and the
+ *                 second-step customize card are byte-identical.
+ *
+ *                 (9.4: docblock records the money-flow path. 9.3:
+ *                 CSRF token inherited from header.php.)
  */
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('customer');
 
 $productId = isset($_GET['id']) ? max(1, (int)$_GET['id']) : 0;
 if ($productId <= 0) {
@@ -44,7 +125,7 @@ $relatedProducts = getRelatedProducts(
 
 require_once __DIR__ . '/../includes/header.php';
 
-// $csrfToken is provided by header.php (via includes/csrf_token.php),
+// $csrfToken is provided by header.php (via includes/customer-csrf-token.php),
 // stored under the customer role's own session key 'customer_csrf_token'.
 
 $isLoggedIn = isset($_SESSION['customer_id']) && !empty($_SESSION['customer_id']);

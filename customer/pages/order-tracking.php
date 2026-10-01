@@ -18,92 +18,116 @@
  * 'delivering'. A rider who accepts a rider_pending offer is in
  * 'picking_up' — on the way to or at the restaurant, food not yet
  * in hand. The rider then taps "Mark Picked Up" to move the order
- * to 'delivering', and finally "Mark Delivered" to close it. The
- * timeline and the status card both reflect this step.
+ * to 'delivering', and finally "Mark Delivered" to close it.
  *
  * ---------------------------------------------------------------------
  * REACHABILITY
  * ---------------------------------------------------------------------
  * This page is reachable for every order the customer owns — live,
- * delivered, cancelled, or refunded. The tracking page is the
- * canonical per-order view. A delivered order past the one-hour
- * grace window still has a story: the timeline, the restaurant and
- * rider the order was delivered by, and the order summary. A
- * cancelled or refunded order likewise.
- *
- * Only the chat is time-limited. See CHAT GATING below.
+ * delivered, cancelled, or refunded. Only the chat is time-limited.
+ * See CHAT GATING below.
  *
  * ---------------------------------------------------------------------
  * CHAT GATING (mirrors the handler)
  * ---------------------------------------------------------------------
  *   - Kitchen tab     → rendered for every order that is not
  *                       cancelled/refunded, plus a one-hour window
- *                       after delivery so the customer can report a
- *                       missing item or thank the kitchen.
+ *                       after delivery.
  *   - Rider tab       → rendered only when the order has a rider
  *                       assigned AND the order is not
- *                       cancelled/refunded. The rider tab becomes
- *                       live the moment the order reaches
- *                       'picking_up' (rider accepted). It stays
- *                       live through 'delivering' and the one-hour
- *                       post-delivery grace window, then closes.
+ *                       cancelled/refunded. Live from 'picking_up'
+ *                       through the one-hour post-delivery window.
  *
- * When BOTH chat channels are closed (delivered past the window,
- * cancelled, or refunded), the page renders a "messaging closed"
- * notice in place of the restaurant card's Message button and the
- * rider card's Message placeholder, and the chat modal is not
- * rendered at all.
+ * When BOTH chat channels are closed, the page renders a
+ * "messaging closed" notice and the chat modal is not rendered at
+ * all.
  *
- * The two "Message" buttons on the tracking cards open the same
- * modal but route to different tabs:
- *   - Rider card      → data-open-tab="delivery_rider"
- *   - Restaurant card → data-open-tab="restaurant_account"
+ * ---------------------------------------------------------------------
+ * CHAT MODAL CONTRACT
+ * ---------------------------------------------------------------------
+ * The chat modal's markup is server-rendered here. Its runtime
+ * class names are the boundary between this page, order-tracking.js,
+ * and order-tracking.css. Those three files MUST agree on the exact
+ * strings below. If any one of them changes a string, the other two
+ * must change in the same commit.
+ *
+ * Element ids the JS queries:
+ *   #customerChatModal
+ *   #customerChatClose
+ *   #customerChatSubtitle
+ *   #customerChatMessages
+ *   #customerChatForm
+ *   #customerChatInput
+ *   #customerChatRecipient
+ *   #customerChatOrderId
+ *   #chatOpenBtn
+ *   #chatOpenBtnRestaurant
+ *
+ * Tab selector the JS queries:
+ *   .customer-chat-tab[data-recipient]
+ *
+ * Message node shape emitted by the JS at runtime:
+ *   <div class="customer-chat-message customer-chat-message-sent">
+ *       <span class="customer-chat-message-sender">You</span>
+ *       <span class="customer-chat-message-text">…</span>
+ *       <span class="customer-chat-message-time">…</span>
+ *   </div>
+ *
+ *   <div class="customer-chat-message customer-chat-message-received">
+ *       <span class="customer-chat-message-sender">Restaurant</span>
+ *       <span class="customer-chat-message-text">…</span>
+ *       <span class="customer-chat-message-time">…</span>
+ *   </div>
+ *
+ *   <div class="customer-chat-system">…</div>
+ *
+ * The outer `.customer-chat-message` carries the bubble surface,
+ * padding, radius, and max-width. The two modifier classes
+ * `-sent` and `-received` carry ONLY the alignment and the colour.
+ * The CSS in order-tracking.css matches those exact strings.
  *
  * ---------------------------------------------------------------------
  * REAL-TIME UPDATES
  * ---------------------------------------------------------------------
  * The page renders once, server-side. On top of that, a light poll
- * (see order-tracking.js) hits the order-handler's
+ * (order-tracking.js) hits the customer order handler's
  * `get_tracking_status` action every few seconds with the current
- * revision token. The handler returns the order's current
- * order_status and a revision hash. When the revision changes, the
- * page reloads once and picks up the new server-rendered state.
+ * revision token. When the revision changes, the client reconciles
+ * the modal's gating flags in place.
+ *
+ * The poll endpoint is published on #trackingPage as
+ * data-handler-url, pointing at customer-order-handler.php.
  *
  * ---------------------------------------------------------------------
  * SCOPE RULES APPLIED
  * ---------------------------------------------------------------------
- *  - No SQL. All data access goes through tracking-queries.php.
+ *  - No SQL. Data comes from tracking-queries.php.
  *  - No inline CSS. order-tracking.css is loaded at the top.
  *  - No inline JS. order-tracking.js is loaded at the bottom.
- *  - No <svg> tags. Shared icons come from shared/assets/images/icons/.
+ *  - No <svg> tags. Shared icons from shared/assets/images/icons/.
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 1.5 — The page is now reachable for every order the
- *                customer owns, including delivered orders past the
- *                1-hour grace window and cancelled/refunded orders.
- *                  - New "messaging closed" treatment: when neither
- *                    chat channel is open, both card Message
- *                    buttons are replaced with an explanatory
- *                    notice, and the chat modal is not rendered at
- *                    all.
- *                  - The rider card now has a distinct disabled
- *                    variant for "delivered, grace window closed",
- *                    separate from "rider has not yet accepted".
- *                  - The chat modal and its tabs are only rendered
- *                    when at least one channel is open.
+ * @version 3.1 — Docblock records the runtime class-name contract
+ *                between this page, order-tracking.js, and
+ *                order-tracking.css, so a future revision of any
+ *                one of them has one place to confirm the exact
+ *                strings. No markup change from v3.0.
  *
- *                (1.4: 'picking_up' support, 1-hour grace, real-time
- *                tracking. 1.3: chat gating. 1.2: CSRF inherited
- *                from header. 1.1: fixed rider/restaurant buttons
- *                opening the same tab.)
+ *                (3.0: poll endpoint declared on #trackingPage's
+ *                data-handler-url attribute. 2.0: poll URL points
+ *                at the renamed customer order handler. 1.5:
+ *                reachable for every order. 1.4: picking_up
+ *                support, 1-hour grace, real-time tracking. 1.3:
+ *                chat gating. 1.2: CSRF inherited from header.
+ *                1.1: fixed rider/restaurant buttons opening the
+ *                same tab.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('customer');
 
 if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     header('Location: sign-in.php');
@@ -157,28 +181,15 @@ $orderTotal   = $totals ? (float)$totals['total']        : 0.0;
 
 // ---------------------------------------------------------------------
 // Chat gating flags
-//
-// The grace-aware helpers live in tracking-queries.php so the page
-// and the handler agree on exactly when a channel closes.
 // ---------------------------------------------------------------------
 $deliveredGraceOpen = customerOrderDeliveredWithinGrace($order);
 
-// The kitchen channel is open for every order that is not
-// cancelled/refunded, plus the one-hour post-delivery window.
 $showKitchenTab = !$isTerminal
     && ($orderStatus !== 'delivered' || $deliveredGraceOpen);
 
-// A rider card is shown whenever a rider is attached to the order
-// and the order is not cancelled/refunded. This includes
-// 'rider_pending' (so the customer can see who was assigned) and
-// 'picking_up' (so the customer can see the rider on the way to the
-// restaurant).
-$hasRider = $rider !== false;
+$hasRider      = $rider !== false;
 $showRiderCard = $hasRider && !$isTerminal;
 
-// The rider tab and its Message button only go live once the rider
-// has actually accepted the order — from 'picking_up' through the
-// one-hour post-delivery window. See riderHasAcceptedOrder().
 $riderCanBeMessaged = $hasRider
     && !$isTerminal
     && riderHasAcceptedOrder($database_connection, $orderId);
@@ -193,12 +204,8 @@ $unreadRider = $showRiderTab
     ? countUnreadOrderMessages($database_connection, $orderId, 'delivery_rider')
     : 0;
 
-// Any channel open → the chat modal is reachable.
 $chatIsReachable = $showKitchenTab || $showRiderTab;
 
-// Why the chat is closed, for the notice copy. Three distinct
-// reasons, so the customer is not told "this order is closed" on an
-// order that is merely past the 1-hour mark.
 $chatClosedReason = '';
 if (!$chatIsReachable) {
     if ($orderStatus === 'delivered') {
@@ -210,12 +217,10 @@ if (!$chatIsReachable) {
     }
 }
 
-// Default tab when the modal opens without an explicit origin.
 $defaultChatTab = $showKitchenTab
     ? 'restaurant_account'
     : ($showRiderTab ? 'delivery_rider' : 'restaurant_account');
 
-// Live status snapshot used as the initial revision for the poll.
 $liveSnapshot    = getOrderLiveSnapshot($database_connection, $orderId, $customerId);
 $initialRevision = $liveSnapshot['revision'] ?? '';
 
@@ -229,8 +234,8 @@ function trackFmt(float|string|null $amount): string
 
 require_once __DIR__ . '/../includes/header.php';
 
-// $csrfToken is provided by header.php (via includes/csrf_token.php),
-// stored under the customer role's own session key 'customer_csrf_token'.
+// $csrfToken is provided by header.php, stored under
+// 'customer_csrf_token'.
 ?>
 
 <link rel="stylesheet" href="../assets/css/order-tracking.css">
@@ -242,7 +247,7 @@ require_once __DIR__ . '/../includes/header.php';
     data-can-message-rider="<?php echo $riderCanBeMessaged ? '1' : '0'; ?>"
     data-order-status="<?php echo htmlspecialchars($orderStatus, ENT_QUOTES, 'UTF-8'); ?>"
     data-revision="<?php echo htmlspecialchars($initialRevision, ENT_QUOTES, 'UTF-8'); ?>"
-    data-handler-url="../backend/handlers/order-handler.php">
+    data-handler-url="../backend/handlers/customer-order-handler.php">
 
     <div class="container">
 
@@ -337,7 +342,6 @@ require_once __DIR__ . '/../includes/header.php';
 
         <!-- ============================================
              CHAT-CLOSED NOTICE
-             Shown only when neither channel is reachable.
              ============================================ -->
         <?php if (!$chatIsReachable && $chatClosedReason !== ''): ?>
         <div class="tracking-chat-closed-notice" role="status">
@@ -556,10 +560,6 @@ require_once __DIR__ . '/../includes/header.php';
 
 <!-- ============================================
      CUSTOMER CHAT MODAL
-     Rendered only when at least one channel is open. Opening the
-     modal on a page with no channels would show an empty tab bar
-     with no way to send, which is what the chat-closed notice
-     above replaces.
      ============================================ -->
 <?php if ($chatIsReachable): ?>
 <div id="customerChatModal" class="modal" style="display: none;">
@@ -601,7 +601,7 @@ require_once __DIR__ . '/../includes/header.php';
             <div class="customer-chat-loading"><span>Loading messages…</span></div>
         </div>
 
-        <form class="customer-chat-form" id="customerChatForm">
+        <form class="customer-chat-form" id="customerChatForm" action="../backend/handlers/message-handler.php">
             <input type="hidden" id="customerChatOrderId" value="<?php echo $orderId; ?>">
             <input type="hidden" id="customerChatRecipient"
                 value="<?php echo htmlspecialchars($defaultChatTab, ENT_QUOTES, 'UTF-8'); ?>">

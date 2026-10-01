@@ -17,8 +17,28 @@
  * top of its own header.css; the customer side works because of
  * it, the rider side was missing it.
  *
- * Avatar circle
- * -------------
+ * ---------------------------------------------------------------------
+ * MODAL BASE
+ * ---------------------------------------------------------------------
+ * This file also now owns the base .modal rules — the overlay
+ * wrapper, the backdrop, the white card shell, and the enter
+ * animation. They are loaded by rider/includes/header.php on every
+ * authenticated rider page, so any modal that appears on any rider
+ * page has a stylesheet behind it.
+ *
+ * Before this revision the only .modal rules on the rider side
+ * lived in rider/assets/css/profile.css. That stylesheet is loaded
+ * only by profile.php, so the chat modal rendered as an unstyled
+ * block on the dashboard, deliveries, and earnings pages. Moving
+ * the base rules into header.css closes that gap without adding a
+ * new stylesheet to the header's load list.
+ *
+ * profile.css keeps its copy of the same rules. It loads after
+ * header.css, so the two copies cascade identically and nothing
+ * on the profile page changes.
+ *
+ * The avatar circle
+ * -----------------
  * .user-profile-circle is a 36px circle in the header, filled by
  * one of three children:
  *
@@ -37,15 +57,18 @@
  * .mobile-user-avatar circle.
  *
  * @package FitPal
- * @version 3.3 — Adds .profile-icon-image so the rider avatar circle
- *                can display a real photo at full color, and widens
- *                the mobile greeting avatar selector to match the
- *                same class. The rest of the file is unchanged from
- *                3.2.
+ * @version 4.0 — Adds the MODAL BASE section. The two rules that
+ *                were previously only in profile.css (.modal and
+ *                .modal.active) and the three supporting rules
+ *                (.modal-overlay, .modal-content, the enter
+ *                keyframe) now live here as well, so any modal on
+ *                any authenticated rider page has a base
+ *                stylesheet behind it.
  *
- *                (3.2: restored html { scrollbar-gutter: stable }.
- *                3.1: scrollbar-gutter: stable added to the page's
- *                assignment-panel.css — did not take effect.)
+ *                (3.3: added .profile-icon-image. 3.2: restored
+ *                html { scrollbar-gutter: stable }. 3.1: the rule
+ *                was tried in assignment-panel.css and did not take
+ *                effect.)
  */
 
 /* Reserve the scrollbar gutter permanently. With this in place,
@@ -403,20 +426,12 @@ html {
     text-transform: uppercase;
 }
 
-/* Fallback icon inside the mobile greeting circle. The base selector
-   is widened to match the photo variant so the same sizing applies
-   before the dedicated .profile-icon-image override below runs. */
 .mobile-user-avatar img {
     width: 24px;
     height: 24px;
     filter: brightness(0) saturate(100%) invert(100%);
 }
 
-/* Real rider photo inside the mobile greeting circle. Fills the
-   44px circle edge-to-edge; object-fit keeps the aspect ratio while
-   cropping the longer side rather than distorting. The filter is
-   explicitly reset — the base rule above would otherwise invert a
-   real photo to a negative. */
 .mobile-user-avatar .profile-icon-image {
     width: 100%;
     height: 100%;
@@ -720,11 +735,99 @@ html {
     }
 }
 
+/* ============================================
+   MODAL BASE
+   Shared skeleton behind every modal that
+   appears on an authenticated rider page:
+   the chat modal, the confirm modals on the
+   deliveries and profile pages, and any
+   future rider-side modal that uses the
+   .modal > .modal-content shape.
+
+   Loaded here because header.php is the one
+   stylesheet every authenticated rider page
+   pulls in. The chat modal previously
+   rendered unstyled on the dashboard,
+   deliveries, and earnings pages because
+   the only .modal rules on the rider side
+   lived in profile.css, which only
+   profile.php loads.
+
+   profile.css keeps its own copy. It loads
+   after this file, so the two cascade
+   identically and nothing on the profile
+   page changes.
+   ============================================ */
+
+.modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 10, 4, 0.6);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.modal.active {
+    display: flex !important;
+}
+
+.modal-overlay {
+    position: absolute;
+    inset: 0;
+    cursor: pointer;
+    z-index: 0;
+}
+
+.modal-content {
+    position: relative;
+    z-index: 1;
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    width: 480px;
+    max-width: calc(100vw - 32px);
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-xl);
+    animation: riderModalFadeIn 0.25s ease;
+    margin: 0 auto;
+    box-sizing: border-box;
+}
+
+@keyframes riderModalFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.96) translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* Subtitle line inside a modal header. Used by the chat modal to
+   show "Order #42 • Juan Dela Cruz" under the title. */
+.modal-subtitle {
+    margin: 2px 0 0 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    font-weight: var(--font-weight-normal);
+}
+
+/* ============================================
+   REDUCED MOTION
+   ============================================ */
+
 @media (prefers-reduced-motion: reduce) {
     .logout-modal,
     .logout-modal-content,
     .logout-btn-cancel,
-    .logout-btn-confirm {
+    .logout-btn-confirm,
+    .modal-content {
         transition: none !important;
+        animation: none !important;
     }
 }

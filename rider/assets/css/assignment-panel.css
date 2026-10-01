@@ -71,21 +71,46 @@
  * already set keeps the wrapped line consistent with the unwrapped
  * one.
  *
+ * Modal visibility (v7.3)
+ * -----------------------
+ * Both modals are hidden by default and shown only when the
+ * .active class is present. The CSS owns visibility entirely:
+ *
+ *   .assignment-notify-modal,
+ *   .assignment-availability-modal {
+ *       display: none;
+ *       opacity: 0;
+ *       ...
+ *   }
+ *
+ *   .assignment-notify-modal.active,
+ *   .assignment-availability-modal.active {
+ *       display: flex;
+ *       opacity: 1;
+ *   }
+ *
+ * The previous revision relied on JavaScript to write
+ * style.display = 'flex' and style.display = 'none' and used the
+ * .active class only to drive the opacity transition. That left
+ * the modals laid out in the DOM at opacity: 0 on page load, where
+ * they still intercepted pointer events and blocked the page.
+ *
+ * The corrected contract is:
+ *   - CSS owns display.
+ *   - JS owns .active.
+ *   - JS no longer writes style.display at all.
+ *
  * @package FitPal
- * @version 7.2 — Adds explicit flex-wrap: wrap to
- *                .assignment-row-actions so a row with three or
- *                four action buttons wraps cleanly on narrow
- *                phones. No other rule changed from 7.1.
+ * @version 7.3 — Modals now default to display: none in CSS.
+ *                Visibility is driven entirely by the .active class.
+ *                JS no longer writes style.display. This fixes the
+ *                bug where the modals blocked the page on load
+ *                because they were laid out at opacity: 0.
  *
- *                The new picking_up row action (Mark Picked Up)
- *                reuses the existing is-primary variant, so no
- *                new button-style rule is required.
- *
- *                (7.1: wrapper pointer-events: none. 7.0: pill is
- *                a real button. 6.0: wrapper permanently visible.
- *                5.0: notification modal fix. 4.0: click-to-
- *                navigate on .assignment-row-top. 3.0: three-zone
- *                header grid.)
+ *                (7.2: action-button wrapping. 7.1: wrapper
+ *                pointer-events: none. 7.0: pill is a real button.
+ *                6.0: wrapper permanently visible. 5.0:
+ *                notification modal fix.)
  */
 
 /* ============================================================
@@ -799,7 +824,7 @@
     position: fixed;
     inset: 0;
     z-index: 9999;
-    display: flex;
+    display: none; /* Hidden by default */
     align-items: center;
     justify-content: center;
     padding: 20px;
@@ -809,6 +834,7 @@
 }
 
 .assignment-notify-modal.active {
+    display: flex; /* Shown when active */
     opacity: 1;
 }
 
@@ -1011,7 +1037,7 @@
     position: fixed;
     inset: 0;
     z-index: 9999;
-    display: flex;
+    display: none; /* Hidden by default */
     align-items: center;
     justify-content: center;
     padding: 20px;
@@ -1021,6 +1047,7 @@
 }
 
 .assignment-availability-modal.active {
+    display: flex; /* Shown when active */
     opacity: 1;
 }
 

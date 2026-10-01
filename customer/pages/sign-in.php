@@ -3,37 +3,23 @@
  * FitPal Customer Sign-In Page
  *
  * @package FitPal
- * @version 1.3 — Now requires includes/csrf_token.php and calls
- *                getCustomerCsrfToken() instead of duplicating the
- *                generation block inline. This makes the customer
- *                role's CSRF bootstrap a single source of truth:
- *                header.php and this file both route through the
- *                same helper, which writes only to the role's own
- *                session key, customer_csrf_token. The form's POST
- *                field stays named csrf_token; only the storage key
- *                is role-specific. Also bootstraps
- *                window.FITPAL_CSRF_TOKEN for consistency with
- *                profile.php, cart.php, and menu.php.
+ * @version 2.0 — Removed the $_SESSION['created'] = time() pin. That
+ *                key belonged to the old global-rotation policy, which
+ *                has been replaced by the per-role activity gate in
+ *                shared/includes/session-activity.php. No other
+ *                behavior changed: the form's POST field stays named
+ *                csrf_token, and sign-in-handler.php still validates
+ *                against $_SESSION['customer_csrf_token'].
  *
- *                (1.2: Own session key, customer_csrf_token, instead
- *                of the shared csrf_token. The customer, rider, and
- *                restaurant roles all run on the same PHP session
- *                (same cookie), so a single shared csrf_token meant
- *                that a successful sign-in by ANY of those roles
- *                unset the token the others' already-rendered sign-in
- *                forms were relying on. Whichever role signed in
- *                first "used up" the shared token, leaving the other
- *                roles' loaded pages with a stale token — their first
- *                submit failed validation and only a reload (which
- *                regenerated the token) fixed it. Splitting the key
- *                per role removes the collision entirely.)
+ *                (1.3: require_once on includes/customer-csrf-token.php
+ *                followed by getCustomerCsrfToken(). 1.2: own session
+ *                key, customer_csrf_token.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('customer');
 
 // Redirect if already logged in
 if (isset($_SESSION['customer_id']) && !empty($_SESSION['customer_id'])) {
@@ -44,10 +30,6 @@ if (isset($_SESSION['customer_id']) && !empty($_SESSION['customer_id'])) {
 // Never let the browser or bfcache serve a stale copy of this form.
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
-
-// Pin the session's "created" marker to now so header.php's 30-minute
-// rotation check can never fire while the sign-in form is on screen.
-$_SESSION['created'] = time();
 
 // Single source of truth for the customer role's CSRF token. The
 // helper generates it on first use and stores it under

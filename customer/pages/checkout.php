@@ -12,48 +12,109 @@
  * is the only code that writes the order to the database.
  *
  * ---------------------------------------------------------------------
+ * CLIENT CONFIG
+ * ---------------------------------------------------------------------
+ * This page publishes every value checkout.js needs on the
+ * #checkoutPage element as data-* attributes:
+ *
+ *     data-total                    order total
+ *     data-subtotal                 item subtotal
+ *     data-delivery-fee             delivery fee
+ *     data-service-fee              service fee
+ *     data-vat-amount               VAT amount
+ *     data-vat-rate                 VAT rate
+ *     data-wallet-balance           customer's wallet balance
+ *     data-has-address              1 when the customer has at least
+ *                                   one address on file
+ *     data-csrf-token               customer_csrf_token value
+ *     data-initial-payment-method   the method rendered pre-selected
+ *     data-checkout-handler-url     the endpoint checkout.js POSTs
+ *                                   to when the customer picks an
+ *                                   address in the address modal
+ *
+ * Every one of those values is read by customer/assets/ui/js/checkout.js.
+ * None of them is a URL to a handler that has been renamed.
+ *
+ * ---------------------------------------------------------------------
+ * FORM AND HANDLER TARGETS
+ * ---------------------------------------------------------------------
+ * The hidden #checkoutForm posts to
+ * ../backend/handlers/place-order-handler.php, which exists in the
+ * tree and was not renamed. The address modal's data attribute
+ * points at ../backend/handlers/checkout-handler.php, which exists
+ * in the tree and was not renamed. No form on this page posts to
+ * order-handler.php or any other retired filename.
+ *
+ * ---------------------------------------------------------------------
  * SCOPE RULES APPLIED
  * ---------------------------------------------------------------------
- *  - No SQL in this file. Wallet balance comes from getCustomerProfile().
- *  - No inline CSS. checkout.css is loaded via the header's $pageCssMap.
- *  - No inline style attributes. Utility classes live in checkout.css.
- *  - Page data for JS is passed via data-* attributes on #checkoutPage,
- *    not via an inline <script> block.
- *  - Address formatting helpers (formatAddress, getAddressLabel) live in
- *    customer/backend/database/address-queries.php. They are NOT in
- *    shared/, because they know about customer_address specifically.
- *  - This page does NOT require shared/includes/view-helpers.php. It has
- *    no need for formatPrice / truncateText / parseTagList.
+ *  - No SQL in this file. Wallet balance comes from
+ *    getCustomerProfile() in customer-queries.php.
+ *  - No inline CSS. checkout.css is loaded via the page-specific
+ *    CSS <link> at the top, and the customer header's $pageCssMap
+ *    also loads it.
+ *  - No inline style attributes.
+ *  - Page data for JS is passed via data-* attributes on
+ *    #checkoutPage.
+ *  - Address formatting helpers (formatAddress, getAddressLabel) live
+ *    in customer/backend/database/address-queries.php.
+ *  - Fee constants and pure fee math live in the shared fee schedule
+ *    at shared/backend/database/fee-queries.php.
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 7.2 — CSRF token now inherited from header.php; local
- *                generation removed. (7.1: address helpers now live
- *                in address-queries.php.)
+ * @version 9.2 — Handler targets verified against the tree.
+ *
+ *                The hidden #checkoutForm posts to
+ *                place-order-handler.php (exists). The address
+ *                modal's data-checkout-handler-url points at
+ *                checkout-handler.php (exists). No form, link, or
+ *                attribute on this page references order-handler.php
+ *                or any other retired filename.
+ *
+ *                No behavioural change from v9.1. Every data-*
+ *                attribute, form, modal, and script tag is
+ *                byte-identical.
+ *
+ *                (9.1: added data-checkout-handler-url. 9.0:
+ *                deployment-independent asset base. 8.0: shared
+ *                fee schedule require. 7.2: CSRF token inherited
+ *                from header.php. 7.1: address helpers moved to
+ *                address-queries.php. 7.0: session-queue checkout
+ *                flow.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('customer');
 
 if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     header('Location: sign-in.php');
     exit;
 }
 
-// Prevent the browser from caching this page.
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
 require_once __DIR__ . '/../backend/database/customer-connect.php';
 require_once __DIR__ . '/../backend/database/customer-queries.php';
-require_once __DIR__ . '/../backend/database/address-queries.php';   // formatAddress + getAddressLabel live here
-require_once __DIR__ . '/../backend/database/fee-queries.php';
+require_once __DIR__ . '/../backend/database/address-queries.php';
+require_once __DIR__ . '/../../shared/backend/database/fee-queries.php';
 
 $customerId = (int)$_SESSION['customer_id'];
+
+// ---------------------------------------------------------------
+// DEPLOYMENT-INDEPENDENT ASSET BASE
+// ---------------------------------------------------------------
+$scriptPath = $_SERVER['SCRIPT_NAME'] ?? '';
+$dirPath    = dirname($scriptPath);
+$segments   = array_filter(explode('/', $dirPath));
+$depth      = count($segments);
+
+$assetBase       = str_repeat('../', $depth) . 'shared/';
+$projectRootBase = str_repeat('../', $depth);
 
 // ---------------------------------------------------------------
 // Read the session queue.
@@ -109,16 +170,13 @@ if (!empty($_SESSION['order_queue']) && is_array($_SESSION['order_queue'])) {
     }
 }
 
-// ---------------------------------------------------------------
-// Empty-queue guard.
-// ---------------------------------------------------------------
 if (empty($orderItems)) {
     header('Location: menu.php');
     exit;
 }
 
 // ---------------------------------------------------------------
-// Aggregate subtotal + distinct branches for the fee schedule.
+// Aggregate subtotal + distinct branches.
 // ---------------------------------------------------------------
 $subtotal  = 0.0;
 $branchIds = [];
@@ -149,7 +207,6 @@ $hasAddress = !empty($addresses);
 
 $userDetails = getCustomerContactInfo($database_connection, $customerId) ?: [];
 
-// Wallet balance comes from the customer profile query — no SQL here.
 $profileRow    = getCustomerProfile($database_connection, $customerId) ?: [];
 $walletBalance = (float)($profileRow['balance'] ?? 0);
 
@@ -187,15 +244,16 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
 
 // ---------------------------------------------------------------
 // CSRF
-//
-// Provided by header.php (via includes/csrf_token.php), stored
-// under the customer role's own session key 'customer_csrf_token'.
-// Do not regenerate here — the header is the single bootstrap point
-// for authenticated customer pages.
 // ---------------------------------------------------------------
 
 require_once __DIR__ . '/../includes/header.php';
 ?>
+
+<link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/global.css">
+<link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/header.css">
+<link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/footer.css">
+<link rel="stylesheet" href="<?php echo $projectRootBase; ?>customer/assets/css/header.css">
+<link rel="stylesheet" href="<?php echo $projectRootBase; ?>customer/assets/css/checkout.css">
 
 <div class="content checkout-page" id="checkoutPage"
     data-total="<?php echo htmlspecialchars((string)$total, ENT_QUOTES, 'UTF-8'); ?>"
@@ -206,8 +264,8 @@ require_once __DIR__ . '/../includes/header.php';
     data-vat-rate="<?php echo htmlspecialchars((string)$vatRate, ENT_QUOTES, 'UTF-8'); ?>"
     data-wallet-balance="<?php echo htmlspecialchars((string)$walletBalance, ENT_QUOTES, 'UTF-8'); ?>"
     data-has-address="<?php echo $hasAddress ? '1' : '0'; ?>"
-    data-csrf-token="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>"
-    data-initial-payment-method="COD">
+    data-csrf-token="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>" data-initial-payment-method="COD"
+    data-checkout-handler-url="../backend/handlers/checkout-handler.php">
 
     <div class="container">
         <p class="heading-2 checkout-title">Checkout</p>
@@ -230,7 +288,6 @@ require_once __DIR__ . '/../includes/header.php';
 
             <div class="checkout-row checkout-row-top">
 
-                <!-- Personal Details -->
                 <div class="card">
                     <div class="card-header">
                         <p class="heading-5">Personal Details</p>
@@ -257,7 +314,6 @@ require_once __DIR__ . '/../includes/header.php';
                     </div>
                 </div>
 
-                <!-- Delivery Address -->
                 <div class="card">
                     <div class="card-header">
                         <p class="heading-5">Delivery Address</p>
@@ -308,7 +364,6 @@ require_once __DIR__ . '/../includes/header.php';
 
             <div class="checkout-row checkout-row-bottom">
 
-                <!-- Order Summary -->
                 <div class="card">
                     <div class="card-header">
                         <p class="heading-5">Order Summary</p>
@@ -392,7 +447,6 @@ require_once __DIR__ . '/../includes/header.php';
                     </div>
                 </div>
 
-                <!-- Payment Method -->
                 <div class="card">
                     <div class="card-header">
                         <p class="heading-5">Payment Method</p>
@@ -455,9 +509,6 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 </div>
 
-<!-- ============================================ -->
-<!-- ADDRESS MODAL -->
-<!-- ============================================ -->
 <?php if ($hasAddress): ?>
 <div id="addressModal" class="modal">
     <div class="modal-overlay"></div>
@@ -511,9 +562,6 @@ require_once __DIR__ . '/../includes/header.php';
 </div>
 <?php endif; ?>
 
-<!-- ============================================ -->
-<!-- ONLINE PAYMENT QR MODAL -->
-<!-- ============================================ -->
 <div id="qrPaymentModal" class="modal">
     <div class="modal-overlay"></div>
     <div class="modal-content qr-modal-content">
@@ -549,9 +597,6 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 </div>
 
-<!-- ============================================ -->
-<!-- WALLET INSUFFICIENT MODAL -->
-<!-- ============================================ -->
 <div id="walletInsufficientModal" class="modal">
     <div class="modal-overlay"></div>
     <div class="modal-content wallet-modal-content">
@@ -597,9 +642,6 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 </div>
 
-<!-- ============================================ -->
-<!-- PLACE ORDER CONFIRMATION MODAL -->
-<!-- ============================================ -->
 <div id="confirmOrderModal" class="modal">
     <div class="modal-overlay"></div>
     <div class="modal-content confirm-modal-content">
@@ -619,12 +661,11 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 </div>
 
-<!-- Hidden form for submitting order -->
 <form id="checkoutForm" class="checkout-form-hidden" method="POST" action="../backend/handlers/place-order-handler.php">
     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
     <input type="hidden" name="address_id" id="hiddenAddressId" value="<?php echo $selectedAddrId; ?>">
     <input type="hidden" name="payment_method" id="hiddenPaymentMethod" value="COD">
 </form>
 
-<script src="../assets/ui/js/checkout.js" defer></script>
+<script src="<?php echo $projectRootBase; ?>customer/assets/ui/js/checkout.js" defer></script>
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>

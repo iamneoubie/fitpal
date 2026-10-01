@@ -12,8 +12,33 @@
  *   - vehicle snapshot (read-only)
  *   - address snapshot (read-only, contact support to change)
  *
+ * ---------------------------------------------------------------------
+ * THE BALANCE THIS PAGE RENDERS
+ * -----------------------------
+ * The header card has no balance field of its own — the rider's
+ * balance is shown on the dashboard and on the earnings page. The
+ * two places a rider sees their balance both read from
+ * financial_account.balance, the same account the shared
+ * order-transaction layer debits and credits:
+ *
+ *   - Accept-time debit      → `payment` transaction, trigger
+ *                              debits the balance by subtotal plus
+ *                              delivery fee. A rider at a 0 balance
+ *                              goes negative on purpose.
+ *   - Delivery credit        → `deposit` transaction, trigger
+ *                              credits the balance by the delivery
+ *                              fee.
+ *   - Withdrawal request     → `withdrawal` transaction with status
+ *                              'pending'. The trigger does not move
+ *                              the balance until an admin completes
+ *                              the row.
+ *
+ * This page never writes to the balance. The value the other two
+ * pages show is whatever the triggers last computed.
+ *
+ * ---------------------------------------------------------------------
  * Page flow
- * ---------
+ * ---------------------------------------------------------------------
  *   1. The rider opens the page in view mode. The contact field is
  *      disabled, the Save/Cancel row is hidden, the Edit Profile
  *      button is visible, and the avatar edit button is hidden.
@@ -29,8 +54,8 @@
  *
  *   4. Save runs a single pipeline:
  *        a. POST action=update_profile to rider-handler.php.
- *        b. If a picture is pending, POST action=upload_picture to the
- *           same endpoint with the file as FormData.
+ *        b. If a picture is pending, POST action=upload_picture to
+ *           the same endpoint with the file as FormData.
  *      Both fetches use literal URLs so no DOM node is ever read to
  *      compute a request target.
  *
@@ -40,37 +65,27 @@
  *
  * Save button contract
  * --------------------
- * The Save button is type="button", not type="submit". It is bound in
- * JS to the same handler the form's submit event runs. This page never
- * performs a native form submission. That removes the possibility of
- * the browser navigating away from the page to a URL that was
- * computed from a DOM property, which is what produced the spurious
- * POST /rider/pages/[object HTMLInputElement] in the server log.
- *
- * $assetBase is defined by rider/includes/header.php, so the header
- * is required before any code that depends on it.
+ * The Save button is type="button", not type="submit". It is bound
+ * in JS to the same handler the form's submit event runs. This page
+ * never performs a native form submission. That removes the
+ * possibility of the browser navigating away from the page to a URL
+ * that was computed from a DOM property.
  *
  * @package FitPal
- * @version 4.1 — Save button is now type="button" and is bound
- *                explicitly. No native form submission path remains.
- *                The form still carries action and enctype so the
- *                markup is semantically complete, but nothing relies
- *                on the browser using them. No other structural
- *                change from 4.0.
+ * @version 4.2 — Docblock records the shared order-transaction layer
+ *                as the writer of the ledger the rider's balance is
+ *                read from on the dashboard and earnings pages. No
+ *                markup, edit-mode lifecycle, address tab, or JS
+ *                config change from the previous revision.
  *
- *                (4.0: unified rider profile with customer profile —
- *                avatar wrap, edit-confirm modal, unsaved-changes
- *                modal, Save / Cancel in header card, deferred
- *                upload. 3.3: docblock reference to
- *                rider-csrf-token.php. 3.2: local CSRF block
- *                removed. 3.0: three-tab layout.)
+ *                (4.1: Save button is now type="button". 4.0:
+ *                unified rider profile with customer profile.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('rider');
 
 if (empty($_SESSION['delivery_rider_id'])) {
     header('Location: sign-in.php');
@@ -78,7 +93,7 @@ if (empty($_SESSION['delivery_rider_id'])) {
 }
 
 require_once __DIR__ . '/../backend/database/rider-connect.php';
-require_once __DIR__ . '/../backend/database/rider-queries.php';
+require_once __DIR__ . '/../backend/database/rider-assignment-queries.php';
 
 // Header defines $assetBase and outputs <head> + <header>.
 require_once __DIR__ . '/../includes/header.php';
@@ -274,11 +289,7 @@ $plateLabel   = $plate !== '' ? $plate : 'No plate recorded';
                     <span>Edit Profile</span>
                 </button>
 
-                <!-- Edit state: Cancel + Save Changes.
-                     Save is type="button" and is bound in profile.js to
-                     the same submit pipeline the form's submit event
-                     runs. Nothing relies on native form submission, so
-                     no URL is ever computed from a DOM property. -->
+                <!-- Edit state: Cancel + Save Changes. -->
                 <div class="profile-edit-actions is-hidden" id="profileEditActions">
                     <button type="button" id="cancelEditBtn" class="btn btn-cancel">Cancel</button>
                     <button type="button" id="saveProfileBtn" class="btn btn-primary">

@@ -23,9 +23,8 @@
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('restaurant');
 
 if (empty($_SESSION['restaurant_account_id'])) {
     header('Location: sign-in.php');

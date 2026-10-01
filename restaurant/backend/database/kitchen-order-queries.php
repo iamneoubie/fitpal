@@ -1,127 +1,129 @@
 <?php
 /**
- * FitPal Restaurant Kitchen Order Queries
+ * FitPal Restaurant Kitchen Queries
  *
- * Pure data-access layer for the restaurant kitchen page. Every query
- * against orders, queue_item, customization_instance, and the rider
- * tables that the kitchen needs to read or write.
+ * Kitchen-scoped data-access layer for orders, queue_item,
+ * customization_instance, and the rider tables on the branch board.
+ * Every read and write the kitchen page and its poll endpoint need.
  *
- * Scope rules:
- *   - This file contains SQL and pure shapers only.
- *   - No formatting beyond what a shaper does; no HTML, no session
- *     access, no side effects beyond the writes below.
- *   - Status transitions and rider assignment live here as write
- *     functions. The handler that calls them owns all validation.
+ * ---------------------------------------------------------------------
+ * WHAT MOVED OUT OF THIS FILE
+ * ---------------------------------------------------------------------
+ * The previous revision of this file lived at
+ * restaurant/backend/database/order-queries.php and carried two
+ * things that belonged to the shared layer:
  *
- * Assignment model
- * ----------------
- * Assigning a rider does NOT immediately move the order to
- * 'delivering'. The kitchen sets the rider on the order and moves it
- * to 'rider_pending'. The rider confirms in their own portal, at
- * which point the order becomes 'picking_up'. The rider then taps
- * "Mark Picked Up" to move it to 'delivering', and finally "Mark
- * Delivered" to close it. Declining at rider_pending returns the
- * order to 'preparing' with no rider attached.
+ *   1. The refund money movement (refundCustomerForCancelledOrder).
+ *      Issuing a `refund` row and relying on the trigger to credit
+ *      the customer is a cross-role write. It now lives in
+ *      shared/backend/database/order-transaction-queries.php as
+ *      refundOrderToWallet(), and the restaurant cancellation
+ *      endpoint POSTs to the shared handler instead of running the
+ *      refund inline.
  *
- * STEP-BY-STEP LIFECYCLE (enforced by assignRiderToOrder below)
- * -------------------------------------------------------------
- * A rider may only be attached to an order that is already being
- * prepared. The kitchen's sequence is strict:
+ *   2. The status transition decision for a kitchen cancel
+ *      ('cancelled' vs 'refunded' by payment method). That decision
+ *      is the same decision the customer and rider cancel paths
+ *      make, so it now lives in the shared layer as
+ *      cancelOrderAsRestaurant(). This file re-exports it through
+ *      the require_once at the top so the kitchen page's own
+ *      ownership-read helpers still work, but it is no longer
+ *      declared here.
  *
- *     pending   --Start Preparing-->   preparing
- *     preparing --Assign Rider---->    rider_pending
- *     rider_pending --(rider accepts)--> picking_up
- *     picking_up --(rider marks picked up)--> delivering
- *     delivering --(rider marks delivered)--> delivered
+ * Every caller that used to reach the removed names still reaches
+ * them; the names and signatures are unchanged, only the file that
+ * declares them is different. Every kitchen-side caller also has the
+ * shared layer available after the require_once below.
  *
- * assignRiderToOrder() and reassignRiderToOrder() refuse any order
- * still in 'pending'. The kitchen must press Start Preparing first.
+ * ---------------------------------------------------------------------
+ * WHAT STAYS
+ * ---------------------------------------------------------------------
+ *   - Reads for the kitchen board: live orders, completed orders,
+ *     per-order items with customizations, tab counts, sign-out
+ *     guard count.
+ *   - Kitchen-only writes: setOrderPreparing,
+ *     setOrderCancelledByRestaurant (thin wrapper), assignRiderToOrder,
+ *     reassignRiderToOrder, releaseRiderFromOrder.
+ *   - Rider roster reads for the assign-rider modal:
+ *     getAvailableRidersForBranch, riderActiveOrderCount.
+ *   - Pure shapers used by both the page and the poll endpoint:
+ *     shapeAvailableRiderRow, shapeAvailableRiderList,
+ *     shapeKitchenOrderSummaryRow.
  *
- * Availability vs. assignment
- * ---------------------------
- * `delivery_rider_profile.is_available` is the rider's OWN toggle.
- * It is set at sign-in (forced offline), toggled by the rider from
- * the dashboard, and cleared on sign-out. The kitchen NEVER writes
- * it.
+ * ---------------------------------------------------------------------
+ * THE KITCHEN CARD RENDERER IS NOT HERE
+ * ---------------------------------------------------------------------
+ * renderKitchenCard() and its render helpers (kitchenStatusLabel,
+ * kitchenStatusBadge, kitchenMoney, kitchenDate,
+ * kitchenBranchAddressLine, kitchenRiderVehicleLine) live in exactly
+ * two files, because they are consumed by exactly two separate
+ * request paths that never load in the same PHP request:
  *
- * Concurrent-order cap
- * --------------------
- * A rider may hold at most 3 orders at once, counting across the
- * three live delivery-facing statuses:
+ *     restaurant/pages/kitchen.php
+ *     restaurant/backend/handlers/order-handler.php
  *
- *     rider_pending  — kitchen asked; rider has not yet decided
- *     picking_up     — rider accepted; en route to / at the
- *                      restaurant; food not yet in hand
- *     delivering     — rider has the food; en route to customer
+ * This file is included by both of them, so it must not declare any
+ * function that either declares. See the changelog for the earlier
+ * fatal "Cannot redeclare" incident that this rule prevents.
  *
- * The cap is enforced in three places that must always agree:
- *   1. assignRiderToOrder() and reassignRiderToOrder(), under a
- *      FOR UPDATE lock on the target rider's profile row. This is
- *      the authoritative check.
- *   2. The before_order_rider_assign SQL trigger, which is the
- *      last-resort guard if a race slips past the app's lock.
- *   3. getAvailableRidersForBranch(), which hides riders already
- *      at the cap so the kitchen's picker never shows a rider who
- *      cannot accept another assignment.
+ * ---------------------------------------------------------------------
+ * CONCURRENT-ORDER CAP
+ * ---------------------------------------------------------------------
+ * A rider may hold at most 3 orders at once, counting only the
+ * orders the rider has ACTUALLY ACCEPTED — 'picking_up' and
+ * 'delivering'. An order in 'rider_pending' is a kitchen offer the
+ * rider has not yet decided on; it does not occupy a slot.
  *
- * Rider roster shapers
- * --------------------
- * shapeAvailableRiderRow() and shapeAvailableRiderList() are pure
- * helpers that turn raw rows from getAvailableRidersForBranch()
- * into the JSON shape the kitchen's rider modal consumes.
+ * The cap is enforced in three places:
+ *   - Here, in assignRiderToOrder and reassignRiderToOrder, under a
+ *     FOR UPDATE lock on the rider's profile row.
+ *   - In the shared order-transaction layer, on the rider side.
+ *   - In the schema trigger before_order_rider_assign.
  *
- * Kitchen order card
- * ------------------
- * Every reader that feeds the kitchen card pulls a consistent set of
- * columns so the card can render, without extra round trips:
- *
- *   - branch address (pickup block)
- *   - rider name, contact, vehicle type, and vehicle plate
- *   - customer name, contact, and destination
- *   - item count, subtotal
- *   - the delivered-grace window flag on completed rows
- *
- * The grace flag (`chat_grace_open`) is computed in SQL. Its window
- * length is derived from RESTAURANT_CHAT_DELIVERED_GRACE_SECONDS,
- * which is defined in PHP and then inlined as a numeric literal into
- * the shared SELECT fragment at load time. Inlining is what keeps
- * the fragment compatible with PDO's native prepare mode, which
- * refuses any statement that mixes named and positional placeholders.
- *
- * Grace constant
- * --------------
- * RESTAURANT_CHAT_DELIVERED_GRACE_SECONDS is defined here and in
- * chat-queries.php with the same value. Neither file requires the
- * other; whichever loads first wins, and both files guard their
- * define() so a double-load is a no-op.
+ * All three count the committed set, so the rule agrees across every
+ * caller.
  *
  * @package FitPal
- * @version 6.1 — Mixed-placeholder bug fix:
- *                  - KITCHEN_ORDER_SELECT_COLUMNS no longer emits
- *                    :grace_seconds. The grace window length is
- *                    inlined into the fragment as a numeric
- *                    literal at load time, computed from
- *                    RESTAURANT_CHAT_DELIVERED_GRACE_SECONDS.
- *                  - All four order readers drop the
- *                    :grace_seconds bind value from their
- *                    parameter lists. The two live readers become
- *                    fully positional. The two completed readers
- *                    stay all-named (they never used a positional
- *                    placeholder for the CASE).
- *                  - The chat_grace_open column still returns 1 or
- *                    0, computed identically to the previous
- *                    revision.
- *                  - No other function changed.
+ * @version 8.0 — Renamed from order-queries.php to
+ *                restaurant-kitchen-queries.php.
  *
- *                (6.0: kitchen card render data. 5.0: rider
- *                roster shapers. 4.0: pagination and sign-out
- *                guard. 3.1: per-rider concurrent-order cap raised
- *                from 1 to 3; added 'picking_up'. 3.0: double-
- *                booking fix for a cap of 1. 2.0: rider_pending
- *                handoff. 1.0: initial kitchen queries.)
+ *                Removed:
+ *                  - refundCustomerForCancelledOrder() — now lives
+ *                    in shared/backend/database/order-transaction-
+ *                    queries.php as part of refundOrderToWallet().
+ *                  - cancelOrderAsRestaurant() — now lives in the
+ *                    shared layer. The kitchen page and its handler
+ *                    use it via the require_once below.
+ *
+ *                Retained with no signature change:
+ *                  - getBranchKitchenOrders, getBranchCompletedOrders,
+ *                    getBranchKitchenOrdersPaginated,
+ *                    getBranchCompletedOrdersPaginated,
+ *                    getKitchenOrderItems, getKitchenTabCounts,
+ *                    hasActiveOrdersForBranch,
+ *                    countActiveOrdersForBranch,
+ *                    riderActiveOrderCount, riderHasActiveDelivery,
+ *                    getAvailableRidersForBranch,
+ *                    getKitchenOrderCounts, getKitchenOrderOwnership,
+ *                    getOwnerKitchenSummary,
+ *                    getOwnerBranchBreakdown, setOrderPreparing,
+ *                    setOrderCancelledByRestaurant,
+ *                    assignRiderToOrder, reassignRiderToOrder,
+ *                    releaseRiderFromOrder,
+ *                    shapeAvailableRiderRow,
+ *                    shapeAvailableRiderList,
+ *                    shapeKitchenOrderSummaryRow.
+ *
+ *                (7.3: removed presentation helpers. 7.2: refund
+ *                money movement. 7.1: cancelled_by fix. 7.0:
+ *                refunded status. 6.x: kitchen card data and rider
+ *                roster shapers. 5.x: pagination and the
+ *                concurrent-order cap. 3.0: rider_pending handoff.)
  */
 
 declare(strict_types=1);
+
+require_once __DIR__ . '/../../../shared/backend/database/order-transaction-queries.php';
 
 /* =============================================================
  * LIVE-STATUS CONSTANTS
@@ -147,50 +149,12 @@ if (!defined('KITCHEN_DEFAULT_PER_PAGE')) {
     define('KITCHEN_DEFAULT_PER_PAGE', 5);
 }
 
-/**
- * Post-delivery chat grace window, in seconds.
- *
- * Must match RESTAURANT_CHAT_DELIVERED_GRACE_SECONDS in
- * restaurant/backend/database/chat-queries.php. Defined here as well
- * so this file can compute the derived `chat_grace_open` column in
- * SQL without requiring chat-queries.php. The two files do not
- * require each other; whichever loads first defines the constant,
- * and both guard the define() so a double-load is a no-op.
- *
- * The value is inlined into KITCHEN_ORDER_SELECT_COLUMNS below as a
- * numeric literal at load time. It is never passed through a
- * prepared-statement placeholder, because mixing named and
- * positional placeholders is a hard error under PDO's native
- * prepare mode (ATTR_EMULATE_PREPARES = false).
- */
 if (!defined('RESTAURANT_CHAT_DELIVERED_GRACE_SECONDS')) {
     define('RESTAURANT_CHAT_DELIVERED_GRACE_SECONDS', 3600);
 }
 
 /* =============================================================
  * SHARED SELECT FRAGMENT
- *
- * Every kitchen order reader returns the same column set so the card
- * renderer never has to branch on origin. The fragment is a string
- * constant, not a function, because concatenating it into a
- * prepared statement at build time is what keeps the four readers
- * in lockstep.
- *
- * Why the grace window is inlined
- * -------------------------------
- * The grace window value comes from RESTAURANT_CHAT_DELIVERED_GRACE_SECONDS
- * and is a fixed integer with no user input. It is inlined into the
- * SQL as a numeric literal so the fragment never contains a named
- * placeholder. This is what makes the fragment safe to concatenate
- * into a statement that also uses positional `?` placeholders —
- * PDO's native prepare mode refuses any statement that mixes the
- * two, and the error it raises (SQLSTATE[HY093]) is opaque at the
- * call site. Inlining removes the hazard entirely.
- *
- * The value is fetched from the constant at file load time. Because
- * the define() above runs before this fragment is built, the literal
- * in the SQL string reflects the current value of the constant, and
- * a change to the constant propagates without any other edit.
  * ============================================================= */
 
 if (!defined('KITCHEN_ORDER_SELECT_COLUMNS')) {
@@ -248,22 +212,9 @@ if (!defined('KITCHEN_ORDER_JOINS')) {
 }
 
 /* =============================================================
- * READS — NON-PAGINATED (kept for the poll path)
+ * READS — NON-PAGINATED
  * ============================================================= */
 
-/**
- * Fetch the kitchen list for a single branch.
- *
- * Fully positional placeholders. The chat_grace_open CASE expression
- * is inside the shared fragment and no longer carries a named
- * placeholder, so the statement is unambiguous under PDO's native
- * prepare mode.
- *
- * @param PDO           $db
- * @param int           $branchId
- * @param array<string> $statuses
- * @return array<int, array<string, mixed>>
- */
 function getBranchKitchenOrders(PDO $db, int $branchId, array $statuses = ['pending', 'preparing']): array
 {
     if ($branchId <= 0 || empty($statuses)) {
@@ -290,19 +241,6 @@ function getBranchKitchenOrders(PDO $db, int $branchId, array $statuses = ['pend
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-/**
- * Fetch closed orders for a branch — delivered, cancelled, or
- * refunded. Limited to orders whose closing timestamp is recent.
- *
- * All-named placeholders. No positional placeholder appears in this
- * statement, so the named binds work as expected under PDO's native
- * prepare mode.
- *
- * @param PDO $db
- * @param int $branchId
- * @param int $limit
- * @return array<int, array<string, mixed>>
- */
 function getBranchCompletedOrders(PDO $db, int $branchId, int $limit = 30): array
 {
     if ($branchId <= 0) {
@@ -336,20 +274,6 @@ function getBranchCompletedOrders(PDO $db, int $branchId, int $limit = 30): arra
  * READS — PAGINATED
  * ============================================================= */
 
-/**
- * Paginated kitchen list for one branch.
- *
- * Fully positional placeholders, including the LIMIT and OFFSET
- * tail. The chat_grace_open CASE expression is inside the shared
- * fragment and no longer carries a named placeholder.
- *
- * @param PDO           $db
- * @param int           $branchId
- * @param array<string> $statuses
- * @param int           $page
- * @param int           $perPage
- * @return array{items:array<int,array<string,mixed>>,total:int,totalPages:int,page:int,perPage:int}
- */
 function getBranchKitchenOrdersPaginated(
     PDO $db,
     int $branchId,
@@ -372,7 +296,6 @@ function getBranchKitchenOrdersPaginated(
 
     $placeholders = implode(',', array_fill(0, count($statuses), '?'));
 
-    // ---- Total count ----
     $countSql = "SELECT COUNT(DISTINCT o.order_id)
                    FROM orders o
                    JOIN queue_item qi ON o.order_id = qi.order_id
@@ -388,7 +311,6 @@ function getBranchKitchenOrdersPaginated(
 
     $offset = ($page - 1) * $perPage;
 
-    // ---- One page of rows ----
     $sql = "SELECT "
          . KITCHEN_ORDER_SELECT_COLUMNS . ",
                 COALESCE(SUM(qi.queue_quantity), 0) AS item_count,
@@ -421,18 +343,6 @@ function getBranchKitchenOrdersPaginated(
     ];
 }
 
-/**
- * Paginated closed-order list for one branch.
- *
- * All-named placeholders. No positional placeholder appears in this
- * statement.
- *
- * @param PDO $db
- * @param int $branchId
- * @param int $page
- * @param int $perPage
- * @return array{items:array<int,array<string,mixed>>,total:int,totalPages:int,page:int,perPage:int}
- */
 function getBranchCompletedOrdersPaginated(
     PDO $db,
     int $branchId,
@@ -452,7 +362,6 @@ function getBranchCompletedOrdersPaginated(
     if ($page    < 1) $page    = 1;
     if ($perPage < 1) $perPage = KITCHEN_DEFAULT_PER_PAGE;
 
-    // ---- Total count ----
     $countStmt = $db->prepare(
         "SELECT COUNT(DISTINCT o.order_id)
            FROM orders o
@@ -468,7 +377,6 @@ function getBranchCompletedOrdersPaginated(
 
     $offset = ($page - 1) * $perPage;
 
-    // ---- One page of rows ----
     $sql = "SELECT "
          . KITCHEN_ORDER_SELECT_COLUMNS . ",
                 COALESCE(SUM(qi.queue_quantity), 0) AS item_count,
@@ -501,16 +409,6 @@ function getBranchCompletedOrdersPaginated(
     ];
 }
 
-/**
- * Fetch the items of a single order, scoped to a branch.
- *
- * All-named placeholders.
- *
- * @param PDO $db
- * @param int $orderId
- * @param int $branchId
- * @return array<int, array<string, mixed>>
- */
 function getKitchenOrderItems(PDO $db, int $orderId, int $branchId): array
 {
     if ($orderId <= 0 || $branchId <= 0) {
@@ -584,22 +482,6 @@ function getKitchenOrderItems(PDO $db, int $orderId, int $branchId): array
  * READS — COUNTS AND SIGN-OUT GUARD
  * ============================================================= */
 
-/**
- * Return the per-tab counts in one query.
- *
- * All-named placeholders.
- *
- * @param PDO $db
- * @param int $branchId
- * @return array{
- *     new:int,
- *     preparing:int,
- *     waiting_on_rider:int,
- *     out_for_delivery:int,
- *     recent:int,
- *     total_live:int
- * }
- */
 function getKitchenTabCounts(PDO $db, int $branchId): array
 {
     $empty = [
@@ -643,15 +525,6 @@ function getKitchenTabCounts(PDO $db, int $branchId): array
     ];
 }
 
-/**
- * True when the branch has at least one order in a live status.
- *
- * Fully positional placeholders.
- *
- * @param PDO $db
- * @param int $branchId
- * @return bool
- */
 function hasActiveOrdersForBranch(PDO $db, int $branchId): bool
 {
     if ($branchId <= 0) {
@@ -674,15 +547,6 @@ function hasActiveOrdersForBranch(PDO $db, int $branchId): bool
     return $stmt->fetchColumn() !== false;
 }
 
-/**
- * Count of live orders for the branch.
- *
- * Fully positional placeholders.
- *
- * @param PDO $db
- * @param int $branchId
- * @return int
- */
 function countActiveOrdersForBranch(PDO $db, int $branchId): int
 {
     if ($branchId <= 0) {
@@ -705,14 +569,11 @@ function countActiveOrdersForBranch(PDO $db, int $branchId): int
 }
 
 /**
- * Count a rider's concurrent live orders.
+ * Count a rider's COMMITTED concurrent orders.
  *
- * All-named placeholders.
- *
- * @param PDO $db
- * @param int $riderId
- * @param int $excludeOrderId
- * @return int
+ * Counts only 'picking_up' and 'delivering'. An order in
+ * 'rider_pending' is a kitchen offer the rider has not yet decided
+ * on; it does not occupy a delivery slot.
  */
 function riderActiveOrderCount(PDO $db, int $riderId, int $excludeOrderId = 0): int
 {
@@ -724,7 +585,7 @@ function riderActiveOrderCount(PDO $db, int $riderId, int $excludeOrderId = 0): 
         "SELECT COUNT(*)
            FROM orders
           WHERE delivery_rider_id = :rider_id
-            AND order_status IN ('rider_pending','picking_up','delivering')
+            AND order_status IN ('picking_up','delivering')
             AND order_id <> :exclude_order_id"
     );
     $stmt->execute([
@@ -734,29 +595,11 @@ function riderActiveOrderCount(PDO $db, int $riderId, int $excludeOrderId = 0): 
     return (int)$stmt->fetchColumn();
 }
 
-/**
- * Compatibility shim over riderActiveOrderCount().
- *
- * @param PDO $db
- * @param int $riderId
- * @param int $excludeOrderId
- * @return bool
- */
 function riderHasActiveDelivery(PDO $db, int $riderId, int $excludeOrderId = 0): bool
 {
     return riderActiveOrderCount($db, $riderId, $excludeOrderId) > 0;
 }
 
-/**
- * Fetch verified, available riders for a given branch.
- *
- * All-named placeholders.
- *
- * @param PDO $db
- * @param int $branchId
- * @param int $excludeOrderId
- * @return array<int, array<string, mixed>>
- */
 function getAvailableRidersForBranch(PDO $db, int $branchId, int $excludeOrderId = 0): array
 {
     if ($branchId <= 0) {
@@ -791,7 +634,7 @@ function getAvailableRidersForBranch(PDO $db, int $branchId, int $excludeOrderId
                 SELECT COUNT(*)
                   FROM orders o2
                  WHERE o2.delivery_rider_id = dr.delivery_rider_id
-                   AND o2.order_status IN ('rider_pending','picking_up','delivering')
+                   AND o2.order_status IN ('picking_up','delivering')
                    AND o2.order_id <> :exclude_order_id_count
             ) AS active_order_count
          FROM delivery_rider dr
@@ -811,7 +654,7 @@ function getAvailableRidersForBranch(PDO $db, int $branchId, int $excludeOrderId
                 SELECT COUNT(*)
                   FROM orders o4
                  WHERE o4.delivery_rider_id = dr.delivery_rider_id
-                   AND o4.order_status IN ('rider_pending','picking_up','delivering')
+                   AND o4.order_status IN ('picking_up','delivering')
                    AND o4.order_id <> :exclude_order_id_filter
            ) < 3
          ORDER BY
@@ -836,23 +679,6 @@ function getAvailableRidersForBranch(PDO $db, int $branchId, int $excludeOrderId
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-/**
- * Counts of orders per kitchen-relevant status for a single branch.
- *
- * All-named placeholders.
- *
- * @param PDO $db
- * @param int $branchId
- * @return array{
- *     pending:int,
- *     preparing:int,
- *     rider_pending:int,
- *     picking_up:int,
- *     delivering:int,
- *     delivered_today:int,
- *     cancelled_today:int
- * }
- */
 function getKitchenOrderCounts(PDO $db, int $branchId): array
 {
     $empty = [
@@ -906,16 +732,6 @@ function getKitchenOrderCounts(PDO $db, int $branchId): array
     ];
 }
 
-/**
- * Fetch the ownership and current state of an order for a branch.
- *
- * All-named placeholders.
- *
- * @param PDO $db
- * @param int $orderId
- * @param int $branchId
- * @return array{order_id:int, order_status:string, delivery_rider_id:?int, branch_id:int}|false
- */
 function getKitchenOrderOwnership(PDO $db, int $orderId, int $branchId): array|false
 {
     if ($orderId <= 0 || $branchId <= 0) {
@@ -926,6 +742,7 @@ function getKitchenOrderOwnership(PDO $db, int $orderId, int $branchId): array|f
         "SELECT
             o.order_id,
             o.order_status,
+            o.payment_method,
             o.delivery_rider_id,
             qi.branch_id
          FROM orders o
@@ -947,6 +764,7 @@ function getKitchenOrderOwnership(PDO $db, int $orderId, int $branchId): array|f
     return [
         'order_id'          => (int)$row['order_id'],
         'order_status'      => (string)$row['order_status'],
+        'payment_method'    => (string)$row['payment_method'],
         'delivery_rider_id' => $row['delivery_rider_id'] !== null
             ? (int)$row['delivery_rider_id']
             : null,
@@ -954,25 +772,6 @@ function getKitchenOrderOwnership(PDO $db, int $orderId, int $branchId): array|f
     ];
 }
 
-/**
- * Summary for the owner kitchen view.
- *
- * All-named placeholders.
- *
- * @param PDO $db
- * @param int $restaurantId
- * @return array{
- *     pending:int,
- *     preparing:int,
- *     rider_pending:int,
- *     picking_up:int,
- *     delivering:int,
- *     delivered_today:int,
- *     revenue_today:float,
- *     revenue_7d:float,
- *     revenue_30d:float
- * }
- */
 function getOwnerKitchenSummary(PDO $db, int $restaurantId): array
 {
     $empty = [
@@ -1044,15 +843,6 @@ function getOwnerKitchenSummary(PDO $db, int $restaurantId): array
     ];
 }
 
-/**
- * Per-branch breakdown for the owner kitchen view.
- *
- * All-named placeholders.
- *
- * @param PDO $db
- * @param int $restaurantId
- * @return array<int, array<string, mixed>>
- */
 function getOwnerBranchBreakdown(PDO $db, int $restaurantId): array
 {
     if ($restaurantId <= 0) {
@@ -1088,19 +878,9 @@ function getOwnerBranchBreakdown(PDO $db, int $restaurantId): array
 }
 
 /* =============================================================
- * WRITES
+ * WRITES — KITCHEN-ONLY STATE TRANSITIONS
  * ============================================================= */
 
-/**
- * Move an order from 'pending' to 'preparing'.
- *
- * All-named placeholders.
- *
- * @param PDO $db
- * @param int $orderId
- * @param int $branchId
- * @return bool
- */
 function setOrderPreparing(PDO $db, int $orderId, int $branchId): bool
 {
     $stmt = $db->prepare(
@@ -1122,43 +902,25 @@ function setOrderPreparing(PDO $db, int $orderId, int $branchId): bool
 /**
  * Cancel an order on behalf of the restaurant.
  *
- * All-named placeholders.
+ * Thin wrapper over the shared layer's cancelOrderAsRestaurant().
+ * It exists under this name so every existing call site keeps
+ * working without a signature change. The status decision and the
+ * cancelled_by biconditional are handled inside the shared
+ * function.
+ *
+ * Requires: caller-owned transaction.
  *
  * @param PDO $db
  * @param int $orderId
  * @param int $branchId
- * @return bool
+ * @return string|false The new status ('cancelled' or 'refunded')
+ *                      on success, or false on failure.
  */
-function setOrderCancelledByRestaurant(PDO $db, int $orderId, int $branchId): bool
+function setOrderCancelledByRestaurant(PDO $db, int $orderId, int $branchId): string|false
 {
-    $stmt = $db->prepare(
-        "UPDATE orders o
-         JOIN queue_item qi ON qi.order_id = o.order_id
-            SET o.order_status = 'cancelled',
-                o.cancelled_by = 'restaurant',
-                o.updated_at   = NOW()
-          WHERE o.order_id = :order_id
-            AND qi.branch_id = :branch_id
-            AND o.order_status IN ('pending','preparing')"
-    );
-    $stmt->execute([
-        ':order_id'  => $orderId,
-        ':branch_id' => $branchId,
-    ]);
-    return $stmt->rowCount() > 0;
+    return cancelOrderAsRestaurant($db, $orderId, $branchId);
 }
 
-/**
- * Attach a rider to an order and move it to 'rider_pending'.
- *
- * All-named placeholders.
- *
- * @param PDO $db
- * @param int $orderId
- * @param int $branchId
- * @param int $riderId
- * @return bool
- */
 function assignRiderToOrder(PDO $db, int $orderId, int $branchId, int $riderId): bool
 {
     if ($orderId <= 0 || $branchId <= 0 || $riderId <= 0) {
@@ -1238,17 +1000,6 @@ function assignRiderToOrder(PDO $db, int $orderId, int $branchId, int $riderId):
     }
 }
 
-/**
- * Reassign an order from its current rider to a new rider.
- *
- * All-named placeholders.
- *
- * @param PDO $db
- * @param int $orderId
- * @param int $branchId
- * @param int $newRiderId
- * @return array{previous_rider_id:int, new_rider_id:int}|false
- */
 function reassignRiderToOrder(PDO $db, int $orderId, int $branchId, int $newRiderId): array|false
 {
     if ($orderId <= 0 || $branchId <= 0 || $newRiderId <= 0) {
@@ -1348,8 +1099,10 @@ function reassignRiderToOrder(PDO $db, int $orderId, int $branchId, int $newRide
 }
 
 /**
- * Release a rider from an assignment. Stub retained for a future
- * cleanup hook. See the previous revision's docblock.
+ * Hook for anything that must run on the previously-assigned rider
+ * when the kitchen reassigns an order. Currently a no-op, retained
+ * so a future change has a name to hang off without touching the
+ * reassign flow itself.
  */
 function releaseRiderFromOrder(PDO $db, int $riderId, int $excludeOrderId = 0): void
 {
@@ -1357,16 +1110,14 @@ function releaseRiderFromOrder(PDO $db, int $riderId, int $excludeOrderId = 0): 
 }
 
 /* =============================================================
- * PRESENTATION HELPERS (pure — no DB access)
+ * PURE SHAPERS
+ *
+ * Consumed by both restaurant/pages/kitchen.php and
+ * restaurant/backend/handlers/order-handler.php. Both entry points
+ * declare their own render helpers; neither declares these, so
+ * declaring them here is the one place they can safely live.
  * ============================================================= */
 
-/**
- * Shape a raw available-rider row into the JSON payload the
- * kitchen's rider-selection modal consumes.
- *
- * @param array<string, mixed> $row
- * @return array<string, mixed>
- */
 function shapeAvailableRiderRow(array $row): array
 {
     $riderId = (int)($row['delivery_rider_id'] ?? 0);
@@ -1419,60 +1170,11 @@ function shapeAvailableRiderRow(array $row): array
     ];
 }
 
-/**
- * Shape a list of raw available-rider rows.
- *
- * @param array<int, array<string, mixed>> $rows
- * @return array<int, array<string, mixed>>
- */
 function shapeAvailableRiderList(array $rows): array
 {
     return array_map('shapeAvailableRiderRow', $rows);
 }
 
-/**
- * Shape a raw kitchen order row into the summary-line fields the
- * collapsed card body renders.
- *
- * A card in its collapsed state shows one line with the facts the
- * kitchen needs to identify the order at a glance:
- *
- *   Restaurant Name • Branch Name • Customer Name • Rider Name • Total
- *
- * Every one of those facts is already present on the row returned
- * by the order readers (see KITCHEN_ORDER_SELECT_COLUMNS). The
- * shaper does not query anything; it reads fields off the row and
- * normalises the ones that can be null or empty.
- *
- * Fields returned:
- *
- *   order_id        int      primary key
- *   restaurant_name string   "Green Bowl Cafe"
- *   branch_name     string   "Main Branch"
- *   customer_name   string   "Peter Parker", or "Customer" when blank
- *   rider_name      string   "Carlos Dela Cruz", or "" when none
- *   order_total     float    subtotal as stored on the row
- *   is_delivered    bool     true when status = 'delivered'
- *   chat_grace_open bool     true only when a delivered order is
- *                            still inside the grace window
- *
- * The shaper does not decide what the summary line should look
- * like. It only normalises the values. The summary-line template
- * lives in the card renderer, one place, so the server-rendered
- * fallback and the polled payload always agree.
- *
- * @param array<string, mixed> $row
- * @return array{
- *     order_id:int,
- *     restaurant_name:string,
- *     branch_name:string,
- *     customer_name:string,
- *     rider_name:string,
- *     order_total:float,
- *     is_delivered:bool,
- *     chat_grace_open:bool
- * }
- */
 function shapeKitchenOrderSummaryRow(array $row): array
 {
     $restaurantName = trim((string)($row['restaurant_name'] ?? ''));

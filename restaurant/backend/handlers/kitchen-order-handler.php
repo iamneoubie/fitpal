@@ -1,139 +1,186 @@
 <?php
 /**
- * FitPal Restaurant Kitchen Order Handler
+ * FitPal Kitchen Order Handler
  *
- * Actions:
- *   start_preparing     — pending → preparing
- *   cancel_order        — pending → cancelled (cancelled_by = 'restaurant')
- *   assign_rider        — preparing → rider_pending (first-time assignment)
- *   reassign_rider      — preparing / rider_pending → rider_pending
- *   available_riders    — read-only roster for the kitchen's rider modal
- *   poll                — delta fetch of the live order list
- *   active_orders_count — read-only count for the sign-out guard
+ * The restaurant-side dispatch endpoint for every kitchen action:
+ * starting preparation, assigning and reassigning riders, fetching
+ * the rider roster, polling for board updates, reading the branch's
+ * live-order count for the sign-out guard, and cancelling an order.
  *
- * Handoff model
- * -------------
- * The kitchen does NOT mark an order delivered, in-transit, or paid.
- * Assigning a rider moves the order to 'rider_pending' and hands
- * control to the rider. The rider confirms in their own portal, at
- * which point the order becomes 'picking_up'. The rider then marks
- * it picked up to move to 'delivering', and finally marks it
- * delivered. The kitchen's only remaining touch on an order after
- * assignment is the Reassign action — and that is only available
- * while the order is still 'preparing' or 'rider_pending'. Once the
- * rider has accepted (order is in 'picking_up' or later), the
- * kitchen has lost control.
+ * ---------------------------------------------------------------------
+ * RENAMED FROM order-handler.php
+ * ---------------------------------------------------------------------
+ * This file was previously named
+ * restaurant/backend/handlers/order-handler.php. It is now named
+ * kitchen-order-handler.php so it is unambiguous which surface it
+ * drives. The customer role's order handler was renamed in the same
+ * sequence to customer-order-handler.php.
  *
- * STEP-BY-STEP LIFECYCLE (enforced by this handler)
- * -------------------------------------------------
- * The kitchen's sequence is strict:
+ * Every page and script that submits to this handler was updated in
+ * the same revision to point at the new path.
  *
+ * ---------------------------------------------------------------------
+ * QUERY LAYER
+ * ---------------------------------------------------------------------
+ * This handler requires:
+ *
+ *     restaurant/backend/database/kitchen-order-queries.php
+ *
+ * That is the file that exists on disk. The previous revision
+ * pointed at a name the query file was documented under but was
+ * never written to disk under. The require below is corrected to
+ * match disk.
+ *
+ * ---------------------------------------------------------------------
+ * CANCELLATION DELEGATION
+ * ---------------------------------------------------------------------
+ * This file contains no money logic. cancel_order forwards to the
+ * shared order-transaction handler:
+ *
+ *     shared/backend/handlers/order-transaction-handler.php
+ *
+ * with action=restaurant_cancel_order. That handler owns the status
+ * decision (COD → 'cancelled', Wallet or Online → 'refunded') and
+ * the refund ledger.
+ *
+ * ---------------------------------------------------------------------
+ * WHY THE DELEGATION NOW WRITES $_POST DIRECTLY AND RUNS AT THE
+ * TOP LEVEL OF THIS FILE
+ * ---------------------------------------------------------------------
+ * The previous revision delegated from inside
+ * handleCancelOrderDelegation() with `require $endpoint;`. PHP
+ * includes a file into the CURRENT variable scope. When the include
+ * runs inside a function, the included file sees that function's
+ * local scope, not the top-level scope that
+ * kitchen-order-handler.php used to define $database_connection.
+ * The shared handler then declared its own variable against a
+ * scope where nothing had defined one, and every reference to
+ * $database_connection inside it was null.
+ *
+ * The fix has two parts:
+ *
+ *   1. The delegation no longer happens inside a function. The
+ *      action switch itself detects `cancel_order` and, before it
+ *      dispatches any handler, forwards the request by setting
+ *      $_POST['action'] and `require`-ing the shared file from the
+ *      top level of this script — the same scope in which
+ *      $database_connection was defined a few lines above.
+ *
+ *   2. The shared handler no longer depends on a caller-supplied
+ *      $database_connection at all. It requires
+ *      database-connect.php itself, so it owns its own connection
+ *      regardless of who included it and from what scope. The
+ *      database-connect.php file assigns $database_connection in
+ *      whatever scope the require runs; the shared handler then
+ *      treats that name as a local.
+ *
+ * Both parts are in place. Either one alone would have fixed the
+ * null-connection warning; together they make the shared handler
+ * correct whether it is reached from a function, from the top
+ * level, or from a future handler that does not yet exist.
+ *
+ * ---------------------------------------------------------------------
+ * ACTIONS
+ * ---------------------------------------------------------------------
+ *   start_preparing     → pending → preparing. Kitchen-only.
+ *   cancel_order        → forwards to the shared handler.
+ *   assign_rider        → preparing → rider_pending.
+ *   reassign_rider      → preparing / rider_pending → rider_pending.
+ *   available_riders    → read-only rider roster.
+ *   poll                → delta fetch of the live board.
+ *   active_orders_count → read-only count for the sign-out guard.
+ *
+ * ---------------------------------------------------------------------
+ * STEP-BY-STEP LIFECYCLE
+ * ---------------------------------------------------------------------
  *     pending --Start Preparing--> preparing --Assign Rider--> rider_pending
  *
  * A rider may only be attached to an order that is already being
- * prepared. Assigning on a 'pending' order is refused at both the
- * page level and at the handler level. The query layer's
- * assignRiderToOrder() enforces the same rule with a WHERE clause
- * so a race or a direct POST that skips the UI is refused too.
+ * prepared. Assigning on a 'pending' order is refused here, at the
+ * page level, and by a WHERE predicate inside assignRiderToOrder().
+ * Three guards, same rule.
  *
- * All actions:
- *   - require a signed-in restaurant account
- *   - require a branch-scoped account (manager / staff / kitchen)
- *   - require a valid CSRF token
- *   - verify the order belongs to the account's branch
- *   - verify the order's current status allows the requested transition
+ * ---------------------------------------------------------------------
+ * CANCELLATION WINDOW
+ * ---------------------------------------------------------------------
+ * The kitchen can cancel an order only while it is 'pending' or
+ * 'preparing'. The window closes the moment a rider is assigned.
  *
- * Concurrent-order cap
- * --------------------
- * A rider may hold at most 3 orders at once, counting across
- * 'rider_pending', 'picking_up', and 'delivering'. The assignment
- * and reassignment handlers enforce this two ways:
+ * The shared handler re-checks the same window against the same set
+ * of statuses. A race between the two checks cannot slip past the
+ * WHERE predicate inside the shared layer.
  *
- *   1. A pre-check via riderActiveOrderCount() so the kitchen sees a
- *      clear error message if they picked a rider who is already at
- *      the cap in another tab.
- *   2. The authoritative count-check inside
- *      assignRiderToOrder() / reassignRiderToOrder(), which runs
- *      under a FOR UPDATE lock on the rider's profile row.
- *
- * The database trigger before_order_rider_assign is the last-resort
- * guard if a race slips past both.
- *
- * Live polling
- * ------------
- * The `poll` action returns only the changes since a client cursor
- * plus the current tab's paginated page:
- *
- *   - `rows`        — new cards for orders with order_id >
- *                     since_order_id that are currently live.
- *   - `updated`     — cards whose status changed since the last
- *                     poll.
- *   - `removed`     — order_ids that were live before but are now
- *                     closed.
- *   - `counts`      — per-tab counts recomputed server-side.
- *   - `page`        — the paginated slice for the requested tab.
- *   - `max_id`      — highest order_id in the current live set.
- *
- * The poll uses LIVE_BOARD_STATUSES from the query layer.
- *
- * Card renderer
- * -------------
+ * ---------------------------------------------------------------------
+ * CARD RENDERER AND THE 'failed' STATUS
+ * ---------------------------------------------------------------------
  * renderKitchenCard() produces the exact same markup as
  * kitchenCardHtml() in restaurant/pages/kitchen.php. The two MUST
- * stay in sync: a card swapped in via poll and a card rendered on
- * page load have to look identical. Both call
- * shapeKitchenOrderSummaryRow() from the query layer so the summary
- * line's fields come from one place.
+ * stay in sync.
  *
- * The card is three bands:
- *   HEADER  — order id, date, status badge, chevron toggle
- *   SUMMARY — Restaurant • Branch • Customer • Rider • Total
- *   DETAILS — pickup block, drop-off block, rider block, items,
- *             subtotal. Collapsed by default.
+ * The 'failed' status is produced by the shared order-transaction
+ * layer's sweepFailedDeliveries() when a rider does not complete a
+ * delivery within FITPAL_RIDER_FAILED_DELIVERY_GRACE_SECONDS of the
+ * order entering 'delivering'. A failed order is a closed order
+ * that never produced deliverable food revenue; the kitchen renders
+ * it on the Recent tab with a distinct red badge.
  *
- * The collapsed state itself is owned by orders.js. The server only
- * emits the details band as hidden; the client reapplies the user's
- * expanded/collapsed choice after every poll re-render.
+ * kitchenStatusLabel() and kitchenStatusBadge() therefore carry a
+ * 'failed' case that matches the page's helpers exactly.
  *
- * Message action gating
- * ---------------------
- * A completed order's Message action is available only while the
- * delivered grace window is open. The query layer computes the flag
- * in SQL; renderKitchenCard() reads it and either emits or does not
- * emit the button. chat-handler.php's gateChannel() enforces the
- * same rule server-side, so the button is only ever shown when the
- * gate would accept the send.
+ * ---------------------------------------------------------------------
+ * RESPONSE SHAPE
+ * ---------------------------------------------------------------------
+ * JSON. Business-rule refusals return HTTP 200 with
+ * {status:'error', message:'...'}; only auth failures return 401
+ * and CSRF mismatches return 403.
  *
  * @package FitPal
- * @version 8.0 — Card renderer synced to the three-band kitchen
- *                card in file #2:
- *                  - renderKitchenCard() now mirrors
- *                    kitchenCardHtml() byte-for-byte, emitting
- *                    header / summary / details bands.
- *                  - The details band renders a pickup block, a
- *                    drop-off block, and a rider block.
- *                  - $canMessage reads the delivered grace flag on
- *                    completed cards, so the polled HTML never
- *                    offers a Message action the chat handler
- *                    would refuse.
- *                  - The action footer is always rendered. The
- *                    buttons inside it are conditional on the
- *                    order status.
- *                  - No other action changed.
+ * @version 10.3 — Cancellation delegation rewritten.
  *
- *                (7.0: available_riders action. 6.0: pagination
- *                and step-by-step lifecycle. 5.1: per-rider
- *                concurrent-order cap raised from 1 to 3; added
- *                'picking_up'. 5.0: added poll. 4.0: CSRF
- *                validated against restaurant_csrf_token. 3.0:
- *                rider_pending handoff.)
+ *                 The previous revision called
+ *                 handleCancelOrderDelegation(), which `require`d
+ *                 the shared order-transaction handler from inside
+ *                 a function. PHP includes a file into the current
+ *                 variable scope, so the shared handler ran in the
+ *                 function's local scope — a scope where
+ *                 $database_connection had never been defined.
+ *                 Every reference to $database_connection inside
+ *                 the shared handler was therefore null, and the
+ *                 cancellation failed with:
+ *
+ *                     Undefined variable $database_connection
+ *                     sweepFailedDeliveries(): Argument #1 ($db)
+ *                         must be of type PDO, null given
+ *                     Call to a member function inTransaction() on null
+ *
+ *                 This revision moves the delegation to the top of
+ *                 the action switch, so the `require` runs in the
+ *                 same top-level scope that already holds
+ *                 $database_connection. The now-unused
+ *                 handleCancelOrderDelegation() function was
+ *                 removed.
+ *
+ *                 Every other handler, the routing table, the card
+ *                 renderer, the guards, the CSRF contract, the
+ *                 auth guard, and the response shape are
+ *                 unchanged from v10.2.
+ *
+ *                 (10.2: corrected the query-layer require. 10.1:
+ *                 'failed' status in kitchenStatusLabel and
+ *                 kitchenStatusBadge. 10.0: renamed from
+ *                 order-handler.php. 9.0: refund on cancellation.
+ *                 8.1: kitchen can cancel 'preparing' orders. 8.0:
+ *                 card renderer synced. 7.0: available_riders. 6.0:
+ *                 pagination and step-by-step lifecycle. 5.1:
+ *                 concurrent-order cap raised to 3. 5.0: poll. 4.0:
+ *                 CSRF validated against restaurant_csrf_token.
+ *                 3.0: rider_pending handoff.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('restaurant');
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -141,11 +188,11 @@ header('Content-Type: application/json; charset=utf-8');
  * GRACE CONSTANT
  *
  * Must match RESTAURANT_CHAT_DELIVERED_GRACE_SECONDS in both
- * order-queries.php and chat-queries.php. The handler itself does
- * not use this constant directly — the query layer computes the
- * derived chat_grace_open column. The define() exists so a direct
- * caller who reaches into this file's renderer still resolves the
- * constant if they have not loaded either query file first.
+ * kitchen-order-queries.php and chat-queries.php. The handler
+ * itself does not use the constant directly — the query layer
+ * computes the derived chat_grace_open column — but the define()
+ * exists so the card renderer below resolves the constant even if
+ * neither query file has been loaded yet.
  * -------------------------------------------------------------- */
 
 if (!defined('RESTAURANT_CHAT_DELIVERED_GRACE_SECONDS')) {
@@ -199,14 +246,15 @@ if ($branchId <= 0) {
  * -------------------------------------------------------------- */
 
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
-require_once __DIR__ . '/../database/order-queries.php';
+require_once __DIR__ . '/../database/kitchen-order-queries.php';
+
+// Own the restaurant role's CSRF bootstrap. Idempotent; stores the
+// token under 'restaurant_csrf_token' — never the shared
+// 'csrf_token' key.
 require_once __DIR__ . '/../../includes/restaurant-csrf-token.php';
 
 /* --------------------------------------------------------------
  * CSRF
- *
- * Validated against the restaurant role's own session key,
- * 'restaurant_csrf_token'. Never the shared 'csrf_token' key.
  * -------------------------------------------------------------- */
 
 if (
@@ -222,20 +270,52 @@ if (
 
 /* --------------------------------------------------------------
  * ROUTING
+ *
+ * The cancel_order case is handled before the try block, because
+ * the shared handler it forwards to terminates the request itself
+ * and must run in THIS top-level scope, not inside a function.
+ * Every other case runs inside the try/catch below.
  * -------------------------------------------------------------- */
 
 $action  = (string)($_POST['action'] ?? '');
 $orderId = (int)($_POST['order_id'] ?? 0);
+
+if ($action === 'cancel_order') {
+
+    if ($orderId <= 0) {
+        echo json_encode(['status' => 'error', 'message' => 'Invalid order.']);
+        exit;
+    }
+
+    $endpoint = __DIR__ . '/../../../shared/backend/handlers/order-transaction-handler.php';
+
+    if (!is_file($endpoint)) {
+        error_log('Kitchen order handler: shared order-transaction handler is missing at ' . $endpoint);
+        echo json_encode([
+            'status'  => 'error',
+            'message' => 'The order service is temporarily unavailable. Please try again.',
+        ]);
+        exit;
+    }
+
+    // Set the action name the shared handler dispatches on, then
+    // include the shared handler in this top-level scope. The
+    // shared handler reads $_POST and $_SESSION directly, bootstraps
+    // its own session context from the action name it finds, and
+    // terminates the request itself.
+    $_POST['action'] = 'restaurant_cancel_order';
+
+    require $endpoint;
+
+    // The shared handler always exits; this line is unreachable.
+    exit;
+}
 
 try {
     switch ($action) {
 
         case 'start_preparing':
             handleStartPreparing($database_connection, $orderId, $branchId);
-            break;
-
-        case 'cancel_order':
-            handleCancelOrder($database_connection, $orderId, $branchId);
             break;
 
         case 'assign_rider':
@@ -311,37 +391,6 @@ function handleStartPreparing(PDO $db, int $orderId, int $branchId): never
         'message'      => 'Order is now being prepared. You can assign a rider when ready.',
         'order_id'     => $orderId,
         'order_status' => 'preparing',
-    ]);
-    exit;
-}
-
-function handleCancelOrder(PDO $db, int $orderId, int $branchId): never
-{
-    $order = requireOwnedOrder($db, $orderId, $branchId);
-
-    if ($order['order_status'] !== 'pending') {
-        echo json_encode([
-            'status'  => 'error',
-            'message' => 'Only pending orders can be cancelled by the kitchen.',
-        ]);
-        exit;
-    }
-
-    $updated = setOrderCancelledByRestaurant($db, $orderId, $branchId);
-
-    if (!$updated) {
-        echo json_encode([
-            'status'  => 'error',
-            'message' => 'Could not cancel. The order may have already been processed.',
-        ]);
-        exit;
-    }
-
-    echo json_encode([
-        'status'       => 'success',
-        'message'      => 'Order cancelled.',
-        'order_id'     => $orderId,
-        'order_status' => 'cancelled',
     ]);
     exit;
 }
@@ -581,7 +630,7 @@ function handlePoll(PDO $db, int $branchId): never
         'preparing'        => ['preparing'],
         'waiting_on_rider' => ['rider_pending', 'picking_up'],
         'out_for_delivery' => ['delivering'],
-        'recent'           => ['delivered', 'cancelled', 'refunded'],
+        'recent'           => ['delivered', 'cancelled', 'refunded', 'failed'],
     ];
 
     if (!isset($tabToStatuses[$tab])) {
@@ -636,7 +685,7 @@ function handlePoll(PDO $db, int $branchId): never
                JOIN queue_item qi ON qi.order_id = o.order_id
               WHERE qi.branch_id = :branch_id
                 AND o.order_id <= :since_order_id
-                AND o.order_status IN ('delivered','cancelled','refunded')"
+                AND o.order_status IN ('delivered','cancelled','refunded','failed')"
         );
         $closedStmt->execute([
             ':branch_id'      => $branchId,
@@ -731,12 +780,6 @@ function handlePoll(PDO $db, int $branchId): never
 
 /* --------------------------------------------------------------
  * CARD RENDERER (mirror of restaurant/pages/kitchen.php)
- *
- * Byte-for-byte identical to kitchenCardHtml() in the page. Both
- * call shapeKitchenOrderSummaryRow() so the summary line's fields
- * come from one place. If this function and the page's diverge, a
- * card rendered on load and a card swapped in via poll look
- * different — a bug class the mirror invariant prevents.
  * -------------------------------------------------------------- */
 
 function assetBaseFromSession(): string
@@ -755,6 +798,7 @@ function kitchenStatusLabel(string $status): string
         'delivered'     => 'Delivered',
         'cancelled'     => 'Cancelled',
         'refunded'      => 'Refunded',
+        'failed'        => 'Failed',
         default         => ucfirst($status),
     };
 }
@@ -770,6 +814,7 @@ function kitchenStatusBadge(string $status): string
         'delivered'     => 'badge-success',
         'cancelled'     => 'badge-danger',
         'refunded'      => 'badge-secondary',
+        'failed'        => 'badge-danger',
         default         => 'badge-secondary',
     };
 }
@@ -807,10 +852,6 @@ function kitchenRiderVehicleLine(array $order): string
     return implode(' • ', $parts);
 }
 
-/**
- * Render a kitchen order card. Mirrors kitchenCardHtml() in
- * restaurant/pages/kitchen.php.
- */
 function renderKitchenCard(
     array $order,
     bool $isCompleted = false,
@@ -848,11 +889,9 @@ function renderKitchenCard(
     $branchAddress  = kitchenBranchAddressLine($order);
     $riderVehicle   = kitchenRiderVehicleLine($order);
 
-    // ---- Summary line -----------------------------------------
     $summary = shapeKitchenOrderSummaryRow($order);
     $riderSummary = $summary['rider_name'] !== '' ? $summary['rider_name'] : '—';
 
-    // ---- Step-by-step action visibility -----------------------
     $canStartPreparing = !$isCompleted && $orderStatus === 'pending';
     $canCancel         = !$isCompleted && in_array($orderStatus, ['pending', 'preparing'], true);
     $canAssignRider    = !$isCompleted
@@ -865,7 +904,6 @@ function renderKitchenCard(
     $canMessage = !$isCompleted
         || ($summary['is_delivered'] && $summary['chat_grace_open']);
 
-    // Rider-block sub-badge.
     $riderBlockBadge = '';
     if (!$isCompleted) {
         if ($orderStatus === 'rider_pending') {
@@ -1123,9 +1161,9 @@ function renderKitchenCard(
         <button type="button" class="btn btn-neutral btn-sm kitchen-action-btn" data-restaurant-chat-open
             data-restaurant-chat-order-id="<?php echo $orderId; ?>" data-restaurant-chat-counterparty="customer"
             data-restaurant-chat-subtitle="Order #<?php echo $orderId; ?> • <?php echo htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8'); ?>">
-            <img src="<?php echo $assetBase; ?>assets/images/icons/chat-line.svg" alt="" class="btn-icon" width="16"
-                height="16"
-                onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg'">
+            <img src="<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg" alt="" class="btn-icon"
+                width="16" height="16"
+                onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/contact-us-fill.svg'">
             <span>Message</span>
         </button>
         <?php endif; ?>
@@ -1139,12 +1177,6 @@ function renderKitchenCard(
  * GUARDS AND HELPERS
  * -------------------------------------------------------------- */
 
-/**
- * Load the order ownership record for the branch, or emit a JSON
- * error and terminate.
- *
- * @return array{order_id:int, order_status:string, delivery_rider_id:?int, branch_id:int}
- */
 function requireOwnedOrder(PDO $db, int $orderId, int $branchId): array
 {
     if ($orderId <= 0) {
@@ -1165,9 +1197,6 @@ function requireOwnedOrder(PDO $db, int $orderId, int $branchId): array
     return $order;
 }
 
-/**
- * Resolve a rider's display name for the reassignment response.
- */
 function riderNameById(PDO $db, int $riderId): string
 {
     if ($riderId <= 0) {

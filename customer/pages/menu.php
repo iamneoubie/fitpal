@@ -2,7 +2,8 @@
 /**
  * FitPal Customer Menu Page
  *
- * Displays restaurants and their menu items with dietary filtering and pagination.
+ * Displays restaurants and their menu items with dietary filtering
+ * and pagination.
  *
  * The queue panel is the session order_queue staging surface. The
  * Add to Cart button routes to cart-handler.php (persistent cart).
@@ -10,16 +11,47 @@
  *   - Queue (session)  → checkout immediately
  *   - Cart (persistent) → save for later
  *
+ * ---------------------------------------------------------------------
+ * WHERE THE MONEY MOVEMENT GOES FROM HERE
+ * ---------------------------------------------------------------------
+ * Every path a customer takes off this page eventually routes
+ * through the shared order-transaction layer:
+ *
+ *   Add to Queue     → queue-handler.php writes a session queue line.
+ *                      place-order-handler.php later calls
+ *                      createOrderFromQueue() in the shared layer to
+ *                      insert the order rows and the customer
+ *                      payment transaction atomically.
+ *
+ *   Add to Cart      → cart-handler.php writes a cart row.
+ *                      cart-handler.php's push_to_queue action
+ *                      copies selected cart rows into the same
+ *                      session queue, where the same
+ *                      createOrderFromQueue() call takes over.
+ *
+ *   Direct Add       → product-detail.php and this page's inline
+ *                      quantity controls both feed one of the two
+ *                      paths above.
+ *
+ * The menu page itself never writes a ledger row and never calls a
+ * handler directly. The user's click lands in the queue or the cart;
+ * the money movement happens later, in the shared layer, when the
+ * order is actually placed.
+ *
  * @package FitPal
- * @version 9.4 — CSRF token now inherited from header.php; local
- *                generation removed. (9.3: removed order tracker;
- *                filter bar fixed under header.)
+ * @version 9.5 — Docblock records the money-flow path from the menu
+ *                page into the shared order-transaction layer. No
+ *                markup, form, or JS config change from the previous
+ *                revision.
+ *
+ *                (9.4: CSRF token inherited from header.php. 9.3:
+ *                removed order tracker; filter bar fixed under
+ *                header.)
  */
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('customer');
 
 require_once __DIR__ . '/../includes/header.php';
 
@@ -125,10 +157,8 @@ $allRestaurants = getAllRestaurants($database_connection);
 // ============================================
 // CSRF TOKEN
 // ============================================
-// Provided by header.php (via includes/csrf_token.php), stored under
-// the customer role's own session key 'customer_csrf_token'. The
-// header is required at the very top of this file, so $csrfToken is
-// already populated here.
+// Provided by header.php (via includes/customer-csrf-token.php), stored
+// under the customer role's own session key 'customer_csrf_token'.
 
 // ============================================
 // HELPERS

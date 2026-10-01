@@ -26,22 +26,39 @@
  *     denied    → [Verify] [Suspend]
  *     suspended → [Remove Suspension]
  *
+ * ---------------------------------------------------------------------
+ * ORDER STATUS SURFACE
+ * ---------------------------------------------------------------------
+ * The rider-details modal's "Recent Deliveries" sub-phase lists the
+ * rider's most recent orders. That list can now include orders whose
+ * status is 'failed' — the outcome produced by the shared
+ * order-transaction layer's sweepFailedDeliveries() when a rider
+ * does not complete a delivery within the grace window.
+ *
+ * The status badge and label for every order row come from
+ * adminOrderStatusBadgeClass() and adminOrderStatusLabel() in
+ * admin-queries.php, which carry a 'failed' case alongside
+ * 'cancelled' and 'refunded'. This page contains no status mapping
+ * of its own, so an admin viewing a rider's history sees the failed
+ * outcome as a distinct badge without any change to this file's
+ * markup.
+ *
  * No inline CSS. No inline JS. Styles come from admin-tables.css
  * plus the compact-override block at the end of riders.css.
  * Behaviour comes from the shared admin-modal.js.
  *
  * @package FitPal
- * @version 12.0 — Page header markup adjusted so the title is
- *                 top-left and the back button is top-right,
- *                 matching the customer role's pattern and the
- *                 admin-tables.css layout.
- *                 (10.0: Footer is state-driven.)
+ * @version 13.0 — Docblock records the reliance on the shared
+ *                 adminOrderStatus* helpers for the 'failed' status.
+ *                 No markup change from the previous revision.
+ *
+ *                 (12.0: page header markup. 10.0: state-driven
+ *                 modal footer.)
  */
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('admin');
 
 if (empty($_SESSION['administrator_id'])) {
     header('Location: sign-in.php');

@@ -11,62 +11,66 @@
  * SCOPE RULES APPLIED
  * ---------------------------------------------------------------------
  *  - No SQL in this file. getOrderOwnership(), getOrderDetails(), and
- *    getOrderTotals() come from customer/backend/database/order-queries.php.
+ *    getOrderTotals() come from
+ *    customer/backend/database/customer-order-queries.php (which in
+ *    turn re-exports the shared order-transaction layer).
  *    getOrderRiderDetails() comes from
  *    customer/backend/database/tracking-queries.php.
- *  - formatCurrency() comes from customer-queries.php. It is NOT declared
- *    here.
- *  - No inline CSS. order-receipt.css is loaded via the customer header's
- *    $pageCssMap.
+ *  - formatCurrency() comes from customer-queries.php.
+ *  - No inline CSS. order-receipt.css is loaded via the customer
+ *    header's $pageCssMap.
  *  - No inline JS, no inline SVG. Icons come from
  *    shared/assets/images/icons/.
- *  - No window alert. Errors route through $_SESSION['order_error'] and
- *    a redirect back to orders.php, matching order-tracking.php.
+ *  - No window alert. Errors route through $_SESSION['order_error']
+ *    and a redirect back to orders.php, matching order-tracking.php.
  * ---------------------------------------------------------------------
  *
  * Access rules:
  *   - Session must have customer_id; otherwise redirect to sign-in.php.
  *   - ?id must be a positive integer; otherwise redirect to orders.php.
  *   - The order must belong to the authenticated customer.
- *   - The order must be in the 'delivered' state. Anything else bounces
- *     back to orders.php with a flash, matching the same constraint the
- *     "View Receipt" button on orders.php enforces.
+ *   - The order must be in the 'delivered' state.
  *
  * Rider block
  * -----------
  * A "Delivered by" section sits between the restaurant block and the
- * meta grid. It renders:
+ * meta grid. It is omitted entirely when getOrderRiderDetails()
+ * returns false — the schema's ON DELETE SET NULL behavior on the FK
+ * to delivery_rider means an old order can lose its rider reference
+ * if that rider's row is later deleted. A delivered order in that
+ * state is still a valid receipt; it simply has no rider to show.
  *
- *   - an avatar square with the rider icon,
- *   - the rider's display name,
- *   - a contact line rendered as a tel: link so the customer can tap
- *     to call on mobile,
- *   - a small key/value grid for vehicle, plate, rating, and total
- *     deliveries.
+ * ---------------------------------------------------------------------
+ * HANDLER TARGETS
+ * ---------------------------------------------------------------------
+ * This file renders no forms and posts to no handler. Every link it
+ * emits targets a page under customer/pages/, and every image it
+ * emits targets an icon under shared/assets/images/icons/ or a
+ * brand asset under shared/assets/images/brand/. No handler path
+ * appears anywhere in this file.
  *
- * The block is omitted entirely when getOrderRiderDetails() returns
- * false. That happens when orders.delivery_rider_id is NULL — the
- * schema's ON DELETE SET NULL behavior on the FK to delivery_rider
- * means an old order can lose its rider reference if that rider's row
- * is later deleted. A delivered order in that state is still a valid
- * receipt; it simply has no rider to show.
+ * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 1.2 — Rider block now surfaces the rider's contact number
- *                as a tap-to-call tel: link, and restructures the
- *                rest of the rider's data (vehicle, plate, rating,
- *                deliveries) into a labeled key/value grid so each
- *                value reads on its own line. Adds the receipt-totals
- *                row rule for VAT rate display clarity.
+ * @version 3.0 — Handler targets verified. The file contains no
+ *                form, no fetch, and no handler URL. Every link
+ *                targets a customer page; every image targets the
+ *                shared asset folder. No reference to
+ *                order-handler.php or any other retired filename
+ *                exists in this file.
  *
- *                (1.1: rider block added. 1.0: initial receipt.)
+ *                No markup change from the previous revision.
+ *
+ *                (2.0: renamed customer order query layer.
+ *                1.2: rider block surfaces the rider's contact
+ *                number as a tap-to-call tel: link. 1.1: rider
+ *                block added. 1.0: initial receipt.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('customer');
 
 if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     header('Location: sign-in.php');
@@ -86,7 +90,7 @@ if ($orderId <= 0) {
 
 require_once __DIR__ . '/../backend/database/customer-connect.php';
 require_once __DIR__ . '/../backend/database/customer-queries.php';
-require_once __DIR__ . '/../backend/database/order-queries.php';
+require_once __DIR__ . '/../backend/database/customer-order-queries.php';
 require_once __DIR__ . '/../backend/database/tracking-queries.php';
 
 $customerId = (int)$_SESSION['customer_id'];
@@ -113,7 +117,6 @@ if (!$order) {
     exit;
 }
 
-// Rider. Returns false when no rider is attached to the order.
 $rider = getOrderRiderDetails($database_connection, $orderId);
 
 // ---------------------------------------------------------------------
@@ -151,7 +154,6 @@ if ($customerName === '') {
     $customerName = 'Customer';
 }
 
-// Branch address is optional.
 $branchAddressParts = array_filter([
     $branchBlock,
     $branchBarangay,
@@ -160,7 +162,6 @@ $branchAddressParts = array_filter([
 ]);
 $branchAddress = implode(', ', $branchAddressParts);
 
-// Payment method label.
 $paymentLabel = match ($paymentMethod) {
     'COD'    => 'Cash on Delivery',
     'Wallet' => 'Wallet',
@@ -170,22 +171,17 @@ $paymentLabel = match ($paymentMethod) {
 
 // ---------------------------------------------------------------------
 // Rider normalization
-//
-// Builds a small struct of display-ready values so the template below
-// stays declarative. Every field is coerced to the shape the markup
-// expects — a string, a float, or an int — so the template never has
-// to null-check.
 // ---------------------------------------------------------------------
 $hasRider = ($rider !== false && is_array($rider));
 
-$riderName            = '';
-$riderContact         = '';
-$riderContactLink     = '';
-$riderVehicle         = '';
-$riderPlate           = '';
-$riderVehicleLine     = '';
-$riderRating          = 0.0;
-$riderDeliveries      = 0;
+$riderName        = '';
+$riderContact     = '';
+$riderContactLink = '';
+$riderVehicle     = '';
+$riderPlate       = '';
+$riderVehicleLine = '';
+$riderRating      = 0.0;
+$riderDeliveries  = 0;
 
 if ($hasRider) {
     $riderNameParts = array_filter([
@@ -199,10 +195,6 @@ if ($hasRider) {
     $riderContact = trim($rawContact);
 
     if ($riderContact !== '') {
-        // tel: links tolerate spaces and hyphens but not arbitrary
-        // punctuation. Strip anything that is not a digit or a leading
-        // plus so a formatted number like "0917 123 4567" becomes a
-        // valid dial string.
         $riderContactLink = preg_replace('/[^0-9+]/', '', $riderContact) ?? '';
     }
 
@@ -221,8 +213,7 @@ if ($hasRider) {
 }
 
 /**
- * Format a date string for display on the receipt. Returns '—' when the
- * input is empty or unparsable.
+ * Format a date string for display on the receipt.
  */
 function receiptDate(string $date): string
 {
@@ -239,9 +230,6 @@ require_once __DIR__ . '/../includes/header.php';
 <div class="content order-receipt-page">
     <div class="container">
 
-        <!-- ============================================
-             PAGE HEADER
-             ============================================ -->
         <div class="page-title-header">
             <div class="page-title-header-top">
                 <a href="orders.php" class="back-btn">
@@ -253,12 +241,8 @@ require_once __DIR__ . '/../includes/header.php';
             </div>
         </div>
 
-        <!-- ============================================
-             RECEIPT CARD
-             ============================================ -->
         <article class="receipt-card" aria-label="Order receipt">
 
-            <!-- Receipt header -->
             <header class="receipt-header">
                 <div class="receipt-header-left">
                     <img src="<?php echo $assetBase; ?>assets/images/brand/Logo.png" alt="FitPal" class="receipt-logo"
@@ -276,7 +260,6 @@ require_once __DIR__ . '/../includes/header.php';
                 </div>
             </header>
 
-            <!-- Restaurant -->
             <?php if ($restaurantName !== '' || $branchName !== ''): ?>
             <section class="receipt-restaurant" aria-label="Restaurant">
                 <?php if ($restaurantName !== ''): ?>
@@ -299,7 +282,6 @@ require_once __DIR__ . '/../includes/header.php';
             </section>
             <?php endif; ?>
 
-            <!-- Rider -->
             <?php if ($hasRider): ?>
             <section class="receipt-rider" aria-label="Delivery rider">
                 <div class="receipt-rider-top">
@@ -373,7 +355,6 @@ require_once __DIR__ . '/../includes/header.php';
             </section>
             <?php endif; ?>
 
-            <!-- Meta grid -->
             <section class="receipt-meta-grid" aria-label="Order details">
                 <div class="receipt-meta-block">
                     <p class="receipt-meta-label">Order Date</p>
@@ -407,7 +388,6 @@ require_once __DIR__ . '/../includes/header.php';
                 </div>
             </section>
 
-            <!-- Customer -->
             <section class="receipt-block" aria-label="Customer">
                 <p class="receipt-block-title">Customer</p>
                 <p class="receipt-block-line">
@@ -425,7 +405,6 @@ require_once __DIR__ . '/../includes/header.php';
                 <?php endif; ?>
             </section>
 
-            <!-- Delivery address -->
             <?php if ($destination !== ''): ?>
             <section class="receipt-block" aria-label="Delivery address">
                 <p class="receipt-block-title">Delivered To</p>
@@ -435,7 +414,6 @@ require_once __DIR__ . '/../includes/header.php';
             </section>
             <?php endif; ?>
 
-            <!-- Items -->
             <section class="receipt-items-section" aria-label="Order items">
                 <p class="receipt-items-title">Items</p>
 
@@ -515,7 +493,6 @@ require_once __DIR__ . '/../includes/header.php';
                 <?php endif; ?>
             </section>
 
-            <!-- Totals -->
             <section class="receipt-totals" aria-label="Order totals">
                 <div class="receipt-totals-inner">
                     <div class="receipt-total-row">
@@ -545,7 +522,6 @@ require_once __DIR__ . '/../includes/header.php';
                 </div>
             </section>
 
-            <!-- Footer note -->
             <footer class="receipt-footer-note">
                 <p class="thanks">Thank you for ordering with FitPal.</p>
                 <p>This receipt is a record of your completed order.</p>

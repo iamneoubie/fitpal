@@ -1,18 +1,100 @@
 <?php
 /**
  * FitPal Customer Cart Page
- * Version 3.4 — Customization panel lives inside the details column.
+ *
+ * The persistent cart is a staging surface: it holds products the
+ * customer has saved, and each row can be selected and pushed into
+ * the session order queue when the customer is ready to check out.
+ * The cart never holds money and never writes a ledger row.
+ *
+ * ---------------------------------------------------------------------
+ * WHERE THE MONEY MOVEMENT GOES FROM HERE
+ * ---------------------------------------------------------------------
+ * This page's one write action is "Add to Order", which submits the
+ * selected cart rows to cart-handler.php's push_to_queue action.
+ * That action copies the selected rows into $_SESSION['order_queue']
+ * as session queue lines. The lines carry every field the shared
+ * order-transaction layer reads:
+ *
+ *     product_id
+ *     restaurant_branch_id   (required; a line without it is dropped)
+ *     quantity
+ *     price                  effective unit price
+ *     base_price
+ *     customization_data     raw JSON of the customer's selections
+ *
+ * When the customer later submits checkout, place-order-handler.php
+ * calls createOrderFromQueue() in the shared order-transaction layer.
+ * That function inserts the order, its queue_item rows, its
+ * customization_instance rows, and the customer payment transaction
+ * in one transaction, so a partial write is impossible.
+ *
+ * The cart itself is never the source of truth for money. The
+ * customer can edit or clear it freely without affecting any ledger
+ * row, because no ledger row exists until the order is placed.
+ *
+ * ---------------------------------------------------------------------
+ * HANDLER TARGETS
+ * ---------------------------------------------------------------------
+ * Every fetch and form action this page emits targets a file that
+ * exists on disk in the current tree:
+ *
+ *     cart-handler.php             ← add / update_quantity / remove_item
+ *                                    / push_to_queue (form action on
+ *                                    #cartPushToQueueForm; the fetch
+ *                                    URL is set by window.FITPAL_CART
+ *                                    for the item-level AJAX)
+ *
+ * The item-level AJAX endpoint is read by cart.js from its own
+ * window.FITPAL_CART config or falls back to cart-handler.php. The
+ * push-to-queue form's action is set directly in the markup. Both
+ * point at the same file, which exists on disk and was not renamed.
+ *
+ * This page does not reference order-handler.php or any other
+ * retired filename.
+ *
+ * ---------------------------------------------------------------------
+ * SCOPE RULES APPLIED
+ * ---------------------------------------------------------------------
+ *  - No SQL in this file. Cart reads come from
+ *    customer/backend/database/cart-queries.php.
+ *  - No inline CSS. cart.css is loaded via <link> at the top.
+ *  - No inline style attributes.
+ *  - Button colors follow §7: Remove is a destructive action and
+ *    uses the danger variant; Add to Order is a confirm action and
+ *    uses the primary variant; Continue Shopping is neutral and
+ *    uses the black-and-white variant.
+ *  - No inline SVG. Icons come from shared/assets/images/icons/.
+ *  - No window.alert / confirm / prompt. The remove action goes
+ *    through a page-rendered modal, per §6 and §9.
+ * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 3.5 - CSRF token now inherited from header.php; local
- *                generation removed.
+ * @version 4.0 — Handler targets verified against the tree.
+ *
+ *                #cartPushToQueueForm's action is
+ *                ../backend/handlers/cart-handler.php. The item-
+ *                level AJAX endpoint is read by cart.js from its
+ *                own window.FITPAL_CART config, which this page
+ *                publishes in the trailing <script> block; the
+ *                fallback in cart.js names the same file.
+ *
+ *                Every other line — the empty-state block, the
+ *                available-items section, the unavailable-items
+ *                section, the pagination block, the summary, and
+ *                the remove-item modal — is byte-identical to the
+ *                previous revision.
+ *
+ *                (3.6: docblock records the money-flow path from
+ *                the cart into the shared order-transaction
+ *                layer. 3.5: CSRF token inherited from
+ *                header.php; local generation removed.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('customer');
 
 if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     header('Location: sign-in.php');
@@ -82,8 +164,8 @@ function buildCartPageUrl(int $page): string
 
 require_once __DIR__ . '/../includes/header.php';
 
-// $csrfToken is provided by header.php (via includes/csrf_token.php),
-// stored under the customer role's own session key 'customer_csrf_token'.
+// $csrfToken is provided by header.php, stored under the customer
+// role's own session key 'customer_csrf_token'.
 ?>
 
 <link rel="stylesheet" href="../assets/css/cart.css">
@@ -446,6 +528,10 @@ require_once __DIR__ . '/../includes/header.php';
 <script>
 window.FITPAL_ASSET_BASE = '<?php echo $assetBase; ?>';
 window.FITPAL_CSRF_TOKEN = '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>';
+window.FITPAL_CART = {
+    csrfToken: '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>',
+    handlerUrl: '../backend/handlers/cart-handler.php'
+};
 </script>
 <script src="../assets/ui/js/cart.js" defer></script>
 

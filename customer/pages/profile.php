@@ -21,6 +21,29 @@
  *  - formatCurrency() comes from customer-queries.php.
  * ---------------------------------------------------------------------
  *
+ * THE BALANCE THIS PAGE RENDERS
+ * -----------------------------
+ * The header card's "Balance:" line is read straight from
+ * financial_account.balance via getCustomerProfile(). That account
+ * is the same account the shared order-transaction layer debits and
+ * credits:
+ *
+ *   - Wallet payments on order placement  → `payment` transaction,
+ *                                            trigger debits the
+ *                                            balance.
+ *   - Refunds on cancellation (Wallet or
+ *     Online)                             → `refund` transaction,
+ *                                            trigger credits the
+ *                                            balance.
+ *   - Deposits                            → `deposit` transaction,
+ *                                            trigger credits the
+ *                                            balance.
+ *
+ * This page never writes to the balance. The number it shows is
+ * whatever the triggers last computed, so a customer who cancels an
+ * order and immediately reloads their profile sees the corrected
+ * balance without any additional code here.
+ *
  * Page flow
  * ---------
  *   1. The customer opens the page in view mode. Every field is
@@ -34,73 +57,42 @@
  *
  *   3. Picking a file only produces a LOCAL PREVIEW. The upload is
  *      deferred until the customer presses Save Changes. Cancel
- *      reverts the preview to the server-rendered picture, exactly
- *      like it reverts every other field.
+ *      reverts the preview to the server-rendered picture.
  *
  *   4. Save is triggered by the Save Changes button, which is a
  *      type="button" control. Its click handler runs the save
  *      pipeline in profile.js: first a POST with action=update_profile
  *      for the text fields, then — when a new picture is pending —
- *      a separate POST with action=upload_picture. Cancel reverts the
- *      form fields and the avatar to the values the server rendered
- *      and exits edit mode without a reload.
+ *      a separate POST with action=upload_picture. Cancel reverts
+ *      the form fields and the avatar to the values the server
+ *      rendered and exits edit mode without a reload.
  *
  *   5. Leaving the page while in edit mode with pending changes
- *      (including a pending picture pick) triggers an
- *      unsaved-changes modal with "Keep Editing" and "Save Changes".
+ *      triggers an unsaved-changes modal with "Keep Editing" and
+ *      "Save Changes".
  *
  * Save button contract
  * --------------------
  * The Save button is deliberately type="button", NOT type="submit".
- * Earlier revisions used type="submit" with form="profileForm" to
- * associate the button (which lives in the header card) with the form
- * (which lives in the Personal Information tab). That combination
- * let the browser perform a NATIVE form submission before the JS
- * handler could intercept it. Because the button was outside the
- * form, the browser read the form's action attribute at submission
- * time in a context where it was resolving to a DOM node, and the
- * server log showed requests to:
- *
- *     POST /customer/pages/[object HTMLInputElement]
- *
- * The same failure mode was closed on the rider profile page. The
- * fix is twofold:
- *   1. Make the Save button type="button" so no native submission
- *      path exists. profile.js binds to its click event.
- *   2. Bind the form's submit event as a safety net only — nothing
- *      relies on it, but an implicit submit (Enter key inside a
- *      field) still routes through the same pipeline.
- *
- * Profile picture
- * ---------------
- * The avatar block is a wrap containing:
- *   - .profile-avatar-placeholder  the initial letter
- *   - .profile-avatar-image        the uploaded picture
- *   - .profile-avatar-edit         a small button that triggers the
- *                                  hidden file input. Hidden in view
- *                                  mode, shown in edit mode.
- *   - an <input type="file">       hidden, read by the save pipeline
+ * The click handler in profile.js is the single entry point into the
+ * save pipeline. No native form submission path exists, so the
+ * browser can never POST to a URL derived from a DOM property.
  *
  * @package FitPal
- * @version 6.1 — Save button changed from type="submit"
- *                form="profileForm" to type="button". Removes the
- *                native submission path that produced POSTs to
- *                /customer/pages/[object HTMLInputElement].
- *                No other markup change. Matches the rider profile
- *                page's button contract.
+ * @version 6.2 — Docblock records the shared order-transaction layer
+ *                as the writer of the balance this page renders. No
+ *                markup, form, or JS config change from the previous
+ *                revision.
  *
- *                (6.0: profile picture change deferred behind the
- *                Save Changes button. 5.0: field layout rebuilt,
- *                Save/Cancel moved into the header card, edit-confirm
- *                and unsaved-changes modals added. 4.3: upload-capable
- *                avatar wrap.)
+ *                (6.1: Save button changed from type="submit"
+ *                form="profileForm" to type="button". 6.0: profile
+ *                picture change deferred behind Save Changes.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('customer');
 
 if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     header('Location: sign-in.php');
@@ -132,8 +124,8 @@ require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../backend/database/customer-queries.php';
 require_once __DIR__ . '/../backend/database/address-queries.php';
 
-// $csrfToken is provided by header.php (via includes/csrf_token.php),
-// stored under the customer role's own session key 'customer_csrf_token'.
+// $csrfToken is provided by header.php, stored under the customer
+// role's own session key 'customer_csrf_token'.
 
 $customerId = (int)$_SESSION['customer_id'];
 
@@ -198,9 +190,7 @@ if ($initial === '') {
 
             <div class="profile-header-left">
 
-                <!-- Avatar: image or initial, ring border, edit button.
-                     The edit button is hidden in view mode; the JS
-                     removes .is-hidden when edit mode begins. -->
+                <!-- Avatar: image or initial, ring border, edit button. -->
                 <div class="profile-avatar-wrap">
 
                     <?php if ($profilePicUrl !== ''): ?>
@@ -245,13 +235,6 @@ if ($initial === '') {
                     <button type="button" id="cancelEditBtn" class="btn btn-cancel">
                         Cancel
                     </button>
-                    <!--
-                        Save is type="button". The click handler in
-                        profile.js is the single entry point into the
-                        save pipeline. No native form submission path
-                        exists, so the browser can never POST to a URL
-                        derived from a DOM property.
-                    -->
                     <button type="button" id="saveProfileBtn" class="btn btn-primary">
                         Save Changes
                     </button>

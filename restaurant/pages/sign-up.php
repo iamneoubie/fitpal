@@ -6,30 +6,89 @@
  *   Step 1 — Account Holder
  *   Step 2 — Business Details + up to 5 permit photos + terms
  *
- * @package FitPal
- * @version 2.0 — Dropped the page-local CSRF bootstrap. The
- *                restaurant role's token is now assigned
- *                unconditionally by includes/header.php via
- *                restaurant-csrf-token.php, so this page no longer
- *                generates $_SESSION['restaurant_csrf_token']
- *                inline. It simply includes the header and reads
- *                $csrfToken from it. Behavior is unchanged: the
- *                form's POST field stays named csrf_token, and
- *                sign-up-handler.php still validates against
- *                $_SESSION['restaurant_csrf_token'].
+ * ---------------------------------------------------------------------
+ * PER-ROLE SESSION MODEL
+ * ---------------------------------------------------------------------
+ * The page bootstraps the restaurant session before doing anything
+ * else. The already-signed-in redirect checks
+ * $_SESSION['restaurant_account_id'], a key only the restaurant
+ * role writes into this session.
  *
- *                (1.2: Used its own session key,
- *                restaurant_csrf_token, for the registration form so
- *                a sign-in by another role in the same browser
- *                session could not invalidate the token this form
- *                was rendered with.)
+ * ---------------------------------------------------------------------
+ * CSRF
+ * ---------------------------------------------------------------------
+ * The page does not generate its own CSRF token. The restaurant
+ * header assigns $csrfToken on every request by calling
+ * getRestaurantCsrfToken() from
+ * restaurant/includes/restaurant-csrf-token.php, which stores the
+ * token under 'restaurant_csrf_token' inside the restaurant
+ * session. The form on this page reads $csrfToken from the header;
+ * sign-up-handler.php validates against the same key.
+ *
+ * ---------------------------------------------------------------------
+ * WHAT REGISTRATION CREATES
+ * ---------------------------------------------------------------------
+ * The form posts to ../backend/handlers/sign-up-handler.php, which
+ * writes a single set of rows in one transaction:
+ *
+ *   1. restaurant                    (verification_status = 'pending')
+ *   2. financial_account             (account_type = 'restaurant',
+ *                                     balance 0)
+ *   3. restaurant_branch             (linked to the financial account)
+ *   4. restaurant_account            (role 'owner', branch_id NULL)
+ *   5. restaurant_permit × 1..5      (one row per uploaded permit)
+ *
+ * The financial_account row is created with a zero balance and is
+ * never debited or credited by registration. The shared
+ * order-transaction layer credits the same account on the first
+ * successful delivery, but that only happens after the restaurant
+ * is verified, its branch is active, and a customer has placed and
+ * completed an order through the branch. A pending restaurant
+ * therefore has no path to the ledger from registration.
+ *
+ * A pending restaurant is also invisible to the customer role:
+ * getMenuDataPaginated() filters on
+ * `r.is_active = 1 AND rb.is_active = 1`, and searchRestaurantsByName()
+ * further filters on `r.verification_status = 'verified'`, so
+ * neither the menu nor the branch sign-in autocomplete will surface
+ * an unverified restaurant.
+ *
+ * ---------------------------------------------------------------------
+ * PERMIT UPLOAD LAYOUT
+ * ---------------------------------------------------------------------
+ * Permits are stored under
+ * shared/uploads/restaurant/permits/<owner_account_id>/ with the
+ * MM_DD_YYYY_<n>.<ext> naming scheme, matching the rider role's
+ * per-account, per-day upload layout. The owner account is created
+ * before the permits are moved so the folder can be keyed on the
+ * account id. On any failure after a file has been moved, the moved
+ * files are unlinked and the transaction is rolled back.
+ *
+ * ---------------------------------------------------------------------
+ * FEE SCHEDULE
+ * ---------------------------------------------------------------------
+ * Registration does not read or write the fee schedule
+ * (shared/backend/database/fee-queries.php). The fee schedule is
+ * the platform-wide constant set applied to every order regardless
+ * of which restaurant produced it.
+ *
+ * @package FitPal
+ * @version 2.1 — Docblock records that registration creates a
+ *                pending restaurant with a zero-balance financial
+ *                account and cannot reach the ledger, and that a
+ *                pending restaurant is invisible to the customer
+ *                role. No markup, form, permit slot, or JS config
+ *                change from the previous revision.
+ *
+ *                (2.0: page no longer generates its own CSRF token;
+ *                header assigns $csrfToken. 1.2: uses the
+ *                restaurant role's own session key.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('restaurant');
 
 if (!empty($_SESSION['restaurant_account_id'])) {
     header('Location: dashboard.php');

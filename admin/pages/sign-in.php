@@ -3,50 +3,27 @@
  * FitPal Admin Sign-In Page
  *
  * @package FitPal
- * @version 3.8 — Replaced the inline admin_csrf_token generation
- *                block with a require_once on
- *                includes/admin-csrf-token.php followed by
- *                getAdminCsrfToken(). The helper is idempotent, so
- *                header.php's call later in the same request is a
- *                no-op. This makes the admin role's CSRF bootstrap
- *                a single source of truth, mirroring the customer
- *                role's sign-in.php pattern. Behavior is unchanged:
- *                the form's POST field stays named csrf_token, and
+ * @version 4.0 — Removed the $_SESSION['created'] = time() pin. That
+ *                key belonged to the old global-rotation policy, which
+ *                has been replaced by the per-role activity gate in
+ *                shared/includes/session-activity.php. The header no
+ *                longer rotates the shared session ID from an
+ *                authenticated page, so there is nothing for this
+ *                page to pin. No other behavior changed: the form's
+ *                POST field stays named csrf_token, and
  *                sign-in-handler.php still validates against
  *                $_SESSION['admin_csrf_token'].
  *
- *                (3.7: Reworded the comment on the
- *                $_SESSION['created'] pin. Under the old shared
- *                csrf_token scheme the pin was load-bearing; now
- *                that admin uses its own admin_csrf_token, the
- *                header's rotation preserves session data, so the
- *                token survives regardless. The pin still serves a
- *                real purpose — it prevents rotation from firing
- *                while an authenticated user in another tab has the
- *                sign-in form open — but the reason has changed, so
- *                the comment now reflects that. No code change.
- *
- *                3.6: Uses its own session key, admin_csrf_token,
- *                instead of the shared csrf_token. The admin and
- *                customer roles run on the same PHP session (same
- *                cookie), so a single shared csrf_token meant that
- *                logging in as one role deleted the token the other
- *                role's sign-in page had already rendered into its
- *                form (both handlers unset csrf_token on success).
- *                Whichever role signed in first "used up" the shared
- *                token, leaving the other role's already-loaded page
- *                stuck with a stale token — its first submit failed
- *                validation, and only a reload (which re-generates
- *                the token) fixed it. Splitting the key per role
- *                removes the collision entirely.)
+ *                (3.8: require_once on includes/admin-csrf-token.php
+ *                followed by getAdminCsrfToken(). 3.7: reworded the
+ *                comment on the $_SESSION['created'] pin. 3.6: own
+ *                session key, admin_csrf_token.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('admin');
 if (!empty($_SESSION['administrator_id'])) {
     header('Location: dashboard.php');
     exit;
@@ -55,16 +32,6 @@ if (!empty($_SESSION['administrator_id'])) {
 // Never let the browser or bfcache serve a stale copy of this form.
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
-
-// Pin the session's "created" marker to now. Under the per-role key
-// scheme this is not load-bearing for the CSRF token — the header's
-// rotation preserves session data, and the header's guarded $csrfToken
-// init no longer clobbers the value assigned below. The pin remains
-// useful for the edge case where an authenticated user in another tab
-// would otherwise trigger a rotation that regenerates this session's
-// ID while this form is open. Keeping it costs nothing and stabilises
-// the sign-in experience for that case.
-$_SESSION['created'] = time();
 
 // Single source of truth for the admin role's CSRF token. The helper
 // generates it on first use and stores it under 'admin_csrf_token' —

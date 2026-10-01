@@ -13,32 +13,57 @@
  *       Orders       7-day order count by payment method
  *       Performers   Top restaurants by GMV, top riders by deliveries
  *
- * The dashboard header no longer renders a navigation button row —
+ * The dashboard header does not render a navigation button row —
  * the stat cards already act as the navigation.
  *
- * The recent-moderation-activity card has been removed. The pending-
- * riders list stays in the right column of the first row and is
- * still served by getRidersPaginated() with $withTotal = false,
+ * The recent-moderation-activity card has been removed. The
+ * pending-riders list stays in the right column of the first row and
+ * is still served by getRidersPaginated() with $withTotal = false,
  * because the card renders no pagination and discards the total.
  *
  * All SQL lives in admin-queries.php. This page contains no SQL, no
  * inline CSS, and no inline JS.
  *
- * @package FitPal
- * @version 6.0 — New analytics-first layout. Adds the chart card
- *                with four sub-tabs. Removes the header action row
- *                and the recent-activity card. Loads the shared
- *                admin-modal.js for consistency with the other
- *                admin pages.
+ * ---------------------------------------------------------------------
+ * REVENUE RECOGNITION AND THE 'failed' STATUS
+ * ---------------------------------------------------------------------
+ * No gross revenue is recognised until an order reaches 'delivered'.
+ * The admin-query layer excludes 'cancelled', 'refunded', and
+ * 'failed' from every revenue aggregate; this page's stat cards and
+ * the Revenue chart panel therefore already show the correct
+ * "billable" numbers without any additional filtering here.
  *
- *                (5.0: loaded admin-modal.js for consistency.
- *                4.4: no functional change from 4.3.)
+ * The 'failed' status was added by the shared order-transaction
+ * layer's sweepFailedDeliveries() and is surfaced to the admin as a
+ * distinct outcome from 'cancelled' so the closed-order split stays
+ * readable:
+ *
+ *   - The Orders chart panel's summary strip now shows the refund
+ *     rate (cancelled + refunded over total, unchanged) AND a
+ *     separate failed count.
+ *   - The Orders series carries a per-day 'failed' bucket alongside
+ *     'cancelled' so a future chart variant can stack it.
+ *
+ * The stacked dimension in the Orders chart is the payment method
+ * (COD / Wallet / Online), not the outcome, so the stacked bars
+ * themselves do not change. Payment-method totals in the summary
+ * strip also do not change.
+ *
+ * @package FitPal
+ * @version 7.0 — Surfaces the 'failed' order status in the Orders
+ *                chart panel's summary strip. The refund rate is
+ *                unchanged; a new "Failed" summary item reports the
+ *                7-day failed count so an admin can see the
+ *                failed-delivery outcome alongside cancellations.
+ *
+ *                (6.0: analytics-first layout. 5.0: loaded
+ *                admin-modal.js for consistency. 4.4: no functional
+ *                change from 4.3.)
  */
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('admin');
 
 if (empty($_SESSION['administrator_id'])) {
     header('Location: sign-in.php');
@@ -131,7 +156,20 @@ foreach ($weeklyFees as $d) {
 }
 
 // ---- Order payment totals for the strip ----
-$paymentTotals = ['cod' => 0, 'wallet' => 0, 'online' => 0, 'total' => 0, 'delivered' => 0, 'cancelled' => 0];
+//
+// $paymentTotals['failed'] is the 7-day count of failed-delivery
+// orders, surfaced as a distinct outcome next to cancellations. It
+// is deliberately NOT folded into $paymentTotals['cancelled']
+// because a failed order is not a refund.
+$paymentTotals = [
+    'cod'       => 0,
+    'wallet'    => 0,
+    'online'    => 0,
+    'total'     => 0,
+    'delivered' => 0,
+    'cancelled' => 0,
+    'failed'    => 0,
+];
 foreach ($weeklyOrders as $d) {
     $paymentTotals['cod']       += $d['cod'];
     $paymentTotals['wallet']    += $d['wallet'];
@@ -139,7 +177,9 @@ foreach ($weeklyOrders as $d) {
     $paymentTotals['total']     += $d['total'];
     $paymentTotals['delivered'] += $d['delivered'];
     $paymentTotals['cancelled'] += $d['cancelled'];
+    $paymentTotals['failed']    += (int)($d['failed'] ?? 0);
 }
+
 $refundRate = $paymentTotals['total'] > 0
     ? round(($paymentTotals['cancelled'] / $paymentTotals['total']) * 100, 1)
     : 0.0;
@@ -576,6 +616,13 @@ foreach ($topRiders as $r) {
                                 <span class="admin-chart-summary-hint">
                                     <?php echo number_format($paymentTotals['cancelled']); ?> cancelled
                                 </span>
+                            </div>
+                            <div class="admin-chart-summary-item">
+                                <span class="admin-chart-summary-label">Failed</span>
+                                <span class="admin-chart-summary-value">
+                                    <?php echo number_format($paymentTotals['failed']); ?>
+                                </span>
+                                <span class="admin-chart-summary-hint">7-day total</span>
                             </div>
                         </div>
                     </div>

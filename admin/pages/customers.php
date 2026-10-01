@@ -12,18 +12,35 @@
  * .admin-page-header-actions, which the shared admin-tables.css
  * renders as a neutral black/white pill anchored top-right.
  *
+ * ---------------------------------------------------------------------
+ * ORDER STATUS SURFACE
+ * ---------------------------------------------------------------------
+ * The customer-details modal's "Transactions" sub-phase lists the
+ * customer's most recent orders. Each row's status badge and label
+ * come from adminOrderStatusBadgeClass() and
+ * adminOrderStatusLabel() in admin-queries.php, which now carry a
+ * 'failed' case alongside 'cancelled' and 'refunded'. The 'failed'
+ * status was added by the shared order-transaction layer's
+ * sweepFailedDeliveries() so an order the rider did not complete in
+ * time is visible to the admin as a distinct outcome from a
+ * cancellation.
+ *
+ * This page contains no status mapping of its own; the two helpers
+ * are the single source of truth so every admin surface that renders
+ * an order status agrees.
+ *
  * @package FitPal
- * @version 12.0 — Page header markup adjusted so the title is
- *                 top-left and the back button is top-right,
- *                 matching the customer role's pattern and the
- *                 admin-tables.css layout.
- *                 (11.0: Footer of the detail modal is state-driven.)
+ * @version 13.0 — Docblock records the reliance on the shared
+ *                 adminOrderStatus* helpers for the 'failed' status.
+ *                 No markup change from the previous revision.
+ *
+ *                 (12.0: page header markup. 11.0: state-driven
+ *                 modal footer.)
  */
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('admin');
 
 if (empty($_SESSION['administrator_id'])) {
     header('Location: sign-in.php');

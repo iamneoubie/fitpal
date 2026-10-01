@@ -3,10 +3,12 @@
  * FitPal Customer Queue Handler
  *
  * The session-based order queue is the ONLY staging system for
- * customer orders. There is no persistent cart. The queue lives in
- * $_SESSION['order_queue'] and is mirrored into the `orders` +
- * `queue_item` + `customization_instance` tables at the moment of
- * order placement by place-order-handler.php.
+ * customer orders. Runs on the customer session
+ * (PHPSESSID_CUSTOMER), separate from every other role's session.
+ *
+ * The queue lives in $_SESSION['order_queue'] and is mirrored into
+ * the `orders` + `queue_item` + `customization_instance` tables at
+ * the moment of order placement by place-order-handler.php.
  *
  * Actions:
  *   get    → return current queue
@@ -27,17 +29,79 @@
  * request dispatch at load time. Pure helpers that pages need
  * (queueEnrich, getProductForQueue) live in queue-queries.php.
  *
+ * ---------------------------------------------------------------------
+ * QUEUE SHAPE CONTRACT (shared with the order-transaction layer)
+ * ---------------------------------------------------------------------
+ * The `add` and `sync` actions write queue lines whose fields are
+ * consumed by createOrderFromQueue() in
+ * shared/backend/database/order-transaction-queries.php. That
+ * function expects, at minimum, the following fields on every line:
+ *
+ *     product_id              int
+ *     restaurant_branch_id    int   ← required; a line missing it is
+ *                                     silently dropped by the shared
+ *                                     layer, which can leave the whole
+ *                                     queue empty
+ *     quantity                int
+ *     price                   float effective unit price
+ *     base_price              float
+ *     customization_data      string|null raw JSON of the customer's
+ *                                     selections
+ *
+ * The canonical producer of a queue line is queueEnrich() in
+ * customer/backend/database/queue-queries.php. Both this handler
+ * and the cart handler (cart-handler.php's push_to_queue action)
+ * write lines through that same enrichment path or an exact-shape
+ * reproduction of it. If queueEnrich() ever changes the field set,
+ * this handler follows it automatically because it calls
+ * queueEnrich() directly.
+ *
+ * The queue line's `line_key` is a hash of the product id plus the
+ * raw customization JSON. Two lines with the same product but
+ * different customizations never merge. Two lines with the same
+ * product and the same customization payload always merge, and
+ * every mutable field is refreshed from the latest enrichment so a
+ * stale price cannot survive a merge.
+ *
+ * If createOrderFromQueue() ever requires a field that queueEnrich()
+ * does not produce, that field must be added to queueEnrich() — not
+ * patched into this handler — so the cart handler and this handler
+ * stay consistent by construction.
+ *
+ * ---------------------------------------------------------------------
+ * PER-ROLE SESSION MODEL
+ * ---------------------------------------------------------------------
+ * The handler bootstraps the customer session before doing
+ * anything else. The auth guard reads $_SESSION['customer_id'], the
+ * CSRF check reads $_SESSION['customer_csrf_token'], and every
+ * queue read and write touches $_SESSION['order_queue'] — all
+ * inside the customer session, guaranteed to be the customer's own.
+ *
  * @package FitPal
- * @version 5.1 — CSRF validation reads customer_csrf_token instead of
- *                the shared csrf_token. (5.0: queueEnrich moved to
- *                queue-queries.php; handler is now SQL-free.)
+ * @version 7.0 — Docblock records the queue shape contract against
+ *                the shared order-transaction layer. No behavioural
+ *                change: the action set, the JSON/Form input
+ *                handling, the merge rules, and the queue write
+ *                order are exactly as they were in the previous
+ *                revision.
+ *
+ *                (6.0: per-role session migration. 5.1: CSRF
+ *                validated against customer_csrf_token. 5.0:
+ *                queueEnrich moved to queue-queries.php.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+// ---------------------------------------------------------------------
+// SESSION BOOTSTRAP
+// ---------------------------------------------------------------------
+
+require_once __DIR__ . '/../../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('customer');
+
+// ---------------------------------------------------------------------
+// INPUT — JSON OR FORM
+// ---------------------------------------------------------------------
 
 $raw    = file_get_contents('php://input');
 $json   = ($raw !== '' && $raw !== false) ? json_decode($raw, true) : null;
@@ -47,6 +111,10 @@ $input  = $isJson ? $json : $_POST;
 $isAjax = $isJson
     || (isset($_SERVER['HTTP_X_REQUESTED_WITH'])
         && strtolower((string)$_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+
+// ---------------------------------------------------------------------
+// AUTHENTICATION
+// ---------------------------------------------------------------------
 
 if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     if ($isAjax) {
@@ -61,24 +129,36 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
 
 $customerId = (int)$_SESSION['customer_id'];
 
+// ---------------------------------------------------------------------
+// DEPENDENCIES
+// ---------------------------------------------------------------------
+
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/queue-queries.php';
+
+// ---------------------------------------------------------------------
+// ACTION RESOLUTION
+// ---------------------------------------------------------------------
 
 $action = (string)($input['action'] ?? '');
 if ($action === '' && ($input['queue_action'] ?? '') === 'queue') {
     $action = 'add';
 }
 
+// ---------------------------------------------------------------------
+// CSRF
+//
+// The get action is read-only and does not require a token. Every
+// other action does. Validated against the customer context's own
+// key, 'customer_csrf_token', inside the customer session.
+// ---------------------------------------------------------------------
+
 $requiresCsrf = !in_array($action, ['get', ''], true);
+
 if ($requiresCsrf) {
-    // Per-role CSRF check. The customer role validates against its
-    // own session key, 'customer_csrf_token', never the shared
-    // 'csrf_token'. Another role in the same browser session could
-    // have unset or rotated the shared key on its own sign-in, which
-    // would otherwise invalidate the token this request was issued
-    // under. See general.md.
     $given = (string)($input['csrf_token'] ?? '');
     $sess  = (string)($_SESSION['customer_csrf_token'] ?? '');
+
     if ($sess === '' || $given === '' || !hash_equals($sess, $given)) {
         if ($isAjax) {
             header('Content-Type: application/json; charset=utf-8');
@@ -92,9 +172,9 @@ if ($requiresCsrf) {
     }
 }
 
-// ---------------------------------------------------------------
-// Session queue helpers (request-layer concerns — stay here)
-// ---------------------------------------------------------------
+// ---------------------------------------------------------------------
+// SESSION QUEUE HELPERS (request-layer concerns — stay here)
+// ---------------------------------------------------------------------
 
 function queueGet(): array
 {
@@ -169,9 +249,10 @@ function queueRespond(array $payload, bool $isAjax, string $redirect = '../../pa
     exit;
 }
 
-// ---------------------------------------------------------------
-// Dispatch
-// ---------------------------------------------------------------
+// ---------------------------------------------------------------------
+// DISPATCH
+// ---------------------------------------------------------------------
+
 try {
     switch ($action) {
 

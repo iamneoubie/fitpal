@@ -2,65 +2,116 @@
 /**
  * FitPal Rider CSRF Token
  *
- * Per-role CSRF token bootstrap for the rider session.
+ * Per-context CSRF token helper for the rider session.
  *
- * Why this file exists:
- *   The rider, customer, admin, and restaurant roles all run on the
- *   same PHP session (same cookie). If every role stored its token
- *   under the shared 'csrf_token' key, whichever role's handler ran
- *   unset($_SESSION['csrf_token']) on a successful sign-in would
- *   delete the token another role's already-rendered form was still
- *   relying on. The rider role therefore keeps its own key,
- *   'rider_csrf_token', and never touches the shared one.
+ * ---------------------------------------------------------------------
+ * WHY THIS FILE EXISTS
+ * ---------------------------------------------------------------------
+ * Every FitPal context — customer, rider, restaurant, admin, and
+ * public — runs as its own PHP session under its own cookie name
+ * (see shared/includes/session-bootstrap.php). The rider session
+ * (PHPSESSID_RIDER) is the only session a request under
+ * rider/pages/ or rider/backend/handlers/ can read. The token
+ * stored in it is therefore never visible to any other context.
  *
- * Why it lives in includes/ and not backend/handlers/ or
- * backend/database/:
- *   - It is not a request dispatch (no $_POST handling, no header(),
- *     no echo, no exit), so it is not a handler.
- *   - It is not SQL, so it is not a query file.
- *   - It is session bootstrap that pages require_once before output.
- *     That is the same role header.php plays for the rider role.
+ * The token key is 'rider_csrf_token'. Under the older shared-
+ * session design this prefix was a collision guard. Under per-role
+ * sessions the prefix is no longer required for safety — the
+ * rider session cannot contain another context's key because the
+ * rider session is a different session entirely — but it is kept
+ * as a naming convention so a reader can tell at a glance which
+ * context a token belongs to.
  *
- * Relationship to existing code:
- *   rider/pages/sign-in.php and rider/pages/sign-up.php previously
- *   generated the rider token inline. rider/pages/dashboard.php,
- *   rider/pages/deliveries.php, rider/pages/earnings.php, and
- *   rider/pages/profile.php did the same under the shared
- *   'csrf_token' key, which was a collision hazard. Those blocks are
- *   being replaced with a require_once on this file plus a call to
- *   getRiderCsrfToken(). The four authenticated handlers
- *   (rider-handler.php, message-handler.php, sign-out-handler.php,
- *   sign-in-handler.php) are being migrated to validate against
- *   'rider_csrf_token' at the same time.
+ * ---------------------------------------------------------------------
+ * THE FULL CSRF KEY MATRIX (after Option B)
+ * ---------------------------------------------------------------------
+ *   customer   → 'customer_csrf_token'     in PHPSESSID_CUSTOMER
+ *   rider      → 'rider_csrf_token'        in PHPSESSID_RIDER       ← this file
+ *   restaurant → 'restaurant_csrf_token'   in PHPSESSID_RESTAURANT
+ *   admin      → 'admin_csrf_token'        in PHPSESSID_ADMIN
+ *   public     → 'public_csrf_token'       in PHPSESSID_PUBLIC
  *
- * Safe to require_once from any rider page, including sign-in.php
- * and sign-up.php. Calling getRiderCsrfToken() more than once in a
- * request is a no-op after the first call.
+ * The generic 'csrf_token' key is used by nothing and must never
+ * be read, written, or cleared.
+ *
+ * ---------------------------------------------------------------------
+ * CONTRACT
+ * ---------------------------------------------------------------------
+ * getRiderCsrfToken(): string
+ *
+ *   - Returns the current rider CSRF token, generating one on
+ *     first use.
+ *   - Returns an empty string when the active session is NOT the
+ *     rider session. This happens when a rider page forgets to
+ *     call fitpal_session_bootstrap('rider') before including this
+ *     file, or when a non-rider page tries to use it. An empty
+ *     return is a hard failure: the caller must not render a
+ *     form, and must not treat the empty string as a valid token.
+ *   - Idempotent: calling it more than once in a request is a
+ *     no-op after the first call.
+ *   - Never touches any session other than the rider session (and
+ *     cannot, because PHP gives a request access to exactly one
+ *     session).
+ *
+ * Safe to require_once from any rider page or rider handler. The
+ * bootstrap is called defensively; if it has already run for
+ * 'rider', it is a no-op.
  *
  * @package FitPal
- * @version 1.0
+ * @version 2.0 — Per-role session migration (Option B). Requires
+ *                the rider session to have been bootstrapped via
+ *                fitpal_session_bootstrap('rider') before the token
+ *                is requested. Removed the direct session_start()
+ *                call in favor of the bootstrap. Returns an empty
+ *                string when the active session is not the rider
+ *                session.
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+if (!function_exists('fitpal_session_bootstrap')) {
+    // The bootstrap lives under shared/includes/. A rider file
+    // that includes this helper directly (rather than through the
+    // rider header) may not have loaded the bootstrap yet; pull
+    // it in so the guard below can run.
+    require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
 }
 
 if (!function_exists('getRiderCsrfToken')) {
     /**
-     * Return the rider role's CSRF token, generating it on first use.
+     * Return the rider context's CSRF token, generating it on first
+     * use.
      *
-     * The token is stored under 'rider_csrf_token' — never under the
-     * shared 'csrf_token' key. See the file header for the reason.
+     * The token is stored under 'rider_csrf_token' inside the rider
+     * session. If the active session is not the rider session —
+     * because the caller forgot to bootstrap, or because a non-
+     * rider page called this helper — the function returns '' and
+     * does NOT write a token into whichever session is currently
+     * open.
      *
-     * @return string 64-character hex string.
+     * @return string 64-character hex string, or '' on misconfiguration.
      */
     function getRiderCsrfToken(): string
     {
+        // Ensure the rider session is the one we are operating on.
+        // If no bootstrap has run yet, run it now. If a bootstrap
+        // ran for a different context, the function is a logged
+        // no-op and the check just after will fail closed.
+        fitpal_session_bootstrap('rider');
+
+        if (fitpal_session_current_context() !== 'rider') {
+            error_log(
+                'getRiderCsrfToken: active session is not the rider session '
+                . '(current: "' . fitpal_session_current_context() . '"). '
+                . 'Refusing to write a rider token into a non-rider session.'
+            );
+            return '';
+        }
+
         if (empty($_SESSION['rider_csrf_token'])) {
             $_SESSION['rider_csrf_token'] = bin2hex(random_bytes(32));
         }
+
         return (string)$_SESSION['rider_csrf_token'];
     }
 }

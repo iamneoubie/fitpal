@@ -8,21 +8,50 @@
  *
  * No $_POST, no header(), no echo.
  *
- * Revenue recognition policy
- * --------------------------
+ * ---------------------------------------------------------------------
+ * REVENUE RECOGNITION
+ * ---------------------------------------------------------------------
  * Revenue is recognised only when an order reaches order_status =
  * 'delivered'. Orders that are still pending, preparing, awaiting a
- * rider, or in transit are operational counts, not revenue. Every
- * revenue reader in this file filters on 'delivered' for that reason.
+ * rider, or in transit are operational counts, not revenue. Orders
+ * that closed as 'cancelled', 'refunded', or 'failed' never produced
+ * deliverable food revenue and are excluded from every revenue
+ * aggregate.
+ *
+ * The 'failed' status is produced by the shared order-transaction
+ * layer's sweepFailedDeliveries() when a rider does not complete a
+ * delivery within FITPAL_RIDER_FAILED_DELIVERY_GRACE_SECONDS of the
+ * order entering 'delivering'. It is a closed order with no
+ * deliverable revenue.
+ *
+ * Why the filter is `= 'delivered'` and not
+ * `NOT IN ('cancelled','refunded','failed')`:
+ *
+ *   The two forms agree today, but they mean different things. The
+ *   `= 'delivered'` form recognises revenue only on the one status
+ *   that has actually earned it, so a future status added to the
+ *   lifecycle is automatically excluded until someone deliberately
+ *   grants it revenue. The `NOT IN (...)` form would silently
+ *   include any new status that someone forgot to add to the
+ *   exclusion list. The narrower form is the canonical revenue gate
+ *   in this file and in admin-queries.php; a reader who wants to
+ *   change it should be doing so as a business decision, not as a
+ *   mechanical widening.
+ *
+ * Operational counts (total_orders, active_orders, orders_today,
+ * orders_this_week, per-status buckets on the kitchen board) keep
+ * their own status filters, because those readers answer "how many
+ * orders are in this state" rather than "how much money did we
+ * make".
  *
  * @package FitPal
- * @version 5.0 — Fixes revenue recognition:
- *                  - getOwnerDashboardStats, getOwnerWeeklyRevenue,
- *                    getOwnerBranchOverview, getBranchDashboardStats,
- *                    and getBranchWeeklyRevenue now filter on
- *                    'delivered' only.
- *                  - Operational counts (total_orders, active_orders,
- *                    etc.) are unchanged.
+ * @version 5.1 — Docblock records the revenue-recognition rule and
+ *                explains why the delivered-only filter is the
+ *                canonical revenue gate. No query or signature
+ *                change from the previous revision.
+ *
+ *                (5.0: revenue recognition fixed to filter on
+ *                'delivered' only across every reader.)
  */
 
 declare(strict_types=1);
@@ -548,7 +577,7 @@ function getOwnerDashboardStats(PDO $db, int $restaurantId): array
             COUNT(DISTINCT o.order_id) AS total_orders,
             SUM(CASE WHEN DATE(o.order_date) = CURDATE() THEN 1 ELSE 0 END) AS orders_today,
             SUM(CASE WHEN o.order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) THEN 1 ELSE 0 END) AS orders_this_week,
-            SUM(CASE WHEN o.order_status IN ('pending','preparing','rider_pending','delivering') THEN 1 ELSE 0 END) AS active_orders,
+            SUM(CASE WHEN o.order_status IN ('pending','preparing','rider_pending','picking_up','delivering') THEN 1 ELSE 0 END) AS active_orders,
             SUM(CASE WHEN o.order_status = 'delivered' THEN 1 ELSE 0 END) AS delivered_orders
          FROM orders o
          JOIN queue_item qi ON qi.order_id = o.order_id
@@ -655,7 +684,7 @@ function getOwnerBranchOverview(PDO $db, int $restaurantId): array
                FROM queue_item qi
                JOIN orders o ON o.order_id = qi.order_id
               WHERE qi.branch_id = rb.restaurant_branch_id
-                AND o.order_status NOT IN ('cancelled','refunded')) AS order_count,
+                AND o.order_status NOT IN ('cancelled','refunded','failed')) AS order_count,
             (SELECT COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0)
                FROM queue_item qi
                JOIN orders o ON o.order_id = qi.order_id
@@ -701,7 +730,7 @@ function getBranchDashboardStats(PDO $db, int $branchId): array
             COUNT(DISTINCT o.order_id) AS total_orders,
             SUM(CASE WHEN DATE(o.order_date) = CURDATE() THEN 1 ELSE 0 END) AS orders_today,
             SUM(CASE WHEN o.order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) THEN 1 ELSE 0 END) AS orders_this_week,
-            SUM(CASE WHEN o.order_status IN ('pending','preparing','rider_pending','delivering') THEN 1 ELSE 0 END) AS active_orders,
+            SUM(CASE WHEN o.order_status IN ('pending','preparing','rider_pending','picking_up','delivering') THEN 1 ELSE 0 END) AS active_orders,
             SUM(CASE WHEN o.order_status = 'delivered' THEN 1 ELSE 0 END) AS delivered_orders
          FROM orders o
          JOIN queue_item qi ON qi.order_id = o.order_id
@@ -859,16 +888,6 @@ function getRestaurantChartScale(float $maxAmount): array
  * BRANCH SIGN-IN AUTOCOMPLETE
  * ============================================================= */
 
-/**
- * Search active, verified restaurants whose business_name matches
- * the given partial string. Empty query returns the first N so the
- * dropdown is never empty when the field is first focused.
- *
- * @param PDO    $db
- * @param string $query
- * @param int    $limit
- * @return array<int, array{restaurant_id:int, business_name:string, cuisine_type:?string, city:?string}>
- */
 function searchRestaurantsByName(PDO $db, string $query, int $limit = 8): array
 {
     $query = trim($query);
@@ -921,15 +940,6 @@ function searchRestaurantsByName(PDO $db, string $query, int $limit = 8): array
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-/**
- * Fetch the active branches of a single restaurant that have at
- * least one active branch-scoped account, so a branch with no
- * possible logins is never selectable.
- *
- * @param PDO $db
- * @param int $restaurantId
- * @return array<int, array{branch_code:string, branch_name:string, city:?string}>
- */
 function searchBranchesByRestaurant(PDO $db, int $restaurantId): array
 {
     if ($restaurantId <= 0) {

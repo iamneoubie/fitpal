@@ -2,7 +2,9 @@
 /**
  * FitPal Customer Cart Handler
  *
- * Persistent cart (cart table). Separate from the session order queue.
+ * Persistent cart (cart table). Runs on the customer session
+ * (PHPSESSID_CUSTOMER), which is separate from every other role's
+ * session.
  *
  * Actions:
  *   add             → insert or merge into cart
@@ -20,42 +22,77 @@
  * request dispatch at load time. Display helpers that pages need
  * (e.g. getCartCustomizationBreakdown) live in cart-queries.php.
  *
+ * ---------------------------------------------------------------------
+ * QUEUE SHAPE CONTRACT (shared with the order-transaction layer)
+ * ---------------------------------------------------------------------
+ * push_to_queue writes session queue lines that are later read by
+ * createOrderFromQueue() in
+ * shared/backend/database/order-transaction-queries.php. That
+ * function expects, at minimum, the following fields on every line:
+ *
+ *     product_id              int
+ *     restaurant_branch_id    int   ← required; a line missing it is
+ *                                     silently dropped by the shared
+ *                                     layer, which can leave the whole
+ *                                     queue empty
+ *     quantity                int
+ *     price                   float effective unit price
+ *     base_price              float
+ *     customization_data      string|null raw JSON from cart.customization_data
+ *
+ * The queue line produced by push_to_queue in this file carries every
+ * one of those fields, plus four additional presentational fields
+ * (name, image, stock, restaurant_name, branch_name) that the menu
+ * page's queue panel renders but that the shared layer ignores.
+ *
+ * If the queue line shape ever changes, this file and
+ * shared/backend/database/order-transaction-queries.php must change
+ * together: a field the shared layer reads but the writer does not
+ * produce will silently drop that line at order-placement time, and
+ * a field the writer produces but the shared layer does not read is
+ * just dead weight on the session.
+ *
+ * The queue line's `line_key` is a hash of the product id plus the
+ * raw customization JSON. Two cart rows with the same product but
+ * different customizations therefore never merge into one queue
+ * line, matching the cart table's own
+ * unique_cart_item (customer_id, product_id, customization_hash)
+ * constraint.
+ *
+ * ---------------------------------------------------------------------
+ * PER-ROLE SESSION MODEL
+ * ---------------------------------------------------------------------
+ * The handler bootstraps the customer session before doing anything
+ * else. The auth guard reads $_SESSION['customer_id'] and the CSRF
+ * check reads $_SESSION['customer_csrf_token'], both inside the
+ * customer session and guaranteed to be the customer's own.
+ *
  * @package FitPal
- * @version 6.3 — push_to_queue now writes every field that
- *                createOrderFromQueue() requires onto each session
- *                queue line. The previous revision omitted
- *                restaurant_branch_id, which caused
- *                createOrderFromQueue() to drop every cart-sourced
- *                line and throw "Your order is empty." Every
- *                payment method (COD, Wallet, Online) failed
- *                identically because the failure happened before
- *                the payment branch was ever reached.
+ * @version 8.0 — Docblock records the queue shape contract against
+ *                the shared order-transaction layer. No behavioural
+ *                change: the action set, the JSON payload fields,
+ *                the merge rules, and the queue write order are
+ *                exactly as they were in the previous revision.
  *
- *                Specifically:
- *                  - New lines carry restaurant_branch_id,
- *                    base_price, and the raw customization_data
- *                    JSON, matching the shape queueEnrich()
- *                    produces.
- *                  - Merged lines refresh the same field set, so a
- *                    second push of the same cart row cannot leave
- *                    a stale price or drop a customization payload.
- *                  - The merge key is product + customization
- *                    signature, not product alone, so two cart
- *                    rows for the same product with different
- *                    customizations stay as two queue lines.
- *                  - No SQL added or moved. getCartRowsForQueue()
- *                    already selects rb.restaurant_branch_id and
- *                    di.images.
- *
- *                (6.2: CSRF validation reads customer_csrf_token
- *                instead of the shared csrf_token. 6.1: pure
- *                helpers moved to cart-queries.php.)
+ *                (7.0: per-role session migration. 6.3:
+ *                push_to_queue writes every field
+ *                createOrderFromQueue() requires. 6.2: CSRF validated
+ *                against customer_csrf_token. 6.1: pure helpers moved
+ *                to cart-queries.php.)
  */
+
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+// ---------------------------------------------------------------------
+// SESSION BOOTSTRAP
+// ---------------------------------------------------------------------
+
+require_once __DIR__ . '/../../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('customer');
+
+// ---------------------------------------------------------------------
+// AJAX DETECTION
+// ---------------------------------------------------------------------
 
 $isAjax = (
     isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
@@ -96,26 +133,41 @@ function cartSuccess(array $payload, bool $isAjax, string $redirect = '../../pag
     exit;
 }
 
+// ---------------------------------------------------------------------
+// AUTHENTICATION
+// ---------------------------------------------------------------------
+
 if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     cartFail('Please sign in to manage your cart.', $isAjax, '../../pages/sign-in.php');
 }
 
 $customerId = (int)$_SESSION['customer_id'];
 
-// Per-role CSRF check. The customer role validates against its own
-// session key, 'customer_csrf_token', never the shared 'csrf_token'.
-// Another role in the same browser session could have unset or
-// rotated the shared key on its own sign-in, which would otherwise
-// invalidate the token this request was issued under. See general.md.
+// ---------------------------------------------------------------------
+// CSRF
+// ---------------------------------------------------------------------
+
 $givenToken = (string)($_POST['csrf_token'] ?? '');
 $sessToken  = (string)($_SESSION['customer_csrf_token'] ?? '');
 
-if ($sessToken === '' || $givenToken === '' || !hash_equals($sessToken, $givenToken)) {
+if (
+    $sessToken === ''
+    || $givenToken === ''
+    || !hash_equals($sessToken, $givenToken)
+) {
     cartFail('Security validation failed. Please try again.', $isAjax);
 }
 
+// ---------------------------------------------------------------------
+// DEPENDENCIES
+// ---------------------------------------------------------------------
+
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/cart-queries.php';
+
+// ---------------------------------------------------------------------
+// ACTION RESOLUTION
+// ---------------------------------------------------------------------
 
 $action = (string)($_POST['action'] ?? '');
 
@@ -125,6 +177,10 @@ if ($action === '') {
         $action = 'add';
     }
 }
+
+// ---------------------------------------------------------------------
+// DISPATCH
+// ---------------------------------------------------------------------
 
 try {
     switch ($action) {
@@ -176,9 +232,9 @@ try {
  * Compute the effective unit price for a cart line.
  *
  * Base price plus the sum of every selected ingredient's modifier
- * multiplied by its requested quantity. Quantities are clamped to the
- * ingredient's max_quantity from product_composition. Removed and
- * unknown ingredients contribute nothing.
+ * multiplied by its requested quantity. Quantities are clamped to
+ * the ingredient's max_quantity from product_composition. Removed
+ * and unknown ingredients contribute nothing.
  *
  * @param float $basePrice
  * @param array<int, array<string, mixed>> $customizations
@@ -388,16 +444,9 @@ function handleGetCount(PDO $db, int $customerId): void
  * Session queue line shape
  * ------------------------
  * Every line written here carries the same fields that
- * queue-handler.php's queueEnrich() produces, because
- * createOrderFromQueue() in order-queries.php reads those fields and
- * silently drops any line that is missing them. In particular,
- * `restaurant_branch_id` is mandatory: without it,
- * createOrderFromQueue() skips the line, the whole queue can drain
- * to zero, and the customer is bounced back to checkout with
- * "Your order is empty." regardless of which payment method was
- * chosen.
+ * createOrderFromQueue() in
+ * shared/backend/database/order-transaction-queries.php reads:
  *
- * Fields written on a new line:
  *   line_key               product + customization signature
  *   product_id             int
  *   name                   string

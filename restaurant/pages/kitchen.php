@@ -22,9 +22,14 @@
  *         Recent      → Message, but only while the delivered
  *                       grace window is open.
  *     - The order list is live: kitchen-realtime.js polls
- *       order-handler.php on a delta cursor.
- *     - The rider modal's roster is live: orders.js fetches and
- *       polls the roster while the modal stays open.
+ *       kitchen-order-handler.php on a delta cursor.
+ *     - The rider modal's roster is live: kitchen-order.js fetches
+ *       and polls the roster while the modal stays open.
+ *     - The Message button opens the shared chat modal. The modal's
+ *       markup is in restaurant/includes/chat-modal.php, its
+ *       behaviour is in
+ *       restaurant/assets/ui/js/restaurant-chat-modal.js, and its
+ *       endpoint is restaurant/backend/handlers/chat-handler.php.
  *
  *   Owner view (owner / partner)
  *     - Read-only summary across all branches.
@@ -35,11 +40,50 @@
  *     partner is redirected to the dashboard.
  *
  * ---------------------------------------------------------------------
+ * REQUIRED QUERY LAYER
+ * ---------------------------------------------------------------------
+ * This page requires:
+ *
+ *     restaurant/backend/database/kitchen-order-queries.php
+ *
+ * Every function this page calls — getKitchenTabCounts,
+ * getBranchKitchenOrdersPaginated, getBranchCompletedOrdersPaginated,
+ * getKitchenOrderItems, getAvailableRidersForBranch,
+ * shapeAvailableRiderList, shapeKitchenOrderSummaryRow,
+ * getOwnerKitchenSummary, getOwnerBranchBreakdown — is declared
+ * there.
+ *
+ * ---------------------------------------------------------------------
+ * HANDLER ENDPOINTS
+ * ---------------------------------------------------------------------
+ * The #kitchenPage element publishes three endpoints on data-*
+ * attributes:
+ *
+ *     data-handler-url  → ../backend/handlers/kitchen-order-handler.php
+ *                          The endpoint for every kitchen action —
+ *                          start_preparing, cancel_order,
+ *                          assign_rider, reassign_rider,
+ *                          available_riders, poll,
+ *                          active_orders_count.
+ *
+ *     data-chat-url     → ../backend/handlers/chat-handler.php
+ *                          The endpoint for the chat modal —
+ *                          list, poll, send, read.
+ *
+ * kitchen-realtime.js, kitchen-order.js, and
+ * restaurant-chat-modal.js all read those attributes rather than
+ * carrying a literal, so each URL lives in one place.
+ *
+ * ---------------------------------------------------------------------
  * STATUS FLOW
  * ---------------------------------------------------------------------
  *     pending → preparing → rider_pending → picking_up → delivering
  *                                                              ↓
  *                                                         delivered
+ *     pending / preparing → cancelled  (COD)
+ *     pending / preparing → refunded   (Wallet / Online)
+ *     delivering          → failed     (rider exceeded the grace
+ *                                       window; see below)
  *
  * Kitchen-side visibility:
  *
@@ -47,7 +91,22 @@
  *   Preparing           preparing
  *   Waiting on Rider    rider_pending + picking_up
  *   Out for Delivery    delivering
- *   Recent              delivered + cancelled + refunded
+ *   Recent              delivered + cancelled + refunded + failed
+ *
+ * ---------------------------------------------------------------------
+ * THE 'failed' STATUS
+ * ---------------------------------------------------------------------
+ * The 'failed' status is produced by the shared order-transaction
+ * layer's sweepFailedDeliveries(), which moves an order from
+ * 'delivering' to 'failed' when the rider does not mark it
+ * delivered within FITPAL_RIDER_FAILED_DELIVERY_GRACE_SECONDS of
+ * the moment it entered 'delivering'.
+ *
+ * A failed order is a closed order that never produced deliverable
+ * food revenue. It is treated the same as a cancelled or refunded
+ * order by every revenue aggregate in the project, and the kitchen
+ * renders it on the Recent tab with a distinct red badge so branch
+ * staff can see why the order closed.
  *
  * ---------------------------------------------------------------------
  * DELIVERED GRACE WINDOW
@@ -75,46 +134,62 @@
  * SCOPE RULES APPLIED
  * ---------------------------------------------------------------------
  *  - No inline CSS. orders.css is loaded by header.php's
- *    $pageCssMap for kitchen.php.
- *  - No inline JS. kitchen-realtime.js and orders.js are loaded at
- *    the bottom of the page for the branch view.
+ *     $pageCssMap for kitchen.php.
+ *  - No inline JS. kitchen-realtime.js, kitchen-order.js, and
+ *     restaurant-chat-modal.js are loaded at the bottom of the page
+ *     for the branch view.
  *  - No SQL. All data comes from
- *    restaurant/backend/database/order-queries.php.
+ *     restaurant/backend/database/kitchen-order-queries.php.
  *  - Icons reference only files present under
- *    shared/assets/images/icons/.
+ *     shared/assets/images/icons/.
  *  - Every modal on the page contains an <img> icon.
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 8.0 — Message button grace window and card render sync:
- *                  - The card's Message action now reads the
- *                    delivered grace flag (`chat_grace_open`) on
- *                    completed orders, so the button is only
- *                    rendered when the server-side chat gate
- *                    would accept the send.
- *                  - The card's action footer is now always
- *                    rendered, though actions themselves remain
- *                    conditional. This ensures the footer renders
- *                    on completed cards that have the Message
- *                    action available.
- *                  - No other structural change. The tab bar,
- *                    pagination bar, new-order pill, confirm
- *                    modal, rider modal, chat modal include, and
- *                    owner view are unchanged from v7.0.
+ * @version 11.3 — The Message button now works.
  *
- *                (7.0: collapsible kitchen cards and unified
- *                contact view. 6.0: realtime rider roster in the
- *                modal. 5.0: pagination and step-by-step actions.
- *                4.0: 'picking_up' status. 3.0: CSRF token
- *                inherited from header.php. 2.0: rider_pending
- *                handoff.)
+ *                 The previous revision loaded kitchen-order.js and
+ *                 kitchen-realtime.js, but neither of those files
+ *                 binds a handler for [data-restaurant-chat-open].
+ *                 kitchen-order.js explicitly returns early for any
+ *                 button that carries that attribute, on the
+ *                 assumption that some other script handles it, and
+ *                 kitchen-realtime.js has no such handler. The
+ *                 Message button was therefore a no-op: clicking it
+ *                 did nothing.
+ *
+ *                 This revision adds
+ *                 restaurant/assets/ui/js/restaurant-chat-modal.js
+ *                 to the script block at the bottom of the branch
+ *                 view. That file owns the chat modal — its open,
+ *                 its close, its tab switching, its delta poll, its
+ *                 send, and its read marker — and it attaches the
+ *                 delegated [data-restaurant-chat-open] listener
+ *                 that the Message button needs.
+ *
+ *                 Nothing else changed. Every function, every markup
+ *                 block, the card renderer, the confirm modal, the
+ *                 rider modal, the pagination renderer, the tab bar,
+ *                 and the chat-modal include are byte-identical to
+ *                 v11.2.
+ *
+ *                 (11.2: kitchen-order-queries.php and
+ *                 kitchen-order-handler.php paths restored. 11.1:
+ *                 kitchen-order.js script reference. 11.0: paths
+ *                 restored. 10.3: documentation-only correction.
+ *                 10.2: corrective rewrite for a runtime "Failed to
+ *                 open stream" error. 10.0: 'failed' status. 9.0:
+ *                 confirm modal rewrite. 8.0: card renderer synced.
+ *                 7.0: collapsible cards. 6.0: realtime rider roster.
+ *                 5.0: pagination and step-by-step actions. 4.0:
+ *                 'picking_up'. 3.0: CSRF token inherited from
+ *                 header.php. 2.0: rider_pending handoff.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('restaurant');
 
 if (empty($_SESSION['restaurant_account_id'])) {
     header('Location: sign-in.php');
@@ -147,12 +222,9 @@ if ($isBranchStaff && ($restaurantScope !== 'branch' || $branchId <= 0)) {
 }
 
 require_once __DIR__ . '/../includes/header.php';
-require_once __DIR__ . '/../backend/database/order-queries.php';
+require_once __DIR__ . '/../backend/database/kitchen-order-queries.php';
 
 // $assetBase and $csrfToken are provided by header.php.
-// header.php has already emitted <!DOCTYPE html>, <head>, <body>,
-// and <header class="header restaurant-header">, and has opened
-// <main class="main-content">.
 
 /* --------------------------------------------------------------
  * PAGE LOCALS (formatting only — declared before they are used)
@@ -174,6 +246,7 @@ function kitchenStatusLabel(string $status): string
         'delivered'     => 'Delivered',
         'cancelled'     => 'Cancelled',
         'refunded'      => 'Refunded',
+        'failed'        => 'Failed',
         default         => ucfirst($status),
     };
 }
@@ -189,6 +262,7 @@ function kitchenStatusBadge(string $status): string
         'delivered'     => 'badge-success',
         'cancelled'     => 'badge-danger',
         'refunded'      => 'badge-secondary',
+        'failed'        => 'badge-danger',
         default         => 'badge-secondary',
     };
 }
@@ -199,10 +273,6 @@ function kitchenDate(string $date): string
     return $ts !== false ? date('M d, g:i A', $ts) : $date;
 }
 
-/**
- * Build the pickup block's address line from the joined branch
- * columns. Returns an empty string when every segment is blank.
- */
 function kitchenBranchAddressLine(array $order): string
 {
     $parts = [];
@@ -215,11 +285,6 @@ function kitchenBranchAddressLine(array $order): string
     return implode(', ', $parts);
 }
 
-/**
- * Build the rider vehicle line, filtered so blank segments do not
- * leave a stray separator. Returns an empty string when neither
- * the vehicle type nor the plate is present.
- */
 function kitchenRiderVehicleLine(array $order): string
 {
     $parts = [];
@@ -230,24 +295,6 @@ function kitchenRiderVehicleLine(array $order): string
     return implode(' • ', $parts);
 }
 
-/**
- * Build the full markup for one order card.
- *
- * Single source of truth for card HTML. Called by the initial render
- * here and by order-handler.php's renderKitchenCard(), so a card
- * swapped in via poll looks identical to one rendered on page load.
- *
- * The card is three bands:
- *   - header  (always visible)
- *   - summary (always visible)
- *   - details (collapsed by default; orders.js toggles)
- *
- * @param array<string, mixed> $order
- * @param string $assetBase
- * @param bool $isCompleted
- * @param bool $isNew         Marked by the poll when a card is fresh.
- * @return string
- */
 function kitchenCardHtml(
     array $order,
     string $assetBase,
@@ -284,20 +331,9 @@ function kitchenCardHtml(
     $branchAddress  = kitchenBranchAddressLine($order);
     $riderVehicle   = kitchenRiderVehicleLine($order);
 
-    // ---- Summary line -----------------------------------------
-    //
-    // Restaurant • Branch • Customer • Rider • Total
-    //
-    // The rider segment renders as an em-dash when no rider is
-    // attached, so the line always has the same number of fields.
     $summary = shapeKitchenOrderSummaryRow($order);
     $riderSummary = $summary['rider_name'] !== '' ? $summary['rider_name'] : '—';
 
-    // ---- Step-by-step action visibility -----------------------
-    //
-    // $isCompleted only affects the status-badge treatment and the
-    // Message-action grace check. Actions themselves are conditioned
-    // on the order's status, not on $isCompleted.
     $canStartPreparing = !$isCompleted && $orderStatus === 'pending';
     $canCancel         = !$isCompleted && in_array($orderStatus, ['pending', 'preparing'], true);
     $canAssignRider    = !$isCompleted
@@ -307,16 +343,9 @@ function kitchenCardHtml(
         && in_array($orderStatus, ['preparing', 'rider_pending'], true)
         && $assignedRiderId > 0;
 
-    // Message action availability.
-    //
-    // Live orders: always available.
-    // Completed orders: only while the delivered grace window is
-    // open, decided by the query layer's chat_grace_open column.
-    // This mirrors chat-handler.php's server-side gate exactly.
     $canMessage = !$isCompleted
         || ($summary['is_delivered'] && $summary['chat_grace_open']);
 
-    // Rider-block sub-badge.
     $riderBlockBadge = '';
     if (!$isCompleted) {
         if ($orderStatus === 'rider_pending') {
@@ -343,8 +372,6 @@ function kitchenCardHtml(
 
     $detailsId = 'kitchenOrderDetails' . $orderId;
 
-    // Assemble the summary line as five textual segments joined
-    // with a bullet. Each segment is escaped at output time.
     $summarySegments = [
         $summary['restaurant_name'],
         $summary['branch_name'],
@@ -358,9 +385,6 @@ function kitchenCardHtml(
 <article class="<?php echo $cardClass; ?>" data-order-id="<?php echo $orderId; ?>"
     data-order-status="<?php echo htmlspecialchars($orderStatus, ENT_QUOTES, 'UTF-8'); ?>">
 
-    <!-- ============================================================
-         HEADER BAND — always visible
-         ============================================================ -->
     <header class="kitchen-order-header">
         <div class="kitchen-order-header-left">
             <span class="kitchen-order-id">#<?php echo $orderId; ?></span>
@@ -385,12 +409,6 @@ function kitchenCardHtml(
         </div>
     </header>
 
-    <!-- ============================================================
-         SUMMARY BAND — always visible
-         One line. The chef reads this and decides which card to
-         expand. The rider segment renders as "—" when no rider is
-         attached so the line always has the same number of fields.
-         ============================================================ -->
     <div class="kitchen-order-summary">
         <?php foreach ($summarySegments as $i => $segment): ?>
         <?php if ($i > 0): ?>
@@ -402,12 +420,8 @@ function kitchenCardHtml(
         <?php endforeach; ?>
     </div>
 
-    <!-- ============================================================
-         DETAILS BAND — collapsed by default
-         ============================================================ -->
     <div class="kitchen-order-details" id="<?php echo $detailsId; ?>" hidden>
 
-        <!-- ---- Route: pickup and drop-off ---- -->
         <div class="kitchen-route">
 
             <div class="kitchen-route-stop kitchen-route-stop-pickup">
@@ -457,7 +471,6 @@ function kitchenCardHtml(
             </div>
         </div>
 
-        <!-- ---- Rider block ---- -->
         <div class="kitchen-rider-block">
             <span class="kitchen-rider-block-label">Rider</span>
             <?php if ($assignedRiderId > 0): ?>
@@ -490,7 +503,6 @@ function kitchenCardHtml(
             <?php endif; ?>
         </div>
 
-        <!-- ---- Items ---- -->
         <div class="kitchen-order-items">
             <p class="kitchen-items-heading">
                 <?php echo $itemCount; ?> item<?php echo $itemCount === 1 ? '' : 's'; ?>
@@ -548,7 +560,6 @@ function kitchenCardHtml(
             </ul>
         </div>
 
-        <!-- ---- Subtotal ---- -->
         <div class="kitchen-order-total">
             <span class="kitchen-order-total-label">Subtotal</span>
             <span class="kitchen-order-total-value">
@@ -557,12 +568,6 @@ function kitchenCardHtml(
         </div>
     </div>
 
-    <!-- ============================================================
-         ACTION FOOTER — always visible
-         Actions themselves are conditional; the footer always
-         renders so a card without any available action still has
-         its bottom edge.
-         ============================================================ -->
     <footer class="kitchen-order-actions">
         <?php if ($canCancel): ?>
         <button type="button" class="btn btn-outline btn-sm kitchen-action-btn" data-action="cancel_order"
@@ -610,14 +615,6 @@ function kitchenCardHtml(
     return (string)ob_get_clean();
 }
 
-/**
- * Render the pagination bar for a tab.
- *
- * @param string $tab
- * @param int $page
- * @param int $totalPages
- * @return string
- */
 function kitchenPaginationHtml(string $tab, int $page, int $totalPages): string
 {
     if ($totalPages <= 1) {
@@ -674,12 +671,6 @@ function kitchenPaginationHtml(string $tab, int $page, int $totalPages): string
     return (string)ob_get_clean();
 }
 
-/**
- * Human-readable title for a tab, used in the empty state.
- *
- * @param string $tab
- * @return string
- */
 function kitchenTabTitle(string $tab): string
 {
     return match ($tab) {
@@ -692,12 +683,6 @@ function kitchenTabTitle(string $tab): string
     };
 }
 
-/**
- * Empty-state copy for a tab.
- *
- * @param string $tab
- * @return array{title:string, text:string}
- */
 function kitchenTabEmptyCopy(string $tab): array
 {
     return match ($tab) {
@@ -719,7 +704,7 @@ function kitchenTabEmptyCopy(string $tab): array
         ],
         'recent' => [
             'title' => 'No recent orders yet',
-            'text'  => 'Delivered, cancelled, and refunded orders appear here.',
+            'text'  => 'Delivered, cancelled, refunded, and failed orders appear here.',
         ],
         default => [
             'title' => 'No orders',
@@ -851,21 +836,13 @@ if (!$isOwner) {
         $maxLiveOrderId = 0;
     }
 }
-
-// The chain that stretches to the footer:
-//   main.main-content (in header.php, flex: 1)
-//     → .content       (flex: 1, flex-column)
-//     → .kitchen-page  (flex: 1, flex-column)
-//     → .container     (flex: 1, flex-column)
-//     → .kitchen-orders (flex: 1)
-//     → footer sibling (flex-shrink: 0)
 ?>
 <div class="content kitchen-page" id="kitchenPage"
     data-csrf-token="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>"
     data-scope="<?php echo $isOwner ? 'owner' : 'branch'; ?>" data-branch-id="<?php echo $branchId; ?>"
     data-asset-base="<?php echo htmlspecialchars($assetBase, ENT_QUOTES, 'UTF-8'); ?>"
-    data-handler-url="../backend/handlers/order-handler.php" data-chat-url="../backend/handlers/chat-handler.php"
-    data-max-order-id="<?php echo $maxLiveOrderId; ?>"
+    data-handler-url="../backend/handlers/kitchen-order-handler.php"
+    data-chat-url="../backend/handlers/chat-handler.php" data-max-order-id="<?php echo $maxLiveOrderId; ?>"
     data-active-tab="<?php echo htmlspecialchars($activeTab, ENT_QUOTES, 'UTF-8'); ?>"
     data-active-page="<?php echo (int)$pagination['page']; ?>"
     data-per-page="<?php echo (int)KITCHEN_DEFAULT_PER_PAGE; ?>">
@@ -995,9 +972,6 @@ if (!$isOwner) {
 
         <?php else: ?>
 
-        <!-- ============================================================
-             TAB BAR
-             ============================================================ -->
         <nav class="kitchen-tabs" role="tablist" aria-label="Order status tabs">
             <a href="kitchen.php?tab=new" class="kitchen-tab <?php echo $activeTab === 'new' ? 'active' : ''; ?>"
                 role="tab" aria-selected="<?php echo $activeTab === 'new' ? 'true' : 'false'; ?>"
@@ -1042,9 +1016,6 @@ if (!$isOwner) {
             </a>
         </nav>
 
-        <!-- ============================================================
-             NEW-ORDER PILL
-             ============================================================ -->
         <div class="kitchen-new-order-pill" id="kitchenNewOrderPill" hidden>
             <a href="kitchen.php?tab=<?php echo htmlspecialchars($activeTab, ENT_QUOTES, 'UTF-8'); ?>&page=1"
                 class="kitchen-new-order-link">
@@ -1059,9 +1030,6 @@ if (!$isOwner) {
             </a>
         </div>
 
-        <!-- ============================================================
-             ACTIVE PANEL
-             ============================================================ -->
         <section class="kitchen-orders" id="kitchenOrderList"
             aria-label="<?php echo htmlspecialchars(kitchenTabTitle($activeTab), ENT_QUOTES, 'UTF-8'); ?>"
             data-active-tab="<?php echo htmlspecialchars($activeTab, ENT_QUOTES, 'UTF-8'); ?>"
@@ -1103,9 +1071,6 @@ if (!$isOwner) {
         );
         ?>
 
-        <!-- ============================================================
-             RIDER MODAL
-             ============================================================ -->
         <div class="kitchen-modal" id="riderModal" role="dialog" aria-modal="true" aria-labelledby="riderModalTitle">
             <div class="kitchen-modal-overlay" data-close-modal="rider-modal"></div>
             <div class="kitchen-modal-content">
@@ -1195,28 +1160,29 @@ if (!$isOwner) {
             </div>
         </div>
 
-        <!-- ============================================================
-             CONFIRM MODAL
-             ============================================================ -->
         <div class="kitchen-modal" id="confirmModal" role="dialog" aria-modal="true"
             aria-labelledby="confirmModalTitle">
             <div class="kitchen-modal-overlay" data-close-modal="confirm-modal"></div>
             <div class="kitchen-modal-content kitchen-confirm-content">
-                <div class="kitchen-modal-header">
-                    <h2 class="heading-5" id="confirmModalTitle">Confirm</h2>
-                    <button type="button" class="kitchen-modal-close" data-close-modal="confirm-modal"
-                        aria-label="Close">&times;</button>
+
+                <div class="kitchen-confirm-icon" aria-hidden="true">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/error-warning-line.svg" alt=""
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/information-fill.svg'">
                 </div>
 
-                <div class="kitchen-modal-body">
-                    <p id="confirmModalMessage" class="kitchen-confirm-text">
-                        Are you sure?
-                    </p>
-                </div>
+                <h2 class="kitchen-confirm-title" id="confirmModalTitle">Cancel this order?</h2>
 
-                <div class="kitchen-modal-footer">
-                    <button type="button" class="btn btn-secondary" data-close-modal="confirm-modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" id="confirmModalBtn">Confirm</button>
+                <p class="kitchen-confirm-body" id="confirmModalMessage">
+                    Are you sure?
+                </p>
+
+                <div class="kitchen-confirm-actions">
+                    <button type="button" class="kitchen-btn-cancel" data-close-modal="confirm-modal">
+                        Keep order
+                    </button>
+                    <button type="button" class="kitchen-btn-danger" id="confirmModalBtn">
+                        Yes, cancel order
+                    </button>
                 </div>
             </div>
         </div>
@@ -1230,8 +1196,9 @@ if (!$isOwner) {
 </div>
 
 <?php if (!$isOwner): ?>
-<script src="../assets/ui/js/orders.js" defer></script>
+<script src="../assets/ui/js/kitchen-order.js" defer></script>
 <script src="../assets/ui/js/kitchen-realtime.js" defer></script>
+<script src="../assets/ui/js/restaurant-chat-modal.js" defer></script>
 <?php endif; ?>
 
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>

@@ -2,33 +2,57 @@
 /**
  * FitPal Customer Header
  *
- * Customer-specific header with conditional navigation based on login
- * status.
+ * Customer-specific header with conditional navigation based on
+ * login status. Runs on the customer session (PHPSESSID_CUSTOMER),
+ * which is separate from every other role's session.
  *
- * Logout uses a confirmation modal, matching the rider and restaurant
- * headers. The logout buttons carry data-logout-trigger so logout.js
- * intercepts the click and opens #logoutModal.
+ * ---------------------------------------------------------------------
+ * PER-ROLE SESSION MODEL (Option B)
+ * ---------------------------------------------------------------------
+ * This header is included by an entry-point file under
+ * customer/pages/ after that file has run:
  *
- * Sign-out guard
- * --------------
+ *     require_once '<...>/shared/includes/session-bootstrap.php';
+ *     fitpal_session_bootstrap('customer');
+ *
+ * If that precondition is not met, this header emits a minimal
+ * error page and exits. It does NOT call session_start() itself,
+ * because doing so would open PHP's default PHPSESSID session and
+ * silently break isolation.
+ *
+ * ---------------------------------------------------------------------
+ * SESSION ACTIVITY
+ * ---------------------------------------------------------------------
+ * The last-activity timestamp is recorded for reference, but it is
+ * not used to expire the session. Sign-out is a manual action: the
+ * user presses the logout button, the sign-out handler runs, and
+ * the customer session is destroyed. The browser's own session-
+ * cookie lifetime is the only other mechanism that ends this
+ * session.
+ *
+ * ---------------------------------------------------------------------
+ * LOGOUT CONFIRMATION MODAL
+ * ---------------------------------------------------------------------
  * The header renders TWO modals:
  *
  *   #logoutModal
- *     The normal Yes/No confirmation. Shown only after the pre-flight
- *     check in logout.js reports the customer is eligible to sign out.
+ *     The normal Yes/No confirmation. Shown only after the
+ *     pre-flight check in logout.js reports the customer is
+ *     eligible to sign out.
  *
  *   #customerBlockSignOutModal
- *     The blocking modal. Shown when the pre-flight check reports the
- *     customer is NOT eligible — either because they still have live
- *     orders, or because they still have items in the cart or the
- *     session order queue. Single OK button; informational only.
- *     logout.js writes the body text because the correct copy depends
- *     on WHICH condition failed.
+ *     The blocking modal. Shown when the pre-flight check reports
+ *     the customer is NOT eligible — either because they still
+ *     have live orders, or because they still have items in the
+ *     cart or the session order queue. Single OK button;
+ *     informational only. logout.js writes the body text because
+ *     the correct copy depends on WHICH condition failed.
  *
- * Avatar block
- * ------------
- * The desktop avatar is a real <a href="profile.php"> link, not a
- * <div>. Its contents are chosen at render time:
+ * ---------------------------------------------------------------------
+ * AVATAR BLOCK
+ * ---------------------------------------------------------------------
+ * The desktop avatar is a real <a href="profile.php"> link. Its
+ * contents are chosen at render time:
  *
  *   - profile_picture is set and the file exists on disk
  *       → <img src="<projectRoot>/<path>" class="profile-icon profile-icon-image">
@@ -36,62 +60,126 @@
  *       → the initial letter, or the fallback user icon when the
  *         initial is empty
  *
- * Session cache
- * -------------
+ * ---------------------------------------------------------------------
+ * SESSION CACHE
+ * ---------------------------------------------------------------------
  * The header prefers $_SESSION['customer_name'] and
- * $_SESSION['customer_profile_picture'] when they are set, and falls
- * back to a single DB query that reads both columns at once when they
- * are not.
+ * $_SESSION['customer_profile_picture'] when they are set, and
+ * falls back to a single DB query that reads both columns at once
+ * when they are not.
  *
  * @package FitPal
- * @version 2.1 — Adds the #customerBlockSignOutModal and the
- *                window.CUSTOMER_HANDLER_ENDPOINT global so the
- *                sign-out guard in logout.js has a stable endpoint
- *                to POST to. No other rule changed from 2.0.
+ * @version 4.0 — Automatic idle logout removed. The header no
+ *                longer calls trackSessionActivity()'s return
+ *                value to decide whether to expire the session.
+ *                It records the timestamp for reference and
+ *                proceeds. Sign-out is now manual only.
  *
- *                (2.0: reads profile_picture from customer_profile
- *                so the avatar circle reflects the customer's
- *                uploaded picture. 1.8: session-cached display
- *                name. 1.7: logout triggers carry the customer
- *                role's CSRF token. 1.6: CSRF bootstrap moved to
- *                includes/customer-csrf-token.php. 1.5:
- *                order-receipt.php registered in $pageCssMap.)
+ *                (3.0: per-role session migration. 2.1: added the
+ *                #customerBlockSignOutModal and the
+ *                window.CUSTOMER_HANDLER_ENDPOINT global.
+ *                2.0: reads profile_picture from customer_profile.
+ *                1.8: session-cached display name.)
  */
 
 declare(strict_types=1);
 
-// ===== SESSION =====
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-if (!isset($_SESSION['created'])) {
-    $_SESSION['created'] = time();
-} elseif (time() - $_SESSION['created'] > 1800) {
-    session_regenerate_id(true);
-    $_SESSION['created'] = time();
-}
-
-// ===== CSRF TOKEN (customer role) =====
+// ---------------------------------------------------------------------
+// PRECONDITION CHECK
 //
-// Per-role token. The customer, admin, rider, and restaurant roles
-// all run on the same PHP session (same cookie), so the customer
-// role must never read or write the shared 'csrf_token' key — a
-// sign-in by another role would otherwise delete the token this
-// role's already-rendered forms were relying on.
+// Under Option B, the customer session must be the active session
+// before this header can render. If it is not, the entry-point
+// file forgot to bootstrap — refuse to render rather than emit
+// customer chrome against the wrong session.
+// ---------------------------------------------------------------------
+
+if (!function_exists('fitpal_session_current_context')) {
+    require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+}
+
+if (fitpal_session_current_context() !== 'customer') {
+    error_log(
+        'customer/includes/header.php: included without the customer session '
+        . 'being bootstrapped. Current context: "'
+        . fitpal_session_current_context() . '". '
+        . 'The entry-point file must call fitpal_session_bootstrap(\'customer\') '
+        . 'before including this header.'
+    );
+
+    http_response_code(500);
+    ?>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>FitPal — Configuration Error</title>
+</head>
+
+<body
+    style="font-family:system-ui,sans-serif;max-width:640px;margin:80px auto;padding:0 24px;line-height:1.5;color:#111;">
+    <h1 style="font-size:20px;margin:0 0 12px;">Configuration Error</h1>
+    <p style="margin:0 0 12px;">
+        This page was reached without a customer session being
+        started. The entry-point file must call
+        <code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;">fitpal_session_bootstrap('customer')</code>
+        before including the customer header.
+    </p>
+    <p style="margin:0;color:#6b7280;font-size:14px;">
+        If you are a developer, check the server error log for details.
+    </p>
+</body>
+
+</html>
+<?php
+    exit;
+}
+
+// ---------------------------------------------------------------------
+// SESSION ACTIVITY
+//
+// The last-activity timestamp is recorded for reference, but it is
+// not used to expire the session. Sign-out is a manual action:
+// the user presses the logout button, the sign-out handler runs,
+// and the customer session is destroyed. The browser's own
+// session-cookie lifetime is the only other mechanism that ends
+// this session.
+// ---------------------------------------------------------------------
+
+require_once __DIR__ . '/../../shared/includes/session-activity.php';
+
+if (!empty($_SESSION['customer_id'])) {
+    trackSessionActivity();
+}
+
+// ---------------------------------------------------------------------
+// CSRF TOKEN (customer context)
+//
+// getCustomerCsrfToken() verifies the active session is the
+// customer session before returning a token, so the value here is
+// always the customer's token and never any other role's.
+// ---------------------------------------------------------------------
+
 require_once __DIR__ . '/customer-csrf-token.php';
 $csrfToken = getCustomerCsrfToken();
 
-// ===== DATABASE =====
+// ---------------------------------------------------------------------
+// DATABASE
+// ---------------------------------------------------------------------
+
 require_once __DIR__ . '/../backend/database/customer-connect.php';
 
-// ===== PATH DETECTION =====
+// ---------------------------------------------------------------------
+// PATH DETECTION
+// ---------------------------------------------------------------------
+
 /**
  * Get the base path to shared/ from the currently executing page.
  *
  * @return string Asset base path ending with 'shared/'
  */
-function getCustomerAssetBase(): string {
+function getCustomerAssetBase(): string
+{
     $scriptPath = $_SERVER['SCRIPT_NAME'];
     $dirPath    = dirname($scriptPath);
     $segments   = array_filter(explode('/', $dirPath));
@@ -101,16 +189,19 @@ function getCustomerAssetBase(): string {
 
 $assetBase = getCustomerAssetBase();
 
-// ===== FETCH CUSTOMER DATA (if logged in) =====
+// ---------------------------------------------------------------------
+// FETCH CUSTOMER DATA (if logged in)
 //
-// Session-canonical for both the display name and the profile picture
-// path. The fallback query reads both columns in one LEFT JOIN so a
-// pre-existing session pays for a single round trip and nothing more.
-$isLoggedIn          = false;
-$userName            = '';
-$userInitial         = '';
-$profilePicturePath  = '';
-$profilePictureUrl   = '';
+// Session-canonical for both the display name and the profile
+// picture path. The fallback query reads both columns in one LEFT
+// JOIN so a pre-existing session pays for a single round trip.
+// ---------------------------------------------------------------------
+
+$isLoggedIn         = false;
+$userName           = '';
+$userInitial        = '';
+$profilePicturePath = '';
+$profilePictureUrl  = '';
 
 if (isset($_SESSION['customer_id']) && !empty($_SESSION['customer_id'])) {
     $isLoggedIn = true;
@@ -148,8 +239,8 @@ if (isset($_SESSION['customer_id']) && !empty($_SESSION['customer_id'])) {
                 $_SESSION['customer_profile_picture'] = '';
             }
         } catch (PDOException $e) {
-            // Silently fail — login state still valid, name and
-            // picture simply won't render. The next page load retries.
+            // Silent fail — login state still valid, name and picture
+            // simply won't render. The next page load retries.
         }
     }
 
@@ -168,7 +259,10 @@ if (isset($_SESSION['customer_id']) && !empty($_SESSION['customer_id'])) {
     }
 }
 
-// ===== CART COUNT (optional badge) =====
+// ---------------------------------------------------------------------
+// CART COUNT (optional badge)
+// ---------------------------------------------------------------------
+
 $cartCount = 0;
 if ($isLoggedIn) {
     try {
@@ -178,14 +272,20 @@ if ($isLoggedIn) {
         $stmt->execute([':id' => $_SESSION['customer_id']]);
         $cartCount = (int)$stmt->fetchColumn();
     } catch (PDOException $e) {
-        // Silently fail — badge simply won't show
+        // Silent fail — badge simply won't show.
     }
 }
 
-// ===== CURRENT PAGE =====
+// ---------------------------------------------------------------------
+// CURRENT PAGE
+// ---------------------------------------------------------------------
+
 $currentPage = basename($_SERVER['PHP_SELF']);
 
-// ===== PAGE-SPECIFIC CSS PRELOADING =====
+// ---------------------------------------------------------------------
+// PAGE-SPECIFIC CSS PRELOADING
+// ---------------------------------------------------------------------
+
 $pageCssMap = [
     'sign-in.php'        => 'sign-in.css',
     'sign-up.php'        => 'sign-up.css',
@@ -207,11 +307,14 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
     $pageCssPath = '../assets/css/' . $pageCssFile;
 }
 
-// ===== EXPLICIT ENDPOINT PATH =====
+// ---------------------------------------------------------------------
+// EXPLICIT ENDPOINT PATH
 //
 // The sign-out guard in logout.js POSTs to this endpoint with
 // action=check_sign_out. Exposed as a global so the JS does not
 // have to guess its own relative path.
+// ---------------------------------------------------------------------
+
 $customerHandlerEndpoint = '../backend/handlers/profile-handler.php';
 ?>
 <!DOCTYPE html>
@@ -246,7 +349,7 @@ $customerHandlerEndpoint = '../backend/handlers/profile-handler.php';
                 </a>
             </div>
 
-            <!-- Mobile Toggle (shared pattern) -->
+            <!-- Mobile Toggle -->
             <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation menu" aria-expanded="false"
                 type="button">
                 <span class="menu-icon">
@@ -340,10 +443,8 @@ $customerHandlerEndpoint = '../backend/handlers/profile-handler.php';
         </div>
     </header>
 
-    <!-- Mobile Overlay (shared pattern) -->
     <div class="mobile-overlay" id="mobileOverlay"></div>
 
-    <!-- Mobile Navigation (shared pattern) -->
     <nav class="mobile-nav" id="mobileNav" role="navigation" aria-label="Mobile navigation">
         <ul class="mobile-nav-list">
 
@@ -423,10 +524,10 @@ $customerHandlerEndpoint = '../backend/handlers/profile-handler.php';
 
     <!-- ============================================
          LOGOUT CONFIRMATION MODAL
-         The confirm action is a POST form so the
-         customer role's own CSRF token is carried
-         in the request body. sign-out-handler.php
-         reads it from POST.
+
+         The confirm action is a POST form so the customer
+         context's CSRF token is carried in the request
+         body. sign-out-handler.php reads it from POST.
          ============================================ -->
     <div class="logout-modal" id="logoutModal" style="display: none;" role="dialog" aria-modal="true"
         aria-labelledby="logoutModalTitle">
@@ -458,9 +559,7 @@ $customerHandlerEndpoint = '../backend/handlers/profile-handler.php';
            - active orders the kitchen is already cooking
            - items still in the cart or the session order queue
 
-         logout.js writes the body text, because the copy
-         depends on which condition failed. The modal has a
-         single OK button: it is informational, not a decision.
+         logout.js writes the body text. Single OK button.
          ============================================ -->
     <div class="logout-modal" id="customerBlockSignOutModal" style="display: none;" role="dialog" aria-modal="true"
         aria-labelledby="customerBlockSignOutTitle">

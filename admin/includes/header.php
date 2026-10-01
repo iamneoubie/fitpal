@@ -3,22 +3,31 @@
  * FitPal Admin Header
  *
  * Renders the admin chrome (nav, user block, logout modal) and
- * bootstraps the admin role's request-scoped needs:
+ * bootstraps the admin role's request-scoped needs.
  *
- *   - Starts or resumes the PHP session.
- *   - Requires includes/admin-csrf-token.php and, for authenticated
- *     pages, calls getAdminCsrfToken() to expose $csrfToken. The
- *     helper stores the token under 'admin_csrf_token' — never the
- *     shared 'csrf_token' key — because all FitPal roles run on the
- *     same PHP session and a shared key would let one role's success
- *     path delete another role's already-rendered token.
- *   - Requires the shared PDO connection via admin-connect.php.
- *   - Computes $assetBase and $pageCssPath for the current page.
- *   - Resolves the signed-in administrator's display name, initial,
- *     and role.
+ * ---------------------------------------------------------------------
+ * PER-ROLE SESSION MODEL (Option B)
+ * ---------------------------------------------------------------------
+ * This header is included by an entry-point file under admin/pages/
+ * after that file has run:
  *
- * Stylesheet load order
- * ---------------------
+ *     require_once '<...>/shared/includes/session-bootstrap.php';
+ *     fitpal_session_bootstrap('admin');
+ *
+ * If that precondition is not met, this header emits a minimal
+ * error page and exits. It does NOT call session_start() itself,
+ * because doing so would open PHP's default PHPSESSID session and
+ * silently break isolation.
+ *
+ * ---------------------------------------------------------------------
+ * SESSION ACTIVITY
+ * ---------------------------------------------------------------------
+ * The last-activity timestamp is recorded for reference, but it is
+ * not used to expire the session. Sign-out is a manual action.
+ *
+ * ---------------------------------------------------------------------
+ * STYLESHEET LOAD ORDER
+ * ---------------------------------------------------------------------
  * The header emits, in this order:
  *
  *   1. shared/assets/css/global.css       (design tokens + components)
@@ -27,92 +36,140 @@
  *   4. ../assets/css/admin-shared.css     (admin list-page chrome)
  *   5. ../assets/css/<page>.css           (page-specific tuning)
  *
- * admin-shared.css was added in v5.4. It carries the list-page
- * chrome that used to be duplicated across admin-tables.css,
- * customers.css, riders.css, and restaurants.css. It must load
- * before the page-specific file so the page tuning wins on cascade
- * position without needing !important. It is linked unconditionally
- * because the page map does not distinguish list pages from
- * non-list pages; the rules it declares only apply to elements
- * that carry the .admin-list-page / .admin-modal / .admin-table-*
- * classes, so loading it on dashboard.php or profile.php is a
- * no-op cost (a small file the browser caches after first use).
+ * admin-shared.css carries the list-page chrome that used to be
+ * duplicated across admin-tables.css, customers.css, riders.css,
+ * and restaurants.css. It must load before the page-specific file
+ * so the page tuning wins on cascade position without needing
+ * !important.
  *
- * Session-first display resolution
- * --------------------------------
- * Sign-in-handler.php writes $_SESSION['admin_name'] and
+ * ---------------------------------------------------------------------
+ * SESSION-FIRST DISPLAY RESOLUTION
+ * ---------------------------------------------------------------------
+ * The admin sign-in handler writes $_SESSION['admin_name'] and
  * $_SESSION['admin_role'] on the success path. This header reads
- * them from the session first and only falls back to a database
- * query when either is missing — which happens only for sessions
- * that predate the migration of the sign-in handler to the
- * {role}_-prefixed key convention (v1.6), or when a session was
- * tampered with to strip the keys.
+ * them from the admin session first and only falls back to a
+ * database query when either is missing.
  *
- * Before this revision the header always queried, once per
- * authenticated page load, on every page, even though the session
- * almost always already carried the values. A five-page admin
- * session paid five redundant LEFT JOIN queries. Now the query
- * fires at most once per session, on the first page view after a
- * sign-in that did not populate the session keys.
- *
- * The $csrfToken initialization is deliberately asymmetric and both
- * halves are intentional:
+ * ---------------------------------------------------------------------
+ * CSRF TOKEN INITIALIZATION
+ * ---------------------------------------------------------------------
+ * The $csrfToken initialization is deliberately asymmetric and
+ * both halves are intentional:
  *
  *   - Before the authenticated check, a guarded init sets an empty
- *     default only when the caller has not already set the variable.
- *     sign-in.php assigns $csrfToken before including this file, so
- *     the guard prevents the header from clobbering it with ''.
+ *     default only when the caller has not already set the
+ *     variable. sign-in.php assigns $csrfToken before including
+ *     this file, so the guard prevents the header from clobbering
+ *     it with ''.
  *
  *   - Inside the authenticated branch, the assignment is
  *     UNCONDITIONAL. On an authenticated page the header is the
  *     authoritative source of the token, and getAdminCsrfToken()
- *     is idempotent within the request — if a future authenticated
- *     page pre-set the variable, the value it set would be exactly
- *     what the helper returns anyway. sign-in.php never reaches
- *     this branch because it redirects away when a session is
- *     already present.
+ *     is idempotent within the request.
  *
  * @package FitPal
- * @version 5.4 — Adds the admin-shared.css <link>, placed between
- *                admin's own header.css and the page-specific CSS
- *                link so shared list-page chrome loads before the
- *                page tuning it is layered under.
+ * @version 7.0 — Automatic idle logout removed. The header no
+ *                longer calls trackSessionActivity()'s return
+ *                value to decide whether to expire the session.
+ *                It records the timestamp for reference and
+ *                proceeds. Sign-out is now manual only.
  *
- *                (5.3: Session-first display resolution. The header
- *                no longer fires a database query on every
- *                authenticated page load. It reads
- *                $_SESSION['admin_name'] and $_SESSION['admin_role']
- *                first, and only falls back to a query when either
- *                is missing.
- *
- *                5.2: Documented the intentional asymmetry in the
- *                $csrfToken initialization. No code change.
- *                5.1: Rewrote the docblock to describe only current
- *                behavior. 5.0: CSRF consolidation via
- *                includes/admin-csrf-token.php.)
+ *                (6.0: per-role session migration. 5.4: adds
+ *                admin-shared.css. 5.3: session-first display
+ *                resolution. 5.2: documented the $csrfToken init
+ *                asymmetry.)
  */
 
 declare(strict_types=1);
 
-// ===== SESSION =====
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+// ---------------------------------------------------------------------
+// PRECONDITION CHECK
+//
+// Under Option B, the admin session must be the active session
+// before this header can render. If it is not, the entry-point
+// file forgot to bootstrap — refuse to render rather than emit
+// admin chrome against the wrong session.
+// ---------------------------------------------------------------------
+
+if (!function_exists('fitpal_session_current_context')) {
+    require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
 }
 
-if (!isset($_SESSION['created'])) {
-    $_SESSION['created'] = time();
-} elseif (time() - $_SESSION['created'] > 1800 && !empty($_SESSION['administrator_id'])) {
-    session_regenerate_id(true);
-    $_SESSION['created'] = time();
+if (fitpal_session_current_context() !== 'admin') {
+    error_log(
+        'admin/includes/header.php: included without the admin session '
+        . 'being bootstrapped. Current context: "'
+        . fitpal_session_current_context() . '". '
+        . 'The entry-point file must call fitpal_session_bootstrap(\'admin\') '
+        . 'before including this header.'
+    );
+
+    http_response_code(500);
+    ?>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>FitPal — Configuration Error</title>
+</head>
+
+<body
+    style="font-family:system-ui,sans-serif;max-width:640px;margin:80px auto;padding:0 24px;line-height:1.5;color:#111;">
+    <h1 style="font-size:20px;margin:0 0 12px;">Configuration Error</h1>
+    <p style="margin:0 0 12px;">
+        This page was reached without an admin session being
+        started. The entry-point file must call
+        <code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;">fitpal_session_bootstrap('admin')</code>
+        before including the admin header.
+    </p>
+    <p style="margin:0;color:#6b7280;font-size:14px;">
+        If you are a developer, check the server error log for details.
+    </p>
+</body>
+
+</html>
+<?php
+    exit;
 }
 
-// ===== CSRF TOKEN (admin role) =====
+// ---------------------------------------------------------------------
+// SESSION ACTIVITY
+//
+// The last-activity timestamp is recorded for reference, but it is
+// not used to expire the session. Sign-out is a manual action:
+// the user presses the logout button, the sign-out handler runs,
+// and the admin session is destroyed. The browser's own session-
+// cookie lifetime is the only other mechanism that ends this
+// session.
+// ---------------------------------------------------------------------
+
+require_once __DIR__ . '/../../shared/includes/session-activity.php';
+
+if (!empty($_SESSION['administrator_id'])) {
+    trackSessionActivity();
+}
+
+// ---------------------------------------------------------------------
+// CSRF TOKEN (admin context)
+//
+// getAdminCsrfToken() verifies the active session is the admin
+// session before returning a token, so the value here is always
+// the admin's token and never any other role's.
+// ---------------------------------------------------------------------
+
 require_once __DIR__ . '/admin-csrf-token.php';
 
-// ===== DATABASE =====
+// ---------------------------------------------------------------------
+// DATABASE
+// ---------------------------------------------------------------------
+
 require_once __DIR__ . '/../backend/database/admin-connect.php';
 
-// ===== PATH DETECTION =====
+// ---------------------------------------------------------------------
+// PATH DETECTION
+// ---------------------------------------------------------------------
+
 function getAdminAssetBase(): string
 {
     $scriptPath = $_SERVER['SCRIPT_NAME'];
@@ -124,7 +181,10 @@ function getAdminAssetBase(): string
 
 $assetBase = getAdminAssetBase();
 
-// ===== FETCH ADMIN DATA (if logged in) =====
+// ---------------------------------------------------------------------
+// FETCH ADMIN DATA (if logged in)
+// ---------------------------------------------------------------------
+
 $isLoggedIn   = false;
 $adminName    = '';
 $adminInitial = '';
@@ -159,10 +219,7 @@ if (!empty($_SESSION['administrator_id'])) {
     // The session's admin_name is intentionally not trusted for
     // authorization — it is a display string only. Authorization
     // still reads $_SESSION['administrator_id'], which was set by the
-    // sign-in handler after session_regenerate_id(true). A tampered
-    // display name cannot elevate privileges; it can only change the
-    // text rendered in the header. This is the same trust level the
-    // customer role's header grants $_SESSION['customer_name'].
+    // sign-in handler after session_regenerate_id(true).
     // -----------------------------------------------------------------
     $nameFromSession = trim((string)($_SESSION['admin_name'] ?? ''));
     $roleFromSession = trim((string)($_SESSION['admin_role'] ?? ''));
@@ -204,17 +261,23 @@ if (!empty($_SESSION['administrator_id'])) {
     }
 }
 
-// ===== CURRENT PAGE =====
+// ---------------------------------------------------------------------
+// CURRENT PAGE
+// ---------------------------------------------------------------------
+
 $currentPage = basename($_SERVER['PHP_SELF']);
 
-// ===== PAGE-SPECIFIC CSS =====
+// ---------------------------------------------------------------------
+// PAGE-SPECIFIC CSS
+// ---------------------------------------------------------------------
+
 $pageCssMap = [
-    'sign-in.php'      => 'sign-in.css',
-    'dashboard.php'    => 'dashboard.css',
-    'customers.php'    => 'customers.css',
-    'riders.php'       => 'riders.css',
-    'restaurants.php'  => 'restaurants.css',
-    'profile.php'      => 'profile.css',
+    'sign-in.php'     => 'sign-in.css',
+    'dashboard.php'   => 'dashboard.css',
+    'customers.php'   => 'customers.css',
+    'riders.php'      => 'riders.css',
+    'restaurants.php' => 'restaurants.css',
+    'profile.php'     => 'profile.css',
 ];
 
 $pageCssFile = $pageCssMap[$currentPage] ?? '';

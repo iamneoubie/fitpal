@@ -6,6 +6,41 @@
  * profile snapshot. All SQL lives in dashboard-queries.php.
  *
  * ---------------------------------------------------------------------
+ * WHERE THE NUMBERS ON THIS PAGE COME FROM
+ * ---------------------------------------------------------------------
+ * Two independent sources feed the dashboard, both written by the
+ * shared order-transaction layer:
+ *
+ *   Order and spend aggregates
+ *       Every value under `stats-grid`, the weekly chart, and the
+ *       recent-orders list is derived from the `orders` and
+ *       `queue_item` tables. Rows in those tables are inserted by
+ *       createOrderFromQueue() in
+ *       shared/backend/database/order-transaction-queries.php.
+ *
+ *       The status filter applied to every spend reader is
+ *       "order_status NOT IN ('cancelled','refunded','failed')",
+ *       matching the revenue-recognition rule the rest of the
+ *       project follows: no gross revenue is recognised until an
+ *       order reaches 'delivered', and a cancelled, refunded, or
+ *       failed order contributes zero to every spend aggregate.
+ *
+ *   Recent-order totals
+ *       getRecentOrdersWithTotals() in dashboard-queries.php
+ *       computes each recent order's delivery fee, service fee, and
+ *       VAT from calculateOrderFees() in the shared fee schedule
+ *       (shared/backend/database/fee-queries.php). Those are the
+ *       same constants the checkout page renders and the same
+ *       constants the placement flow stores, so the totals this
+ *       card shows and the totals the customer paid agree by
+ *       construction.
+ *
+ * The dashboard never writes to the ledger and never reads
+ * financial_account.balance for spend; the wallet balance on the
+ * sidebar profile snapshot comes from customer_profile /
+ * financial_account via the same read path the wallet page uses.
+ *
+ * ---------------------------------------------------------------------
  * SCOPE RULES APPLIED
  * ---------------------------------------------------------------------
  *  - No SQL in this file.
@@ -16,34 +51,21 @@
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 4.1 — The greeting now reads the signed-in customer's
- *                display name from $_SESSION['customer_name'] (written
- *                by sign-in-handler.php v2.2). Previously it read
- *                $_SESSION['user_name'], a generic key that the admin,
- *                rider, and restaurant sign-in handlers also wrote
- *                into the same shared PHP session. When both an admin
- *                and a customer were signed in on the same browser,
- *                whichever role signed in last clobbered the other's
- *                user_name, and this greeting rendered the wrong
- *                person's name while the profile card, orders, and
- *                wallet — all fetched by customer_id from the
- *                database — stayed correct. That mismatch was the
- *                visible symptom of the collision.
+ * @version 4.2 — Docblock records the shared order-transaction layer
+ *                as the writer of every order row this page
+ *                aggregates, and the shared fee schedule as the
+ *                source of the recent-order totals. No markup,
+ *                chart, or JS config change from the previous
+ *                revision.
  *
- *                A defensive fallback uses the session value from
- *                header.php (which itself falls back to a database
- *                lookup for pre-v2.2 sessions) so this page renders
- *                a name even during the migration window.
- *
- *                (4.0: Local formatCurrency() removed; uses the
- *                query-layer version.)
+ *                (4.1: greeting reads $_SESSION['customer_name'].
+ *                4.0: local formatCurrency() removed.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('customer');
 
 if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     header('Location: sign-in.php');
@@ -56,11 +78,7 @@ require_once __DIR__ . '/../backend/database/dashboard-queries.php';
 
 $customerId = (int)$_SESSION['customer_id'];
 
-// Session-canonical display name. header.php has already resolved
-// this into $_SESSION['customer_name'] by the time we get here, so
-// this is a straight read. The fallback string is only reached if
-// the session value is somehow empty even after header.php's
-// resolution path — defensive, not expected in normal operation.
+// Session-canonical display name.
 $userName = $_SESSION['customer_name'] ?? 'Customer';
 if (trim($userName) === '') {
     $userName = 'Customer';
@@ -103,6 +121,7 @@ function getStatusBadgeClass(string $status): string
         'delivered'  => 'badge-success',
         'cancelled'  => 'badge-danger',
         'refunded'   => 'badge-secondary',
+        'failed'     => 'badge-danger',
         default      => 'badge-secondary',
     };
 }
@@ -116,6 +135,7 @@ function getStatusLabel(string $status): string
         'delivered'  => 'Delivered',
         'cancelled'  => 'Cancelled',
         'refunded'   => 'Refunded',
+        'failed'     => 'Failed',
         default      => ucfirst($status),
     };
 }
@@ -285,7 +305,6 @@ $weekShareOfMonth = ($spend['monthly_spend'] ?? 0) > 0
 
                 <div class="analytics-body">
                     <div class="weekly-chart" role="img" aria-label="Bar chart of spending over the last seven days">
-                        <!-- Y-axis labels -->
                         <div class="chart-y-axis" aria-hidden="true">
                             <?php foreach (array_reverse($scale['gridlines']) as $grid): ?>
                             <span class="chart-y-label">₱<?php echo number_format($grid, 0); ?></span>
@@ -293,12 +312,10 @@ $weekShareOfMonth = ($spend['monthly_spend'] ?? 0) > 0
                         </div>
 
                         <div class="chart-plot">
-                            <!-- Gridlines -->
                             <?php foreach ($scale['gridlines'] as $grid): ?>
                             <div class="chart-gridline" aria-hidden="true"></div>
                             <?php endforeach; ?>
 
-                            <!-- Bars -->
                             <div class="chart-columns">
                                 <?php foreach ($weeklySeries as $day):
                                     $pct     = $barHeights[$day['date']];
@@ -322,11 +339,9 @@ $weekShareOfMonth = ($spend['monthly_spend'] ?? 0) > 0
                             </div>
                         </div>
 
-                        <!-- Floating tooltip (positioned by JS) -->
                         <div class="chart-tooltip" id="chartTooltip" role="status" aria-live="polite"></div>
                     </div>
 
-                    <!-- Summary strip -->
                     <div class="analytics-summary">
                         <div class="analytics-item">
                             <span class="analytics-label">This Week</span>

@@ -10,44 +10,97 @@
  * This page is intentionally decoupled from every role directory
  * (customer/, restaurant/, rider/, admin/). It only depends on:
  *
- *   - shared/includes/header.php        (session, nav, auth state, asset base)
- *   - shared/includes/footer.php        (footer markup)
- *   - shared/includes/view-helpers.php  (presentation helpers)
+ *   - shared/includes/session-bootstrap.php  (public session)
+ *   - shared/includes/header.php             (public chrome)
+ *   - shared/includes/footer.php             (footer markup)
+ *   - shared/includes/view-helpers.php       (presentation helpers)
  *   - shared/backend/database/database-connect.php
  *   - shared/backend/database/landing-queries.php
  *
  * It contains NO SQL of its own. Every database call goes through
  * landing-queries.php, which lives under shared/ for the same reason.
  *
- * The asset base path ($assetBase) is provided by header.php. This page
- * does NOT compute its own path — one source of truth, no drift.
+ * The asset base path ($assetBase) is provided by header.php. This
+ * page does NOT compute its own path — one source of truth, no drift.
  *
  * Page-specific CSS (landing.css) is loaded by header.php via its
  * $pageCssMap. This page does NOT emit <link> tags for its own styles.
+ *
+ * ---------------------------------------------------------------------
+ * PER-ROLE SESSION MODEL (Option B)
+ * ---------------------------------------------------------------------
+ * Every role runs as its own PHP session under its own cookie name.
+ * This page belongs to the public context and runs on
+ * PHPSESSID_PUBLIC. That means this page CANNOT read any
+ * authenticated role's session — not the customer's, not the
+ * rider's, not the restaurant's, not the admin's — because a
+ * request to this page carries only the public session cookie.
+ *
+ * The landing page therefore renders the anonymous experience for
+ * every visitor. A signed-in customer who lands here and wants to
+ * go to their dashboard clicks "Login" in the nav, which takes
+ * them to the customer sign-in page; that page detects the already-
+ * active customer session and redirects them to their dashboard.
+ *
+ * ---------------------------------------------------------------------
+ * ADD-TO-CART REMOVED FROM THIS PAGE
+ * ---------------------------------------------------------------------
+ * Before this revision, the featured-product cards rendered an
+ * inline form that POSTed to
+ * customer/backend/handlers/cart-handler.php. That form carried
+ * $_SESSION['csrf_token'], but the cart handler validates against
+ * $_SESSION['customer_csrf_token'], so every submission failed
+ * with "Security validation failed."
+ *
+ * Under Option B the mismatch is structural: this page runs on
+ * the public session, so it cannot read the customer session at
+ * all. The inline form is removed entirely. Each featured product
+ * card now links to
+ * customer/pages/product-detail.php?id=<product_id>, which is the
+ * correct place to add an item to a cart because it runs on the
+ * customer session.
+ *
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 3.2 — Removed inline CSS link and duplicated asset-base helper.
+ * @version 4.0 — Per-role session migration (Option B). The page
+ *                bootstraps the public session before any other
+ *                include. The inline add-to-cart form and the
+ *                logged-in CTA branch are removed because the
+ *                public session cannot read the customer session.
+ *                Featured-product cards now link to the product
+ *                detail page.
+ *
+ *                (3.2: removed inline CSS link and duplicated
+ *                asset-base helper.)
  */
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/shared/includes/header.php';
+// ---------------------------------------------------------------------
+// SESSION BOOTSTRAP
+//
+// Must run before any include that might touch the session. This
+// page belongs to the public context.
+// ---------------------------------------------------------------------
+
+require_once __DIR__ . '/shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('public');
 
 // ---------------------------------------------------------------------
-// CSRF TOKEN
+// HEADER
+//
+// The header verifies the active session is the public session and
+// computes $assetBase. It also pulls in the shared database
+// connection.
 // ---------------------------------------------------------------------
-// The header starts the session but does not guarantee a token. The
-// landing page renders a cart form for logged-in customers, so we make
-// sure a token exists before rendering.
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
+
+require_once __DIR__ . '/shared/includes/header.php';
 
 // ---------------------------------------------------------------------
 // DATA
 // ---------------------------------------------------------------------
-require_once __DIR__ . '/shared/backend/database/database-connect.php';
+
 require_once __DIR__ . '/shared/backend/database/landing-queries.php';
 require_once __DIR__ . '/shared/includes/view-helpers.php';
 
@@ -81,19 +134,12 @@ $hasProducts = !empty($featuredProducts);
                     Restaurants provide nutritional information and dietary tags for their menu items.
                 </p>
                 <div class="hero-actions">
-                    <?php if ($isLoggedIn): ?>
-                    <a href="<?php echo $assetBase; ?>../<?php echo htmlspecialchars($userRole, ENT_QUOTES, 'UTF-8'); ?>/pages/dashboard.php"
-                        class="btn btn-primary btn-lg">
-                        Go to Dashboard
-                    </a>
-                    <?php else: ?>
                     <a href="<?php echo $assetBase; ?>../customer/pages/sign-up.php" class="btn btn-primary btn-lg">
                         Get Started
                     </a>
                     <a href="<?php echo $assetBase; ?>pages/about.php" class="btn btn-outline btn-lg">
                         Learn More
                     </a>
-                    <?php endif; ?>
                 </div>
                 <div class="hero-stats">
                     <div class="hero-stat">
@@ -259,10 +305,8 @@ $hasProducts = !empty($featuredProducts);
                     $productId          = (int)$product['id'];
                     $productName        = $product['name'] ?? 'Product';
                     $productPrice       = (float)($product['price'] ?? 0);
-                    $productStock       = (int)($product['stock'] ?? 0);
                     $productCalories    = (int)($product['calories'] ?? 0);
                     $restaurantName     = $product['restaurant_name'] ?? '';
-                    $branchName         = $product['branch_name'] ?? '';
                     $productDescription = $product['description'] ?? '';
 
                     $dietaryTags = parseTagList($product['dietary_tags'] ?? '');
@@ -271,16 +315,13 @@ $hasProducts = !empty($featuredProducts);
                     $productImage = !empty($product['product_image'])
                         ? htmlspecialchars($product['product_image'], ENT_QUOTES, 'UTF-8')
                         : $assetBase . 'assets/images/icons/restaurant.svg';
-                ?>
-                <div class="product-card" data-product-id="<?php echo $productId; ?>"
-                    data-product-name="<?php echo htmlspecialchars($productName, ENT_QUOTES, 'UTF-8'); ?>"
-                    data-product-price="<?php echo $productPrice; ?>" data-product-stock="<?php echo $productStock; ?>"
-                    data-product-image="<?php echo $productImage; ?>"
-                    data-restaurant-name="<?php echo htmlspecialchars($restaurantName, ENT_QUOTES, 'UTF-8'); ?>"
-                    data-branch-name="<?php echo htmlspecialchars($branchName, ENT_QUOTES, 'UTF-8'); ?>">
 
-                    <a href="<?php echo $assetBase; ?>../customer/pages/product-detail.php?id=<?php echo $productId; ?>"
-                        class="product-image-link" onclick="event.stopPropagation();">
+                    $productDetailUrl = $assetBase . '../customer/pages/product-detail.php?id=' . $productId;
+                ?>
+                <div class="product-card" data-product-id="<?php echo $productId; ?>">
+
+                    <a href="<?php echo htmlspecialchars($productDetailUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                        class="product-image-link">
                         <div class="product-image">
                             <img src="<?php echo $productImage; ?>"
                                 alt="<?php echo htmlspecialchars($productName, ENT_QUOTES, 'UTF-8'); ?>" loading="lazy"
@@ -289,8 +330,8 @@ $hasProducts = !empty($featuredProducts);
                     </a>
 
                     <div class="product-info">
-                        <a href="<?php echo $assetBase; ?>../customer/pages/product-detail.php?id=<?php echo $productId; ?>"
-                            class="product-name-link" onclick="event.stopPropagation();">
+                        <a href="<?php echo htmlspecialchars($productDetailUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                            class="product-name-link">
                             <p class="heading-6">
                                 <?php echo htmlspecialchars($productName, ENT_QUOTES, 'UTF-8'); ?>
                             </p>
@@ -341,47 +382,18 @@ $hasProducts = !empty($featuredProducts);
                     </div>
 
                     <!--
-                        Product Actions
-
-                        Posts to the CUSTOMER cart handler. The handler
-                        expects `action=add` plus `csrf_token` and
-                        `product_id`. We also send `total_price=0` because
-                        the handler logs a warning when the client-supplied
-                        total does not match the server-computed total. For
-                        a plain add-from-landing-page with no customizations,
-                        sending 0 skips that warning path.
+                        The inline add-to-cart form was removed in v4.0.
+                        This page runs on the public session and cannot
+                        read the customer session's CSRF token. The
+                        featured card links to the product detail page
+                        instead, which runs on the customer session and
+                        is where add-to-cart belongs.
                     -->
                     <div class="product-actions">
-                        <?php if ($isLoggedIn && $productStock > 0): ?>
-                        <form method="POST"
-                            action="<?php echo $assetBase; ?>../customer/backend/handlers/cart-handler.php"
-                            class="add-to-cart-form">
-                            <input type="hidden" name="action" value="add">
-                            <input type="hidden" name="csrf_token"
-                                value="<?php echo htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8'); ?>">
-                            <input type="hidden" name="product_id" value="<?php echo $productId; ?>">
-                            <input type="hidden" name="total_price" value="0">
-                            <div class="action-row">
-                                <div class="quantity-control">
-                                    <button type="button" class="qty-btn qty-minus"
-                                        aria-label="Decrease quantity">&minus;</button>
-                                    <input type="number" name="quantity" value="1" min="1"
-                                        max="<?php echo $productStock; ?>" class="qty-input">
-                                    <button type="button" class="qty-btn qty-plus"
-                                        aria-label="Increase quantity">+</button>
-                                </div>
-                                <button type="submit" class="btn btn-primary btn-sm add-btn" aria-label="Add to cart">
-                                    <img src="<?php echo $assetBase; ?>assets/images/icons/add-circle-empty.svg" alt=""
-                                        class="btn-icon" width="18" height="18">
-                                </button>
-                            </div>
-                        </form>
-                        <?php elseif (!$isLoggedIn): ?>
-                        <a href="<?php echo $assetBase; ?>../customer/pages/sign-in.php"
-                            class="btn btn-outline btn-sm">Login to Order</a>
-                        <?php else: ?>
-                        <span class="btn btn-sm btn-disabled">Out of Stock</span>
-                        <?php endif; ?>
+                        <a href="<?php echo htmlspecialchars($productDetailUrl, ENT_QUOTES, 'UTF-8'); ?>"
+                            class="btn btn-primary btn-sm">
+                            View Meal
+                        </a>
                     </div>
                 </div>
                 <?php endforeach; ?>
@@ -413,19 +425,12 @@ $hasProducts = !empty($featuredProducts);
                 <p class="cta-title" id="cta-title">Find Meals That Match Your Diet</p>
                 <p class="cta-description">Explore restaurants and filter by your dietary preferences.</p>
                 <div class="cta-buttons">
-                    <?php if ($isLoggedIn): ?>
-                    <a href="<?php echo $assetBase; ?>../<?php echo htmlspecialchars($userRole, ENT_QUOTES, 'UTF-8'); ?>/pages/dashboard.php"
-                        class="btn btn-primary btn-lg">
-                        Go to Dashboard
-                    </a>
-                    <?php else: ?>
                     <a href="<?php echo $assetBase; ?>../customer/pages/sign-up.php" class="btn btn-primary btn-lg">
                         Get Started
                     </a>
                     <a href="<?php echo $assetBase; ?>../customer/pages/sign-in.php" class="btn btn-outline btn-lg">
                         Sign In
                     </a>
-                    <?php endif; ?>
                 </div>
             </div>
         </div>

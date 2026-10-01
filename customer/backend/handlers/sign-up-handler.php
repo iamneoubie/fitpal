@@ -2,37 +2,110 @@
 /**
  * FitPal Customer Registration Handler
  *
+ * Runs on the customer session (PHPSESSID_CUSTOMER), separate from
+ * every other role's session.
+ *
+ * Creates the following rows in a single DB transaction:
+ *   1. financial_account            (account_type = 'customer')
+ *   2. customer
+ *   3. customer_profile
+ *
+ * Responds with JSON. The customer is NOT logged in after
+ * registration — they are redirected to sign-in.php.
+ *
+ * ---------------------------------------------------------------------
+ * PER-ROLE SESSION MODEL (Option B)
+ * ---------------------------------------------------------------------
+ * The handler bootstraps the customer session before doing
+ * anything else. Because the request that reaches this handler
+ * carries only the customer cookie, the customer session is the
+ * only session this code can see. The CSRF check reads
+ * $_SESSION['customer_csrf_token'] and the success flash writes to
+ * $_SESSION['registration_success'] — both inside the customer
+ * session and guaranteed to be the customer's own.
+ *
  * @package FitPal
- * @version 2.1 — Validates against customer_csrf_token (own key)
- *                instead of the shared csrf_token, matching the
- *                sign-in handler and the customer sign-up.php form.
+ * @version 3.0 — Per-role session migration (Option B). The
+ *                handler bootstraps the customer session as its
+ *                first executable statement. The obsolete
+ *                cross-role commentary in the CSRF block is
+ *                replaced with a note about the structural
+ *                isolation that per-role sessions provide. No
+ *                logic changed; no SQL moved.
+ *
+ *                (2.1: validated against customer_csrf_token
+ *                instead of the shared csrf_token key.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+// ---------------------------------------------------------------------
+// SESSION BOOTSTRAP
+//
+// Must run before any other include that might touch the session.
+// This handler belongs to the customer context.
+// ---------------------------------------------------------------------
+
+require_once __DIR__ . '/../../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('customer');
+
+// ---------------------------------------------------------------------
+// DEPENDENCIES
+// ---------------------------------------------------------------------
 
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/customer-queries.php';
 
+// ---------------------------------------------------------------------
+// RESPONSE HEADERS
+// ---------------------------------------------------------------------
+
 header('Content-Type: application/json');
 
-function respondError(string $message, string $field = ''): never
+// ---------------------------------------------------------------------
+// HELPERS
+// ---------------------------------------------------------------------
+
+/**
+ * Terminate with a JSON error payload.
+ *
+ * @return never
+ */
+function respondError(string $message, string $field = ''): void
 {
     echo json_encode(['status' => 'error', 'message' => $message, 'field' => $field]);
     exit;
 }
 
+// ---------------------------------------------------------------------
+// REQUEST METHOD GUARD
+// ---------------------------------------------------------------------
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     respondError('Invalid request method.');
 }
 
-if (!isset($_POST['csrf_token']) ||
-    !hash_equals((string)($_SESSION['customer_csrf_token'] ?? ''), (string)$_POST['csrf_token'])) {
+// ---------------------------------------------------------------------
+// CSRF
+//
+// Validated against the customer context's own key,
+// 'customer_csrf_token', inside the customer session. Under
+// Option B this key lives in a session that only requests bearing
+// the customer cookie can reach, so the token is guaranteed to be
+// the customer's own. The key name keeps the {role}_ prefix as a
+// naming convention, not as a collision guard.
+// ---------------------------------------------------------------------
+
+if (
+    !isset($_POST['csrf_token']) ||
+    !hash_equals((string)($_SESSION['customer_csrf_token'] ?? ''), (string)$_POST['csrf_token'])
+) {
     respondError('Security validation failed. Please refresh the page and try again.');
 }
+
+// ---------------------------------------------------------------------
+// INPUT COLLECTION
+// ---------------------------------------------------------------------
 
 $firstName         = trim($_POST['first_name'] ?? '');
 $middleName        = trim($_POST['middle_name'] ?? '');
@@ -51,13 +124,21 @@ $fitnessGoal       = trim($_POST['fitness_goal'] ?? '');
 $height            = trim((string)($_POST['height'] ?? ''));
 $weight            = trim((string)($_POST['weight'] ?? ''));
 
-// ---- Required fields ----
-if ($firstName === '' || $lastName === '' || $birthdate === '' || $gender === '' ||
-    $email === '' || $contactNumber === '' || $username === '' || $password === '') {
+// ---------------------------------------------------------------------
+// REQUIRED FIELDS
+// ---------------------------------------------------------------------
+
+if (
+    $firstName === '' || $lastName === '' || $birthdate === '' || $gender === '' ||
+    $email === '' || $contactNumber === '' || $username === '' || $password === ''
+) {
     respondError('All required fields must be filled out.');
 }
 
-// ---- Name validation ----
+// ---------------------------------------------------------------------
+// NAME VALIDATION
+// ---------------------------------------------------------------------
+
 $namePattern = '/^[A-Za-z\s\-\']+$/u';
 
 if (strlen($firstName) < 2) {
@@ -73,30 +154,45 @@ if (!preg_match($namePattern, $lastName)) {
     respondError('Last name contains invalid characters.', 'last_name');
 }
 
-// ---- Gender ----
+// ---------------------------------------------------------------------
+// GENDER
+// ---------------------------------------------------------------------
+
 if (!in_array($gender, ['Male', 'Female', 'Other'], true)) {
     respondError('Invalid gender selection.', 'gender');
 }
 
-// ---- Email ----
+// ---------------------------------------------------------------------
+// EMAIL
+// ---------------------------------------------------------------------
+
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     respondError('Please enter a valid email address.', 'email');
 }
 
-// ---- Contact ----
+// ---------------------------------------------------------------------
+// CONTACT
+// ---------------------------------------------------------------------
+
 $cleanedContact = preg_replace('/\s+/', '', $contactNumber);
 if (!preg_match('/^09\d{9}$/', $cleanedContact)) {
     respondError('Enter a valid Philippine mobile number (11 digits, starting with 09).', 'contact_number');
 }
 
-// ---- Username ----
+// ---------------------------------------------------------------------
+// USERNAME
+// ---------------------------------------------------------------------
+
 if (strlen($username) < 3)  respondError('Username must be at least 3 characters.', 'username');
 if (strlen($username) > 20) respondError('Username must be no more than 20 characters.', 'username');
 if (!preg_match('/^[A-Za-z0-9_]+$/', $username)) {
     respondError('Username can only contain letters, numbers, and underscores.', 'username');
 }
 
-// ---- Password ----
+// ---------------------------------------------------------------------
+// PASSWORD
+// ---------------------------------------------------------------------
+
 if (strlen($password) < 8)  respondError('Password must be at least 8 characters.', 'password');
 if (strlen($password) > 20) respondError('Password must be no more than 20 characters.', 'password');
 if (!preg_match('/^[A-Za-z0-9]+$/', $password)) {
@@ -106,7 +202,10 @@ if (!preg_match('/[A-Za-z]/', $password)) respondError('Password must contain at
 if (!preg_match('/[0-9]/', $password))    respondError('Password must contain at least one number.', 'password');
 if ($password !== $confirmPassword)       respondError('Passwords do not match.', 'confirm_password');
 
-// ---- Age ----
+// ---------------------------------------------------------------------
+// AGE
+// ---------------------------------------------------------------------
+
 try {
     $bd    = new DateTime($birthdate);
     $today = new DateTime();
@@ -117,12 +216,18 @@ try {
     respondError('Please enter a valid birthdate.', 'birthdate');
 }
 
-// ---- Terms ----
+// ---------------------------------------------------------------------
+// TERMS
+// ---------------------------------------------------------------------
+
 if (empty($terms)) {
     respondError('You must agree to the Terms and Conditions and Privacy Policy.', 'terms');
 }
 
-// ---- Database ----
+// ---------------------------------------------------------------------
+// DATABASE
+// ---------------------------------------------------------------------
+
 try {
     if (emailExists($database_connection, $email)) {
         respondError('This email address is already registered.', 'email');
@@ -174,9 +279,10 @@ try {
 
     $database_connection->commit();
 
-    // Do NOT wipe the whole session — other roles may be signed in on
-    // this same browser session. Only the customer CSRF token becomes
-    // stale after a successful registration, so clear just that.
+    // Only the customer CSRF token becomes stale after a successful
+    // registration, so clear just that. Under Option B this unset
+    // can only ever touch the customer session; no other context
+    // can see this key.
     unset($_SESSION['customer_csrf_token']);
 
     $_SESSION['registration_success'] = 'Account created successfully! Please sign in.';

@@ -1,118 +1,141 @@
 /**
- * FitPal Restaurant Kitchen JavaScript
+ * FitPal Kitchen Orders — client behaviour.
  *
- * Wires the kitchen page's interactive surfaces:
+ * Owns the interactive surface of the kitchen page
+ * (restaurant/pages/kitchen.php) that is NOT the real-time board.
+ * The real-time board — live order polling and the new-order pill —
+ * lives in kitchen-realtime.js and is not touched here.
  *
+ * What this file owns
+ * -------------------
  *   - The Start Preparing, Cancel, Assign Rider, and Reassign Rider
- *     buttons. Each posts to order-handler.php, then reloads the
- *     page so the tab counts and the tab the order belongs to stay
- *     accurate.
+ *     buttons. Each posts to the handler and, on success, reloads
+ *     the page so the tab counts and the tab the order belongs to
+ *     stay accurate.
+ *
  *   - The generic confirm modal for destructive actions.
+ *
  *   - The rider-selection modal, whose roster is fetched fresh from
  *     the server on open and polled while the modal stays open.
+ *
  *   - The card collapse toggle. Each kitchen card is three bands:
  *     a header, a summary, and a details body that is collapsed by
  *     default. The chevron in the header toggles the details body.
- *   - The sign-out guard helper: checkActiveOrders() posts to
- *     order-handler.php's active_orders_count action and calls back
- *     with the result. logout.js uses this to refuse sign-out
- *     while live orders are open.
+ *     This file owns the USER INTERACTION. Preserving the expanded
+ *     set across a realtime poll is kitchen-realtime.js's job; that
+ *     file snapshots the expanded set from the DOM around its own
+ *     mutation phase. This file never keeps a JS-side Set.
  *
- * Card collapse state
- * -------------------
- * This file owns the USER INTERACTION for expanding and collapsing
- * a card. It does NOT own preserving that state across a poll —
- * kitchen-realtime.js now snapshots the expanded set from the DOM
- * before each poll's mutations and reapplies it afterward, so this
- * file never needs to remember anything.
+ *   - The sign-out guard helper: window.checkActiveOrders() posts
+ *     to the handler's active_orders_count action and calls back
+ *     with the result. logout.js uses this to refuse sign-out while
+ *     live orders are open.
  *
- * This file's role is exactly two click listeners: one for the
- * chevron toggle button, one for the header band. Both toggle the
- * .is-expanded class and the details band's hidden attribute in
- * direct response to the user's click. Nothing else.
+ *   - The toast banner used to surface a handler response.
  *
- * Realtime rider roster
- * ---------------------
- * The modal's roster is the only thing in this file that polls.
- * The kitchen's live order list is owned by kitchen-realtime.js
- * and this file does not touch it.
+ * Where the actions go
+ * --------------------
+ * Every action posts to the endpoint named by #kitchenPage's
+ * data-handler-url attribute:
  *
- * The roster poll is deliberately simple:
+ *     restaurant/backend/handlers/kitchen-order-handler.php
  *
- *   - Started when the modal opens.
- *   - Stopped when the modal closes, when the page begins a
- *     reload, or when the tab is hidden.
- *   - One immediate fetch when the tab returns to foreground,
- *     then the interval resumes.
- *   - Every fetch goes through order-handler.php with the same
- *     csrf_token the rest of the file uses.
- *   - On open, the modal shows the server-rendered fallback until
- *     the first fetch lands. Once a fetch succeeds, the fallback
- *     is replaced. A fetch that fails leaves the fallback in
- *     place — the modal is never blank.
+ * That handler owns the kitchen's own status transitions and, for
+ * cancel_order, forwards to the shared order-transaction handler so
+ * the ledger rules for COD, Wallet, and Online cancels stay in one
+ * place. The client never talks to the shared handler directly.
  *
- * Signature guard
- * ---------------
- * A poll that returns the same rider_id set as the previous poll
- * does NOT re-render the list. This is what keeps an idle modal
- * from flickering every four seconds. The guard compares a sorted
- * join of the ids in the current DOM against a sorted join of the
- * ids in the new payload. Only a difference (a rider added or
- * removed) triggers a re-render.
+ * Bootstrap
+ * ---------
+ * The page loads this file with the `defer` attribute. A deferred
+ * script runs AFTER the HTML parser finishes, AFTER
+ * DOMContentLoaded has already been dispatched, and BEFORE load.
+ * A listener attached to DOMContentLoaded inside this file would
+ * therefore never fire and the module would never boot. This file
+ * uses a readyState guard instead:
  *
- * Not owned by this file
- * ----------------------
- *   - Live order polling and the new-order pill are owned by
- *     kitchen-realtime.js.
- *   - The chat modal is owned by kitchen-realtime.js.
- *   - Tab switching is a server-side navigation via anchor links.
- *     This file never hides or shows cards.
+ *     if (document.readyState === 'loading') {
+ *         document.addEventListener('DOMContentLoaded', boot);
+ *     } else {
+ *         boot();
+ *     }
+ *
+ * That is correct whether the script is `defer`, `async`, plain, or
+ * injected after the document is already interactive.
  *
  * Config
  * ------
  * Every value this file needs is read from data-* attributes on
- * #kitchenPage, which kitchen.php sets from the session. This file
- * does not read window globals set by an inline <script>.
+ * #kitchenPage, which kitchen.php sets from the session. No window
+ * globals set by an inline <script> are read here.
  *
- * No CSS is defined here. No DOM markup is fabricated with a
- * hard-coded SVG — the roster rows use the same <img> icons the
- * server-rendered fallback does. No window.alert / confirm /
- * prompt — every message goes through a modal or a toast.
+ * Rules honored
+ * -------------
+ *   - No CSS in this file.
+ *   - No <svg> injection. Icons come from the shared icon folder
+ *     and are used through <img> tags, matching the server-rendered
+ *     fallback.
+ *   - No window.alert / confirm / prompt. Every message goes
+ *     through a modal or a toast.
  *
  * @package FitPal
- * @version 9.0 — Removed all logic related to preserving card
- *                collapse state across a poll.
- *                  - No `expandedIds` Set.
- *                  - No `window.FITPAL_KITCHEN_CARD_STATE` hook.
- *                  - No `applyExpandedState()`.
- *                  - No `forgetCard()`.
- *                  - No reapply after poll.
- *                kitchen-realtime.js now owns preserving the
- *                expanded state via a snapshot/reapply pair taken
- *                directly from the DOM around its own mutation
- *                phase. This file's only responsibility for the
- *                card collapse is the user's click.
+ * @version 10.0 — Rebuilt from the last working v9.0 kitchen script
+ *                with two corrections.
  *
- *                (8.0: introduced expandedIds and the card state
- *                hook. 7.0: realtime rider roster in the
- *                assignment modal. 6.0: full rewrite for the
- *                paginated, step-by-step kitchen page. 5.0:
- *                order-handler polling moved out. 4.1: data-icon on
- *                the confirm modal. 4.0: chat moved to
- *                kitchen-realtime.js. 3.0: initial kitchen JS.)
+ *                Fix 1: the bootstrap guard. v9.0 attached its init
+ *                calls to DOMContentLoaded, which never fires for a
+ *                `defer` script. The module never booted, no
+ *                delegated listeners were attached, and every
+ *                .kitchen-action-btn on the page was dead. The
+ *                bootstrap now uses a readyState guard so boot()
+ *                runs immediately when the document is already
+ *                interactive or complete, and only defers to
+ *                DOMContentLoaded when the document is still
+ *                loading.
+ *
+ *                Fix 2: HANDLER_URL fallback corrected from
+ *                ../backend/handlers/order-handler.php to
+ *                ../backend/handlers/kitchen-order-handler.php, the
+ *                file that exists on disk. The read of
+ *                data-handler-url still wins; the fallback only
+ *                matters when the page renders without that
+ *                attribute.
+ *
+ *                Everything else is restored from v9.0 because a
+ *                later revision had silently removed it:
+ *                  - The card-collapse click delegation on
+ *                    #kitchenOrderList, for both the chevron and
+ *                    the header band. Without it, the chevron on
+ *                    each card is dead.
+ *                  - window.checkActiveOrders(), which logout.js
+ *                    calls to refuse sign-out while orders are
+ *                    live. Without it, the kitchen page's logout
+ *                    button fails open.
+ *                  - The rider roster poll and its visibility
+ *                    handling, so the roster stays live while the
+ *                    modal is open.
+ *
+ *                (9.0: card state handed off to kitchen-realtime.js.
+ *                8.0: expandedIds and card state hook. 7.0:
+ *                realtime rider roster in the assignment modal.
+ *                6.0: full rewrite for the paginated, step-by-step
+ *                kitchen page. 5.0: order-handler polling moved
+ *                out. 4.1: data-icon on the confirm modal. 4.0:
+ *                chat moved to kitchen-realtime.js. 3.0: initial
+ *                kitchen JS.)
  */
-
 (function () {
     'use strict';
 
-    document.addEventListener('DOMContentLoaded', function () {
+    function boot() {
 
         var page = document.getElementById('kitchenPage');
         if (!page) return;
 
         var SCOPE       = page.dataset.scope || 'branch';
         var CSRF_TOKEN  = page.dataset.csrfToken || '';
-        var HANDLER_URL = page.dataset.handlerUrl || '../backend/handlers/order-handler.php';
+        var HANDLER_URL = page.dataset.handlerUrl
+            || '../backend/handlers/kitchen-order-handler.php';
         var BRANCH_ID   = parseInt(page.dataset.branchId, 10) || 0;
 
         // Owner view has no interactive elements. Exit before wiring
@@ -259,7 +282,19 @@
                 var btn = e.target.closest('.kitchen-action-btn');
                 if (!btn || btn.disabled) return;
 
+                // The Message button on every card carries the same
+                // .kitchen-action-btn class but no data-action. Its
+                // handler is attached by kitchen-realtime.js against
+                // [data-restaurant-chat-open]. Return immediately so
+                // that delegation can fire without this listener
+                // also trying (and failing) to route it.
+                if (btn.hasAttribute('data-restaurant-chat-open')) {
+                    return;
+                }
+
                 var action  = btn.dataset.action || '';
+                if (action === '') return;
+
                 var orderId = parseInt(btn.dataset.orderId, 10) || 0;
                 if (orderId <= 0) return;
 
@@ -737,6 +772,15 @@
                     callback(null);
                 });
         };
+    }
 
-    });
+    /* ============================================
+       BOOTSTRAP
+       ============================================ */
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', boot);
+    } else {
+        boot();
+    }
 })();

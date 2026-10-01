@@ -368,7 +368,7 @@ def main() -> None:
     
     # Output path: /logs/output/
     logs_path = project_root / 'logs'
-    output_path = logs_path / 'output'
+    output_path = logs_path / 'tree-mapper'
     
     # Create directories if they don't exist
     output_path.mkdir(parents=True, exist_ok=True)

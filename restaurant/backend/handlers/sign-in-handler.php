@@ -8,63 +8,30 @@
  *             scoped to a specific branch_code
  *
  * @package FitPal
- * @version 2.1 — Writes the signed-in account's display name to the
- *                restaurant role's own session key, 'restaurant_name',
- *                instead of the shared 'user_name' key. Removes the
- *                writes to the shared 'user_email' and 'user_role'
- *                keys entirely, since nothing in the restaurant role
- *                reads them and every other role runs on the same PHP
- *                session — a restaurant sign-in writing those keys
- *                would clobber whatever the rider, customer, or admin
- *                role had stored under them.
+ * @version 3.0 — Replaced the write to the dead shared key
+ *                $_SESSION['created'] with the per-role activity
+ *                marker $_SESSION['restaurant_last_activity']. The
+ *                header's idle gate reads this key; the shared
+ *                $_SESSION['created'] key is no longer used anywhere.
  *
- *                Owns its own CSRF bootstrap and rotates the
- *                restaurant token on mismatch.
+ *                session_regenerate_id(true) remains — it is the one
+ *                legal rotation point for the restaurant role and
+ *                happens exactly once per sign-in.
  *
- *                require_once on includes/restaurant-csrf-token.php
- *                makes this handler the authoritative reader of
- *                'restaurant_csrf_token' rather than an incidental
- *                one that only worked because the page which
- *                rendered the form had already called
- *                getRestaurantCsrfToken().
- *
- *                On the CSRF-mismatch branch the restaurant's token
- *                is now unset before redirecting. Without that
- *                rotation, getRestaurantCsrfToken() on the next
- *                render of sign-in.php saw the key still set and
- *                returned the same stale value, so a user who hit a
- *                mismatch was stuck re-submitting the dead token
- *                until the session was cleared manually.
- *
- *                Uses isset() on both keys before hash_equals() so an
- *                unset session key can never be coerced to an empty
- *                string and pass validation against an empty POST
- *                value.
- *
- *                Only the restaurant's own key is touched. The shared
- *                'csrf_token' key is never read, written, or cleared
- *                by this file — other roles in the same PHP session
- *                may still depend on it.
- *
- *                (2.0: Validated against restaurant_csrf_token (own
- *                key) instead of the shared csrf_token, so a sign-in
- *                by another role in the same browser session can no
- *                longer delete/rotate the token this form relied on.
- *                1.2: Same key split for the sign-in form itself.)
+ *                (2.1: wrote the display name under the restaurant
+ *                role's own key, restaurant_name. 2.0: validated
+ *                against restaurant_csrf_token.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('restaurant');
 
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/restaurant-queries.php';
 
-// Own the restaurant role's CSRF bootstrap. The helper is idempotent
-// and stores the token under 'restaurant_csrf_token' — never the
-// shared 'csrf_token' key.
+// Own the restaurant role's CSRF bootstrap.
 require_once __DIR__ . '/../../includes/restaurant-csrf-token.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -78,10 +45,8 @@ if (
     !hash_equals((string)$_SESSION['restaurant_csrf_token'], (string)$_POST['csrf_token'])
 ) {
     // Rotate the restaurant's own token so the next render of
-    // sign-in.php generates a fresh one. Without this the key stays
-    // set, getRestaurantCsrfToken() returns the same stale value, and
-    // the user is stuck in a validation loop. Only the restaurant's
-    // key is cleared — never the shared 'csrf_token' key.
+    // sign-in.php generates a fresh one. Only the restaurant's key is
+    // cleared — never the shared 'csrf_token' key.
     unset($_SESSION['restaurant_csrf_token']);
 
     $_SESSION['login_error'] = 'Security validation failed. Please try again.';
@@ -172,13 +137,16 @@ try {
     );
     $_SESSION['restaurant_role']        = (string)($account['role'] ?? 'owner');
     $_SESSION['business_name']          = (string)($account['business_name'] ?? '');
-    $_SESSION['created']                = time();
+
+    // Per-role activity marker. The header's idle gate reads this key.
+    // The shared $_SESSION['created'] key is dead and must not be
+    // written here.
+    $_SESSION['restaurant_last_activity'] = time();
 
     recordRestaurantLogin($database_connection, (int)$account['restaurant_account_id']);
 
     // Only clear restaurant's own token. Do not touch the shared
-    // 'csrf_token' key or any other role's token — another role in
-    // this same browser session may still be relying on it.
+    // 'csrf_token' key or any other role's token.
     unset($_SESSION['restaurant_csrf_token']);
 
     header('Location: ../../pages/dashboard.php');

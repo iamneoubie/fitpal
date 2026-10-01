@@ -8,16 +8,14 @@
  * selected panel. The tab bar stays static across renders; only
  * the .active panel runs the enter animation.
  *
- * Active tab — v5.1
- * -----------------
- * The Active tab now shows every order the rider is currently
+ * Active tab
+ * ----------
+ * The Active tab shows every order the rider is currently
  * working, across two statuses:
  *
  *   picking_up  — accepted; en route to or at the restaurant.
- *                 Primary action on the card: "Mark Picked Up".
- *                 Contact action: "Message Kitchen" (chat) and,
- *                 when the kitchen's phone number is available,
- *                 "Call Kitchen".
+ *                 Primary action: "Mark Picked Up".
+ *                 Contact action: "Message Kitchen".
  *
  *   delivering  — food in hand; en route to the customer.
  *                 Primary action: "Mark Delivered".
@@ -44,20 +42,30 @@
  *
  * Shared route and fact rules are declared once and used by both.
  *
- * Confirm modal — icon variants (v5.1)
- * ------------------------------------
+ * History tab — post-delivery messaging (v5.4)
+ * --------------------------------------------
+ * A delivered order stays messageable for one hour after
+ * delivery. During that window the History row renders a
+ * .rider-history-actions block inside .rider-history-info with
+ * two neutral Message buttons: Message Customer and Message
+ * Kitchen. Outside the window — and for cancelled, refunded, and
+ * failed orders — the block is absent.
+ *
+ * The block is styled to sit below the date line with a small top
+ * margin so it reads as part of the info column and does not
+ * disturb the three-column grid. On mobile the two buttons wrap
+ * full-width so neither label truncates.
+ *
+ * Confirm modal — icon variants
+ * -----------------------------
  * The confirm modal carries data-icon on the modal element; CSS
  * shows exactly one of the pre-rendered SVGs inside the icon
  * circle. The four variants:
  *
  *   data-icon="accept"    → .rider-confirm-icon-accept
  *   data-icon="decline"   → .rider-confirm-icon-decline
- *   data-icon="picked_up" → .rider-confirm-icon-picked_up  (NEW)
+ *   data-icon="picked_up" → .rider-confirm-icon-picked_up
  *   data-icon="delivered" → .rider-confirm-icon-delivered
- *
- * The "picked_up" variant is the one added by this revision. It
- * fires when the rider taps "Mark Picked Up" on a picking_up card.
- * The other three are unchanged.
  *
  * Tab transition
  * --------------
@@ -69,18 +77,15 @@
  * hover transitions are disabled under prefers-reduced-motion.
  *
  * @package FitPal
- * @version 5.2 — Page shell now stretches to the footer. The chain
- *                .content → .rider-deliveries-page → .container
- *                is now all flex columns with flex: 1, matching the
- *                customer cart/orders/wallet shell. This lets the
- *                empty state (or the last panel) fill the space to
- *                the footer instead of leaving a gap.
+ * @version 5.4 — Adds .rider-history-actions and its button
+ *                treatment. The History tab now renders a Message
+ *                Customer and Message Kitchen button for delivered
+ *                orders within the 1-hour post-delivery window.
  *
- *                (5.1: Adds the "picked_up" icon variant to the confirm
- *                modal. 5.0: three-tab layout. 4.1: stat strip removed.
- *                4.0: chat modal extracted to shared include. 3.4:
- *                .btn-neutral and .btn-danger made global. 3.0: initial
- *                deliveries layout.)
+ *                (5.3: page shell stretches to the footer. 5.2:
+ *                empty state fills the space to the footer. 5.1:
+ *                adds the "picked_up" icon variant to the confirm
+ *                modal. 5.0: three-tab layout.)
  */
 
 /* ============================================
@@ -761,6 +766,49 @@
     color: var(--gray-400);
 }
 
+/* ---- Post-delivery messaging actions ----
+ *
+ * Rendered inside .rider-history-info for a delivered order whose
+ * delivered_at is within the 1-hour post-delivery window. Two
+ * neutral buttons: Message Customer and Message Kitchen.
+ *
+ * The block sits below the date line with a small top margin so it
+ * reads as part of the info column and does not disturb the
+ * three-column grid on desktop. On mobile the two buttons wrap
+ * full-width so neither label truncates.
+ *
+ * The neutral button treatment is identical to the one used on the
+ * Active tab's Message Kitchen button, so a rider sees the same
+ * visual affordance regardless of which tab they are on.
+ */
+.rider-history-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+.rider-history-actions .btn,
+.rider-history-actions .btn-neutral {
+    flex: 0 1 auto;
+    padding: 8px 14px;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    border-radius: var(--radius-base);
+    min-height: 36px;
+    justify-content: center;
+    white-space: nowrap;
+}
+
+.rider-history-actions .btn-icon {
+    width: 14px;
+    height: 14px;
+    display: block;
+    flex-shrink: 0;
+    filter: brightness(0) invert(1);
+}
+
 .rider-history-meta {
     display: flex;
     flex-direction: column;
@@ -1164,12 +1212,6 @@
             hue-rotate(330deg) brightness(90%) contrast(85%);
 }
 
-/* New in v5.1: the "Mark Picked Up" confirm.
- *
- * The icon is the same package glyph the deliveries page uses on
- * its rider_route_stop pickup tile and the assignment panel uses
- * on a picking_up row. Tinted to the primary green so it matches
- * the confirm button colour. */
 .rider-confirm-modal[data-icon="picked_up"] .rider-confirm-icon-picked_up {
     display: block;
     filter: brightness(0) saturate(100%)
@@ -1336,6 +1378,27 @@
         height: 36px;
     }
 
+    /* History actions: allow the two buttons to wrap onto a second
+       line within the info column without forcing the meta column
+       to reflow. The row's grid still reserves the auto column on
+       the right for the badge and earning. */
+    .rider-history-actions {
+        gap: 6px;
+        margin-top: 8px;
+    }
+
+    .rider-history-actions .btn,
+    .rider-history-actions .btn-neutral {
+        padding: 7px 12px;
+        font-size: 11px;
+        min-height: 32px;
+    }
+
+    .rider-history-actions .btn-icon {
+        width: 13px;
+        height: 13px;
+    }
+
     .rider-chat-modal-content {
         height: 90vh;
     }
@@ -1472,6 +1535,25 @@
         width: 100%;
     }
 
+    /* History actions: full-width stack so neither label truncates
+       and the two buttons are easy thumb targets. */
+    .rider-history-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+        margin-top: 10px;
+    }
+
+    .rider-history-actions .btn,
+    .rider-history-actions .btn-neutral {
+        width: 100%;
+        flex: 1 1 auto;
+        justify-content: center;
+        padding: 10px 14px;
+        font-size: var(--font-size-xs);
+        min-height: 40px;
+    }
+
     .rider-deliveries-empty {
         padding: 40px 18px;
         min-height: 260px;
@@ -1522,6 +1604,7 @@
     .rider-confirm-content,
     .rider-confirm-icon,
     .rider-history-row,
+    .rider-history-actions .btn,
     .rider-chat-send,
     .rider-chat-tab {
         transition: none !important;

@@ -1,1442 +1,1145 @@
 /**
- * FitPal Rider Assignment Panel
+ * FitPal Rider Assignment Panel — client behaviour.
  *
- * The bottom-anchored, collapsible panel that mirrors the kitchen's
- * rider_pending handoff on the rider side. Also drives:
+ * Owns the bottom-anchored assignment panel that appears on every
+ * authenticated rider page.
  *
- *   - the per-assignment notification modal (Accept / Decline /
- *     Dismiss) that fires when a new rider_pending row arrives
- *     while the rider is online;
- *   - the availability modal that opens when the rider activates
- *     the availability pill in the panel header.
+ * ---------------------------------------------------------------------
+ * POLL SHAPE
+ * ---------------------------------------------------------------------
+ * Full-snapshot poll on every tick: action=list, replace the whole
+ * list. The cost is a bounded payload (server caps at 20 rows); the
+ * benefit is that every status change the panel cares about is
+ * visible on the same tick it happened.
  *
- * Row layout contract (kept in sync with assignment-panel.css)
- * ------------------------------------------------------------
- * Each row is three bands inside a flex-column container:
+ * ---------------------------------------------------------------------
+ * COLLAPSE STATE PRESERVATION (v5.1)
+ * ---------------------------------------------------------------------
+ * replaceRows() rebuilds the list from scratch on every tick. Before
+ * this revision it also reset every row's collapse state to the
+ * server-derived default, so a row the user had expanded collapsed
+ * again on the next 5-second tick. Users read that as "the detail
+ * auto-collapses when I expand it."
  *
- *   .assignment-row
- *     .assignment-row-top       order # | status badge | actions
- *     .assignment-row-summary   one-line "Restaurant • Deliver to"
- *                               (visible only when .is-collapsed)
- *     .assignment-row-meta      the full label/value grid
- *                               (hidden when .is-collapsed)
- *     .assignment-row-expand    chevron toggle for the two above
+ * The fix reads the current DOM's is-collapsed class per
+ * data-order-id before wiping, and re-applies it to the freshly
+ * rendered row. A row whose state is not present in the snapshot
+ * (because it was added by this tick) keeps the default the server
+ * chose for its status: expanded for rider_pending, collapsed for
+ * everything else.
  *
- * The actions sit INSIDE the top band so they align with the order
- * number on the same line. They are not a separate grid column.
+ * ---------------------------------------------------------------------
+ * MARKUP CONTRACT
+ * ---------------------------------------------------------------------
+ * Row shape:
  *
- * Live statuses (v8.0)
- * --------------------
- * The panel surfaces three statuses, each with its own action set:
+ *   article.assignment-row [.is-collapsed]
+ *     header.assignment-row-top
+ *       span.assignment-row-order
+ *       span.assignment-row-status
+ *       div.assignment-row-actions
+ *         button.assignment-action-btn.is-primary
+ *           img.assignment-action-icon
+ *         ...
+ *     p.assignment-row-summary           visible only when .is-collapsed
+ *     div.assignment-row-meta            hidden when .is-collapsed
+ *       p.assignment-row-line
+ *         span.label
+ *         span.value
+ *     button.assignment-row-expand
+ *       img.assignment-row-expand-icon
+ *       span
  *
- *   rider_pending  → Accept, Decline, [Message Kitchen], [Call Kitchen]
- *   picking_up     → Mark Picked Up, [Message Kitchen], [Call Kitchen]
- *   delivering     → Mark Delivered, [Message Customer], [Call Customer]
+ * Collapse is a class. Visibility of summary vs meta is a CSS
+ * consequence of that class.
  *
- * The status field on the row drives the action choice. Every
- * action button posts to assignment-handler.php with the matching
- * `action` value.
+ * ---------------------------------------------------------------------
+ * ROW ACTION ICONS
+ * ---------------------------------------------------------------------
+ *   Accept         → verified-fill.svg
+ *   Decline        → close-circle-fill.svg
+ *   Mark Picked Up → package.svg
+ *   Mark Delivered → verified-badge-fill.svg
+ *   Message        → contact-us-line.svg
+ *   Call           → phone-fill.svg
  *
- * Click-to-navigate contract
- * --------------------------
- * Clicking the top band (but NOT an action button inside it)
- * navigates to deliveries.php. The band is given role="link",
- * tabindex="0", and an aria-label so keyboard users can reach it
- * and activate it with Enter or Space.
+ * ---------------------------------------------------------------------
+ * CONFIG
+ * ---------------------------------------------------------------------
+ * The page writes these globals before loading this file:
  *
- * Panel state contract
- * --------------------
- * The panel's collapsed/expanded state is expressed by:
- *   - the .open class on #assignmentPanel (expanded)
- *   - the .closed class on #assignmentPanel (collapsed)
- *   - aria-expanded on #assignmentPanelToggle ("true"/"false")
- *   - the isOpen variable in this closure
+ *     window.RIDER_CSRF_TOKEN
+ *     window.RIDER_ASSET_BASE
+ *     window.RIDER_HANDLER_ENDPOINT
+ *     window.RIDER_ASSIGNMENT_ENDPOINT   (fallback only)
  *
- * All four must always agree. openPanel() and closePanel() are the
- * only writers, they are idempotent, and they write all four on
- * every call.
- *
- * Availability pill contract
- * --------------------------
- * The pill (#assignmentPanelStatus) is a real <button>. Its click
- * opens #assignmentAvailabilityModal in one of three shapes,
- * decided by the two flags this file already tracks
- * (lastKnownOnline and hasLiveAssignments):
- *
- *   offline                     → Go Online      (primary)
- *   online, no live assignment  → Go Offline     (danger)
- *   online, with live assignment→ Blocked        (neutral, info-only)
- *
- * The modal's copy and its confirm button colour are expressed
- * through data-variant and data-icon on the modal element; CSS
- * reads those.
- *
- * Going offline is refused by the server while the rider holds any
- * live order. The "Blocked" shape here is the client-side mirror of
- * that rule; the server is still the authority.
+ * The authoritative endpoint is the wrapper's data-endpoint
+ * attribute, populated server-side.
  *
  * @package FitPal
- * @version 8.0 — Adds the 'picking_up' status:
- *                  - buildRowActions() renders Mark Picked Up +
- *                    Message Kitchen + Call Kitchen on picking_up
- *                    rows.
- *                  - submitDecision() is generalized to handle
- *                    accept, decline, and mark_picked_up through
- *                    one code path. All three replace the row in
- *                    place with the server-returned payload.
- *                  - updateRowInPlace() replaces the old
- *                    accept-specific path so the row's actions
- *                    flip cleanly when a picking_up order moves
- *                    to delivering.
- *                  - The availability modal's Blocked shape now
- *                    names live orders as the reason the rider
- *                    cannot go offline.
- *                  - No change to the notification modal — it is
- *                    still only for fresh rider_pending offers.
+ * @version 5.1 — replaceRows() preserves each row's collapse state
+ *                across re-renders. The restaurant meta line now
+ *                also renders the branch name and branch address
+ *                when the server provides them.
  *
- *                (7.0: availability pill as a control.
- *                6.0: panel state always in sync. 5.0: accept
- *                re-renders the row in place. 4.0: click-to-
- *                navigate on the row's top band. 3.0: three-band
- *                row layout.)
+ *                (5.0: full-snapshot poll. 4.0: row markup and
+ *                action buttons. 3.2: modals class-driven. 3.1:
+ *                endpoint from wrapper. 3.0: page endpoint globals.
+ *                2.0: single endpoint. 1.4: notification modal.
+ *                1.3: availability modal. 1.2: delta poll. 1.1:
+ *                initial panel.)
  */
-
 (function () {
     'use strict';
 
-    // ============================================================
+    // -----------------------------------------------------------------
+    // EARLY ELEMENT HANDLES
+    // -----------------------------------------------------------------
+
+    var panel   = document.getElementById('assignmentPanel');
+    var wrapper = document.getElementById('assignmentPanelWrapper');
+    if (!panel || !wrapper) return;
+
+    // -----------------------------------------------------------------
+    // CONFIG
+    // -----------------------------------------------------------------
+
+    var CSRF_TOKEN = window.RIDER_CSRF_TOKEN || '';
+    var ASSET_BASE = window.RIDER_ASSET_BASE || '';
+
+    var ASSIGNMENT_ENDPOINT = '';
+
+    var dataEndpoint = wrapper.getAttribute('data-endpoint');
+    if (typeof dataEndpoint === 'string' && dataEndpoint !== '') {
+        ASSIGNMENT_ENDPOINT = dataEndpoint;
+    } else if (typeof window.RIDER_ASSIGNMENT_ENDPOINT === 'string' &&
+               window.RIDER_ASSIGNMENT_ENDPOINT !== '') {
+        ASSIGNMENT_ENDPOINT = window.RIDER_ASSIGNMENT_ENDPOINT;
+    } else {
+        ASSIGNMENT_ENDPOINT = '../backend/handlers/assignment-handler.php';
+    }
+
+    var RIDER_ENDPOINT = window.RIDER_HANDLER_ENDPOINT
+        || '../backend/handlers/rider-handler.php';
+
+    var POLL_INTERVAL_MS = 5000;
+
+    // -----------------------------------------------------------------
+    // REMAINING ELEMENT HANDLES
+    // -----------------------------------------------------------------
+
+    var toggleBtn = document.getElementById('assignmentPanelToggle');
+    var header    = document.getElementById('assignmentPanelHeader');
+    var countBadge = document.getElementById('assignmentCountBadge');
+    var listEl    = document.getElementById('assignmentList');
+    var emptyState = document.getElementById('assignmentEmptyState');
+    var offlineHint = document.getElementById('assignmentOfflineHint');
+    var ineligibleHint = document.getElementById('assignmentIneligibleHint');
+
+    var statusBtn    = document.getElementById('assignmentPanelStatus');
+    var statusTextEl = document.getElementById('assignmentPanelStatusText');
+    var statusActionEl = document.getElementById('assignmentPanelStatusAction');
+
+    var notifyModal = document.getElementById('assignmentNotifyModal');
+    var notifyOrderIdEl = document.getElementById('assignmentNotifyOrderId');
+    var notifyRestaurantEl = document.getElementById('assignmentNotifyRestaurant');
+    var notifyCustomerEl = document.getElementById('assignmentNotifyCustomer');
+    var notifyTotalEl = document.getElementById('assignmentNotifyTotal');
+    var notifyAcceptBtn = document.getElementById('assignmentNotifyAcceptBtn');
+    var notifyDeclineBtn = document.getElementById('assignmentNotifyDeclineBtn');
+    var notifyDismissBtn = document.getElementById('assignmentNotifyDismissBtn');
+
+    var availabilityModal = document.getElementById('assignmentAvailabilityModal');
+    var availabilityTitleEl = document.getElementById('assignmentAvailabilityTitle');
+    var availabilityTextEl = document.getElementById('assignmentAvailabilityText');
+    var availabilityConfirmBtn = document.getElementById('assignmentAvailabilityConfirmBtn');
+    var availabilityCancelBtn = document.getElementById('assignmentAvailabilityCancelBtn');
+
+    // -----------------------------------------------------------------
+    // ICON FILES
+    // -----------------------------------------------------------------
+
+    var ICONS = {
+        accept:         'verified-fill.svg',
+        decline:        'close-circle-fill.svg',
+        picked_up:      'package.svg',
+        delivered:      'verified-badge-fill.svg',
+        message:        'contact-us-line.svg',
+        call:           'phone-fill.svg',
+        expand:         'arrow-drop-down-line.svg'
+    };
+
+    function iconUrl(file) {
+        return ASSET_BASE + 'assets/images/icons/' + file;
+    }
+
+    // -----------------------------------------------------------------
     // STATE
-    // ============================================================
-    var wrapper, panel, panelInner, header, toggleBtn, body;
-    var badgeEl;
-    var statusPillEl, statusTextEl, statusActionEl;
-    var listEl, emptyEl, offlineHintEl, ineligibleHintEl;
+    // -----------------------------------------------------------------
 
-    var notifyModal, notifyOrderIdEl, notifyRestaurantEl,
-        notifyCustomerEl, notifyTotalEl,
-        notifyAcceptBtn, notifyDeclineBtn, notifyDismissBtn;
+    var isOpen   = false;
+    var online   = false;
+    var eligible = true;
 
-    var availModal, availTitleEl, availTextEl,
-        availConfirmBtn, availCancelBtn;
+    var dismissedOfferIds = Object.create(null);
+    var notifyOrderId = 0;
 
-    var ENDPOINT = '';
-    var RIDER_ID = 0;
+    // -----------------------------------------------------------------
+    // HELPERS
+    // -----------------------------------------------------------------
 
-    var initialized   = false;
-    var isOpen        = false;
-    var hasAutoOpened = false;
+    function escapeHtml(str) {
+        return String(str == null ? '' : str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
 
-    var lastOrderId  = 0;
-    var rowsById     = Object.create(null);
-    var notifyQueue  = [];
-    var dismissedIds = Object.create(null);
+    function formatCurrency(amount) {
+        var n = parseFloat(amount || 0);
+        return '\u20B1' + n.toFixed(2);
+    }
 
-    var expandedIds  = Object.create(null);
+    function postAssignment(action, payload) {
+        var body = new FormData();
+        body.append('action', action);
+        body.append('csrf_token', CSRF_TOKEN);
 
-    var pollTimer   = null;
-    var POLL_LIVE_MS = 5000;
-    var POLL_IDLE_MS = 15000;
-    var lastKnownOnline   = false;
-    var lastKnownEligible = false;
-    var hasLiveAssignments = false;
+        if (payload && typeof payload === 'object') {
+            Object.keys(payload).forEach(function (key) {
+                body.append(key, String(payload[key]));
+            });
+        }
 
-    // ============================================================
-    // INIT
-    // ============================================================
-    function init() {
-        if (initialized) return;
+        return fetch(ASSIGNMENT_ENDPOINT, {
+            method: 'POST',
+            body: body,
+            credentials: 'same-origin'
+        }).then(function (res) { return res.json(); });
+    }
 
-        wrapper = document.getElementById('assignmentPanelWrapper');
-        if (!wrapper) return;
+    function postRider(action, payload) {
+        var body = new FormData();
+        body.append('action', action);
+        body.append('csrf_token', CSRF_TOKEN);
 
-        panel            = document.getElementById('assignmentPanel');
-        panelInner       = document.getElementById('assignmentPanelInner');
-        header           = document.getElementById('assignmentPanelHeader');
-        toggleBtn        = document.getElementById('assignmentPanelToggle');
-        body             = document.getElementById('assignmentPanelBody');
-        badgeEl          = document.getElementById('assignmentCountBadge');
-        statusPillEl     = document.getElementById('assignmentPanelStatus');
-        statusTextEl     = document.getElementById('assignmentPanelStatusText');
-        statusActionEl   = document.getElementById('assignmentPanelStatusAction');
-        listEl           = document.getElementById('assignmentList');
-        emptyEl          = document.getElementById('assignmentEmptyState');
-        offlineHintEl    = document.getElementById('assignmentOfflineHint');
-        ineligibleHintEl = document.getElementById('assignmentIneligibleHint');
+        if (payload && typeof payload === 'object') {
+            Object.keys(payload).forEach(function (key) {
+                body.append(key, String(payload[key]));
+            });
+        }
 
-        notifyModal        = document.getElementById('assignmentNotifyModal');
-        notifyOrderIdEl    = document.getElementById('assignmentNotifyOrderId');
-        notifyRestaurantEl = document.getElementById('assignmentNotifyRestaurant');
-        notifyCustomerEl   = document.getElementById('assignmentNotifyCustomer');
-        notifyTotalEl      = document.getElementById('assignmentNotifyTotal');
-        notifyAcceptBtn    = document.getElementById('assignmentNotifyAcceptBtn');
-        notifyDeclineBtn   = document.getElementById('assignmentNotifyDeclineBtn');
-        notifyDismissBtn   = document.getElementById('assignmentNotifyDismissBtn');
+        return fetch(RIDER_ENDPOINT, {
+            method: 'POST',
+            body: body,
+            credentials: 'same-origin'
+        }).then(function (res) { return res.json(); });
+    }
 
-        availModal       = document.getElementById('assignmentAvailabilityModal');
-        availTitleEl     = document.getElementById('assignmentAvailabilityTitle');
-        availTextEl      = document.getElementById('assignmentAvailabilityText');
-        availConfirmBtn  = document.getElementById('assignmentAvailabilityConfirmBtn');
-        availCancelBtn   = document.getElementById('assignmentAvailabilityCancelBtn');
+    // -----------------------------------------------------------------
+    // MODAL VISIBILITY
+    // -----------------------------------------------------------------
 
-        if (!panel || !listEl) return;
+    function showModal(modal) {
+        if (!modal) return;
+        modal.classList.add('active');
+    }
 
-        ENDPOINT = wrapper.dataset.endpoint || '../../rider/backend/handlers/assignment-handler.php';
-        RIDER_ID = parseInt(wrapper.dataset.riderId, 10) || 0;
+    function hideModal(modal) {
+        if (!modal) return;
+        modal.classList.remove('active');
+    }
 
-        wrapper.style.display = 'block';
+    // -----------------------------------------------------------------
+    // PANEL OPEN / CLOSE
+    // -----------------------------------------------------------------
 
-        isOpen = panel.classList.contains('open');
-        if (!panel.classList.contains('open') &&
-            !panel.classList.contains('closed')) {
+    function setPanelOpen(open) {
+        isOpen = !!open;
+
+        if (isOpen) {
+            panel.classList.remove('closed');
+            panel.classList.add('open');
+        } else {
+            panel.classList.remove('open');
             panel.classList.add('closed');
         }
 
-        wireToggle();
-        wireNotifyModal();
-        wireAvailabilityPill();
-        wireRowDelegation();
-        wireVisibility();
-
-        loadList();
-
-        initialized = true;
-    }
-
-    // ============================================================
-    // PANEL OPEN / CLOSE
-    // ============================================================
-    function wireToggle() {
-        if (header) {
-            header.addEventListener('click', function (e) {
-                if (e.target.closest('.assignment-panel-toggle')) return;
-                togglePanel();
-            });
-        }
-
         if (toggleBtn) {
-            toggleBtn.addEventListener('click', function (e) {
-                e.stopPropagation();
-                togglePanel();
+            toggleBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        }
+    }
+
+    function initToggle() {
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', function (event) {
+                event.stopPropagation();
+                setPanelOpen(!isOpen);
+            });
+        }
+
+        if (header) {
+            header.addEventListener('click', function (event) {
+                if (event.target.closest('#assignmentPanelStatus')) return;
+                if (event.target.closest('#assignmentPanelToggle')) return;
+
+                setPanelOpen(!isOpen);
             });
         }
     }
 
-    function togglePanel() {
-        if (isOpen) {
-            closePanel();
-        } else {
-            openPanel();
-        }
-    }
-
-    function openPanel() {
-        if (!panel) return;
-        if (isOpen && panel.classList.contains('open')) return;
-
-        isOpen = true;
-        panel.classList.remove('closed');
-        panel.classList.add('open');
-        if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'true');
-    }
-
-    function closePanel() {
-        if (!panel) return;
-        if (!isOpen && panel.classList.contains('closed')) return;
-
-        isOpen = false;
-        panel.classList.remove('open');
-        panel.classList.add('closed');
-        if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'false');
-    }
-
-    // ============================================================
-    // VISIBILITY
-    // ============================================================
-    function updateVisibility() {
-        if (!wrapper) return;
-
-        if (hasLiveAssignments) {
-            wrapper.classList.add('has-items');
-            wrapper.classList.remove('empty');
-            wrapper.setAttribute('aria-hidden', 'false');
-
-            if (!hasAutoOpened) {
-                hasAutoOpened = true;
-                openPanel();
-            }
-        } else {
-            wrapper.classList.remove('has-items');
-            wrapper.classList.remove('empty');
-            wrapper.setAttribute('aria-hidden', 'false');
-            closePanel();
-        }
-    }
-
-    // ============================================================
-    // SERVER CALLS
-    // ============================================================
-    function csrfToken() {
-        return window.RIDER_ASSIGNMENT_CSRF ||
-               window.RIDER_CSRF_TOKEN ||
-               '';
-    }
-
-    function post(action, extra) {
-        var fd = new FormData();
-        fd.append('csrf_token', csrfToken());
-        fd.append('action', action);
-
-        if (extra) {
-            Object.keys(extra).forEach(function (k) {
-                fd.append(k, String(extra[k]));
-            });
-        }
-
-        return fetch(ENDPOINT, {
-            method: 'POST',
-            body: fd,
-            credentials: 'same-origin'
-        })
-        .then(function (r) { return r.json(); })
-        .catch(function () {
-            return { status: 'error', message: 'Network error.' };
-        });
-    }
-
-    // ============================================================
-    // AVAILABILITY PILL + MODAL
-    // ============================================================
-    function wireAvailabilityPill() {
-        if (!statusPillEl || !availModal) return;
-
-        statusPillEl.addEventListener('click', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-
-            if (!lastKnownEligible) {
-                openAvailabilityModal({
-                    variant: 'neutral',
-                    icon: 'blocked',
-                    title: 'Account not verified',
-                    text: 'Your account must be verified before you can go online.',
-                    confirmLabel: 'Got it',
-                    hideCancel: true,
-                    onConfirm: null
-                });
-                return;
-            }
-
-            if (!lastKnownOnline) {
-                openAvailabilityModal({
-                    variant: 'primary',
-                    icon: 'online',
-                    title: 'Go online?',
-                    text: 'You will start receiving new assignments from the kitchen.',
-                    confirmLabel: 'Go Online',
-                    hideCancel: false,
-                    onConfirm: function () {
-                        submitAvailabilityToggle(1);
-                    }
-                });
-                return;
-            }
-
-            // Online.
-            if (hasLiveAssignments) {
-                openAvailabilityModal({
-                    variant: 'neutral',
-                    icon: 'blocked',
-                    title: 'Finish your active orders first',
-                    text: "You can't go offline while you have orders in progress. "
-                        + 'Complete all of them, then try again.',
-                    confirmLabel: 'Got it',
-                    hideCancel: true,
-                    onConfirm: null
-                });
-                return;
-            }
-
-            openAvailabilityModal({
-                variant: 'danger',
-                icon: 'offline',
-                title: 'Go offline?',
-                text: 'You will stop receiving new assignments until you go online again.',
-                confirmLabel: 'Go Offline',
-                hideCancel: false,
-                onConfirm: function () {
-                    submitAvailabilityToggle(0);
-                }
-            });
-        });
-
-        if (availConfirmBtn) {
-            availConfirmBtn.addEventListener('click', function () {
-                var fn = availConfirmBtn._onConfirm;
-                if (typeof fn === 'function') {
-                    fn();
-                    return;
-                }
-                // Info-only shape: just close.
-                closeAvailabilityModal();
-            });
-        }
-
-        if (availCancelBtn) {
-            availCancelBtn.addEventListener('click', function () {
-                closeAvailabilityModal();
-            });
-        }
-
-        var overlay = availModal.querySelector('[data-assignment-availability-dismiss]');
-        if (overlay) {
-            overlay.addEventListener('click', closeAvailabilityModal);
-        }
-
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape' && isAvailabilityOpen()) {
-                closeAvailabilityModal();
-            }
-        });
-    }
-
-    function openAvailabilityModal(copy) {
-        if (!availModal) return;
-
-        availModal.dataset.variant = copy.variant || 'primary';
-        availModal.dataset.icon    = copy.icon    || 'online';
-
-        if (availTitleEl) availTitleEl.textContent = copy.title || '';
-        if (availTextEl)  availTextEl.textContent  = copy.text  || '';
-
-        if (availConfirmBtn) {
-            availConfirmBtn.textContent = copy.confirmLabel || 'Confirm';
-            availConfirmBtn.disabled    = false;
-            availConfirmBtn._onConfirm  =
-                typeof copy.onConfirm === 'function' ? copy.onConfirm : null;
-        }
-
-        if (availCancelBtn) {
-            availCancelBtn.hidden = !!copy.hideCancel;
-        }
-
-        document.body.style.overflow = 'hidden';
-        availModal.style.display = 'flex';
-        void availModal.offsetWidth;
-        availModal.classList.add('active');
-
-        if (availConfirmBtn) {
-            setTimeout(function () { availConfirmBtn.focus(); }, 80);
-        }
-    }
-
-    function closeAvailabilityModal() {
-        if (!availModal) return;
-
-        availModal.classList.remove('active');
-        setTimeout(function () {
-            if (!availModal.classList.contains('active')) {
-                availModal.style.display = 'none';
-                document.body.style.overflow = '';
-            }
-        }, 220);
-
-        if (availConfirmBtn) {
-            availConfirmBtn._onConfirm = null;
-        }
-    }
-
-    function isAvailabilityOpen() {
-        return availModal && availModal.classList.contains('active');
-    }
-
-    function submitAvailabilityToggle(newValue) {
-        if (availConfirmBtn) {
-            availConfirmBtn.disabled = true;
-            availConfirmBtn.textContent = 'Updating…';
-        }
-
-        // toggle_availability lives on rider-handler.php, not on the
-        // assignment handler this file's post() helper talks to.
-        var fd = new FormData();
-        fd.append('csrf_token', csrfToken());
-        fd.append('action', 'toggle_availability');
-        fd.append('is_available', String(newValue));
-
-        fetch('../backend/handlers/rider-handler.php', {
-            method: 'POST',
-            body: fd,
-            credentials: 'same-origin'
-        })
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                if (!data || data.status !== 'success') {
-                    if (availConfirmBtn) {
-                        availConfirmBtn.disabled = false;
-                        availConfirmBtn.textContent =
-                            newValue === 1 ? 'Go Online' : 'Go Offline';
-                    }
-                    showPanelToast(
-                        (data && data.message) || 'Could not update availability.',
-                        'error'
-                    );
-                    return;
-                }
-
-                // Optimistic local flip, then a poll to resync.
-                lastKnownOnline = (newValue === 1);
-                updateStatusPill(lastKnownOnline, lastKnownEligible);
-
-                closeAvailabilityModal();
-
-                showPanelToast(
-                    data.message || (newValue === 1
-                        ? 'You are now online.'
-                        : 'You are now offline.'),
-                    'success'
-                );
-
-                lastPollAt = 0;
-                post('poll', { since_order_id: lastOrderId })
-                    .then(function (res) {
-                        if (!res || res.status !== 'success') return;
-                        applyResponseState(res, false);
-                    });
-            })
-            .catch(function () {
-                if (availConfirmBtn) {
-                    availConfirmBtn.disabled = false;
-                    availConfirmBtn.textContent =
-                        newValue === 1 ? 'Go Online' : 'Go Offline';
-                }
-                showPanelToast('Network error. Please try again.', 'error');
-            });
-    }
-
-    // ============================================================
-    // INITIAL LOAD + POLL
-    // ============================================================
-    function loadList() {
-        post('list').then(function (data) {
-            if (!data || data.status !== 'success') {
-                applyErrorState();
-                return;
-            }
-            applyResponseState(data, true);
-            startPolling();
-        });
-    }
-
-    function startPolling() {
-        stopPolling();
-        pollTimer = setInterval(pollTick, 1000);
-    }
-
-    function stopPolling() {
-        if (pollTimer) {
-            clearInterval(pollTimer);
-            pollTimer = null;
-        }
-    }
-
-    var lastPollAt = 0;
-    function pollTick() {
-        if (document.hidden) return;
-
-        var now = Date.now();
-        var interval = hasLiveAssignments ? POLL_LIVE_MS : POLL_IDLE_MS;
-        if (now - lastPollAt < interval) return;
-
-        lastPollAt = now;
-        post('poll', { since_order_id: lastOrderId })
-            .then(function (data) {
-                if (!data || data.status !== 'success') return;
-                applyResponseState(data, false);
-            });
-    }
-
-    function wireVisibility() {
-        document.addEventListener('visibilitychange', function () {
-            if (document.visibilityState === 'visible') {
-                post('poll', { since_order_id: lastOrderId })
-                    .then(function (data) {
-                        if (!data || data.status !== 'success') return;
-                        applyResponseState(data, false);
-                    });
-            }
-        });
-    }
-
-    // ============================================================
-    // STATE APPLICATION
-    // ============================================================
-    function applyResponseState(data, fullReplace) {
-        var eligible = !!data.eligible;
-        var online   = !!data.online;
-        var counts   = data.counts || { pending: 0, picking_up: 0, active: 0, total: 0 };
-        var rows     = data.rows || [];
-        var maxId    = parseInt(data.max_id, 10) || lastOrderId;
-        var dismissed = Array.isArray(data.dismissed) ? data.dismissed : null;
-
-        lastKnownOnline   = online;
-        lastKnownEligible = eligible;
-
-        if (dismissed !== null) {
-            dismissedIds = Object.create(null);
-            dismissed.forEach(function (id) {
-                dismissedIds[parseInt(id, 10)] = true;
-            });
-        }
-
-        updateStatusPill(online, eligible);
-
-        if (ineligibleHintEl) ineligibleHintEl.hidden = eligible;
-        if (offlineHintEl)    offlineHintEl.hidden    = (!eligible || online);
-
-        var total = parseInt(counts.total, 10) || 0;
-        hasLiveAssignments = (total > 0);
-
-        if (badgeEl) {
-            badgeEl.textContent = String(total);
-            badgeEl.style.display = total > 0 ? 'inline-flex' : 'none';
-        }
-
-        if (fullReplace) {
-            listEl.innerHTML = '';
-            rowsById = Object.create(null);
-        }
-
-        var newRows = [];
-
-        rows.forEach(function (row) {
-            var oid = parseInt(row.order_id, 10) || 0;
-            if (oid <= 0) return;
-
-            var existing = rowsById[oid];
-            if (existing) {
-                updateRow(existing, row);
-            } else {
-                var el = buildRow(row);
-                listEl.appendChild(el);
-                rowsById[oid] = el;
-
-                if (!fullReplace) {
-                    newRows.push(row);
-                    el.classList.add('is-new');
-                    setTimeout(function () {
-                        el.classList.remove('is-new');
-                    }, 6000);
-                }
-            }
-        });
-
-        if (fullReplace) {
-            Object.keys(rowsById).forEach(function (key) {
-                var oid = parseInt(key, 10) || 0;
-                var present = rows.some(function (r) {
-                    return (parseInt(r.order_id, 10) || 0) === oid;
-                });
-                if (!present) {
-                    var el = rowsById[oid];
-                    if (el && el.parentNode) el.parentNode.removeChild(el);
-                    delete rowsById[oid];
-                }
-            });
-        }
-
-        if (emptyEl) emptyEl.hidden = (total > 0) || !eligible;
-
-        if (maxId > lastOrderId) lastOrderId = maxId;
-
-        updateVisibility();
-
-        if (!fullReplace && eligible && online) {
-            newRows.forEach(function (row) {
-                var oid = parseInt(row.order_id, 10) || 0;
-                if (!oid) return;
-                if (String(row.status) !== 'rider_pending') return;
-                if (dismissedIds[oid]) return;
-                if (notifyQueue.some(function (q) { return q.order_id === oid; })) return;
-                if (notifyModal && notifyModal.dataset.currentOrderId === String(oid)) return;
-                notifyQueue.push(row);
-            });
-
-            if (notifyQueue.length > 0 && !isNotifyOpen()) {
-                openNextNotification();
-            }
-        }
-
-        if (!online || !eligible) {
-            notifyQueue = [];
-            if (isNotifyOpen()) closeNotification();
-        }
-    }
-
-    function applyErrorState() {
-        hasLiveAssignments = false;
-        updateVisibility();
-    }
-
-    /**
-     * Update the availability pill so it always reflects the
-     * current state:
-     *
-     *   - the base label span (what shows when not hovered/focused)
-     *   - the action label span (what shows on hover / focus)
-     *   - the pill's own aria-label
-     *   - the .is-online / .is-offline classes
-     */
-    function updateStatusPill(online, eligible) {
-        if (!statusPillEl) return;
+    // -----------------------------------------------------------------
+    // AVAILABILITY PILL
+    // -----------------------------------------------------------------
+
+    function applyAvailabilityState() {
+        if (!statusBtn || !statusTextEl) return;
+
+        var state;
+        var label;
+        var action;
 
         if (!eligible) {
-            statusPillEl.classList.remove('is-online');
-            statusPillEl.classList.add('is-offline');
+            state  = 'is-inactive';
+            label  = 'Inactive';
+            action = '';
+        } else if (online) {
+            state  = 'is-online';
+            label  = 'Online';
+            action = 'Go Offline';
+        } else {
+            state  = 'is-offline';
+            label  = 'Offline';
+            action = 'Go Online';
+        }
 
-            if (statusTextEl)   statusTextEl.textContent   = 'Inactive';
-            if (statusActionEl) statusActionEl.textContent = 'Unavailable';
-            statusPillEl.setAttribute('aria-label', 'Availability: Inactive');
+        statusBtn.classList.remove('is-online', 'is-offline', 'is-inactive');
+        statusBtn.classList.add(state);
+
+        statusTextEl.textContent = label;
+        if (statusActionEl) statusActionEl.textContent = action;
+
+        statusBtn.setAttribute(
+            'aria-label',
+            'Availability: ' + label
+            + (action !== '' ? ' \u2014 press to ' + action.toLowerCase() : '')
+        );
+    }
+
+    function initAvailabilityPill() {
+        if (!statusBtn) return;
+
+        statusBtn.addEventListener('click', function (event) {
+            event.stopPropagation();
+            openAvailabilityModal();
+        });
+    }
+
+    // -----------------------------------------------------------------
+    // AVAILABILITY MODAL
+    // -----------------------------------------------------------------
+
+    function setModalVariant(variant, iconKey) {
+        if (!availabilityModal) return;
+        availabilityModal.setAttribute('data-variant', variant);
+        availabilityModal.setAttribute('data-icon', iconKey);
+    }
+
+    function setConfirmButtonTone(variant) {
+        if (!availabilityConfirmBtn) return;
+        availabilityConfirmBtn.classList.remove(
+            'assignment-availability-btn-primary',
+            'assignment-availability-btn-danger',
+            'assignment-availability-btn-neutral'
+        );
+        availabilityConfirmBtn.classList.add(
+            variant === 'danger'
+                ? 'assignment-availability-btn-danger'
+                : variant === 'neutral'
+                    ? 'assignment-availability-btn-neutral'
+                    : 'assignment-availability-btn-primary'
+        );
+    }
+
+    function openAvailabilityModal() {
+        if (!availabilityModal) return;
+
+        if (!eligible) {
+            setModalVariant('neutral', 'blocked');
+            setConfirmButtonTone('neutral');
+            if (availabilityTitleEl) availabilityTitleEl.textContent = 'Account not active';
+            if (availabilityTextEl) {
+                availabilityTextEl.textContent =
+                    'Your account must be verified before you can go online.';
+            }
+            if (availabilityCancelBtn) availabilityCancelBtn.hidden = true;
+            if (availabilityConfirmBtn) {
+                availabilityConfirmBtn.textContent = 'OK';
+                availabilityConfirmBtn.setAttribute('data-confirm-mode', 'close');
+            }
+            showModal(availabilityModal);
             return;
         }
 
         if (online) {
-            statusPillEl.classList.remove('is-offline');
-            statusPillEl.classList.add('is-online');
-
-            if (statusTextEl) statusTextEl.textContent = 'Online';
-
-            if (hasLiveAssignments) {
-                if (statusActionEl) statusActionEl.textContent = "Finish Orders First";
-            } else {
-                if (statusActionEl) statusActionEl.textContent = 'Go Offline';
+            setModalVariant('danger', 'offline');
+            setConfirmButtonTone('danger');
+            if (availabilityTitleEl) availabilityTitleEl.textContent = 'Go offline?';
+            if (availabilityTextEl) {
+                availabilityTextEl.textContent =
+                    'You will stop receiving new assignments while you are offline.';
             }
-
-            statusPillEl.setAttribute('aria-label', 'Availability: Online');
+            if (availabilityCancelBtn) availabilityCancelBtn.hidden = false;
+            if (availabilityConfirmBtn) {
+                availabilityConfirmBtn.textContent = 'Go Offline';
+                availabilityConfirmBtn.setAttribute('data-confirm-mode', 'offline');
+            }
         } else {
-            statusPillEl.classList.remove('is-online');
-            statusPillEl.classList.add('is-offline');
+            setModalVariant('primary', 'online');
+            setConfirmButtonTone('primary');
+            if (availabilityTitleEl) availabilityTitleEl.textContent = 'Go online?';
+            if (availabilityTextEl) {
+                availabilityTextEl.textContent =
+                    'You will start receiving new assignments immediately.';
+            }
+            if (availabilityCancelBtn) availabilityCancelBtn.hidden = false;
+            if (availabilityConfirmBtn) {
+                availabilityConfirmBtn.textContent = 'Go Online';
+                availabilityConfirmBtn.setAttribute('data-confirm-mode', 'online');
+            }
+        }
 
-            if (statusTextEl)   statusTextEl.textContent   = 'Offline';
-            if (statusActionEl) statusActionEl.textContent = 'Go Online';
-            statusPillEl.setAttribute('aria-label', 'Availability: Offline');
+        showModal(availabilityModal);
+    }
+
+    function closeAvailabilityModal() {
+        if (!availabilityModal) return;
+        hideModal(availabilityModal);
+    }
+
+    function initAvailabilityModal() {
+        if (!availabilityModal) return;
+
+        availabilityModal.addEventListener('click', function (event) {
+            if (event.target.closest('[data-assignment-availability-dismiss]')) {
+                closeAvailabilityModal();
+            }
+        });
+
+        if (availabilityConfirmBtn) {
+            availabilityConfirmBtn.addEventListener('click', function () {
+                var mode = availabilityConfirmBtn.getAttribute('data-confirm-mode') || '';
+
+                if (mode === 'close') {
+                    closeAvailabilityModal();
+                    return;
+                }
+
+                var target = (mode === 'offline') ? 0 : 1;
+
+                availabilityConfirmBtn.disabled = true;
+                var originalText = availabilityConfirmBtn.textContent;
+                availabilityConfirmBtn.textContent = 'Saving\u2026';
+
+                postRider('toggle_availability', { is_available: target })
+                    .then(function (data) {
+                        availabilityConfirmBtn.disabled = false;
+                        availabilityConfirmBtn.textContent = originalText;
+
+                        if (data && data.status === 'success') {
+                            online = (target === 1);
+                            applyAvailabilityState();
+                            closeAvailabilityModal();
+                            fetchNow();
+                            return;
+                        }
+
+                        if (availabilityTextEl) {
+                            availabilityTextEl.textContent = (data && data.message)
+                                ? data.message
+                                : 'Could not update your availability. Please try again.';
+                        }
+                    })
+                    .catch(function () {
+                        availabilityConfirmBtn.disabled = false;
+                        availabilityConfirmBtn.textContent = originalText;
+
+                        if (availabilityTextEl) {
+                            availabilityTextEl.textContent =
+                                'A network error occurred. Please try again.';
+                        }
+                    });
+            });
         }
     }
 
-    // ============================================================
-    // ROW RENDERING — three-band layout
-    // ============================================================
-    function buildRow(row) {
-        var oid    = parseInt(row.order_id, 10) || 0;
-        var status = String(row.status || '');
+    // -----------------------------------------------------------------
+    // CHAT HANDOFF
+    // -----------------------------------------------------------------
 
-        var el = document.createElement('div');
-        el.className = 'assignment-row';
-        el.setAttribute('data-order-id', String(oid));
-        el.setAttribute('data-status', status);
-        el.setAttribute('role', 'listitem');
+    function openRiderChat(orderId, recipient, subtitle) {
+        var chat = window.FitPalRiderChat;
 
-        if (!expandedIds[oid]) {
-            el.classList.add('is-collapsed');
+        if (!chat || typeof chat.open !== 'function') {
+            if (window.console && console.warn) {
+                console.warn(
+                    '[assignment-panel] window.FitPalRiderChat.open is not available. '
+                    + 'rider/assets/ui/js/rider-chat-modal.js must publish the chat '
+                    + 'interface before the Message action can open a conversation.'
+                );
+            }
+            return;
         }
 
-        var top = document.createElement('div');
-        top.className = 'assignment-row-top';
-        top.setAttribute('role', 'link');
-        top.setAttribute('tabindex', '0');
-        top.setAttribute('aria-label', 'View order #' + oid + ' in Deliveries');
-
-        var orderEl = document.createElement('span');
-        orderEl.className = 'assignment-row-order';
-        orderEl.textContent = 'Order #' + oid;
-        top.appendChild(orderEl);
-
-        var badge = document.createElement('span');
-        badge.className = 'assignment-row-status ' + (row.status_badge || 'badge-secondary');
-        badge.textContent = row.status_label || '';
-        top.appendChild(badge);
-
-        var actions = document.createElement('div');
-        actions.className = 'assignment-row-actions';
-        buildRowActions(row, actions);
-        top.appendChild(actions);
-
-        el.appendChild(top);
-
-        var summary = document.createElement('p');
-        summary.className = 'assignment-row-summary';
-        var restName = String(row.restaurant_name || '—');
-        var custName = String(row.customer_name || 'Customer');
-        summary.textContent = restName + ' • ' + custName;
-        el.appendChild(summary);
-
-        var meta = document.createElement('div');
-        meta.className = 'assignment-row-meta';
-        meta.appendChild(buildMetaLine('Restaurant', restName));
-        meta.appendChild(buildMetaLine('Branch',     String(row.branch_name     || '—')));
-        meta.appendChild(buildMetaLine('Customer',   custName));
-        meta.appendChild(buildMetaLine('Deliver to', String(row.destination     || '—')));
-
-        var totalsLine = document.createElement('div');
-        totalsLine.className = 'assignment-row-line';
-        var totalsLabel = document.createElement('span');
-        totalsLabel.className = 'label';
-        totalsLabel.textContent = 'Total';
-        var totalsValue = document.createElement('span');
-        totalsValue.className = 'value assignment-row-total';
-        var itemCount = parseInt(row.item_count, 10) || 0;
-        totalsValue.textContent =
-            '₱' + Number(row.order_total || 0).toFixed(2) +
-            ' • ' + itemCount + ' item' + (itemCount === 1 ? '' : 's');
-        totalsLine.appendChild(totalsLabel);
-        totalsLine.appendChild(totalsValue);
-        meta.appendChild(totalsLine);
-
-        el.appendChild(meta);
-
-        var expandBtn = document.createElement('button');
-        expandBtn.type = 'button';
-        expandBtn.className = 'assignment-row-expand';
-        expandBtn.setAttribute('data-row-expand', '1');
-        expandBtn.setAttribute('aria-expanded', expandedIds[oid] ? 'true' : 'false');
-        expandBtn.setAttribute('aria-label', 'Toggle details');
-
-        var expandIcon = document.createElement('img');
-        expandIcon.className = 'assignment-row-expand-icon';
-        expandIcon.alt = '';
-        expandIcon.width = 12;
-        expandIcon.height = 12;
-        expandIcon.src = assetPath('assets/images/icons/arrow-drop-down-line.svg');
-        expandIcon.onerror = function () {
-            this.onerror = null;
-            this.src = assetPath('assets/images/icons/arrow-down-s-line.svg');
-        };
-        expandBtn.appendChild(expandIcon);
-
-        var expandText = document.createElement('span');
-        expandText.textContent = 'Details';
-        expandBtn.appendChild(expandText);
-
-        el.appendChild(expandBtn);
-
-        return el;
+        chat.open({
+            orderId:   orderId,
+            recipient: recipient,
+            subtitle:  subtitle
+        });
     }
 
-    function buildMetaLine(label, value) {
-        var line = document.createElement('div');
-        line.className = 'assignment-row-line';
+    // -----------------------------------------------------------------
+    // ROW MARKUP
+    // -----------------------------------------------------------------
 
-        var l = document.createElement('span');
-        l.className = 'label';
-        l.textContent = label;
+    function actionButton(opts) {
+        var tone = opts.tone || 'is-neutral';
+        var label = opts.label || '';
+        var iconFile = ICONS[opts.icon] || ICONS.message;
 
-        var v = document.createElement('span');
-        v.className = 'value';
-        v.textContent = value;
+        var attrs = [
+            'type="button"',
+            'class="assignment-action-btn ' + tone + '"',
+            'title="' + escapeHtml(label) + '"',
+            'aria-label="' + escapeHtml(label) + '"'
+        ];
 
-        line.appendChild(l);
-        line.appendChild(v);
-        return line;
+        if (opts.dataAction) {
+            attrs.push('data-row-action="' + escapeHtml(opts.dataAction) + '"');
+        }
+        if (opts.dataOrderId) {
+            attrs.push('data-order-id="' + escapeHtml(String(opts.dataOrderId)) + '"');
+        }
+        if (opts.dataChannel) {
+            attrs.push('data-channel="' + escapeHtml(opts.dataChannel) + '"');
+        }
+        if (opts.dataSubtitle) {
+            attrs.push('data-subtitle="' + escapeHtml(opts.dataSubtitle) + '"');
+        }
+
+        return (
+            '<button ' + attrs.join(' ') + '>' +
+                '<img src="' + escapeHtml(iconUrl(iconFile)) + '" alt="" ' +
+                     'class="assignment-action-icon" width="16" height="16">' +
+            '</button>'
+        );
+    }
+
+    function rowActions(row) {
+        var status = row.status || '';
+        var id     = row.order_id;
+        var parts  = [];
+
+        if (status === 'rider_pending') {
+            parts.push(actionButton({
+                tone: 'is-danger',
+                icon: 'decline',
+                label: 'Decline',
+                dataAction: 'decline',
+                dataOrderId: id
+            }));
+            parts.push(actionButton({
+                tone: 'is-primary',
+                icon: 'accept',
+                label: 'Accept',
+                dataAction: 'accept',
+                dataOrderId: id
+            }));
+        } else if (status === 'picking_up') {
+            parts.push(actionButton({
+                tone: 'is-primary',
+                icon: 'picked_up',
+                label: 'Mark Picked Up',
+                dataAction: 'mark_picked_up',
+                dataOrderId: id
+            }));
+        } else if (status === 'delivering') {
+            parts.push(actionButton({
+                tone: 'is-primary',
+                icon: 'delivered',
+                label: 'Mark Delivered',
+                dataAction: 'mark_delivered',
+                dataOrderId: id
+            }));
+        }
+
+        if (row.message_enabled && row.message_channel) {
+            parts.push(actionButton({
+                tone: 'is-neutral',
+                icon: 'message',
+                label: 'Message',
+                dataAction: 'message',
+                dataOrderId: id,
+                dataChannel: row.message_channel,
+                dataSubtitle: 'Order #' + id + ' \u2022 ' + (row.customer_name || '')
+            }));
+        }
+
+        if (row.call_number) {
+            parts.push(
+                '<a class="assignment-action-btn is-neutral" ' +
+                   'href="tel:' + escapeHtml(row.call_number) + '" ' +
+                   'title="' + escapeHtml(row.call_label || 'Call') + '" ' +
+                   'aria-label="' + escapeHtml(row.call_label || 'Call') + '">' +
+                    '<img src="' + escapeHtml(iconUrl(ICONS.call)) + '" alt="" ' +
+                         'class="assignment-action-icon" width="16" height="16">' +
+                '</a>'
+            );
+        }
+
+        return parts.join('');
     }
 
     /**
-     * Fill the actions slot for a row based on its status.
+     * Build the pickup meta lines for a row.
      *
-     *   rider_pending → [Decline] [Accept] [Message Kitchen] [Call Kitchen]
-     *   picking_up    → [Mark Picked Up] [Message Kitchen] [Call Kitchen]
-     *   delivering    → [Mark Delivered] [Message Customer] [Call Customer]
+     * The Restaurant block shows the restaurant name, the branch
+     * name (when distinct from the restaurant), and the branch's
+     * full address (block, barangay, city, province, region, postal
+     * code, country — whichever the server provided).
      *
-     * All three action buttons post to assignment-handler.php with a
-     * matching `action` value: accept, decline, or mark_picked_up.
-     * The row's own status is used to label the primary action.
+     * The Deliver-to block shows the destination the customer
+     * supplied at checkout. It is a single free-form string.
+     *
+     * Item count and order total are their own rows.
      */
-    function buildRowActions(row, container) {
-        var status = String(row.status || '');
-        var oid    = parseInt(row.order_id, 10) || 0;
+    function rowMetaLines(row) {
+        var lines = [];
 
-        if (status === 'rider_pending') {
-            container.appendChild(buildActionButton({
-                label: 'Decline',
-                icon: 'close-circle-fill.svg',
-                iconFallbacks: ['close-circle-line.svg', 'cancel.svg'],
-                variant: 'danger',
-                attrs: {
-                    'data-action': 'decline',
-                    'data-order-id': String(oid)
-                }
-            }));
+        // ---- Restaurant -------------------------------------------------
+        var restaurantName = row.restaurant_name || '\u2014';
+        var branchName     = row.branch_name     || '';
+        var branchAddress  = row.branch_address  || '';
 
-            container.appendChild(buildActionButton({
-                label: 'Accept',
-                icon: 'verified-fill.svg',
-                iconFallbacks: ['verified-badge-fill.svg', 'check-line.svg'],
-                variant: 'primary',
-                attrs: {
-                    'data-action': 'accept',
-                    'data-order-id': String(oid)
-                }
-            }));
-
-            if (row.message_enabled && row.message_channel) {
-                container.appendChild(buildChatTrigger(row));
-            }
-            if (row.call_number) {
-                container.appendChild(buildCallLink(row));
-            }
-        } else if (status === 'picking_up') {
-            container.appendChild(buildActionButton({
-                label: 'Mark Picked Up',
-                icon: 'package.svg',
-                iconFallbacks: ['cart-arrow-up.svg', 'add-to-queue.svg', 'order.svg'],
-                variant: 'primary',
-                attrs: {
-                    'data-action': 'mark_picked_up',
-                    'data-order-id': String(oid)
-                }
-            }));
-
-            if (row.message_enabled && row.message_channel) {
-                container.appendChild(buildChatTrigger(row));
-            }
-            if (row.call_number) {
-                container.appendChild(buildCallLink(row));
-            }
-        } else if (status === 'delivering') {
-            container.appendChild(buildActionButton({
-                label: 'Mark Delivered',
-                icon: 'verified-badge-fill.svg',
-                iconFallbacks: ['verified-fill.svg', 'check-line.svg'],
-                variant: 'primary',
-                attrs: {
-                    'data-action': 'delivered',
-                    'data-order-id': String(oid)
-                }
-            }));
-
-            if (row.message_enabled && row.message_channel) {
-                container.appendChild(buildChatTrigger(row));
-            }
-            if (row.call_number) {
-                container.appendChild(buildCallLink(row));
-            }
+        // Compose the restaurant value: name, then a middle dot and
+        // the branch name only when the two differ. The customer's
+        // destination is a single string; the pickup point is two —
+        // the business and the physical branch within it.
+        var restaurantValue = restaurantName;
+        if (branchName !== '' && branchName !== restaurantName) {
+            restaurantValue += ' \u2014 ' + branchName;
         }
+
+        lines.push(['Restaurant', restaurantValue]);
+
+        // The address gets its own line so a long address does not
+        // squeeze the restaurant name into ellipsis. Skip when the
+        // server had no address on file.
+        if (branchAddress !== '') {
+            lines.push(['Pickup at', branchAddress]);
+        }
+
+        // ---- Customer ---------------------------------------------------
+        lines.push(['Customer', row.customer_name || '\u2014']);
+
+        // ---- Destination ------------------------------------------------
+        lines.push(['Deliver to', row.destination || '\u2014']);
+
+        // ---- Item count -------------------------------------------------
+        lines.push(['Items', String(row.item_count || 0)]);
+
+        // ---- Total ------------------------------------------------------
+        lines.push(['Total', formatCurrency(row.order_total)]);
+
+        return lines.map(function (pair) {
+            return (
+                '<p class="assignment-row-line">' +
+                    '<span class="label">' + escapeHtml(pair[0]) + '</span>' +
+                    '<span class="value">' + escapeHtml(pair[1]) + '</span>' +
+                '</p>'
+            );
+        }).join('');
     }
 
-    function buildActionButton(cfg) {
-        var btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'assignment-action-btn is-' + cfg.variant;
-        btn.setAttribute('aria-label', cfg.label);
-        btn.setAttribute('title', cfg.label);
-
-        Object.keys(cfg.attrs).forEach(function (k) {
-            btn.setAttribute(k, cfg.attrs[k]);
-        });
-
-        btn.appendChild(buildIcon(cfg.icon, cfg.iconFallbacks || []));
-        return btn;
+    function rowSummaryText(row) {
+        var restaurant = row.restaurant_name || 'Restaurant';
+        var customer   = row.customer_name   || 'Customer';
+        return restaurant + ' \u2192 ' + customer
+             + ' \u2022 ' + (row.item_count || 0) + ' item'
+             + ((row.item_count || 0) === 1 ? '' : 's')
+             + ' \u2022 ' + formatCurrency(row.order_total);
     }
 
-    function buildChatTrigger(row) {
-        var btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'assignment-action-btn is-neutral';
-        btn.setAttribute('aria-label', 'Message');
-        btn.setAttribute('title', 'Message');
+    function renderRow(row, collapsed) {
+        var status       = row.status || '';
+        var badgeClass   = row.status_badge || 'badge-secondary';
+        var statusLabel  = row.status_label || status;
 
-        btn.setAttribute('data-rider-chat-open', '1');
-        btn.setAttribute('data-rider-chat-order-id', String(row.order_id));
-        btn.setAttribute('data-rider-chat-recipient', String(row.message_channel || 'customer'));
-        btn.setAttribute(
-            'data-rider-chat-subtitle',
-            'Order #' + row.order_id + ' • ' + (row.restaurant_name || '')
+        var classes = 'assignment-row';
+        if (collapsed) classes += ' is-collapsed';
+
+        return (
+            '<article class="' + classes + '" ' +
+                     'data-order-id="' + row.order_id + '" ' +
+                     'data-order-status="' + escapeHtml(status) + '">' +
+
+                '<header class="assignment-row-top" tabindex="0">' +
+                    '<span class="assignment-row-order">Order #' + row.order_id + '</span>' +
+                    '<span class="assignment-row-status ' + escapeHtml(badgeClass) + '">' +
+                        escapeHtml(statusLabel) +
+                    '</span>' +
+                    '<div class="assignment-row-actions">' +
+                        rowActions(row) +
+                    '</div>' +
+                '</header>' +
+
+                '<p class="assignment-row-summary">' +
+                    escapeHtml(rowSummaryText(row)) +
+                '</p>' +
+
+                '<div class="assignment-row-meta">' +
+                    rowMetaLines(row) +
+                '</div>' +
+
+                '<button type="button" class="assignment-row-expand" ' +
+                        'aria-expanded="' + (collapsed ? 'false' : 'true') + '">' +
+                    '<img src="' + escapeHtml(iconUrl(ICONS.expand)) + '" alt="" ' +
+                         'class="assignment-row-expand-icon" width="12" height="12">' +
+                    '<span>' + (collapsed ? 'Details' : 'Hide') + '</span>' +
+                '</button>' +
+            '</article>'
         );
-
-        btn.appendChild(buildIcon(
-            'chat-1-fill.svg',
-            ['chat-fill.svg', 'chat-line.svg', 'contact-us-line.svg']
-        ));
-        return btn;
     }
 
-    function buildCallLink(row) {
-        var a = document.createElement('a');
-        a.className = 'assignment-action-btn is-neutral';
-        a.href = 'tel:' + String(row.call_number).replace(/\s+/g, '');
-        a.setAttribute('aria-label', row.call_label || 'Call');
-        a.setAttribute('title', row.call_label || 'Call');
+    /**
+     * Read the collapse state of every row currently in the DOM.
+     *
+     * Returns a map of order_id (string) to a boolean is-collapsed.
+     * replaceRows() uses this snapshot to re-apply per-row state to
+     * the freshly rendered rows, so a poll never resets a row the
+     * user has expanded.
+     */
+    function snapshotCollapseState() {
+        var state = Object.create(null);
+        if (!listEl) return state;
 
-        a.appendChild(buildIcon(
-            'phone-fill.svg',
-            ['contact-us-line.svg', 'phone-line.svg']
-        ));
-        return a;
-    }
-
-    function updateRow(existingEl, row) {
-        var oid = parseInt(row.order_id, 10) || 0;
-        if (!existingEl.classList.contains('is-collapsed')) {
-            expandedIds[oid] = true;
-        } else {
-            delete expandedIds[oid];
+        var rows = listEl.querySelectorAll('.assignment-row[data-order-id]');
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var id  = row.getAttribute('data-order-id');
+            if (!id) continue;
+            state[id] = row.classList.contains('is-collapsed');
         }
-
-        var newEl = buildRow(row);
-        existingEl.parentNode.replaceChild(newEl, existingEl);
-        rowsById[oid] = newEl;
+        return state;
     }
 
-    // ============================================================
-    // ROW DELEGATION
-    // ============================================================
-    function wireRowDelegation() {
+    /**
+     * Replace the entire list from a server-provided rows array.
+     *
+     * Before wiping, this reads the collapse state of every row in
+     * the DOM. After rendering, it re-applies that state per
+     * order_id. A row whose id is not in the snapshot is one the
+     * server just added; it keeps the default collapse state for its
+     * status (expanded for rider_pending, collapsed for everything
+     * else).
+     *
+     * @param {Array} rows
+     */
+    function replaceRows(rows) {
         if (!listEl) return;
 
-        listEl.addEventListener('click', function (e) {
-            var expandBtn = e.target.closest('[data-row-expand]');
-            if (expandBtn) {
-                e.preventDefault();
-                e.stopPropagation();
+        var previousState = snapshotCollapseState();
 
-                var rowEl = expandBtn.closest('.assignment-row');
-                if (!rowEl) return;
+        listEl.innerHTML = '';
 
-                var oid = parseInt(rowEl.getAttribute('data-order-id'), 10) || 0;
-                var nowCollapsed = rowEl.classList.toggle('is-collapsed');
-
-                if (nowCollapsed) {
-                    delete expandedIds[oid];
-                } else {
-                    expandedIds[oid] = true;
-                }
-                expandBtn.setAttribute('aria-expanded', nowCollapsed ? 'false' : 'true');
-                return;
-            }
-
-            var btn = e.target.closest('[data-action]');
-            if (btn && !btn.disabled) {
-                e.preventDefault();
-                e.stopPropagation();
-
-                var action  = btn.getAttribute('data-action');
-                var orderId = parseInt(btn.getAttribute('data-order-id'), 10) || 0;
-                if (!orderId) return;
-
-                if (action === 'accept')         return submitDecision(btn, 'accept',  orderId);
-                if (action === 'decline')        return submitDecision(btn, 'decline', orderId);
-                if (action === 'mark_picked_up') return submitDecision(btn, 'mark_picked_up', orderId);
-                if (action === 'delivered')      return submitDecision(btn, 'delivered', orderId);
-                return;
-            }
-
-            var topBand = e.target.closest('.assignment-row-top');
-            if (topBand) {
-                if (e.target.closest(
-                    'button, a, [data-action], [data-row-expand], [data-rider-chat-open]'
-                )) {
-                    return;
-                }
-
-                e.preventDefault();
-                window.location.href = 'deliveries.php';
-            }
-        });
-
-        listEl.addEventListener('keydown', function (e) {
-            if (e.key !== 'Enter' && e.key !== ' ') return;
-
-            var topBand = e.target.closest('.assignment-row-top');
-            if (!topBand) return;
-            if (e.target !== topBand) return;
-
-            e.preventDefault();
-            window.location.href = 'deliveries.php';
-        });
-    }
-
-    // ============================================================
-    // ACCEPT / DECLINE / MARK PICKED UP / DELIVERED
-    //
-    // All four actions post to the same endpoint with different
-    // `action` values. The handler returns a `row` payload shaped
-    // by shapeAssignmentRow(); we swap the row in place with it so
-    // the actions reflect the new status without a full reload.
-    //
-    // mark_picked_up is owned by the assignment handler (not the
-    // rider handler), so the panel keeps a single write endpoint
-    // for all its row actions. The delivered action is the one
-    // exception — it lives on rider-handler.php because it credits
-    // the rider's wallet inside a transaction. This file posts
-    // delivered to rider-handler.php directly.
-    // ============================================================
-    function submitDecision(btn, action, orderId) {
-        btn.disabled = true;
-
-        var endpoint;
-        var fd = new FormData();
-        fd.append('csrf_token', csrfToken());
-        fd.append('action', action);
-        fd.append('order_id', String(orderId));
-
-        if (action === 'delivered') {
-            // delivered credits the rider and must go through
-            // rider-handler.php, which owns the transaction.
-            endpoint = '../backend/handlers/rider-handler.php';
-        } else {
-            // accept, decline, mark_picked_up all live on the
-            // assignment handler.
-            endpoint = ENDPOINT;
+        if (!Array.isArray(rows) || rows.length === 0) {
+            return;
         }
 
-        fetch(endpoint, {
-            method: 'POST',
-            body: fd,
-            credentials: 'same-origin'
-        })
-            .then(function (r) { return r.json(); })
+        var html = rows.map(function (row) {
+            var id = String(row.order_id);
+            var collapsed;
+
+            if (Object.prototype.hasOwnProperty.call(previousState, id)) {
+                collapsed = previousState[id];
+            } else {
+                // Default for a newly seen row: expand rider_pending
+                // (the rider has a decision to make), collapse the
+                // rest.
+                collapsed = (row.status !== 'rider_pending');
+            }
+
+            return renderRow(row, collapsed);
+        }).join('');
+
+        listEl.innerHTML = html;
+    }
+
+    // -----------------------------------------------------------------
+    // BADGES, HINTS, EMPTY STATE
+    // -----------------------------------------------------------------
+
+    function applyCounts(counts) {
+        if (!countBadge || !counts) return;
+        var total = parseInt(counts.total || 0, 10);
+        if (total > 0) {
+            countBadge.textContent = String(total);
+            countBadge.style.display = '';
+        } else {
+            countBadge.style.display = 'none';
+        }
+    }
+
+    function applyEligibilityState() {
+        if (offlineHint)    offlineHint.hidden    = (!eligible) || online;
+        if (ineligibleHint) ineligibleHint.hidden = eligible;
+    }
+
+    function applyEmptyState(totalAssignments) {
+        if (!emptyState) return;
+        emptyState.hidden = (totalAssignments > 0) || !eligible;
+    }
+
+    // -----------------------------------------------------------------
+    // ROW ACTION DELEGATION
+    // -----------------------------------------------------------------
+
+    function handleRowAction(action, orderId, btn) {
+        if (orderId <= 0) return;
+
+        if (action === 'message') {
+            var channel  = btn.getAttribute('data-channel') || 'customer';
+            var subtitle = btn.getAttribute('data-subtitle') || '';
+            openRiderChat(orderId, channel, subtitle);
+            return;
+        }
+
+        var isPostable =
+            action === 'accept' ||
+            action === 'decline' ||
+            action === 'mark_picked_up' ||
+            action === 'mark_delivered';
+
+        if (!isPostable) return;
+
+        var originalHtml = btn.innerHTML;
+        btn.disabled = true;
+
+        postAssignment(action, { order_id: orderId })
             .then(function (data) {
-                if (!data || data.status !== 'success') {
-                    btn.disabled = false;
-                    showPanelToast(
-                        (data && data.message) || 'Could not complete the action.',
-                        'error'
-                    );
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+
+                if (data && data.status === 'success') {
+                    fetchNow();
                     return;
                 }
 
-                if (action === 'decline') {
-                    removeRow(orderId);
-                } else if (data.row) {
-                    replaceRow(data.row);
-                } else {
-                    // No row payload. Fall back to a full list
-                    // refresh so the panel does not drift.
-                    loadList();
-                }
-
-                if (orderId > lastOrderId) lastOrderId = orderId;
-                clearNotificationFor(orderId);
-                delete expandedIds[orderId];
-
-                showPanelToast(
-                    data.message || defaultSuccessMessage(action),
-                    'success'
-                );
+                var message = (data && data.message)
+                    ? data.message
+                    : 'Could not complete that action.';
+                openNotice(message);
             })
             .catch(function () {
                 btn.disabled = false;
-                showPanelToast('Network error. Please try again.', 'error');
+                btn.innerHTML = originalHtml;
+                openNotice('A network error occurred. Please try again.');
             });
     }
 
-    function defaultSuccessMessage(action) {
-        switch (action) {
-            case 'accept':
-                return 'Assignment accepted.';
-            case 'decline':
-                return 'Assignment declined.';
-            case 'mark_picked_up':
-                return 'Order picked up.';
-            case 'delivered':
-                return 'Delivery completed.';
-            default:
-                return 'Done.';
-        }
-    }
+    function openNotice(message) {
+        if (!notifyModal) return;
 
-    function replaceRow(row) {
-        var oid = parseInt(row.order_id, 10) || 0;
-        if (oid <= 0) return;
+        if (notifyOrderIdEl)   notifyOrderIdEl.textContent   = '';
+        if (notifyRestaurantEl) notifyRestaurantEl.textContent = '';
+        if (notifyCustomerEl)  notifyCustomerEl.textContent  = message;
+        if (notifyTotalEl)     notifyTotalEl.textContent     = '';
 
-        var existing = rowsById[oid];
-
-        if (existing && existing.parentNode) {
-            updateRow(existing, row);
-        } else {
-            var el = buildRow(row);
-            listEl.appendChild(el);
-            rowsById[oid] = el;
+        if (notifyAcceptBtn)  notifyAcceptBtn.hidden  = true;
+        if (notifyDeclineBtn) notifyDeclineBtn.hidden = true;
+        if (notifyDismissBtn) {
+            notifyDismissBtn.hidden = false;
+            notifyDismissBtn.textContent = 'Close';
         }
 
-        hasLiveAssignments = Object.keys(rowsById).length > 0;
-
-        if (emptyEl) emptyEl.hidden = hasLiveAssignments || !lastKnownEligible;
-        updateVisibility();
-        refreshCountsFromDom();
-        updateStatusPill(lastKnownOnline, lastKnownEligible);
+        showModal(notifyModal);
     }
 
-    function removeRow(orderId) {
-        var el = rowsById[orderId];
-        if (el && el.parentNode) {
-            el.parentNode.removeChild(el);
-        }
-        delete rowsById[orderId];
+    function initRowDelegation() {
+        if (!listEl) return;
 
-        var remaining = Object.keys(rowsById).length;
-        hasLiveAssignments = remaining > 0;
+        listEl.addEventListener('click', function (event) {
+            // Order matters: the expand chevron and the action
+            // buttons both live inside the row, and the row header
+            // itself is clickable. Match the most specific target
+            // first.
+            var expandBtn = event.target.closest('.assignment-row-expand');
+            if (expandBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                toggleRowCollapse(expandBtn);
+                return;
+            }
 
-        if (emptyEl) emptyEl.hidden = hasLiveAssignments || !lastKnownEligible;
-        updateVisibility();
-        refreshCountsFromDom();
-        updateStatusPill(lastKnownOnline, lastKnownEligible);
-    }
+            var actionBtn = event.target.closest('[data-row-action]');
+            if (actionBtn) {
+                event.preventDefault();
+                event.stopPropagation();
 
-    function refreshCountsFromDom() {
-        var pending = 0;
-        var picking = 0;
-        var active = 0;
+                var action  = actionBtn.getAttribute('data-row-action') || '';
+                var orderId = parseInt(actionBtn.getAttribute('data-order-id') || '0', 10);
 
-        Object.keys(rowsById).forEach(function (key) {
-            var el = rowsById[key];
-            var status = el.getAttribute('data-status') || '';
-            if (status === 'rider_pending') pending++;
-            else if (status === 'picking_up') picking++;
-            else if (status === 'delivering') active++;
+                handleRowAction(action, orderId, actionBtn);
+                return;
+            }
+
+            var top = event.target.closest('.assignment-row-top');
+            if (top) {
+                var article = top.closest('.assignment-row');
+                var chevron = article
+                    ? article.querySelector('.assignment-row-expand')
+                    : null;
+                if (chevron) toggleRowCollapse(chevron);
+            }
         });
 
-        var total = pending + picking + active;
+        listEl.addEventListener('keydown', function (event) {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
 
-        if (badgeEl) {
-            badgeEl.textContent = String(total);
-            badgeEl.style.display = total > 0 ? 'inline-flex' : 'none';
-        }
+            var top = event.target.closest('.assignment-row-top');
+            if (!top) return;
+
+            event.preventDefault();
+
+            var article = top.closest('.assignment-row');
+            var chevron = article
+                ? article.querySelector('.assignment-row-expand')
+                : null;
+            if (chevron) toggleRowCollapse(chevron);
+        });
     }
 
-    // ============================================================
+    function toggleRowCollapse(chevronBtn) {
+        var article = chevronBtn.closest('.assignment-row');
+        if (!article) return;
+
+        var collapsed = article.classList.toggle('is-collapsed');
+
+        chevronBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+
+        var labelEl = chevronBtn.querySelector('span');
+        if (labelEl) labelEl.textContent = collapsed ? 'Details' : 'Hide';
+    }
+
+    // -----------------------------------------------------------------
     // NOTIFICATION MODAL
-    // ============================================================
-    function wireNotifyModal() {
+    // -----------------------------------------------------------------
+
+    function openNotificationModal(row) {
         if (!notifyModal) return;
+
+        notifyOrderId = row.order_id;
+
+        if (notifyAcceptBtn)  notifyAcceptBtn.hidden  = false;
+        if (notifyDeclineBtn) notifyDeclineBtn.hidden = false;
+        if (notifyDismissBtn) {
+            notifyDismissBtn.hidden = false;
+            notifyDismissBtn.textContent = 'Decide later';
+        }
+
+        if (notifyOrderIdEl)   notifyOrderIdEl.textContent   = String(row.order_id);
+
+        // Restaurant line: name plus branch plus address on one
+        // string. The three parts are separated by a middle dot so
+        // the modal can show them without a second grid.
+        if (notifyRestaurantEl) {
+            var restaurantName = row.restaurant_name || '\u2014';
+            var branchName     = row.branch_name     || '';
+            var branchAddress  = row.branch_address  || '';
+
+            var parts = [restaurantName];
+            if (branchName !== '' && branchName !== restaurantName) {
+                parts.push(branchName);
+            }
+            if (branchAddress !== '') {
+                parts.push(branchAddress);
+            }
+
+            notifyRestaurantEl.textContent = parts.join(' \u2014 ');
+        }
+
+        if (notifyCustomerEl)  notifyCustomerEl.textContent  = row.customer_name   || '\u2014';
+        if (notifyTotalEl)     notifyTotalEl.textContent     = formatCurrency(row.order_total);
+
+        if (notifyAcceptBtn)  notifyAcceptBtn.setAttribute('data-order-id', String(row.order_id));
+        if (notifyDeclineBtn) notifyDeclineBtn.setAttribute('data-order-id', String(row.order_id));
+        if (notifyDismissBtn) notifyDismissBtn.setAttribute('data-order-id', String(row.order_id));
+
+        showModal(notifyModal);
+    }
+
+    function closeNotificationModal() {
+        if (!notifyModal) return;
+        hideModal(notifyModal);
+        notifyOrderId = 0;
+    }
+
+    function initNotificationModal() {
+        if (!notifyModal) return;
+
+        notifyModal.addEventListener('click', function (event) {
+            if (event.target.closest('[data-assignment-notify-dismiss]')) {
+                closeNotificationModal();
+            }
+        });
 
         if (notifyAcceptBtn) {
             notifyAcceptBtn.addEventListener('click', function () {
-                var oid = parseInt(notifyAcceptBtn.dataset.orderId, 10) || 0;
-                if (!oid) return;
+                var orderId = parseInt(notifyAcceptBtn.getAttribute('data-order-id') || '0', 10);
+                if (orderId <= 0) return;
 
                 notifyAcceptBtn.disabled = true;
-                if (notifyDeclineBtn) notifyDeclineBtn.disabled = true;
+                var original = notifyAcceptBtn.textContent;
+                notifyAcceptBtn.textContent = 'Accepting\u2026';
 
-                post('accept', { order_id: oid }).then(function (data) {
-                    notifyAcceptBtn.disabled = false;
-                    if (notifyDeclineBtn) notifyDeclineBtn.disabled = false;
+                postAssignment('accept', { order_id: orderId })
+                    .then(function (data) {
+                        notifyAcceptBtn.disabled = false;
+                        notifyAcceptBtn.textContent = original;
 
-                    if (!data || data.status !== 'success') {
-                        showPanelToast(
-                            (data && data.message) || 'Could not accept the assignment.',
-                            'error'
-                        );
-                        return;
-                    }
-
-                    if (data.row) {
-                        replaceRow(data.row);
-                    } else {
-                        loadList();
-                    }
-
-                    if (oid > lastOrderId) lastOrderId = oid;
-
-                    closeNotification();
-                    showPanelToast(data.message || 'Assignment accepted.', 'success');
-                });
+                        if (data && data.status === 'success') {
+                            closeNotificationModal();
+                            fetchNow();
+                        } else {
+                            openNotice((data && data.message) || 'Could not accept.');
+                        }
+                    })
+                    .catch(function () {
+                        notifyAcceptBtn.disabled = false;
+                        notifyAcceptBtn.textContent = original;
+                        openNotice('A network error occurred. Please try again.');
+                    });
             });
         }
 
         if (notifyDeclineBtn) {
             notifyDeclineBtn.addEventListener('click', function () {
-                var oid = parseInt(notifyDeclineBtn.dataset.orderId, 10) || 0;
-                if (!oid) return;
+                var orderId = parseInt(notifyDeclineBtn.getAttribute('data-order-id') || '0', 10);
+                if (orderId <= 0) return;
 
-                if (notifyAcceptBtn) notifyAcceptBtn.disabled = true;
                 notifyDeclineBtn.disabled = true;
+                var original = notifyDeclineBtn.textContent;
+                notifyDeclineBtn.textContent = 'Declining\u2026';
 
-                post('decline', { order_id: oid }).then(function (data) {
-                    if (notifyAcceptBtn) notifyAcceptBtn.disabled = false;
-                    notifyDeclineBtn.disabled = false;
+                postAssignment('decline', { order_id: orderId })
+                    .then(function (data) {
+                        notifyDeclineBtn.disabled = false;
+                        notifyDeclineBtn.textContent = original;
 
-                    if (!data || data.status !== 'success') {
-                        showPanelToast(
-                            (data && data.message) || 'Could not decline the assignment.',
-                            'error'
-                        );
-                        return;
-                    }
-
-                    removeRow(oid);
-                    if (oid > lastOrderId) lastOrderId = oid;
-
-                    closeNotification();
-                    showPanelToast(data.message || 'Assignment declined.', 'success');
-                });
+                        if (data && data.status === 'success') {
+                            closeNotificationModal();
+                            fetchNow();
+                        } else {
+                            openNotice((data && data.message) || 'Could not decline.');
+                        }
+                    })
+                    .catch(function () {
+                        notifyDeclineBtn.disabled = false;
+                        notifyDeclineBtn.textContent = original;
+                        openNotice('A network error occurred. Please try again.');
+                    });
             });
         }
 
         if (notifyDismissBtn) {
             notifyDismissBtn.addEventListener('click', function () {
-                var oid = parseInt(notifyDismissBtn.dataset.orderId, 10) || 0;
-                if (!oid) { closeNotification(); return; }
-
-                post('dismiss', { order_id: oid });
-                dismissedIds[oid] = true;
-                closeNotification();
+                var orderId = parseInt(notifyDismissBtn.getAttribute('data-order-id') || '0', 10);
+                if (orderId > 0) {
+                    dismissedOfferIds[orderId] = true;
+                    postAssignment('dismiss', { order_id: orderId }).catch(function () {
+                        // Best-effort.
+                    });
+                }
+                closeNotificationModal();
             });
         }
-
-        var overlay = notifyModal.querySelector('[data-assignment-notify-dismiss]');
-        if (overlay) {
-            overlay.addEventListener('click', closeNotification);
-        }
-
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape' && isNotifyOpen()) closeNotification();
-        });
     }
 
-    function openNextNotification() {
-        if (!notifyModal) return;
-        if (isNotifyOpen()) return;
-        if (notifyQueue.length === 0) return;
+    function maybeNotifyForNewOffer(rows) {
+        if (!notifyModal || !online || !eligible) return;
+        if (notifyOrderId > 0) return;
 
-        var row = notifyQueue[0];
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            if (row.status !== 'rider_pending') continue;
+            if (dismissedOfferIds[row.order_id]) continue;
 
-        if (notifyOrderIdEl)    notifyOrderIdEl.textContent    = String(row.order_id);
-        if (notifyRestaurantEl) notifyRestaurantEl.textContent =
-            (row.restaurant_name || '—') +
-            (row.branch_name ? ' • ' + row.branch_name : '');
-        if (notifyCustomerEl)   notifyCustomerEl.textContent   = row.customer_name || '—';
-        if (notifyTotalEl)      notifyTotalEl.textContent      =
-            '₱' + Number(row.order_total || 0).toFixed(2);
-
-        if (notifyAcceptBtn)  notifyAcceptBtn.dataset.orderId  = String(row.order_id);
-        if (notifyDeclineBtn) notifyDeclineBtn.dataset.orderId = String(row.order_id);
-        if (notifyDismissBtn) notifyDismissBtn.dataset.orderId = String(row.order_id);
-
-        notifyModal.dataset.currentOrderId = String(row.order_id);
-
-        document.body.style.overflow = 'hidden';
-        notifyModal.style.display = 'flex';
-        void notifyModal.offsetWidth;
-        notifyModal.classList.add('active');
-
-        if (notifyAcceptBtn) {
-            setTimeout(function () { notifyAcceptBtn.focus(); }, 120);
+            openNotificationModal(row);
+            return;
         }
     }
 
-    function closeNotification() {
-        if (!notifyModal) return;
+    // -----------------------------------------------------------------
+    // POLL
+    // -----------------------------------------------------------------
 
-        notifyModal.classList.remove('active');
-        setTimeout(function () {
-            if (!notifyModal.classList.contains('active')) {
-                notifyModal.style.display = 'none';
-                document.body.style.overflow = '';
-                delete notifyModal.dataset.currentOrderId;
-            }
-        }, 220);
+    function fetchNow() {
+        var body = new FormData();
+        body.append('action', 'list');
+        body.append('csrf_token', CSRF_TOKEN);
 
-        notifyQueue.shift();
+        fetch(ASSIGNMENT_ENDPOINT, {
+            method: 'POST',
+            body: body,
+            credentials: 'same-origin'
+        })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                if (!data || data.status !== 'success') return;
 
-        if (notifyQueue.length > 0) {
-            setTimeout(function () {
-                if (!isNotifyOpen() && lastKnownOnline && lastKnownEligible) {
-                    openNextNotification();
+                eligible = !!data.eligible;
+                online   = !!data.online;
+
+                applyEligibilityState();
+                applyAvailabilityState();
+
+                if (Array.isArray(data.dismissed)) {
+                    data.dismissed.forEach(function (id) {
+                        dismissedOfferIds[parseInt(id, 10)] = true;
+                    });
                 }
-            }, 350);
-        }
+
+                if (data.counts) {
+                    applyCounts(data.counts);
+                    applyEmptyState(parseInt(data.counts.total || 0, 10));
+                }
+
+                var rows = Array.isArray(data.rows) ? data.rows : [];
+                replaceRows(rows);
+
+                maybeNotifyForNewOffer(rows);
+            })
+            .catch(function () {
+                // Silent. Next tick retries.
+            });
     }
 
-    function isNotifyOpen() {
-        return notifyModal && notifyModal.classList.contains('active');
-    }
+    // -----------------------------------------------------------------
+    // BOOTSTRAP
+    // -----------------------------------------------------------------
 
-    function clearNotificationFor(orderId) {
-        notifyQueue = notifyQueue.filter(function (row) {
-            return (parseInt(row.order_id, 10) || 0) !== orderId;
-        });
+    document.addEventListener('DOMContentLoaded', function () {
+        setPanelOpen(false);
 
-        if (notifyModal &&
-            notifyModal.dataset.currentOrderId === String(orderId)) {
-            closeNotification();
-        }
-    }
+        initToggle();
+        initAvailabilityPill();
+        initAvailabilityModal();
+        initNotificationModal();
+        initRowDelegation();
 
-    // ============================================================
-    // HELPERS
-    // ============================================================
-    function assetPath(relative) {
-        var base = window.RIDER_ASSET_BASE || '';
-        if (base) {
-            if (base.charAt(base.length - 1) !== '/') base += '/';
-            return base + relative.replace(/^\/+/, '');
-        }
-        return '../../shared/' + relative.replace(/^\/+/, '');
-    }
-
-    function buildIcon(primary, fallbacks) {
-        var img = document.createElement('img');
-        img.alt = '';
-        img.className = 'assignment-action-icon';
-        img.setAttribute('width', '18');
-        img.setAttribute('height', '18');
-
-        var chain = [primary].concat(fallbacks || []);
-
-        img.onerror = function () {
-            var next = chain.shift();
-            if (next) {
-                img.src = assetPath('assets/images/icons/' + next);
-            } else {
-                img.onerror = null;
-                img.style.display = 'none';
-            }
-        };
-
-        img.src = assetPath('assets/images/icons/' + chain.shift());
-        return img;
-    }
-
-    function showPanelToast(message, type) {
-        var toast = document.getElementById('assignmentPanelToast');
-        if (!toast) {
-            toast = document.createElement('div');
-            toast.id = 'assignmentPanelToast';
-            toast.style.cssText = [
-                'position:fixed', 'top:80px', 'right:20px',
-                'padding:12px 20px', 'border-radius:8px',
-                'font-size:14px', 'font-weight:500', 'z-index:9999',
-                'max-width:360px', 'box-shadow:0 4px 16px rgba(0,0,0,.15)',
-                'transform:translateX(120%)',
-                'transition:transform .3s cubic-bezier(.4,0,.2,1)'
-            ].join(';');
-            document.body.appendChild(toast);
-        }
-
-        var palette = {
-            success: ['#d1fae5', '#065f46'],
-            error:   ['#fee2e2', '#991b1b'],
-            warning: ['#fef3c7', '#92400e'],
-            info:    ['#dbeafe', '#1e40af']
-        };
-        var colors = palette[type] || palette.info;
-        toast.style.background = colors[0];
-        toast.style.color      = colors[1];
-        toast.textContent      = message;
-
-        void toast.offsetWidth;
-        toast.style.transform = 'translateX(0)';
-
-        clearTimeout(toast._timer);
-        toast._timer = setTimeout(function () {
-            toast.style.transform = 'translateX(120%)';
-        }, 2800);
-    }
-
-    // ============================================================
-    // BOOT
-    // ============================================================
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
+        fetchNow();
+        setInterval(fetchNow, POLL_INTERVAL_MS);
+    });
 })();

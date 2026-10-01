@@ -19,6 +19,40 @@
  * tab never lands on a page that belongs to the other.
  *
  * ---------------------------------------------------------------------
+ * WHERE THE ROWS THIS PAGE RENDERS COME FROM
+ * ---------------------------------------------------------------------
+ * Both tabs read the `transaction` table, which is written by the
+ * shared order-transaction layer:
+ *
+ *     shared/backend/database/order-transaction-queries.php
+ *
+ * Three of the four ledger writers there touch the customer's
+ * financial_account:
+ *
+ *   - createOrderFromQueue writes the placement `payment` row.
+ *       COD    → status 'pending'
+ *       Online → status 'pending'
+ *       Wallet → status 'completed'
+ *
+ *   - refundOrderToWallet writes a `refund` row on customer
+ *     cancellation when the original method was Wallet or Online.
+ *
+ *   - The customer's own wallet-handler.php writes `deposit` rows
+ *     for recharges, and `withdrawal` rows are written by admin
+ *     tooling. Those two never touch order state.
+ *
+ * The balance hero and the Credit tab's balance column are both
+ * read from financial_account.balance, which the
+ * after_transaction_insert trigger moves automatically as those
+ * rows are written. This page never moves the balance itself; it
+ * only renders what the trigger last computed.
+ *
+ * A customer who cancels an order and immediately reloads the
+ * wallet page sees the correct balance, because the balance and the
+ * ledger rows are written in the same transaction that closed the
+ * order.
+ *
+ * ---------------------------------------------------------------------
  * SCOPE RULES APPLIED
  * ---------------------------------------------------------------------
  *  - No SQL. getWalletAccount(), getWalletTransactions(),
@@ -26,35 +60,27 @@
  *    countWalletAccountActivity() come from wallet-queries.php.
  *  - No inline CSS. wallet.css is loaded via the customer header's
  *    $pageCssMap.
- *  - formatCurrency() comes from customer-queries.php. It is NOT
- *    declared here.
+ *  - formatCurrency() comes from customer-queries.php.
  *  - No inline JS beyond the FITPAL_WALLET config block that
  *    wallet.js already reads. That block is a data bag, not
  *    behaviour.
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 5.0 — Both tabs now carry a wallet-transactions-card.
- *                  - Credit tab lists completed wallet movements
- *                    only (deposits, wallet payments, refunds,
- *                    withdrawals).
- *                  - Transactions tab lists every row on the
- *                    wallet account, including pending and failed
- *                    COD and Online payments, and labels each row
- *                    with a status pill and a payment-method badge
- *                    where those apply.
- *                  - Pagination is per tab.
+ * @version 5.1 — Docblock records the shared order-transaction layer
+ *                as the writer of the `transaction` rows both tabs
+ *                read. No markup, pagination, modal, or JS config
+ *                change from the previous revision.
  *
- *                (4.0: split into two anchor tabs. 3.1: CSRF
- *                inherited from header.php. 3.0: local walletFmt()
- *                removed; uses formatCurrency().)
+ *                (5.0: split into two anchor tabs with independent
+ *                pagination. 4.0: page header and back button.
+ *                3.1: CSRF inherited from header.php.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('customer');
 
 if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     header('Location: sign-in.php');
@@ -104,11 +130,6 @@ if ($fromParam !== '' && isset($walletBackMap[$fromParam])) {
 
 /* ============================================
    ACTIVE TAB
-   ============================================
-   Two tabs. Anything other than 'transactions' lands on 'credit'.
-   The default is intentionally Credit, because the header's wallet
-   link arrives with no query string and the first thing a customer
-   usually wants is their balance.
    ============================================ */
 $activeTab = isset($_GET['tab']) ? strtolower(trim((string)$_GET['tab'])) : 'credit';
 if (!in_array($activeTab, ['credit', 'transactions'], true)) {
@@ -119,15 +140,6 @@ if (!in_array($activeTab, ['credit', 'transactions'], true)) {
    HELPERS (page-local; no DB access)
    ============================================ */
 
-/**
- * Build a wallet page URL that keeps the customer on the tab the
- * link was clicked from.
- *
- * @param string $tab       'credit' | 'transactions'
- * @param int    $targetPage 1-based
- * @param string $fromParam  origin slug, or '' for none
- * @param array<string,string> $backMap
- */
 function walletPageUrl(string $tab, int $targetPage, string $fromParam, array $backMap): string
 {
     $params = [
@@ -140,9 +152,6 @@ function walletPageUrl(string $tab, int $targetPage, string $fromParam, array $b
     return 'wallet.php?' . http_build_query($params);
 }
 
-/**
- * Build the tab href for a given tab, preserving the from= origin.
- */
 function walletTabUrl(string $tab, string $fromParam, array $backMap): string
 {
     $params = ['tab' => $tab];
@@ -184,12 +193,6 @@ function walletDate(string $date): string
     return $ts !== false ? date('M d, Y • g:i A', $ts) : $date;
 }
 
-/**
- * Human-readable label for the order payment method that produced
- * a given transaction row. Returns '' when the row has no
- * associated order (deposits, withdrawals, refunds on legacy
- * orders) or when the value is unrecognized.
- */
 function walletPaymentMethodLabel(?string $method): string
 {
     return match ($method) {
@@ -222,7 +225,6 @@ $totalTxns    = 0;
 $totalPages   = 1;
 
 if ($activeTab === 'credit') {
-    // Credit tab: completed wallet movements only.
     $transactions = getWalletTransactions($database_connection, $customerId, $perPage, $offset);
     $returnedRows = count($transactions);
 
@@ -244,7 +246,6 @@ if ($activeTab === 'credit') {
     }
 
 } else {
-    // Transactions tab: every row on the wallet account.
     $transactions = getWalletAccountActivity($database_connection, $customerId, $perPage, $offset);
     $returnedRows = count($transactions);
 
@@ -268,8 +269,8 @@ if ($activeTab === 'credit') {
 
 require_once __DIR__ . '/../includes/header.php';
 
-// $csrfToken is provided by header.php (via includes/csrf_token.php),
-// stored under the customer role's own session key 'customer_csrf_token'.
+// $csrfToken is provided by header.php, stored under the customer
+// role's own session key 'customer_csrf_token'.
 ?>
 
 <div class="content wallet-page" id="walletPage">
@@ -334,9 +335,6 @@ require_once __DIR__ . '/../includes/header.php';
 
         <!-- ============================================ -->
         <!-- CREDIT PANEL -->
-        <!-- Balance hero + Recharge button + wallet-only -->
-        <!-- activity card. No status pill, no method badge — -->
-        <!-- every row here is a completed wallet movement. -->
         <!-- ============================================ -->
         <section class="wallet-panel wallet-panel-credit" aria-label="Wallet credit">
 
@@ -488,10 +486,6 @@ require_once __DIR__ . '/../includes/header.php';
 
         <!-- ============================================ -->
         <!-- TRANSACTIONS PANEL -->
-        <!-- Full wallet-account activity. Every row, -->
-        <!-- including pending and failed COD / Online. -->
-        <!-- Status pill on non-completed rows. Payment- -->
-        <!-- method badge on rows with an associated order. -->
         <!-- ============================================ -->
         <section class="wallet-panel wallet-panel-transactions" aria-label="Wallet transactions">
 

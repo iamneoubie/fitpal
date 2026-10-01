@@ -2,105 +2,286 @@
 /**
  * FitPal Restaurant Header
  *
- * Contract
- * --------
- * 1. The header NEVER writes to $_SESSION except through the
- *    restaurant CSRF helper, which owns the role-scoped token key
- *    'restaurant_csrf_token'. Only the sign-in handler and the
- *    sign-out handler may write other session values.
+ * Renders the restaurant chrome (nav, user block, logout modal) and
+ * bootstraps the restaurant role's request-scoped needs.
  *
- * 2. The header NEVER queries the DB to re-validate a session. If
- *    $_SESSION['restaurant_account_id'] is missing, the user is
- *    logged out — period.
+ * ---------------------------------------------------------------------
+ * PER-ROLE SESSION MODEL (Option B)
+ * ---------------------------------------------------------------------
+ * This header is included by an entry-point file under
+ * restaurant/pages/ after that file has run:
  *
- * 3. $assetBase is computed here so pages never compute it twice.
+ *     require_once '<...>/shared/includes/session-bootstrap.php';
+ *     fitpal_session_bootstrap('restaurant');
  *
- * 4. $csrfToken is assigned here on every request, authenticated or
- *    not, so no restaurant page needs to generate or fetch the token
- *    itself. The token is stored under 'restaurant_csrf_token' — never
- *    the shared 'csrf_token' key — because all FitPal roles run on the
- *    same PHP session and a shared key would let one role's success
- *    path delete another role's already-rendered token.
+ * If that precondition is not met, this header emits a minimal
+ * error page and exits. It does NOT call session_start() itself,
+ * because doing so would open PHP's default PHPSESSID session and
+ * silently break isolation.
  *
- * 5. The desktop avatar circle links to profile.php. The mobile
- *    greeting block also links to profile.php. The logout button
- *    (desktop and mobile) is a <button> carrying data-logout-trigger
- *    so logout.js can intercept it and show the confirmation modal.
+ * ---------------------------------------------------------------------
+ * SESSION ACTIVITY
+ * ---------------------------------------------------------------------
+ * The last-activity timestamp is recorded for reference, but it is
+ * not used to expire the session. Sign-out is a manual action.
  *
- * 6. The Kitchen link is shown only to role ∈ {manager, staff, kitchen}.
- *    Owner and partner accounts see Dashboard and Profile only — the
- *    kitchen page is an operational surface for branch staff.
+ * ---------------------------------------------------------------------
+ * CSRF TOKEN (restaurant context)
+ * ---------------------------------------------------------------------
+ * The header assigns $csrfToken on every request — authenticated or
+ * not — by calling getRestaurantCsrfToken() from
+ * includes/restaurant-csrf-token.php. The helper verifies the
+ * active session is the restaurant session before returning a
+ * token, so a misconfigured page cannot accidentally write a
+ * restaurant token into a non-restaurant session.
+ *
+ * Every restaurant page reads $csrfToken from this header. No
+ * restaurant page generates or fetches the token itself.
+ *
+ * ---------------------------------------------------------------------
+ * SIGN-OUT GUARD CONTRACT
+ * ---------------------------------------------------------------------
+ * The header emits two JS globals on every AUTHENTICATED page:
+ *
+ *   window.RESTAURANT_SIGNOUT_GUARD_ENDPOINT
+ *     The URL that answers "how many active orders does this
+ *     branch have right now?". Points at
+ *     kitchen-order-handler.php, whose `active_orders_count`
+ *     action is already implemented and already used by the
+ *     kitchen page. The previous revision pointed this at
+ *     order-handler.php, which was renamed to
+ *     kitchen-order-handler.php and no longer exists on disk, so
+ *     every guard check returned 404 and logout.js failed open.
+ *
+ *   window.RESTAURANT_CSRF_TOKEN
+ *     The restaurant role's CSRF token, needed by the guard's
+ *     POST body.
+ *
+ * These globals exist so logout.js can run the same pre-flight on
+ * dashboard.php and profile.php that it already runs on
+ * kitchen.php.
+ *
+ * The two globals are NOT emitted on the sign-in or sign-up pages,
+ * because those pages are unauthenticated and the guard endpoint
+ * would be irrelevant.
+ *
+ * ---------------------------------------------------------------------
+ * ROLE GATING
+ * ---------------------------------------------------------------------
+ * The Kitchen nav link is shown only to role in
+ * {manager, staff, kitchen}. Owner and partner accounts see
+ * Dashboard and Profile only — the kitchen page is an operational
+ * surface for branch staff, and the sign-out guard's
+ * active_orders_count action is also branch-scoped, so owner and
+ * partner accounts are not subject to the guard.
+ *
+ * ---------------------------------------------------------------------
+ * PAGE-SPECIFIC CSS
+ * ---------------------------------------------------------------------
+ * The header's $pageCssMap maps the current page basename to a
+ * stylesheet under restaurant/assets/css/. It is loaded after the
+ * shared global.css and header.css so page tuning wins on cascade
+ * position without needing !important.
  *
  * @package FitPal
- * @version 4.1 — Reads the signed-in account's display name from the
- *                restaurant role's own session key, 'restaurant_name',
- *                instead of the shared 'user_name' key. All four roles
- *                (admin, customer, rider, restaurant) run on the same
- *                PHP session, so a shared name key meant a rider or
- *                customer sign-out in the same browser could wipe the
- *                restaurant's display name mid-session. The name is now
- *                role-scoped and immune to other roles' sign-out paths.
+ * @version 5.2 — Corrected the sign-out guard endpoint.
  *
- *                (4.0: Adds restaurant-csrf-token.php and assigns
- *                $csrfToken unconditionally so no restaurant page
- *                needs to bootstrap CSRF itself. Removes the
- *                duplicated inline token generation that existed in
- *                sign-in.php, sign-up.php, profile.php, and
- *                kitchen.php. 3.1: Adds the Kitchen nav link for
- *                branch staff roles.)
+ *                The previous revision emitted:
+ *
+ *                    window.RESTAURANT_SIGNOUT_GUARD_ENDPOINT =
+ *                        '../backend/handlers/order-handler.php';
+ *
+ *                That file was renamed to kitchen-order-handler.php
+ *                and no longer exists on disk. Every guard check
+ *                made by logout.js therefore returned 404, which
+ *                logout.js treats as "cannot decide" and fails
+ *                open, opening the plain confirmation modal and
+ *                letting a branch staff member with active orders
+ *                sign out unchecked. This revision points the
+ *                global at the file that exists:
+ *
+ *                    '../backend/handlers/kitchen-order-handler.php'
+ *
+ *                That handler's active_orders_count action is
+ *                already implemented and already used by the
+ *                kitchen page, so no handler change is needed.
+ *
+ *                No other line changed. The precondition check,
+ *                the CSRF bootstrap, the nav, the mobile nav,
+ *                the logout modal, the block modal, and the
+ *                page-specific CSS map are byte-identical to
+ *                v5.1.
+ *
+ *                (5.1: emits the sign-out guard globals on every
+ *                authenticated page. 5.0: per-role session
+ *                migration. 4.1: role-scoped display name. 4.0:
+ *                CSRF helper bootstrap. 3.1: Kitchen nav link for
+ *                branch staff.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+// ---------------------------------------------------------------------
+// PRECONDITION CHECK
+//
+// Under Option B, the restaurant session must be the active session
+// before this header can render. If it is not, the entry-point
+// file forgot to bootstrap — refuse to render rather than emit
+// restaurant chrome against the wrong session.
+// ---------------------------------------------------------------------
+
+if (!function_exists('fitpal_session_current_context')) {
+    require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
 }
 
-if (!isset($_SESSION['created'])) {
-    $_SESSION['created'] = time();
-} elseif (time() - $_SESSION['created'] > 1800) {
-    session_regenerate_id(true);
-    $_SESSION['created'] = time();
+if (fitpal_session_current_context() !== 'restaurant') {
+    error_log(
+        'restaurant/includes/header.php: included without the restaurant session '
+        . 'being bootstrapped. Current context: "'
+        . fitpal_session_current_context() . '". '
+        . 'The entry-point file must call fitpal_session_bootstrap(\'restaurant\') '
+        . 'before including this header.'
+    );
+
+    http_response_code(500);
+    ?>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>FitPal — Configuration Error</title>
+</head>
+
+<body
+    style="font-family:system-ui,sans-serif;max-width:640px;margin:80px auto;padding:0 24px;line-height:1.5;color:#111;">
+    <h1 style="font-size:20px;margin:0 0 12px;">Configuration Error</h1>
+    <p style="margin:0 0 12px;">
+        This page was reached without a restaurant session being
+        started. The entry-point file must call
+        <code
+            style="background:#f3f4f6;padding:2px 6px;border-radius:4px;">fitpal_session_bootstrap('restaurant')</code>
+        before including the restaurant header.
+    </p>
+    <p style="margin:0;color:#6b7280;font-size:14px;">
+        If you are a developer, check the server error log for details.
+    </p>
+</body>
+
+</html>
+<?php
+    exit;
 }
+
+// ---------------------------------------------------------------------
+// SESSION ACTIVITY
+//
+// The last-activity timestamp is recorded for reference, but it is
+// not used to expire the session. Sign-out is a manual action.
+// ---------------------------------------------------------------------
+
+require_once __DIR__ . '/../../shared/includes/session-activity.php';
+
+if (!empty($_SESSION['restaurant_account_id'])) {
+    trackSessionActivity();
+}
+
+// ---------------------------------------------------------------------
+// CSRF TOKEN (restaurant context)
+//
+// getRestaurantCsrfToken() verifies the active session is the
+// restaurant session before returning a token, so the value here is
+// always the restaurant's token and never any other role's.
+// ---------------------------------------------------------------------
+
+require_once __DIR__ . '/restaurant-csrf-token.php';
+
+// ---------------------------------------------------------------------
+// DATABASE
+// ---------------------------------------------------------------------
 
 require_once __DIR__ . '/../backend/database/restaurant-connect.php';
 
-// ===== CSRF TOKEN (restaurant role) =====
-//
-// Single source of truth for the restaurant role's CSRF token. The
-// helper generates it on first use and stores it under
-// 'restaurant_csrf_token' — never the shared 'csrf_token' key.
-require_once __DIR__ . '/restaurant-csrf-token.php';
+// ---------------------------------------------------------------------
+// PATH DETECTION
+// ---------------------------------------------------------------------
 
-function getRestaurantAssetBase(): string
-{
-    $scriptPath = $_SERVER['SCRIPT_NAME'];
-    $dirPath    = dirname($scriptPath);
-    $segments   = array_filter(explode('/', $dirPath));
-    $depth      = count($segments);
-    return str_repeat('../', $depth) . 'shared/';
+if (!function_exists('getRestaurantAssetBase')) {
+    /**
+     * Get the base path to shared/ from the currently executing page.
+     *
+     * @return string Asset base path ending with 'shared/'
+     */
+    function getRestaurantAssetBase(): string
+    {
+        $scriptPath = $_SERVER['SCRIPT_NAME'] ?? '';
+        $dirPath    = dirname($scriptPath);
+        $segments   = array_filter(explode('/', $dirPath));
+        $depth      = count($segments);
+        return str_repeat('../', $depth) . 'shared/';
+    }
 }
 
 $assetBase = getRestaurantAssetBase();
 
+// ---------------------------------------------------------------------
+// SESSION DATA
+//
+// The restaurant sign-in handler writes the keys read here on the
+// success path. This header trusts those keys for display; the
+// authorization gate is $_SESSION['restaurant_account_id'].
+// ---------------------------------------------------------------------
+
 $isLoggedIn      = !empty($_SESSION['restaurant_account_id']);
 $accountName     = $isLoggedIn ? (string)($_SESSION['restaurant_name']  ?? '') : '';
-$businessName    = $isLoggedIn ? (string)($_SESSION['business_name']   ?? '') : '';
-$restaurantRole  = $isLoggedIn ? (string)($_SESSION['restaurant_role'] ?? '') : '';
+$businessName    = $isLoggedIn ? (string)($_SESSION['business_name']    ?? '') : '';
+$restaurantRole  = $isLoggedIn ? (string)($_SESSION['restaurant_role']  ?? '') : '';
 $restaurantScope = $isLoggedIn ? (string)($_SESSION['restaurant_scope'] ?? 'owner') : '';
 
-$showKitchenLink = $isLoggedIn && in_array($restaurantRole, ['manager', 'staff', 'kitchen'], true);
+$showKitchenLink = $isLoggedIn
+    && in_array($restaurantRole, ['manager', 'staff', 'kitchen'], true);
 
 $accountInitial = '';
 if ($accountName !== '') {
     $accountInitial = strtoupper(substr($accountName, 0, 1));
 }
 
-// Always expose a restaurant-scoped token so any form rendered below
-// can carry it, regardless of whether the visitor is authenticated.
+// Always expose a restaurant-scoped token so any form rendered by a
+// restaurant page can carry it. getRestaurantCsrfToken() refuses to
+// return a token unless the active session is the restaurant
+// session, so the value here is always the restaurant's own token.
 $csrfToken = getRestaurantCsrfToken();
 
-$currentPage = basename($_SERVER['PHP_SELF']);
+// ---------------------------------------------------------------------
+// SIGN-OUT GUARD ENDPOINT
+//
+// Only emitted on an authenticated page. The endpoint is the
+// existing kitchen-order-handler.php action `active_orders_count`,
+// which answers "how many live orders does this branch have right
+// now?".
+//
+// The previous revision pointed this at order-handler.php, which
+// was renamed to kitchen-order-handler.php and no longer exists.
+// Every guard check returned 404 and logout.js failed open,
+// allowing a branch staff member with active orders to sign out
+// without being blocked. This revision points at the file that
+// exists on disk.
+//
+// The guard applies to branch-scoped accounts only. Owner and
+// partner accounts are not branch-scoped, so the endpoint would
+// answer with a branch_id of 0 and the handler would refuse the
+// call. Emitting the globals only for branch staff keeps the
+// contract honest.
+// ---------------------------------------------------------------------
+
+$showSignOutGuard = $isLoggedIn
+    && in_array($restaurantRole, ['manager', 'staff', 'kitchen'], true);
+
+// ---------------------------------------------------------------------
+// CURRENT PAGE + PAGE-SPECIFIC CSS
+// ---------------------------------------------------------------------
+
+$currentPage = basename($_SERVER['PHP_SELF'] ?? '');
 
 $pageCssMap = [
     'sign-in.php'   => 'sign-in.css',
@@ -306,7 +487,32 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
         </div>
     </div>
 
+    <?php if ($showSignOutGuard): ?>
+    <div class="logout-modal" id="restaurantBlockSignOutModal" style="display: none;" role="dialog" aria-modal="true"
+        aria-labelledby="restaurantBlockSignOutTitle">
+        <div class="logout-modal-overlay" data-block-signout-cancel></div>
+        <div class="logout-modal-content">
+            <div class="logout-modal-icon" aria-hidden="true">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/error-warning-line.svg" alt=""
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/information-fill.svg'">
+            </div>
+            <p class="logout-modal-title" id="restaurantBlockSignOutTitle">Can't sign out right now</p>
+            <p class="logout-modal-text" id="restaurantBlockSignOutText"></p>
+            <div class="logout-modal-actions">
+                <button type="button" class="logout-btn-cancel" data-block-signout-cancel>OK</button>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <main class="main-content" role="main">
+
+        <?php if ($showSignOutGuard): ?>
+        <script>
+        window.RESTAURANT_SIGNOUT_GUARD_ENDPOINT = '../backend/handlers/kitchen-order-handler.php';
+        window.RESTAURANT_CSRF_TOKEN = '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>';
+        </script>
+        <?php endif; ?>
 
         <script src="../assets/ui/js/header.js" defer></script>
         <script src="../assets/ui/js/logout.js" defer></script>

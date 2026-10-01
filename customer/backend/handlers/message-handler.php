@@ -3,79 +3,93 @@
  * FitPal Customer Order Tracking Message Handler
  *
  * AJAX endpoint for the customer chat modal on the order tracking
- * page. Handles fetching messages, sending a new message, and
- * marking a conversation as read.
+ * page. Runs on the customer session (PHPSESSID_CUSTOMER), separate
+ * from every other role's session.
  *
- * Actions:
+ * ---------------------------------------------------------------------
+ * ACTIONS
+ * ---------------------------------------------------------------------
  *   get    → return messages for a channel (full load or delta)
  *   send   → insert a new customer message
  *   read   → mark all messages from a counterparty as read
  *
- * Chat gating
- * -----------
- * Two business rules are enforced here, both backed by helpers in
- * tracking-queries.php:
+ * --------------------------------------------------------------------- * DIRECTION — WHO IS "SENT"
+ * ---------------------------------------------------------------------
+ * This handler runs on the customer session. Every request it
+ * answers is a customer's request. Therefore:
  *
- *   - Kitchen messaging is allowed for every order status except
- *     'cancelled' and 'refunded'. Once an order is closed, the
- *     customer and the kitchen have nothing left to say.
+ *     sender_type === 'customer'  →  the message is the customer's
+ *                                    own; direction = 'sent'
  *
- *   - Rider messaging is allowed only after the assigned rider has
- *     actually accepted the order (order_status = 'delivering' or
- *     'delivered' with delivery_rider_id set). During 'rider_pending'
- *     the kitchen has proposed a rider but the rider may still
- *     decline — messaging someone who might walk away is noise, so
- *     the send is refused until the rider is on the order for real.
- *     The get action still returns the (empty) history for the rider
- *     channel in that window so the tab is harmless; only the send
- *     is gated.
+ *     sender_type === anything else
+ *         (restaurant_account, delivery_rider, administrator,
+ *          system)                 →  the message came from the
+ *                                    other side; direction =
+ *                                    'received'
  *
- * Delta fetch
- * -----------
- * The get action accepts an optional `since_id`. When it is present
- * and > 0, the handler returns only rows whose message_id is greater
- * than that value (see getOrderMessagesSince()). When it is absent
- * or zero, the full conversation is returned. Both paths select the
- * same columns so the client can render either response with the
- * same code.
+ * The previous revision keyed direction on
+ * `sender_type === 'restaurant_account'`. That happened to be
+ * correct on the restaurant channel and wrong on the rider channel,
+ * where the customer's own messages are `sender_type = 'customer'`
+ * and the rider's messages are `sender_type = 'delivery_rider'`.
+ * The result was that on the rider tab, the customer's own
+ * messages were tagged `direction = 'received'` and rendered as
+ * white left-aligned bubbles, while the rider's messages were
+ * tagged `direction = 'received'` too and looked identical.
  *
- * The polling client sends `since_id` on every tick after the first
- * load. An idle conversation therefore costs one indexed lookup and
- * transfers an empty JSON array; there is no GROUP BY, no JOIN, no
- * full-table scan, and no re-render on the client.
+ * This revision decides direction on `sender_type === 'customer'`,
+ * which is the only predicate that is correct on both channels.
  *
- * This handler contains NO SQL of its own. All data access goes
- * through customer/backend/database/tracking-queries.php. The one
- * exception is resolveRecipientId(), which needs a join across
- * queue_item, restaurant_branch, and restaurant_account and is
- * declared here because it is a request-scoped lookup for the send
- * path, not a reusable read.
+ * ---------------------------------------------------------------------
+ * CHAT GATING
+ * ---------------------------------------------------------------------
+ * The read path and the send path are gated by the same predicate,
+ * getRiderMessagingState() from tracking-queries.php. Both channels
+ * (kitchen and rider) route through it so the two cannot drift.
  *
- * This file is NOT safe to require from a page — it runs a full
- * request dispatch at load time.
+ * ---------------------------------------------------------------------
+ * RESPONSE SHAPE
+ * ---------------------------------------------------------------------
+ * Every message object carries:
+ *
+ *   message_id  int
+ *   direction   "sent" | "received"      ← see above
+ *   sender      display string ("You", "Restaurant", "Rider")
+ *   content     string
+ *   time        "g:i A" formatted timestamp
+ *
+ * The top-level response carries max_id — the highest message_id in
+ * the batch — so the client can advance its delta cursor.
+ *
+ * ---------------------------------------------------------------------
+ * DEPLOYMENT NOTE
+ * ---------------------------------------------------------------------
+ * Requires getRiderMessagingState() from tracking-queries.php.
+ * Deploy tracking-queries.php BEFORE this file.
  *
  * @package FitPal
- * @version 1.3 — Adds chat gating and delta polling:
- *                  - get: accepts optional `since_id`; routes through
- *                    getOrderMessagesSince() when present.
- *                  - send: refuses delivery_rider messages until the
- *                    rider has accepted (riderHasAcceptedOrder);
- *                    refuses restaurant_account messages on
- *                    cancelled/refunded orders
- *                    (orderAllowsKitchenMessaging).
- *                  - send: reads the inserted row back via
- *                    getMessageById() so the response payload is
- *                    identical to what a delta fetch would produce.
+ * @version 5.0 — direction is decided on `sender_type === 'customer'`
+ *                instead of `sender_type === 'restaurant_account'`.
+ *                This is the fix for the rider channel returning
+ *                direction = 'received' for the customer's own
+ *                messages.
  *
- *                (1.2: CSRF validated against customer_csrf_token;
- *                explicit empty guards on both sides. 1.1: explicit
- *                join in resolveRecipientId.)
+ *                Every other line — the actions, the channel
+ *                gating, the refusal copy, the response shape, the
+ *                CSRF contract, the auth guard — is byte-identical
+ *                to v4.0.
+ *
+ *                (4.0: rider-channel read path gated identically
+ *                to the send path. 3.0: documentation only. 2.0:
+ *                per-role session migration. 1.3: chat gating and
+ *                delta polling. 1.2: CSRF validated against
+ *                customer_csrf_token.)
  */
+
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('customer');
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -90,21 +104,28 @@ $customerId = (int)$_SESSION['customer_id'];
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/tracking-queries.php';
 
-// Per-role CSRF check. The customer role validates against its own
-// session key, 'customer_csrf_token', never the shared 'csrf_token'.
-// Another role in the same browser session could have unset or
-// rotated the shared key on its own sign-in, which would otherwise
-// invalidate the token this request was issued under. See general.md.
+// ---------------------------------------------------------------------
+// CSRF
+// ---------------------------------------------------------------------
+
 $givenToken = (string)($_POST['csrf_token'] ?? '');
 $sessToken  = (string)($_SESSION['customer_csrf_token'] ?? '');
 
-if ($sessToken === '' || $givenToken === '' || !hash_equals($sessToken, $givenToken)) {
+if (
+    $sessToken === ''
+    || $givenToken === ''
+    || !hash_equals($sessToken, $givenToken)
+) {
     http_response_code(403);
     echo json_encode(['status' => 'error', 'message' => 'Security validation failed']);
     exit;
 }
 
 $action = (string)($_POST['action'] ?? '');
+
+// ---------------------------------------------------------------------
+// DISPATCH
+// ---------------------------------------------------------------------
 
 try {
     switch ($action) {
@@ -132,16 +153,38 @@ try {
 }
 
 /* -----------------------------------------------------------------
+ * REFUSAL COPY
+ * ----------------------------------------------------------------- */
+
+function riderChannelRefusalMessage(string $state): string
+{
+    return match ($state) {
+        'not_accepted'  => 'You can message the rider once they have accepted your order.',
+        'terminal'      => 'This order is closed and can no longer be discussed.',
+        'window_closed' => 'The messaging window for this delivered order has ended.',
+        'no_rider'      => 'This order does not have a rider assigned.',
+        'not_found'     => 'Order not found.',
+        default         => '',
+    };
+}
+
+function kitchenChannelRefusalMessage(string $orderStatus, bool $withinGrace): string
+{
+    if (in_array($orderStatus, ['cancelled', 'refunded', 'failed'], true)) {
+        return 'This order is closed and can no longer be discussed with the kitchen.';
+    }
+
+    if ($orderStatus === 'delivered' && !$withinGrace) {
+        return 'The messaging window for this delivered order has ended.';
+    }
+
+    return '';
+}
+
+/* -----------------------------------------------------------------
  * HANDLERS
  * ----------------------------------------------------------------- */
 
-/**
- * Return messages for a single channel on an order.
- *
- * When `since_id` is provided and > 0, returns only messages that
- * arrived after it — the polling path. When it is absent or zero,
- * returns the full conversation — the initial load path.
- */
 function handleGetMessages(PDO $db, int $customerId): void
 {
     $orderId = (int)($_POST['order_id'] ?? 0);
@@ -154,13 +197,43 @@ function handleGetMessages(PDO $db, int $customerId): void
         return;
     }
 
-    if (!getTrackableOrder($db, $orderId, $customerId)) {
+    $order = getTrackableOrder($db, $orderId, $customerId);
+    if (!$order) {
         echo json_encode(['status' => 'error', 'message' => 'Order not found']);
         return;
     }
 
-    // Delta path when the client already holds history; full path
-    // otherwise. Same SELECT shape, same JSON output either way.
+    $orderStatus = (string)$order['order_status'];
+
+    if ($channel === 'delivery_rider') {
+        $state = getRiderMessagingState($db, $orderId);
+
+        if ($state !== 'open') {
+            echo json_encode([
+                'status'  => 'error',
+                'message' => riderChannelRefusalMessage($state),
+                'channel' => $channel,
+                'reason'  => $state,
+            ]);
+            return;
+        }
+    } elseif ($channel === 'restaurant_account') {
+        $withinGrace = customerOrderDeliveredWithinGrace($order);
+
+        $refusal = kitchenChannelRefusalMessage($orderStatus, $withinGrace);
+        if ($refusal !== '') {
+            echo json_encode([
+                'status'  => 'error',
+                'message' => $refusal,
+                'channel' => $channel,
+                'reason'  => in_array($orderStatus, ['cancelled', 'refunded', 'failed'], true)
+                    ? 'terminal'
+                    : 'window_closed',
+            ]);
+            return;
+        }
+    }
+
     if ($sinceId > 0) {
         $messages = getOrderMessagesSince($db, $orderId, $customerId, $channel, $sinceId);
     } else {
@@ -176,14 +249,7 @@ function handleGetMessages(PDO $db, int $customerId): void
             $maxId = $mid;
         }
 
-        $isSent = ($m['sender_type'] === 'customer');
-        $formatted[] = [
-            'message_id' => $mid,
-            'direction'  => $isSent ? 'sent' : 'received',
-            'sender'     => $isSent ? 'You' : senderDisplayName($channel),
-            'content'    => (string)$m['content'],
-            'time'       => formatMessageTime((string)$m['created_at']),
-        ];
+        $formatted[] = shapeMessage($m, $channel);
     }
 
     echo json_encode([
@@ -193,18 +259,6 @@ function handleGetMessages(PDO $db, int $customerId): void
     ]);
 }
 
-/**
- * Insert a new customer message.
- *
- * Enforces the two chat-gating rules described in the file header:
- *   - restaurant_account: refused on cancelled/refunded orders.
- *   - delivery_rider:     refused until the rider has accepted.
- *
- * On success the inserted row is read back via getMessageById() and
- * returned in the same shape a subsequent delta fetch would return,
- * so the client's optimistic append is indistinguishable from the
- * server's next poll.
- */
 function handleSendMessage(PDO $db, int $customerId): void
 {
     $orderId = (int)($_POST['order_id'] ?? 0);
@@ -233,20 +287,32 @@ function handleSendMessage(PDO $db, int $customerId): void
         return;
     }
 
-    // ---- Chat gating ----
+    $orderStatus = (string)$order['order_status'];
+
     if ($channel === 'restaurant_account') {
-        if (!orderAllowsKitchenMessaging($db, $orderId)) {
+        $withinGrace = customerOrderDeliveredWithinGrace($order);
+        $refusal     = kitchenChannelRefusalMessage($orderStatus, $withinGrace);
+
+        if ($refusal !== '') {
             echo json_encode([
                 'status'  => 'error',
-                'message' => 'This order is closed and can no longer be discussed with the kitchen.',
+                'message' => $refusal,
+                'channel' => $channel,
+                'reason'  => in_array($orderStatus, ['cancelled', 'refunded', 'failed'], true)
+                    ? 'terminal'
+                    : 'window_closed',
             ]);
             return;
         }
     } elseif ($channel === 'delivery_rider') {
-        if (!riderHasAcceptedOrder($db, $orderId)) {
+        $state = getRiderMessagingState($db, $orderId);
+
+        if ($state !== 'open') {
             echo json_encode([
                 'status'  => 'error',
-                'message' => 'You can only message the rider once they have accepted your order.',
+                'message' => riderChannelRefusalMessage($state),
+                'channel' => $channel,
+                'reason'  => $state,
             ]);
             return;
         }
@@ -267,16 +333,8 @@ function handleSendMessage(PDO $db, int $customerId): void
         $content
     );
 
-    // Read the inserted row back so the appended node on the client
-    // is byte-identical to what a delta fetch would produce. This
-    // matters for the polling flow: after an optimistic append, the
-    // very next tick fetches since_id=max_id and returns nothing for
-    // this message, so there is no duplicate.
     $row = getMessageById($db, $messageId, $orderId);
     if (!$row) {
-        // Extremely unlikely (the row was just inserted). Fall back
-        // to a locally-shaped payload so the client still renders
-        // something sensible.
         echo json_encode([
             'status'       => 'success',
             'message_id'   => $messageId,
@@ -295,20 +353,11 @@ function handleSendMessage(PDO $db, int $customerId): void
     echo json_encode([
         'status'       => 'success',
         'message_id'   => $messageId,
-        'message_data' => [
-            'message_id' => (int)$row['message_id'],
-            'direction'  => 'sent',
-            'sender'     => 'You',
-            'content'    => (string)$row['content'],
-            'time'       => formatMessageTime((string)$row['created_at']),
-        ],
+        'message_data' => shapeMessage($row, $channel),
         'max_id'       => $messageId,
     ]);
 }
 
-/**
- * Mark all incoming messages from a channel as read.
- */
 function handleMarkRead(PDO $db, int $customerId): void
 {
     $orderId = (int)($_POST['order_id'] ?? 0);
@@ -320,9 +369,40 @@ function handleMarkRead(PDO $db, int $customerId): void
         return;
     }
 
-    if (!getTrackableOrder($db, $orderId, $customerId)) {
+    $order = getTrackableOrder($db, $orderId, $customerId);
+    if (!$order) {
         echo json_encode(['status' => 'error', 'message' => 'Order not found']);
         return;
+    }
+
+    $orderStatus = (string)$order['order_status'];
+
+    if ($channel === 'delivery_rider') {
+        $state = getRiderMessagingState($db, $orderId);
+        if ($state !== 'open') {
+            echo json_encode([
+                'status'  => 'error',
+                'message' => riderChannelRefusalMessage($state),
+                'channel' => $channel,
+                'reason'  => $state,
+            ]);
+            return;
+        }
+    } elseif ($channel === 'restaurant_account') {
+        $withinGrace = customerOrderDeliveredWithinGrace($order);
+        $refusal     = kitchenChannelRefusalMessage($orderStatus, $withinGrace);
+
+        if ($refusal !== '') {
+            echo json_encode([
+                'status'  => 'error',
+                'message' => $refusal,
+                'channel' => $channel,
+                'reason'  => in_array($orderStatus, ['cancelled', 'refunded', 'failed'], true)
+                    ? 'terminal'
+                    : 'window_closed',
+            ]);
+            return;
+        }
     }
 
     markOrderMessagesRead($db, $orderId, $channel);
@@ -331,22 +411,47 @@ function handleMarkRead(PDO $db, int $customerId): void
 }
 
 /* -----------------------------------------------------------------
- * HELPERS
+ * SHAPING
  * ----------------------------------------------------------------- */
 
 /**
- * Resolve the counterparty ID for a channel on an order.
+ * Shape a raw message row into the JSON payload the modal consumes.
  *
- * For 'delivery_rider' this is the assigned rider.
- * For 'restaurant_account' this is the first active restaurant
- * account tied to the order's branch(es). The customer talks to a
- * single restaurant contact per order.
+ * Direction is decided on `sender_type === 'customer'`. This handler
+ * runs on the customer session, so a row whose sender_type is
+ * 'customer' is the customer's own message and reads as 'sent'.
+ * Every other sender_type — restaurant_account, delivery_rider,
+ * administrator, system — reads as 'received'.
  *
- * @param PDO $db
- * @param array<string, mixed> $order
- * @param string $channel
- * @return int 0 if unavailable
+ * @param array<string, mixed> $row
+ * @param string $channel  Used only for the label on the received
+ *                         side ("Restaurant" or "Rider").
+ * @return array<string, mixed>
  */
+function shapeMessage(array $row, string $channel): array
+{
+    $senderType = (string)($row['sender_type'] ?? '');
+    $isSent     = ($senderType === 'customer');
+
+    $receivedLabel = ($channel === 'delivery_rider') ? 'Rider' : 'Restaurant';
+
+    return [
+        'message_id' => (int)($row['message_id'] ?? 0),
+        'direction'  => $isSent ? 'sent' : 'received',
+        'sender'     => $isSent ? 'You' : $receivedLabel,
+        'content'    => (string)($row['content'] ?? ''),
+        'time'       => formatMessageTime((string)($row['created_at'] ?? '')),
+
+        'sender_type' => $senderType,
+        'created_at'  => (string)($row['created_at'] ?? ''),
+        'is_read'     => (int)($row['is_read'] ?? 0) === 1,
+    ];
+}
+
+/* -----------------------------------------------------------------
+ * HELPERS
+ * ----------------------------------------------------------------- */
+
 function resolveRecipientId(PDO $db, array $order, string $channel): int
 {
     if ($channel === 'delivery_rider') {
@@ -376,12 +481,6 @@ function resolveRecipientId(PDO $db, array $order, string $channel): int
     return 0;
 }
 
-/**
- * Human-readable label for a message sender.
- *
- * @param string $channel
- * @return string
- */
 function senderDisplayName(string $channel): string
 {
     return $channel === 'delivery_rider' ? 'Rider' : 'Restaurant';

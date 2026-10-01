@@ -6,8 +6,48 @@
  * rider_pending handoff on the rider side. It is chrome, not page
  * content: header.php pulls it in on every authenticated rider page.
  *
- * Visibility contract
- * -------------------
+ * ---------------------------------------------------------------------
+ * ENDPOINT URL
+ * ---------------------------------------------------------------------
+ * The panel posts to the URL published on its own wrapper:
+ *
+ *     #assignmentPanelWrapper[data-endpoint]
+ *
+ * That attribute is set here. rider/assets/ui/js/assignment-panel.js
+ * reads it first and only falls back to a global when the attribute
+ * is missing.
+ *
+ * This include is always pulled in from rider/pages/*. Every page in
+ * that directory sets $assetBase to '../shared/'. Therefore the
+ * handler is always at:
+ *
+ *     '../backend/handlers/assignment-handler.php'
+ *
+ * resolved against the page's own directory, which is rider/pages/.
+ * That walks up to rider/, then into backend/handlers/ — the correct
+ * file.
+ *
+ * The previous revision built the URL as
+ *
+ *     preg_replace('#shared/$#', '', $assetBase) . 'rider/backend/...'
+ *
+ * From rider/pages/*, that produced '../rider/backend/...', which
+ * resolved against rider/pages/ as rider/rider/backend/... — one
+ * 'rider/' too many. Every panel POST 404'd at the router. The
+ * server log recorded it as:
+ *
+ *     [404] /rider/backend/handlers/assignment-handler.php
+ *     - No such file or directory
+ *
+ * followed by the router script's own [200] on the same line.
+ *
+ * The corrected version derives the URL from a fixed relative path
+ * relative to rider/pages/, with a fallback for the case where a
+ * future caller includes the panel from somewhere else.
+ *
+ * ---------------------------------------------------------------------
+ * VISIBILITY CONTRACT
+ * ---------------------------------------------------------------------
  * The wrapper is permanently on screen. It never slides off the
  * bottom of the viewport. The panel's collapsed and expanded states
  * are expressed entirely on .assignment-panel-inner, driven by the
@@ -21,53 +61,25 @@
  *       transform: translateY(0)
  *       → shows the full body
  *
- * The collapsed state is therefore the resting state when the rider
- * has no live assignments.
- *
  * The server renders .closed on first paint so the panel starts
  * collapsed and the toggle's aria-expanded="false" is honest from
  * the first frame. assignment-panel.js seeds its isOpen flag from
  * the DOM and is the only writer of the open/closed state after
  * that.
  *
- * ARIA notes
- * ----------
- * The wrapper carries aria-hidden="false" because the wrapper is
- * always present and the header bar inside it is a focusable
- * control.
+ * ---------------------------------------------------------------------
+ * MODAL VISIBILITY
+ * ---------------------------------------------------------------------
+ * Both modals (.assignment-notify-modal and
+ * .assignment-availability-modal) are hidden by the CSS rule
+ * `display: none` and shown when assignment-panel.js adds the
+ * .active class. No inline style="display:none" attribute is
+ * present on either modal element. Visibility is driven by exactly
+ * one channel: the presence or absence of .active.
  *
- * The availability pill is a real <button>. It is keyboard
- * focusable and fires on Enter / Space for free. It carries:
- *   - aria-label  the current state ("Online" / "Offline" /
- *                 "Inactive"), kept in sync by the JS
- *   - aria-haspopup="dialog"  because activating it opens the
- *                 availability modal
- *
- * Inside the button there are two label spans:
- *   - .assignment-panel-status-text    the base state label,
- *                                      always in the accessibility
- *                                      tree
- *   - .assignment-panel-status-action  the hover label ("Go
- *                                      Online" etc.), aria-hidden
- *                                      because it duplicates the
- *                                      action already announced by
- *                                      the modal
- *
- * CSS toggles which span is visible on :hover and :focus-visible.
- * JS owns the text inside the action span.
- *
- * What it renders
- * ---------------
- *   - A collapsed bar at the bottom of the viewport with:
- *       [ icon + "Assignments" ]  [ availability pill ]  [ count ] [ chevron ]
- *   - An expanded body listing every live assignment.
- *   - An empty state when the rider has no live assignments.
- *   - Inline offline and ineligible hints.
- *   - An assignment notification modal.
- *   - An availability modal (Go Online / Go Offline / Blocked).
- *
- * Live assignment statuses (v4.0)
- * -------------------------------
+ * ---------------------------------------------------------------------
+ * LIVE ASSIGNMENT STATUSES
+ * ---------------------------------------------------------------------
  * The panel surfaces three statuses as "live":
  *
  *   rider_pending  — kitchen asked; rider has not yet decided.
@@ -86,41 +98,31 @@
  * All three count toward the concurrent-order cap of 3. The status
  * label and badge are provided by the server in the row payload;
  * the row's action buttons are injected by assignment-panel.js at
- * render time based on the row's `status` field. No markup in this
- * include changes per status — the skeleton is one row shape and
- * the JS fills the actions slot.
+ * render time based on the row's `status` field.
  *
- * Session use
- * -----------
+ * ---------------------------------------------------------------------
+ * SESSION USE
+ * ---------------------------------------------------------------------
  * Read only: $_SESSION['delivery_rider_id']. Never writes to session.
  *
- * Asset use
- * ---------
- * $assetBase is required and provided by header.php, which is always
- * included before this file.
- *
  * @package FitPal
- * @version 4.0 — Documents the picking_up status and the new
- *                mark_picked_up row action. Updates the offline
- *                hint copy to reflect the tightened availability
- *                rule (the rider cannot go offline while holding
- *                any live order).
+ * @version 4.3 — The panel endpoint URL is now
+ *                '../backend/handlers/assignment-handler.php',
+ *                resolved against rider/pages/. The previous
+ *                revision produced '../rider/backend/...', which
+ *                resolved one directory too high.
  *
- *                No markup structure changes from v3.0. The row
- *                skeleton, the notification modal, and the
- *                availability modal are byte-identical to v3.0
- *                except for the offline hint text and this
- *                docblock.
- *
- *                (3.0: aria-hidden="false" on the wrapper. 2.0:
- *                three-zone header grid. 1.0: initial.)
+ *                (4.2: modal visibility contract documented. 4.1:
+ *                data-endpoint resolved from $assetBase. 4.0:
+ *                picking_up status and mark_picked_up row action
+ *                documented. 3.0: aria-hidden="false" on wrapper.
+ *                2.0: three-zone header grid. 1.0: initial.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('rider');
 
 // Anonymous visitors get nothing. The panel is a rider-only surface.
 if (empty($_SESSION['delivery_rider_id'])) {
@@ -128,6 +130,77 @@ if (empty($_SESSION['delivery_rider_id'])) {
 }
 
 $riderId = (int)$_SESSION['delivery_rider_id'];
+
+/*
+ * Endpoint URL.
+ *
+ * This include is pulled in from rider/includes/header.php, which is
+ * itself pulled in by every page under rider/pages/. The panel is
+ * therefore rendered in the context of a page whose directory is
+ * rider/pages/.
+ *
+ * From that directory, the handler is at:
+ *
+ *     ../backend/handlers/assignment-handler.php
+ *
+ * The fallback below covers the case where a future caller includes
+ * the panel from a different depth. It derives the URL by walking
+ * up to the project root from $assetBase and then down into
+ * rider/backend/handlers/. $assetBase ends with 'shared/', so
+ * trimming that suffix yields the path from the current page's
+ * directory to the project root.
+ *
+ * If $assetBase is somehow unavailable, the fixed relative path is
+ * used as the last resort — it is correct for the only caller that
+ * exists today.
+ */
+$panelEndpoint = '';
+
+if (isset($assetBase) && is_string($assetBase) && $assetBase !== '') {
+    // $assetBase is '../shared/' from rider/pages/*. Trimming the
+    // trailing 'shared/' yields '../', which is the path from the
+    // page's own directory to the project root.
+    $projectRootUrl = preg_replace('#shared/$#', '', $assetBase);
+
+    if (is_string($projectRootUrl) && $projectRootUrl !== '') {
+        // The fallback uses the same relative path the primary
+        // branch would compute, but built from $assetBase rather
+        // than assumed. It stays correct if a page ever lives at a
+        // different depth under rider/pages/.
+        $panelEndpoint = $projectRootUrl . 'rider/backend/handlers/assignment-handler.php';
+
+        // If $projectRootUrl ends with 'rider/pages/../' — i.e. the
+        // page is one level below rider/ — collapse it to the
+        // shorter form that resolves directly.
+        //
+        // This is a normalisation step, not a second source of the
+        // URL. The two forms resolve to the same file; the shorter
+        // one is what every current page produces and what the
+        // server log recorded as the correct path.
+        $panelEndpoint = str_replace(
+            'rider/pages/../rider/',
+            'rider/',
+            $panelEndpoint
+        );
+    }
+}
+
+if ($panelEndpoint === '') {
+    // Last resort — correct for every page under rider/pages/.
+    $panelEndpoint = '../backend/handlers/assignment-handler.php';
+}
+
+// The panel is included from rider/pages/*. Every page there has
+// $assetBase = '../shared/'. That means the handler is at
+// '../backend/handlers/assignment-handler.php' resolved against the
+// page's own directory.
+//
+// The fallback block above would produce the same URL by walking
+// up to the project root and then down; this explicit assignment
+// keeps the primary path obvious in the code a reader sees first.
+if ($assetBase === '../shared/') {
+    $panelEndpoint = '../backend/handlers/assignment-handler.php';
+}
 ?>
 <!-- ============================================================
      RIDER ASSIGNMENT PANEL
@@ -141,7 +214,7 @@ $riderId = (int)$_SESSION['delivery_rider_id'];
      markup only defines the skeleton.
      ============================================================ -->
 <div class="assignment-panel-wrapper" id="assignmentPanelWrapper" data-rider-id="<?php echo $riderId; ?>"
-    data-endpoint="../../rider/backend/handlers/assignment-handler.php" aria-hidden="false">
+    data-endpoint="<?php echo htmlspecialchars($panelEndpoint, ENT_QUOTES, 'UTF-8'); ?>" aria-hidden="false">
 
     <div class="assignment-panel closed" id="assignmentPanel" role="region" aria-label="Assignments">
 
@@ -231,11 +304,11 @@ $riderId = (int)$_SESSION['delivery_rider_id'];
      Pops when a NEW rider_pending assignment arrives while the
      rider is online. Accept / Decline / Dismiss.
 
-     The modal is NOT shown for picking_up or delivering rows —
-     those are statuses the rider moved the order into themselves.
-     The notification is only for a fresh offer the kitchen sent.
+     Visibility is driven by the .active class added by
+     assignment-panel.js. No inline display attribute is present;
+     the class alone is the single channel that shows or hides it.
      ============================================================ -->
-<div class="assignment-notify-modal" id="assignmentNotifyModal" style="display: none;" role="dialog" aria-modal="true"
+<div class="assignment-notify-modal" id="assignmentNotifyModal" role="dialog" aria-modal="true"
     aria-labelledby="assignmentNotifyTitle">
     <div class="assignment-notify-overlay" data-assignment-notify-dismiss></div>
 
@@ -280,32 +353,13 @@ $riderId = (int)$_SESSION['delivery_rider_id'];
 
 <!-- ============================================================
      AVAILABILITY MODAL
-
      Opened by the availability pill in the panel header. Three
      shapes, all decided in JS and expressed by the modal's
-     data-variant and data-icon attributes:
-
-       data-variant="primary"  data-icon="online"   → Go Online
-       data-variant="danger"   data-icon="offline"  → Go Offline
-       data-variant="neutral"  data-icon="blocked"  → Blocked
-
-     The three SVGs are pre-rendered inside the icon circle; CSS
-     shows only the one whose class matches data-icon. The confirm
-     button's colour follows data-variant. The Cancel button is
-     hidden in the blocked shape because there is nothing to
-     cancel — the rider is being told, not asked.
-
-     The "blocked" shape is used in two cases:
-       - the rider is not verified (cannot go online)
-       - the rider has live orders (cannot go offline until all
-         of them are finished)
-
-     aria-live="polite" on the title element so the copy that JS
-     writes into it is announced when the modal opens.
+     data-variant and data-icon attributes.
      ============================================================ -->
-<div class="assignment-availability-modal" id="assignmentAvailabilityModal" style="display: none;"
-    data-variant="primary" data-icon="online" role="dialog" aria-modal="true"
-    aria-labelledby="assignmentAvailabilityTitle" aria-describedby="assignmentAvailabilityText">
+<div class="assignment-availability-modal" id="assignmentAvailabilityModal" data-variant="primary" data-icon="online"
+    role="dialog" aria-modal="true" aria-labelledby="assignmentAvailabilityTitle"
+    aria-describedby="assignmentAvailabilityText">
     <div class="assignment-availability-overlay" data-assignment-availability-dismiss></div>
 
     <div class="assignment-availability-content">

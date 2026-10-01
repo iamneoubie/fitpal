@@ -6,48 +6,44 @@
  * kitchen page. Handles reading messages, sending a message, and
  * marking a conversation as read for a single order.
  *
- * Actions
- * -------
+ * ---------------------------------------------------------------------
+ * ACTIONS
+ * ---------------------------------------------------------------------
  *   list   → full conversation for one channel on one order, plus
- *            the counterparty metadata (name, sub label, initial)
- *            and the highest message_id in the batch as the client
- *            delta cursor.
- *   poll   → delta fetch. The client sends since_message_id — the
- *            highest message_id it already holds — and the handler
- *            returns only rows above it. An idle poll returns an
- *            empty messages array after one indexed lookup.
+ *            the counterparty metadata and the highest message_id
+ *            in the batch as the client delta cursor.
+ *   poll   → delta fetch. The client sends since_message_id and
+ *            the handler returns only rows above it.
  *   send   → insert a new message from the restaurant to the
  *            counterparty, scoped to an order this restaurant owns.
  *            Reads the inserted row back so the response payload is
  *            byte-identical to what a delta fetch would return.
  *   read   → mark all unread messages from a counterparty as read.
  *
- * Scoping
- * -------
+ * ---------------------------------------------------------------------
+ * SCOPING
+ * ---------------------------------------------------------------------
  * Every action takes an order_id and validates ownership through
- * restaurantOwnsOrder() before doing anything else. A restaurant
- * account cannot read or write a conversation on an order that does
- * not belong to one of its branches.
+ * restaurantOwnsOrder() before doing anything else.
  *
- * Role gating
- * -----------
+ * ---------------------------------------------------------------------
+ * ROLE GATING
+ * ---------------------------------------------------------------------
  * Any active restaurant account scoped to the owning branch can use
  * the chat. That is the same set of roles the kitchen page already
- * allows: owner, partner, manager, staff, kitchen. Owner and
- * partner accounts do not have a branch_id in the session, so
- * for them the ownership check falls back to the restaurant-level
- * scope: they can message on any order that belongs to any of
- * their branches.
+ * allows: owner, partner, manager, staff, kitchen.
  *
- * Channel gating
- * --------------
+ * ---------------------------------------------------------------------
+ * CHANNEL GATING
+ * ---------------------------------------------------------------------
  * Which channels are reachable for a given order is decided by
- * restaurantChatChannelStatus() in restaurant/backend/database/
- * chat-queries.php. That function is the single source of truth
- * for the status-to-channels mapping. This handler calls it and
- * refuses any channel the mapping reports as closed.
+ * restaurantChatChannelStatus() in
+ * restaurant/backend/database/chat-queries.php. That function is the
+ * single source of truth for the status-to-channels mapping. This
+ * handler calls it and refuses any channel the mapping reports as
+ * closed.
  *
- * The mapping as of v1.2:
+ * The mapping as of v1.3:
  *
  *   pending         → customer open,   rider closed
  *   preparing       → customer open,   rider closed
@@ -58,23 +54,19 @@
  *   delivered > 1h  → both closed
  *   cancelled       → both closed
  *   refunded        → both closed
+ *   failed          → both closed
  *
- * The customer channel is open from the moment the order is placed
- * until one hour after it is delivered. That covers the whole
- * window in which the kitchen might need to raise an out-of-stock
- * item, an address clarification, or an ETA question. The rider
- * channel is open only while a rider is actually attached — from
- * the moment the kitchen assigns a rider until one hour after
- * delivery.
+ * The 'failed' status is produced by the shared order-transaction
+ * layer's sweepFailedDeliveries() when a rider does not complete a
+ * delivery in time. It is a closed order: the kitchen has nothing
+ * left to discuss with the rider, and the customer's own tracking
+ * page has already rendered the terminal state. gateChannel()
+ * therefore refuses every channel for a failed order with the same
+ * "this order is closed" copy the cancelled and refunded cases use.
  *
- * Keeping the mapping in the query layer means a future status
- * addition changes one file, not two. Before v1.1 this handler
- * carried its own hardcoded set, and adding 'picking_up' would
- * have required editing both files in lockstep — an easy source of
- * drift.
- *
- * Response shape
- * --------------
+ * ---------------------------------------------------------------------
+ * RESPONSE SHAPE
+ * ---------------------------------------------------------------------
  * Every message object carries:
  *
  *   message_id  int
@@ -84,35 +76,25 @@
  *   time        "g:i A" formatted timestamp
  *
  * and the top-level response carries max_id — the highest
- * message_id in the batch — so the client can advance its cursor
- * without scanning the array.
+ * message_id in the batch.
  *
  * @package FitPal
- * @version 1.2 — Delivered grace window and open-early customer
- *                channel:
- *                  - gateChannel() now reads delivered_at from the
- *                    order row and passes it into
- *                    restaurantChatChannelStatus(), so the
- *                    one-hour post-delivery window is honored.
- *                  - The customer-channel error message is now
- *                    conditional on the actual reason (closed
- *                    order, expired delivery window, missing
- *                    counterparty).
- *                  - The rider-channel error message gains the
- *                    same expired-window branch and a distinct
- *                    message for a closed order.
+ * @version 1.3 — gateChannel()'s $isClosed predicate now names
+ *                'failed' alongside 'cancelled' and 'refunded', so a
+ *                failed order produces the closed-order copy rather
+ *                than the generic "not reachable" fallback. No
+ *                other behavioural change.
  *
- *                (1.1: delegated channel gating to
- *                restaurantChatChannelStatus() so 'picking_up' is
- *                handled in one place. 1.0: initial restaurant
- *                chat handler.)
+ *                (1.2: delivered grace window and open-early
+ *                customer channel. 1.1: delegated channel gating to
+ *                restaurantChatChannelStatus(). 1.0: initial
+ *                restaurant chat handler.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('restaurant');
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -139,8 +121,6 @@ if ($restaurantId <= 0) {
     exit;
 }
 
-// Any active restaurant account can chat. The ownership gate below
-// is the actual security boundary.
 $allowedRoles = ['owner', 'partner', 'manager', 'staff', 'kitchen'];
 if (!in_array($accountRole, $allowedRoles, true)) {
     echo json_encode([
@@ -222,9 +202,6 @@ exit;
 
 /**
  * Full conversation for one channel on one order.
- *
- * Returns the counterparty meta so the modal can render its tab
- * header (name, sub label, avatar initial) without a second call.
  */
 function handleList(PDO $db, int $restaurantId, string $counterparty): array
 {
@@ -312,12 +289,6 @@ function handlePoll(PDO $db, int $restaurantId, string $counterparty): array
 
 /**
  * Insert a new message from the restaurant to the counterparty.
- *
- * After the insert, reads the row back through
- * getRestaurantMessageById() and shapes it with the same function
- * the list and poll paths use, so the appended node on the client
- * is indistinguishable from what a subsequent delta fetch would
- * return.
  */
 function handleSend(PDO $db, int $restaurantId, int $accountId, string $counterparty): array
 {
@@ -362,8 +333,6 @@ function handleSend(PDO $db, int $restaurantId, int $accountId, string $counterp
     $row = getRestaurantMessageById($db, $messageId, $orderId);
 
     if (!$row) {
-        // Extremely unlikely — the row was just inserted. Fall back
-        // to a locally-shaped payload so the client still renders.
         return [
             'status'       => 'success',
             'counterparty' => $counterparty,
@@ -416,30 +385,23 @@ function handleMarkRead(PDO $db, int $restaurantId, string $counterparty): array
  * Enforce the channel-availability rules for one order.
  *
  * Returns null when the channel is allowed. Returns an error
- * response array when it is not — the caller echoes that back.
+ * response array when it is not.
  *
  * The status-to-channels mapping is owned by
  * restaurantChatChannelStatus() in the query layer. This function
  * fetches the order's current status AND its delivered_at
- * timestamp, then consults the map. The delivered_at value is
- * only meaningful for a 'delivered' order; for any other status
- * the mapping ignores it.
+ * timestamp, then consults the map.
  *
- * The error copy is selected from the actual reason rather than
- * a single catch-all string, so the user sees the right message:
+ * The error copy is selected from the actual reason:
  *
- *   - cancelled / refunded            → "order is closed"
+ *   - cancelled / refunded / failed   → "order is closed"
  *   - delivered past the grace window → "the message window ended"
  *   - no rider attached               → "no rider yet"
  *   - anything else (defensive)       → "not reachable"
  *
- * The "anything else" branches are defensive. After the v1.2
- * mapping, the customer channel is only ever off for closed
- * orders or an expired delivered window, and the rider channel
- * is only ever off for those same two reasons plus a missing
- * rider. The defensive branches should never fire in practice;
- * they exist so an unexpected future status change produces a
- * sane message rather than a null.
+ * The 'failed' case is grouped with 'cancelled' and 'refunded' so
+ * the kitchen is told the same thing in all three terminal states:
+ * the order is closed and no one can be reached.
  *
  * @return array<string, mixed>|null
  */
@@ -464,17 +426,20 @@ function gateChannel(PDO $db, int $orderId, string $counterparty): ?array
         ? (string)$row['delivered_at']
         : null;
 
-    // Single source of truth for the mapping. Pass the delivered
-    // timestamp so the one-hour grace window is honored.
+    // Single source of truth for the mapping.
     $channels = restaurantChatChannelStatus($status, $deliveredAt);
 
-    // Helper predicate: the order is closed and the message window
-    // (if any) has ended. A delivered order past the grace window
-    // is treated the same as a cancelled order for copy purposes.
-    $isClosed = (
-        in_array($status, ['cancelled', 'refunded'], true)
-        || ($status === 'delivered' && !$channels['customer'] && !$channels['delivery_rider'])
-    );
+    // The three terminal statuses are treated as one case for
+    // copy purposes. A delivered order past its grace window is
+    // also closed; it is caught below.
+    $isTerminal = in_array($status, ['cancelled', 'refunded', 'failed'], true);
+
+    $isDeliveredPastGrace =
+        ($status === 'delivered')
+        && !$channels['customer']
+        && !$channels['delivery_rider'];
+
+    $isClosed = $isTerminal || $isDeliveredPastGrace;
 
     if ($counterparty === 'delivery_rider') {
         // No rider attached yet is a distinct, useful message.
@@ -532,13 +497,8 @@ function gateChannel(PDO $db, int $orderId, string $counterparty): ?array
 /**
  * Shape a raw message row into the JSON payload the modal consumes.
  *
- * Must produce the same object shape regardless of which path
- * fetched the row, so the client renders a message from list, from
- * poll, and from a send response all through the same code.
- *
  * @param array<string, mixed> $row
- * @param string $counterparty  Which counterparty this channel is
- *                              — 'customer' or 'delivery_rider'.
+ * @param string $counterparty
  * @return array<string, mixed>
  */
 function shapeMessage(array $row, string $counterparty): array

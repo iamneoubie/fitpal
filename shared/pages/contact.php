@@ -1,134 +1,196 @@
 <?php
 /**
  * FitPal Contact Page
- * 
- * This is the public contact page that provides contact information and a form.
- * 
+ *
+ * Public contact form and FAQ. Belongs to the public context and
+ * runs on its own PHP session (PHPSESSID_PUBLIC), separate from
+ * every authenticated role's session.
+ *
  * @package FitPal
- * @version 1.3 - Replaced inline SVG in FAQ toggle with shared add-line.svg.
+ * @version 3.0 — Per-role session migration (Option B). The page
+ *                bootstraps the public session itself before any
+ *                other include. The CSRF token is read from and
+ *                written to the public session only. All other
+ *                behavior is unchanged from v2.0.
+ *
+ *                (2.0: migrated away from the forbidden shared
+ *                'csrf_token' key to 'public_csrf_token'.)
  */
 
 declare(strict_types=1);
 
+// ---------------------------------------------------------------------
+// SESSION BOOTSTRAP
+//
+// Must run BEFORE any other include that might touch the session.
+// Under Option B, this page belongs to the public context and must
+// open PHPSESSID_PUBLIC, not any role's session. The bootstrap is
+// idempotent, so a double call is safe.
+// ---------------------------------------------------------------------
+
+require_once __DIR__ . '/../includes/session-bootstrap.php';
+fitpal_session_bootstrap('public');
+
+// ---------------------------------------------------------------------
+// HEADER
+//
+// The shared header verifies that the active session is the public
+// session. If this page had not bootstrapped above, the header
+// would refuse to render.
+// ---------------------------------------------------------------------
+
 require_once __DIR__ . '/../includes/header.php';
 
 /**
- * Get the base path for assets based on current file location
- * 
- * @return string The asset base path
+ * Get the base path for assets based on current file location.
+ *
+ * @return string The asset base path.
  */
-function getContactAssetBase(): string {
+function getContactAssetBase(): string
+{
     $scriptPath = $_SERVER['SCRIPT_NAME'];
-    $dirPath = dirname($scriptPath);
-    $segments = array_filter(explode('/', $dirPath));
-    $depth = count($segments);
-    
+    $dirPath    = dirname($scriptPath);
+    $segments   = array_filter(explode('/', $dirPath));
+    $depth      = count($segments);
+
     if ($depth <= 0) {
         return './shared/';
     }
-    
+
     return str_repeat('../', $depth) . 'shared/';
 }
 
 $assetBase = getContactAssetBase();
 
-// Generate CSRF token
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-$csrfToken = $_SESSION['csrf_token'];
+// ============================================================
+// CSRF — public context
+// ============================================================
+//
+// The public contact form is anonymous. Its token lives in the
+// public session under 'public_csrf_token'. getPublicCsrfToken()
+// refuses to return a token unless the active session is the
+// public session, so a misconfigured page cannot accidentally
+// write a public token into a role session.
+//
+// If the returned token is empty, the bootstrap did not run for
+// the public context and the form must not be rendered.
+require_once __DIR__ . '/../includes/public-csrf-token.php';
+$csrfToken = getPublicCsrfToken();
 
-// Contact information
+$csrfAvailable = ($csrfToken !== '');
+
+// ============================================================
+// CONTACT INFORMATION
+// ============================================================
 $contactInfo = [
     'address' => '123 Health Street, San Miguel, Pasig City, Metro Manila, Philippines 1600',
-    'phone' => '+63 (2) 8123 4567',
-    'email' => 'support@fitpal.com',
-    'hours' => 'Weekdays: 8:00 AM - 5:00 PM, Saturday: 8:00 AM - 12:00 PM'
+    'phone'   => '+63 (2) 8123 4567',
+    'email'   => 'support@fitpal.com',
+    'hours'   => 'Weekdays: 8:00 AM - 5:00 PM, Saturday: 8:00 AM - 12:00 PM',
 ];
 
-// FAQ items
+// ============================================================
+// FAQ ITEMS
+// ============================================================
 $faqItems = [
     [
         'question' => 'How do I create an account?',
-        'answer' => 'Click the "Register" button in the navigation menu. Fill in your details, set your dietary preferences, and you are ready to start ordering.'
+        'answer'   => 'Click the "Register" button in the navigation menu. Fill in your details, set your dietary preferences, and you are ready to start ordering.',
     ],
     [
         'question' => 'How do I find meals that fit my dietary needs?',
-        'answer' => 'Use the dietary filters on the menu page. You can filter by vegan, keto, gluten-free, and other preferences.'
+        'answer'   => 'Use the dietary filters on the menu page. You can filter by vegan, keto, gluten-free, and other preferences.',
     ],
     [
         'question' => 'How do I add special instructions to my order?',
-        'answer' => 'When placing an order, you can add special instructions in the checkout process. These are communicated directly to the kitchen.'
+        'answer'   => 'When placing an order, you can add special instructions in the checkout process. These are communicated directly to the kitchen.',
     ],
     [
         'question' => 'How do I track my order?',
-        'answer' => 'Track your order in real-time from the "My Orders" page. You will see updates when the restaurant is preparing your food.'
-    ]
+        'answer'   => 'Track your order in real-time from the "My Orders" page. You will see updates when the restaurant is preparing your food.',
+    ],
 ];
 
-// Handle form submission
+// ============================================================
+// FORM HANDLING
+// ============================================================
 $formSubmitted = false;
-$formErrors = [];
-$formSuccess = false;
+$formErrors    = [];
+$formSuccess   = false;
+
 $fullName = '';
-$email = '';
-$subject = '';
-$message = '';
+$email    = '';
+$subject  = '';
+$message  = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $csrfToken) {
+    $formSubmitted = true;
+
+    $givenToken = (string)($_POST['csrf_token'] ?? '');
+    $sessToken  = (string)($_SESSION['public_csrf_token'] ?? '');
+
+    if ($sessToken === '' || $givenToken === '' || !hash_equals($sessToken, $givenToken)) {
+        // Rotate the public token so the next render generates a
+        // fresh one. Under Option B this unset can only ever touch
+        // the public session; a role session cannot see this key.
+        unset($_SESSION['public_csrf_token']);
+
         $formErrors['general'] = 'Security validation failed. Please try again.';
+        $csrfToken             = getPublicCsrfToken();
+        $csrfAvailable         = ($csrfToken !== '');
     } else {
-        $fullName = trim($_POST['full_name'] ?? '');
-        $email = trim($_POST['email'] ?? '');
-        $subject = trim($_POST['subject'] ?? '');
-        $message = trim($_POST['message'] ?? '');
-        
-        if (empty($fullName)) {
+        $fullName = trim((string)($_POST['full_name'] ?? ''));
+        $email    = trim((string)($_POST['email'] ?? ''));
+        $subject  = trim((string)($_POST['subject'] ?? ''));
+        $message  = trim((string)($_POST['message'] ?? ''));
+
+        if ($fullName === '') {
             $formErrors['full_name'] = 'Full name is required.';
         } elseif (strlen($fullName) < 2) {
             $formErrors['full_name'] = 'Full name must be at least 2 characters.';
         }
-        
-        if (empty($email)) {
+
+        if ($email === '') {
             $formErrors['email'] = 'Email address is required.';
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $formErrors['email'] = 'Please enter a valid email address.';
         }
-        
-        if (empty($subject)) {
+
+        if ($subject === '') {
             $formErrors['subject'] = 'Subject is required.';
         } elseif (strlen($subject) < 3) {
             $formErrors['subject'] = 'Subject must be at least 3 characters.';
         }
-        
-        if (empty($message)) {
+
+        if ($message === '') {
             $formErrors['message'] = 'Message is required.';
         } elseif (strlen($message) < 10) {
             $formErrors['message'] = 'Message must be at least 10 characters.';
         }
-        
+
         if (empty($formErrors)) {
-            error_log("Contact form submission from: {$fullName} ({$email}) - Subject: {$subject}");
-            
+            error_log('Contact form submission from: ' . $fullName . ' (' . $email . ') - Subject: ' . $subject);
+
             $formSuccess = true;
-            $formSubmitted = true;
-            $fullName = '';
-            $email = '';
-            $subject = '';
-            $message = '';
-            
-            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-            $csrfToken = $_SESSION['csrf_token'];
-        } else {
-            $formSubmitted = true;
+            $fullName    = '';
+            $email       = '';
+            $subject     = '';
+            $message     = '';
+
+            // Rotate the public token after a successful submission
+            // so the same token cannot be replayed.
+            unset($_SESSION['public_csrf_token']);
+            $csrfToken     = getPublicCsrfToken();
+            $csrfAvailable = ($csrfToken !== '');
         }
     }
 }
 ?>
 <div class="content">
 
-    <!-- Hero Section -->
+    <!-- ============================================
+         HERO
+         ============================================ -->
     <section class="contact-hero" aria-labelledby="contact-hero-title">
         <div class="container">
             <div class="contact-hero-content">
@@ -142,7 +204,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
         </div>
     </section>
 
-    <!-- Contact Information Section -->
+    <!-- ============================================
+         CONTACT INFORMATION
+         ============================================ -->
     <section class="contact-info-section" aria-labelledby="contact-info-title">
         <div class="container">
             <p class="sr-only" id="contact-info-title">Contact Information</p>
@@ -191,7 +255,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
         </div>
     </section>
 
-    <!-- Contact Form Section -->
+    <!-- ============================================
+         CONTACT FORM
+         ============================================ -->
     <section class="contact-form-section" aria-labelledby="contact-form-title">
         <div class="container">
             <div class="contact-form-grid">
@@ -200,6 +266,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
                     <p class="contact-form-subtitle">
                         Fill out the form below and we will get back to you as soon as possible.
                     </p>
+
+                    <?php if (!$csrfAvailable): ?>
+                    <div class="alert alert-danger" role="alert">
+                        <strong>Configuration error.</strong> The contact form is temporarily
+                        unavailable. Please try again later.
+                    </div>
+                    <?php else: ?>
 
                     <?php if ($formSuccess): ?>
                     <div class="alert alert-success" role="alert">
@@ -227,59 +300,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
 
                         <div class="form-row">
                             <div class="form-group">
-                                <label for="full_name" class="form-label">
-                                    Full Name <span class="text-danger"></span>
-                                </label>
+                                <label for="full_name" class="form-label">Full Name</label>
                                 <input type="text" id="full_name" name="full_name"
                                     value="<?php echo htmlspecialchars($fullName, ENT_QUOTES, 'UTF-8'); ?>"
                                     class="form-control <?php echo isset($formErrors['full_name']) ? 'error' : ''; ?>"
                                     placeholder="Enter your full name" required>
                                 <?php if (isset($formErrors['full_name'])): ?>
                                 <div class="form-error">
-                                    <?php echo htmlspecialchars($formErrors['full_name'], ENT_QUOTES, 'UTF-8'); ?></div>
+                                    <?php echo htmlspecialchars($formErrors['full_name'], ENT_QUOTES, 'UTF-8'); ?>
+                                </div>
                                 <?php endif; ?>
                             </div>
 
                             <div class="form-group">
-                                <label for="email" class="form-label">
-                                    Email Address <span class="text-danger"></span>
-                                </label>
+                                <label for="email" class="form-label">Email Address</label>
                                 <input type="email" id="email" name="email"
                                     value="<?php echo htmlspecialchars($email, ENT_QUOTES, 'UTF-8'); ?>"
                                     class="form-control <?php echo isset($formErrors['email']) ? 'error' : ''; ?>"
                                     placeholder="Enter your email address" required>
                                 <?php if (isset($formErrors['email'])): ?>
                                 <div class="form-error">
-                                    <?php echo htmlspecialchars($formErrors['email'], ENT_QUOTES, 'UTF-8'); ?></div>
+                                    <?php echo htmlspecialchars($formErrors['email'], ENT_QUOTES, 'UTF-8'); ?>
+                                </div>
                                 <?php endif; ?>
                             </div>
                         </div>
 
                         <div class="form-group">
-                            <label for="subject" class="form-label">
-                                Subject <span class="text-danger"></span>
-                            </label>
+                            <label for="subject" class="form-label">Subject</label>
                             <input type="text" id="subject" name="subject"
                                 value="<?php echo htmlspecialchars($subject, ENT_QUOTES, 'UTF-8'); ?>"
                                 class="form-control <?php echo isset($formErrors['subject']) ? 'error' : ''; ?>"
                                 placeholder="What is your message about?" required>
                             <?php if (isset($formErrors['subject'])): ?>
                             <div class="form-error">
-                                <?php echo htmlspecialchars($formErrors['subject'], ENT_QUOTES, 'UTF-8'); ?></div>
+                                <?php echo htmlspecialchars($formErrors['subject'], ENT_QUOTES, 'UTF-8'); ?>
+                            </div>
                             <?php endif; ?>
                         </div>
 
                         <div class="form-group">
-                            <label for="message" class="form-label">
-                                Message <span class="text-danger"></span>
-                            </label>
+                            <label for="message" class="form-label">Message</label>
                             <textarea id="message" name="message" rows="6"
                                 class="form-control <?php echo isset($formErrors['message']) ? 'error' : ''; ?>"
                                 placeholder="Write your message here..."
                                 required><?php echo htmlspecialchars($message, ENT_QUOTES, 'UTF-8'); ?></textarea>
                             <?php if (isset($formErrors['message'])): ?>
                             <div class="form-error">
-                                <?php echo htmlspecialchars($formErrors['message'], ENT_QUOTES, 'UTF-8'); ?></div>
+                                <?php echo htmlspecialchars($formErrors['message'], ENT_QUOTES, 'UTF-8'); ?>
+                            </div>
                             <?php endif; ?>
                         </div>
 
@@ -287,12 +356,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
                             Send Message
                         </button>
                     </form>
+
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- FAQ Section -->
+    <!-- ============================================
+         FAQ
+         ============================================ -->
     <section class="faq-section" aria-labelledby="faq-title">
         <div class="container">
             <div class="section-header">
@@ -300,7 +373,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
                 <p class="section-subtitle">Find answers to common questions</p>
             </div>
             <div class="faq-grid">
-                <?php foreach ($faqItems as $index => $faq): ?>
+                <?php foreach ($faqItems as $faq): ?>
                 <div class="faq-item">
                     <button class="faq-question-btn" type="button" aria-expanded="false">
                         <span
@@ -319,7 +392,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
         </div>
     </section>
 
-    <!-- CTA Section -->
+    <!-- ============================================
+         CTA
+         ============================================ -->
     <section class="contact-cta" aria-labelledby="cta-title">
         <div class="container">
             <div class="contact-cta-content">
@@ -342,6 +417,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_contact'])) {
 <script src="<?php echo $assetBase; ?>assets/ui/js/contact.js" defer></script>
 
 <?php
-// Include shared footer
 require_once __DIR__ . '/../includes/footer.php';
-?>

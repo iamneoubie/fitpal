@@ -7,102 +7,104 @@
  * Three tabs, each a separate panel:
  *
  *   Active      Every order the rider is currently working: one in
- *               'picking_up' (accepted, en route to or at the
- *               restaurant) and/or one or more in 'delivering'
- *               (food in hand, en route to customer). This is the
- *               default tab because it is what a rider opens the
- *               page to check.
+ *               'picking_up' and/or one or more in 'delivering'.
+ *               This is the default tab.
  *
- *               Each active card shows a status badge and its own
- *               primary action button:
- *                 - picking_up → "Mark Picked Up"
- *                 - delivering → "Mark Delivered"
+ *   Assigned    Orders waiting on an accept / decline decision
+ *               (status = 'rider_pending').
  *
- *               Secondary actions are shared: Call Customer (when
- *               the order is 'delivering') or Call Kitchen (when
- *               the order is 'picking_up'), plus Message.
+ *   History     Closed deliveries, read-only. Not polled.
+ *               Delivered orders within the 1-hour post-delivery
+ *               window expose a Message button so the rider can
+ *               still reach the customer or kitchen.
  *
- *   Assigned    Orders the kitchen has handed to this rider and
- *               that are waiting on an accept / decline decision
- *               (status = 'rider_pending'). Actions: Decline,
- *               Accept. When a rider has several concurrent offers
- *               (the cap is 3), each shows its own Accept/Decline
- *               pair so the rider can decide in any order.
+ * ---------------------------------------------------------------------
+ * TAB SWITCHING
+ * ---------------------------------------------------------------------
+ * All three panels are always rendered by the server. The `active`
+ * class on the section decides which one is visible. The `active`
+ * class is set from `$activeTab`, which is read from the `?tab=`
+ * query parameter.
  *
- *   History     Closed deliveries, read-only.
+ * Client-side tab switching (deliveries.js) toggles the `active`
+ * class on the sections without re-fetching from the server. If the
+ * server rendered only the selected panel, the client-side switch
+ * would show an empty panel for any tab the server did not render.
+ * Every panel therefore renders its full content on every request.
  *
- * Tab counts are shown as badges on each tab. The tab bar is
- * styled like customer/pages/orders.php's filter tabs so both
- * roles feel like the same product.
+ * ---------------------------------------------------------------------
+ * REAL-TIME REFRESH
+ * ---------------------------------------------------------------------
+ * The Active and Assigned panels are refreshed by a client-side poll
+ * every few seconds. The poll posts action=list to the assignment
+ * handler and re-renders the two live lists from the response.
  *
- * Tab state
- * ---------
- * ?tab=active|assigned|history. Default is active. The value is
- * validated against an allowlist so nothing user-supplied reaches
- * the template raw.
+ * The server-side first paint still renders the same rows, so a
+ * rider with JavaScript disabled sees a complete page for the
+ * moment they load it. The poll takes over after that.
  *
- * Panel enter animation
- * ---------------------
- * Only the .active panel runs the fade + slide-up keyframe
- * declared in deliveries.css, so switching tabs reads as a
- * content change rather than a full-page reload.
+ * The History panel is not polled. It is a closed set of rows. The
+ * delivered-row Message button is decided server-side from
+ * delivered_at and is not re-evaluated by the poll.
  *
- * Confirmation model
- * ------------------
- * Delivery actions open a styled confirm modal. The copy is
- * authored on each button via data-confirm-* attributes so the JS
- * never carries text. The modal carries two attributes:
- *   - data-variant: "primary" or "danger" (drives button colour)
- *   - data-icon:    "accept" | "decline" | "picked_up" | "delivered"
- *                   (drives which SVG is visible)
+ * ---------------------------------------------------------------------
+ * WHERE THE STATUSES ON THIS PAGE COME FROM
+ * ---------------------------------------------------------------------
+ * Every status this page reads is written by the shared
+ * order-transaction layer:
  *
- * Chat modal
- * ----------
- * The chat modal is provided by rider/includes/rider-chat-modal.php,
- * loaded on every authenticated rider page by header.php. This
- * page's Message buttons use the delegated trigger contract:
+ *     shared/backend/database/order-transaction-queries.php
  *
- *   data-rider-chat-open
- *   data-rider-chat-order-id="<order_id>"
- *   data-rider-chat-recipient="customer|restaurant_account"
- *   data-rider-chat-subtitle="<display string>"
+ *   'rider_pending'  set by the kitchen's assignRiderToOrder().
+ *   'picking_up'     set by the rider's accept path.
+ *   'delivering'     set by the rider's mark-picked-up transition.
+ *   'delivered'      set by the rider's mark-delivered transition.
+ *   'failed'         set by sweepFailedDeliveries().
+ *   'cancelled' and
+ *   'refunded'       set by the customer or restaurant cancel paths.
  *
- * Button rules
- * ------------
- *   - Positive / confirm → primary (green / white)
- *   - Neutral             → black background / white text
- *   - Negative            → danger (red / white)
- * No transparent or outlined buttons are used on this page.
+ * The per-delivery earning shown on every card is read from the
+ * shared fee schedule (FITPAL_DELIVERY_BASE_FEE), the same constant
+ * the shared layer uses when it writes the delivery credit.
+ *
+ * ---------------------------------------------------------------------
+ * POST-DELIVERY MESSAGING WINDOW (1 HOUR)
+ * ---------------------------------------------------------------------
+ * A delivered order stays messageable for one hour after delivery.
+ * This matches the customer and restaurant sides.
+ *
+ * The rule is enforced server-side by the rider message handler,
+ * which permits the 'delivered' status on both channels while the
+ * order's delivered_at is within the window. The History tab on
+ * this page renders the Message buttons for any delivered order
+ * inside the window and stamps the block with an absolute
+ * data-message-window-ends timestamp so deliveries.js can remove
+ * the buttons once the window elapses.
  *
  * @package FitPal
- * @version 5.1 — Adds the 'picking_up' status to the Active tab:
- *                  - Active tab now renders orders in either
- *                    picking_up or delivering, one card per order.
- *                  - Each active card picks its primary action
- *                    from the order's own status: Mark Picked Up
- *                    for picking_up, Mark Delivered for
- *                    delivering.
- *                  - Contact action on a picking_up card is Call
- *                    Kitchen (rider is still at / near the
- *                    restaurant); on a delivering card it stays
- *                    Call Customer.
- *                  - The Active tab's empty-state copy now points
- *                    at the pickup step so a rider with a fresh
- *                    picking_up order is not confused.
- *                  - Config object exposes riderCap so a future
- *                    client can show a per-rider slot label.
+ * @version 5.5 — The History panel's content is now rendered on
+ *                every request, with no server-side `?tab=history`
+ *                guard. The previous revision guarded the panel
+ *                content on `$activeTab === 'history'`, so a
+ *                client-side tab switch (which deliveries.js
+ *                performs without re-fetching the page) made an
+ *                empty panel visible. All three panels now render
+ *                their full content on every request, matching the
+ *                Active and Assigned panels and matching the
+ *                client-side tab-switching contract.
  *
- *                (5.0: three-tab layout. 4.1: stat strip removed.
- *                4.0: chat modal extracted to shared include.
- *                3.6: docblock corrected. 3.5: local CSRF block
- *                removed.)
+ *                (5.4: asset paths on this page now use
+ *                $assetBase. History tab renders Message buttons
+ *                for delivered orders within the 1-hour window.
+ *                5.3: Active and Assigned panels gain a
+ *                client-side poll. 5.2: docblock records the
+ *                shared layer. 5.1: 'picking_up' added to Active.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('rider');
 
 if (empty($_SESSION['delivery_rider_id'])) {
     header('Location: sign-in.php');
@@ -110,7 +112,7 @@ if (empty($_SESSION['delivery_rider_id'])) {
 }
 
 require_once __DIR__ . '/../backend/database/rider-connect.php';
-require_once __DIR__ . '/../backend/database/rider-queries.php';
+require_once __DIR__ . '/../backend/database/rider-assignment-queries.php';
 
 $riderId = (int)$_SESSION['delivery_rider_id'];
 
@@ -127,45 +129,88 @@ $assignedCount = count($assignedOrders);
 $activeCount   = count($activeDeliveries);
 $historyCount  = count($deliveryHistory);
 
-// Break the active set down by status so the empty-state and the
-// per-tab copy can say the right thing.
-$activePickingCount    = 0;
-$activeDeliveringCount = 0;
-foreach ($activeDeliveries as $d) {
-    $s = (string)($d['order_status'] ?? '');
-    if ($s === 'picking_up') $activePickingCount++;
-    elseif ($s === 'delivering') $activeDeliveringCount++;
+// The per-delivery earning the shared layer will credit on success.
+$riderPayoutPerDelivery = FITPAL_DELIVERY_BASE_FEE;
+
+/**
+ * Post-delivery messaging grace window, in seconds.
+ *
+ * Matches FITPAL_RIDER_FAILED_DELIVERY_GRACE_SECONDS in
+ * shared/backend/database/fee-queries.php so the two windows that
+ * bracket a delivery have the same length. Referenced here as a
+ * view-layer constant: the page decides whether to render the
+ * Message button for a delivered row, and the server handler makes
+ * the authoritative decision.
+ */
+if (!defined('FITPAL_RIDER_MESSAGE_GRACE_SECONDS')) {
+    define('FITPAL_RIDER_MESSAGE_GRACE_SECONDS', 3600);
 }
 
-// ---------------------------------------------------------------
-// ACTIVE TAB
-// ---------------------------------------------------------------
+/**
+ * True when the given delivered order is still inside the 1-hour
+ * post-delivery messaging window.
+ *
+ * @param string $deliveredAt Raw delivered_at string from the DB.
+ * @return bool
+ */
+function historyRowMessageable(string $deliveredAt): bool
+{
+    if ($deliveredAt === '') {
+        return false;
+    }
+
+    $ts = strtotime($deliveredAt);
+    if ($ts === false) {
+        return false;
+    }
+
+    return (time() - $ts) < FITPAL_RIDER_MESSAGE_GRACE_SECONDS;
+}
+
+/**
+ * Absolute epoch-millisecond timestamp at which a delivered order's
+ * 1-hour messaging window closes.
+ *
+ * Emitted on the History actions block as
+ * data-message-window-ends. deliveries.js reads it and removes the
+ * block's buttons once the timestamp has passed, without needing a
+ * page reload.
+ *
+ * @param string $deliveredAt Raw delivered_at string from the DB.
+ * @return int  Epoch milliseconds, or 0 when the timestamp cannot
+ *              be parsed.
+ */
+function historyRowWindowEndsMs(string $deliveredAt): int
+{
+    if ($deliveredAt === '') {
+        return 0;
+    }
+
+    $ts = strtotime($deliveredAt);
+    if ($ts === false) {
+        return 0;
+    }
+
+    return ($ts + FITPAL_RIDER_MESSAGE_GRACE_SECONDS) * 1000;
+}
+
 $allowedTabs = ['active', 'assigned', 'history'];
 $activeTab   = isset($_GET['tab']) ? strtolower(trim((string)$_GET['tab'])) : 'active';
 if (!in_array($activeTab, $allowedTabs, true)) {
     $activeTab = 'active';
 }
 
-/**
- * Build a URL for the given tab, preserving nothing else.
- */
 function deliveriesTabUrl(string $tab): string
 {
     return 'deliveries.php?tab=' . urlencode($tab);
 }
 
-/**
- * Format a date string for display on this page.
- */
 function formatRiderDate(string $date): string
 {
     $ts = strtotime($date);
     return $ts !== false ? date('M d, g:i A', $ts) : $date;
 }
 
-/**
- * Badge class for an order status.
- */
 function getDeliveryStatusClass(string $status): string
 {
     return match ($status) {
@@ -177,13 +222,11 @@ function getDeliveryStatusClass(string $status): string
         'delivered'     => 'badge-success',
         'cancelled'     => 'badge-danger',
         'refunded'      => 'badge-secondary',
+        'failed'        => 'badge-danger',
         default         => 'badge-secondary',
     };
 }
 
-/**
- * Human label for an order status.
- */
 function getDeliveryStatusLabel(string $status): string
 {
     return match ($status) {
@@ -195,11 +238,20 @@ function getDeliveryStatusLabel(string $status): string
         'delivered'     => 'Delivered',
         'cancelled'     => 'Cancelled',
         'refunded'      => 'Refunded',
+        'failed'        => 'Failed',
         default         => ucfirst($status),
     };
 }
 
 require_once __DIR__ . '/../includes/header.php';
+
+// The poll endpoint. Corrected in the panel include; reused here.
+$deliveriesEndpoint = '../backend/handlers/assignment-handler.php';
+
+// Resolve the post-delivery window in seconds so the JS can build
+// a countdown if it ever wants to. The History rows are not polled,
+// so this is informational only.
+$historyGraceSeconds = FITPAL_RIDER_MESSAGE_GRACE_SECONDS;
 ?>
 
 <div class="content rider-deliveries-page">
@@ -209,7 +261,8 @@ require_once __DIR__ . '/../includes/header.php';
             <div class="page-title-header-top">
                 <a href="dashboard.php" class="back-btn">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg" alt="Back"
-                        class="back-btn-icon" width="20" height="20">
+                        class="back-btn-icon" width="20" height="20"
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/arrow-left-s-line.svg'">
                     <span>Back to Dashboard</span>
                 </a>
                 <h1>My Deliveries</h1>
@@ -237,35 +290,35 @@ require_once __DIR__ . '/../includes/header.php';
             <a href="<?php echo htmlspecialchars(deliveriesTabUrl('active'), ENT_QUOTES, 'UTF-8'); ?>"
                 class="rider-deliveries-tab <?php echo $activeTab === 'active' ? 'active' : ''; ?>" role="tab"
                 aria-selected="<?php echo $activeTab === 'active' ? 'true' : 'false'; ?>" aria-controls="panel-active"
-                id="tabBtnActive">
+                id="tabBtnActive" data-deliveries-tab="active">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/riding-fill.svg" alt=""
                     class="rider-deliveries-tab-icon"
                     onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/car-fill.svg'">
                 <span>Active</span>
-                <?php if ($activeCount > 0): ?>
-                <span class="rider-deliveries-tab-count"><?php echo $activeCount; ?></span>
-                <?php endif; ?>
+                <span class="rider-deliveries-tab-count" id="deliveriesActiveCount"
+                    <?php if ($activeCount === 0) echo 'style="display:none;"'; ?>>
+                    <?php echo $activeCount; ?>
+                </span>
             </a>
 
             <a href="<?php echo htmlspecialchars(deliveriesTabUrl('assigned'), ENT_QUOTES, 'UTF-8'); ?>"
                 class="rider-deliveries-tab <?php echo $activeTab === 'assigned' ? 'active' : ''; ?>" role="tab"
                 aria-selected="<?php echo $activeTab === 'assigned' ? 'true' : 'false'; ?>"
-                aria-controls="panel-assigned" id="tabBtnAssigned">
+                aria-controls="panel-assigned" id="tabBtnAssigned" data-deliveries-tab="assigned">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/package.svg" alt=""
                     class="rider-deliveries-tab-icon"
                     onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/order.svg'">
                 <span>Assigned</span>
-                <?php if ($assignedCount > 0): ?>
-                <span class="rider-deliveries-tab-count rider-deliveries-tab-count-alert">
+                <span class="rider-deliveries-tab-count rider-deliveries-tab-count-alert" id="deliveriesAssignedCount"
+                    <?php if ($assignedCount === 0) echo 'style="display:none;"'; ?>>
                     <?php echo $assignedCount; ?>
                 </span>
-                <?php endif; ?>
             </a>
 
             <a href="<?php echo htmlspecialchars(deliveriesTabUrl('history'), ENT_QUOTES, 'UTF-8'); ?>"
                 class="rider-deliveries-tab <?php echo $activeTab === 'history' ? 'active' : ''; ?>" role="tab"
                 aria-selected="<?php echo $activeTab === 'history' ? 'true' : 'false'; ?>" aria-controls="panel-history"
-                id="tabBtnHistory">
+                id="tabBtnHistory" data-deliveries-tab="history">
                 <img src="<?php echo $assetBase; ?>assets/images/icons/history-line.svg" alt=""
                     class="rider-deliveries-tab-icon"
                     onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/time-update.svg'">
@@ -278,88 +331,51 @@ require_once __DIR__ . '/../includes/header.php';
 
         <!-- ============================================================
              TAB: ACTIVE
-             Orders in picking_up or delivering.
              ============================================================ -->
         <section class="rider-deliveries-panel <?php echo $activeTab === 'active' ? 'active' : ''; ?>" id="panel-active"
-            role="tabpanel" aria-labelledby="tabBtnActive">
-            <?php if ($activeTab === 'active'): ?>
+            role="tabpanel" aria-labelledby="tabBtnActive" data-deliveries-panel="active">
 
-            <?php if (empty($activeDeliveries)): ?>
-
-            <div class="rider-deliveries-empty">
-                <div class="rider-deliveries-empty-icon">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/riding-line.svg" alt=""
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/car-line.svg'">
+            <div class="rider-deliveries-list" id="deliveriesActiveList">
+                <?php if (empty($activeDeliveries)): ?>
+                <div class="rider-deliveries-empty" id="deliveriesActiveEmpty">
+                    <div class="rider-deliveries-empty-icon">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/riding-line.svg" alt=""
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/car-line.svg'">
+                    </div>
+                    <p class="rider-deliveries-empty-title">No active delivery</p>
+                    <p class="rider-deliveries-empty-text">
+                        <?php if (!$isVerified): ?>
+                        Your account is pending verification. Active deliveries will appear here once you can go
+                        online.
+                        <?php elseif ($assignedCount > 0): ?>
+                        You have
+                        <?php echo $assignedCount; ?>
+                        assignment<?php echo $assignedCount === 1 ? '' : 's'; ?>
+                        waiting. Open the Assigned tab to accept one.
+                        <?php elseif ($available): ?>
+                        You're online. When the kitchen assigns you an order and you accept it, it will appear here.
+                        <?php else: ?>
+                        Go online from the assignments panel at the bottom of the page to start receiving deliveries.
+                        <?php endif; ?>
+                    </p>
                 </div>
-                <p class="rider-deliveries-empty-title">No active delivery</p>
-                <p class="rider-deliveries-empty-text">
-                    <?php if (!$isVerified): ?>
-                    Your account is pending verification. Active deliveries will appear here once you can go online.
-                    <?php elseif ($assignedCount > 0): ?>
-                    You have
-                    <?php echo $assignedCount; ?>
-                    assignment<?php echo $assignedCount === 1 ? '' : 's'; ?>
-                    waiting. Open the Assigned tab to accept one.
-                    <?php elseif ($available): ?>
-                    You're online. When the kitchen assigns you an order and you accept it, it will appear here.
-                    <?php else: ?>
-                    Go online from the assignments panel at the bottom of the page to start receiving deliveries.
-                    <?php endif; ?>
-                </p>
-
-                <?php if ($assignedCount > 0): ?>
-                <a href="<?php echo htmlspecialchars(deliveriesTabUrl('assigned'), ENT_QUOTES, 'UTF-8'); ?>"
-                    class="btn btn-primary btn-sm">
-                    View Assigned
-                </a>
-                <?php endif; ?>
-            </div>
-
-            <?php else: ?>
-
-            <div class="rider-deliveries-list">
-                <?php foreach ($activeDeliveries as $delivery):
-                    $orderId        = (int)$delivery['order_id'];
-                    $orderStatus    = (string)$delivery['order_status'];
-                    $customerName   = (string)$delivery['customer_name'];
-                    $customerPhone  = (string)($delivery['customer_contact'] ?? '');
-                    $destination    = (string)$delivery['destination_address'];
-                    $orderDate      = (string)$delivery['order_date'];
-                    $branchName     = (string)($delivery['branch_name'] ?? '');
-                    $restaurantName = (string)($delivery['restaurant_name'] ?? '');
-                    $itemCount      = (int)($delivery['item_count'] ?? 0);
-                    $orderTotal     = (float)($delivery['order_total'] ?? 0);
-                    $riderEarning   = 50.00;
-
-                    $isPickingUp = ($orderStatus === 'picking_up');
-
-                    // The primary action depends on where the order
-                    // is in the rider's own flow.
-                    if ($isPickingUp) {
-                        $primaryAction  = 'mark_picked_up';
-                        $primaryLabel   = 'Mark Picked Up';
-                        $primaryIconKey = 'picked_up';
-                        $confirmTitle   = 'Confirm pickup?';
-                        $confirmBody    = 'Only mark this after you have the food in hand. '
-                                        . 'The customer will see the order move to "In Transit".';
-                        $confirmLabel   = 'Mark Picked Up';
-                    } else {
-                        $primaryAction  = 'delivered';
-                        $primaryLabel   = 'Mark Delivered';
-                        $primaryIconKey = 'delivered';
-                        $confirmTitle   = 'Mark as delivered?';
-                        $confirmBody    = 'This closes the order and recognises the earning on your account.';
-                        $confirmLabel   = 'Mark Delivered';
-                    }
-
-                    // Contact target: kitchen while picking up,
-                    // customer while delivering.
-                    $contactLabel = $isPickingUp ? 'Call Kitchen' : 'Call';
-                    $chatChannel  = $isPickingUp ? 'restaurant_account' : 'customer';
+                <?php else: ?>
+                <?php foreach ($activeDeliveries as $delivery): ?>
+                <?php
+                $orderId        = (int)$delivery['order_id'];
+                $orderStatus    = (string)$delivery['order_status'];
+                $customerName   = (string)$delivery['customer_name'];
+                $customerPhone  = (string)($delivery['customer_contact'] ?? '');
+                $destination    = (string)$delivery['destination_address'];
+                $orderDate      = (string)$delivery['order_date'];
+                $branchName     = (string)($delivery['branch_name'] ?? '');
+                $restaurantName = (string)($delivery['restaurant_name'] ?? '');
+                $itemCount      = (int)($delivery['item_count'] ?? 0);
+                $orderTotal     = (float)($delivery['order_total'] ?? 0);
+                $isPickingUp    = ($orderStatus === 'picking_up');
                 ?>
                 <article class="rider-delivery-card" data-order-id="<?php echo $orderId; ?>"
                     data-order-status="<?php echo htmlspecialchars($orderStatus, ENT_QUOTES, 'UTF-8'); ?>">
-
                     <div class="rider-delivery-card-head">
                         <div class="rider-delivery-card-id">
                             <p class="rider-delivery-card-order">Order #<?php echo $orderId; ?></p>
@@ -419,7 +435,7 @@ require_once __DIR__ . '/../includes/header.php';
                         <span class="rider-fact">
                             <span class="rider-fact-label">Your Earning</span>
                             <span class="rider-fact-value rider-fact-value-highlight">
-                                <?php echo formatRiderCurrency($riderEarning); ?>
+                                <?php echo formatRiderCurrency($riderPayoutPerDelivery); ?>
                             </span>
                         </span>
                     </div>
@@ -441,7 +457,7 @@ require_once __DIR__ . '/../includes/header.php';
                             <img src="<?php echo $assetBase; ?>assets/images/icons/phone-fill.svg" alt=""
                                 class="btn-icon" width="16" height="16"
                                 onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg'">
-                            <span><?php echo htmlspecialchars($contactLabel, ENT_QUOTES, 'UTF-8'); ?></span>
+                            <span>Call</span>
                         </a>
                         <?php endif; ?>
 
@@ -455,77 +471,64 @@ require_once __DIR__ . '/../includes/header.php';
                         <?php endif; ?>
 
                         <button type="button" class="btn btn-primary btn-sm delivery-status-btn"
-                            data-order-id="<?php echo $orderId; ?>" data-action="<?php echo $primaryAction; ?>"
-                            data-confirm-title="<?php echo htmlspecialchars($confirmTitle, ENT_QUOTES, 'UTF-8'); ?>"
-                            data-confirm-message="<?php echo htmlspecialchars($confirmBody, ENT_QUOTES, 'UTF-8'); ?>"
-                            data-confirm-label="<?php echo htmlspecialchars($confirmLabel, ENT_QUOTES, 'UTF-8'); ?>"
+                            data-order-id="<?php echo $orderId; ?>"
+                            data-action="<?php echo $isPickingUp ? 'mark_picked_up' : 'delivered'; ?>"
+                            data-confirm-title="<?php echo htmlspecialchars($isPickingUp ? 'Confirm pickup?' : 'Mark as delivered?', ENT_QUOTES, 'UTF-8'); ?>"
+                            data-confirm-message="<?php echo htmlspecialchars($isPickingUp
+                                ? 'Only mark this after you have the food in hand. The customer will see the order move to \"In Transit\".'
+                                : 'This closes the order and recognises the earning on your account.', ENT_QUOTES, 'UTF-8'); ?>"
+                            data-confirm-label="<?php echo htmlspecialchars($isPickingUp ? 'Mark Picked Up' : 'Mark Delivered', ENT_QUOTES, 'UTF-8'); ?>"
                             data-confirm-variant="primary"
-                            data-confirm-icon="<?php echo htmlspecialchars($primaryIconKey, ENT_QUOTES, 'UTF-8'); ?>">
-                            <?php echo htmlspecialchars($primaryLabel, ENT_QUOTES, 'UTF-8'); ?>
+                            data-confirm-icon="<?php echo $isPickingUp ? 'picked_up' : 'delivered'; ?>">
+                            <?php echo $isPickingUp ? 'Mark Picked Up' : 'Mark Delivered'; ?>
                         </button>
                     </div>
                 </article>
                 <?php endforeach; ?>
+                <?php endif; ?>
             </div>
-
-            <?php endif; ?>
-
-            <?php endif; ?>
         </section>
 
         <!-- ============================================================
              TAB: ASSIGNED
-             rider_pending offers only.
              ============================================================ -->
         <section class="rider-deliveries-panel <?php echo $activeTab === 'assigned' ? 'active' : ''; ?>"
-            id="panel-assigned" role="tabpanel" aria-labelledby="tabBtnAssigned">
-            <?php if ($activeTab === 'assigned'): ?>
+            id="panel-assigned" role="tabpanel" aria-labelledby="tabBtnAssigned" data-deliveries-panel="assigned">
 
-            <?php if (empty($assignedOrders)): ?>
-
-            <div class="rider-deliveries-empty">
-                <div class="rider-deliveries-empty-icon">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/package.svg" alt=""
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/order.svg'">
+            <div class="rider-deliveries-list" id="deliveriesAssignedList">
+                <?php if (empty($assignedOrders)): ?>
+                <div class="rider-deliveries-empty" id="deliveriesAssignedEmpty">
+                    <div class="rider-deliveries-empty-icon">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/package.svg" alt=""
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/order.svg'">
+                    </div>
+                    <p class="rider-deliveries-empty-title">No pending assignments</p>
+                    <p class="rider-deliveries-empty-text">
+                        <?php if (!$isVerified): ?>
+                        Your account is pending verification. Assignments will appear here once you can go online.
+                        <?php elseif (!$available): ?>
+                        You're offline. Go online from the assignments panel at the bottom of the page so the kitchen
+                        can assign you orders.
+                        <?php else: ?>
+                        When the kitchen assigns you an order, it will appear here for you to accept or decline.
+                        <?php endif; ?>
+                    </p>
                 </div>
-                <p class="rider-deliveries-empty-title">No pending assignments</p>
-                <p class="rider-deliveries-empty-text">
-                    <?php if (!$isVerified): ?>
-                    Your account is pending verification. Assignments will appear here once you can go online.
-                    <?php elseif (!$available): ?>
-                    You're offline. Go online from the assignments panel at the bottom of the page so the kitchen can
-                    assign you orders.
-                    <?php else: ?>
-                    When the kitchen assigns you an order, it will appear here for you to accept or decline. The
-                    notification at the bottom of the page will also alert you.
-                    <?php endif; ?>
-                </p>
-            </div>
-
-            <?php else: ?>
-
-            <div class="rider-deliveries-list">
-                <?php foreach ($assignedOrders as $pending):
-                    $orderId        = (int)$pending['order_id'];
-                    $customerName   = (string)$pending['customer_name'];
-                    $destination    = (string)$pending['destination_address'];
-                    $orderDate      = (string)$pending['order_date'];
-                    $branchName     = (string)($pending['branch_name'] ?? '');
-                    $restaurantName = (string)($pending['restaurant_name'] ?? '');
-                    $itemCount      = (int)($pending['item_count'] ?? 0);
-                    $orderTotal     = (float)($pending['order_total'] ?? 0);
-
-                    $canDecide = $isVerified && $available;
-
-                    $acceptTitle = 'Accept this assignment?';
-                    $acceptBody  = "You'll be responsible for picking up this order and delivering it to the customer. You won't be able to go offline until the delivery is complete.";
-
-                    $declineTitle = 'Decline this assignment?';
-                    $declineBody  = 'The kitchen will choose another rider for this order. This cannot be undone.';
+                <?php else: ?>
+                <?php foreach ($assignedOrders as $pending): ?>
+                <?php
+                $orderId        = (int)$pending['order_id'];
+                $customerName   = (string)$pending['customer_name'];
+                $destination    = (string)$pending['destination_address'];
+                $orderDate      = (string)$pending['order_date'];
+                $branchName     = (string)($pending['branch_name'] ?? '');
+                $restaurantName = (string)($pending['restaurant_name'] ?? '');
+                $itemCount      = (int)($pending['item_count'] ?? 0);
+                $orderTotal     = (float)($pending['order_total'] ?? 0);
+                $canDecide      = $isVerified && $available;
                 ?>
                 <article class="rider-delivery-card rider-delivery-card-assigned"
-                    data-order-id="<?php echo $orderId; ?>">
-
+                    data-order-id="<?php echo $orderId; ?>" data-order-status="rider_pending">
                     <div class="rider-delivery-card-head">
                         <div class="rider-delivery-card-id">
                             <p class="rider-delivery-card-order">Order #<?php echo $orderId; ?></p>
@@ -581,7 +584,7 @@ require_once __DIR__ . '/../includes/header.php';
                         <span class="rider-fact">
                             <span class="rider-fact-label">Your Earning</span>
                             <span class="rider-fact-value rider-fact-value-highlight">
-                                <?php echo formatRiderCurrency(50.00); ?>
+                                <?php echo formatRiderCurrency($riderPayoutPerDelivery); ?>
                             </span>
                         </span>
                     </div>
@@ -590,15 +593,15 @@ require_once __DIR__ . '/../includes/header.php';
                         <?php if ($canDecide): ?>
                         <button type="button" class="btn btn-danger btn-sm delivery-status-btn"
                             data-order-id="<?php echo $orderId; ?>" data-action="decline_assignment"
-                            data-confirm-title="<?php echo htmlspecialchars($declineTitle, ENT_QUOTES, 'UTF-8'); ?>"
-                            data-confirm-message="<?php echo htmlspecialchars($declineBody, ENT_QUOTES, 'UTF-8'); ?>"
+                            data-confirm-title="Decline this assignment?"
+                            data-confirm-message="The kitchen will choose another rider for this order. This cannot be undone."
                             data-confirm-label="Decline" data-confirm-variant="danger" data-confirm-icon="decline">
                             Decline
                         </button>
                         <button type="button" class="btn btn-primary btn-sm delivery-status-btn"
                             data-order-id="<?php echo $orderId; ?>" data-action="accept_assignment"
-                            data-confirm-title="<?php echo htmlspecialchars($acceptTitle, ENT_QUOTES, 'UTF-8'); ?>"
-                            data-confirm-message="<?php echo htmlspecialchars($acceptBody, ENT_QUOTES, 'UTF-8'); ?>"
+                            data-confirm-title="Accept this assignment?"
+                            data-confirm-message="You'll be responsible for picking up this order and delivering it to the customer. You won't be able to go offline until the delivery is complete."
                             data-confirm-label="Accept" data-confirm-variant="primary" data-confirm-icon="accept">
                             Accept Assignment
                         </button>
@@ -610,22 +613,35 @@ require_once __DIR__ . '/../includes/header.php';
                     </div>
                 </article>
                 <?php endforeach; ?>
+                <?php endif; ?>
             </div>
-
-            <?php endif; ?>
-
-            <?php endif; ?>
         </section>
 
         <!-- ============================================================
              TAB: HISTORY
+
+             Rendered on every request. The `active` class on the
+             section decides visibility. The previous revision wrapped
+             this panel's content in an `if ($activeTab === 'history')`
+             guard, which meant the panel was empty in the DOM
+             whenever the server rendered the page for any other tab.
+             A client-side tab switch then made that empty panel
+             visible. All three panels now render their full content
+             on every request.
+
+             Delivered orders within the 1-hour post-delivery grace
+             window expose a Message button. The block carries an
+             absolute data-message-window-ends timestamp so
+             deliveries.js can remove the buttons once the window
+             elapses, without a page reload.
+
+             Orders outside the window render no Message button.
+             Cancelled, refunded, and failed orders never render one.
              ============================================================ -->
         <section class="rider-deliveries-panel <?php echo $activeTab === 'history' ? 'active' : ''; ?>"
-            id="panel-history" role="tabpanel" aria-labelledby="tabBtnHistory">
-            <?php if ($activeTab === 'history'): ?>
+            id="panel-history" role="tabpanel" aria-labelledby="tabBtnHistory" data-deliveries-panel="history">
 
             <div class="rider-deliveries-card">
-
                 <?php if (empty($deliveryHistory)): ?>
                 <div class="rider-deliveries-empty">
                     <div class="rider-deliveries-empty-icon">
@@ -644,16 +660,20 @@ require_once __DIR__ . '/../includes/header.php';
                     </p>
                 </div>
                 <?php else: ?>
-
                 <div class="rider-history-list">
                     <?php foreach ($deliveryHistory as $delivery):
                         $orderId      = (int)$delivery['order_id'];
                         $orderStatus  = (string)$delivery['order_status'];
                         $customerName = (string)$delivery['customer_name'];
                         $deliveredAt  = (string)($delivery['delivered_at'] ?? '');
-                        $riderEarning = 50.00;
+                        $isDelivered  = $orderStatus === 'delivered';
 
-                        $isDelivered = $orderStatus === 'delivered';
+                        // A delivered order stays messageable for one
+                        // hour. Cancelled, refunded, and failed orders
+                        // are closed on both channels and never render
+                        // a Message button.
+                        $canMessage   = $isDelivered && historyRowMessageable($deliveredAt);
+                        $windowEndsMs = $isDelivered ? historyRowWindowEndsMs($deliveredAt) : 0;
                     ?>
                     <div class="rider-history-row">
                         <div
@@ -676,6 +696,28 @@ require_once __DIR__ . '/../includes/header.php';
                             <p class="rider-history-date">
                                 <?php echo $deliveredAt !== '' ? formatRiderDate($deliveredAt) : '—'; ?>
                             </p>
+
+                            <?php if ($canMessage): ?>
+                            <div class="rider-history-actions"
+                                data-message-window-ends="<?php echo (int)$windowEndsMs; ?>">
+                                <button type="button" class="btn btn-neutral btn-sm" data-rider-chat-open
+                                    data-rider-chat-order-id="<?php echo $orderId; ?>"
+                                    data-rider-chat-recipient="customer"
+                                    data-rider-chat-subtitle="Order #<?php echo $orderId; ?> • <?php echo htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8'); ?>">
+                                    <img src="<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg" alt=""
+                                        class="btn-icon" width="16" height="16">
+                                    <span>Message Customer</span>
+                                </button>
+                                <button type="button" class="btn btn-neutral btn-sm" data-rider-chat-open
+                                    data-rider-chat-order-id="<?php echo $orderId; ?>"
+                                    data-rider-chat-recipient="restaurant_account"
+                                    data-rider-chat-subtitle="Order #<?php echo $orderId; ?> • Kitchen">
+                                    <img src="<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg" alt=""
+                                        class="btn-icon" width="16" height="16">
+                                    <span>Message Kitchen</span>
+                                </button>
+                            </div>
+                            <?php endif; ?>
                         </div>
 
                         <div class="rider-history-meta">
@@ -683,17 +725,14 @@ require_once __DIR__ . '/../includes/header.php';
                                 <?php echo getDeliveryStatusLabel($orderStatus); ?>
                             </span>
                             <p class="rider-history-earning">
-                                <?php echo $isDelivered ? '+' : ''; ?><?php echo formatRiderCurrency($isDelivered ? $riderEarning : 0); ?>
+                                <?php echo $isDelivered ? '+' : ''; ?><?php echo formatRiderCurrency($isDelivered ? $riderPayoutPerDelivery : 0); ?>
                             </p>
                         </div>
                     </div>
                     <?php endforeach; ?>
                 </div>
-
                 <?php endif; ?>
             </div>
-
-            <?php endif; ?>
         </section>
 
     </div>
@@ -733,8 +772,10 @@ window.FITPAL_RIDER_DELIVERIES = {
     csrfToken: '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>',
     assetBase: '<?php echo $assetBase; ?>',
     riderId: <?php echo $riderId; ?>,
-    riderCap: <?php echo (int)(defined('RIDER_CONCURRENT_CAP') ? RIDER_CONCURRENT_CAP : 3); ?>,
-    activeTab: '<?php echo htmlspecialchars($activeTab, ENT_QUOTES, 'UTF-8'); ?>'
+    payout: <?php echo (float)$riderPayoutPerDelivery; ?>,
+    activeTab: '<?php echo htmlspecialchars($activeTab, ENT_QUOTES, 'UTF-8'); ?>',
+    panelEndpoint: '<?php echo htmlspecialchars($deliveriesEndpoint, ENT_QUOTES, 'UTF-8'); ?>',
+    messageGraceSeconds: <?php echo (int)$historyGraceSeconds; ?>
 };
 </script>
 <script src="../assets/ui/js/deliveries.js" defer></script>

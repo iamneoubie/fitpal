@@ -23,7 +23,8 @@ INCLUDE_EXTENSIONS = {".php", ".css", ".js"}
 # These are ALWAYS emitted first, verbatim, under the File Structure block
 PINNED_ENTRIES = [
     "/logs/instructions/general.md",
-    "/logs/output/project_structure.md",
+    "/logs/tree-mapper/project_structure.md",
+    "/logs/logic/business-logic.md",
     "/sql/database.sql",
     "/sql/seed/all-in-one.sql",
 ]

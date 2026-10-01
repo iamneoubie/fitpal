@@ -5,99 +5,113 @@
  * Layout
  * ------
  *   1. Greeting header
- *   2. Four stat cards (wallet, deliveries, rating, today's earnings)
+ *   2. Four stat cards (available balance, deliveries, rating, today's earnings)
  *   3. Current Work strip
- *        A compact card that answers "what should I do next?":
- *          - Not verified              → verification reminder
- *          - Has picking_up orders     → "Head to pickup" copy,
- *                                        names the count and payout
- *          - Has delivering orders     → "Delivering to Juan" copy
- *                                        at 1, count + payout at 2–3
- *          - Has both                  → "2 in progress" copy with
- *                                        a split summary
- *          - Neither, rider is online  → "You're clear" status
- *          - Neither, rider is offline → "Go online" reminder
- *   4. Two-column row: weekly chart | info card
- *   5. Verification warning (only when not verified)
+ *   4. Order liability strip — rendered only when the rider is
+ *      carrying outstanding COD cash
+ *   5. Two-column row: weekly chart | info card
+ *   6. Verification warning (only when not verified)
  *
- * Current Work strip — live-status awareness (v4.3)
- * --------------------------------------------------
- * The rider's live work now spans two statuses, both of which
- * count as active:
+ * ---------------------------------------------------------------------
+ * WHERE THE NUMBERS ON THIS PAGE COME FROM
+ * ---------------------------------------------------------------------
+ * Three sources feed the dashboard:
+ *
+ *   Live work counts (stat cards, Current Work strip)
+ *       Every order status the dashboard tracks is written by the
+ *       shared order-transaction layer. The rider-role dashboard
+ *       reads the committed subset ('picking_up' and 'delivering')
+ *       through the same queries the assignment panel and the
+ *       deliveries page use.
+ *
+ *   Per-delivery payout
+ *       The rider's earnings and today's/wk/30d sums are read from
+ *       the `transaction` table (the `deposit` rows written by the
+ *       shared layer's delivery credit pair). The per-delivery
+ *       figure comes from FITPAL_DELIVERY_BASE_FEE via
+ *       getRiderDashboardStats().
+ *
+ *   Order liability
+ *       Under v2.4.0, a COD rider physically collects the order
+ *       total from the customer at pickup. The amount they are
+ *       currently carrying is the sum of the 'collected' rows in
+ *       `rider_collection` for their own rider id. That table is
+ *       written by the shared handler and read here through
+ *       getRiderOutstandingCollections().
+ *
+ * The dashboard never writes to the ledger. It never moves a rider
+ * between statuses; the assignment handler and the deliveries page
+ * are the only surfaces that do.
+ *
+ * ---------------------------------------------------------------------
+ * AVAILABLE BALANCE
+ * ---------------------------------------------------------------------
+ * Under v2.4.0 the rider is never debited. The accept-time debit
+ * does not exist. The rider pays nothing at accept time; they
+ * collect cash from the customer at pickup and settle it on
+ * delivery. Their `financial_account.balance` therefore only ever
+ * increases, by the delivery fee, on each successful delivery. It
+ * is exactly what the rider has earned and can withdraw. The label
+ * is "Available Balance."
+ *
+ * ---------------------------------------------------------------------
+ * ORDER LIABILITY STRIP — SIGN CONVENTION
+ * ---------------------------------------------------------------------
+ * The strip tells the rider how much customer cash they are
+ * currently carrying: "Order liability: −₱447.00."
+ *
+ * The number is presented with a leading minus sign because it
+ * represents cash the rider is holding for someone else — money
+ * that is not theirs and that they will hand back. The rider reads
+ * the minus as "this much is not mine."
+ *
+ * Underneath, the value is a positive sum over a positive column.
+ * `rider_collection.amount` carries CHECK (amount >= 0) and the
+ * query layer returns a positive float. The minus sign is added
+ * here, in the page, by the format call. The ledger column stays
+ * positive because a negative value in a column that means
+ * "amount" would violate the ACID contract the schema enforces.
+ *
+ * If the schema ever needed to represent a real negative balance,
+ * it would do so with a signed column and an explicit constraint
+ * that allows the range — the model in force does not, and does not
+ * need to. The sign on this page is a view choice.
+ *
+ * ---------------------------------------------------------------------
+ * CURRENT WORK STRIP — LIVE-STATUS AWARENESS
+ * ---------------------------------------------------------------------
+ * The rider's live work spans two statuses, both of which count as
+ * active:
  *
  *   picking_up  — accepted; en route to or at the restaurant.
- *                 Food not yet in hand.
  *   delivering  — food in hand; en route to the customer.
  *
  * The strip runs three signals in priority order:
  *
  *   1. If not verified → the blocked face.
  *   2. If the rider has any live order → the working face.
- *      The working face's copy is chosen from the mix:
- *        - picking_up only   → "N pickups in progress"
- *        - delivering only   → "Delivering to X" (1) or "N deliveries"
- *        - both              → "N in progress" + split subtitle
  *   3. If neither, check availability → clear or offline face.
  *
- * Plural copy is dynamic (D14 option C) so it reads correctly at
- * every count from 1 to the cap of 3. The payout line shows the
- * total earnings the rider will collect when every live order is
- * delivered, so a rider with 3 orders sees "up to ₱150.00" rather
- * than a flat ₱50.00 that only matches 1 order.
- *
- * Info card (right column)
- * ------------------------
- * Reads top to bottom:
- *
- *   Profile            header, with a link to profile.php
- *   ├── Name           first + middle + last, concatenated
- *   ├── Email
- *   └── Contact number
- *
- *   Vehicle
- *   ├── Icon + type
- *   └── Plate
- *
- *   Status             verification badge
- *   Availability       online / offline
- *   Total deliveries
- *   Average rating
- *
- * Data sources
- * ------------
- *   - getRiderProfile()            profile, wallet balance, status
- *   - getRiderDashboardStats()     stat-card numbers + chart scale
- *   - getRiderWeeklyEarnings()     chart bars
- *   - getAssignedOrders()          Current Work strip (pending)
- *   - getRiderActiveDeliveries()   Current Work strip (picking_up
- *                                  + delivering)
- *
- * Every one of those lives in rider/backend/database/rider-queries.php.
- * This page contains no SQL.
+ * Plural copy is dynamic so it reads correctly at every count from
+ * 1 to the cap of 3.
  *
  * @package FitPal
- * @version 4.3 — Current Work strip reads the new picking_up
- *                status:
- *                  - $activeDeliveries now contains orders in
- *                    picking_up and delivering (both, thanks to
- *                    the updated getRiderActiveDeliveries()).
- *                  - The "active" branch of $currentWork is
- *                    rewritten to distinguish pickups from
- *                    deliveries, and to show a combined face when
- *                    the rider holds both.
- *                  - Plural copy is dynamic (D14 option C).
- *                  - Payout text scales with the live count.
+ * @version 4.7 — The collection strip becomes the Order liability
+ *                strip. The amount is prefixed with a minus sign at
+ *                the view layer; the underlying value stays a
+ *                positive float from the query layer. The label and
+ *                the hint text reflect the v2.4.0 model.
  *
- *                (4.2: Right column rebuilt as an info card.
- *                4.1: Vehicle icon corrected. 4.0: Recent
- *                Deliveries removed, Current Work strip added.)
+ *                (4.6: label reverted to "Available Balance"; strip
+ *                added. 4.5: label renamed under the pre-v2.4.0
+ *                model. 4.4: docblock records the shared layer.
+ *                4.3: Current Work strip reads 'picking_up'.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('rider');
 
 if (empty($_SESSION['delivery_rider_id'])) {
     header('Location: sign-in.php');
@@ -105,7 +119,7 @@ if (empty($_SESSION['delivery_rider_id'])) {
 }
 
 require_once __DIR__ . '/../includes/header.php';
-require_once __DIR__ . '/../backend/database/rider-queries.php';
+require_once __DIR__ . '/../backend/database/rider-assignment-queries.php';
 
 $riderId = (int)$_SESSION['delivery_rider_id'];
 
@@ -120,6 +134,10 @@ $chartScale       = getRiderChartScale($stats['week_earnings_max'] ?? 0);
 $assignedOrders   = getAssignedOrders($database_connection, $riderId);
 // Returns both picking_up and delivering orders.
 $activeDeliveries = getRiderActiveDeliveries($database_connection, $riderId);
+
+// Outstanding COD cash the rider is currently carrying. Returned
+// as a positive total from the query layer.
+$outstandingCollections = getRiderOutstandingCollections($database_connection, $riderId);
 
 // ============================================
 // DERIVED VIEW DATA
@@ -187,18 +205,17 @@ foreach ($weeklyEarnings as $day) {
 
 $today = date('Y-m-d');
 
+// Outstanding collections. Kept positive here; the minus sign is
+// added in the strip markup below.
+$collectionTotal = (float)($outstandingCollections['total'] ?? 0);
+$collectionCount = (int)($outstandingCollections['count'] ?? 0);
+
 // ============================================
 // CURRENT WORK
-//
-// Live work spans two statuses: picking_up (accepted; food not in
-// hand) and delivering (food in hand; en route to customer). The
-// strip runs in priority order and picks the first face that
-// matches.
 // ============================================
 $activeCount   = count($activeDeliveries);
 $assignedCount = count($assignedOrders);
 
-// Split the active set so the copy can describe the mix.
 $pickingUpOrders  = [];
 $deliveringOrders = [];
 foreach ($activeDeliveries as $order) {
@@ -212,7 +229,8 @@ foreach ($activeDeliveries as $order) {
 $pickingUpCount  = count($pickingUpOrders);
 $deliveringCount = count($deliveringOrders);
 
-$riderPayoutPerDelivery = 50.00;
+// The per-delivery payout the shared layer will credit on success.
+$riderPayoutPerDelivery = FITPAL_DELIVERY_BASE_FEE;
 $livePayoutTotal        = $activeCount * $riderPayoutPerDelivery;
 
 $currentWork = null;
@@ -226,9 +244,7 @@ if (!$isVerified) {
         'text'   => 'Your account is ' . strtolower($statusLabel) . '. You cannot go online or accept orders until it is approved.',
     ];
 } elseif ($activeCount > 0) {
-    // The rider has live work. Which copy depends on the mix.
     if ($pickingUpCount > 0 && $deliveringCount === 0) {
-        // All pickups. At 1, name the restaurant. At 2+, count.
         if ($pickingUpCount === 1) {
             $first = $pickingUpOrders[0];
             $restaurantName = (string)($first['restaurant_name'] ?? 'the restaurant');
@@ -242,7 +258,6 @@ if (!$isVerified) {
         $text .= ' ₱' . number_format($livePayoutTotal, 2)
                . ' total on delivery.';
     } elseif ($deliveringCount > 0 && $pickingUpCount === 0) {
-        // All deliveries. At 1, name the customer. At 2+, count.
         if ($deliveringCount === 1) {
             $first = $deliveringOrders[0];
             $customerName = (string)($first['customer_name'] ?? 'the customer');
@@ -254,7 +269,6 @@ if (!$isVerified) {
             ? 'Mark it delivered to earn ₱' . number_format($riderPayoutPerDelivery, 2) . '.'
             : 'Mark each order delivered to collect ₱' . number_format($livePayoutTotal, 2) . ' total.';
     } else {
-        // Mixed. Lead with the count, subtitle names the split.
         $title = $activeCount . ' in progress';
         $text = $pickingUpCount . ' pickup' . ($pickingUpCount === 1 ? '' : 's')
               . ' and ' . $deliveringCount . ' deliver' . ($deliveringCount === 1 ? 'y' : 'ies')
@@ -271,8 +285,6 @@ if (!$isVerified) {
         'cta'    => 'Open Deliveries',
     ];
 } elseif ($assignedCount > 0) {
-    // Pending offers exist, no live work yet. The plural copy
-    // works at 1, 2, or 3.
     if ($assignedCount === 1) {
         $title = '1 assignment waiting';
         $text  = 'The kitchen assigned you an order. Accept or decline to continue.';
@@ -313,8 +325,7 @@ if (!$isVerified) {
 $vehicleLabel = $vehicle !== '' ? ucfirst($vehicle) : 'Not recorded';
 $plateLabel   = $plate   !== '' ? $plate            : 'No plate recorded';
 
-// Vehicle icon — matches the tile glyph to the rider's actual
-// registered vehicle type.
+// Vehicle icon.
 $vehicleIconMap = [
     'motorcycle' => ['riding-line.svg', 'taxi-line.svg'],
     'scooter'    => ['riding-line.svg', 'taxi-line.svg'],
@@ -381,7 +392,7 @@ $emailLabel   = $email   !== '' ? $email   : '—';
              ============================================ -->
         <section class="rider-stats-grid" aria-label="Performance summary">
 
-            <!-- Wallet Balance -->
+            <!-- Available Balance -->
             <a href="earnings.php" class="rider-stat-card">
                 <div class="rider-stat-icon rider-stat-icon-wallet" aria-hidden="true">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/wallet-line.svg" alt=""
@@ -389,7 +400,7 @@ $emailLabel   = $email   !== '' ? $email   : '—';
                 </div>
                 <div class="rider-stat-info">
                     <p class="rider-stat-number"><?php echo formatRiderCurrency($balance); ?></p>
-                    <p class="rider-stat-label">Wallet Balance</p>
+                    <p class="rider-stat-label">Available Balance</p>
                 </div>
                 <span class="rider-stat-arrow" aria-hidden="true">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-right-s-line.svg" alt=""
@@ -485,6 +496,38 @@ $emailLabel   = $email   !== '' ? $email   : '—';
             </a>
             <?php endif; ?>
         </section>
+
+        <!-- ============================================
+             ORDER LIABILITY STRIP
+             Renders only when the rider is carrying COD cash.
+
+             The amount is the positive sum returned by
+             getRiderOutstandingCollections(); the minus sign
+             is a view-layer prefix. The ledger column stays
+             positive, per the ACID contract.
+             ============================================ -->
+        <?php if ($collectionCount > 0): ?>
+        <section class="rider-work-card rider-work-card-assigned" aria-label="Order liability">
+            <div class="rider-work-icon" aria-hidden="true">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/wallet-fill.svg" alt=""
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/coin-fill.svg'">
+            </div>
+
+            <div class="rider-work-body">
+                <span class="rider-work-label">Order liability</span>
+                <p class="rider-work-title">
+                    &minus;<?php echo htmlspecialchars(formatRiderCurrency($collectionTotal), ENT_QUOTES, 'UTF-8'); ?>
+                </p>
+                <p class="rider-work-text">
+                    You are carrying this amount for
+                    <?php echo $collectionCount; ?>
+                    COD order<?php echo $collectionCount === 1 ? '' : 's'; ?>.
+                    It clears when the deliver<?php echo $collectionCount === 1 ? 'y' : 'ies'; ?>
+                    complete<?php echo $collectionCount === 1 ? 's' : ''; ?>.
+                </p>
+            </div>
+        </section>
+        <?php endif; ?>
 
         <!-- ============================================
              TWO-COLUMN ROW: Chart + Info Card

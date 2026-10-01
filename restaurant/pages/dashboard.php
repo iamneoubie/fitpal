@@ -6,43 +6,67 @@
  *   - Owner  : restaurant-wide stats + branch overview + weekly chart
  *   - Branch : branch-scoped stats + top products + weekly chart
  *
- * Access control
- * --------------
- * The page is guarded by $_SESSION['restaurant_account_id']. If it is
- * not set, the user is redirected to sign-in. This guard is what
+ * ---------------------------------------------------------------------
+ * REVENUE RECOGNITION
+ * ---------------------------------------------------------------------
+ * No gross revenue is recognised until an order reaches 'delivered'.
+ * Every revenue reader in restaurant/backend/database/restaurant-queries.php
+ * filters on order_status = 'delivered' only, so cancelled, refunded,
+ * and failed orders all contribute zero. The 'failed' status is
+ * produced by the shared order-transaction layer's
+ * sweepFailedDeliveries() when a rider does not complete a delivery
+ * within FITPAL_RIDER_FAILED_DELIVERY_GRACE_SECONDS; it is treated
+ * the same as a cancellation by every revenue aggregate in the
+ * project.
+ *
+ * This page does not need to add a status filter of its own: the
+ * query layer is the single source of truth for what counts as
+ * deliverable revenue, and the filter it uses ('delivered' only) is
+ * already strictly narrower than 'NOT IN (cancelled, refunded,
+ * failed)'. Adding a second filter here would be redundant and, more
+ * importantly, would risk drifting from the query layer if the
+ * status set ever changes.
+ *
+ * ---------------------------------------------------------------------
+ * ACCESS CONTROL
+ * ---------------------------------------------------------------------
+ * The page is guarded by $_SESSION['restaurant_account_id']. If it
+ * is not set, the user is redirected to sign-in. This guard is what
  * makes sign-out work: after sign-out, the key is gone and the
  * dashboard becomes unreachable.
  *
- * Kitchen link
- * ------------
+ * ---------------------------------------------------------------------
+ * KITCHEN LINK
+ * ---------------------------------------------------------------------
  * For branch-scoped accounts (manager / staff / kitchen), the Total
  * Orders stat tile and the Active Orders hint link into kitchen.php
  * so staff can move from a summary into the working list in one
  * click. Owner accounts do not see a kitchen link — the kitchen page
  * is an operational surface for branch staff only.
  *
- * @package FitPal
- * @version 1.2 — Reads the signed-in account's display name from the
- *                restaurant role's own session key, 'restaurant_name',
- *                instead of the shared 'user_name' key. The shared
- *                key is written by every role on sign-in, so when the
- *                same browser was signed in as both a rider and a
- *                restaurant (one shared PHP session, role-scoped
- *                keys), a rider sign-in overwrote 'user_name' and the
- *                restaurant dashboard then rendered the rider's name
- *                in the greeting. The greeting now reads the
- *                restaurant-scoped key written by
- *                restaurant/backend/handlers/sign-in-handler.php v2.1.
+ * ---------------------------------------------------------------------
+ * SESSION KEYS
+ * ---------------------------------------------------------------------
+ * The signed-in account's display name comes from the restaurant
+ * role's own session key, 'restaurant_name', written by
+ * restaurant/backend/handlers/sign-in-handler.php. The shared
+ * 'user_name' key is never read here.
  *
- *                (1.1: Total Orders tile and Active Orders hint link
- *                to kitchen.php for branch accounts.)
+ * @package FitPal
+ * @version 1.3 — Docblock records the revenue-recognition rule and
+ *                names the shared order-transaction layer as the
+ *                writer of the 'failed' status. No markup, query,
+ *                or variable change from the previous revision.
+ *
+ *                (1.2: session-key fix for the greeting. 1.1:
+ *                Total Orders tile and Active Orders hint link to
+ *                kitchen.php for branch accounts.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('restaurant');
 
 if (empty($_SESSION['restaurant_account_id'])) {
     header('Location: sign-in.php');

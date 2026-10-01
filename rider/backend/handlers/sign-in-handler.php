@@ -3,83 +3,56 @@
  * FitPal Rider Sign-In Handler
  *
  * Validates credentials against the delivery_rider table.
- * Contains no SQL — all data access goes through rider-queries.php.
  *
  * ---------------------------------------------------------------------
- * AVAILABILITY POLICY
+ * REQUIRED QUERY LAYER
  * ---------------------------------------------------------------------
- * Every successful sign-in forces is_available = 0. A rider must
- * explicitly toggle availability after logging in. This prevents the
- * rider from inheriting an "online" flag from a previous session and
- * matches the expectation that a rider only receives assignments
- * after opting in.
- * ---------------------------------------------------------------------
+ * This handler requires:
  *
- * ---------------------------------------------------------------------
- * DEVELOPMENT-ONLY BYPASS
- * ---------------------------------------------------------------------
- * Seed data stores plaintext passwords ("rider123"). password_verify()
- * only accepts bcrypt hashes, so the normal check fails against seeds.
- * The bypass below accepts the stored value as plaintext, matching the
- * customer handler's pattern. REMOVE before any non-local deployment.
- * ---------------------------------------------------------------------
+ *     rider/backend/database/rider-assignment-queries.php
+ *
+ * That file is the merged successor to the older
+ * rider/backend/database/rider-queries.php and
+ * rider/backend/database/assignment-queries.php. Every function this
+ * handler calls — findRiderByIdentifier() and setRiderAvailability()
+ * — is declared there. The old rider-queries.php file was removed in
+ * the v8.0 merge and must not be required by any rider file.
+ *
+ * If this handler fails with "Failed to open stream: No such file or
+ * directory", the query file is not on disk at the path above. The
+ * correct file name is rider-assignment-queries.php.
  *
  * @package FitPal
- * @version 2.3 — Removes the writes to the shared session keys
- *                'user_name', 'user_email', and 'user_role'. All four
- *                FitPal roles run on the same PHP session, and no
- *                rider page reads any of those three keys — the rider
- *                header loads the display name from the database, not
- *                from the session. Leaving the writes in place only
- *                gave the rider sign-in a way to clobber whatever the
- *                restaurant, customer, or admin role had stored under
- *                the same shared key in the same browser. The rider's
- *                identity now lives entirely under the role-scoped
- *                'delivery_rider_id' key.
+ * @version 2.5 — The query-layer require now points at
+ *                rider-assignment-queries.php. The previous revision
+ *                required rider-queries.php, which no longer exists
+ *                after the v8.0 merge, so every sign-in request died
+ *                on the require before any code ran.
  *
- *                Owns its own CSRF bootstrap and rotates the rider
- *                token on mismatch.
+ *                Every other behaviour — the CSRF contract, the
+ *                dev-only plaintext bypass, the session_regenerate_id
+ *                call, the per-role activity marker write, the
+ *                forced-offline call, the redirect target, and the
+ *                error handling — is byte-identical to v2.4.
  *
- *                require_once on includes/rider-csrf-token.php makes
- *                this handler the authoritative reader of
- *                'rider_csrf_token' rather than an incidental one
- *                that only worked because the page which rendered
- *                the form had already called getRiderCsrfToken().
- *
- *                On the CSRF-mismatch branch the rider's token is
- *                now unset before redirecting, mirroring
- *                admin/sign-in-handler.php v1.5. Without that
- *                rotation, getRiderCsrfToken() on the next render of
- *                sign-in.php saw the key still set and returned the
- *                same stale value, so a user who hit a mismatch was
- *                stuck re-submitting the dead token until the
- *                session was cleared manually.
- *
- *                Only the rider's own key is touched. The shared
- *                'csrf_token' key is never read, written, or cleared
- *                by this file — other roles in the same PHP session
- *                may still depend on it.
- *
- *                (2.2: Validated against rider_csrf_token (own key)
- *                instead of the shared csrf_token, so a sign-in by
- *                another role in the same browser session can no
- *                longer delete/rotate the token this form relied on.
- *                Only unsets its own token key on success. 2.1:
- *                Rotated rider token on CSRF mismatch.)
+ *                (2.4: replaced the write to the dead shared key
+ *                $_SESSION['created'] with the per-role activity
+ *                marker $_SESSION['rider_last_activity']. 2.3:
+ *                removed writes to shared user_name / user_email /
+ *                user_role. 2.2: validated against
+ *                rider_csrf_token. 2.1: rotated the rider token on
+ *                CSRF mismatch.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('rider');
 
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
-require_once __DIR__ . '/../database/rider-queries.php';
+require_once __DIR__ . '/../database/rider-assignment-queries.php';
 
-// Own the rider role's CSRF bootstrap. The helper is idempotent and
-// stores the token under 'rider_csrf_token' — never the shared
-// 'csrf_token' key.
+// Own the rider role's CSRF bootstrap.
 require_once __DIR__ . '/../../includes/rider-csrf-token.php';
 
 // ===== REQUEST METHOD =====
@@ -95,10 +68,8 @@ if (
     !hash_equals((string)$_SESSION['rider_csrf_token'], (string)$_POST['csrf_token'])
 ) {
     // Rotate the rider's own token so the next render of sign-in.php
-    // generates a fresh one. Without this the key stays set,
-    // getRiderCsrfToken() returns the same stale value, and the user
-    // is stuck in a validation loop. Only the rider's key is cleared
-    // — never the shared 'csrf_token' key.
+    // generates a fresh one. Only the rider's key is cleared — never
+    // the shared 'csrf_token' key.
     unset($_SESSION['rider_csrf_token']);
 
     $_SESSION['login_error'] = 'Security validation failed. Please try again.';
@@ -150,14 +121,17 @@ try {
     $riderId = (int)$rider['delivery_rider_id'];
 
     $_SESSION['delivery_rider_id'] = $riderId;
-    $_SESSION['created']           = time();
+
+    // Per-role activity marker. The header's idle gate reads this key.
+    // The shared $_SESSION['created'] key is dead and must not be
+    // written here.
+    $_SESSION['last_activity'] = time();
 
     // Explicit opt-in required: force offline on every fresh sign-in.
     setRiderAvailability($database_connection, $riderId, 0);
 
     // Only clear rider's own token. Do not touch the shared
-    // 'csrf_token' key or any other role's token — another role in
-    // this same browser session may still be relying on it.
+    // 'csrf_token' key or any other role's token.
     unset($_SESSION['rider_csrf_token']);
 
     header('Location: ../../pages/dashboard.php');

@@ -51,30 +51,41 @@
  * cycle. No animation is declared here; the transition is a plain
  * border-color change.
  *
- * @package FitPal
- * @version 4.0 — Three-band collapsible kitchen card:
- *                  - New .kitchen-order-header, .kitchen-order-summary,
- *                    .kitchen-order-details, .kitchen-order-actions
- *                    rules.
- *                  - New .kitchen-order-toggle chevron button.
- *                  - New .kitchen-route, .kitchen-route-stop,
- *                    .kitchen-route-icon, .kitchen-route-info,
- *                    .kitchen-route-connector rules.
- *                  - New .kitchen-rider-block and its children.
- *                  - Removed .kitchen-order-body, .kitchen-order-meta,
- *                    .kitchen-meta-block, .kitchen-meta-label,
- *                    .kitchen-meta-value, .kitchen-order-side,
- *                    .kitchen-order-rider, .kitchen-rider-assigned,
- *                    .kitchen-rider-unassigned, .kitchen-rider-awaiting
- *                    rules.
- *                  - The tab bar, pagination bar, new-order pill,
- *                    modals, owner view, and shared .btn-* rules
- *                    are unchanged.
+ * Confirm modal (v5.0)
+ * --------------------
+ * The generic confirmation modal now mirrors the logout modal's
+ * visual language:
  *
- *                (3.0: pagination, tab bar as anchor row, new-order
- *                pill, empty-state stretch. 2.1: per-rider slot
- *                label. 2.0: Waiting on Rider + Out for Delivery
- *                tabs, muted completed cards, awaiting-confirmation
+ *   .kitchen-confirm-content        narrow, centered card
+ *     .kitchen-confirm-icon         circular icon badge, top
+ *     .kitchen-confirm-title        "Cancel this order?"
+ *     .kitchen-confirm-body         the message
+ *     .kitchen-confirm-actions      two-button row
+ *       .kitchen-btn-cancel         black / white
+ *       .kitchen-btn-danger         red / white
+ *
+ * A modal MUST contain an <img> icon (general rules, §9). The icon
+ * is supplied by the markup in kitchen.php; this file only paints
+ * the badge around it. The destructive button uses the .danger
+ * background/white-text rule from §7.
+ *
+ * @package FitPal
+ * @version 5.0 — Confirm modal visual rewrite:
+ *                  - New .kitchen-confirm-icon, .kitchen-confirm-title,
+ *                    .kitchen-confirm-body, .kitchen-confirm-actions.
+ *                  - New .kitchen-btn-cancel (black/white) and
+ *                    .kitchen-btn-danger (red/white).
+ *                  - Removed .kitchen-confirm-text (superseded by
+ *                    .kitchen-confirm-body).
+ *                  - On narrow viewports the confirm actions
+ *                    stack full-width.
+ *                  - All other rules unchanged.
+ *
+ *                (4.0: three-band collapsible kitchen card. 3.0:
+ *                pagination, tab bar as anchor row, new-order pill,
+ *                empty-state stretch. 2.1: per-rider slot label.
+ *                2.0: Waiting on Rider + Out for Delivery tabs,
+ *                muted completed cards, awaiting-confirmation
  *                badge. 1.1: Mark Ready styles. 1.0: initial.)
  */
 
@@ -1153,7 +1164,7 @@ html {
 }
 
 /* ============================================
-   MODALS
+   MODALS (shared shell)
    ============================================ */
 
 .kitchen-modal {
@@ -1373,20 +1384,110 @@ html {
 }
 
 /* ============================================
-   CONFIRM MODAL
+   CONFIRM MODAL (v5.0)
+   Mirrors the logout-modal structure so the two
+   destructive dialogs share one visual language.
    ============================================ */
 
 .kitchen-confirm-content {
     max-width: 420px;
+    padding: 0;
 }
 
-.kitchen-confirm-text {
-    margin: 0;
+.kitchen-confirm-icon {
+    width: 64px;
+    height: 64px;
+    margin: 28px auto 16px;
+    background: rgba(220, 53, 69, 0.10);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.kitchen-confirm-icon img {
+    width: 28px;
+    height: 28px;
+    display: block;
+    /* Tint the icon to match the danger red of the confirm button. */
+    filter: brightness(0) saturate(100%)
+            invert(40%) sepia(90%) saturate(600%)
+            hue-rotate(330deg) brightness(90%) contrast(85%);
+}
+
+.kitchen-confirm-title {
+    margin: 0 0 8px 0;
+    padding: 0 24px;
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--text);
+    text-align: center;
+    line-height: 1.3;
+}
+
+.kitchen-confirm-body {
+    margin: 0 0 24px 0;
+    padding: 0 24px;
     font-size: var(--font-size-sm);
-    color: var(--gray-700);
+    color: var(--gray-600);
     line-height: 1.6;
     text-align: center;
-    padding: 4px 0;
+    word-break: break-word;
+}
+
+.kitchen-confirm-actions {
+    display: flex;
+    gap: 12px;
+    padding: 0 24px 24px;
+}
+
+.kitchen-confirm-actions .kitchen-btn-cancel,
+.kitchen-confirm-actions .kitchen-btn-danger {
+    flex: 1;
+    min-height: 46px;
+    padding: 12px 20px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    border: 2px solid transparent;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+/* Neutral / cancel — black background, white text. */
+.kitchen-btn-cancel {
+    background: #1a1a1a;
+    color: #ffffff;
+    border-color: #1a1a1a;
+}
+
+.kitchen-btn-cancel:hover,
+.kitchen-btn-cancel:focus-visible {
+    background: #000000;
+    border-color: #000000;
+    color: #ffffff;
+    outline: none;
+}
+
+/* Destructive / confirm — danger red, white text. */
+.kitchen-btn-danger {
+    background: var(--danger);
+    color: #ffffff;
+    border-color: var(--danger);
+}
+
+.kitchen-btn-danger:hover,
+.kitchen-btn-danger:focus-visible {
+    background: #b91c1c;
+    border-color: #b91c1c;
+    color: #ffffff;
+    outline: none;
 }
 
 /* ============================================
@@ -1661,6 +1762,44 @@ html {
     .kitchen-pagination-link {
         padding: 6px 10px;
         font-size: 11px;
+    }
+
+    /* Confirm modal: stack the two buttons full-width. */
+    .kitchen-confirm-content {
+        max-width: calc(100vw - 24px);
+    }
+
+    .kitchen-confirm-icon {
+        width: 56px;
+        height: 56px;
+        margin: 24px auto 14px;
+    }
+
+    .kitchen-confirm-icon img {
+        width: 24px;
+        height: 24px;
+    }
+
+    .kitchen-confirm-title {
+        padding: 0 18px;
+        font-size: var(--font-size-base);
+    }
+
+    .kitchen-confirm-body {
+        padding: 0 18px;
+        margin-bottom: 20px;
+        font-size: var(--font-size-xs);
+    }
+
+    .kitchen-confirm-actions {
+        padding: 0 18px 20px;
+        flex-direction: column-reverse;
+    }
+
+    .kitchen-confirm-actions .kitchen-btn-cancel,
+    .kitchen-confirm-actions .kitchen-btn-danger {
+        width: 100%;
+        flex: 0 0 auto;
     }
 }
 

@@ -8,37 +8,67 @@
  *     Phase 1 — restaurant combobox + branch combobox.
  *     Phase 2 — identifier + password.
  *
- * The branch_code selected in Phase 1 is stored on a hidden input
- * inside the Phase 2 form and posted to sign-in-handler.php, which
- * is unchanged and still expects `branch_code`, `identifier`,
- * `password`, `role_scope=branch`.
+ * ---------------------------------------------------------------------
+ * PER-ROLE SESSION MODEL
+ * ---------------------------------------------------------------------
+ * The page bootstraps the restaurant session before doing anything
+ * else. The already-signed-in redirect checks
+ * $_SESSION['restaurant_account_id'], a key only the restaurant
+ * role writes into this session. No other role's key is read here.
+ *
+ * ---------------------------------------------------------------------
+ * CSRF
+ * ---------------------------------------------------------------------
+ * The page does not generate its own CSRF token. The restaurant
+ * header assigns $csrfToken on every request by calling
+ * getRestaurantCsrfToken() from
+ * restaurant/includes/restaurant-csrf-token.php, which stores the
+ * token under 'restaurant_csrf_token' inside the restaurant
+ * session. Every form on this page reads $csrfToken from the header.
+ *
+ * The restaurant sign-in handler validates against the same key.
+ * This is the one contract the sign-in page depends on and the one
+ * contract the sequence preserved: the restaurant role's CSRF
+ * bootstrap has not moved and its session key name has not changed.
+ *
+ * ---------------------------------------------------------------------
+ * HANDLER ENDPOINT
+ * ---------------------------------------------------------------------
+ * Both the owner form and the branch form post to
+ * ../backend/handlers/sign-in-handler.php, which is unchanged by
+ * the sequence. It sets the restaurant role's session keys on
+ * success and redirects to the dashboard. It never touches the
+ * ledger.
+ *
+ * ---------------------------------------------------------------------
+ * BRANCH COMBO CONTRACT
+ * ---------------------------------------------------------------------
+ * The branch combobox is populated by branch-lookup-handler.php,
+ * which reads searchRestaurantsByName() and
+ * searchBranchesByRestaurant() from restaurant-queries.php. Those
+ * readers are unchanged. They only expose restaurants that are
+ * active and verified, and branches that have at least one active
+ * branch-scoped account, so a branch with no possible logins is
+ * never selectable.
  *
  * @package FitPal
- * @version 3.0 — Dropped the page-local CSRF bootstrap. The
- *                restaurant role's token is now assigned
- *                unconditionally by includes/header.php via
- *                restaurant-csrf-token.php, so this page no longer
- *                generates $_SESSION['restaurant_csrf_token']
- *                inline. It simply includes the header and reads
- *                $csrfToken from it. Behavior is unchanged: the
- *                form's POST field stays named csrf_token, and
- *                sign-in-handler.php still validates against
- *                $_SESSION['restaurant_csrf_token'].
+ * @version 4.1 — Docblock records the per-role session keys this
+ *                page reads, the CSRF key contract it depends on,
+ *                and the branch-lookup readers it relies on. All
+ *                three were preserved by the sequence. No markup,
+ *                form, combo box, or JS config change from the
+ *                previous revision.
  *
- *                (2.1: Uses its own session key, restaurant_csrf_token,
- *                instead of the shared csrf_token. The restaurant,
- *                customer, and rider roles all run on the same PHP
- *                session (same cookie), so a single shared csrf_token
- *                meant that a successful sign-in by one role unset
- *                the token another role's already-rendered form was
- *                relying on.)
+ *                (4.0: removed the dead shared $_SESSION['created']
+ *                pin. 3.0: header now assigns $csrfToken
+ *                unconditionally. 2.1: own session key,
+ *                restaurant_csrf_token.)
  */
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../../shared/includes/session-bootstrap.php';
+fitpal_session_bootstrap('restaurant');
 
 if (!empty($_SESSION['restaurant_account_id'])) {
     header('Location: dashboard.php');
@@ -48,10 +78,6 @@ if (!empty($_SESSION['restaurant_account_id'])) {
 // Never let the browser or bfcache serve a stale copy of this form.
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
-
-// Pin the session's "created" marker to now so header.php's 30-minute
-// rotation check can never fire while the sign-in form is on screen.
-$_SESSION['created'] = time();
 
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../backend/database/restaurant-queries.php';
@@ -195,7 +221,7 @@ unset($_SESSION['login_scope']);
                                 aria-expanded="false" aria-autocomplete="list" aria-controls="branchSuggestions"
                                 disabled>
                             <input type="hidden" id="branch_code" value="">
-                            <button type="button" class="combo-clear" id="branchClear" aria-label="Clear branch"
+                            <button type="button" class="combo-clear" id="branchClear" aria-label="Clear branch" hidden
                                 hidden>&times;</button>
                             <ul class="combo-list" id="branchSuggestions" role="listbox" hidden></ul>
                         </div>

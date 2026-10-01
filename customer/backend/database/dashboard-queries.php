@@ -4,31 +4,54 @@
  *
  * Pure data-access layer for the customer dashboard.
  *
- * DESIGN NOTES
- * ------------
- * - `orders` no longer stores subtotal / delivery_charge / total_amount.
- *   Every total here is derived from queue_item rows
- *   (queue_quantity × COALESCE(final_price, unit_price)) plus the fee
- *   schedule in fee-queries.php — same pattern as getOrderTotals().
+ * ---------------------------------------------------------------------
+ * REVENUE RECOGNITION
+ * ---------------------------------------------------------------------
+ * No gross revenue is recognised until an order reaches 'delivered'.
+ * Cancelled, refunded, and failed orders contribute zero to every
+ * spend aggregate below. The `transaction` table still records every
+ * money movement, so an audit can reconcile a refund or a
+ * failed-delivery loss.
  *
- * - The old version fired 5 separate queries inside getDashboardStats().
- *   This version merges them into 2 aggregates:
+ * ---------------------------------------------------------------------
+ * DESIGN NOTES
+ * ---------------------------------------------------------------------
+ * - `orders` no longer stores subtotal / delivery_charge /
+ *   total_amount. Every total here is derived from queue_item rows
+ *   (queue_quantity × COALESCE(final_price, unit_price)) plus the fee
+ *   schedule in shared/backend/database/fee-queries.php — same
+ *   pattern as getOrderTotals() in the shared order-transaction
+ *   layer.
+ *
+ * - The old version fired 5 separate queries inside
+ *   getDashboardStats(). This version merges them into 2 aggregates:
  *       1. order_counts  (total + active)
  *       2. spend_summary (7d, 30d, all-time-delivered + counts)
- *   Wallet balance is a 3rd query but it hits a different table with a
- *   primary-key lookup, so it cannot be folded in without a JOIN that
- *   would scan orders unnecessarily.
+ *   Wallet balance is a 3rd query but it hits a different table with
+ *   a primary-key lookup, so it cannot be folded in without a JOIN
+ *   that would scan orders unnecessarily.
  *
  * - Single source of truth for "what counts as spend":
- *       order_status NOT IN ('cancelled','refunded')
+ *       order_status NOT IN ('cancelled','refunded','failed')
  *
  * @package FitPal
- * @version 2.0 — Consolidated aggregates; nicer chart scale support.
+ * @version 3.0 — Requires the shared fee schedule from
+ *                shared/backend/database/fee-queries.php. The
+ *                previous revision required the customer-scoped copy
+ *                at customer/backend/database/fee-queries.php, which
+ *                has been removed. The two functions this file
+ *                calls — calculateOrderFees() and the FITPAL_*
+ *                constants — are declared in exactly the same shape
+ *                at the shared path, so no call site in this file
+ *                changes.
+ *
+ *                (2.0: consolidated aggregates; nicer chart scale
+ *                support.)
  */
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/fee-queries.php';
+require_once __DIR__ . '/../../../shared/backend/database/fee-queries.php';
 
 /**
  * One round-trip for order counts and wallet balance.
@@ -40,7 +63,7 @@ function getDashboardCounts(PDO $db, int $customerId): array
     $stmt = $db->prepare(
         "SELECT
             COUNT(*) AS total_orders,
-            SUM(CASE WHEN order_status IN ('pending','preparing','delivering')
+            SUM(CASE WHEN order_status IN ('pending','preparing','rider_pending','picking_up','delivering')
                      THEN 1 ELSE 0 END) AS active_orders
          FROM orders
          WHERE customer_id = :cid"
@@ -85,24 +108,24 @@ function getDashboardSpendSummary(PDO $db, int $customerId): array
     $stmt = $db->prepare(
         "SELECT
             COALESCE(SUM(CASE
-                WHEN o.order_status NOT IN ('cancelled','refunded')
+                WHEN o.order_status NOT IN ('cancelled','refunded','failed')
                  AND o.order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
                 THEN qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
                 ELSE 0 END), 0) AS weekly_spend,
 
             COUNT(DISTINCT CASE
-                WHEN o.order_status NOT IN ('cancelled','refunded')
+                WHEN o.order_status NOT IN ('cancelled','refunded','failed')
                  AND o.order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
                 THEN o.order_id END) AS weekly_order_count,
 
             COALESCE(SUM(CASE
-                WHEN o.order_status NOT IN ('cancelled','refunded')
+                WHEN o.order_status NOT IN ('cancelled','refunded','failed')
                  AND o.order_date >= DATE_SUB(CURDATE(), INTERVAL 29 DAY)
                 THEN qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
                 ELSE 0 END), 0) AS monthly_spend,
 
             COUNT(DISTINCT CASE
-                WHEN o.order_status NOT IN ('cancelled','refunded')
+                WHEN o.order_status NOT IN ('cancelled','refunded','failed')
                  AND o.order_date >= DATE_SUB(CURDATE(), INTERVAL 29 DAY)
                 THEN o.order_id END) AS monthly_order_count,
 
@@ -152,7 +175,7 @@ function getWeeklySpendingSeries(PDO $db, int $customerId, int $days = 7): array
          FROM orders o
          JOIN queue_item qi ON qi.order_id = o.order_id
          WHERE o.customer_id = :cid
-           AND o.order_status NOT IN ('cancelled','refunded')
+           AND o.order_status NOT IN ('cancelled','refunded','failed')
            AND o.order_date >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
          GROUP BY DATE(o.order_date)
          ORDER BY day ASC"
@@ -173,8 +196,8 @@ function getWeeklySpendingSeries(PDO $db, int $customerId, int $days = 7): array
         $date = date('Y-m-d', $ts);
         $series[] = [
             'date'   => $date,
-            'label'  => date('l', $ts),     // "Thursday"
-            'short'  => date('D', $ts),     // "Thu"
+            'label'  => date('l', $ts),
+            'short'  => date('D', $ts),
             'amount' => $byDay[$date] ?? 0.0,
         ];
     }
@@ -269,7 +292,6 @@ function getDashboardProfileSnapshot(PDO $db, int $customerId): array
  */
 function getChartScale(float $maxAmount): array
 {
-    // Empty data — still show a useful floor so the chart renders a baseline.
     if ($maxAmount <= 0) {
         return [
             'ceiling'   => 100.0,
@@ -278,9 +300,8 @@ function getChartScale(float $maxAmount): array
         ];
     }
 
-    // Choose a step from a short ladder, aiming for 4–5 gridlines.
-    $magnitude = 10 ** floor(log10($maxAmount));
-    $normalized = $maxAmount / $magnitude; // 1.0 – 9.99
+    $magnitude  = 10 ** floor(log10($maxAmount));
+    $normalized = $maxAmount / $magnitude;
 
     $stepMultiplier = match (true) {
         $normalized <= 1.5 => 0.25,
@@ -292,7 +313,6 @@ function getChartScale(float $maxAmount): array
     $step    = $magnitude * $stepMultiplier;
     $ceiling = ceil($maxAmount / $step) * $step;
 
-    // Guarantee at least 2x headroom so a single purchase never fills the chart.
     if ($ceiling < $maxAmount * 2) {
         $ceiling += $step;
     }

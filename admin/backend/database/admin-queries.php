@@ -9,44 +9,74 @@
  *
  * No $_POST, no header(), no echo.
  *
- * Pagination contract (every paginated read follows this):
+ * ---------------------------------------------------------------------
+ * PAGINATION CONTRACT
+ * ---------------------------------------------------------------------
+ * Every paginated read follows this:
  *   1. Count query with the same WHERE clause as the data query.
  *   2. Data query with LIMIT/OFFSET bound as integers.
- *   3. Return ['rows' => [...], 'total' => N, 'page' => P, 'perPage' => L, 'totalPages' => T].
+ *   3. Return {rows, total, page, perPage, totalPages}.
  *
  * Default page size is 5 across every list.
  *
- * Dashboard analytics
- * -------------------
- * Four readers back the dashboard's chart tabs:
+ * ---------------------------------------------------------------------
+ * REVENUE RECOGNITION
+ * ---------------------------------------------------------------------
+ * No gross revenue is recognised until an order reaches 'delivered'.
+ * Every revenue aggregate in this file excludes orders whose status
+ * is 'cancelled', 'refunded', or 'failed'. The three excluded
+ * statuses each represent a closed order that never produced
+ * deliverable food revenue:
  *
- *   getAdminDashboardStats()    high-level counts + gross revenue
- *   getAdminWeeklyRevenue()     7-day GMV + fee series
- *   getAdminWeeklyFeeBreakdown() 7-day fee-bucket series
- *   getAdminWeeklyOrders()      7-day order count by payment method
- *   getAdminTopRestaurants()    top restaurants by GMV
- *   getAdminTopRiders()         top riders by completed deliveries
+ *     cancelled  customer or restaurant cancelled before pickup
+ *     refunded   same, with money moved back to the customer
+ *     failed     rider did not complete the delivery in time
  *
- * Every total is computed from queue_item + the fee schedule in
- * customer/backend/database/fee-queries.php. The orders table itself
- * no longer stores subtotal, delivery_charge, total_amount, or any
- * of the fee fields, so the analytics view has to re-derive them
- * from the current fee constants. The constants are loaded here so
- * the dashboard, the checkout page, and createOrderFromQueue() all
- * agree on the same numbers.
+ * The 'failed' status was added by the shared order-transaction
+ * layer's sweepFailedDeliveries() and must be excluded from every
+ * revenue reader so the admin's platform-revenue view agrees with
+ * the customer and restaurant views.
+ *
+ * Operational counts (active_orders, orders_today, per-status
+ * buckets in the fees/orders series) keep their own status filters,
+ * because those readers answer "how many orders are in this state"
+ * rather than "how much money did we make".
+ *
+ * ---------------------------------------------------------------------
+ * FEE SCHEDULE
+ * ---------------------------------------------------------------------
+ * Every total is computed from queue_item + the fee schedule, which
+ * now lives at:
+ *
+ *     shared/backend/database/fee-queries.php
+ *
+ * The customer, restaurant, and rider roles all require the same
+ * shared file, so the numbers the admin dashboard shows and the
+ * numbers the customer sees are guaranteed to come from the same
+ * constants.
  *
  * @package FitPal
- * @version 9.0 — Adds four analytics readers for the dashboard's
- *                chart tabs. All existing readers are unchanged.
+ * @version 10.0 — Requires the shared fee schedule from
+ *                 shared/backend/database/fee-queries.php.
  *
- *                (8.0: merged dashboard order scans; added
- *                $withTotal to paginated readers. 7.0: added
- *                admin profile picture functions. 6.0: added
- *                getRestaurantPermits().)
+ *                 Revenue aggregates widened to exclude 'failed'
+ *                 alongside 'cancelled' and 'refunded':
+ *                   - getAdminDashboardStats
+ *                   - getAdminWeeklyRevenue
+ *                   - getAdminWeeklyFeeBreakdown
+ *                   - getAdminTopRestaurants
+ *
+ *                 getAdminWeeklyOrders is unchanged; it counts
+ *                 orders per status bucket, which is an operational
+ *                 metric, not a revenue one.
+ *
+ *                 (9.0: analytics readers. 8.0: merged dashboard
+ *                 order scans. 7.0: admin profile picture
+ *                 functions. 6.0: getRestaurantPermits().)
  */
 declare(strict_types=1);
 
-require_once __DIR__ . '/../../../customer/backend/database/fee-queries.php';
+require_once __DIR__ . '/../../../shared/backend/database/fee-queries.php';
 
 /* =============================================================
  * PAGINATION HELPER
@@ -232,6 +262,7 @@ function getAdminDashboardStats(PDO $db): array
         'delivered_orders'     => 0,
         'cancelled_orders'     => 0,
         'refunded_orders'      => 0,
+        'failed_orders'        => 0,
         'gross_merchandise_value' => 0.0,
         'platform_revenue'     => 0.0,
         'revenue_this_week'    => 0.0,
@@ -259,7 +290,9 @@ function getAdminDashboardStats(PDO $db): array
     $stats['pending_riders']       = (int)($entityRow['pending_riders'] ?? 0);
 
     // One scan of orders+queue_item produces every order and revenue
-    // aggregate the dashboard needs.
+    // aggregate the dashboard needs. Revenue filters exclude the
+    // three closed statuses (cancelled, refunded, failed) — see the
+    // file header for the revenue-recognition rule.
     $orderRow = $db->query(
         "SELECT
             COUNT(DISTINCT o.order_id) AS total_orders,
@@ -281,22 +314,25 @@ function getAdminDashboardStats(PDO $db): array
             COUNT(DISTINCT CASE
                 WHEN o.order_status = 'refunded'
                 THEN o.order_id END) AS refunded_orders,
+            COUNT(DISTINCT CASE
+                WHEN o.order_status = 'failed'
+                THEN o.order_id END) AS failed_orders,
             COALESCE(SUM(CASE
-                WHEN o.order_status NOT IN ('cancelled','refunded')
+                WHEN o.order_status NOT IN ('cancelled','refunded','failed')
                 THEN qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
                 ELSE 0 END), 0) AS gross_merchandise_value,
             COALESCE(SUM(CASE
-                WHEN o.order_status NOT IN ('cancelled','refunded')
+                WHEN o.order_status NOT IN ('cancelled','refunded','failed')
                  AND o.order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
                 THEN qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
                 ELSE 0 END), 0) AS gmv_this_week,
             COALESCE(SUM(CASE
-                WHEN o.order_status NOT IN ('cancelled','refunded')
+                WHEN o.order_status NOT IN ('cancelled','refunded','failed')
                  AND DATE(o.order_date) = CURDATE()
                 THEN qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)
                 ELSE 0 END), 0) AS gmv_today,
             COUNT(DISTINCT CASE
-                WHEN o.order_status NOT IN ('cancelled','refunded')
+                WHEN o.order_status NOT IN ('cancelled','refunded','failed')
                 THEN o.order_id END) AS billable_orders
          FROM orders o
          LEFT JOIN queue_item qi ON qi.order_id = o.order_id"
@@ -309,6 +345,7 @@ function getAdminDashboardStats(PDO $db): array
     $stats['delivered_orders'] = (int)($orderRow['delivered_orders'] ?? 0);
     $stats['cancelled_orders'] = (int)($orderRow['cancelled_orders'] ?? 0);
     $stats['refunded_orders']  = (int)($orderRow['refunded_orders'] ?? 0);
+    $stats['failed_orders']    = (int)($orderRow['failed_orders'] ?? 0);
 
     $gmv        = (float)($orderRow['gross_merchandise_value'] ?? 0);
     $gmvWeek    = (float)($orderRow['gmv_this_week'] ?? 0);
@@ -318,7 +355,7 @@ function getAdminDashboardStats(PDO $db): array
     $stats['gross_merchandise_value'] = $gmv;
     $stats['average_order_value']     = round($gmv / $billable, 2);
 
-    // Platform revenue = all four fee buckets across non-cancelled
+    // Platform revenue = all four fee buckets across billable
     // orders. Computed with the same constants the checkout page and
     // createOrderFromQueue() use, so the dashboard never disagrees
     // with what the customer was charged.
@@ -341,13 +378,13 @@ function getAdminDashboardStats(PDO $db): array
 /**
  * Compute the platform's take for a given GMV and order count.
  *
- * The fee schedule is defined in fee-queries.php. Because a
- * per-order breakdown by branch count is not available from the
- * aggregate GMV alone, this function applies the base delivery fee
- * and service fee per order, VAT on the GMV, and assumes the
- * average order has 1 branch. Extra-branch surcharges are therefore
- * not modeled here — they only appear in the per-order series used
- * by the Fees tab, where the branch count is available.
+ * The fee schedule is defined in
+ * shared/backend/database/fee-queries.php. Because a per-order
+ * breakdown by branch count is not available from the aggregate GMV
+ * alone, this function applies the base delivery fee and service
+ * fee per order, VAT on the GMV, and assumes the average order has 1
+ * branch. Extra-branch surcharges are therefore not modeled here —
+ * they only appear in the per-order series used by the Fees tab.
  *
  * @param float $gmv
  * @param int   $orderCount
@@ -405,12 +442,11 @@ function getAdminChartScale(float $maxAmount): array
  * Seven-day series of GMV and platform revenue.
  *
  * Each day returns:
- *   gmv              sum of item subtotals for non-cancelled orders
+ *   gmv              sum of item subtotals for billable orders
  *   platform_fees    base delivery + service + VAT (no extra branch)
  *   orders           distinct order count for that day
  *
- * Days with no orders are included with zeroed values, so the chart
- * always has exactly $days bars.
+ * Days with no orders are included with zeroed values.
  */
 function getAdminWeeklyRevenue(PDO $db, int $days = 7): array
 {
@@ -425,7 +461,7 @@ function getAdminWeeklyRevenue(PDO $db, int $days = 7): array
             COUNT(DISTINCT o.order_id) AS orders
          FROM orders o
          JOIN queue_item qi ON qi.order_id = o.order_id
-         WHERE o.order_status NOT IN ('cancelled', 'refunded')
+         WHERE o.order_status NOT IN ('cancelled', 'refunded', 'failed')
            AND o.order_date >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
          GROUP BY DATE(o.order_date)
          ORDER BY day ASC"
@@ -470,17 +506,11 @@ function getAdminWeeklyRevenue(PDO $db, int $days = 7): array
  *   extra_branches   FITPAL_DELIVERY_EXTRA_PER_BRANCH × extra branches
  *   service_fee      FITPAL_SERVICE_FEE × distinct orders
  *   vat              FITPAL_VAT_RATE × GMV
- *
- * The extra-branch surcharge is per order for each branch beyond the
- * first. It is computed here as
- *   (branch_count_for_order - 1) × FITPAL_DELIVERY_EXTRA_PER_BRANCH
- * summed across the day's orders.
  */
 function getAdminWeeklyFeeBreakdown(PDO $db, int $days = 7): array
 {
     $days = max(1, min(30, $days));
 
-    // Per-order branch counts, one row per day.
     $stmt = $db->prepare(
         "SELECT
             DATE(o.order_date) AS day,
@@ -491,7 +521,7 @@ function getAdminWeeklyFeeBreakdown(PDO $db, int $days = 7): array
             ), 0) AS order_gmv
          FROM orders o
          JOIN queue_item qi ON qi.order_id = o.order_id
-         WHERE o.order_status NOT IN ('cancelled', 'refunded')
+         WHERE o.order_status NOT IN ('cancelled', 'refunded', 'failed')
            AND o.order_date >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
          GROUP BY DATE(o.order_date), o.order_id
          ORDER BY day ASC"
@@ -558,6 +588,11 @@ function getAdminWeeklyFeeBreakdown(PDO $db, int $days = 7): array
 
 /**
  * Seven-day series of order counts by payment method.
+ *
+ * This is an operational reader, not a revenue reader, so its
+ * delivered/cancelled buckets keep their own filters. The 'failed'
+ * bucket is deliberately not folded into 'cancelled' here; it is a
+ * distinct outcome the admin may want to see.
  */
 function getAdminWeeklyOrders(PDO $db, int $days = 7): array
 {
@@ -570,7 +605,8 @@ function getAdminWeeklyOrders(PDO $db, int $days = 7): array
             SUM(CASE WHEN payment_method = 'Wallet' THEN 1 ELSE 0 END) AS wallet,
             SUM(CASE WHEN payment_method = 'Online' THEN 1 ELSE 0 END) AS online,
             SUM(CASE WHEN order_status = 'delivered' THEN 1 ELSE 0 END) AS delivered,
-            SUM(CASE WHEN order_status IN ('cancelled','refunded') THEN 1 ELSE 0 END) AS cancelled,
+            SUM(CASE WHEN order_status IN ('cancelled','refunded','failed') THEN 1 ELSE 0 END) AS cancelled,
+            SUM(CASE WHEN order_status = 'failed' THEN 1 ELSE 0 END) AS failed,
             COUNT(*) AS total
          FROM orders
          WHERE order_date >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
@@ -595,6 +631,7 @@ function getAdminWeeklyOrders(PDO $db, int $days = 7): array
             'online'    => 0,
             'delivered' => 0,
             'cancelled' => 0,
+            'failed'    => 0,
             'total'     => 0,
         ];
 
@@ -607,6 +644,7 @@ function getAdminWeeklyOrders(PDO $db, int $days = 7): array
             'online'    => (int)$row['online'],
             'delivered' => (int)$row['delivered'],
             'cancelled' => (int)$row['cancelled'],
+            'failed'    => (int)($row['failed'] ?? 0),
             'total'     => (int)$row['total'],
         ];
     }
@@ -614,7 +652,7 @@ function getAdminWeeklyOrders(PDO $db, int $days = 7): array
 }
 
 /**
- * Top restaurants by GMV across non-cancelled orders.
+ * Top restaurants by GMV across billable orders.
  *
  * @param int $limit
  * @return array<int, array{
@@ -641,7 +679,7 @@ function getAdminTopRestaurants(PDO $db, int $limit = 5): array
          JOIN restaurant_branch rb ON rb.restaurant_id = r.restaurant_id
          JOIN queue_item qi ON qi.branch_id = rb.restaurant_branch_id
          JOIN orders o ON o.order_id = qi.order_id
-         WHERE o.order_status NOT IN ('cancelled', 'refunded')
+         WHERE o.order_status NOT IN ('cancelled', 'refunded', 'failed')
          GROUP BY r.restaurant_id, r.business_name
          ORDER BY gmv DESC
          LIMIT :lim"
@@ -1407,6 +1445,7 @@ function adminOrderStatusBadgeClass(string $status): string
         'delivered'  => 'badge-success',
         'cancelled'  => 'badge-danger',
         'refunded'   => 'badge-secondary',
+        'failed'     => 'badge-danger',
         default      => 'badge-secondary',
     };
 }
@@ -1422,6 +1461,7 @@ function adminOrderStatusLabel(string $status): string
         'delivered'  => 'Delivered',
         'cancelled'  => 'Cancelled',
         'refunded'   => 'Refunded',
+        'failed'     => 'Failed',
         default      => ucfirst($status),
     };
 }
