@@ -45,19 +45,36 @@
  * (name, image, stock, restaurant_name, branch_name) that the menu
  * page's queue panel renders but that the shared layer ignores.
  *
- * If the queue line shape ever changes, this file and
- * shared/backend/database/order-transaction-queries.php must change
- * together: a field the shared layer reads but the writer does not
- * produce will silently drop that line at order-placement time, and
- * a field the writer produces but the shared layer does not read is
- * just dead weight on the session.
+ * ---------------------------------------------------------------------
+ * IMAGE URL RESOLUTION
+ * ---------------------------------------------------------------------
+ * The cart row carries the raw dietary_information.images value in
+ * `product_image`. That raw value is NOT a browser-loadable URL — it
+ * is a project-root-relative folder path that may omit the literal
+ * `restaurant/` segment the manifest folder actually carries.
  *
- * The queue line's `line_key` is a hash of the product id plus the
- * raw customization JSON. Two cart rows with the same product but
- * different customizations therefore never merge into one queue
- * line, matching the cart table's own
- * unique_cart_item (customer_id, product_id, customization_hash)
- * constraint.
+ * The previous revision of this file copied the raw value into the
+ * queue line's `image` field, which meant the checkout page and the
+ * queue panel (after a reload that re-read the queue from the
+ * session) rendered a broken image or fell back to the restaurant
+ * icon. The queue had a valid image when it was created by
+ * queue-handler.php's `add` action (which routes through
+ * queueEnrich()), but not when it was created by push_to_queue.
+ *
+ * This revision resolves the raw value through the same helper that
+ * queueEnrich() uses:
+ *
+ *     resolveCartImageForQueue()
+ *
+ * That helper delegates to getProductImageBasePath() and
+ * getProductPrimaryFilename() from product-queries.php, then
+ * prepends the project-root URL derived from the current request.
+ * The queue line's `image` field is therefore always a browser-
+ * loadable URL, regardless of which path created the line.
+ *
+ * When the folder cannot be resolved, the helper returns an empty
+ * string. The checkout page and the queue panel already fall back
+ * to the shared restaurant icon in that case.
  *
  * ---------------------------------------------------------------------
  * PER-ROLE SESSION MODEL
@@ -68,17 +85,24 @@
  * customer session and guaranteed to be the customer's own.
  *
  * @package FitPal
- * @version 8.0 — Docblock records the queue shape contract against
- *                the shared order-transaction layer. No behavioural
- *                change: the action set, the JSON payload fields,
- *                the merge rules, and the queue write order are
- *                exactly as they were in the previous revision.
+ * @version 9.0 — push_to_queue now resolves the product image into
+ *                a browser-loadable URL through
+ *                resolveCartImageForQueue(), which delegates to the
+ *                same helpers queueEnrich() uses. Queue lines
+ *                written by the cart therefore carry a valid image
+ *                URL, and the checkout page and queue panel render
+ *                the real product image instead of the fallback
+ *                icon.
  *
- *                (7.0: per-role session migration. 6.3:
- *                push_to_queue writes every field
- *                createOrderFromQueue() requires. 6.2: CSRF validated
- *                against customer_csrf_token. 6.1: pure helpers moved
- *                to cart-queries.php.)
+ *                Every other behavior — the action set, the merge
+ *                rules, the field set on the queue line — is
+ *                byte-identical to v8.0.
+ *
+ *                (8.0: docblock records the queue shape contract.
+ *                7.0: per-role session migration. 6.3: push_to_queue
+ *                writes every field createOrderFromQueue() requires.
+ *                6.2: CSRF validated against customer_csrf_token.
+ *                6.1: pure helpers moved to cart-queries.php.)
  */
 
 declare(strict_types=1);
@@ -96,7 +120,7 @@ fitpal_session_bootstrap('customer');
 
 $isAjax = (
     isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
-    strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest'
+    strtolower((string)$_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest'
 );
 
 /**
@@ -164,6 +188,13 @@ if (
 
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/cart-queries.php';
+
+// queue-queries.php is required for its image-resolution helpers.
+// It is safe to include: it only declares functions, it does not
+// dispatch a request, and it re-requires product-queries.php which
+// declares getProductImageBasePath() and
+// getProductPrimaryFilename().
+require_once __DIR__ . '/../database/queue-queries.php';
 
 // ---------------------------------------------------------------------
 // ACTION RESOLUTION
@@ -274,6 +305,51 @@ function computeServerUnitPrice(
     }
 
     return max(0.0, $unitPrice);
+}
+
+/**
+ * Resolve a cart row's raw dietary_information.images value into a
+ * browser-loadable URL for the session queue line.
+ *
+ * Delegates to the helpers in product-queries.php:
+ *
+ *     getProductImageBasePath()    resolves the folder
+ *     getProductPrimaryFilename()  finds the first image file
+ *
+ * The project-root URL prefix is derived from the current request's
+ * script depth, matching what queueEnrich() does. The result is the
+ * same URL that queueEnrich() would produce for the same product,
+ * so a queue line written by the cart and a queue line written by
+ * the menu page's "Add to Order" button carry identical image
+ * fields.
+ *
+ * Returns an empty string when the folder cannot be resolved. The
+ * checkout page and queue panel fall back to the restaurant icon
+ * in that case.
+ *
+ * @param string $rawPath  Raw dietary_information.images value.
+ * @return string
+ */
+function resolveCartImageForQueue(string $rawPath): string
+{
+    if ($rawPath === '') {
+        return '';
+    }
+
+    $imageBase    = getProductImageBasePath($rawPath);
+    $primaryImage = getProductPrimaryFilename($rawPath);
+
+    if ($imageBase === '' || $primaryImage === '') {
+        return '';
+    }
+
+    $projectRootUrl = queueProjectRootUrl();
+
+    if ($projectRootUrl === '') {
+        return '';
+    }
+
+    return $projectRootUrl . $imageBase . $primaryImage;
 }
 
 /* -----------------------------------------------------------------
@@ -453,12 +529,21 @@ function handleGetCount(PDO $db, int $customerId): void
  *   price                  float  effective unit price (server-authoritative)
  *   base_price             float  product base price
  *   quantity               int    capped at product stock
- *   image                  string project-relative or absolute path
+ *   image                  string browser-loadable URL
  *   stock                  int
  *   restaurant_branch_id   int    required by createOrderFromQueue()
  *   restaurant_name        string
  *   branch_name            string
  *   customization_data     string|null  raw JSON from cart.customization_data
+ *
+ * Image field
+ * -----------
+ * The `image` field is a browser-loadable URL produced by
+ * resolveCartImageForQueue(), not the raw dietary_information.images
+ * value the cart row carries. This matches what queueEnrich()
+ * produces for a queue line added via the menu page, so a queue
+ * line's image renders identically regardless of which page added
+ * it.
  *
  * Merge rule
  * ----------
@@ -535,6 +620,12 @@ function handlePushToQueue(PDO $db, int $customerId, bool $isAjax): void
 
         $lineKey = 'p::' . $productId . '::' . sha1((string)($row['customization_data'] ?? ''));
 
+        // Resolve the raw image path into a browser-loadable URL.
+        // This is the fix: the previous revision copied the raw
+        // dietary_information.images value into the queue line, which
+        // the checkout page and queue panel could not render.
+        $imageUrl = resolveCartImageForQueue((string)($row['product_image'] ?? ''));
+
         $newLine = [
             'line_key'             => $lineKey,
             'product_id'           => $productId,
@@ -542,7 +633,7 @@ function handlePushToQueue(PDO $db, int $customerId, bool $isAjax): void
             'price'                => (float)($row['price'] ?? 0),
             'base_price'           => (float)($row['base_price'] ?? 0),
             'quantity'             => $quantity,
-            'image'                => (string)($row['product_image'] ?? ''),
+            'image'                => $imageUrl,
             'stock'                => $stock,
             'restaurant_branch_id' => $branchId,
             'restaurant_name'      => (string)($row['business_name'] ?? ''),

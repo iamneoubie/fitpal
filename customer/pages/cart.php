@@ -8,6 +8,23 @@
  * The cart never holds money and never writes a ledger row.
  *
  * ---------------------------------------------------------------------
+ * PRODUCT IMAGES
+ * ---------------------------------------------------------------------
+ * The raw dietary_information.images value stored on each product is
+ * resolved into a browser-loadable URL by resolveCartImageUrl()
+ * below, which delegates to the helpers in product-queries.php:
+ *
+ *     getProductImageBasePath()    resolves the folder
+ *     getProductPrimaryFilename()  finds the first image file
+ *
+ * The project-root URL prefix is derived from the current page's
+ * asset base, so the URL is correct regardless of deployment depth.
+ *
+ * When the folder cannot be resolved, or contains no image file,
+ * the function returns the shared restaurant icon so the customer
+ * always sees a picture rather than a broken image.
+ *
+ * ---------------------------------------------------------------------
  * WHERE THE MONEY MOVEMENT GOES FROM HERE
  * ---------------------------------------------------------------------
  * This page's one write action is "Add to Order", which submits the
@@ -45,14 +62,6 @@
  *                                    URL is set by window.FITPAL_CART
  *                                    for the item-level AJAX)
  *
- * The item-level AJAX endpoint is read by cart.js from its own
- * window.FITPAL_CART config or falls back to cart-handler.php. The
- * push-to-queue form's action is set directly in the markup. Both
- * point at the same file, which exists on disk and was not renamed.
- *
- * This page does not reference order-handler.php or any other
- * retired filename.
- *
  * ---------------------------------------------------------------------
  * SCOPE RULES APPLIED
  * ---------------------------------------------------------------------
@@ -70,25 +79,15 @@
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 4.0 — Handler targets verified against the tree.
+ * @version 5.0 — Cart item images now resolve through
+ *                resolveCartImageUrl(), which delegates to the
+ *                helpers in product-queries.php. The raw column
+ *                value is no longer used directly as an image src.
  *
- *                #cartPushToQueueForm's action is
- *                ../backend/handlers/cart-handler.php. The item-
- *                level AJAX endpoint is read by cart.js from its
- *                own window.FITPAL_CART config, which this page
- *                publishes in the trailing <script> block; the
- *                fallback in cart.js names the same file.
- *
- *                Every other line — the empty-state block, the
- *                available-items section, the unavailable-items
- *                section, the pagination block, the summary, and
- *                the remove-item modal — is byte-identical to the
- *                previous revision.
- *
- *                (3.6: docblock records the money-flow path from
- *                the cart into the shared order-transaction
- *                layer. 3.5: CSRF token inherited from
- *                header.php; local generation removed.)
+ *                (4.0: handler targets verified. 3.6: docblock
+ *                records the money-flow path. 3.5: CSRF token
+ *                inherited from header.php; local generation
+ *                removed.)
  */
 
 declare(strict_types=1);
@@ -103,6 +102,7 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
 
 require_once __DIR__ . '/../backend/database/customer-connect.php';
 require_once __DIR__ . '/../backend/database/cart-queries.php';
+require_once __DIR__ . '/../backend/database/product-queries.php';
 
 $customerId = (int)$_SESSION['customer_id'];
 $perPage    = 5;
@@ -144,12 +144,47 @@ if ($hasAnyItems) {
 
 $hasAvailable = !empty($availableItems);
 
-function getCartImageUrl(string $mediaPath, string $assetBase): string
+/**
+ * Build the browser-loadable URL for a cart item's product image.
+ *
+ * The raw dietary_information.images value is resolved through the
+ * helpers in product-queries.php. The project-root URL prefix is
+ * derived from the page's own $assetBase so the returned URL is
+ * correct at any deployment depth.
+ *
+ * Returns the shared restaurant icon when the folder cannot be
+ * resolved, when the folder contains no image file, or when the
+ * raw path is empty.
+ *
+ * @param string $rawPath  Raw dietary_information.images value.
+ * @param string $assetBase The page's asset base, ending in 'shared/'.
+ * @return string A browser-loadable URL.
+ */
+function resolveCartImageUrl(string $rawPath, string $assetBase): string
 {
-    if ($mediaPath === '') {
-        return $assetBase . 'assets/images/icons/restaurant.svg';
+    $fallback = $assetBase . 'assets/images/icons/restaurant.svg';
+
+    if ($rawPath === '') {
+        return $fallback;
     }
-    return htmlspecialchars($mediaPath, ENT_QUOTES, 'UTF-8');
+
+    $imageBase    = getProductImageBasePath($rawPath);
+    $primaryImage = getProductPrimaryFilename($rawPath);
+
+    if ($imageBase === '' || $primaryImage === '') {
+        return $fallback;
+    }
+
+    // Trim the trailing 'shared/' off the asset base to get the
+    // project-root URL prefix, then append the resolved folder and
+    // the filename.
+    $projectRootUrl = preg_replace('#shared/$#', '', $assetBase);
+
+    if (!is_string($projectRootUrl) || $projectRootUrl === '') {
+        return $fallback;
+    }
+
+    return $projectRootUrl . $imageBase . $primaryImage;
 }
 
 function formatCurrency(float|string|null $amount): string
@@ -239,7 +274,13 @@ require_once __DIR__ . '/../includes/header.php';
                         $price        = (float)$item['price'];
                         $stock        = (int)$item['stock'];
                         $itemSubtotal = $price * $quantity;
-                        $imageUrl     = getCartImageUrl($item['product_image'] ?? '', $assetBase);
+
+                        // Resolve the full image URL from the raw
+                        // dietary_information.images value.
+                        $imageUrl = resolveCartImageUrl(
+                            (string)($item['product_image'] ?? ''),
+                            $assetBase
+                        );
 
                         $breakdown  = getCartCustomizationBreakdown($item);
                         $hasCustoms = !empty($breakdown['modifications']);
@@ -258,7 +299,7 @@ require_once __DIR__ . '/../includes/header.php';
                         </div>
 
                         <div class="cart-item-image">
-                            <img src="<?php echo $imageUrl; ?>"
+                            <img src="<?php echo htmlspecialchars($imageUrl, ENT_QUOTES, 'UTF-8'); ?>"
                                 alt="<?php echo htmlspecialchars($item['name'], ENT_QUOTES, 'UTF-8'); ?>"
                                 onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/restaurant.svg'">
                         </div>
@@ -385,7 +426,11 @@ require_once __DIR__ . '/../includes/header.php';
                     <?php foreach ($unavailableItems as $item):
                         $cartId    = (int)$item['cart_id'];
                         $reason    = ((int)$item['is_active'] === 1) ? 'Out of Stock' : 'Product Unavailable';
-                        $imageUrl  = getCartImageUrl($item['product_image'] ?? '', $assetBase);
+
+                        $imageUrl = resolveCartImageUrl(
+                            (string)($item['product_image'] ?? ''),
+                            $assetBase
+                        );
                     ?>
                     <div class="cart-item cart-item-unavailable" data-cart-id="<?php echo $cartId; ?>">
                         <div class="cart-item-select">
@@ -396,7 +441,7 @@ require_once __DIR__ . '/../includes/header.php';
                         </div>
 
                         <div class="cart-item-image">
-                            <img src="<?php echo $imageUrl; ?>"
+                            <img src="<?php echo htmlspecialchars($imageUrl, ENT_QUOTES, 'UTF-8'); ?>"
                                 alt="<?php echo htmlspecialchars($item['name'], ENT_QUOTES, 'UTF-8'); ?>"
                                 onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/restaurant.svg'">
                         </div>

@@ -3,25 +3,99 @@
  * FitPal Product Queries
  *
  * Pure data-access layer for product, product_composition, and
- * dietary_information. No $_POST, no header(), no echo.
+ * dietary_information. No $_POST, no header(), no echo, no session
+ * read, no URL prefixing.
+ *
+ * ---------------------------------------------------------------------
+ * MULTI-IMAGE MODEL
+ * ---------------------------------------------------------------------
+ * dietary_information.images stores a project-root-relative FOLDER
+ * path. On this deployment the column value omits the literal
+ * `restaurant/` segment that the manifest folder actually carries:
+ *
+ *     column value:  shared/assets/images/manifest/products/<resto>/<slug>/
+ *     disk folder:   shared/assets/images/manifest/products/restaurant/<resto>/<slug>/
+ *
+ * The reader resolves the column value against a candidate list of
+ * roots and returns the first candidate that is a directory. The
+ * absolute directory it found is exposed to callers as the
+ * `image_base` field — a project-root-relative folder path that the
+ * page appends a filename to, then prepends its own project-root
+ * URL to.
+ *
+ * The page's URL is therefore built from the folder the reader
+ * actually resolved, not from the raw column value. That is what
+ * makes the browser request match a real file on disk.
+ *
+ * ---------------------------------------------------------------------
+ * CANDIDATE ORDER
+ * ---------------------------------------------------------------------
+ * For a column value `$folder`, resolveProductImageDir() tries:
+ *
+ *   1. $projectRoot . '/' . $folder
+ *         The value as stored. Correct when the column already names
+ *         a real on-disk folder.
+ *
+ *   2. $projectRoot . '/shared/assets/images/manifest/products/restaurant/' . $tail
+ *         The manifest root that actually exists. $tail is the last
+ *         two path segments of $folder. Covers the seed data's
+ *         `<resto>/<slug>` shape.
+ *
+ *   3. $projectRoot . '/shared/uploads/restaurant/' . $tail
+ *         The future runtime upload root. Covers a future
+ *         `<branch>/<product_id>` shape.
+ *
+ * Adding a fourth root is a change to one array.
+ *
+ * ---------------------------------------------------------------------
+ * RETURN SHAPE
+ * ---------------------------------------------------------------------
+ * Filenames are BARE. Folder paths are project-root-relative. The
+ * page concatenates:
+ *
+ *     $assetBase (minus trailing 'shared/') . $image_base . $filename
+ *
+ * exactly the way customer/pages/profile.php builds the avatar URL
+ * from customer_profile.profile_picture.
+ *
+ * ---------------------------------------------------------------------
+ * FALLBACK
+ * ---------------------------------------------------------------------
+ * A column value whose tail does not resolve under any root yields
+ * an empty `image_base`, an empty `primary_image`, and an empty
+ * `product_images` array. Every caller in the tree already falls
+ * back to shared/assets/images/icons/restaurant.svg in that case.
  *
  * @package FitPal
- * @version 5.4 — No behavioural change. The docblock on
- *                getProductReviews() now states that callers who
- *                want client-side paging should pass a limit large
- *                enough to cover the page's expected total (the
- *                product detail page passes 50).
+ * @version 8.0 — Adds getProductImageBasePath() and exposes it to
+ *                callers as the `image_base` field on every read
+ *                shape. The pages now build the browser URL from
+ *                the folder the reader actually resolved, instead
+ *                of from the raw column value. This is what makes
+ *                the browser request match a file on disk when the
+ *                column omits the `restaurant/` segment.
  *
- *                (5.3: getProductReviews decodes the comment
- *                envelope and joins customer_profile. 5.2: added
- *                getProductReviews(). 5.1: removed stale
- *                `max_quantity_per_item` reference.)
+ *                (7.0: candidate-list resolution. 6.2: depth
+ *                correction. 6.0: multi-image read support.
+ *                5.2: reviews reader added.)
  */
 
 declare(strict_types=1);
 
+/* =============================================================
+ * SINGLE PRODUCT
+ * ============================================================= */
+
 /**
- * Get a single product by ID with full details and customization rules.
+ * Get a single product by ID with full details, customization
+ * rules, and the ordered list of its image filenames.
+ *
+ * Return shape adds three image-related keys:
+ *   image           raw dietary_information.images value
+ *   image_base      project-root-relative folder the reader
+ *                   resolved, or '' when nothing matched
+ *   product_images  ordered list of bare filenames inside that
+ *                   folder, or []
  *
  * @param PDO $db
  * @param int $productId
@@ -65,12 +139,25 @@ function getProductById(PDO $db, int $productId): ?array
     );
     $stmt->execute([':product_id' => $productId]);
     $product = $stmt->fetch(PDO::FETCH_ASSOC);
-    return $product ?: null;
+    if (!$product) {
+        return null;
+    }
+
+    $folder = (string)($product['product_image'] ?? '');
+
+    $product['image_base']     = getProductImageBasePath($folder);
+    $product['product_images'] = getProductImageFilenames($folder);
+
+    return $product;
 }
+
+/* =============================================================
+ * CUSTOMIZATION RULES
+ * ============================================================= */
 
 /**
  * Fetch customization components for a product and group them into
- * presentation-ready shapes (static / choice / choice / modifier / multi).
+ * presentation-ready shapes (static / choice / modifier / multi).
  *
  * @param PDO $db
  * @param int $productId
@@ -204,8 +291,19 @@ function getProductComponentsGrouped(PDO $db, int $productId): array
     return $components;
 }
 
+/* =============================================================
+ * MENU LISTING
+ * ============================================================= */
+
 /**
  * Get menu data with pagination.
+ *
+ * Each product in the response carries:
+ *   image          raw dietary_information.images value (unchanged)
+ *   image_base     project-root-relative folder the reader resolved
+ *   primary_image  first image-*.{ext} filename inside that folder
+ *
+ * The page builds the browser URL from image_base, not from image.
  *
  * @param PDO $db
  * @param int $page
@@ -389,13 +487,18 @@ function getMenuDataPaginated(
                 'products' => []
             ];
         }
+
+        $folder = (string)($product['product_image'] ?? '');
+
         $restaurants[$restId]['branches'][$branchId]['products'][] = [
             'id' => (int)$product['id'],
             'name' => $product['name'],
             'description' => $product['description'] ?? '',
             'price' => (float)$product['price'],
             'stock' => (int)$product['stock'],
-            'image' => $product['product_image'] ?? '',
+            'image' => $folder,
+            'image_base' => getProductImageBasePath($folder),
+            'primary_image' => getProductPrimaryFilename($folder),
             'calories' => $product['calories'] ?? null,
             'dietary_tags' => $dietaryTags,
             'allergens' => $allergens,
@@ -419,6 +522,10 @@ function getMenuDataPaginated(
         'searchTerm' => $search
     ];
 }
+
+/* =============================================================
+ * FILTER DATA
+ * ============================================================= */
 
 /**
  * Get all distinct allergens from dietary_information.
@@ -478,6 +585,10 @@ function getAllRestaurants(PDO $db): array
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
+/* =============================================================
+ * RELATED PRODUCTS
+ * ============================================================= */
+
 /**
  * Get related products for a product detail page.
  *
@@ -510,8 +621,22 @@ function getRelatedProducts(PDO $db, int $productId, int $branchId, int $limit =
     $stmt->bindValue(':product_id', $productId, PDO::PARAM_INT);
     $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
     $stmt->execute();
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($rows as &$row) {
+        $folder = (string)($row['product_image'] ?? '');
+        $row['image'] = $folder;
+        $row['image_base'] = getProductImageBasePath($folder);
+        $row['primary_image'] = getProductPrimaryFilename($folder);
+    }
+    unset($row);
+
+    return $rows;
 }
+
+/* =============================================================
+ * REVIEWS
+ * ============================================================= */
 
 /**
  * Decode a feedback_content JSON envelope and return the comment
@@ -552,32 +677,6 @@ function productDecodeCommentForSubject(?string $content, string $subjectKey): s
 
 /**
  * Get customer reviews for a product.
- *
- * The path from a product to a review goes through queue_item:
- *
- *     product → queue_item → rating → feedback → customer
- *
- * A `rating` row with rating_type='product' anchors on the queue_item
- * the customer actually received. That queue_item carries the
- * product_id. The `feedback` row that the rating belongs to carries
- * the comment envelope and the author. The `customer` and
- * `customer_profile` rows carry the name and picture to display.
- *
- * The comment the customer wrote for THIS subject is stored inside
- * the envelope as JSON keyed by "product:<queue_item_id>". This
- * function selects the rating row's queue_item_id, decodes the
- * envelope, and returns the string at that key. A review that
- * carried no comment for this product comes back with comment = ''.
- *
- * Paging
- * ------
- * This function returns a flat list. The caller controls how many
- * rows come back through $limit. The product detail page passes a
- * limit large enough to carry the full review set for one product,
- * then splits that list client-side into pages of 5 for the "Load
- * More" button. A product with 12 reviews therefore makes one
- * request of 50 rows, renders 5, and stores the remaining 7 in a
- * data attribute for the client to reveal on demand.
  *
  * @param PDO $db
  * @param int $productId
@@ -648,4 +747,167 @@ function getProductReviews(PDO $db, int $productId, int $limit = 50): array
         ];
     }
     return $out;
+}
+
+/* =============================================================
+ * MULTI-IMAGE READ HELPERS
+ *
+ * Pure. No SQL. No session. No URL prefixing. The page that
+ * renders an <img> prepends its own project-root URL, exactly the
+ * way customer/pages/profile.php resolves profile_picture.
+ * ============================================================= */
+
+/**
+ * Return the ordered list of candidate absolute directories for a
+ * given dietary_information.images value.
+ *
+ * @param string $folderPath
+ * @return array<int, string>
+ */
+function getProductImageCandidateDirs(string $folderPath): array
+{
+    $folderPath = trim($folderPath);
+    if ($folderPath === '') {
+        return [];
+    }
+
+    $folderPath = rtrim(str_replace('\\', '/', $folderPath), '/') . '/';
+
+    $projectRoot = dirname(__DIR__, 3);
+
+    $candidates = [];
+
+    // Candidate 1: the value as stored.
+    $candidates[] = $projectRoot . '/' . ltrim($folderPath, '/');
+
+    // Extract the trailing two path segments.
+    $trimmed = trim($folderPath, '/');
+    $parts   = explode('/', $trimmed);
+    $parts   = array_values(array_filter($parts, static fn($p) => $p !== ''));
+
+    if (count($parts) >= 2) {
+        $tail = $parts[count($parts) - 2] . '/' . $parts[count($parts) - 1] . '/';
+
+        // Candidate 2: manifest layout with the extra `restaurant/` segment.
+        $candidates[] = $projectRoot
+            . '/shared/assets/images/manifest/products/restaurant/'
+            . $tail;
+
+        // Candidate 3: runtime upload root.
+        $candidates[] = $projectRoot . '/shared/uploads/restaurant/' . $tail;
+    }
+
+    return $candidates;
+}
+
+/**
+ * Return the first candidate directory that exists on disk, as an
+ * absolute filesystem path, or '' when none exist.
+ *
+ * @param string $folderPath
+ * @return string
+ */
+function resolveProductImageDir(string $folderPath): string
+{
+    foreach (getProductImageCandidateDirs($folderPath) as $candidate) {
+        if (is_dir($candidate)) {
+            return $candidate;
+        }
+    }
+    return '';
+}
+
+/**
+ * Return the project-root-relative folder path the reader resolved
+ * for a column value, or '' when nothing matched.
+ *
+ * The returned path always begins with `shared/` and always ends
+ * with `/`. The page prepends its own project-root URL (obtained
+ * by trimming the trailing `shared/` off $assetBase) and appends a
+ * bare filename to build the browser URL.
+ *
+ * This is the value that makes the browser request match the folder
+ * that actually exists on disk, regardless of whether the column
+ * value carried the full on-disk prefix.
+ *
+ * @param string $folderPath
+ * @return string
+ */
+function getProductImageBasePath(string $folderPath): string
+{
+    $abs = resolveProductImageDir($folderPath);
+    if ($abs === '') {
+        return '';
+    }
+
+    $projectRoot = dirname(__DIR__, 3);
+
+    // Convert the absolute directory back to a project-root-relative
+    // path with forward slashes and a trailing slash.
+    $normalized = str_replace('\\', '/', $abs);
+    $root       = str_replace('\\', '/', $projectRoot);
+
+    if (stripos($normalized, $root) === 0) {
+        $normalized = substr($normalized, strlen($root));
+    }
+
+    $normalized = ltrim($normalized, '/');
+    if ($normalized === '') {
+        return '';
+    }
+
+    return rtrim($normalized, '/') . '/';
+}
+
+/**
+ * Return the ordered list of image-*.{ext} filenames inside the
+ * folder the reader resolved for a column value.
+ *
+ * Filenames are BARE. Ordering is 1..5, regardless of extension.
+ *
+ * @param string $folderPath
+ * @return array<int, string>
+ */
+function getProductImageFilenames(string $folderPath): array
+{
+    $dir = resolveProductImageDir($folderPath);
+    if ($dir === '') {
+        return [];
+    }
+
+    $filenames = [];
+
+    for ($index = 1; $index <= 5; $index++) {
+        $matches = glob($dir . '/image-' . $index . '.*');
+
+        if (empty($matches)) {
+            continue;
+        }
+
+        $filenames[] = basename($matches[0]);
+    }
+
+    return $filenames;
+}
+
+/**
+ * Return only the FIRST image-*.{ext} filename inside the folder the
+ * reader resolved for a column value, or '' when nothing matched.
+ *
+ * @param string $folderPath
+ * @return string
+ */
+function getProductPrimaryFilename(string $folderPath): string
+{
+    $dir = resolveProductImageDir($folderPath);
+    if ($dir === '') {
+        return '';
+    }
+
+    $matches = glob($dir . '/image-1.*');
+    if (empty($matches)) {
+        return '';
+    }
+
+    return basename($matches[0]);
 }

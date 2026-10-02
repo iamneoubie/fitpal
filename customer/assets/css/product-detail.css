@@ -1,27 +1,38 @@
 /**
  * FitPal Product Detail Page Styles
- * Version 6.0 — Reviews section fixes.
+ * Version 10.4 — Aligns the thumbnail navigation strip's bottom
+ *                edge with the action control form's bottom edge
+ *                on desktop and tablet, by matching the action
+ *                control's total height.
  *
- *                1. .review-item is a two-column grid whose first
- *                   column is 44px. The .review-avatar child now
- *                   carries an explicit aspect-ratio: 1 / 1 so its
- *                   height is derived from its width. Without that
- *                   property the grid cell could collapse the
- *                   circle's height and the avatar appeared as a
- *                   thin sliver instead of a filled circle.
+ *                The action control block is:
+ *                  14px top padding
+ *                + 44px action row A (quantity + total)
+ *                + 10px gap
+ *                + 48px action row B (buttons)
+ *                = 116px tall
  *
- *                2. .reviews-list is a single-column flex
- *                   container at every breakpoint. The previous
- *                   revision added a 2-column grid at
- *                   min-width: 1024px; that rule is removed.
+ *                The thumbnail strip was 48px, sitting at the
+ *                bottom of its grid cell. To bring its top edge
+ *                down to line up with the top of the action row
+ *                buttons, the strip is given a min-height that
+ *                matches the whole action control block, and
+ *                its contents are centered inside it. That
+ *                pushes the buttons' bottom edge to the same
+ *                line as the action form's bottom edge.
  *
- *                3. .reviews-load-more-wrap and .reviews-load-more
- *                   are added for the Load More button.
- *
- *                Every other rule is byte-identical to v5.9.
+ *                (10.3: mobile order fix. 10.2: centered
+ *                thumbnail, bottom-anchored. 10.1: tag sizing.
+ *                10.0: 2x2 grid main step. 9.9: 460px column.
+ *                9.8: 380px column. 9.7: end align — reverted.
+ *                9.6: fixed bottom offset — reverted. 9.5:
+ *                wider left column. 9.4: tightened info. 9.3:
+ *                fixed wrapper render. 9.2: removed sticky.
+ *                9.1: raised interactive controls. 9.0: capped
+ *                preview on tablet and mobile.)
  *
  * @package FitPal
- * @version 6.0
+ * @version 10.4
  */
 
 /* ============================================
@@ -140,6 +151,7 @@
     font-size: var(--font-size-sm);
     font-weight: 500;
     padding: 10px 18px;
+    min-height: 44px;
     border-radius: var(--radius-base);
     transition: none;
     background: #1a1a1a;
@@ -148,6 +160,7 @@
     cursor: pointer;
     white-space: nowrap;
     flex-shrink: 0;
+    box-sizing: border-box;
 }
 
 .back-btn:active {
@@ -156,26 +169,26 @@
 }
 
 .back-btn-icon {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     display: block;
     flex-shrink: 0;
     filter: brightness(0) invert(1);
 }
 
 .customize-step-title {
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-xs);
     font-weight: 600;
     color: var(--text);
     background: var(--white);
-    padding: 8px 16px;
+    padding: 6px 14px;
     border-radius: var(--radius-full);
     box-shadow: var(--shadow-sm);
     white-space: nowrap;
 }
 
 /* ============================================
-   PRODUCT CARD (Main View)
+   PRODUCT DETAIL CARD — 2x2 GRID
    ============================================ */
 .product-detail-card {
     background: var(--white);
@@ -184,23 +197,74 @@
     box-shadow: var(--shadow-sm);
     border: 1px solid var(--gray-100);
     width: 100%;
+    padding: 20px;
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
 }
 
 /* ============================================
-   PRODUCT IMAGE
+   GRID CELL 1: PREVIEW BOX
    ============================================ */
-.product-image-wrapper {
+.preview-box {
     position: relative;
+    width: 100%;
+    padding-bottom: 100%;
+    height: 0;
     background: var(--gray-100);
-    padding: 0;
+    border-radius: var(--radius-base);
     overflow: hidden;
+    cursor: default;
+    box-sizing: content-box;
+    order: 1;
 }
 
+.preview-image {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-color: var(--white);
+    border-radius: var(--radius-base);
+    display: none;
+}
+
+.preview-placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+    background: var(--gray-100);
+    border-radius: var(--radius-base);
+}
+
+.preview-placeholder img {
+    width: 64px;
+    height: 64px;
+    display: block;
+    opacity: 0.45;
+}
+
+/* ============================================
+   LEGACY SINGLE-IMAGE CONTAINER
+   ============================================ */
 .product-image-container {
     position: relative;
     width: 100%;
     padding-bottom: 100%;
     background: var(--gray-100);
+    border-radius: var(--radius-base);
     overflow: hidden;
 }
 
@@ -211,20 +275,25 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+    border-radius: var(--radius-base);
 }
 
+/* ============================================
+   PRODUCT BADGE (out-of-stock, low-stock)
+   ============================================ */
 .product-badge {
     position: absolute;
-    top: 12px;
-    right: 12px;
-    padding: 6px 14px;
+    top: 10px;
+    right: 10px;
+    padding: 4px 10px;
     border-radius: var(--radius-full);
-    font-size: var(--font-size-xs);
+    font-size: 10px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(4px);
+    z-index: 2;
 }
 
 .out-of-stock-badge {
@@ -238,24 +307,25 @@
 }
 
 /* ============================================
-   PRODUCT INFO
+   GRID CELL 2: PRODUCT INFO
    ============================================ */
 .product-info-section {
-    padding: 20px 16px;
     display: flex;
     flex-direction: column;
+    min-width: 0;
+    order: 3;
 }
 
 .product-header {
-    margin-bottom: 16px;
+    margin-bottom: 12px;
 }
 
 .product-title {
-    font-size: var(--font-size-2xl);
+    font-size: 22px;
     font-weight: 700;
     color: var(--text);
     margin: 0 0 6px 0;
-    line-height: 1.2;
+    line-height: 1.25;
     word-wrap: break-word;
 }
 
@@ -263,7 +333,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: var(--font-size-sm);
+    font-size: 13px;
     color: var(--gray-500);
     flex-wrap: wrap;
 }
@@ -282,25 +352,26 @@
    PRICE
    ============================================ */
 .product-price-section {
-    margin-bottom: 16px;
+    margin-bottom: 14px;
     padding: 12px 16px;
     background: var(--gray-50);
     border-radius: var(--radius-base);
     border: 1px solid var(--gray-100);
     display: flex;
     align-items: baseline;
-    gap: 12px;
+    gap: 10px;
     flex-wrap: wrap;
 }
 
 .product-price-large {
-    font-size: var(--font-size-3xl);
+    font-size: 26px;
     font-weight: 700;
     color: var(--text);
+    line-height: 1.15;
 }
 
 .price-note {
-    font-size: var(--font-size-xs);
+    font-size: 12px;
     color: var(--gray-500);
 }
 
@@ -308,10 +379,10 @@
    SECTION LABELS
    ============================================ */
 .section-label {
-    font-size: var(--font-size-sm);
+    font-size: 12px;
     font-weight: 600;
     color: var(--gray-700);
-    margin: 0 0 8px 0;
+    margin: 0 0 6px 0;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -320,15 +391,21 @@
    DESCRIPTION
    ============================================ */
 .product-description {
-    margin-bottom: 16px;
+    margin-bottom: 14px;
 }
 
 .product-description p {
     margin: 0;
     color: var(--gray-600);
-    line-height: 1.7;
-    font-size: var(--font-size-base);
+    line-height: 1.6;
+    font-size: 14px;
     word-wrap: break-word;
+
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 6;
+    line-clamp: 6;
+    overflow: hidden;
 }
 
 /* ============================================
@@ -337,8 +414,7 @@
 .product-quick-info {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 20px;
+    gap: 10px;
     flex-wrap: wrap;
 }
 
@@ -352,9 +428,9 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 4px 10px;
+    padding: 4px 11px;
     border-radius: var(--radius-full);
-    font-size: var(--font-size-xs);
+    font-size: 12px;
     font-weight: 500;
 }
 
@@ -363,29 +439,123 @@
     background: #dbeafe;
 }
 
+.allergen-tag {
+    color: #dc2626;
+    background: #fee2e2;
+}
+
 .tag-more {
     color: var(--gray-500);
     background: var(--gray-100);
 }
 
 .calories-badge {
-    font-size: var(--font-size-xs);
+    font-size: 12px;
     font-weight: 500;
     color: var(--gray-500);
-    padding: 4px 10px;
+    padding: 4px 11px;
     background: var(--gray-100);
     border-radius: var(--radius-full);
 }
 
 /* ============================================
-   ACTION CONTROLS - TRUE 50/50 SPLIT
+   GRID CELL 3: THUMBNAIL NAVIGATION
+   Now vertically stretched to match the total
+   height of the action control block (about
+   116px on desktop), with the thumbnail buttons
+   centered inside that height. This makes the
+   top of the thumbnail buttons line up with the
+   top of the quantity row, and the bottom of
+   the thumbnail buttons line up with the bottom
+   of the action buttons.
+   ============================================ */
+.thumbnail-navigation {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    align-items: center;
+    padding: 0;
+    background: transparent;
+    border-radius: 0;
+    border: none;
+    width: 100%;
+    min-height: 116px;
+    box-sizing: border-box;
+    align-self: end;
+    order: 2;
+}
+
+.thumbnail-image-btn {
+    width: 80px;
+    height: 80px;
+    padding: 0;
+    border: 2px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    background-color: var(--white);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease,
+                transform 0.15s ease;
+    flex-shrink: 0;
+    display: block;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.thumbnail-image-btn:hover {
+    border-color: var(--gray-400);
+    transform: translateY(-1px);
+}
+
+.thumbnail-image-btn.hover {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.18);
+}
+
+.thumbnail-image-btn.active {
+    border-color: var(--primary);
+    border-width: 3px;
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.22);
+}
+
+.thumbnail-image-btn:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.thumbnail-image-btn.is-broken {
+    background-image: none !important;
+    background-color: var(--gray-100);
+    border-style: dashed;
+    border-color: var(--gray-300);
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.thumbnail-image-btn.is-broken:hover {
+    border-color: var(--gray-300);
+    transform: none;
+}
+
+.thumbnail-image-btn.is-broken.hover,
+.thumbnail-image-btn.is-broken.active {
+    border-color: var(--gray-300);
+    box-shadow: none;
+    border-width: 2px;
+}
+
+/* ============================================
+   GRID CELL 4: ACTION ROW
    ============================================ */
 .action-control {
-    padding-top: 16px;
-    border-top: 1px solid var(--gray-200);
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
+    align-self: end;
+    padding-top: 0;
+    order: 4;
 }
 
 .action-control-form {
@@ -400,106 +570,51 @@
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
-    gap: 16px;
+    gap: 12px;
 }
 
 .action-row-a {
-    margin-bottom: 12px;
+    margin-bottom: 10px;
 }
 
 .action-row-b {
     gap: 8px;
 }
 
-@media (min-width: 769px) {
-    .action-col {
-        display: flex;
-        align-items: center;
-        flex: 1 1 50%;
-        max-width: 50%;
-        box-sizing: border-box;
-    }
-
-    .action-col-qty {
-        justify-content: flex-start;
-        padding-right: 8px;
-    }
-
-    .action-col-total {
-        justify-content: flex-end;
-        padding-left: 8px;
-    }
-
-    .action-row-b {
-        flex-wrap: nowrap;
-    }
-
-    .action-row-b .action-btn {
-        flex: 1;
-        justify-content: center;
-        min-width: 0;
-    }
-
-    .quantity-control {
-        margin: 0;
-    }
-
-    .action-total {
-        margin: 0;
-    }
+.action-col {
+    display: flex;
+    align-items: center;
+    flex: 1 1 50%;
+    max-width: 50%;
+    box-sizing: border-box;
 }
 
-@media (max-width: 768px) {
-    .action-row {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 10px;
-    }
+.action-col-qty {
+    justify-content: flex-start;
+    padding-right: 8px;
+}
 
-    .action-row-a {
-        gap: 8px;
-    }
+.action-col-total {
+    justify-content: flex-end;
+    padding-left: 8px;
+}
 
-    .action-col {
-        display: flex;
-        align-items: center;
-        flex: 1 1 100%;
-        width: 100%;
-        max-width: 100%;
-        justify-content: center !important;
-        padding: 0;
-    }
+.action-row-b {
+    flex-wrap: nowrap;
+}
 
-    .action-col-qty {
-        justify-content: center !important;
-    }
+.action-row-b .action-btn {
+    flex: 1;
+    justify-content: center;
+    min-width: 0;
+}
 
-    .action-col-total {
-        justify-content: center !important;
-    }
+.quantity-control {
+    margin: 0;
+}
 
-    .action-row-b {
-        flex-direction: column;
-        gap: 8px;
-        align-items: stretch;
-    }
-
-    .action-row-b .action-btn {
-        flex: 1 1 100%;
-        width: 100%;
-        justify-content: center;
-        padding: 10px 14px;
-        font-size: var(--font-size-xs);
-    }
-
-    .quantity-control {
-        justify-content: center;
-        margin: 0 auto;
-    }
-
-    .action-total {
-        justify-content: center;
-    }
+.action-total {
+    margin: 0;
 }
 
 /* ============================================
@@ -518,8 +633,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
     border: none;
     background: var(--gray-50);
     cursor: pointer;
@@ -543,8 +658,8 @@
 }
 
 .qty-input {
-    width: 44px;
-    height: 40px;
+    width: 48px;
+    height: 44px;
     border: none;
     background: var(--white);
     text-align: center;
@@ -570,7 +685,7 @@
 .action-total {
     display: flex;
     align-items: baseline;
-    gap: 4px;
+    gap: 6px;
     white-space: nowrap;
 }
 
@@ -580,7 +695,7 @@
 }
 
 .action-total-price {
-    font-size: var(--font-size-lg);
+    font-size: 20px;
     font-weight: 700;
     color: var(--text);
     white-space: nowrap;
@@ -593,19 +708,21 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    padding: 10px 12px;
+    gap: 8px;
+    padding: 12px 18px;
     font-size: var(--font-size-sm);
     font-weight: 600;
     border-radius: var(--radius-base);
     border: none;
     cursor: pointer;
     transition: none;
-    min-height: 40px;
+    min-height: 48px;
     white-space: nowrap;
     text-decoration: none;
     overflow: hidden;
     text-overflow: ellipsis;
+    box-sizing: border-box;
+    line-height: 1;
 }
 
 .action-btn svg {
@@ -654,17 +771,19 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    padding: 10px 18px;
+    gap: 8px;
+    padding: 12px 20px;
     font-size: var(--font-size-sm);
     font-weight: 600;
     border-radius: var(--radius-base);
     cursor: pointer;
-    min-height: 40px;
+    min-height: 48px;
     text-decoration: none;
     transition: none;
     width: 100%;
     max-width: 100%;
+    box-sizing: border-box;
+    line-height: 1;
 }
 
 .btn-primary:active {
@@ -689,26 +808,12 @@
     pointer-events: none;
     width: 100%;
     justify-content: center;
+    min-height: 48px;
 }
 
 .action-control-login,
 .action-control-disabled {
     width: 100%;
-}
-
-@media (min-width: 769px) and (max-width: 1024px) {
-    .action-btn {
-        padding: 8px 10px;
-        font-size: var(--font-size-xs);
-    }
-
-    .action-btn span {
-        display: inline;
-    }
-
-    .action-row {
-        gap: 10px;
-    }
 }
 
 /* ============================================
@@ -726,15 +831,15 @@
 .customization-product-summary {
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 16px 20px;
+    gap: 14px;
+    padding: 14px 16px;
     background: var(--gray-50);
     border-bottom: 1px solid var(--gray-200);
 }
 
 .customization-product-image {
-    width: 56px;
-    height: 56px;
+    width: 100px;
+    height: 100px;
     border-radius: var(--radius-base);
     overflow: hidden;
     flex-shrink: 0;
@@ -745,11 +850,12 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+    border-radius: var(--radius-base);
 }
 
 .customization-product-name {
     font-weight: 600;
-    font-size: var(--font-size-base);
+    font-size: var(--font-size-sm);
     color: var(--text);
     margin: 0;
     word-wrap: break-word;
@@ -763,12 +869,12 @@
 }
 
 .customization-options-container {
-    padding: 20px;
+    padding: 16px;
 }
 
 .customization-group {
-    margin-bottom: 20px;
-    padding-bottom: 20px;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
     border-bottom: 1px solid var(--gray-100);
 }
 
@@ -782,7 +888,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     flex-wrap: wrap;
     gap: 8px;
 }
@@ -801,9 +907,9 @@
 }
 
 .badge {
-    font-size: 0.7rem;
+    font-size: 10px;
     font-weight: 600;
-    padding: 0.1rem 0.7rem;
+    padding: 2px 8px;
     border-radius: var(--radius-full);
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -828,35 +934,38 @@
 .static-ingredient {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
+    gap: 10px;
+    padding: 8px 12px;
     background: var(--gray-50);
     border-radius: var(--radius-base);
     border: 1px solid var(--gray-200);
     color: var(--text);
+    min-height: 44px;
 }
 
 .static-name {
     flex: 1;
     font-weight: 500;
+    font-size: var(--font-size-sm);
 }
 
 .static-price {
     font-weight: 600;
     color: var(--primary);
+    font-size: var(--font-size-sm);
 }
 
 .static-calories {
     font-weight: 500;
     color: var(--gray-600);
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-xs);
 }
 
 .customization-radio-group {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    margin: 8px 0 12px 0;
+    gap: 6px;
+    margin: 8px 0 10px 0;
     border: none;
     padding: 0;
 }
@@ -865,12 +974,14 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 14px;
+    padding: 10px 12px;
+    min-height: 44px;
     border-radius: var(--radius-base);
     border: 2px solid var(--gray-200);
     background: var(--white);
     cursor: pointer;
     transition: border-color 0.15s ease;
+    box-sizing: border-box;
 }
 
 .radio-option.selected {
@@ -895,7 +1006,7 @@
 }
 
 .radio-option .option-price {
-    font-size: var(--font-size-s);
+    font-size: var(--font-size-xs);
     font-weight: 600;
     color: var(--primary);
     margin-right: 8px;
@@ -903,7 +1014,7 @@
 }
 
 .radio-option .option-calories {
-    font-size: var(--font-size-s);
+    font-size: var(--font-size-xs);
     font-weight: 600;
     white-space: nowrap;
 }
@@ -912,7 +1023,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 12px;
+    padding: 10px 12px;
+    min-height: 48px;
     border-radius: var(--radius-base);
     border: 2px solid var(--gray-200);
     background: var(--white);
@@ -920,6 +1032,7 @@
     margin-bottom: 6px;
     flex-wrap: wrap;
     gap: 8px;
+    box-sizing: border-box;
 }
 
 .modifier-option:last-child {
@@ -961,7 +1074,7 @@
 .modifier-controls {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
     flex-shrink: 0;
 }
 
@@ -969,8 +1082,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 30px;
-    height: 30px;
+    width: 32px;
+    height: 32px;
     border-radius: var(--radius-full);
     border: 1px solid var(--gray-300);
     background: var(--white);
@@ -994,7 +1107,7 @@
 }
 
 .modifier-quantity {
-    min-width: 24px;
+    min-width: 26px;
     text-align: center;
     font-weight: 600;
     font-size: var(--font-size-sm);
@@ -1004,7 +1117,8 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 8px 12px;
+    padding: 10px 12px;
+    min-height: 44px;
     border-radius: var(--radius-base);
     border: 2px solid var(--gray-200);
     cursor: pointer;
@@ -1012,6 +1126,7 @@
     background: var(--white);
     margin-bottom: 6px;
     flex-wrap: wrap;
+    box-sizing: border-box;
 }
 
 .checkbox-option:last-child {
@@ -1051,15 +1166,15 @@
 }
 
 .customization-notes-global {
-    margin-top: 16px;
-    padding-top: 16px;
+    margin-top: 14px;
+    padding-top: 14px;
     border-top: 1px solid var(--gray-200);
 }
 
 .customization-textarea {
     width: 100%;
-    min-height: 60px;
-    padding: 8px 12px;
+    min-height: 64px;
+    padding: 10px 12px;
     border: 1px solid var(--gray-300);
     border-radius: var(--radius-base);
     font-size: var(--font-size-sm);
@@ -1068,6 +1183,7 @@
     font-family: inherit;
     box-sizing: border-box;
     max-width: 100%;
+    resize: none;
 }
 
 .customization-textarea:focus {
@@ -1079,8 +1195,8 @@
 .customization-actions {
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    padding: 16px 20px;
+    gap: 14px;
+    padding: 14px 16px;
     background: var(--gray-50);
     border-top: 1px solid var(--gray-200);
 }
@@ -1089,7 +1205,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
-    gap: 16px 32px;
+    gap: 14px 28px;
     width: 100%;
 }
 
@@ -1097,7 +1213,7 @@
     display: flex;
     align-items: baseline;
     gap: 6px;
-    font-size: var(--font-size-base);
+    font-size: var(--font-size-sm);
 }
 
 .customization-total-item .customization-total-label {
@@ -1106,7 +1222,7 @@
 }
 
 .customization-total-item span:last-child {
-    font-size: var(--font-size-xl);
+    font-size: var(--font-size-lg);
     font-weight: 700;
     color: var(--text);
 }
@@ -1118,24 +1234,26 @@
 .customization-buttons {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     width: 100%;
 }
 
 .customization-buttons .btn {
     width: 100%;
     justify-content: center;
-    padding: 12px 20px;
-    font-size: var(--font-size-base);
+    padding: 12px 18px;
+    font-size: var(--font-size-sm);
     border-radius: var(--radius-base);
     font-weight: 600;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 46px;
+    min-height: 48px;
     cursor: pointer;
     border: none;
     text-decoration: none;
+    box-sizing: border-box;
+    line-height: 1;
 }
 
 .customization-buttons .btn-outline {
@@ -1150,22 +1268,13 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-@media (min-width: 769px) {
-    .customization-actions {
-        flex-direction: column;
-    }
-    .customization-buttons {
-        flex-direction: column;
-    }
-}
-
 .product-calories-section {
     display: flex;
     align-items: baseline;
     gap: 6px;
     font-size: var(--font-size-sm);
     color: var(--gray-500);
-    margin-bottom: 16px;
+    margin-bottom: 14px;
     padding: 0 4px;
 }
 
@@ -1178,25 +1287,22 @@
    RELATED PRODUCTS
    ============================================ */
 .related-products {
-    margin-top: 32px;
+    margin-top: 28px;
     padding-bottom: 20px;
     width: 100%;
-    max-width: 1200px;
-    margin-left: auto;
-    margin-right: auto;
 }
 
 .related-title {
-    font-size: var(--font-size-xl);
+    font-size: var(--font-size-lg);
     font-weight: 700;
     color: var(--text);
-    margin: 0 0 16px 0;
+    margin: 0 0 14px 0;
 }
 
 .related-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+    gap: 14px;
 }
 
 .related-card {
@@ -1219,153 +1325,196 @@
     aspect-ratio: 1 / 1;
     overflow: hidden;
     background: var(--gray-100);
+    border-radius: var(--radius-base);
+    flex-shrink: 0;
 }
 
 .related-image img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    border-radius: var(--radius-base);
 }
 
 .related-info {
-    padding: 10px 12px;
+    padding: 14px;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 8px;
+    flex: 1 1 auto;
 }
 
 .related-name {
     margin: 0;
-    font-size: var(--font-size-sm);
-    font-weight: 600;
+    font-size: 15px;
+    font-weight: 700;
     color: var(--text);
     display: -webkit-box;
     -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     overflow: hidden;
     line-height: 1.3;
     word-wrap: break-word;
 }
 
+.related-description {
+    margin: 0;
+    font-size: 12px;
+    color: var(--gray-500);
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    word-wrap: break-word;
+    min-height: 36px;
+}
+
+.related-meta {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
 .related-price {
     margin: 0;
-    font-size: var(--font-size-base);
+    font-size: 15px;
     font-weight: 700;
     color: var(--text);
 }
 
 .related-calories {
     margin: 0;
-    font-size: var(--font-size-xs);
+    font-size: 12px;
     color: var(--gray-500);
 }
 
+.related-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: auto;
+    min-height: 26px;
+    align-items: flex-start;
+}
+
+.related-tags .tag {
+    font-size: 11px;
+    padding: 4px 10px;
+    gap: 4px;
+    line-height: 1.2;
+}
+
 /* ============================================
-   OTHER RESPONSIVE
+   RESPONSIVE — TABLET (>= 768px)
    ============================================ */
 @media (min-width: 768px) {
     .product-detail-page {
         padding: 24px 0 20px 0;
     }
 
-    .product-info-section {
+    .product-detail-card {
+        grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+        gap: 24px;
         padding: 24px;
     }
 
+    .preview-box {
+        grid-column: 1;
+        grid-row: 1;
+        order: initial;
+    }
+
+    .product-info-section {
+        grid-column: 2;
+        grid-row: 1;
+        order: initial;
+    }
+
+    .thumbnail-navigation {
+        grid-column: 1;
+        grid-row: 2;
+        order: initial;
+        align-self: end;
+        min-height: 116px;
+    }
+
+    .action-control {
+        grid-column: 2;
+        grid-row: 2;
+        order: initial;
+        align-self: end;
+    }
+
     .product-title {
-        font-size: var(--font-size-3xl);
+        font-size: 24px;
     }
 
     .product-price-large {
-        font-size: var(--font-size-4xl);
+        font-size: 30px;
     }
 
     .back-btn {
-        padding: 12px 20px;
-        font-size: var(--font-size-base);
+        padding: 10px 18px;
+        font-size: var(--font-size-sm);
     }
 
     .back-btn-icon {
-        width: 22px;
-        height: 22px;
-    }
-
-    .qty-btn-icon {
         width: 20px;
         height: 20px;
     }
 
     .related-grid {
         grid-template-columns: repeat(3, 1fr);
-        gap: 16px;
+        gap: 18px;
     }
 
     .customization-actions {
-        padding: 16px 24px;
+        padding: 14px 20px;
     }
 
     .customization-total-item span:last-child {
-        font-size: var(--font-size-2xl);
+        font-size: var(--font-size-xl);
     }
 
     .customization-product-summary {
-        padding: 16px 24px;
+        padding: 14px 20px;
     }
 
     .customization-options-container {
-        padding: 24px;
-    }
-
-    .customization-select {
-        padding: 12px 16px;
-        font-size: var(--font-size-base);
+        padding: 20px;
     }
 }
 
+/* ============================================
+   RESPONSIVE — DESKTOP (>= 1024px)
+   ============================================ */
 @media (min-width: 1024px) {
     .product-detail-page {
-        padding: 32px 0 20px 0;
+        padding: 28px 0 20px 0;
     }
 
     .product-detail-card {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
-        gap: 0;
-        border-radius: var(--radius-lg);
+        grid-template-columns: minmax(0, 480px) minmax(0, 1fr);
+        gap: 32px;
+        padding: 28px;
     }
 
-    .product-image-wrapper {
-        border-radius: var(--radius-lg) 0 0 var(--radius-lg);
-        min-height: 400px;
-        height: 100%;
+    .product-title {
+        font-size: 28px;
     }
 
-    .product-image-container {
-        padding-bottom: 0;
-        height: 100%;
-        min-height: 400px;
+    .product-price-large {
+        font-size: 34px;
     }
 
-    .product-image {
-        position: relative;
-        height: 100%;
-    }
-
-    .product-info-section {
-        padding: 32px;
-        display: flex;
-        flex-direction: column;
-    }
-
-    .product-info-section > * {
-        margin-bottom: 16px;
-    }
-
-    .product-info-section > *:last-child {
-        margin-bottom: 0;
-    }
-
-    .action-control {
-        margin-top: auto;
+    .product-description p {
+        font-size: 15px;
+        -webkit-line-clamp: 8;
+        line-clamp: 8;
     }
 
     .related-grid {
@@ -1374,19 +1523,171 @@
     }
 }
 
-@media (min-width: 1400px) {
-    .product-info-section {
-        padding: 40px;
+/* ============================================
+   RESPONSIVE — MOBILE (<= 767px)
+   ============================================ */
+@media (max-width: 767px) {
+    .product-detail-card {
+        padding: 16px;
+        gap: 16px;
     }
 
-    .related-grid {
-        grid-template-columns: repeat(4, 1fr);
-        gap: 24px;
+    .preview-box,
+    .thumbnail-navigation,
+    .product-info-section,
+    .action-control {
+        grid-column: 1;
+        grid-row: auto;
+        align-self: auto;
+        justify-self: stretch;
+    }
+
+    .preview-box            { order: 1; }
+    .thumbnail-navigation   { order: 2; min-height: 0; }
+    .product-info-section   { order: 3; }
+    .action-control         { order: 4; }
+
+    .action-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .action-row-a {
+        gap: 8px;
+    }
+
+    .action-col {
+        display: flex;
+        align-items: center;
+        flex: 1 1 100%;
+        width: 100%;
+        max-width: 100%;
+        justify-content: center !important;
+        padding: 0;
+    }
+
+    .action-col-qty {
+        justify-content: center !important;
+    }
+
+    .action-col-total {
+        justify-content: center !important;
+    }
+
+    .action-row-b {
+        flex-direction: column;
+        gap: 8px;
+        align-items: stretch;
+    }
+
+    .action-row-b .action-btn {
+        flex: 1 1 100%;
+        width: 100%;
+        justify-content: center;
+        padding: 12px 16px;
+        font-size: var(--font-size-sm);
+    }
+
+    .quantity-control {
+        justify-content: center;
+        margin: 0 auto;
+    }
+
+    .action-total {
+        justify-content: center;
+    }
+
+    .thumbnail-navigation {
+        justify-content: center;
+    }
+
+    .thumbnail-image-btn {
+        width: 56px;
+        height: 48px;
     }
 }
 
 /* ============================================
-   UTILITY
+   RESPONSIVE — SMALL TABLET (481px – 767px)
+   ============================================ */
+@media (max-width: 767px) and (min-width: 481px) {
+    .thumbnail-image-btn {
+        width: 60px;
+        height: 52px;
+    }
+}
+
+/* ============================================
+   RESPONSIVE — MOBILE (<= 480px)
+   ============================================ */
+@media (max-width: 480px) {
+    .product-title {
+        font-size: 20px;
+    }
+
+    .product-price-large {
+        font-size: 24px;
+    }
+
+    .product-description p {
+        font-size: 13px;
+        -webkit-line-clamp: 4;
+        line-clamp: 4;
+    }
+
+    .thumbnail-navigation {
+        padding: 0;
+        gap: 6px;
+    }
+
+    .thumbnail-image-btn {
+        width: 52px;
+        height: 44px;
+    }
+
+    .preview-placeholder img {
+        width: 56px;
+        height: 56px;
+    }
+
+    .related-info {
+        padding: 12px;
+        gap: 6px;
+    }
+
+    .related-name {
+        font-size: 14px;
+    }
+
+    .related-tags .tag {
+        font-size: 10px;
+        padding: 3px 8px;
+    }
+}
+
+/* ============================================
+   RESPONSIVE — VERY SMALL MOBILE (<= 375px)
+   ============================================ */
+@media (max-width: 375px) {
+    .thumbnail-navigation {
+        padding: 0;
+        gap: 4px;
+    }
+
+    .thumbnail-image-btn {
+        width: 46px;
+        height: 40px;
+    }
+
+    .preview-placeholder img {
+        width: 48px;
+        height: 48px;
+    }
+}
+
+/* ============================================
+   UTILITY — Hide number input spinners
    ============================================ */
 input[type=number]::-webkit-inner-spin-button,
 input[type=number]::-webkit-outer-spin-button {
@@ -1430,70 +1731,42 @@ input[type=number]::-webkit-outer-spin-button {
    PRODUCT REVIEWS
    ============================================ */
 .product-reviews-section {
-    margin-top: 32px;
+    margin-top: 28px;
     padding-bottom: 20px;
     width: 100%;
-    max-width: 1200px;
-    margin-left: auto;
-    margin-right: auto;
 }
 
 .reviews-title {
-    font-size: var(--font-size-xl);
+    font-size: var(--font-size-lg);
     font-weight: 700;
     color: var(--text);
-    margin: 0 0 16px 0;
+    margin: 0 0 14px 0;
 }
 
-/* Single-column list at every breakpoint.
-   The customer asked for a full-width row per review.
-   Do not add a @media rule that turns this into a grid. */
 .reviews-list {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 14px;
     width: 100%;
 }
 
-/* ============================================================
-   Review card — two columns: avatar circle + body
-   ============================================================
-   grid-template-columns: 44px 1fr keeps the avatar column at
-   exactly 44px and lets the body take the rest. The avatar
-   child has aspect-ratio: 1 / 1 so its height is derived from
-   its width. Without that property, a grid cell can collapse
-   the child's height and the circle becomes a thin sliver.
-   ============================================================ */
 .review-item {
     display: grid;
-    grid-template-columns: 44px 1fr;
-    gap: 14px;
+    grid-template-columns: 40px 1fr;
+    gap: 12px;
     align-items: flex-start;
     background: var(--white);
     border: 1px solid var(--gray-100);
     border-radius: var(--radius-base);
-    padding: 16px;
+    padding: 14px;
     box-shadow: var(--shadow-sm);
     box-sizing: border-box;
     width: 100%;
 }
 
-/* ------------------------------------------------------------
-   Avatar circle
-   ------------------------------------------------------------
-   44px circle, primary-green fill, white initial. When a real
-   picture is present, the <img> fills the circle edge-to-edge
-   with object-fit: cover; the initial span is hidden by the
-   inline display toggle in the PHP.
-
-   aspect-ratio: 1 / 1 is load-bearing. The grid column is
-   44px wide; without aspect-ratio the flex container's
-   content-box height can collapse to zero and the avatar
-   renders as a thin sliver instead of a circle.
-   ------------------------------------------------------------ */
 .review-avatar {
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     aspect-ratio: 1 / 1;
     border-radius: 50%;
     background: var(--primary);
@@ -1502,7 +1775,7 @@ input[type=number]::-webkit-outer-spin-button {
     align-items: center;
     justify-content: center;
     font-weight: 700;
-    font-size: 18px;
+    font-size: 16px;
     flex-shrink: 0;
     overflow: hidden;
     user-select: none;
@@ -1525,18 +1798,15 @@ input[type=number]::-webkit-outer-spin-button {
     height: 100%;
     color: #ffffff;
     font-weight: 700;
-    font-size: 18px;
+    font-size: 16px;
     text-transform: uppercase;
     line-height: 1;
 }
 
-/* ------------------------------------------------------------
-   Body column
-   ------------------------------------------------------------ */
 .review-body {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 5px;
     min-width: 0;
 }
 
@@ -1544,7 +1814,7 @@ input[type=number]::-webkit-outer-spin-button {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    gap: 12px;
+    gap: 10px;
     flex-wrap: wrap;
 }
 
@@ -1556,7 +1826,7 @@ input[type=number]::-webkit-outer-spin-button {
 }
 
 .review-date {
-    font-size: var(--font-size-xs);
+    font-size: 11px;
     color: var(--gray-500);
     white-space: nowrap;
     flex-shrink: 0;
@@ -1569,7 +1839,7 @@ input[type=number]::-webkit-outer-spin-button {
 }
 
 .review-rating .star {
-    font-size: 16px;
+    font-size: 14px;
     line-height: 1;
     color: var(--gray-300);
 }
@@ -1581,32 +1851,24 @@ input[type=number]::-webkit-outer-spin-button {
 .review-comment {
     font-size: var(--font-size-sm);
     color: var(--gray-600);
-    line-height: 1.6;
+    line-height: 1.55;
     margin: 0;
     word-break: break-word;
 }
 
-/* ------------------------------------------------------------
-   Load More button
-   ------------------------------------------------------------
-   A black neutral button per §7: it is a non-destructive,
-   non-positive action and must not compete visually with the
-   green Add to Order button. It is centered and its width is
-   bounded so it does not stretch the section.
-   ------------------------------------------------------------ */
 .reviews-load-more-wrap {
     display: flex;
     justify-content: center;
-    margin-top: 20px;
+    margin-top: 18px;
 }
 
 .reviews-load-more {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 200px;
+    min-width: 180px;
     min-height: 44px;
-    padding: 12px 24px;
+    padding: 12px 22px;
     font-size: var(--font-size-sm);
     font-weight: 600;
     border-radius: var(--radius-base);
@@ -1616,6 +1878,7 @@ input[type=number]::-webkit-outer-spin-button {
     cursor: pointer;
     transition: background 0.15s ease, border-color 0.15s ease,
                 box-shadow 0.15s ease;
+    box-sizing: border-box;
 }
 
 .reviews-load-more:hover,
@@ -1639,4 +1902,16 @@ input[type=number]::-webkit-outer-spin-button {
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .thumbnail-image-btn {
+        transition: none !important;
+        transform: none !important;
+    }
+    .thumbnail-image-btn:hover,
+    .thumbnail-image-btn.hover,
+    .thumbnail-image-btn.active {
+        transform: none !important;
+    }
 }

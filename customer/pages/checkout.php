@@ -12,6 +12,16 @@
  * is the only code that writes the order to the database.
  *
  * ---------------------------------------------------------------------
+ * PRODUCT IMAGES IN THE ORDER SUMMARY
+ * ---------------------------------------------------------------------
+ * Each queue line carries an `image` field that is a browser-loadable
+ * URL, produced by queueEnrich() in queue-queries.php. The page uses
+ * that URL directly. When the field is empty — a queue line written
+ * before the image-resolution revision, or a product whose folder
+ * could not be resolved — the page falls back to the shared
+ * restaurant icon.
+ *
+ * ---------------------------------------------------------------------
  * CLIENT CONFIG
  * ---------------------------------------------------------------------
  * This page publishes every value checkout.js needs on the
@@ -33,7 +43,6 @@
  *                                   address in the address modal
  *
  * Every one of those values is read by customer/assets/ui/js/checkout.js.
- * None of them is a URL to a handler that has been renamed.
  *
  * ---------------------------------------------------------------------
  * FORM AND HANDLER TARGETS
@@ -42,8 +51,7 @@
  * ../backend/handlers/place-order-handler.php, which exists in the
  * tree and was not renamed. The address modal's data attribute
  * points at ../backend/handlers/checkout-handler.php, which exists
- * in the tree and was not renamed. No form on this page posts to
- * order-handler.php or any other retired filename.
+ * in the tree and was not renamed.
  *
  * ---------------------------------------------------------------------
  * SCOPE RULES APPLIED
@@ -51,8 +59,7 @@
  *  - No SQL in this file. Wallet balance comes from
  *    getCustomerProfile() in customer-queries.php.
  *  - No inline CSS. checkout.css is loaded via the page-specific
- *    CSS <link> at the top, and the customer header's $pageCssMap
- *    also loads it.
+ *    CSS <link> at the top.
  *  - No inline style attributes.
  *  - Page data for JS is passed via data-* attributes on
  *    #checkoutPage.
@@ -63,25 +70,18 @@
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 9.2 — Handler targets verified against the tree.
+ * @version 10.0 — Order summary images now render from the queue
+ *                 line's `image` field, which queueEnrich() resolves
+ *                 to a browser-loadable URL. Fallback to the
+ *                 restaurant icon when the field is empty.
  *
- *                The hidden #checkoutForm posts to
- *                place-order-handler.php (exists). The address
- *                modal's data-checkout-handler-url points at
- *                checkout-handler.php (exists). No form, link, or
- *                attribute on this page references order-handler.php
- *                or any other retired filename.
- *
- *                No behavioural change from v9.1. Every data-*
- *                attribute, form, modal, and script tag is
- *                byte-identical.
- *
- *                (9.1: added data-checkout-handler-url. 9.0:
- *                deployment-independent asset base. 8.0: shared
- *                fee schedule require. 7.2: CSRF token inherited
- *                from header.php. 7.1: address helpers moved to
- *                address-queries.php. 7.0: session-queue checkout
- *                flow.)
+ *                 (9.2: handler targets verified. 9.1: added
+ *                 data-checkout-handler-url. 9.0:
+ *                 deployment-independent asset base. 8.0: shared
+ *                 fee schedule require. 7.2: CSRF token inherited
+ *                 from header.php. 7.1: address helpers moved to
+ *                 address-queries.php. 7.0: session-queue checkout
+ *                 flow.)
  */
 
 declare(strict_types=1);
@@ -118,6 +118,11 @@ $projectRootBase = str_repeat('../', $depth);
 
 // ---------------------------------------------------------------
 // Read the session queue.
+//
+// Each line carries an `image` field that queueEnrich() has already
+// resolved to a browser-loadable URL. Lines written before the
+// image-resolution revision carry a raw path instead; the fallback
+// icon covers those.
 // ---------------------------------------------------------------
 $orderItems = [];
 
@@ -156,12 +161,18 @@ if (!empty($_SESSION['order_queue']) && is_array($_SESSION['order_queue'])) {
             }
         }
 
+        // The image field is the browser-loadable URL produced by
+        // queueEnrich(). When it is empty, the page renders the
+        // fallback icon.
+        $imageUrl = (string)($qItem['image'] ?? '');
+
         $orderItems[] = [
             'product_id'           => $pid,
             'product_name'         => (string)($qItem['name'] ?? 'Product'),
             'quantity'             => $qty,
             'price'                => (float)($qItem['price'] ?? 0),
             'stock'                => (int)($qItem['stock'] ?? 0),
+            'image'                => $imageUrl,
             'branch_name'          => (string)($qItem['branch_name'] ?? ''),
             'restaurant_name'      => (string)($qItem['restaurant_name'] ?? ''),
             'restaurant_branch_id' => (int)($qItem['restaurant_branch_id'] ?? 0),
@@ -247,6 +258,8 @@ $userContact = $userDetails['contact_number'] ?? 'Not provided';
 // ---------------------------------------------------------------
 
 require_once __DIR__ . '/../includes/header.php';
+
+$restaurantIconFallback = $assetBase . 'assets/images/icons/restaurant.svg';
 ?>
 
 <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/global.css">
@@ -371,12 +384,16 @@ require_once __DIR__ . '/../includes/header.php';
                     </div>
                     <div class="card-body">
                         <div class="order-items">
-                            <?php foreach ($orderItems as $item): ?>
+                            <?php foreach ($orderItems as $item):
+                                $itemImage = $item['image'] !== ''
+                                    ? $item['image']
+                                    : $restaurantIconFallback;
+                            ?>
                             <div class="order-item">
                                 <div class="order-item-image">
-                                    <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg"
+                                    <img src="<?php echo htmlspecialchars($itemImage, ENT_QUOTES, 'UTF-8'); ?>"
                                         alt="<?php echo htmlspecialchars($item['product_name'], ENT_QUOTES, 'UTF-8'); ?>"
-                                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/restaurant.svg'">
+                                        onerror="this.onerror=null; this.src='<?php echo $restaurantIconFallback; ?>'">
                                 </div>
                                 <div class="order-item-info">
                                     <p class="order-item-name">

@@ -9,6 +9,25 @@
  * from the orders table.
  *
  * ---------------------------------------------------------------------
+ * PRODUCT IMAGES
+ * ---------------------------------------------------------------------
+ * The raw dietary_information.images value returned by the query
+ * layer is resolved into a browser-loadable URL by
+ * resolveOrderItemImageUrl() below, which delegates to the helpers
+ * in product-queries.php:
+ *
+ *     getProductImageBasePath()    resolves the folder
+ *     getProductPrimaryFilename()  finds the first image file
+ *
+ * The project-root URL prefix is derived from the page's own
+ * $assetBase so the URL is correct at any deployment depth.
+ *
+ * When the folder cannot be resolved, when the folder contains no
+ * image file, or when the raw path is empty, the function returns
+ * the shared restaurant icon so the customer always sees a picture
+ * rather than a broken image.
+ *
+ * ---------------------------------------------------------------------
  * CARD LAYOUT (top to bottom)
  * ---------------------------------------------------------------------
  *   .order-card-header
@@ -29,7 +48,7 @@
  * ---------------------------------------------------------------------
  * FILTER TABS
  * ---------------------------------------------------------------------
- * Eight tabs, wallet-style (rectangular, full-width row, no count
+ * Nine tabs, wallet-style (rectangular, full-width row, no count
  * badges). Order left to right:
  *
  *     Active | All | Pending | Preparing | For Delivery |
@@ -100,19 +119,17 @@
  * The page's client script is customer-order.js.
  *
  * @package FitPal
- * @version 9.0 — Filter tabs rewritten wallet-style with an Active
- *                default. Review footer button added for delivered
- *                orders. The review modal removed — review.php
- *                owns the feedback form now.
+ * @version 10.0 — Order item images now resolve through
+ *                 resolveOrderItemImageUrl(), which delegates to the
+ *                 helpers in product-queries.php. The raw column
+ *                 value is no longer used directly as an image src.
  *
- *                (8.0: three-column card header; chevron totals
- *                dropdown; footer actions only. 7.0: consistent
- *                terminal-status layout; option-B tracking label.
- *                6.0: config object's handlerUrl names
- *                customer-order-handler.php. 5.1: script tag
- *                points at customer-order.js. 5.0: renamed
- *                customer order query layer and handler.
- *                3.5: cancel restricted to 'pending' only.)
+ *                 (9.0: filter tabs rewritten wallet-style with an
+ *                 Active default. Review footer button added for
+ *                 delivered orders. 8.0: three-column card header;
+ *                 chevron totals dropdown. 7.0: consistent terminal-
+ *                 status layout. 6.0: config object's handlerUrl.
+ *                 5.0: renamed customer order query layer.)
  */
 declare(strict_types=1);
 
@@ -127,6 +144,7 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
 require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../backend/database/customer-order-queries.php';
 require_once __DIR__ . '/../backend/database/tracking-queries.php';
+require_once __DIR__ . '/../backend/database/product-queries.php';
 
 $customerId = (int)$_SESSION['customer_id'];
 
@@ -219,12 +237,47 @@ function formatOrderDateTime(string $date): string
     return $timestamp !== false ? date('M d, Y g:i A', $timestamp) : $date;
 }
 
-function getOrderItemImage(string $imagePath, string $assetBase): string
+/**
+ * Build the browser-loadable URL for an order item's product image.
+ *
+ * The raw dietary_information.images value is resolved through the
+ * helpers in product-queries.php. The project-root URL prefix is
+ * derived from the page's own $assetBase so the returned URL is
+ * correct at any deployment depth.
+ *
+ * Returns the shared restaurant icon when the folder cannot be
+ * resolved, when the folder contains no image file, or when the
+ * raw path is empty.
+ *
+ * @param string $rawPath   Raw dietary_information.images value.
+ * @param string $assetBase The page's asset base, ending in 'shared/'.
+ * @return string A browser-loadable URL.
+ */
+function resolveOrderItemImageUrl(string $rawPath, string $assetBase): string
 {
-    if (empty($imagePath)) {
-        return $assetBase . 'assets/images/icons/restaurant.svg';
+    $fallback = $assetBase . 'assets/images/icons/restaurant.svg';
+
+    if ($rawPath === '') {
+        return $fallback;
     }
-    return htmlspecialchars($imagePath, ENT_QUOTES, 'UTF-8');
+
+    $imageBase    = getProductImageBasePath($rawPath);
+    $primaryImage = getProductPrimaryFilename($rawPath);
+
+    if ($imageBase === '' || $primaryImage === '') {
+        return $fallback;
+    }
+
+    // Trim the trailing 'shared/' off the asset base to get the
+    // project-root URL prefix, then append the resolved folder and
+    // the filename.
+    $projectRootUrl = preg_replace('#shared/$#', '', $assetBase);
+
+    if (!is_string($projectRootUrl) || $projectRootUrl === '') {
+        return $fallback;
+    }
+
+    return $projectRootUrl . $imageBase . $primaryImage;
 }
 
 function getPaymentMethodMeta(string $method): array
@@ -327,6 +380,7 @@ function getTrackingButtonDescriptor(string $status, ?string $deliveredAt): arra
 }
 
 $hasOrders = !empty($orders);
+$restaurantIconFallback = $assetBase . 'assets/images/icons/restaurant.svg';
 ?>
 
 <link rel="stylesheet" href="../assets/css/customer-orders.css">
@@ -501,7 +555,14 @@ $hasOrders = !empty($orders);
                     <div class="order-items-list">
                         <?php foreach ($items as $index => $item):
                             $productId   = (int)$item['product_id'];
-                            $itemImage   = getOrderItemImage($item['product_image'] ?? '', $assetBase);
+
+                            // Resolve the full image URL from the raw
+                            // dietary_information.images value.
+                            $itemImage = resolveOrderItemImageUrl(
+                                (string)($item['product_image'] ?? ''),
+                                $assetBase
+                            );
+
                             $quantity    = (int)$item['quantity'];
                             $unitPrice   = (float)$item['unit_price'];
                             $finalPrice  = (float)($item['final_price'] ?? $item['unit_price']);
@@ -520,9 +581,9 @@ $hasOrders = !empty($orders);
                                 aria-controls="<?php echo $itemKey; ?>-details" <?php endif; ?>>
 
                                 <div class="order-item-image">
-                                    <img src="<?php echo $itemImage; ?>"
+                                    <img src="<?php echo htmlspecialchars($itemImage, ENT_QUOTES, 'UTF-8'); ?>"
                                         alt="<?php echo htmlspecialchars($item['product_name'], ENT_QUOTES, 'UTF-8'); ?>"
-                                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/restaurant.svg'">
+                                        onerror="this.onerror=null; this.src='<?php echo $restaurantIconFallback; ?>'">
                                 </div>
 
                                 <div class="order-item-info">

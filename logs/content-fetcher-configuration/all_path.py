@@ -128,6 +128,7 @@ filesToCheck = [
     "/customer/pages/cart.php",
     "/customer/pages/checkout.php",
     "/customer/pages/dashboard.php",
+    "/customer/pages/image-debug.php",
     "/customer/pages/menu.php",
     "/customer/pages/order-receipt.php",
     "/customer/pages/order-tracking.php",

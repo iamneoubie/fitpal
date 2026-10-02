@@ -8,47 +8,76 @@
  * the same order-placement flow.
  *
  * ---------------------------------------------------------------------
+ * MAIN STEP LAYOUT (v16.0)
+ * ---------------------------------------------------------------------
+ * The main step is a 2x2 CSS Grid on desktop and tablet:
+ *
+ *     [ preview            ] [ product info       ]
+ *     [ thumbnail nav      ] [ action row         ]
+ *
+ * On mobile the grid collapses to one column and the four blocks
+ * stack in source order: preview, info, thumbnails, action row.
+ *
+ * The four blocks are direct children of .product-detail-card, so
+ * the grid can place each one. The customize step is unchanged.
+ *
+ * ---------------------------------------------------------------------
+ * PRODUCT IMAGE URL
+ * ---------------------------------------------------------------------
+ * The reader (product-queries.php) resolves the raw
+ * dietary_information.images value against the folder shapes that
+ * actually exist on disk and returns:
+ *
+ *   image_base       the resolved project-root-relative folder path
+ *   product_images   ordered list of bare filenames inside it
+ *
+ * This page builds every image URL from image_base, never from the
+ * raw column value:
+ *
+ *     $projectRootUrl = preg_replace('#shared/$#', '', $assetBase);
+ *     $url = $projectRootUrl . $product['image_base'] . $filename;
+ *
+ * That is the same two-step pattern customer/pages/profile.php uses
+ * for the avatar, and it is what makes the browser request match a
+ * file on disk when the column omits the `restaurant/` segment.
+ *
+ * ---------------------------------------------------------------------
  * CUSTOMER REVIEWS SECTION
  * ---------------------------------------------------------------------
- * Below the "You might also like" grid, the page renders up to 50
- * reviews as a single-column list, shows the first 5, and reveals
- * the rest five at a time when the customer clicks Load More. The
- * remaining reviews are embedded as JSON on the wrapper's
- * data-reviews-more attribute; product-detail.js reads that payload
- * and appends cards. No HTTP requests are made after the initial
- * page load.
- *
- * Each review card carries:
- *
- *   - the reviewer's avatar circle, either their profile picture or
- *     the first letter of their first name on a primary-green
- *     background, matching the header's .user-profile-circle
- *   - their display name
- *   - the date they submitted the review
- *   - their star score
- *   - their comment text for THIS product, when they wrote one
- *
- * The section is omitted entirely when there are no reviews.
+ * Below "You might also like", the page renders up to 50 reviews
+ * as a single-column list, shows the first 5, and reveals the rest
+ * five at a time when the customer clicks Load More. The remaining
+ * reviews are embedded as JSON on the wrapper's data-reviews-more
+ * attribute; product-detail.js reads that payload and appends
+ * cards. No HTTP requests are made after the initial page load.
  *
  * ---------------------------------------------------------------------
- * AVATAR URL CONSTRUCTION
+ * HOW IT TRACES BACK TO THE SHARED ORDER-TRANSACTION LAYER
  * ---------------------------------------------------------------------
- * The stored profile_picture column holds a project-root-relative
- * path like "shared/uploads/customer/profiles/12/07_18_2026_0.jpg".
- * The page builds the browser URL by trimming the trailing "shared/"
- * from $assetBase and appending the stored path. When the stored
- * path is empty, the page renders the first letter of the reviewer's
- * first name inside the avatar circle.
+ * Add to Cart posts to cart-handler.php; Add to Order posts to
+ * queue-handler.php. The actual order row and the customer payment
+ * transaction are written later, when the customer reaches
+ * checkout and place-order-handler.php calls
+ * createOrderFromQueue() in
+ * shared/backend/database/order-transaction-queries.php.
  *
  * @package FitPal
- * @version 13.0 — Reviews section now: single-column, first 5
- *                 visible, Load More reveals 5 at a time. The full
- *                 remaining set is embedded on the list wrapper's
- *                 data-reviews-more attribute.
+ * @version 16.0 — Main step restructured as a 2x2 CSS grid.
+ *                 Preview, product info, thumbnail navigation,
+ *                 and the action row are now four sibling blocks
+ *                 under .product-detail-card. The image wrapper
+ *                 that used to hold the preview and thumbnails
+ *                 has been unwrapped so the grid can place them
+ *                 independently. Related products render at a
+ *                 slightly smaller size with dietary tags,
+ *                 allergen tags, and a short description.
  *
- *                 (12.0: decoded comment + avatar with fallback
- *                 initial. 11.0: reviews section. 10.0: handler
- *                 targets verified. 9.4: money-flow docblock.)
+ *                 (15.0: image_base resolved by reader. 14.1:
+ *                 profile.php-pattern attempt. 14.0: preview +
+ *                 thumbnails. 13.0: reviews single-column,
+ *                 Load More. 12.0: avatar fallback. 11.0:
+ *                 reviews section. 10.0: handler targets. 9.4:
+ *                 money-flow docblock.)
  */
 declare(strict_types=1);
 
@@ -85,8 +114,6 @@ $relatedProducts = getRelatedProducts(
     4
 );
 
-// Read up to 50 reviews, split into the first page (5) and the
-// remainder (the rest) for client-side Load More.
 $allReviews = getProductReviews($database_connection, $productId, 50);
 
 $reviewsPerPage = 5;
@@ -106,9 +133,57 @@ $allergens   = $product['allergens']    !== '' ? explode(',', $product['allergen
 $basePrice = (float)$product['base_price'];
 $inStock   = (int)$product['stock'] > 0 && (int)$product['is_active'] === 1;
 
-$productImage = $product['product_image'] !== ''
-    ? htmlspecialchars($product['product_image'], ENT_QUOTES, 'UTF-8')
-    : $assetBase . 'assets/images/icons/restaurant.svg';
+// ---------------------------------------------------------------------
+// PROJECT-ROOT URL
+// ---------------------------------------------------------------------
+$projectRootUrl = preg_replace('#shared/$#', '', $assetBase);
+if (!is_string($projectRootUrl)) {
+    $projectRootUrl = '';
+}
+
+$productImageFallback = $assetBase . 'assets/images/icons/restaurant.svg';
+
+// ---------------------------------------------------------------------
+// Product image resolution.
+//
+// $product['image_base']     resolved folder (project-root-relative).
+// $product['product_images'] ordered list of bare filenames.
+//
+// Every filename is resolved against $projectRootUrl exactly once.
+// ---------------------------------------------------------------------
+$imageBase        = (string)($product['image_base'] ?? '');
+$productFilenames = is_array($product['product_images'] ?? null)
+    ? $product['product_images']
+    : [];
+
+$productImageUrls = [];
+foreach ($productFilenames as $filename) {
+    if (!is_string($filename) || $filename === '') {
+        continue;
+    }
+    if ($imageBase === '' || $projectRootUrl === '') {
+        continue;
+    }
+    $productImageUrls[] = $projectRootUrl . $imageBase . $filename;
+}
+
+$primaryImageUrl = $productImageUrls[0] ?? $productImageFallback;
+$hasGallery      = count($productImageUrls) > 1;
+
+/**
+ * Resolve a related product's primary image the same way.
+ */
+function productDetailResolvePrimary(
+    string $projectRootUrl,
+    string $imageBase,
+    string $filename,
+    string $fallbackUrl
+): string {
+    if ($projectRootUrl === '' || $imageBase === '' || $filename === '') {
+        return $fallbackUrl;
+    }
+    return $projectRootUrl . $imageBase . $filename;
+}
 
 $baseCalories = 0;
 
@@ -155,8 +230,6 @@ $formattedPrice = '₱' . number_format($basePrice, 2);
 /**
  * Build a browser-loadable URL for a profile picture path stored in
  * customer_profile.profile_picture.
- *
- * Returns '' when the stored path is empty.
  */
 function buildReviewAvatarUrl(string $storedPath, string $assetBase): string
 {
@@ -164,17 +237,14 @@ function buildReviewAvatarUrl(string $storedPath, string $assetBase): string
         return '';
     }
 
-    $projectRootUrl = preg_replace('#shared/$#', '', $assetBase);
-    if (!is_string($projectRootUrl)) {
+    $projectRoot = preg_replace('#shared/$#', '', $assetBase);
+    if (!is_string($projectRoot)) {
         return '';
     }
 
-    return $projectRootUrl . $storedPath;
+    return $projectRoot . $storedPath;
 }
 
-/**
- * Resolve the initial letter to draw inside an avatar circle.
- */
 function buildReviewInitial(string $firstName, string $lastName): string
 {
     if ($firstName !== '') {
@@ -188,13 +258,6 @@ function buildReviewInitial(string $firstName, string $lastName): string
 
 /**
  * Render a single review card.
- *
- * Declared as a function so the first-page render and the
- * serialized "more" payload render use exactly the same markup. A
- * change to the card shape is a change to one function.
- *
- * @param array<string, mixed> $review
- * @param string $assetBase
  */
 function renderReviewCard(array $review, string $assetBase): string
 {
@@ -253,8 +316,6 @@ function renderReviewCard(array $review, string $assetBase): string
         . '</article>';
 }
 
-// Serialize the "more" set as JSON for the client. Each entry
-// carries only the fields the JS needs to build a card.
 $reviewsMoreJson = json_encode(
     array_map(
         static function (array $r): array {
@@ -313,22 +374,27 @@ if ($reviewsMoreJson === false) {
             </div>
 
             <div class="product-detail-card">
-                <div class="product-image-wrapper">
-                    <div class="product-image-container">
-                        <img src="<?php echo $productImage; ?>"
-                            alt="<?php echo htmlspecialchars($product['product_name'], ENT_QUOTES, 'UTF-8'); ?>"
-                            class="product-image"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/restaurant.svg'">
-                        <?php if (!$inStock): ?>
-                        <div class="product-badge out-of-stock-badge">Out of Stock</div>
-                        <?php elseif ((int)$product['stock'] < 10): ?>
-                        <div class="product-badge low-stock-badge">
-                            Only <?php echo (int)$product['stock']; ?> left
-                        </div>
-                        <?php endif; ?>
+
+                <!-- ---------- GRID CELL 1: PREVIEW ---------- -->
+                <div class="preview-box" id="mainPreviewBox">
+                    <div class="preview-placeholder" id="previewPlaceholder"
+                        style="<?php echo empty($productImageUrls) ? 'display:flex;' : 'display:none;'; ?>">
+                        <img src="<?php echo $productImageFallback; ?>" alt="No product image">
                     </div>
+                    <div class="preview-image" id="previewImage"
+                        style="<?php echo empty($productImageUrls) ? 'display:none;' : "background-image:url('" . htmlspecialchars($productImageUrls[0], ENT_QUOTES, 'UTF-8') . "');display:block;"; ?>">
+                    </div>
+
+                    <?php if (!$inStock): ?>
+                    <div class="product-badge out-of-stock-badge">Out of Stock</div>
+                    <?php elseif ((int)$product['stock'] < 10): ?>
+                    <div class="product-badge low-stock-badge">
+                        Only <?php echo (int)$product['stock']; ?> left
+                    </div>
+                    <?php endif; ?>
                 </div>
 
+                <!-- ---------- GRID CELL 2: PRODUCT INFO ---------- -->
                 <div class="product-info-section">
                     <div class="product-header">
                         <h1 class="product-title">
@@ -374,73 +440,85 @@ if ($reviewsMoreJson === false) {
                         <span class="calories-badge" id="mainCaloriesBadge"><?php echo $baseCalories; ?> kcal</span>
                         <?php endif; ?>
                     </div>
+                </div>
 
-                    <div class="action-control" id="actionControl">
-                        <?php if ($isLoggedIn && $inStock): ?>
-                        <form method="POST" action="../backend/handlers/cart-handler.php" class="action-control-form"
-                            id="actionControlForm" data-cart-url="../backend/handlers/cart-handler.php"
-                            data-queue-url="../backend/handlers/queue-handler.php">
-                            <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
-                            <input type="hidden" name="product_id" value="<?php echo $productId; ?>">
-                            <input type="hidden" name="customizations" id="customizationsData" value="">
-                            <input type="hidden" name="total_price" id="totalPriceInput"
-                                value="<?php echo $basePrice; ?>">
-                            <input type="hidden" name="total_calories" id="totalCaloriesInput"
-                                value="<?php echo $baseCalories; ?>">
-                            <input type="hidden" name="action" id="queueActionInput" value="add">
+                <!-- ---------- GRID CELL 3: THUMBNAIL NAVIGATION ---------- -->
+                <?php if ($hasGallery): ?>
+                <div class="thumbnail-navigation" id="thumbnailNavigation">
+                    <?php foreach ($productImageUrls as $index => $url): ?>
+                    <button type="button" class="thumbnail-image-btn <?php echo $index === 0 ? 'active' : ''; ?>"
+                        data-index="<?php echo $index; ?>"
+                        style="background-image:url('<?php echo htmlspecialchars($url, ENT_QUOTES, 'UTF-8'); ?>');"
+                        aria-label="View image <?php echo $index + 1; ?>"></button>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
 
-                            <div class="action-row action-row-a">
-                                <div class="action-col action-col-qty">
-                                    <div class="quantity-control">
-                                        <button type="button" class="qty-btn qty-minus" aria-label="Decrease quantity">
-                                            <img src="<?php echo $assetBase; ?>assets/images/icons/subtract-line.svg"
-                                                alt="" class="qty-btn-icon" width="18" height="18">
-                                        </button>
-                                        <input type="number" name="quantity" id="productQuantity" value="1" min="1"
-                                            max="<?php echo (int)$product['stock']; ?>" class="qty-input">
-                                        <button type="button" class="qty-btn qty-plus" aria-label="Increase quantity">
-                                            <img src="<?php echo $assetBase; ?>assets/images/icons/add-line.svg" alt=""
-                                                class="qty-btn-icon" width="18" height="18">
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="action-col action-col-total">
-                                    <div class="action-total">
-                                        <span class="action-total-label">Total:</span>
-                                        <span class="action-total-price"
-                                            id="mainTotalPrice"><?php echo $formattedPrice; ?></span>
-                                    </div>
+                <!-- ---------- GRID CELL 4: ACTION ROW ---------- -->
+                <div class="action-control" id="actionControl">
+                    <?php if ($isLoggedIn && $inStock): ?>
+                    <form method="POST" action="../backend/handlers/cart-handler.php" class="action-control-form"
+                        id="actionControlForm" data-cart-url="../backend/handlers/cart-handler.php"
+                        data-queue-url="../backend/handlers/queue-handler.php">
+                        <input type="hidden" name="csrf_token" value="<?php echo $csrfToken; ?>">
+                        <input type="hidden" name="product_id" value="<?php echo $productId; ?>">
+                        <input type="hidden" name="customizations" id="customizationsData" value="">
+                        <input type="hidden" name="total_price" id="totalPriceInput" value="<?php echo $basePrice; ?>">
+                        <input type="hidden" name="total_calories" id="totalCaloriesInput"
+                            value="<?php echo $baseCalories; ?>">
+                        <input type="hidden" name="action" id="queueActionInput" value="add">
+
+                        <div class="action-row action-row-a">
+                            <div class="action-col action-col-qty">
+                                <div class="quantity-control">
+                                    <button type="button" class="qty-btn qty-minus" aria-label="Decrease quantity">
+                                        <img src="<?php echo $assetBase; ?>assets/images/icons/subtract-line.svg" alt=""
+                                            class="qty-btn-icon" width="18" height="18">
+                                    </button>
+                                    <input type="number" name="quantity" id="productQuantity" value="1" min="1"
+                                        max="<?php echo (int)$product['stock']; ?>" class="qty-input">
+                                    <button type="button" class="qty-btn qty-plus" aria-label="Increase quantity">
+                                        <img src="<?php echo $assetBase; ?>assets/images/icons/add-line.svg" alt=""
+                                            class="qty-btn-icon" width="18" height="18">
+                                    </button>
                                 </div>
                             </div>
-
-                            <div class="action-row action-row-b">
-                                <?php if ($hasCustomizations): ?>
-                                <button type="button" class="action-btn customize-btn" id="customizeBtn">
-                                    <span>Customize</span>
-                                </button>
-                                <?php endif; ?>
-                                <button type="button" class="action-btn add-to-cart-btn" id="addToCartBtn">
-                                    <span>Add to Cart</span>
-                                </button>
-                                <button type="button" class="action-btn add-to-order-btn" id="addToOrderBtn">
-                                    <span>Add to Order</span>
-                                </button>
+                            <div class="action-col action-col-total">
+                                <div class="action-total">
+                                    <span class="action-total-label">Total:</span>
+                                    <span class="action-total-price"
+                                        id="mainTotalPrice"><?php echo $formattedPrice; ?></span>
+                                </div>
                             </div>
-                        </form>
-                        <?php elseif (!$isLoggedIn): ?>
-                        <div class="action-row action-control-login">
-                            <a href="sign-in.php" class="action-btn btn-primary">
-                                <span>Login to Order</span>
-                            </a>
                         </div>
-                        <?php else: ?>
-                        <div class="action-row action-control-disabled">
-                            <button class="action-btn btn-disabled" disabled>
-                                <span>Out of Stock</span>
+
+                        <div class="action-row action-row-b">
+                            <?php if ($hasCustomizations): ?>
+                            <button type="button" class="action-btn customize-btn" id="customizeBtn">
+                                <span>Customize</span>
+                            </button>
+                            <?php endif; ?>
+                            <button type="button" class="action-btn add-to-cart-btn" id="addToCartBtn">
+                                <span>Add to Cart</span>
+                            </button>
+                            <button type="button" class="action-btn add-to-order-btn" id="addToOrderBtn">
+                                <span>Add to Order</span>
                             </button>
                         </div>
-                        <?php endif; ?>
+                    </form>
+                    <?php elseif (!$isLoggedIn): ?>
+                    <div class="action-row action-control-login">
+                        <a href="sign-in.php" class="action-btn btn-primary">
+                            <span>Login to Order</span>
+                        </a>
                     </div>
+                    <?php else: ?>
+                    <div class="action-row action-control-disabled">
+                        <button class="action-btn btn-disabled" disabled>
+                            <span>Out of Stock</span>
+                        </button>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -448,22 +526,61 @@ if ($reviewsMoreJson === false) {
             <section class="related-products">
                 <h2 class="related-title">You might also like</h2>
                 <div class="related-grid">
-                    <?php foreach ($relatedProducts as $related): ?>
+                    <?php foreach ($relatedProducts as $related):
+                        $relatedImageUrl = productDetailResolvePrimary(
+                            $projectRootUrl,
+                            (string)($related['image_base']    ?? ''),
+                            (string)($related['primary_image'] ?? ''),
+                            $productImageFallback
+                        );
+
+                        $relatedDietaryTags = !empty($related['dietary_tags'])
+                            ? array_map('trim', explode(',', $related['dietary_tags']))
+                            : [];
+                        $relatedAllergens = !empty($related['allergens'])
+                            ? array_map('trim', explode(',', $related['allergens']))
+                            : [];
+                        $relatedDescription = (string)($related['description'] ?? '');
+                    ?>
                     <a href="product-detail.php?id=<?php echo (int)$related['product_id']; ?>" class="related-card">
                         <div class="related-image">
-                            <img src="<?php echo $related['product_image'] !== ''
-                                ? htmlspecialchars($related['product_image'], ENT_QUOTES, 'UTF-8')
-                                : $assetBase . 'assets/images/icons/restaurant.svg'; ?>"
+                            <img src="<?php echo htmlspecialchars($relatedImageUrl, ENT_QUOTES, 'UTF-8'); ?>"
                                 alt="<?php echo htmlspecialchars($related['product_name'], ENT_QUOTES, 'UTF-8'); ?>"
                                 loading="lazy"
-                                onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/restaurant.svg'">
+                                onerror="this.onerror=null; this.src='<?php echo $productImageFallback; ?>'">
                         </div>
                         <div class="related-info">
                             <p class="related-name">
                                 <?php echo htmlspecialchars($related['product_name'], ENT_QUOTES, 'UTF-8'); ?></p>
-                            <p class="related-price">₱<?php echo number_format((float)$related['price'], 2); ?></p>
-                            <?php if ($related['calories'] !== null): ?>
-                            <p class="related-calories"><?php echo (int)$related['calories']; ?> kcal</p>
+
+                            <?php if ($relatedDescription !== ''): ?>
+                            <p class="related-description">
+                                <?php echo htmlspecialchars(mb_strimwidth($relatedDescription, 0, 70, '…'), ENT_QUOTES, 'UTF-8'); ?>
+                            </p>
+                            <?php endif; ?>
+
+                            <div class="related-meta">
+                                <span
+                                    class="related-price">₱<?php echo number_format((float)$related['price'], 2); ?></span>
+                                <?php if ($related['calories'] !== null): ?>
+                                <span class="related-calories"><?php echo (int)$related['calories']; ?> kcal</span>
+                                <?php endif; ?>
+                            </div>
+
+                            <?php if (!empty($relatedDietaryTags) || !empty($relatedAllergens)): ?>
+                            <div class="related-tags">
+                                <?php foreach (array_slice($relatedDietaryTags, 0, 2) as $tag): ?>
+                                <span class="tag dietary-tag">
+                                    <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $tag)), ENT_QUOTES, 'UTF-8'); ?>
+                                </span>
+                                <?php endforeach; ?>
+
+                                <?php foreach (array_slice($relatedAllergens, 0, 2) as $allergen): ?>
+                                <span class="tag allergen-tag">
+                                    <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $allergen)), ENT_QUOTES, 'UTF-8'); ?>
+                                </span>
+                                <?php endforeach; ?>
+                            </div>
                             <?php endif; ?>
                         </div>
                     </a>
@@ -515,9 +632,9 @@ if ($reviewsMoreJson === false) {
             <div class="customization-card">
                 <div class="customization-product-summary">
                     <div class="customization-product-image">
-                        <img src="<?php echo $productImage; ?>"
+                        <img src="<?php echo htmlspecialchars($primaryImageUrl, ENT_QUOTES, 'UTF-8'); ?>"
                             alt="<?php echo htmlspecialchars($product['product_name'], ENT_QUOTES, 'UTF-8'); ?>"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/restaurant.svg'">
+                            onerror="this.onerror=null; this.src='<?php echo $productImageFallback; ?>'">
                     </div>
                     <div class="customization-product-info">
                         <p class="customization-product-name">

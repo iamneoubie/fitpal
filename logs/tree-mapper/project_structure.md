@@ -1,7 +1,7 @@
 # Web Project Structure
 
 **Project:** fitpal
-**Generated:** 2026-10-01 22:11:17
+**Generated:** 2026-10-02 05:24:49
 **Mode:** all
 
 ```
@@ -53,6 +53,7 @@ fitpal/
 │   │   ├── css/
 │   │   │   ├── cart.css
 │   │   │   ├── checkout.css
+│   │   │   ├── customer-orders.css
 │   │   │   ├── dashboard.css
 │   │   │   ├── header.css
 │   │   │   ├── menu-filter.css
@@ -60,10 +61,10 @@ fitpal/
 │   │   │   ├── menu.css
 │   │   │   ├── order-receipt.css
 │   │   │   ├── order-tracking.css
-│   │   │   ├── orders.css
 │   │   │   ├── product-detail.css
 │   │   │   ├── profile.css
 │   │   │   ├── queue-panel.css
+│   │   │   ├── review.css
 │   │   │   ├── sign-in.css
 │   │   │   ├── sign-up.css
 │   │   │   └── wallet.css
@@ -80,6 +81,7 @@ fitpal/
 │   │           ├── product-detail.js
 │   │           ├── profile.js
 │   │           ├── queue-panel.js
+│   │           ├── review.js
 │   │           ├── sign-in.js
 │   │           ├── sign-out.js
 │   │           ├── sign-up.js
@@ -104,6 +106,7 @@ fitpal/
 │   │       ├── checkout-handler.php
 │   │       ├── customer-order-handler.php
 │   │       ├── feedback-handler.php
+│   │       ├── feedback-queries.php
 │   │       ├── get-branch-handler.php
 │   │       ├── message-handler.php
 │   │       ├── place-order-handler.php
@@ -126,6 +129,7 @@ fitpal/
 │       ├── orders.php
 │       ├── product-detail.php
 │       ├── profile.php
+│       ├── review.php
 │       ├── sign-in.php
 │       ├── sign-up.php
 │       └── wallet.php
@@ -150,6 +154,7 @@ fitpal/
 │   ├── logic/
 │   │   └── business-logic.md
 │   ├── output/
+│   │   ├── all_path_fetched_codebase.md
 │   │   ├── directories_customer_fetched_codebase.md
 │   │   ├── directories_restaurant_fetched_codebase.md
 │   │   └── directories_rider_fetched_codebase.md
@@ -183,6 +188,7 @@ fitpal/
 │   │           ├── kitchen-realtime.js
 │   │           ├── logout.js
 │   │           ├── profile.js
+│   │           ├── restaurant-chat-modal.js
 │   │           ├── sign-in.js
 │   │           └── sign-up.js
 │   ├── backend/
@@ -440,6 +446,101 @@ fitpal/
 │   │   │   │   ├── permits/
 │   │   │   │   │   ├── business-permit.png
 │   │   │   │   │   └── sanitary-permit.jpg
+│   │   │   │   ├── products/
+│   │   │   │   │   └── restaurant/
+│   │   │   │   │       ├── asian-fusion-fit/
+│   │   │   │   │       │   ├── 001-gluten-free-salmon-roll/
+│   │   │   │   │       │   │   ├── image-1.png
+│   │   │   │   │       │   │   ├── image-2.png
+│   │   │   │   │       │   │   ├── image-3.jpg
+│   │   │   │   │       │   │   └── image-4.jpg
+│   │   │   │   │       │   ├── 002-grilled-fish-greens/
+│   │   │   │   │       │   │   ├── image-1.png
+│   │   │   │   │       │   │   └── image-2.png
+│   │   │   │   │       │   ├── 003-matcha-banana-smotthie/
+│   │   │   │   │       │   │   ├── image-1.png
+│   │   │   │   │       │   │   └── image-2.png
+│   │   │   │   │       │   ├── 004-nori-hand-roll/
+│   │   │   │   │       │   │   ├── image-1.png
+│   │   │   │   │       │   │   └── image-2.png
+│   │   │   │   │       │   ├── 005-osaka-rice-bowl/
+│   │   │   │   │       │   │   └── image-1.png
+│   │   │   │   │       │   ├── 006-rainbow-poke-bowl/
+│   │   │   │   │       │   │   ├── image-1.png
+│   │   │   │   │       │   │   └── image-2.png
+│   │   │   │   │       │   ├── 007-seaweed-sesame-salad/
+│   │   │   │   │       │   │   ├── image-1.png
+│   │   │   │   │       │   │   └── image-2.png
+│   │   │   │   │       │   ├── 008-spicy-tuna-roll/
+│   │   │   │   │       │   │   ├── image-1.png
+│   │   │   │   │       │   │   └── image-2.png
+│   │   │   │   │       │   ├── 009-tokyo-noodle-bowl/
+│   │   │   │   │       │   │   ├── image-1.png
+│   │   │   │   │       │   │   └── image-2.png
+│   │   │   │   │       │   └── 010-wok-tossed-vegetables/
+│   │   │   │   │       │       └── image-1.png
+│   │   │   │   │       ├── green-bowl-cafe/
+│   │   │   │   │       │   ├── 001-berry-almond/
+│   │   │   │   │       │   │   ├── image-1.png
+│   │   │   │   │       │   │   └── image-2.png
+│   │   │   │   │       │   ├── 002-classic-vegan-bowl/
+│   │   │   │   │       │   │   ├── image-1.png
+│   │   │   │   │       │   │   └── image-2.png
+│   │   │   │   │       │   ├── 003-edamame-citrus-salad/
+│   │   │   │   │       │   │   ├── image-1.png
+│   │   │   │   │       │   │   └── image-2.png
+│   │   │   │   │       │   ├── 004-garden-harvest-bowl/
+│   │   │   │   │       │   │   ├── image-1.png
+│   │   │   │   │       │   │   └── image-2.png
+│   │   │   │   │       │   ├── 005-market-greens-salad/
+│   │   │   │   │       │   │   ├── image-1.png
+│   │   │   │   │       │   │   └── image-2.png
+│   │   │   │   │       │   ├── 006-morning-power-smoothie/
+│   │   │   │   │       │   │   ├── image-1.png
+│   │   │   │   │       │   │   └── image-2.png
+│   │   │   │   │       │   ├── 007-seaside-poke-bowl/
+│   │   │   │   │       │   │   ├── image-1.png
+│   │   │   │   │       │   │   └── image-2.png
+│   │   │   │   │       │   ├── 008-sunrise-breakfast-bowl/
+│   │   │   │   │       │   │   ├── image-1.png
+│   │   │   │   │       │   │   └── image-2.png
+│   │   │   │   │       │   ├── 009-superfood-buddha-bowl/
+│   │   │   │   │       │   │   ├── image-1.png
+│   │   │   │   │       │   │   └── image-2.png
+│   │   │   │   │       │   └── 010-zucchini-noodle-pesto/
+│   │   │   │   │       │       ├── image-1.png
+│   │   │   │   │       │       └── image-2.png
+│   │   │   │   │       └── keto-kitchen/
+│   │   │   │   │           ├── 001-chicken parmesan plate/
+│   │   │   │   │           │   ├── image-1.png
+│   │   │   │   │           │   └── image-2.png
+│   │   │   │   │           ├── 002-egg avocado bowl/
+│   │   │   │   │           │   ├── image-1.png
+│   │   │   │   │           │   └── image-2.png
+│   │   │   │   │           ├── 003-keto butcher plate/
+│   │   │   │   │           │   ├── image-1.png
+│   │   │   │   │           │   └── image-2.png
+│   │   │   │   │           ├── 004-keto cauliflower pizza/
+│   │   │   │   │           │   ├── image-1.png
+│   │   │   │   │           │   └── image-2.png
+│   │   │   │   │           ├── 005-keto garden salad/
+│   │   │   │   │           │   ├── image-1.png
+│   │   │   │   │           │   └── image-2.png
+│   │   │   │   │           ├── 006-keto power bowl/
+│   │   │   │   │           │   ├── image-1.png
+│   │   │   │   │           │   └── image-2.png
+│   │   │   │   │           ├── 007-keto-smash-burger/
+│   │   │   │   │           │   ├── image-1.png
+│   │   │   │   │           │   └── image-2.png
+│   │   │   │   │           ├── 008-keto-steak-plate/
+│   │   │   │   │           │   ├── image-1.png
+│   │   │   │   │           │   └── image-2.png
+│   │   │   │   │           ├── 009-salmon-dill-plate/
+│   │   │   │   │           │   ├── image-1.png
+│   │   │   │   │           │   └── image-2.png
+│   │   │   │   │           └── 010-shrimp-scampi-zoodles/
+│   │   │   │   │               ├── image-1.png
+│   │   │   │   │               └── image-2.png
 │   │   │   │   └── profiles/
 │   │   │   │       ├── profile-1.jpg
 │   │   │   │       ├── profile-10.jpg
@@ -476,14 +577,15 @@ fitpal/
 │   │   ├── session-activity.php
 │   │   ├── session-bootstrap.php
 │   │   └── view-helpers.php
-│   ├── pages/
-│   │   ├── about.php
-│   │   ├── contact.php
-│   │   ├── privacy-policy.php
-│   │   └── terms-conditions.php
-│   └── uploads/
+│   └── pages/
+│       ├── about.php
+│       ├── contact.php
+│       ├── privacy-policy.php
+│       └── terms-conditions.php
 ├── sql/
 │   ├── seed/
+│   │   ├── test/
+│   │   │   └── orders.sql
 │   │   ├── all-in-one.sql
 │   │   ├── seed-1-core.sql
 │   │   ├── seed-2-content.sql
@@ -507,16 +609,16 @@ fitpal/
 | File Type | Count |
 |-----------|-------|
 | HTML Files | 0 |
-| PHP Files | 111 |
-| CSS Files | 48 |
-| JavaScript Files | 46 |
+| PHP Files | 113 |
+| CSS Files | 49 |
+| JavaScript Files | 48 |
 | JSON Files | 2 |
-| Text/Markdown | 14 |
-| Image Files | 178 |
-| Other Files | 16 |
+| Text/Markdown | 15 |
+| Image Files | 238 |
+| Other Files | 18 |
 
-**Total Directories:** 78
-**Total Files:** 414
+**Total Directories:** 113
+**Total Files:** 481
 
 ---
 

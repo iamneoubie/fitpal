@@ -62,19 +62,55 @@
  * writers — so both writers and the shared layer stay consistent by
  * construction.
  *
- * @package FitPal
- * @version 3.0 — Docblock records the queue shape contract against
- *                the shared order-transaction layer. No behavioural
- *                change: getProductForQueue(),
- *                getProductCompositionRules(), and queueEnrich()
- *                are byte-for-byte the same as the previous revision.
+ * ---------------------------------------------------------------------
+ * IMAGE URL RESOLUTION
+ * ---------------------------------------------------------------------
+ * The `image` field returned by queueEnrich() is a browser-loadable
+ * URL, not a raw database path. The raw value stored in
+ * dietary_information.images is resolved through the helpers in
+ * product-queries.php:
  *
- *                (2.0: raw SQL from queue-handler.php moved here;
- *                enrichment function relocated because this file is
- *                safe to require from pages.)
+ *     getProductImageBasePath()    resolves the folder
+ *     getProductPrimaryFilename()  finds the first image file
+ *
+ * The project-root URL prefix is derived from $_SERVER['SCRIPT_NAME']
+ * so the returned URL is correct regardless of which page called
+ * this function. The depth calculation walks up from the script's
+ * directory to the project root, then appends 'shared/' plus the
+ * resolved folder plus the filename.
+ *
+ * ---------------------------------------------------------------------
+ * getProductCompositionRules() COLLISION GUARD
+ * ---------------------------------------------------------------------
+ * Both this file and cart-queries.php declare a function named
+ * getProductCompositionRules(). Whichever file is loaded first
+ * declares the canonical version; the second file's declaration is
+ * skipped by the function_exists() guard.
+ *
+ * The two shapes are compatible for every current caller:
+ * cart-handler.php's computeServerUnitPrice() reads
+ * ['price_modifier'] and ['max_quantity']; queueEnrich() below
+ * reads the same two keys. Both shapes carry those keys. To keep
+ * the two shapes identical — so a future caller that reads
+ * ['is_default'] or ['default_quantity'] works regardless of which
+ * file loaded first — this file's version returns the full row
+ * shape, matching what cart-queries.php returns.
+ *
+ * @package FitPal
+ * @version 5.0 — getProductCompositionRules() is wrapped in a
+ *                function_exists() guard so it does not fatal when
+ *                cart-handler.php requires both this file and
+ *                cart-queries.php in the same request.
+ *
+ *                (4.0: queueEnrich() resolves the full image URL.
+ *                3.0: docblock records the queue shape contract.
+ *                2.0: raw SQL from queue-handler.php moved here.
+ *                1.0: initial queue query layer.)
  */
 
 declare(strict_types=1);
+
+require_once __DIR__ . '/product-queries.php';
 
 /**
  * Fetch product details needed to enrich a queued item.
@@ -121,25 +157,123 @@ function getProductForQueue(PDO $db, int $productId): array|false
  *
  * Returns an array keyed by ingredient_id for O(1) lookup.
  *
+ * COLLISION GUARD: cart-queries.php declares a function with the
+ * same name. Whichever file loads first declares the canonical
+ * version; this guard makes the second file's declaration a
+ * silent no-op.
+ *
+ * Both files return the same superset shape — every column the
+ * query selects — so every caller sees compatible keys regardless
+ * of load order.
+ *
  * @param PDO $db
  * @param int $productId
- * @return array<int, array<string, mixed>>
+ * @return array<int, array{
+ *     ingredient_id: int,
+ *     price_modifier: float,
+ *     min_quantity: int,
+ *     max_quantity: int,
+ *     is_required: int,
+ *     is_default: int,
+ *     default_quantity: int
+ * }>
  */
-function getProductCompositionRules(PDO $db, int $productId): array
-{
-    $stmt = $db->prepare(
-        "SELECT ingredient_id, price_modifier, min_quantity, max_quantity,
-                is_required, is_default, default_quantity
-           FROM product_composition
-          WHERE product_id = :product_id"
-    );
-    $stmt->execute([':product_id' => $productId]);
+if (!function_exists('getProductCompositionRules')) {
+    function getProductCompositionRules(PDO $db, int $productId): array
+    {
+        $stmt = $db->prepare(
+            "SELECT ingredient_id, price_modifier, min_quantity, max_quantity,
+                    is_required, is_default, default_quantity
+               FROM product_composition
+              WHERE product_id = :product_id"
+        );
+        $stmt->execute([':product_id' => $productId]);
 
-    $rules = [];
-    while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $rules[(int)$r['ingredient_id']] = $r;
+        $rules = [];
+        while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $rules[(int)$r['ingredient_id']] = [
+                'ingredient_id'    => (int)$r['ingredient_id'],
+                'price_modifier'   => (float)$r['price_modifier'],
+                'min_quantity'     => (int)$r['min_quantity'],
+                'max_quantity'     => (int)$r['max_quantity'],
+                'is_required'      => (int)($r['is_required']      ?? 0),
+                'is_default'       => (int)($r['is_default']       ?? 0),
+                'default_quantity' => (int)($r['default_quantity'] ?? 0),
+            ];
+        }
+        return $rules;
     }
-    return $rules;
+}
+
+/**
+ * Derive the project-root URL prefix for the current request.
+ *
+ * The returned string always ends with a forward slash and is the
+ * URL path from the current script's directory up to the project
+ * root. For a page at /customer/pages/menu.php it returns
+ * '../../'. For a handler at
+ * /customer/backend/handlers/queue-handler.php it returns
+ * '../../../'.
+ *
+ * Used by queueEnrich() to build a browser-loadable image URL from
+ * a project-root-relative folder path.
+ *
+ * @return string
+ */
+function queueProjectRootUrl(): string
+{
+    $scriptPath = $_SERVER['SCRIPT_NAME'] ?? '';
+
+    if ($scriptPath === '') {
+        return '';
+    }
+
+    $dirPath  = dirname($scriptPath);
+    $segments = array_filter(explode('/', $dirPath));
+    $depth    = count($segments);
+
+    if ($depth <= 0) {
+        return './';
+    }
+
+    return str_repeat('../', $depth);
+}
+
+/**
+ * Build a browser-loadable image URL from a raw
+ * dietary_information.images value.
+ *
+ * Uses the helpers in product-queries.php to resolve the folder
+ * that actually exists on disk, then prepends the project-root
+ * URL prefix derived from the current request.
+ *
+ * Returns '' when the folder cannot be resolved or the folder
+ * contains no image file. Callers fall back to the restaurant
+ * icon in that case.
+ *
+ * @param string $imageFolder  Raw dietary_information.images value.
+ * @return string
+ */
+function queueResolveImageUrl(string $imageFolder): string
+{
+    if ($imageFolder === '') {
+        return '';
+    }
+
+    $imageBase    = getProductImageBasePath($imageFolder);
+    $primaryImage = getProductPrimaryFilename($imageFolder);
+
+    if ($imageBase === '' || $primaryImage === '') {
+        return '';
+    }
+
+    $projectRootUrl = queueProjectRootUrl();
+
+    if ($projectRootUrl === '') {
+        return '';
+    }
+
+    return $projectRootUrl . $imageBase . $primaryImage;
 }
 
 /**
@@ -166,6 +300,9 @@ function getProductCompositionRules(PDO $db, int $productId): array
  * quantity, price, base_price, customization_data), plus four
  * presentational fields (name, image, stock, restaurant_name,
  * branch_name) that the menu page's queue panel renders.
+ *
+ * The `image` field is a browser-loadable URL, not a raw database
+ * path. See queueResolveImageUrl() for the resolution logic.
  *
  * Every writer of $_SESSION['order_queue'] builds its line from
  * this return value. Any change to the field set here is a change
@@ -244,13 +381,17 @@ function queueEnrich(PDO $db, array $item): ?array
         $unitPrice = 0.0;
     }
 
+    // Resolve the full image URL from the raw database folder path.
+    $imageFolder = (string)($p['product_image'] ?? '');
+    $imageUrl    = queueResolveImageUrl($imageFolder);
+
     return [
         'product_id'           => (int)$p['product_id'],
         'name'                 => (string)$p['name'],
         'price'                => round($unitPrice, 2),
         'base_price'           => $basePrice,
         'quantity'             => $quantity,
-        'image'                => (string)$p['product_image'],
+        'image'                => $imageUrl,
         'stock'                => $maxStock,
         'restaurant_name'      => (string)$p['restaurant_name'],
         'branch_name'          => (string)$p['branch_name'],

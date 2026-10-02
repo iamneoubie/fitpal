@@ -20,12 +20,66 @@
  *
  * No $_POST, no header(), no echo.
  *
+ * ---------------------------------------------------------------------
+ * IMAGE PATH RESOLUTION
+ * ---------------------------------------------------------------------
+ * The `product_image` column returned by the reads below is the raw
+ * dietary_information.images value — a project-root-relative folder
+ * path that may omit the literal `restaurant/` segment the manifest
+ * folder actually carries. It is NOT a browser-loadable URL on its
+ * own.
+ *
+ * Pages that render a cart image resolve the raw value through the
+ * helpers in product-queries.php:
+ *
+ *     getProductImageBasePath()    resolves the folder that exists
+ *     getProductPrimaryFilename()  finds the first image file
+ *
+ * This file requires product-queries.php so that every caller of
+ * this file automatically has those helpers available. The
+ * resolution itself is done by the page (cart.php's
+ * resolveCartImageUrl()), because the page knows its own asset base
+ * and the query layer does not.
+ *
+ * ---------------------------------------------------------------------
+ * getProductCompositionRules() COLLISION GUARD
+ * ---------------------------------------------------------------------
+ * Both this file and queue-queries.php declare a function named
+ * getProductCompositionRules(). Whichever file is loaded first
+ * declares the canonical version; the second file's declaration is
+ * skipped by the function_exists() guard.
+ *
+ * The two shapes are compatible for every current caller:
+ * cart-handler.php's computeServerUnitPrice() reads
+ * ['price_modifier'] and ['max_quantity']; queue-queries.php's
+ * queueEnrich() reads the same two keys. Both shapes carry those
+ * keys. To keep the two shapes identical — so a future caller that
+ * reads ['is_default'] or ['default_quantity'] works regardless of
+ * which file loaded first — this file's version returns the full
+ * row shape, matching what queue-queries.php returns.
+ *
  * @package FitPal
- * @version 6.1 — Pure cart-feature functions co-located here because
- *                this is the only cart file that is safe to include.
+ * @version 8.0 — getProductCompositionRules() is wrapped in a
+ *                function_exists() guard and returns the full
+ *                product_composition row shape. This fixes the
+ *                "Cannot redeclare getProductCompositionRules()"
+ *                fatal that fired when cart-handler.php required
+ *                both this file and queue-queries.php.
+ *
+ *                No query in this file changed shape. The
+ *                `product_image` field remains the raw column
+ *                value; resolution happens in the page.
+ *
+ *                (7.0: requires product-queries.php so callers can
+ *                resolve the raw `product_image` value. 6.1: pure
+ *                cart-feature functions co-located here. 6.0:
+ *                paginated read with image column. 5.0: cart
+ *                customization breakdown helper.)
  */
 
 declare(strict_types=1);
+
+require_once __DIR__ . '/product-queries.php';
 
 /* ---------------------------------------------------------------
  * READS
@@ -299,33 +353,57 @@ function getCartItemByProduct(
 
 /**
  * Fetch the composition rules for a product — every ingredient that
- * can be selected or removed, with its price modifier and max quantity.
+ * can be selected or removed, with its price modifier, min/max
+ * quantities, and required/default flags.
  *
- * Returns an array keyed by ingredient_id for O(1) lookup in the caller.
+ * Returns an array keyed by ingredient_id for O(1) lookup.
+ *
+ * COLLISION GUARD: queue-queries.php declares a function with the
+ * same name. Whichever file loads first declares the canonical
+ * version; this guard makes the second file's declaration a
+ * silent no-op.
+ *
+ * Both files return the same superset shape — every column the
+ * query selects — so every caller sees compatible keys regardless
+ * of load order.
  *
  * @param PDO $db
  * @param int $productId
- * @return array<int, array{ingredient_id:int, price_modifier:float, min_quantity:int, max_quantity:int}>
+ * @return array<int, array{
+ *     ingredient_id: int,
+ *     price_modifier: float,
+ *     min_quantity: int,
+ *     max_quantity: int,
+ *     is_required: int,
+ *     is_default: int,
+ *     default_quantity: int
+ * }>
  */
-function getProductCompositionRules(PDO $db, int $productId): array
-{
-    $stmt = $db->prepare(
-        "SELECT ingredient_id, price_modifier, min_quantity, max_quantity
-           FROM product_composition
-          WHERE product_id = :product_id"
-    );
-    $stmt->execute([':product_id' => $productId]);
+if (!function_exists('getProductCompositionRules')) {
+    function getProductCompositionRules(PDO $db, int $productId): array
+    {
+        $stmt = $db->prepare(
+            "SELECT ingredient_id, price_modifier, min_quantity, max_quantity,
+                    is_required, is_default, default_quantity
+               FROM product_composition
+              WHERE product_id = :product_id"
+        );
+        $stmt->execute([':product_id' => $productId]);
 
-    $rules = [];
-    while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $rules[(int)$r['ingredient_id']] = [
-            'ingredient_id'  => (int)$r['ingredient_id'],
-            'price_modifier' => (float)$r['price_modifier'],
-            'min_quantity'   => (int)$r['min_quantity'],
-            'max_quantity'   => (int)$r['max_quantity'],
-        ];
+        $rules = [];
+        while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $rules[(int)$r['ingredient_id']] = [
+                'ingredient_id'    => (int)$r['ingredient_id'],
+                'price_modifier'   => (float)$r['price_modifier'],
+                'min_quantity'     => (int)$r['min_quantity'],
+                'max_quantity'     => (int)$r['max_quantity'],
+                'is_required'      => (int)($r['is_required']      ?? 0),
+                'is_default'       => (int)($r['is_default']       ?? 0),
+                'default_quantity' => (int)($r['default_quantity'] ?? 0),
+            ];
+        }
+        return $rules;
     }
-    return $rules;
 }
 
 /**

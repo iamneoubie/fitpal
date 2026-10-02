@@ -1,7 +1,7 @@
 /**
  * FitPal Product Detail
- * Version 10.0 — Adds client-side "Load More" for the reviews
- *                section.
+ * Version 11.0 — Adds the thumbnail swap behaviour on the main
+ *                preview box.
  *
  * Routing:
  *   Main view:
@@ -20,16 +20,174 @@
  * appends 5 more cards per click of #reviewsLoadMoreBtn, and
  * removes the button once the payload is exhausted.
  *
- * Card markup is built with document.createElement and textContent.
- * No innerHTML writes with user-supplied strings.
+ * Thumbnail swap
+ * --------------
+ * product-detail.php renders the main preview box (#mainPreviewBox,
+ * #previewImage, #previewPlaceholder) and, when the product folder
+ * has more than one image-*.{ext} file, a thumbnail strip
+ * (#thumbnailNavigation) carrying one
+ * .thumbnail-image-btn[data-index] per image.
+ *
+ * This file binds:
+ *   - mouseenter on a thumbnail → preview shows that image
+ *   - click on a thumbnail      → that index is locked in
+ *   - mouseleave on a thumbnail → preview reverts to the locked index
+ *
+ * The strip is optional. When it is absent (single-image products,
+ * or a folder with zero images), the whole block exits at its first
+ * line and the preview box keeps whatever the server rendered.
+ *
+ * The preview box swaps its background-image inline. Every visual
+ * rule (sizing, ring, active/hover/broken states) lives in
+ * product-detail.css. This file only toggles class names and
+ * writes one inline style property.
  *
  * @package FitPal
- * @version 10.0
+ * @version 11.0 — Adds the thumbnail swap behaviour. Every other
+ *                behaviour is byte-identical to v10.0.
+ *
+ *                (10.0: reviews Load More. 9.0: single-button
+ *                loading state. 8.0: reviews section.)
  */
 (function () {
     'use strict';
 
     document.addEventListener('DOMContentLoaded', function () {
+
+        // ------------------------------------------------------
+        // THUMBNAIL SWAP
+        //
+        // Self-contained. Exits immediately when #thumbnailNavigation
+        // is absent. Has no reference to any node the wizard owns,
+        // and the wizard below has no reference to any node this
+        // block owns.
+        // ------------------------------------------------------
+        (function initThumbnailSwap() {
+            const previewImage       = document.getElementById('previewImage');
+            const previewPlaceholder = document.getElementById('previewPlaceholder');
+            const thumbnailNav       = document.getElementById('thumbnailNavigation');
+
+            if (!previewImage || !previewPlaceholder) return;
+            if (!thumbnailNav) return;
+
+            const buttons = Array.from(
+                thumbnailNav.querySelectorAll('.thumbnail-image-btn')
+            );
+            if (buttons.length === 0) return;
+
+            let lockedIndex  = 0;
+            let hoveredIndex = -1;
+
+            // Read every button's background-image URL once at bind
+            // time. Product-detail.php writes them inline as
+            // url('...') on each button.
+            const imageUrls = buttons.map(function (btn) {
+                const bg = btn.style.backgroundImage;
+                if (!bg || bg === 'none') return '';
+                const match = bg.match(/url\((['"]?)(.*?)\1\)/);
+                return match && match[2] ? match[2] : '';
+            });
+
+            // Probe each URL once so a broken file can be marked
+            // before the customer ever hovers it.
+            imageUrls.forEach(function (url, index) {
+                if (!url) {
+                    buttons[index].classList.add('is-broken');
+                    buttons[index].setAttribute('aria-disabled', 'true');
+                    return;
+                }
+                const probe = new Image();
+                probe.onerror = function () {
+                    buttons[index].classList.add('is-broken');
+                    buttons[index].setAttribute('aria-disabled', 'true');
+                    console.warn('[product-detail] Thumbnail failed to load:', url);
+                };
+                probe.src = url;
+            });
+
+            function isUsableIndex(index) {
+                if (index < 0 || index >= imageUrls.length) return false;
+                if (imageUrls[index] === '') return false;
+                if (buttons[index].classList.contains('is-broken')) return false;
+                return true;
+            }
+
+            function applyPreviewAtIndex(index) {
+                if (!isUsableIndex(index)) {
+                    previewImage.style.display = 'none';
+                    previewPlaceholder.style.display = 'flex';
+                    return;
+                }
+                previewImage.style.backgroundImage = "url('" + imageUrls[index] + "')";
+                previewImage.style.display = 'block';
+                previewPlaceholder.style.display = 'none';
+            }
+
+            function setActiveButton(index) {
+                buttons.forEach(function (btn, i) {
+                    btn.classList.toggle('active', i === index);
+                });
+            }
+
+            function setHoverButton(index) {
+                buttons.forEach(function (btn, i) {
+                    btn.classList.toggle('hover', i === index && i !== lockedIndex);
+                });
+            }
+
+            // The server rendered index 0 as active. Normalise in case
+            // index 0 is broken — fall through to the first usable one.
+            let initialIndex = 0;
+            if (!isUsableIndex(initialIndex)) {
+                initialIndex = imageUrls.findIndex(function (_, i) {
+                    return isUsableIndex(i);
+                });
+            }
+            if (initialIndex >= 0) {
+                lockedIndex = initialIndex;
+                applyPreviewAtIndex(lockedIndex);
+                setActiveButton(lockedIndex);
+            }
+
+            buttons.forEach(function (btn, index) {
+                btn.addEventListener('mouseenter', function () {
+                    if (!isUsableIndex(index)) return;
+                    hoveredIndex = index;
+                    applyPreviewAtIndex(index);
+                    setHoverButton(index);
+                });
+
+                btn.addEventListener('mouseleave', function () {
+                    if (hoveredIndex === -1) return;
+                    hoveredIndex = -1;
+                    applyPreviewAtIndex(lockedIndex);
+                    setActiveButton(lockedIndex);
+                    buttons.forEach(function (b) {
+                        b.classList.remove('hover');
+                    });
+                });
+
+                btn.addEventListener('click', function (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (!isUsableIndex(index)) return;
+                    lockedIndex = index;
+                    hoveredIndex = -1;
+                    applyPreviewAtIndex(lockedIndex);
+                    setActiveButton(lockedIndex);
+                    buttons.forEach(function (b) {
+                        b.classList.remove('hover');
+                    });
+                });
+
+                // Keyboard parity: Enter and Space act like a click.
+                btn.addEventListener('keydown', function (event) {
+                    if (event.key !== 'Enter' && event.key !== ' ') return;
+                    event.preventDefault();
+                    btn.click();
+                });
+            });
+        })();
 
         // ------------------------------------------------------
         // DOM
@@ -618,7 +776,7 @@
             avatar.setAttribute('aria-hidden', 'true');
 
             if (picture !== '') {
-                const assetBase = list_dataset_asset_base();
+                const assetBase = resolveAssetBase();
                 const url = buildAvatarUrl(picture, assetBase);
                 const img = document.createElement('img');
                 img.className = 'review-avatar-image';
@@ -675,7 +833,6 @@
             if (comment !== '') {
                 const p = document.createElement('p');
                 p.className = 'review-comment';
-                // Preserve line breaks from nl2br on the server-rendered cards.
                 const lines = comment.split(/\r?\n/);
                 lines.forEach((line, idx) => {
                     if (idx > 0) {
@@ -700,9 +857,6 @@
         function formatReviewDate(dateRaw) {
             if (dateRaw === '') return '';
 
-            // MySQL returns 'YYYY-MM-DD HH:MM:SS'. Parse it as a
-            // local time rather than relying on the browser's
-            // locale-specific Date(string) parsing.
             const m = dateRaw.match(/^(\d{4})-(\d{2})-(\d{2})/);
             if (!m) return dateRaw;
 
@@ -740,7 +894,7 @@
          * falling back to the standard ../../shared/ used by every
          * customer page.
          */
-        function list_dataset_asset_base() {
+        function resolveAssetBase() {
             if (typeof window.FITPAL_ASSET_BASE === 'string' && window.FITPAL_ASSET_BASE !== '') {
                 return window.FITPAL_ASSET_BASE;
             }
@@ -808,6 +962,6 @@
         updateCustomizeTotals();
         initReviewsLoadMore();
 
-        console.log('Product Detail JS v10.0 initialized');
+        console.log('Product Detail JS v11.0 initialized');
     });
 })();

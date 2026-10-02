@@ -12,6 +12,22 @@
  *   - Cart (persistent) → save for later
  *
  * ---------------------------------------------------------------------
+ * PRODUCT IMAGE URL
+ * ---------------------------------------------------------------------
+ * The reader (product-queries.php) resolves the raw
+ * dietary_information.images value against the folder shapes that
+ * actually exist on disk and returns the resolved folder as the
+ * `image_base` field. This page builds the browser URL from
+ * `image_base`, never from the raw column value:
+ *
+ *     $projectRootUrl = preg_replace('#shared/$#', '', $assetBase);
+ *     $url = $projectRootUrl . $product['image_base'] . $product['primary_image'];
+ *
+ * That is the same two-step pattern customer/pages/profile.php uses
+ * for the avatar, and it is what makes the browser request match a
+ * file on disk when the column omits the `restaurant/` segment.
+ *
+ * ---------------------------------------------------------------------
  * WHERE THE MONEY MOVEMENT GOES FROM HERE
  * ---------------------------------------------------------------------
  * Every path a customer takes off this page eventually routes
@@ -29,24 +45,20 @@
  *                      session queue, where the same
  *                      createOrderFromQueue() call takes over.
  *
- *   Direct Add       → product-detail.php and this page's inline
- *                      quantity controls both feed one of the two
- *                      paths above.
- *
- * The menu page itself never writes a ledger row and never calls a
- * handler directly. The user's click lands in the queue or the cart;
- * the money movement happens later, in the shared layer, when the
- * order is actually placed.
+ * The menu page itself never writes a ledger row.
  *
  * @package FitPal
- * @version 9.5 — Docblock records the money-flow path from the menu
- *                page into the shared order-transaction layer. No
- *                markup, form, or JS config change from the previous
- *                revision.
+ * @version 10.0 — Browser URL for product images is now built from
+ *                 $product['image_base'], not from the raw column
+ *                 value. Every card, thumbnail, and related-product
+ *                 tile goes through the same helper. Fallback to the
+ *                 restaurant icon when image_base is empty.
  *
- *                (9.4: CSRF token inherited from header.php. 9.3:
- *                removed order tracker; filter bar fixed under
- *                header.)
+ *                 (9.7: profile.php-pattern attempt, still used the
+ *                 raw column value. 9.6: first primary_image
+ *                 attempt. 9.5: money-flow docblock. 9.4: CSRF
+ *                 inherited from header.php. 9.3: removed order
+ *                 tracker.)
  */
 declare(strict_types=1);
 
@@ -155,10 +167,19 @@ $allAllergens = [
 $allRestaurants = getAllRestaurants($database_connection);
 
 // ============================================
-// CSRF TOKEN
+// PROJECT-ROOT URL
+//
+// Trim the trailing 'shared/' off $assetBase to get the URL of the
+// directory that contains shared/. Every image_base value the
+// reader returns begins with 'shared/', so appending it to this
+// base resolves without doubling the segment.
 // ============================================
-// Provided by header.php (via includes/customer-csrf-token.php), stored
-// under the customer role's own session key 'customer_csrf_token'.
+$projectRootUrl = preg_replace('#shared/$#', '', $assetBase);
+if (!is_string($projectRootUrl)) {
+    $projectRootUrl = '';
+}
+
+$productImageFallback = $assetBase . 'assets/images/icons/restaurant.svg';
 
 // ============================================
 // HELPERS
@@ -200,6 +221,24 @@ function hasActiveFilters(): bool {
            (isset($_GET['restaurant_id']) && (int)$_GET['restaurant_id'] > 0) ||
            (isset($_GET['min_price']) && (float)$_GET['min_price'] > 0) ||
            (isset($_GET['max_price']) && (float)$_GET['max_price'] > 0);
+}
+
+/**
+ * Build a browser-loadable URL for a product's primary image.
+ *
+ * Uses the reader's resolved folder (image_base) — not the raw
+ * column value — so the browser request matches a file on disk.
+ */
+function resolveMenuProductImageUrl(
+    string $projectRootUrl,
+    string $imageBase,
+    string $primaryFilename,
+    string $fallbackUrl
+): string {
+    if ($projectRootUrl === '' || $imageBase === '' || $primaryFilename === '') {
+        return $fallbackUrl;
+    }
+    return $projectRootUrl . $imageBase . $primaryFilename;
 }
 ?>
 <link rel="stylesheet" href="../assets/css/menu.css">
@@ -443,13 +482,22 @@ function hasActiveFilters(): bool {
                 <div class="branch-section">
                     <p class="heading-5"><?php echo htmlspecialchars($branch['name'], ENT_QUOTES, 'UTF-8'); ?></p>
                     <div class="product-grid">
-                        <?php foreach ($branch['products'] as $product): ?>
+                        <?php foreach ($branch['products'] as $product):
+                            $imageBase     = (string)($product['image_base']     ?? '');
+                            $primaryFile   = (string)($product['primary_image']  ?? '');
+                            $productImageUrl = resolveMenuProductImageUrl(
+                                $projectRootUrl,
+                                $imageBase,
+                                $primaryFile,
+                                $productImageFallback
+                            );
+                        ?>
                         <!-- PRODUCT CARD -->
                         <div class="product-card" data-product-id="<?php echo (int)$product['id']; ?>"
                             data-product-name="<?php echo htmlspecialchars($product['name'], ENT_QUOTES, 'UTF-8'); ?>"
                             data-product-price="<?php echo (float)$product['price']; ?>"
                             data-product-stock="<?php echo (int)$product['stock']; ?>"
-                            data-product-image="<?php echo !empty($product['image']) ? htmlspecialchars($product['image'], ENT_QUOTES, 'UTF-8') : ''; ?>"
+                            data-product-image="<?php echo htmlspecialchars($productImageUrl, ENT_QUOTES, 'UTF-8'); ?>"
                             data-restaurant-name="<?php echo htmlspecialchars($restaurant['name'], ENT_QUOTES, 'UTF-8'); ?>"
                             data-branch-name="<?php echo htmlspecialchars($branch['name'], ENT_QUOTES, 'UTF-8'); ?>"
                             data-dietary="<?php echo htmlspecialchars(implode(',', $product['dietary_tags']), ENT_QUOTES, 'UTF-8'); ?>"
@@ -459,15 +507,10 @@ function hasActiveFilters(): bool {
                             <a href="product-detail.php?id=<?php echo (int)$product['id']; ?>"
                                 class="product-image-link" onclick="event.stopPropagation();">
                                 <div class="product-image">
-                                    <?php if (!empty($product['image'])): ?>
-                                    <img src="<?php echo htmlspecialchars($product['image'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    <img src="<?php echo htmlspecialchars($productImageUrl, ENT_QUOTES, 'UTF-8'); ?>"
                                         alt="<?php echo htmlspecialchars($product['name'], ENT_QUOTES, 'UTF-8'); ?>"
                                         loading="lazy"
-                                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/restaurant.svg'">
-                                    <?php else: ?>
-                                    <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg"
-                                        alt="Restaurant icon" loading="lazy">
-                                    <?php endif; ?>
+                                        onerror="this.onerror=null; this.src='<?php echo $productImageFallback; ?>'">
                                 </div>
                             </a>
 

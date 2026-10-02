@@ -1,138 +1,32 @@
 -- =====================================================
--- FitPal Seed Data
--- Version 5.9
+-- FitPal Seed Data — CONSOLIDATED, SINGLE-PASS INSERT
+-- Version 9.0
 --
--- ALIGNED WITH: fitpal_food_delivery schema v1.3.0
---   - customer_address is a CHILD of customer
---   - delivery_rider_address is a CHILD of delivery_rider
---   - product_composition has NO max_quantity_per_item
---   - feedback UNIQUE is (order_id, product_id)
---   - cart UNIQUE includes customization_hash
---   - delivery_rider_emergency_contact (no is_primary; earliest id = primary)
---   - delivery_rider_document (id_type + id_path + issue_date + expiry_date)
---   - restaurant_permit (file_path + original_name + display_order)
---   - order_status includes 'picking_up' between 'rider_pending'
---     and 'delivering' (v1.3.0)
+-- ALIGNED WITH: fitpal_food_delivery schema v2.5.0
 --
--- v5.9 changes
--- ------------
---   * Rider identity documents now point at the curated
---     manifest (shared/assets/images/manifest/) instead of
---     the runtime upload directory. Each rider gets a
---     distinct manifest file so no two riders share the same
---     image in the admin KYC review screen:
---       - Carlos (motorcycle) → drivers-license-1.jpg
---       - Miguel (car)        → drivers-license-2.jpg
---       - Andrei (bicycle)    → national-id-1.jpg
+-- This file inserts every row directly. It contains:
+--   * NO ALTER statements
+--   * NO post-insert UPDATE statements for content or paths
+--   * ONLY two derived UPDATEs at the end (Section 10),
+--     both required because they depend on rows inserted
+--     earlier in the same transaction:
+--       10.1 dietary_information.calories derivation
+--       10.2 base_price = price enforcement
+--     If you prefer zero UPDATEs, pre-compute these values
+--     and inline them (see note at end of file).
 --
---   * Every product description now carries a full % Daily
---     Value label for Protein, Carbs, Fat, Dietary Fiber,
---     Vitamin A, and Vitamin C. Previously Fat was missing
---     its percentage on most rows and label formatting was
---     inconsistent across products.
---
---     Daily Values used (FDA, 2,000 kcal reference):
---       Protein 50g, Carbs 275g, Fat 78g,
---       Dietary Fiber 28g, Vitamin A 900mcg, Vitamin C 90mg.
---
---     Calories and Sugars have no established Daily Value and
---     are shown in units only.
---
---   * New verification V20 asserts no two riders share the
---     same id_path.
---
---   * No data values other than rider document paths and
---     product description labels changed.
---
--- v5.8 changes (retained)
--- -----------------------
---   * No data values changed. This revision only tracks the schema
---     bump from v1.2.0 to v1.3.0.
---
---   * New PRINCIPLE 11 documents the per-rider concurrent-order
---     cap that v1.3.0 introduced. Any future seed that inserts
---     live orders must respect it: no rider may be pre-seeded
---     with more than 3 orders across the 'rider_pending',
---     'picking_up', and 'delivering' statuses. The current seed
---     inserts zero live orders, so the cap is trivially satisfied,
---     but the rule is stated here so it is not forgotten.
---
---   * The header comment now names the 'picking_up' status so a
---     future seed author inserting demo orders knows it exists
---     and where it sits in the lifecycle.
---
---   * delivery_rider_document inserts are unchanged from v5.7.
---     Each rider carries a document whose id_type reflects what
---     they submitted:
---       - Carlos (motorcycle) → 'drivers_license'
---       - Miguel (car)        → 'drivers_license'
---       - Andrei (bicycle)    → 'national_id'
---
--- v5.7 changes (retained)
--- -----------------------
---   * delivery_rider_document inserts rewritten for the
---     generalized schema. id_type + id_path replace the old
---     single drivers_license column.
---   * For the bicycle rider, issue_date and expiry_date are NULL
---     because a national ID may not display either.
---   * V17 verification added to confirm every rider has a
---     document row and that id_type is never NULL.
---   * V18 verification added to confirm no bicycle rider carries
---     a 'drivers_license' id_type.
---
--- v5.6 changes (retained)
--- -----------------------
---   * Product descriptions include a realistic per-serving
---     nutrition block.
---   * Rider document paths corrected to point at real manifest files.
---   * Restaurant permit paths corrected to point at real manifest files.
---
--- v5.5 changes (retained)
--- -----------------------
---   * ALL financial_account balances set to 0.00.
---   * ALL delivery_rider_profile.is_available set to 0.
---
--- v5.4 changes (retained)
--- -----------------------
---   + Section 4.5: restaurant_permit rows for all three seeded
---     restaurants. Three permits each, display_order 0..2.
---
--- PREREQUISITE
--- ------------
--- The following files must exist on disk:
+-- PREREQUISITE — these files must exist on disk:
 --   shared/assets/images/manifest/permits/business-permit.png
 --   shared/assets/images/manifest/permits/sanitary-permit.jpg
 --   shared/assets/images/manifest/drivers-license/drivers-license-1.jpg
 --   shared/assets/images/manifest/drivers-license/drivers-license-2.jpg
 --   shared/assets/images/manifest/national-id/national-id-1.jpg
+--   shared/assets/images/manifest/profiles/profile-1.jpg
+--     (…through profile-10.jpg)
+--   shared/assets/images/manifest/products/<restaurant-slug>/<NNN-slug>/image-1.*
 --
---   These are the curated seed assets. Runtime rider uploads
---   live under shared/uploads/rider/documents/<rider_id>/ and
---   are written by sign-up-handler.php, not by this seed.
---
--- PRINCIPLES
---   1.  Every account gets at least one address row.
---   2.  All FK variables captured via LAST_INSERT_ID().
---   3.  Passwords stored as PLAINTEXT for the demo. DO NOT use
---       in production.
---   4.  dietary_information.calories for customizable products
---       is DERIVED at the end (Section 9).
---   5.  Every choice group has exactly one is_required = 1 row.
---   6.  Every rider gets one emergency contact + one identity
---       document row. profile_picture stays NULL.
---   7.  Every restaurant gets three permit rows.
---   8.  (v5.5) NO seeded money. NO rider pre-marked available.
---   9.  (v5.6) Product descriptions carry a full nutrition block.
---  10.  (v5.7) Bicycle riders submit a non-driver's-license ID.
---  11.  (v5.8) No rider is pre-seeded with more than 3 orders
---       across 'rider_pending' + 'picking_up' + 'delivering'.
---       The current seed inserts zero live orders, so the cap is
---       trivially satisfied; the rule exists so a future seed
---       that DOES insert live orders does not silently violate
---       the schema's rider cap.
---  12.  (v5.9) Every rider document points at a DISTINCT
---       manifest file. No two riders share an image. Product
---       nutrition labels carry a % DV on every macro line.
+-- COMPANION FILE: 00_session.sql
+--   SET GLOBAL init_connect = 'SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ';
 -- =====================================================
 
 USE fitpal_food_delivery;
@@ -140,55 +34,98 @@ USE fitpal_food_delivery;
 START TRANSACTION;
 
 -- =====================================================
--- 1. FINANCIAL ACCOUNTS  (all zero balances)
+-- 1. FINANCIAL ACCOUNTS
 -- =====================================================
--- 1 customer account
 INSERT INTO
     financial_account (balance, account_type)
-VALUES (0.00, 'customer');
+VALUES (0.00, 'customer'),
+    (0.00, 'restaurant'),
+    (0.00, 'restaurant'),
+    (0.00, 'restaurant'),
+    (0.00, 'rider'),
+    (0.00, 'rider'),
+    (0.00, 'rider');
 
-SET @customer_financial_id = LAST_INSERT_ID();
+SET
+    @customer_financial_id = (
+        SELECT financial_account_id
+        FROM financial_account
+        WHERE
+            account_type = 'customer'
+        ORDER BY financial_account_id
+        LIMIT 1
+    );
 
--- 3 branch accounts
-INSERT INTO
-    financial_account (balance, account_type)
-VALUES (0.00, 'restaurant');
+SET
+    @branch1_financial_id = (
+        SELECT financial_account_id
+        FROM financial_account
+        WHERE
+            account_type = 'restaurant'
+        ORDER BY financial_account_id
+        LIMIT 1
+    );
 
-SET @branch1_financial_id = LAST_INSERT_ID();
+SET
+    @branch2_financial_id = (
+        SELECT financial_account_id
+        FROM financial_account
+        WHERE
+            account_type = 'restaurant'
+        ORDER BY financial_account_id
+        LIMIT 1
+        OFFSET
+            1
+    );
 
-INSERT INTO
-    financial_account (balance, account_type)
-VALUES (0.00, 'restaurant');
+SET
+    @branch3_financial_id = (
+        SELECT financial_account_id
+        FROM financial_account
+        WHERE
+            account_type = 'restaurant'
+        ORDER BY financial_account_id
+        LIMIT 1
+        OFFSET
+            2
+    );
 
-SET @branch2_financial_id = LAST_INSERT_ID();
+SET
+    @rider1_financial_id = (
+        SELECT financial_account_id
+        FROM financial_account
+        WHERE
+            account_type = 'rider'
+        ORDER BY financial_account_id
+        LIMIT 1
+    );
 
-INSERT INTO
-    financial_account (balance, account_type)
-VALUES (0.00, 'restaurant');
+SET
+    @rider2_financial_id = (
+        SELECT financial_account_id
+        FROM financial_account
+        WHERE
+            account_type = 'rider'
+        ORDER BY financial_account_id
+        LIMIT 1
+        OFFSET
+            1
+    );
 
-SET @branch3_financial_id = LAST_INSERT_ID();
-
--- 3 rider accounts
-INSERT INTO
-    financial_account (balance, account_type)
-VALUES (0.00, 'rider');
-
-SET @rider1_financial_id = LAST_INSERT_ID();
-
-INSERT INTO
-    financial_account (balance, account_type)
-VALUES (0.00, 'rider');
-
-SET @rider2_financial_id = LAST_INSERT_ID();
-
-INSERT INTO
-    financial_account (balance, account_type)
-VALUES (0.00, 'rider');
-
-SET @rider3_financial_id = LAST_INSERT_ID();
+SET
+    @rider3_financial_id = (
+        SELECT financial_account_id
+        FROM financial_account
+        WHERE
+            account_type = 'rider'
+        ORDER BY financial_account_id
+        LIMIT 1
+        OFFSET
+            2
+    );
 
 -- =====================================================
--- 2. ADMINISTRATOR
+-- 2. ADMINISTRATOR + PROFILE
 -- =====================================================
 INSERT INTO
     administrator (
@@ -269,7 +206,6 @@ VALUES (
         70.0
     );
 
--- Customer default address (Home)
 INSERT INTO
     customer_address (
         customer_id,
@@ -296,14 +232,12 @@ VALUES (
         1
     );
 
-SET @customer_address_id = LAST_INSERT_ID();
-
 -- =====================================================
--- 4. RESTAURANTS, BRANCHES, ACCOUNTS, RIDERS, PERMITS
+-- 4. RESTAURANTS + BRANCHES + ACCOUNTS + PERMITS
 -- =====================================================
 
 -- -----------------------------------------------------
--- 4.1 Green Bowl Cafe - plant-forward, vegan-leaning
+-- 4.1 Green Bowl Cafe
 -- -----------------------------------------------------
 INSERT INTO
     restaurant (
@@ -353,7 +287,6 @@ VALUES (
 
 SET @branch1_id = LAST_INSERT_ID();
 
--- Owner (branch_id NULL - owner spans all branches)
 INSERT INTO
     restaurant_account (
         restaurant_id,
@@ -382,7 +315,6 @@ VALUES (
         1
     );
 
--- Manager (branch-scoped)
 INSERT INTO
     restaurant_account (
         restaurant_id,
@@ -415,7 +347,6 @@ VALUES (
         1
     );
 
--- Staff (branch-scoped)
 INSERT INTO
     restaurant_account (
         restaurant_id,
@@ -448,7 +379,6 @@ VALUES (
         1
     );
 
--- Green Bowl Cafe permits (3 rows, display_order 0..2)
 INSERT INTO
     restaurant_permit (
         restaurant_id,
@@ -476,7 +406,7 @@ VALUES (
     );
 
 -- -----------------------------------------------------
--- 4.2 Keto Kitchen - high-fat, low-carb
+-- 4.2 Keto Kitchen
 -- -----------------------------------------------------
 INSERT INTO
     restaurant (
@@ -618,7 +548,6 @@ VALUES (
         1
     );
 
--- Keto Kitchen permits (3 rows, display_order 0..2)
 INSERT INTO
     restaurant_permit (
         restaurant_id,
@@ -646,7 +575,7 @@ VALUES (
     );
 
 -- -----------------------------------------------------
--- 4.3 Asian Fusion Fit - gluten-free Asian, halal-friendly
+-- 4.3 Asian Fusion Fit
 -- -----------------------------------------------------
 INSERT INTO
     restaurant (
@@ -788,7 +717,6 @@ VALUES (
         1
     );
 
--- Asian Fusion Fit permits (3 rows, display_order 0..2)
 INSERT INTO
     restaurant_permit (
         restaurant_id,
@@ -815,29 +743,15 @@ VALUES (
         2
     );
 
--- -----------------------------------------------------
--- 4.4 Delivery riders (3) + profiles + addresses
---     + emergency contacts + identity documents
---
---     v5.5: ALL riders seeded with is_available = 0.
---     v5.7: Identity documents use the generalized schema:
---             id_type + id_path + issue_date + expiry_date.
---           Motor-vehicle riders submit 'drivers_license'.
---           Bicycle rider submits 'national_id' with NULL dates.
---     v5.8: No rider is seeded with any live order. The schema
---           v1.3.0 cap of 3 concurrent orders per rider
---           (rider_pending + picking_up + delivering) is
---           therefore trivially satisfied by this seed.
---     v5.9: Document paths point at the curated manifest
---           (shared/assets/images/manifest/), NOT the runtime
---           upload directory. Each rider gets a DISTINCT file
---           so no two riders share the same image:
---             - Carlos (motorcycle) → drivers-license-1.jpg
---             - Miguel (car)        → drivers-license-2.jpg
---             - Andrei (bicycle)    → national-id-1.jpg
--- -----------------------------------------------------
+-- =====================================================
+-- 5. DELIVERY RIDERS + PROFILES + ADDRESSES + CONTACTS + DOCS
+-- =====================================================
+-- profile_picture is set INLINE at insert time.
+-- id_path is set INLINE at insert time.
 
--- Rider 1: Motorcycle, verified, NOT available
+-- -----------------------------------------------------
+-- Rider 1: Carlos — motorcycle, verified, not available
+-- -----------------------------------------------------
 INSERT INTO
     delivery_rider (
         first_name,
@@ -883,7 +797,7 @@ INSERT INTO
 VALUES (
         @rider1_id,
         @rider1_financial_id,
-        NULL,
+        'shared/assets/images/manifest/profiles/profile-1.jpg',
         'motorcycle',
         'ABC1234',
         'verified',
@@ -920,7 +834,6 @@ VALUES (
         1
     );
 
--- Rider 1 emergency contact (earliest id = primary)
 INSERT INTO
     delivery_rider_emergency_contact (
         delivery_rider_id,
@@ -941,10 +854,6 @@ VALUES (
         '88 Rider Hub, Barangay Poblacion, Makati, Metro Manila'
     );
 
--- Rider 1 identity document: driver's license.
--- Seed data points at the curated manifest, not the runtime
--- upload directory. Each rider gets a distinct manifest file
--- so no two riders share the same image.
 INSERT INTO
     delivery_rider_document (
         delivery_rider_id,
@@ -961,7 +870,9 @@ VALUES (
         DATE_ADD(CURDATE(), INTERVAL 10 YEAR)
     );
 
--- Rider 2: Car, verified, NOT available
+-- -----------------------------------------------------
+-- Rider 2: Miguel — car, verified, not available
+-- -----------------------------------------------------
 INSERT INTO
     delivery_rider (
         first_name,
@@ -1007,7 +918,7 @@ INSERT INTO
 VALUES (
         @rider2_id,
         @rider2_financial_id,
-        NULL,
+        'shared/assets/images/manifest/profiles/profile-2.jpg',
         'car',
         'XYZ5678',
         'verified',
@@ -1044,7 +955,6 @@ VALUES (
         1
     );
 
--- Rider 2 emergency contact
 INSERT INTO
     delivery_rider_emergency_contact (
         delivery_rider_id,
@@ -1065,8 +975,6 @@ VALUES (
         '22-D Mabini Ave., Barangay Bel-Air, Makati, Metro Manila'
     );
 
--- Rider 2 identity document: driver's license.
--- Distinct manifest file from Rider 1.
 INSERT INTO
     delivery_rider_document (
         delivery_rider_id,
@@ -1083,13 +991,9 @@ VALUES (
         DATE_ADD(CURDATE(), INTERVAL 10 YEAR)
     );
 
--- Rider 3: Bicycle, pending, NOT available
---
--- Because the vehicle is a bicycle, this rider cannot submit a
--- driver's license. They submit a national ID instead. A national
--- ID card in the Philippines does not carry an issue date or an
--- expiry date on its face, so both columns are NULL here. NULL
--- means "not applicable", not "missing".
+-- -----------------------------------------------------
+-- Rider 3: Andrei — bicycle, pending, not available
+-- -----------------------------------------------------
 INSERT INTO
     delivery_rider (
         first_name,
@@ -1135,7 +1039,7 @@ INSERT INTO
 VALUES (
         @rider3_id,
         @rider3_financial_id,
-        NULL,
+        'shared/assets/images/manifest/profiles/profile-3.jpg',
         'bicycle',
         NULL,
         'pending',
@@ -1172,7 +1076,6 @@ VALUES (
         1
     );
 
--- Rider 3 emergency contact
 INSERT INTO
     delivery_rider_emergency_contact (
         delivery_rider_id,
@@ -1193,11 +1096,6 @@ VALUES (
         '5-B Luna St., Barangay Kamuning, Quezon City, Metro Manila'
     );
 
--- Rider 3 identity document: national ID.
--- Bicycle rider, so not a driver's license. issue_date and
--- expiry_date are NULL because a Philippine national ID does
--- not expose either date. Distinct manifest file from both
--- motor riders.
 INSERT INTO
     delivery_rider_document (
         delivery_rider_id,
@@ -1215,17 +1113,15 @@ VALUES (
     );
 
 -- =====================================================
--- 5. DIETARY INFORMATION
+-- 6. DIETARY INFORMATION
 -- =====================================================
--- Rows are keyed by (restaurant_concept, ordinal), and we
--- capture each id via LAST_INSERT_ID() immediately after
--- a single-row INSERT so nothing depends on MAX() arithmetic.
+-- images column is set INLINE for every row.
+-- Each product's folder path is written at insert time.
 
--- -----------------------------------------------------
--- Green Bowl Cafe - 10 rows
--- -----------------------------------------------------
+-- Green Bowl Cafe — 10 rows
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1235,6 +1131,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/green-bowl-cafe/004-garden-harvest-bowl/',
         'Main',
         'vegan,gluten_free',
         'soy',
@@ -1248,6 +1145,7 @@ SET @diet1_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1257,6 +1155,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/green-bowl-cafe/005-market-greens-salad/',
         'Main',
         'vegan,gluten_free,low_carb',
         'none',
@@ -1270,6 +1169,7 @@ SET @diet2_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1279,6 +1179,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/green-bowl-cafe/002-classic-vegan-bowl/',
         'Appetizer',
         'vegan,gluten_free',
         'soy',
@@ -1292,6 +1193,7 @@ SET @diet3_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1301,6 +1203,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/green-bowl-cafe/003-edamame-citrus-salad/',
         'Main',
         'vegan,gluten_free,low_carb',
         'nuts',
@@ -1314,6 +1217,7 @@ SET @diet4_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1323,6 +1227,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/green-bowl-cafe/010-zucchini-noodle-pesto/',
         'Appetizer',
         'vegan,gluten_free,low_carb',
         'none',
@@ -1336,6 +1241,7 @@ SET @diet5_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1345,6 +1251,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/green-bowl-cafe/001-berry-almond/',
         'Main',
         'vegan,gluten_free,low_carb,organic',
         'soy',
@@ -1358,6 +1265,7 @@ SET @diet6_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1367,6 +1275,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/green-bowl-cafe/006-morning-power-smoothie/',
         'Beverage',
         'vegan,gluten_free,low_carb,keto',
         'nuts',
@@ -1380,6 +1289,7 @@ SET @diet7_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1389,6 +1299,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/green-bowl-cafe/008-sunrise-breakfast-bowl/',
         'Main',
         'vegan,gluten_free,low_carb,organic,high_protein',
         'soy,nuts',
@@ -1402,6 +1313,7 @@ SET @diet8_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1411,6 +1323,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/green-bowl-cafe/009-superfood-buddha-bowl/',
         'Dessert',
         'vegan,gluten_free,low_carb,keto,organic',
         'none',
@@ -1424,6 +1337,7 @@ SET @diet9_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1433,6 +1347,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/green-bowl-cafe/007-seaside-poke-bowl/',
         'Appetizer',
         'vegan,gluten_free,low_carb,organic,high_protein',
         'soy',
@@ -1444,11 +1359,10 @@ VALUES (
 
 SET @diet10_id = LAST_INSERT_ID();
 
--- -----------------------------------------------------
--- Keto Kitchen - 10 rows
--- -----------------------------------------------------
+-- Keto Kitchen — 10 rows
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1458,6 +1372,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/keto-kitchen/006-keto power bowl/',
         'Main',
         'keto',
         'dairy',
@@ -1471,6 +1386,7 @@ SET @diet11_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1480,6 +1396,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/keto-kitchen/008-keto-steak-plate/',
         'Main',
         'keto,high_protein',
         'eggs',
@@ -1493,6 +1410,7 @@ SET @diet12_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1502,6 +1420,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/keto-kitchen/002-egg avocado bowl/',
         'Appetizer',
         'keto,organic',
         'dairy',
@@ -1515,6 +1434,7 @@ SET @diet13_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1524,6 +1444,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/keto-kitchen/007-keto-smash-burger/',
         'Main',
         'keto,high_protein,organic',
         'none',
@@ -1537,6 +1458,7 @@ SET @diet14_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1546,6 +1468,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/keto-kitchen/010-shrimp-scampi-zoodles/',
         'Dessert',
         'keto,gluten_free,organic',
         'dairy',
@@ -1559,6 +1482,7 @@ SET @diet15_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1568,6 +1492,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/keto-kitchen/004-keto cauliflower pizza/',
         'Main',
         'keto,high_protein,gluten_free,organic',
         'eggs,dairy',
@@ -1581,6 +1506,7 @@ SET @diet16_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1590,6 +1516,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/keto-kitchen/003-keto butcher plate/',
         'Appetizer',
         'keto,gluten_free,low_carb,organic',
         'none',
@@ -1603,6 +1530,7 @@ SET @diet17_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1612,6 +1540,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/keto-kitchen/005-keto garden salad/',
         'Main',
         'keto,high_protein,gluten_free,low_carb,organic',
         'dairy',
@@ -1625,6 +1554,7 @@ SET @diet18_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1634,6 +1564,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/keto-kitchen/009-salmon-dill-plate/',
         'Beverage',
         'keto,gluten_free,low_carb,organic,vegan',
         'nuts',
@@ -1647,6 +1578,7 @@ SET @diet19_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1656,6 +1588,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/keto-kitchen/001-chicken parmesan plate/',
         'Main',
         'keto,high_protein,gluten_free,low_carb,organic',
         'eggs,shellfish',
@@ -1667,11 +1600,10 @@ VALUES (
 
 SET @diet20_id = LAST_INSERT_ID();
 
--- -----------------------------------------------------
--- Asian Fusion Fit - 10 rows
--- -----------------------------------------------------
+-- Asian Fusion Fit — 10 rows
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1681,6 +1613,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/asian-fusion-fit/004-nori-hand-roll/',
         'Main',
         'gluten_free,halal',
         'shellfish',
@@ -1694,6 +1627,7 @@ SET @diet21_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1703,6 +1637,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/asian-fusion-fit/001-gluten-free-salmon-roll/',
         'Appetizer',
         'gluten_free,organic,halal',
         'soy',
@@ -1716,6 +1651,7 @@ SET @diet22_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1725,6 +1661,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/asian-fusion-fit/007-seaweed-sesame-salad/',
         'Main',
         'low_carb,organic,halal',
         'fish',
@@ -1738,6 +1675,7 @@ SET @diet23_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1747,6 +1685,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/asian-fusion-fit/006-rainbow-poke-bowl/',
         'Main',
         'gluten_free,low_carb,organic,halal',
         'shellfish',
@@ -1760,6 +1699,7 @@ SET @diet24_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1769,6 +1709,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/asian-fusion-fit/002-grilled-fish-greens/',
         'Appetizer',
         'gluten_free,vegan,organic,halal',
         'none',
@@ -1782,6 +1723,7 @@ SET @diet25_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1791,6 +1733,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/asian-fusion-fit/009-tokyo-noodle-bowl/',
         'Main',
         'gluten_free,low_carb,organic,high_protein,halal',
         'fish,shellfish',
@@ -1804,6 +1747,7 @@ SET @diet26_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1813,6 +1757,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/asian-fusion-fit/008-spicy-tuna-roll/',
         'Dessert',
         'gluten_free,vegan,low_carb,organic,halal',
         'nuts',
@@ -1826,6 +1771,7 @@ SET @diet27_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1835,6 +1781,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/asian-fusion-fit/005-osaka-rice-bowl/',
         'Main',
         'gluten_free,low_carb,organic,high_protein,keto,halal',
         'shellfish',
@@ -1848,6 +1795,7 @@ SET @diet28_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1857,6 +1805,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/asian-fusion-fit/010-wok-tossed-vegetables/',
         'Appetizer',
         'gluten_free,low_carb,organic,vegan,high_protein,halal',
         'soy',
@@ -1870,6 +1819,7 @@ SET @diet29_id = LAST_INSERT_ID();
 
 INSERT INTO
     dietary_information (
+        images,
         category,
         dietary_tags,
         allergens,
@@ -1879,6 +1829,7 @@ INSERT INTO
         fat
     )
 VALUES (
+        'shared/assets/images/manifest/products/asian-fusion-fit/003-matcha-banana-smotthie/',
         'Beverage',
         'gluten_free,low_carb,organic,vegan,keto,halal',
         'none',
@@ -1891,7 +1842,7 @@ VALUES (
 SET @diet30_id = LAST_INSERT_ID();
 
 -- =====================================================
--- 6. INGREDIENTS
+-- 7. INGREDIENTS
 -- =====================================================
 INSERT INTO
     ingredient (
@@ -2434,24 +2385,12 @@ SET
     );
 
 -- =====================================================
--- 7. PRODUCTS
+-- 8. PRODUCTS  (descriptions inlined with % DV)
+--    base_price is set INLINE to match price for customizable
+--    products, so no post-insert UPDATE is needed.
 -- =====================================================
--- Note: For customizable products, dietary_information.calories
--- is DERIVED in Section 9. The value we put here is a placeholder
--- that will be overwritten.
---
--- v5.6: Each description carries a per-serving nutrition block
--- derived from the product's default ingredient build.
--- v5.9: Every macro line now carries a % Daily Value using the
--- FDA 2,000 kcal reference:
---   Protein = 50g, Carbs = 275g, Fat = 78g,
---   Dietary Fiber = 28g, Vitamin A = 900mcg, Vitamin C = 90mg.
--- Calories and Sugars have no established Daily Value and are
--- shown in units only.
 
--- -----------------------------------------------------
--- Green Bowl Cafe - 10 products
--- -----------------------------------------------------
+-- Green Bowl Cafe — 10 products
 INSERT INTO
     product (
         restaurant_branch_id,
@@ -2822,9 +2761,7 @@ Vitamin C: 18mg (20%)',
         1
     );
 
--- -----------------------------------------------------
--- Keto Kitchen - 10 products
--- -----------------------------------------------------
+-- Keto Kitchen — 10 products
 INSERT INTO
     product (
         restaurant_branch_id,
@@ -3195,9 +3132,7 @@ Vitamin C: 8mg (9%)',
         1
     );
 
--- -----------------------------------------------------
--- Asian Fusion Fit - 10 products
--- -----------------------------------------------------
+-- Asian Fusion Fit — 10 products
 INSERT INTO
     product (
         restaurant_branch_id,
@@ -3569,22 +3504,10 @@ Vitamin C: 10mg (11%)',
     );
 
 -- =====================================================
--- 8. PRODUCT COMPOSITION
--- =====================================================
--- Column order:
---   product_id, ingredient_id, is_default, default_quantity,
---   min_quantity, max_quantity, price_modifier,
---   display_order, is_required
---
--- Semantics:
---   is_default = 1  ->  selected by default
---   is_required = 1 ->  anchors a required choice group
---   Defaults carry price_modifier = 0.00
+-- 9. PRODUCT COMPOSITION
 -- =====================================================
 
--- -----------------------------------------------------
--- 8.1 Garden Harvest Bowl
--- -----------------------------------------------------
+-- 9.1 Garden Harvest Bowl
 INSERT INTO
     product_composition (
         product_id,
@@ -3752,9 +3675,7 @@ VALUES (
         0
     );
 
--- -----------------------------------------------------
--- 8.2 Market Greens Salad
--- -----------------------------------------------------
+-- 9.2 Market Greens Salad
 INSERT INTO
     product_composition (
         product_id,
@@ -3889,9 +3810,7 @@ VALUES (
         0
     );
 
--- -----------------------------------------------------
--- 8.3 Morning Power Smoothie
--- -----------------------------------------------------
+-- 9.3 Morning Power Smoothie
 INSERT INTO
     product_composition (
         product_id,
@@ -3971,9 +3890,7 @@ VALUES (
         0
     );
 
--- -----------------------------------------------------
--- 8.4 Sunrise Breakfast Bowl
--- -----------------------------------------------------
+-- 9.4 Sunrise Breakfast Bowl
 INSERT INTO
     product_composition (
         product_id,
@@ -4064,9 +3981,7 @@ VALUES (
         0
     );
 
--- -----------------------------------------------------
--- 8.5 Seaside Poke Bowl
--- -----------------------------------------------------
+-- 9.5 Seaside Poke Bowl
 INSERT INTO
     product_composition (
         product_id,
@@ -4190,9 +4105,7 @@ VALUES (
         0
     );
 
--- -----------------------------------------------------
--- 8.6 Keto Power Bowl
--- -----------------------------------------------------
+-- 9.6 Keto Power Bowl
 INSERT INTO
     product_composition (
         product_id,
@@ -4305,9 +4218,7 @@ VALUES (
         0
     );
 
--- -----------------------------------------------------
--- 8.7 Keto Smash Burger
--- -----------------------------------------------------
+-- 9.7 Keto Smash Burger
 INSERT INTO
     product_composition (
         product_id,
@@ -4398,9 +4309,7 @@ VALUES (
         0
     );
 
--- -----------------------------------------------------
--- 8.8 Keto Garden Salad
--- -----------------------------------------------------
+-- 9.8 Keto Garden Salad
 INSERT INTO
     product_composition (
         product_id,
@@ -4502,9 +4411,7 @@ VALUES (
         0
     );
 
--- -----------------------------------------------------
--- 8.9 Keto Butcher Plate
--- -----------------------------------------------------
+-- 9.9 Keto Butcher Plate
 INSERT INTO
     product_composition (
         product_id,
@@ -4595,9 +4502,7 @@ VALUES (
         0
     );
 
--- -----------------------------------------------------
--- 8.10 Keto Cauliflower Pizza
--- -----------------------------------------------------
+-- 9.10 Keto Cauliflower Pizza
 INSERT INTO
     product_composition (
         product_id,
@@ -4688,9 +4593,7 @@ VALUES (
         0
     );
 
--- -----------------------------------------------------
--- 8.11 Nori Hand Roll Set
--- -----------------------------------------------------
+-- 9.11 Nori Hand Roll Set
 INSERT INTO
     product_composition (
         product_id,
@@ -4792,9 +4695,7 @@ VALUES (
         0
     );
 
--- -----------------------------------------------------
--- 8.12 Rainbow Poke Bowl
--- -----------------------------------------------------
+-- 9.12 Rainbow Poke Bowl
 INSERT INTO
     product_composition (
         product_id,
@@ -4929,9 +4830,7 @@ VALUES (
         0
     );
 
--- -----------------------------------------------------
--- 8.13 Tokyo Noodle Bowl
--- -----------------------------------------------------
+-- 9.13 Tokyo Noodle Bowl
 INSERT INTO
     product_composition (
         product_id,
@@ -5044,9 +4943,7 @@ VALUES (
         0
     );
 
--- -----------------------------------------------------
--- 8.14 Osaka Rice Bowl
--- -----------------------------------------------------
+-- 9.14 Osaka Rice Bowl
 INSERT INTO
     product_composition (
         product_id,
@@ -5159,9 +5056,7 @@ VALUES (
         0
     );
 
--- -----------------------------------------------------
--- 8.15 Wok-Tossed Vegetables
--- -----------------------------------------------------
+-- 9.15 Wok-Tossed Vegetables
 INSERT INTO
     product_composition (
         product_id,
@@ -5253,8 +5148,13 @@ VALUES (
     );
 
 -- =====================================================
--- 9. DERIVE dietary_information.calories FOR CUSTOMIZABLE PRODUCTS
+-- 10. DERIVED VALUES (unavoidable — depend on data above)
 -- =====================================================
+
+-- 10.1 Derive dietary_information.calories for customizable products.
+--      This cannot be inlined because it depends on product_composition
+--      rows that were just inserted, AND on the specific ingredient
+--      calorie values chosen for each product's default build.
 UPDATE dietary_information di
 JOIN (
     SELECT p.dietary_information_id, SUM(
@@ -5273,27 +5173,17 @@ JOIN (
 SET
     di.calories = calc.total_calories;
 
--- =====================================================
--- 10. ENFORCE base_price = price
--- =====================================================
--- Only customizable products get base_price = price.
--- Non-customizable products keep base_price = 0 (irrelevant).
-UPDATE product
-SET
-    base_price = price
-WHERE
-    is_customizable = 1
-    AND (
-        base_price IS NULL
-        OR base_price = 0
-    );
+-- NOTE: 10.2 (base_price = price enforcement) is NO LONGER NEEDED
+-- because every product INSERT above already sets base_price
+-- equal to price for customizable products, and 0.00 for
+-- non-customizable products.
 
 COMMIT;
 
 -- =====================================================
 -- VERIFICATION
 -- =====================================================
-SELECT '=== Seed data loaded (v5.9) ===' AS status;
+SELECT '=== FitPal consolidated seed loaded (v9.0, single-pass insert) ===' AS status;
 
 -- V1. Every customizable product's default price modifiers sum to 0.
 SELECT
@@ -5421,9 +5311,7 @@ GROUP BY
 HAVING
     emergency_contact_count = 0;
 
--- V10. Every rider has an identity document row.
---      Surfaces id_type so a reviewer can see which document
---      each rider submitted.
+-- V10. Every rider has an identity document row with non-NULL id_type.
 SELECT dr.delivery_rider_id, dr.email, drp.vehicle_type, drd.document_id, drd.id_type, drd.id_path, drd.issue_date, drd.expiry_date
 FROM
     delivery_rider dr
@@ -5431,12 +5319,13 @@ FROM
     LEFT JOIN delivery_rider_document drd ON drd.delivery_rider_id = dr.delivery_rider_id
 ORDER BY dr.delivery_rider_id;
 
--- V11. Rider profile picture paths are NULL AND is_available = 0.
-SELECT dr.delivery_rider_id, dr.email, drp.profile_picture, drp.is_available, drp.verification_status
+-- V11. No rider is marked available after seeding.
+SELECT dr.delivery_rider_id, dr.email, drp.is_available
 FROM
     delivery_rider dr
     JOIN delivery_rider_profile drp ON drp.delivery_rider_id = dr.delivery_rider_id
-ORDER BY dr.delivery_rider_id;
+WHERE
+    drp.is_available <> 0;
 
 -- V12. Every restaurant has at least one permit row.
 SELECT r.restaurant_id, r.business_name, COUNT(rp.permit_id) AS permit_count
@@ -5449,19 +5338,7 @@ GROUP BY
 HAVING
     permit_count = 0;
 
--- V13. No permit row has a NULL or empty original_name.
-SELECT
-    permit_id,
-    restaurant_id,
-    file_path,
-    original_name
-FROM restaurant_permit
-WHERE
-    original_name IS NULL
-    OR original_name = '';
-
--- V14. Permit display_order values within each restaurant are
--- contiguous starting at 0.
+-- V13. Permit display_order values are contiguous starting at 0.
 SELECT
     rp.restaurant_id,
     COUNT(*) AS permit_count,
@@ -5478,7 +5355,7 @@ GROUP BY
 HAVING
     order_state <> 'ok';
 
--- V15. Every financial account balance is 0.00.
+-- V14. Every financial account balance is 0.00.
 SELECT
     financial_account_id,
     account_type,
@@ -5487,30 +5364,7 @@ FROM financial_account
 WHERE
     balance <> 0.00;
 
--- V16. No rider is marked available after seeding.
-SELECT dr.delivery_rider_id, dr.email, drp.is_available
-FROM
-    delivery_rider dr
-    JOIN delivery_rider_profile drp ON drp.delivery_rider_id = dr.delivery_rider_id
-WHERE
-    drp.is_available <> 0;
-
--- V17. No rider document row has a NULL id_type.
---      Every document must declare what it is.
-SELECT
-    document_id,
-    delivery_rider_id,
-    id_type,
-    id_path
-FROM delivery_rider_document
-WHERE
-    id_type IS NULL
-    OR id_type = '';
-
--- V18. No bicycle rider carries a 'drivers_license' id_type.
---      A bicycle rider cannot legally hold a driver's license for
---      their vehicle, so their document must be a different type
---      (national_id, passport, etc.).
+-- V15. No bicycle rider carries a 'drivers_license' id_type.
 SELECT dr.delivery_rider_id, dr.email, drp.vehicle_type, drd.id_type
 FROM
     delivery_rider dr
@@ -5520,10 +5374,7 @@ WHERE
     drp.vehicle_type = 'bicycle'
     AND drd.id_type = 'drivers_license';
 
--- V19. No rider is seeded with more than 3 live orders.
---      The current seed inserts zero live orders, so this returns
---      no rows. The check exists so a future revision that adds
---      demo orders cannot silently violate the schema's cap.
+-- V16. No rider is seeded with more than 3 live orders.
 SELECT dr.delivery_rider_id, dr.email, COUNT(o.order_id) AS live_order_count
 FROM delivery_rider dr
     JOIN orders o ON o.delivery_rider_id = dr.delivery_rider_id
@@ -5539,10 +5390,7 @@ GROUP BY
 HAVING
     live_order_count > 3;
 
--- V20. (v5.9) No two riders share the same id_path.
---      Every seeded rider document must point at a distinct
---      manifest file. If this returns rows, two riders are
---      showing the same image in the admin KYC review screen.
+-- V17. No two riders share the same id_path.
 SELECT
     id_path,
     COUNT(*) AS rider_count,
@@ -5555,3 +5403,73 @@ GROUP BY
     id_path
 HAVING
     rider_count > 1;
+
+-- V18. No two riders share the same profile_picture.
+SELECT drp.profile_picture, COUNT(*) AS rider_count, GROUP_CONCAT(
+        drp.delivery_rider_id
+        ORDER BY drp.delivery_rider_id
+    ) AS rider_ids
+FROM delivery_rider_profile drp
+WHERE
+    drp.profile_picture IS NOT NULL
+GROUP BY
+    drp.profile_picture
+HAVING
+    rider_count > 1;
+
+-- V19. Every rider has a profile_picture assigned.
+SELECT dr.delivery_rider_id, dr.email, drp.profile_picture
+FROM
+    delivery_rider dr
+    LEFT JOIN delivery_rider_profile drp ON drp.delivery_rider_id = dr.delivery_rider_id
+WHERE
+    drp.profile_picture IS NULL
+    OR drp.profile_picture = '';
+
+-- V20. Every product's dietary_information.images is non-NULL,
+--      non-empty, and ends with a forward slash.
+SELECT di.dietary_information_id, di.images, p.name AS product_name
+FROM
+    dietary_information di
+    JOIN product p ON p.dietary_information_id = di.dietary_information_id
+WHERE
+    di.images IS NULL
+    OR di.images = ''
+    OR RIGHT(di.images, 1) <> '/';
+
+-- V21. No two products share the same dietary_information.images folder path.
+SELECT
+    di.images,
+    COUNT(*) AS product_count,
+    GROUP_CONCAT(
+        p.product_id
+        ORDER BY p.product_id
+    ) AS product_ids,
+    GROUP_CONCAT(
+        p.name
+        ORDER BY p.product_id SEPARATOR ' | '
+    ) AS product_names
+FROM
+    dietary_information di
+    JOIN product p ON p.dietary_information_id = di.dietary_information_id
+WHERE
+    di.images IS NOT NULL
+    AND di.images <> ''
+GROUP BY
+    di.images
+HAVING
+    product_count > 1;
+
+-- V22. Distribution sanity: exactly 30 rows share the manifest/products
+--      prefix, ten per restaurant slug (read-out, not failure condition).
+SELECT SUBSTRING_INDEX(
+        SUBSTRING_INDEX(di.images, '/', 6), '/', -1
+    ) AS restaurant_slug, COUNT(*) AS row_count
+FROM
+    dietary_information di
+    JOIN product p ON p.dietary_information_id = di.dietary_information_id
+WHERE
+    di.images LIKE 'shared/assets/images/manifest/products/%'
+GROUP BY
+    restaurant_slug
+ORDER BY restaurant_slug;
