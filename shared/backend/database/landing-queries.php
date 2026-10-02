@@ -9,13 +9,40 @@
  * the landing page is a platform-wide entry point that must not depend
  * on any specific role's query layer.
  *
+ * ---------------------------------------------------------------------
+ * PRODUCT IMAGE RESOLUTION
+ * ---------------------------------------------------------------------
+ * The `dietary_information.images` column stores a folder path. The
+ * actual on-disk location of that folder varies by deployment. This
+ * query layer resolves the raw path into two fields the landing page
+ * can use to build a correct image URL:
+ *
+ *   - image_base      project-root-relative folder path (or '')
+ *   - primary_image   first image filename inside that folder (or '')
+ *
+ * The resolution logic is shared with the customer-facing menu,
+ * product detail, and cart pages, and lives in
+ * customer/backend/database/product-queries.php. Requiring that file
+ * here ensures the landing page uses the exact same folder-discovery
+ * rules as every other page that renders a product image.
+ *
  * Pure data-access layer. No $_POST, no $_GET, no header(), no echo.
  *
  * @package FitPal
- * @version 1.0
+ * @version 2.0 — getFeaturedProducts() now resolves the raw
+ *                `dietary_information.images` value into the
+ *                `image_base` and `primary_image` fields by using
+ *                the helper functions in product-queries.php. This
+ *                makes the landing page's featured-product cards
+ *                render images identically to the customer menu and
+ *                product detail pages.
+ *
+ *                (1.0: initial landing page queries.)
  */
 
 declare(strict_types=1);
+
+require_once __DIR__ . '/../../../customer/backend/database/product-queries.php';
 
 /**
  * Fetch a random sample of active products across all active
@@ -52,7 +79,7 @@ function getFeaturedProducts(PDO $db, int $limit = 8): array
             di.protein,
             di.carbs,
             di.fat,
-            COALESCE(di.images, '')       AS product_image
+            COALESCE(di.images, '')       AS raw_image_path
          FROM product p
          JOIN restaurant_branch rb ON p.restaurant_branch_id = rb.restaurant_branch_id
          JOIN restaurant r        ON rb.restaurant_id = r.restaurant_id
@@ -65,7 +92,19 @@ function getFeaturedProducts(PDO $db, int $limit = 8): array
     );
     $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
     $stmt->execute();
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($products as &$product) {
+        $rawPath = (string)($product['raw_image_path'] ?? '');
+
+        $product['image_base']    = getProductImageBasePath($rawPath);
+        $product['primary_image'] = getProductPrimaryFilename($rawPath);
+
+        unset($product['raw_image_path']);
+    }
+    unset($product);
+
+    return $products;
 }
 
 /**

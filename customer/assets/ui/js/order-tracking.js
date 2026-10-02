@@ -4,23 +4,7 @@
  * Owns three surfaces on customer/pages/order-tracking.php:
  *
  *   1. The customer chat modal.
- *      Two channels:
- *        - 'restaurant_account' — talk to the kitchen.
- *        - 'delivery_rider'     — talk to the rider; only becomes
- *                                 live once the rider has accepted.
- *      Each channel is loaded once on first open (a full fetch
- *      through message-handler.php's `get` action), then polled
- *      with `since_id` to pick up new messages. Sending posts to
- *      message-handler.php's `send` action; marking read posts to
- *      the `read` action.
- *
  *   2. The real-time status poll.
- *      Every few seconds, sends `get_tracking_status` to the
- *      customer order handler with the client's current revision.
- *      When the server reports that the revision has changed, the
- *      client reconciles the chat modal's gating flags in place —
- *      it does NOT reload the page.
- *
  *   3. Origin-aware chat modal opening.
  *
  * ---------------------------------------------------------------------
@@ -34,158 +18,87 @@
  *     { status: 'error', message: '…', reason: 'terminal' }
  *
  * When that happens, the message form is replaced by a static
- * notice inside the modal body. The form is hidden with the
- * `hidden` attribute (not `display: none` inline), so no inline
- * style is written and the swap is a pure DOM operation.
+ * notice inside the modal body.
  *
- * The swap is:
- *   - idempotent: re-applying for the same channel is a no-op.
- *   - reversible: switching to a channel that is still open
- *     restores the form.
- *   - final when both channels are closed: the form stays hidden
- *     for the rest of the modal's lifetime in this page view.
+ * ---------------------------------------------------------------------
+ * REAL-TIME STATUS POLL
+ * ---------------------------------------------------------------------
+ * Every few seconds the page sends get_tracking_payload to
+ * customer-order-handler.php. The response carries a revision
+ * hash. When the revision differs from the last-seen value, the
+ * page patches these regions in place:
  *
- * The notice text is fixed:
+ *     #trackingStatusTitle
+ *     #trackingStatusDescription
+ *     #trackingStatusBadge
+ *     #trackingStatusIconImg
+ *     #trackingTimelineCard  (per-step class changes)
+ *     #trackingChatClosedWrapper
  *
- *     "This conversation is closed. This order is available for
- *      history only. You can no longer send messages on this
- *      order."
+ * Everything else on the page — the chat modal if it is open, the
+ * order summary, scroll position, focus — is left alone.
  *
  * ---------------------------------------------------------------------
  * CLASS-NAME CONTRACT
  * ---------------------------------------------------------------------
- * This file emits three shapes of node. The exact class strings are
- * the boundary between this file and order-tracking.css. Both must
- * agree, and both must agree with the docblock in
- * customer/pages/order-tracking.php.
+ * This file emits three shapes of chat node. The exact class
+ * strings are the boundary between this file and
+ * order-tracking.css.
  *
  * Sent (customer's own message):
- *
  *   <div class="customer-chat-message customer-chat-message-sent">
  *     <span class="customer-chat-message-sender">You</span>
  *     <span class="customer-chat-message-text">…</span>
  *     <span class="customer-chat-message-time">…</span>
  *   </div>
  *
- * Received (from the restaurant or the rider):
- *
+ * Received:
  *   <div class="customer-chat-message customer-chat-message-received">
  *     <span class="customer-chat-message-sender">Restaurant</span>
  *     <span class="customer-chat-message-text">…</span>
  *     <span class="customer-chat-message-time">…</span>
  *   </div>
  *
- * System (server refusal, channel-closed notice):
- *
+ * System:
  *   <div class="customer-chat-system">…</div>
- *
- * Closed-chat form swap (this revision):
- *
- *   <div class="customer-chat-closed-notice">
- *     <img class="customer-chat-closed-icon" src="…" alt="">
- *     <p class="customer-chat-closed-text">…</p>
- *   </div>
- *
- * The `.customer-chat-closed-notice`, `.customer-chat-closed-icon`,
- * and `.customer-chat-closed-text` classes already exist in
- * order-tracking.css for the page-level notice. This file reuses
- * them so no new CSS is required. The modal-scoped instance is
- * distinguished by its parent (`#customerChatMessages`), which
- * carries its own layout; no additional class is introduced.
  *
  * ---------------------------------------------------------------------
  * MODAL VISIBILITY
  * ---------------------------------------------------------------------
- * order-tracking.css defines the modal's visible state behind a
- * class, not behind a bare inline `display` flip:
- *
- *     .modal             { display: none; opacity: 0; }
- *     .modal.active      { display: flex !important; opacity: 1; }
- *
- * Every open in this file goes through one pair of helpers,
- * `openModal` / `closeModal`, that set `display: flex` inline, force
- * a reflow, and toggle `.active`. closeModal waits for the fade-out
- * transition before restoring `display: none`.
- *
- * ---------------------------------------------------------------------
- * LOADING STATE
- * ---------------------------------------------------------------------
- * The loading placeholder is shown exactly once per channel: on the
- * very first load for that channel. After that, the modal never
- * returns to the loading placeholder.
- *
- * Two pieces of state drive this:
- *
- *   hasLoadedMessages  — an object keyed by channel. Set to true
- *                        the first time a `get` response arrives,
- *                        success or failure.
- *   messageCursor      — the highest message_id the client holds
- *                        per channel.
- *
- * ---------------------------------------------------------------------
- * CHANNEL GATING (client side)
- * ---------------------------------------------------------------------
- * The tracking page publishes two data attributes on #trackingPage:
- *
- *     data-can-message-kitchen="1|0"
- *     data-can-message-rider="1|0"
- *
- * The chat modal's tab bar only ever renders tabs whose flag is 1.
- * The real-time status poll re-reads the flags on every revision
- * change and updates the local state. If a channel becomes
- * unavailable while the modal is open, the tab is removed from the
- * DOM and the modal switches to the other channel (or closes).
+ * Every open goes through openModal / closeModal, which set
+ * display: flex inline, force a reflow, and toggle `.active`.
+ * closeModal waits for the fade-out transition.
  *
  * ---------------------------------------------------------------------
  * CONFIG
  * ---------------------------------------------------------------------
- * The tracking page writes these data attributes on #trackingPage:
+ * #trackingPage publishes:
+ *     data-order-id
+ *     data-csrf-token
+ *     data-default-chat-tab
+ *     data-can-message-kitchen
+ *     data-can-message-rider
+ *     data-order-status
+ *     data-revision
+ *     data-status-revision
+ *     data-asset-base
+ *     data-handler-url
  *
- *     data-order-id            the order this page tracks
- *     data-csrf-token          the customer's own CSRF token
- *     data-default-chat-tab    'restaurant_account' or
- *                              'delivery_rider'
- *     data-can-message-kitchen '1' or '0'
- *     data-can-message-rider   '1' or '0'
- *     data-order-status        the current order_status
- *     data-revision            the initial poll revision
- *     data-handler-url         the customer order handler
- *
- * ---------------------------------------------------------------------
- * Rules honored
- * ---------------------------------------------------------------------
+ * Rules honored:
  *   - No CSS in this file.
- *   - No <svg> injection. The closed-chat icon is loaded as an
- *     <img> from shared/assets/images/icons/; the asset base is
- *     read from window.FITPAL_ASSET_BASE or a documented fallback.
+ *   - No <svg> injection.
  *   - No window.alert / confirm / prompt.
  *
  * @package FitPal
- * @version 6.0 — Adds the closed-chat form swap. When the
- *                message-handler's `get` action returns
- *                reason='window_closed' or reason='terminal', the
- *                message form is hidden and a static notice is
- *                inserted inside the modal body. The swap is
- *                idempotent, reversible on channel switch, and
- *                final once both channels are closed.
+ * @version 7.0 — The poll now patches the status card, timeline,
+ *                and chat-closed notice in place when the server
+ *                reports a status change. No manual reload needed
+ *                to see a kitchen or rider update.
  *
- *                Every other surface — the message node class
- *                names, the loading-state fix, the real-time
- *                status poll, the channel-availability tracking,
- *                the modal open/close helpers, the system message
- *                styling — is byte-identical to v5.0.
- *
- *                (5.0: fixed the runtime class-name contract on
- *                sent and received messages. 4.1: loading-state
- *                fix. 4.0: modal open/close toggles .active;
- *                real-time poll no longer reloads; channel
- *                availability tracked in local state; send
- *                refusals rendered as system messages; Escape
- *                handler added. 3.0: poll endpoint fallback
- *                renamed. 2.0: origin-aware open. 1.5: chat-modal
- *                origin opening. 1.4: chat polling. 1.3: chat
- *                gating by order status. 1.2: real-time poll.
- *                1.1: initial tracking JS.)
+ *                (6.0: closed-chat form swap. 5.0: fixed message
+ *                class names. 4.1: loading-state fix. 4.0: real-
+ *                time poll no longer reloads; channel availability
+ *                tracked in local state.)
  */
 (function () {
     'use strict';
@@ -208,20 +121,15 @@
     var POLL_ENDPOINT = page.getAttribute('data-handler-url')
         || '../backend/handlers/customer-order-handler.php';
 
+    var ASSET_BASE = page.getAttribute('data-asset-base')
+        || window.FITPAL_ASSET_BASE
+        || '../../shared/';
+
     var POLL_INTERVAL_MS = 6000;
 
     var currentRevision = page.getAttribute('data-revision') || '';
+    var statusRevision  = page.getAttribute('data-status-revision') || '';
 
-    // Asset base for the closed-chat icon. The tracking page
-    // publishes window.FITPAL_ASSET_BASE from header.php; the
-    // fallback names the same folder the rest of the customer
-    // role uses when resolving shared/ from customer/pages/.
-    var ASSET_BASE = window.FITPAL_ASSET_BASE
-        || window.FITPAL_ORDERS && window.FITPAL_ORDERS.assetBase
-        || '../../shared/';
-
-    // Text of the closed-chat notice. Kept as a single constant so
-    // the copy lives in exactly one place.
     var CLOSED_NOTICE_TEXT =
         'This conversation is closed. This order is available for ' +
         'history only. You can no longer send messages on this order.';
@@ -261,6 +169,16 @@
         }).then(function (res) { return res.json(); });
     }
 
+    function escapeHtml(text) {
+        var d = document.createElement('div');
+        d.textContent = String(text == null ? '' : text);
+        return d.innerHTML;
+    }
+
+    function iconUrl(filename) {
+        return ASSET_BASE + 'assets/images/icons/' + filename;
+    }
+
     // -----------------------------------------------------------------
     // MODAL VISIBILITY
     // -----------------------------------------------------------------
@@ -292,26 +210,10 @@
 
     // -----------------------------------------------------------------
     // CLOSED-CHAT FORM SWAP
-    //
-    // When a channel is closed by the server, the message form is
-    // hidden and a static notice is inserted at the bottom of the
-    // modal body. The form is never removed from the DOM, so
-    // switching to a still-open channel can restore it without a
-    // re-render.
-    //
-    // State is tracked per channel so a channel that was observed
-    // closed stays closed even if the customer navigates away from
-    // it and back. This matches the server's own state: once the
-    // grace window has elapsed, the server will keep refusing
-    // sends on that channel for the rest of the page's lifetime.
     // -----------------------------------------------------------------
 
     var closedChannels = { restaurant_account: false, delivery_rider: false };
 
-    /**
-     * Ensure a closed-chat notice node exists in the modal body.
-     * Returns the node. The node is created once and reused.
-     */
     function ensureClosedNoticeNode() {
         if (!chatMessages) return null;
 
@@ -326,17 +228,14 @@
         icon.alt = '';
         icon.width = 18;
         icon.height = 18;
-        icon.src = ASSET_BASE + 'assets/images/icons/information-fill.svg';
+        icon.src = iconUrl('information-fill.svg');
         icon.onerror = function () {
-            // If the information icon is missing, fall back to the
-            // warning icon. If that is missing too, remove the img
-            // entirely so the notice still reads as text.
             if (this.getAttribute('data-fallback-applied') === '1') {
-                this.parentNode && this.parentNode.removeChild(this);
+                if (this.parentNode) this.parentNode.removeChild(this);
                 return;
             }
             this.setAttribute('data-fallback-applied', '1');
-            this.src = ASSET_BASE + 'assets/images/icons/file-warning-fill.svg';
+            this.src = iconUrl('file-warning-fill.svg');
         };
 
         var text = document.createElement('p');
@@ -355,9 +254,6 @@
         return notice;
     }
 
-    /**
-     * Remove the closed-chat notice node if it exists.
-     */
     function removeClosedNoticeNode() {
         if (!chatMessages) return;
         var node = qs('.customer-chat-closed-notice', chatMessages);
@@ -366,46 +262,21 @@
         }
     }
 
-    /**
-     * Apply the closed state for a channel:
-     *   - hide the message form (hidden attribute, no inline style)
-     *   - insert the closed notice inside the modal body
-     *   - remember the channel so it stays closed on return
-     */
     function applyClosedState(channel) {
         if (!channel) return;
-
         if (closedChannels[channel] === true) return;
         closedChannels[channel] = true;
 
-        if (chatForm) {
-            chatForm.hidden = true;
-        }
+        if (chatForm) chatForm.hidden = true;
 
         ensureClosedNoticeNode();
     }
 
-    /**
-     * Clear the closed state for a channel:
-     *   - remove the closed notice (only when no other channel is
-     *     also closed)
-     *   - unhide the message form
-     *
-     * Called when the modal switches to a channel that is not in
-     * the closed set.
-     */
     function clearClosedStateForOpenChannel(channel) {
         if (!channel) return;
 
-        if (chatForm) {
-            chatForm.hidden = false;
-        }
+        if (chatForm) chatForm.hidden = false;
 
-        // Remove the notice only if no other channel is currently
-        // marked closed. If the other channel is still closed, the
-        // notice stays visible behind whichever channel the user
-        // is looking at, which is the desired behaviour: the
-        // modal is still a closed conversation overall.
         var anyOtherClosed = Object.keys(closedChannels).some(function (key) {
             return key !== channel && closedChannels[key] === true;
         });
@@ -415,9 +286,6 @@
         }
     }
 
-    /**
-     * True when the get-response body carries a closed reason.
-     */
     function isClosedReason(reason) {
         return reason === 'window_closed' || reason === 'terminal';
     }
@@ -426,75 +294,180 @@
     // REAL-TIME STATUS POLL
     // -----------------------------------------------------------------
 
-    function applyTrackingState(state) {
-        if (!state || typeof state !== 'object') return;
+    function setAttributeSafe(el, name, value) {
+        if (!el) return;
+        el.setAttribute(name, String(value));
+    }
 
-        if (typeof state.can_message_kitchen === 'boolean') {
-            canMessageKitchen = state.can_message_kitchen;
+    /**
+     * Apply the full tracking payload to the page.
+     *
+     * Only the sections the payload describes are touched.
+     *
+     * @param {object} payload
+     */
+    function applyTrackingPayload(payload) {
+        if (!payload || payload.status !== 'success') return;
+
+        var status = payload.order_status || '';
+        var meta   = payload.status_meta || {};
+        var idx    = parseInt(payload.timeline_index, 10);
+
+        ORDER_STATUS = status;
+
+        // ---- Chat gating flags (used by the modal) ----
+        if (payload.chat) {
+            canMessageKitchen = !!payload.chat.can_message_kitchen;
+            canMessageRider   = !!payload.chat.can_message_rider;
+
+            setAttributeSafe(page, 'data-can-message-kitchen', canMessageKitchen ? '1' : '0');
+            setAttributeSafe(page, 'data-can-message-rider',   canMessageRider   ? '1' : '0');
+            setAttributeSafe(page, 'data-order-status',        status);
+
+            if (chatOpen) {
+                reconcileOpenChat();
+            }
         }
-        if (typeof state.can_message_rider === 'boolean') {
-            canMessageRider = state.can_message_rider;
+
+        // ---- Status card ----
+        var titleEl       = document.getElementById('trackingStatusTitle');
+        var descriptionEl = document.getElementById('trackingStatusDescription');
+        var badgeEl       = document.getElementById('trackingStatusBadge');
+        var iconImg       = document.getElementById('trackingStatusIconImg');
+
+        if (titleEl && meta.label) {
+            titleEl.textContent = meta.label;
+        }
+        if (descriptionEl && meta.description) {
+            descriptionEl.textContent = meta.description;
+        }
+        if (badgeEl && meta.badge && meta.label) {
+            badgeEl.className   = 'badge ' + meta.badge;
+            badgeEl.textContent = meta.label;
+        }
+        if (iconImg && meta.icon) {
+            iconImg.src = iconUrl(meta.icon);
         }
 
-        if (typeof state.order_status === 'string' && state.order_status !== '') {
-            ORDER_STATUS = state.order_status;
+        // ---- Timeline ----
+        var timelineCard = document.getElementById('trackingTimelineCard');
+        if (timelineCard) {
+            if (payload.is_terminal) {
+                timelineCard.style.display = 'none';
+            } else {
+                timelineCard.style.display = '';
+                var steps = qsa('.tracking-step', timelineCard);
+                steps.forEach(function (step, i) {
+                    var state = 'pending';
+                    if (!isNaN(idx) && idx >= 0) {
+                        if (i < idx)       state = 'done';
+                        else if (i === idx) state = 'current';
+                    }
+                    step.className = 'tracking-step ' + state;
+
+                    var dotImg = qs('.tracking-step-dot img', step);
+                    if (dotImg) {
+                        dotImg.src = iconUrl(
+                            state === 'done' ? 'verified-fill.svg' : 'time-fill.svg'
+                        );
+                    }
+                });
+            }
         }
 
-        page.setAttribute('data-can-message-kitchen', canMessageKitchen ? '1' : '0');
-        page.setAttribute('data-can-message-rider',   canMessageRider   ? '1' : '0');
-        page.setAttribute('data-order-status', ORDER_STATUS);
+        // ---- Chat closed notice ----
+        var closedWrapper = document.getElementById('trackingChatClosedWrapper');
+        if (closedWrapper && payload.chat) {
+            if (!payload.chat.is_reachable && payload.chat.closed_reason) {
+                closedWrapper.innerHTML =
+                    '<div class="tracking-chat-closed-notice" role="status">'
+                    + '<img src="' + escapeHtml(iconUrl('information-fill.svg')) + '"'
+                    + ' alt="" class="tracking-chat-closed-icon" width="18" height="18"'
+                    + ' onerror="this.onerror=null; this.src=\''
+                    + escapeHtml(iconUrl('file-warning-fill.svg'))
+                    + '\'">'
+                    + '<p class="tracking-chat-closed-text">'
+                    + escapeHtml(payload.chat.closed_reason)
+                    + '</p>'
+                    + '</div>';
+            } else {
+                closedWrapper.innerHTML = '';
+            }
+        }
 
-        if (chatOpen) {
-            reconcileOpenChat();
+        // ---- Advance the revision cursor ----
+        if (typeof payload.revision === 'string' && payload.revision !== '') {
+            statusRevision = payload.revision;
+            setAttributeSafe(page, 'data-status-revision', statusRevision);
         }
     }
 
+    var pollInFlight = false;
+
     function pollStatus() {
+        if (pollInFlight) return;
+        if (document.visibilityState !== 'visible') return;
+
+        pollInFlight = true;
+
         var body = new FormData();
-        body.append('action', 'get_tracking_status');
+        body.append('action', 'get_tracking_payload');
         body.append('csrf_token', CSRF_TOKEN);
         body.append('order_id', String(ORDER_ID));
-        body.append('current_revision', currentRevision);
 
         fetchJson(POLL_ENDPOINT, body)
             .then(function (data) {
                 if (!data || data.status !== 'success') return;
 
-                if (typeof data.revision === 'string' && data.revision !== '') {
-                    if (currentRevision !== '' && data.revision !== currentRevision) {
-                        currentRevision = data.revision;
-                        if (data.tracking_state) {
-                            applyTrackingState(data.tracking_state);
-                        } else if (typeof data.order_status === 'string') {
-                            applyTrackingState({
-                                order_status: data.order_status
-                            });
-                        }
-                    } else {
-                        currentRevision = data.revision;
-                    }
+                var nextRevision = String(data.revision || '');
+                if (nextRevision === '') return;
+
+                if (nextRevision === statusRevision) {
+                    return;
                 }
 
-                if (data.tracking_state) {
-                    applyTrackingState(data.tracking_state);
-                }
+                applyTrackingPayload(data);
             })
             .catch(function () {
-                // Silent fail. The next tick retries.
+                // Silent. Next tick retries.
+            })
+            .finally(function () {
+                pollInFlight = false;
             });
     }
 
+    var statusPollTimer = null;
+
+    function startStatusPoll() {
+        if (statusPollTimer !== null) return;
+        statusPollTimer = setInterval(pollStatus, POLL_INTERVAL_MS);
+    }
+
+    function stopStatusPoll() {
+        if (statusPollTimer === null) return;
+        clearInterval(statusPollTimer);
+        statusPollTimer = null;
+    }
+
     function initStatusPoll() {
-        if (ORDER_STATUS === 'delivered'
-            || ORDER_STATUS === 'cancelled'
-            || ORDER_STATUS === 'refunded'
-            || ORDER_STATUS === 'failed') {
-            if (ORDER_STATUS !== 'delivered') {
-                return;
-            }
+        if (ORDER_STATUS === 'cancelled' || ORDER_STATUS === 'refunded') {
+            // Terminal non-delivered orders have nothing left to
+            // watch. Delivered orders still need to watch for the
+            // grace window closing so the chat-closed notice
+            // appears at the right moment.
+            return;
         }
 
-        setInterval(pollStatus, POLL_INTERVAL_MS);
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible') {
+                pollStatus();
+                startStatusPoll();
+            } else {
+                stopStatusPoll();
+            }
+        });
+
+        startStatusPoll();
     }
 
     // -----------------------------------------------------------------
@@ -507,7 +480,7 @@
     var chatOpen = false;
 
     var hasLoadedMessages = { restaurant_account: false, delivery_rider: false };
-    var pollInFlight      = { restaurant_account: false, delivery_rider: false };
+    var chatPollInFlight  = { restaurant_account: false, delivery_rider: false };
 
     function channelIsAvailable(channel) {
         if (channel === 'restaurant_account') return canMessageKitchen;
@@ -583,23 +556,6 @@
             '<div class="customer-chat-empty"><span>No messages yet.</span></div>';
     }
 
-    /**
-     * Append one message node to the chat body.
-     *
-     * The outer node carries two class names:
-     *   - .customer-chat-message
-     *   - .customer-chat-message-sent OR .customer-chat-message-received
-     *
-     * The inner nodes are:
-     *   - .customer-chat-message-sender
-     *   - .customer-chat-message-text
-     *   - .customer-chat-message-time
-     *
-     * These strings are the boundary between this file and
-     * order-tracking.css. Both files must agree.
-     *
-     * @param {{direction:string, sender:string, content:string, time:string}} entry
-     */
     function appendMessageNode(entry) {
         if (!chatMessages) return;
 
@@ -684,11 +640,6 @@
                 hasLoadedMessages[channel] = true;
 
                 if (!data || data.status !== 'success') {
-                    // If the handler refused the channel with a
-                    // closed reason, hide the form and show the
-                    // closed notice instead of the usual message
-                    // list. This is the moment the swap is
-                    // applied.
                     if (data && isClosedReason(data.reason)) {
                         if (chatMessages) chatMessages.innerHTML = '';
                         applyClosedState(channel);
@@ -736,12 +687,10 @@
             return;
         }
 
-        // Do not poll a channel the client has already been told
-        // is closed. There is nothing to poll for.
         if (closedChannels[activeChannel] === true) return;
 
-        if (pollInFlight[activeChannel]) return;
-        pollInFlight[activeChannel] = true;
+        if (chatPollInFlight[activeChannel]) return;
+        chatPollInFlight[activeChannel] = true;
 
         var channel = activeChannel;
         var sinceId = messageCursor[channel] || 0;
@@ -762,9 +711,6 @@
         fetchJson(endpoint, body)
             .then(function (data) {
                 if (!data || data.status !== 'success') {
-                    // A closed reason arriving on the poll means
-                    // the grace window expired while the modal was
-                    // open. Apply the swap.
                     if (data && isClosedReason(data.reason)) {
                         applyClosedState(channel);
                         return;
@@ -784,10 +730,10 @@
                 }
             })
             .catch(function () {
-                // Silent. The next tick retries.
+                // Silent. Next tick retries.
             })
             .finally(function () {
-                pollInFlight[channel] = false;
+                chatPollInFlight[channel] = false;
             });
     }
 
@@ -823,10 +769,6 @@
             chatSubtitle.textContent = 'Order #' + ORDER_ID + ' • ' + label;
         }
 
-        // If this channel is known to be closed, hide the form
-        // and show the notice. If it is not closed, ensure the
-        // form is visible and the notice is gone (unless the
-        // other channel is still closed).
         if (closedChannels[channel] === true) {
             applyClosedState(channel);
         } else {
@@ -912,10 +854,6 @@
             chatForm.addEventListener('submit', function (event) {
                 event.preventDefault();
 
-                // If the channel is known to be closed, refuse
-                // the send locally and re-apply the closed state
-                // (belt and braces — the form is hidden, but a
-                // programmatic submit could still reach here).
                 if (closedChannels[activeChannel] === true) {
                     applyClosedState(activeChannel);
                     return;
@@ -953,11 +891,6 @@
                         if (!data || data.status !== 'success') {
                             if (chatInput) chatInput.value = content;
 
-                            // A closed reason on the send path
-                            // means the window shut between the
-                            // last load and this send. Apply the
-                            // swap rather than just appending a
-                            // system message.
                             if (data && isClosedReason(data.reason)) {
                                 applyClosedState(activeChannel);
                                 return;

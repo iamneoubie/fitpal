@@ -288,7 +288,7 @@ $pageCssMap = [
     'sign-up.php'   => 'sign-up.css',
     'dashboard.php' => 'dashboard.css',
     'profile.php'   => 'profile.css',
-    'kitchen.php'   => 'orders.css',
+    'kitchen.php'   => 'kitchen-orders.css',
 ];
 
 $pageCssFile = $pageCssMap[$currentPage] ?? '';

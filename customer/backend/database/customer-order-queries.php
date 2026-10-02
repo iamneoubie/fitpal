@@ -14,27 +14,18 @@
  * things that did not belong to a single role:
  *
  *   1. Order creation from a session queue (createOrderFromQueue).
- *      Every role's order-creation path funnels through the shared
- *      layer now. A customer-side, restaurant-side, and admin-side
- *      variant would each write the same ledger rows; three copies
- *      is three chances to diverge.
- *
  *   2. Customer cancellation (cancelOrderAsCustomer).
  *   3. Refund issuance (refundOrderToWallet).
  *   4. Fee math via the fee schedule (calculateOrderFees).
  *
- * All four now live in:
+ * All four now live in the shared layer:
  *
  *     shared/backend/database/order-transaction-queries.php
  *     shared/backend/database/fee-queries.php
  *
  * Every caller that used to reach the old names still reaches them;
  * the names and signatures are unchanged, only the file that
- * declares them is different. Every page and handler that
- * previously required `order-queries.php` requires
- * `customer-order-queries.php` now, and this file re-requires the
- * shared layer so a caller that only knows about this file still
- * gets the shared functions.
+ * declares them is different.
  *
  * ---------------------------------------------------------------------
  * SCOPE
@@ -47,11 +38,7 @@
  *
  * This file does NOT contain:
  *   - Any SQL that writes orders, transactions, or financial
- *     accounts. Those are shared writes and live in the shared
- *     layer.
- *   - Any SQL that writes queue_item or customization_instance
- *     for order creation. Order creation is a shared write and
- *     lives in the shared layer.
+ *     accounts.
  *   - $_POST, header(), echo, session access.
  *   - HTML, formatting helpers, render helpers.
  *
@@ -61,10 +48,7 @@
  * The `orders` table does not store subtotal, delivery_charge,
  * total_amount, or any of the fee fields. Every total in this file
  * is computed on read by calling getOrderTotals() in the shared
- * order-transaction layer, which in turn reads the fee schedule in
- * shared/backend/database/fee-queries.php. A change to the fee
- * policy is therefore a change in exactly one file and every
- * reader agrees on the numbers.
+ * order-transaction layer.
  *
  * ---------------------------------------------------------------------
  * PLACEHOLDER RULE
@@ -74,32 +58,63 @@
  * Every query in this file that needs the same value in more than
  * one position uses distinct placeholder names.
  *
+ * ---------------------------------------------------------------------
+ * REORDER (v2.2.0)
+ * ---------------------------------------------------------------------
+ * The reorder path has three moving parts:
+ *
+ *   1. getReorderableItems() — reads the original order's queue_item
+ *      rows, plus each row's customization_instance rows and its
+ *      custom_instructions string.
+ *
+ *   2. buildReorderLine() — validates each row against the current
+ *      database state, recomputes a fresh unit price from
+ *      base_price + current composition rules, and returns a line
+ *      shaped like a session queue line.
+ *
+ *   3. handleReorder() in customer-order-handler.php — merges the
+ *      returned line into $_SESSION['order_queue'].
+ *
+ * Two fields on the line produced by buildReorderLine() are load-
+ * bearing for the queue panel's render:
+ *
+ *     customizations        the parsed array the panel reads to
+ *                           decide whether to show its dropdown
+ *     image                 a BROWSER-LOADABLE URL, not the raw
+ *                           dietary_information.images folder path
+ *
+ * Before v2.2.0, buildReorderLine():
+ *
+ *   - did not select qi.custom_instructions, so the customer's
+ *     special instructions were silently dropped when reordering
+ *   - returned `image` as the raw folder path, which the browser
+ *     could not load, so the queue panel fell back to the restaurant
+ *     icon on every reordered line
+ *   - did not return a `customizations` key at all, so the panel's
+ *     "Customized" dropdown never rendered even when the reordered
+ *     line carried customizations
+ *
+ * This revision fixes all three. getReorderableItems() now selects
+ * qi.custom_instructions; buildReorderLine() resolves the image
+ * through the same helpers queueEnrich() uses and returns both
+ * `customization_data` (raw JSON) and `customizations` (parsed
+ * array, with the notes entry reconstructed from
+ * custom_instructions when one is present).
+ *
  * @package FitPal
- * @version 2.0 — Renamed from order-queries.php to
- *                customer-order-queries.php.
+ * @version 2.2.0 — Reorder now carries special instructions and a
+ *                  browser-loadable product image, and returns the
+ *                  parsed customizations array the queue panel
+ *                  reads.
  *
- *                Cross-role code removed:
- *                  - createOrderFromQueue, cancelOrderAsCustomer,
- *                    refundOrderToWallet, and getOrderTotals were
- *                    removed from this file; they now live in
- *                    shared/backend/database/order-transaction-queries.php
- *                    and are pulled in by the require_once at the
- *                    top.
- *                  - No other function in this file changed name or
- *                    signature. Every customer page that already
- *                    calls getOrderDetails(), getActiveOrder(),
- *                    getOrderTotals(), getOrderItemsSummary(),
- *                    getOrderItemsWithCustomizations(),
- *                    getReorderableItems(), or buildReorderLine()
- *                    keeps working after its require path is
- *                    updated to this file.
- *
- *                (1.0: initial customer order query layer.)
+ *                  (2.0.0: renamed to customer-order-queries.php.
+ *                  1.0: initial customer order query layer.)
  */
 
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../../shared/backend/database/order-transaction-queries.php';
+require_once __DIR__ . '/queue-queries.php';
 
 /* =============================================================
  * READS — SINGLE ORDER
@@ -114,9 +129,7 @@ require_once __DIR__ . '/../../../shared/backend/database/order-transaction-quer
  * table does not store them.
  *
  * The caller is responsible for having verified that the order
- * belongs to the authenticated customer before calling this. The
- * customer-facing handlers do that with getOrderOwnership() from
- * the shared layer.
+ * belongs to the authenticated customer before calling this.
  *
  * @param PDO $db
  * @param int $orderId
@@ -160,6 +173,7 @@ function getOrderDetails(PDO $db, int $orderId): array|false
             qi.is_customized,
             qi.base_price_snapshot,
             qi.final_price,
+            qi.custom_instructions,
             p.name AS product_name,
             p.description,
             di.dietary_tags,
@@ -252,18 +266,6 @@ function getOrderBranch(PDO $db, int $orderId): array|false
 
 /**
  * Get the customer's current active order, if any.
- *
- * An order is "active" for the whole span from placement to
- * delivery. That includes the two rider-facing statuses:
- *
- *     rider_pending  — kitchen has proposed a rider; the rider may
- *                      still decline
- *     picking_up     — rider accepted; en route to / at the
- *                      restaurant; food not yet in hand
- *
- * Both are live, both are visible to the customer on orders.php and
- * order-tracking.php, and both belong in the dashboard's "current
- * order" card.
  *
  * @param PDO $db
  * @param int $customerId
@@ -358,23 +360,6 @@ function getOrderItemsSummary(PDO $db, int $orderId): array
  * Get order items with full customization details and per-item
  * review status. Per-product data source for the Orders page.
  *
- * Review status
- * -------------
- * A product is considered reviewed for this order when the order
- * has a feedback envelope carrying a product-type rating whose
- * queue_item_id belongs to this order and whose queue_item points
- * at this product_id.
- *
- * The schema does not store product_id on `feedback`. The correct
- * path is:
- *
- *     queue_item → rating → feedback
- *
- * The rating table's chk_rating_subject_matches_type CHECK
- * constraint guarantees that a row with rating_type = 'product' has
- * a non-NULL queue_item_id and NULL branch_id / rider_id, so
- * filtering on rating_type alone is sufficient.
- *
  * @param PDO $db
  * @param int $orderId
  * @return array<int, array<string, mixed>>
@@ -442,10 +427,6 @@ function getOrderItemsWithCustomizations(PDO $db, int $orderId): array
     $productIds       = array_values(array_unique(array_column($items, 'product_id')));
     $prodPlaceholders = implode(',', array_fill(0, count($productIds), '?'));
 
-    // Reviewed-product lookup. See docblock for the schema shape.
-    // Positional ? is used throughout because native PDO prepares
-    // reject mixing named and positional placeholders in one
-    // statement.
     $revStmt = $db->prepare(
         "SELECT DISTINCT qi.product_id
            FROM queue_item qi
@@ -529,9 +510,14 @@ function canReviewProduct(PDO $db, int $orderId, int $productId, int $customerId
  * session queue. Only returns lines that belong to the given
  * customer.
  *
- * Returns one row per queue_item with its original customizations
- * attached. Does NOT validate availability — buildReorderLine()
- * handles that, so the handler can report per-line reasons.
+ * Every line carries:
+ *
+ *   - its customization_instance rows, as `customizations`
+ *   - its special-instructions string, as `custom_instructions`
+ *   - the raw dietary_information.images folder path, as
+ *     `product_image`
+ *
+ * buildReorderLine() consumes all three.
  *
  * @param PDO $db
  * @param int $orderId
@@ -562,6 +548,7 @@ function getReorderableItems(PDO $db, int $orderId, int $customerId): array
             qi.final_price,
             qi.is_customized,
             qi.base_price_snapshot,
+            qi.custom_instructions,
             p.name AS product_name
          FROM queue_item qi
          JOIN product p ON qi.product_id = p.product_id
@@ -623,9 +610,30 @@ function getReorderableItems(PDO $db, int $orderId, int $customerId): array
  *   - removed ingredients are skipped
  *   - unit price = base_price + Σ(modifier × qty)
  *
- * Lives here rather than in a handler because pages that render
- * order data cannot require a handler file (a handler runs a full
- * request dispatch at load time).
+ * The returned line carries every field a session queue line needs:
+ *
+ *   product_id              int
+ *   name, price, base_price, quantity, stock
+ *   image                   BROWSER-LOADABLE URL (not the raw
+ *                           dietary_information.images value)
+ *   restaurant_name, branch_name, restaurant_branch_id
+ *   is_customizable
+ *   customization_data      raw JSON of the customer's selections
+ *   customizations          PARSED array of the same selections,
+ *                           with a {type:'notes'} entry prepended
+ *                           when custom_instructions is present
+ *
+ * The queue panel reads `customizations` to decide whether to
+ * render its "Customized" dropdown and to render the modification
+ * rows inside it. It reads `image` as an <img src>. Both must be
+ * correct for a reordered line to render identically to a line
+ * added through the menu.
+ *
+ * The `$item['custom_instructions']` argument is the customer's
+ * free-text note for the ORIGINAL order. When present it is
+ * reconstructed as a {type:'notes', notes:'...'} entry at the head
+ * of the `customizations` array, matching the shape the
+ * product-detail wizard emits and createOrderFromQueue() consumes.
  *
  * @param PDO   $db
  * @param array $item
@@ -743,36 +751,112 @@ function buildReorderLine(
 
     $unitPrice = $basePrice;
 
+    // Build the parsed customizations array the queue panel reads.
+    // Every entry the caller supplied is preserved here, with the
+    // ingredient name looked up so the panel does not have to do a
+    // second query. Entries whose ingredient is no longer in the
+    // composition are dropped from the price calculation but kept
+    // in the display array with their original name — a customer
+    // who sees "(no longer available)" next to an item has a better
+    // experience than one who sees the entry silently vanish.
+    $parsedCustomizations = [];
+
     foreach ($customizations as $cust) {
         if (!is_array($cust)) continue;
-        if (($cust['type'] ?? '') === 'notes') continue;
+        if (($cust['type'] ?? '') === 'notes') {
+            // Notes entries are carried verbatim; the caller (or
+            // the reconstruction below) supplies them in the right
+            // shape.
+            $parsedCustomizations[] = $cust;
+            continue;
+        }
 
         $ingredientId = (int)($cust['ingredient_id'] ?? 0);
         if ($ingredientId <= 0) continue;
 
-        // Ingredient was dropped from the composition since the
-        // original order. Skip it — do not add its modifier.
-        if (!isset($rules[$ingredientId])) continue;
-
         $option = (string)($cust['selected_option'] ?? 'selected');
-        if ($option === 'remove') continue;
+        $qty    = (int)($cust['quantity'] ?? 1);
+        if ($qty < 1) $qty = 1;
 
-        $requestedQty = (int)($cust['quantity'] ?? 0);
-        if ($requestedQty <= 0) continue;
+        $inCurrentComposition = isset($rules[$ingredientId]);
+
+        if (!$inCurrentComposition) {
+            // The ingredient was removed from the product since the
+            // original order. Keep it in the display array so the
+            // customer can see what they had, mark it as removed,
+            // and do not add its modifier to the price.
+            $parsedCustomizations[] = [
+                'ingredient_id'   => $ingredientId,
+                'ingredient_name' => (string)($cust['ingredient_name'] ?? ('Ingredient #' . $ingredientId)),
+                'selected_option' => 'remove',
+                'quantity'        => 1,
+                'price_modifier'  => 0.0,
+            ];
+            continue;
+        }
 
         $rule     = $rules[$ingredientId];
         $modifier = (float)$rule['price_modifier'];
         $maxQty   = (int)$rule['max_quantity'];
-        if ($maxQty > 0 && $requestedQty > $maxQty) {
-            $requestedQty = $maxQty;
+
+        $appliedQty = $qty;
+        if ($maxQty > 0 && $appliedQty > $maxQty) {
+            $appliedQty = $maxQty;
         }
 
-        $unitPrice += $modifier * $requestedQty;
+        if ($option !== 'remove') {
+            $unitPrice += $modifier * $appliedQty;
+        } else {
+            $modifier = 0.0;
+        }
+
+        $parsedCustomizations[] = [
+            'ingredient_id'   => $ingredientId,
+            'ingredient_name' => (string)($cust['ingredient_name'] ?? ('Ingredient #' . $ingredientId)),
+            'selected_option' => $option,
+            'quantity'        => $appliedQty,
+            'price_modifier'  => $modifier,
+        ];
     }
 
     if ($unitPrice < 0) {
         $unitPrice = 0.0;
     }
+
+    // Reconstruct the notes entry from the original order's
+    // custom_instructions string, if any. It is placed at the head
+    // of the parsed array so the panel renders it consistently
+    // regardless of where the customer typed it.
+    $originalNotes = isset($item['custom_instructions'])
+        ? trim((string)$item['custom_instructions'])
+        : '';
+
+    if ($originalNotes !== '') {
+        array_unshift($parsedCustomizations, [
+            'type'  => 'notes',
+            'notes' => $originalNotes,
+        ]);
+    }
+
+    // Re-encode the customization_data JSON so it carries the notes
+    // entry too. createOrderFromQueue() reads this field on the
+    // session queue line and extracts the notes entry into
+    // queue_item.custom_instructions. Without this, the notes would
+    // display in the panel but would not survive a re-order.
+    $customizationData = null;
+    if (!empty($parsedCustomizations)) {
+        $encoded = json_encode($parsedCustomizations);
+        if ($encoded !== false) {
+            $customizationData = $encoded;
+        }
+    }
+
+    // Resolve the raw dietary_information.images folder value into a
+    // browser-loadable URL through the same helper queueEnrich()
+    // uses. Without this, the queue panel's <img src> points at a
+    // project-root-relative folder path and the browser falls back
+    // to the restaurant icon.
+    $imageUrl = queueResolveImageUrl((string)$p['product_image']);
 
     return [
         'product_id'           => (int)$p['product_id'],
@@ -780,12 +864,13 @@ function buildReorderLine(
         'price'                => round($unitPrice, 2),
         'base_price'           => $basePrice,
         'quantity'             => $quantity,
-        'image'                => (string)$p['product_image'],
+        'image'                => $imageUrl,
         'stock'                => $maxStock,
         'restaurant_name'      => (string)$p['restaurant_name'],
         'branch_name'          => (string)$p['branch_name'],
         'restaurant_branch_id' => (int)$p['restaurant_branch_id'],
         'is_customizable'      => (bool)$p['is_customizable'],
-        'customization_data'   => $item['customization_data'] ?? null,
+        'customization_data'   => $customizationData,
+        'customizations'       => $parsedCustomizations,
     ];
 }

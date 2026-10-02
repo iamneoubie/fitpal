@@ -22,6 +22,36 @@
  *   check_sign_out        → read-only guard for the sign-out button
  *
  * ---------------------------------------------------------------------
+ * TOGGLE_AVAILABILITY RESPONSE CONTRACT
+ * ---------------------------------------------------------------------
+ * The toggle_availability success response is authoritative and
+ * self-contained. The client does not guess the post-write state,
+ * does not race a follow-up list call against a local variable, and
+ * does not need a second round-trip to render the new pill. The
+ * response carries:
+ *
+ *     status          "success"
+ *     message         a human-readable confirmation
+ *     is_available    0 | 1  (integer, kept for compatibility)
+ *     online          true | false  (boolean, this is what the JS reads)
+ *     eligible        true | false  (rider is verified and active)
+ *     status_text     "Online" | "Offline" | "Inactive"
+ *     status_action   "Go Offline" | "Go Online" | ""
+ *     status_class    "is-online" | "is-offline" | "is-inactive"
+ *
+ * The `online`, `eligible`, and the three status_* fields are
+ * derived on the server from the same helpers that shape the
+ * panel's first paint in rider/includes/assignment-panel.php. That
+ * means the pill the client paints from the toggle response is
+ * byte-identical to the pill the server renders on the next page
+ * load, and no follow-up call can disagree with it.
+ *
+ * The failure branch — the offline guard firing because the rider
+ * has live orders — returns status=error with a message and no
+ * state fields. The client leaves its current rendering unchanged
+ * and shows the message in the modal.
+ *
+ * ---------------------------------------------------------------------
  * TWO ACCEPT PATHS, ONE SHAPE
  * ---------------------------------------------------------------------
  * There are two accept endpoints in the rider role:
@@ -39,13 +69,6 @@
  *   5. Commit.
  *   6. Forward to the shared handler for the (no-op under v2.4.0)
  *      shared-handler record.
- *
- * The previous revision of this file performed steps 1, 2, and 6,
- * and skipped 3, 4, and 5. The order stayed at rider_pending forever
- * when accepted from the deliveries page, and every retry returned
- * success without moving anything. The panel's accept path had the
- * same bug and was fixed in file 2 of the v2.4.0 revision. This file
- * closes the second half.
  *
  * ---------------------------------------------------------------------
  * TWO PICKUP PATHS, ONE SHAPE
@@ -91,26 +114,27 @@
  * CSRF check reads $_SESSION['rider_csrf_token'].
  *
  * @package FitPal
- * @version 9.0 — The deliveries-page accept, pickup, and delivered
- *                paths are now shaped the same way the panel's
- *                paths are shaped:
+ * @version 10.0 — The toggle_availability success response now
+ *                 carries the full post-write state: online,
+ *                 eligible, status_text, status_action, and
+ *                 status_class, all derived server-side from the
+ *                 same helpers the panel's first paint uses. The
+ *                 client no longer has to guess the new state from
+ *                 a local variable or wait for a follow-up list
+ *                 call to confirm it, and the dashboard's
+ *                 availability display is updated from the same
+ *                 authoritative payload.
  *
- *                - handleAcceptAssignment() runs the transition
- *                  itself before forwarding to the shared handler.
- *                - handleMarkPickedUp() runs the transition, then
- *                  forwards so the COD collection row is written.
- *                - handleDelivered() forwards to the shared handler
- *                  for both the transition and the credit pair. The
- *                  local call to creditRiderForDelivery() is gone;
- *                  that function no longer exists under v2.4.0.
- *
- *                (8.0: accept_assignment and delivered delegated
- *                their money movement to the shared handler. 7.2:
- *                committed-order cap on accept. 7.1: added
- *                check_sign_out. 7.0: picking_up intermediate
- *                status. 6.x: upload layout. 5.1: delivery payout
- *                constant at file scope. 5.0: delivery payout.
- *                4.1: rider_csrf_token. 4.0: accept + decline.)
+ *                 (9.0: the deliveries-page accept, pickup, and
+ *                 delivered paths shaped the same way the panel's
+ *                 paths are shaped. 8.0: accept_assignment and
+ *                 delivered delegated their money movement to the
+ *                 shared handler. 7.2: committed-order cap on
+ *                 accept. 7.1: added check_sign_out. 7.0:
+ *                 picking_up intermediate status. 6.x: upload
+ *                 layout. 5.1: delivery payout constant at file
+ *                 scope. 5.0: delivery payout. 4.1:
+ *                 rider_csrf_token. 4.0: accept + decline.)
  */
 
 declare(strict_types=1);
@@ -237,6 +261,27 @@ function handleCheckSignOut(PDO $db, int $riderId): array
     ];
 }
 
+/**
+ * Toggle the rider's online / offline flag and return the full
+ * post-write state.
+ *
+ * The success response is authoritative and self-contained. The
+ * client does not need to guess the new state or make a follow-up
+ * call to confirm the write landed. Every field the panel and the
+ * dashboard need to render the new availability is derived here,
+ * on the server, from the same helpers the panel's first paint
+ * uses.
+ *
+ * Failure branch: the offline guard inside setRiderAvailability()
+ * fires when the rider has any live order. The handler returns
+ * status=error with a message and no state fields. The client
+ * leaves its current rendering unchanged and shows the message in
+ * the modal.
+ *
+ * @param PDO $db
+ * @param int $riderId
+ * @return array<string, mixed>
+ */
 function handleToggleAvailability(PDO $db, int $riderId): array
 {
     $isAvailable = (int)($_POST['is_available'] ?? 0) === 1 ? 1 : 0;
@@ -251,12 +296,59 @@ function handleToggleAvailability(PDO $db, int $riderId): array
         ];
     }
 
+    // ---- Post-write state, derived server-side ----
+    //
+    // Read the rider's eligibility and the canonical value of
+    // is_available back from the database. The read is a fresh
+    // SELECT after the UPDATE, so it reflects the write that just
+    // committed.
+    //
+    // Note: a fresh SELECT on the same PDO connection after an
+    // UPDATE reads the committed value. There is no transaction
+    // open on this path — setRiderAvailability() runs a plain
+    // autocommitted UPDATE — so the read is not subject to any
+    // snapshot that could predate the write.
+    $eligible = panelRiderIsEligible($db, $riderId);
+    $profile  = getRiderProfile($db, $riderId);
+
+    $isNowOnline = $profile
+        ? (int)($profile['is_available'] ?? 0) === 1
+        : ($isAvailable === 1);
+
+    // Derive the pill's three display fields the same way
+    // rider/includes/assignment-panel.php derives them on first
+    // paint. Keeping this derivation in one shape means a pill
+    // painted from this response is byte-identical to the pill
+    // the server renders on the next page load.
+    if (!$eligible) {
+        $statusText   = 'Inactive';
+        $statusAction = '';
+        $statusClass  = 'is-inactive';
+    } elseif ($isNowOnline) {
+        $statusText   = 'Online';
+        $statusAction = 'Go Offline';
+        $statusClass  = 'is-online';
+    } else {
+        $statusText   = 'Offline';
+        $statusAction = 'Go Online';
+        $statusClass  = 'is-offline';
+    }
+
     return [
-        'status'       => 'success',
-        'message'      => $isAvailable
+        'status'        => 'success',
+        'message'       => $isNowOnline
             ? 'You are now online and ready to accept deliveries.'
             : 'You are now offline.',
-        'is_available' => $isAvailable,
+
+        // Kept for any caller that reads the raw integer.
+        'is_available'  => $isNowOnline ? 1 : 0,
+
+        // The fields the client renders from.
+        'online'        => $isNowOnline,
+        'eligible'      => $eligible,
+        'status_text'   => $statusText,
+        'status_action' => $statusAction,
+        'status_class'  => $statusClass,
     ];
 }
 

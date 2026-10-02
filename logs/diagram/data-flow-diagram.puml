@@ -1,0 +1,137 @@
+@startuml
+skinparam handwritten false
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam linetype ortho
+skinparam nodesep 60
+skinparam ranksep 60
+skinparam packageStyle rectangle
+
+' --- Custom Styles for Basic Shapes ---
+skinparam rectangle {
+    BackgroundColor white
+    BorderColor #333333
+    RoundCorner 0
+}
+skinparam arrow {
+    Color #1E90FF
+    Thickness 1.2
+}
+
+' --- Title ---
+title
+  <size:24><b>Food Delivery System – Data Flow Diagram (DFD)</b></size>
+end title
+
+' ==========================================
+' CONTEXT DIAGRAM (LEVEL 0)
+' ==========================================
+package "Context Diagram (Level 0)" {
+    
+    rectangle "Customer" as C_Ext #C8E6C9
+    rectangle "Food Delivery\nSystem" as System #BBDEFB
+    rectangle "Restaurant" as R_Ext #E1BEE7
+    rectangle "Delivery Rider" as D_Ext #FFE0B2
+    rectangle "Administrator" as A_Ext #B3E5FC
+
+    ' Data flows
+    C_Ext -> System : Registration / Login Data\nOrders / Payments\nFeedback
+    System -> C_Ext : Menu Information\nFood Details & Calories\nOrder Status / Delivery Updates\nConfirmation / Receipts
+
+    System -> R_Ext : Menu & Nutritional Information\nOrder Requests / Updates
+    R_Ext -> System : Order Details / Status\nFeedback Reports
+
+    System -> D_Ext : Delivery Assignments\nStatus Updates
+    D_Ext -> System : Availability / Delivery status\nOrder Acceptance
+
+    System -> A_Ext : User Management / Reports
+    A_Ext -> System : System Analytics / Audit Logs
+}
+
+' ==========================================
+' LEVEL 1 DFD
+' ==========================================
+package "Level 1 DFD" {
+    
+    rectangle "Customer" as C1 #C8E6C9
+    rectangle "Restaurant" as R1 #FFCCBC
+    rectangle "Delivery Rider" as D1 #FFE0B2
+
+    ' Processes (Basic Rectangles)
+    rectangle "1. User Registration" as P1 #E3F2FD
+    rectangle "2. Login" as P2 #E3F2FD
+    rectangle "3. Browse Food Menu" as P3 #E3F2FD
+    rectangle "4. Display Food Calories" as P4 #E3F2FD
+    rectangle "5. Process Food Order" as P5 #E3F2FD
+    rectangle "6. Order Request" as P6 #E3F2FD
+    rectangle "7. Process Payment" as P7 #E3F2FD
+    rectangle "8. Track Delivery" as P8 #E3F2FD
+    rectangle "9. Feedback" as P9 #E3F2FD
+
+    ' Data Stores (Basic Rectangles)
+    rectangle "Customer\nDatabase" as DB_Cust #E6E0F8
+    rectangle "Food Menu\nDatabase" as DB_Menu #E6E0F8
+    rectangle "Calories\nDatabase" as DB_Cal #E6E0F8
+    rectangle "Order\nDatabase" as DB_Order #E6E0F8
+    rectangle "Payment\nRecords" as DB_Pay #E6E0F8
+    rectangle "Feedback\nRecords" as DB_Feed #E6E0F8
+
+    ' Flows from Customer to Processes
+    C1 -> P1 : Registration Data
+    C1 -> P2 : Login Credentials
+    C1 -> P3 : Browse/Search Request
+    C1 -> P5 : Order Details
+    C1 -> P7 : Payment Information
+    C1 -> P9 : Feedback
+
+    ' Flows between Processes and Data Stores
+    P1 -> DB_Cust : User Data
+    DB_Cust -> P1 : Account Confirmation
+    
+    P2 -> DB_Cust : Credentials
+    DB_Cust -> P2 : Authentication Result
+    
+    P3 -> DB_Menu : Menu Request
+    DB_Menu -> P3 : Menu List
+    
+    P4 -> DB_Cal : Food Item ID
+    DB_Cal -> P4 : Nutritional Information
+    
+    P5 -> DB_Order : Order Details
+    DB_Order -> P5 : Order Confirmation
+    
+    P7 -> DB_Pay : Payment Details
+    DB_Pay -> P7 : Payment Confirmation
+    
+    P9 -> DB_Feed : Feedback Data
+    DB_Feed -> P9 : Feedback Acknowledgement
+
+    ' Flows to External Entities
+    P4 -> C1 : Nutritional Information
+    P7 -> C1 : Order Confirmation
+    
+    ' Flows between Processes
+    P5 -> P6 : Order Details
+    P6 -> P8 : Confirmed Order
+    P8 -> P9 : Delivery Confirmation
+
+    ' Flows between Order Request and Entities
+    P6 -> R1 : Menu / Availability / Nutritional Info
+    R1 -> P6 : Order Details / Status Update
+    
+    P6 -> D1 : Delivery Assignment
+    D1 -> P6 : Delivery Status Update
+    
+    ' Flows back to Customer
+    P8 -> C1 : Delivery Status / Order Confirmation
+    P9 -> C1 : Feedback / Rating
+}
+
+' ==========================================
+' LEGEND
+' ==========================================
+legend bottom center
+    |= <color:#C8E6C9>■</color> External Entity |= <color:#BBDEFB>■</color> Process |= <color:#E6E0F8>■</color> Data Store |= <color:#1E90FF>→</color> Data Flow |
+endlegend
+
+@enduml

@@ -1,74 +1,76 @@
 <?php
 /**
  * FitPal About Page
- * 
- * This is the public about page that provides information about the platform.
- * 
- * Usage: Direct access via web browser
- * 
+ *
+ * Public-facing "About" page. Belongs to the public context and
+ * runs on its own PHP session (PHPSESSID_PUBLIC).
+ *
+ * This page provides information about the FitPal platform's
+ * mission, features, and team.
+ *
  * @package FitPal
- * @version 1.0
+ * @version 2.0 — Per-role session migration (Option B) and layout
+ *                redesign. The page bootstraps the public session
+ *                itself. The layout was reworked to align with the
+ *                project's design system, using standard grid and
+ *                card components. The local asset-base helper was
+ *                removed in favor of the one provided by the header.
+ *
+ *                (1.0: initial page.)
  */
 
 declare(strict_types=1);
 
-// Session is now handled by header.php
-// No need to start session here
+// ---------------------------------------------------------------------
+// SESSION BOOTSTRAP
+//
+// Must run BEFORE any other include that might touch the session.
+// Under Option B, this page belongs to the public context.
+// ---------------------------------------------------------------------
 
-// Include shared header (handles session)
+require_once __DIR__ . '/../includes/session-bootstrap.php';
+fitpal_session_bootstrap('public');
+
+// ---------------------------------------------------------------------
+// HEADER
+//
+// The shared header verifies the active session is the public
+// session and provides the $assetBase variable.
+// ---------------------------------------------------------------------
+
 require_once __DIR__ . '/../includes/header.php';
 
-/**
- * Get the base path for assets based on current file location
- * 
- * @return string The asset base path
- */
-function getAboutAssetBase(): string {
-    $scriptPath = $_SERVER['SCRIPT_NAME'];
-    $dirPath = dirname($scriptPath);
-    $segments = array_filter(explode('/', $dirPath));
-    $depth = count($segments);
-    
-    if ($depth <= 0) {
-        return './shared/';
-    }
-    
-    return str_repeat('../', $depth) . 'shared/';
-}
-
-$assetBase = getAboutAssetBase();
-
-// ===== FIXED: Define mission points with matching icons =====
+// Data for the "What We Offer" section
 $offerItems = [
     [
-        'title' => 'Transparent nutritional information for every meal',
+        'title' => 'Transparent Nutritional Information',
+        'description' => 'View calories, protein, carbs, and fats for every meal to make informed choices.',
         'icon' => 'list-view.svg',
-        'fallback' => 'file-warning-fill.svg'
     ],
     [
-        'title' => 'Dietary filtering by vegan, keto, gluten-free, and more',
+        'title' => 'Advanced Dietary Filtering',
+        'description' => 'Filter meals by vegan, keto, gluten-free, and other preferences to match your lifestyle.',
         'icon' => 'equalizer-line.svg',
-        'fallback' => 'file-warning-fill'
     ],
     [
-        'title' => 'Allergy management for safe food choices',
+        'title' => 'Allergy Management',
+        'description' => 'Set your allergies and get safe meal recommendations you can trust.',
         'icon' => 'list-settings-fill.svg',
-        'fallback' => 'file-warning-fill'
     ],
     [
-        'title' => 'Special instructions communicated directly to the kitchen',
+        'title' => 'Direct Kitchen Communication',
+        'description' => 'Add custom special instructions that are communicated directly to the kitchen.',
         'icon' => 'edit.svg',
-        'fallback' => 'file-warning-fill'
     ],
     [
-        'title' => 'Order tracking from preparation to delivery',
-        'icon' => 'information-fill.svg',
-        'fallback' => 'file-warning-fill'
+        'title' => 'Real-Time Order Tracking',
+        'description' => 'Track your orders from preparation to delivery for peace of mind.',
+        'icon' => 'time-update.svg',
     ],
     [
-        'title' => 'Nutrition analytics to understand your eating habits',
+        'title' => 'Personal Nutrition Analytics',
+        'description' => 'View insights into your eating habits over time to track your goals.',
         'icon' => 'chart-line-up.svg',
-        'fallback' => 'file-warning-fill'
     ]
 ];
 
@@ -77,33 +79,29 @@ $teamMembers = [
     [
         'name' => 'Lance N. Madelar',
         'role' => 'Lead Developer',
-        'bio' => 'Project leader responsible for system architecture, database design, and core functionality implementation.',
-        'image' => $assetBase . 'assets/images/team/lance-madelar.jpg',
-        'email' => 'lance.madelar@fitpal.com'
+        'bio' => 'Project leader responsible for system architecture, database design, and core functionality.',
+        'image' => $assetBase . 'assets/images/manifest/profiles/profile-1.jpg',
     ],
     [
         'name' => 'Maria Santos',
         'role' => 'UI/UX Designer',
         'bio' => 'Designs the user interface and user experience for all FitPal platforms.',
-        'image' => $assetBase . 'assets/images/team/maria-santos.jpg',
-        'email' => 'maria.santos@fitpal.com'
+        'image' => $assetBase . 'assets/images/manifest/profiles/profile-2.jpg',
     ],
     [
         'name' => 'John Dela Cruz',
         'role' => 'Backend Developer',
         'bio' => 'Builds and maintains the server-side logic and database optimization.',
-        'image' => $assetBase . 'assets/images/team/john-dela-cruz.jpg',
-        'email' => 'john.delacruz@fitpal.com'
+        'image' => $assetBase . 'assets/images/manifest/profiles/profile-3.jpg',
     ]
 ];
 ?>
-<!-- ============================================
-    ABOUT PAGE CONTENT
-    ============================================ -->
 
 <div class="content">
 
-    <!-- Hero Section -->
+    <!-- ============================================
+         HERO
+         ============================================ -->
     <section class="about-hero" aria-labelledby="about-hero-title">
         <div class="container">
             <div class="about-hero-content">
@@ -117,7 +115,9 @@ $teamMembers = [
         </div>
     </section>
 
-    <!-- Mission Section -->
+    <!-- ============================================
+         MISSION
+         ============================================ -->
     <section class="mission-section" aria-labelledby="mission-title">
         <div class="container">
             <div class="mission-grid">
@@ -126,26 +126,28 @@ $teamMembers = [
                         Our <span>Mission</span>
                     </p>
                     <p class="mission-description">
-                        At FitPal, we believe that everyone deserves access to food
-                        that meets their dietary needs and preferences. Our mission is to bridge the gap
-                        between health-conscious consumers and restaurants by providing transparent
-                        nutritional information and dietary filtering.
+                        At FitPal, we believe that everyone deserves access to food that meets their dietary needs
+                        and preferences. Our mission is to bridge the gap between health-conscious consumers and
+                        restaurants by providing transparent nutritional information and powerful dietary filtering.
                     </p>
                     <p class="mission-description">
-                        We empower individuals to make informed food choices, support restaurants in
-                        showcasing their healthy options, and build a community that values health,
-                        transparency, and delicious food.
+                        We empower individuals to make informed food choices, support restaurants in showcasing
+                        their healthy options, and build a community that values health, transparency, and
+                        delicious food.
                     </p>
                 </div>
                 <div class="mission-image">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/people-team.svg" alt="Our mission illustration"
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/people-team.svg"
+                        alt="Our mission illustration"
                         onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/community-general.svg'">
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- What We Offer Section -->
+    <!-- ============================================
+         WHAT WE OFFER
+         ============================================ -->
     <section class="offer-section" aria-labelledby="offer-title">
         <div class="container">
             <div class="section-header">
@@ -156,19 +158,22 @@ $teamMembers = [
                 <?php foreach ($offerItems as $item): ?>
                 <div class="offer-card">
                     <div class="offer-icon">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/<?php echo $item['icon']; ?>" 
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/<?php echo htmlspecialchars($item['icon'], ENT_QUOTES, 'UTF-8'); ?>"
                             alt="Feature icon"
-                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/<?php echo $item['fallback']; ?>'">
+                            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
                     </div>
                     <p class="heading-6"><?php echo htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8'); ?></p>
+                    <p><?php echo htmlspecialchars($item['description'], ENT_QUOTES, 'UTF-8'); ?></p>
                 </div>
                 <?php endforeach; ?>
             </div>
         </div>
     </section>
 
-    <!-- Team Section -->
-    <section class="team-section" aria-labelledby="team-title">
+    <!-- ============================================
+         TEAM
+         ============================================ -->
+    <!-- <section class="team-section" aria-labelledby="team-title">
         <div class="container">
             <div class="section-header">
                 <p class="section-title" id="team-title">Meet Our <span>Team</span></p>
@@ -186,18 +191,16 @@ $teamMembers = [
                         <p class="heading-5"><?php echo htmlspecialchars($member['name'], ENT_QUOTES, 'UTF-8'); ?></p>
                         <p class="team-role"><?php echo htmlspecialchars($member['role'], ENT_QUOTES, 'UTF-8'); ?></p>
                         <p class="team-bio"><?php echo htmlspecialchars($member['bio'], ENT_QUOTES, 'UTF-8'); ?></p>
-                        <a href="mailto:<?php echo htmlspecialchars($member['email'], ENT_QUOTES, 'UTF-8'); ?>"
-                            class="team-email">
-                            <?php echo htmlspecialchars($member['email'], ENT_QUOTES, 'UTF-8'); ?>
-                        </a>
                     </div>
                 </div>
                 <?php endforeach; ?>
             </div>
         </div>
-    </section>
+    </section> -->
 
-    <!-- CTA Section -->
+    <!-- ============================================
+         CTA
+         ============================================ -->
     <section class="about-cta" aria-labelledby="cta-title">
         <div class="container">
             <div class="about-cta-content">
@@ -218,6 +221,5 @@ $teamMembers = [
 </div>
 
 <?php
-// Include shared footer
 require_once __DIR__ . '/../includes/footer.php';
 ?>

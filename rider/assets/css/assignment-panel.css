@@ -4,10 +4,12 @@
  * Covers:
  *   - The bottom-anchored panel wrapper (collapsed bar + expanded
  *     body, chevron toggle, count badge, availability button).
- *   - The assignment list rows: a three-band layout where the top
- *     band holds the order number, status badge, and the per-row
- *     action buttons on the same line; the meta band collapses by
- *     default and expands via a small chevron.
+ *   - The assignment list rows, laid out in the same shape as the
+ *     customer's queue panel: one horizontal header line with the
+ *     item thumbnail, the order number, the combined status/payment
+ *     pill, and the action buttons; a meta line with the order
+ *     summary and the expand chevron; and a details block holding
+ *     the pickup and drop-off lines and the customization dropdown.
  *   - The offline and ineligible hint blocks.
  *   - The empty state.
  *   - The assignment notification modal.
@@ -46,85 +48,121 @@
  * areas to the sides fall through to the page. Clicks on the
  * visible panel still reach the panel.
  *
- * Availability pill contract
- * --------------------------
- * The pill is a real <button>. It carries two label spans:
- *   - .assignment-panel-status-text    the base state label
- *   - .assignment-panel-status-action  the action label
+ * Row layout contract
+ * -------------------
+ * A row has three visible bands and one optional band:
  *
- * CSS shows exactly one at a time:
- *   - default / not hovered / not focused → base label
- *   - :hover or :focus-visible            → action label
+ *   HEADER   .assignment-row-top          always visible
+ *   META     .assignment-row-meta-line    always visible
+ *   DETAILS  .assignment-row-details      visible only when expanded
  *
- * The action text itself is written by JS on every poll, because
- * the copy depends on BOTH the online flag and whether the rider
- * has a live assignment. CSS only decides which span is visible.
+ * The header band is a three-zone flex layout, the same way the
+ * panel's own header is a three-zone grid:
  *
- * Action-button wrapping (v7.2)
- * -----------------------------
- * The action row on an assignment panel row now holds up to four
- * buttons in the worst case (rider_pending: Decline, Accept,
- * Message, Call). At normal widths all four fit on one line beside
- * the status badge. On very narrow phones (≤ 360px) they wrap to a
- * second line. flex-wrap: wrap on .assignment-row-actions lets
- * that happen without any width calculation — the gap the rule
- * already set keeps the wrapped line consistent with the unwrapped
- * one.
+ *     [thumb] Order #N  |  [ status | payment ]  |  [actions]
+ *     zone 1 (left)         zone 2 (center)          zone 3 (right)
  *
- * Modal visibility (v7.3)
- * -----------------------
+ * Zone 1 (left) hugs its content.
+ * Zone 2 (center) takes the free space and centers the pill group
+ * inside itself, so the pills land at the visual midpoint of the
+ * row.
+ * Zone 3 (right) hugs its content.
+ *
+ * The three zones are wrapped in the header flex row with
+ * `justify-content: space-between` and the center zone grows with
+ * `flex: 1`. The pill group itself is horizontally centered inside
+ * the center zone by its own `justify-content: center`. That places
+ * the group at the row's horizontal midpoint regardless of how wide
+ * zone 1 or zone 3 happen to be.
+ *
+ * The meta band is a single flex row:
+ *
+ *     [summary text ..........]  [Details / Hide chevron]
+ *
+ * The details band holds the pickup and drop-off lines and, when
+ * the order carries one, the customization dropdown.
+ *
+ * Item thumbnail
+ * --------------
+ * The single thumbnail in the header is the row's visual anchor.
+ * It is always visible, in both the collapsed and expanded states,
+ * because the header band is always visible.
+ *
+ * Customization dropdown
+ * ----------------------
+ * The details band carries a second, independent disclosure: the
+ * "Customized" chevron. It is only rendered when the order carries
+ * at least one modification or a non-empty special-instruction
+ * value.
+ *
+ * Action-button wrapping
+ * ----------------------
+ * The action cluster holds up to four buttons in the worst case.
+ * At normal widths all four fit on one line. On very narrow phones
+ * they wrap to a second line inside the header band.
+ *
+ * Modal visibility
+ * ----------------
  * Both modals are hidden by default and shown only when the
- * .active class is present. The CSS owns visibility entirely:
+ * .active class is present. CSS owns display; JS owns .active.
  *
- *   .assignment-notify-modal,
- *   .assignment-availability-modal {
- *       display: none;
- *       opacity: 0;
- *       ...
- *   }
+ * ---------------------------------------------------------------------
+ * AVAILABILITY PILL — TEXT IS ALWAYS VISIBLE
+ * ---------------------------------------------------------------------
+ * The availability pill is a single button that carries three
+ * children:
  *
- *   .assignment-notify-modal.active,
- *   .assignment-availability-modal.active {
- *       display: flex;
- *       opacity: 1;
- *   }
+ *     .assignment-panel-status-dot     the colored dot
+ *     .assignment-panel-status-text    the state label
+ *     .assignment-panel-status-action  the action label
  *
- * The previous revision relied on JavaScript to write
- * style.display = 'flex' and style.display = 'none' and used the
- * .active class only to drive the opacity transition. That left
- * the modals laid out in the DOM at opacity: 0 on page load, where
- * they still intercepted pointer events and blocked the page.
+ * The state label is the pill's primary content and must be
+ * visible at all times, in every interaction state: idle, hovered,
+ * focused, and active. A rider must be able to look at the pill
+ * and read whether they are Online or Offline without moving the
+ * mouse off it.
  *
- * The corrected contract is:
- *   - CSS owns display.
- *   - JS owns .active.
- *   - JS no longer writes style.display at all.
+ * An earlier revision hid the state label whenever the pill was
+ * hovered or focused and showed only the action label in its
+ * place. That behavior made the pill read as the wrong state in
+ * the exact moment the rider had just used it, because the modal
+ * that the pill opens takes and then returns focus to the pill,
+ * leaving the pill in its hovered/focused rendering while the
+ * rider was reading it.
+ *
+ * The current revision keeps the state label permanently visible
+ * and shows the action label as an additional hint alongside it
+ * on hover and focus. Both labels are displayed together in the
+ * hovered state: the state label first, the action label after
+ * it. The dot stays visible in every state.
  *
  * @package FitPal
- * @version 7.3 — Modals now default to display: none in CSS.
- *                Visibility is driven entirely by the .active class.
- *                JS no longer writes style.display. This fixes the
- *                bug where the modals blocked the page on load
- *                because they were laid out at opacity: 0.
+ * @version 10.2 — The availability pill's state label
+ *                 (.assignment-panel-status-text) is now visible in
+ *                 every interaction state. The previous rule hid it
+ *                 on hover and on focus and showed only the action
+ *                 label in its place, which made the pill read as
+ *                 the wrong state the moment the rider finished a
+ *                 toggle: the modal takes and then returns focus to
+ *                 the pill, so the rider was reading the action
+ *                 label ("Go Online" / "Go Offline") as if it were
+ *                 the state label ("Online" / "Offline"). The
+ *                 action label is now rendered as an additional
+ *                 hint after the state label on hover and focus,
+ *                 not as a replacement.
  *
- *                (7.2: action-button wrapping. 7.1: wrapper
- *                pointer-events: none. 7.0: pill is a real button.
- *                6.0: wrapper permanently visible. 5.0:
- *                notification modal fix.)
+ *                 (10.1: payment pill and status badge grouped in
+ *                 an .assignment-row-pills container. 10.0:
+ *                 three-zone header layout. 9.0: single-thumbnail
+ *                 header. 8.0: item strip and customization
+ *                 dropdown. 7.3: modals default to display: none.
+ *                 7.2: action-button wrapping. 7.1: wrapper
+ *                 pointer-events: none. 7.0: pill is a real
+ *                 button. 6.0: wrapper permanently visible.)
  */
 
 /* ============================================================
    PANEL WRAPPER
-
-   Permanently visible. The wrapper never slides off-screen. Its
-   inline display is set to 'block' once by assignment-panel.js in
-   init() and never touched again; the CSS below owns every other
-   property.
-
-   pointer-events: none on this element is what allows clicks in
-   the empty strip beside and above the visible panel to reach the
-   page underneath. The visible panel re-enables pointer events on
-   .assignment-panel-inner below.
    ============================================================ */
 
 .assignment-panel-wrapper {
@@ -194,8 +232,6 @@
     background: var(--gray-50);
 }
 
-/* ---- LEFT — title ---- */
-
 .assignment-panel-title {
     display: flex;
     align-items: center;
@@ -224,6 +260,12 @@
 
 /* ============================================================
    AVAILABILITY BUTTON
+   ============================================================
+   The button is a pill. It carries three children: a dot, a
+   state label, and an action label. All three are visible in
+   every interaction state. The state label is the primary
+   content; the action label is a hint that appears alongside it
+   on hover and focus.
    ============================================================ */
 
 .assignment-panel-status {
@@ -268,8 +310,6 @@
     transform: scale(0.97);
 }
 
-/* ---- Dot ---- */
-
 .assignment-panel-status-dot {
     display: inline-block;
     width: 8px;
@@ -279,29 +319,33 @@
     transition: background 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* ---- Label swap ---- */
-
-.assignment-panel-status-text,
-.assignment-panel-status-action {
-    display: none;
+/* ---- State label ----
+ *
+ * Always visible. This is the pill's primary content and it is
+ * never hidden, at any viewport, in any interaction state. A rider
+ * must be able to read the current state without moving the mouse.
+ */
+.assignment-panel-status-text {
+    display: inline;
     white-space: nowrap;
 }
 
-.assignment-panel-status-text {
-    display: inline;
-}
-
-.assignment-panel-status:hover .assignment-panel-status-text,
-.assignment-panel-status:focus-visible .assignment-panel-status-text {
+/* ---- Action label ----
+ *
+ * Hidden by default. Shown on hover and focus as an additional
+ * hint rendered AFTER the state label. It does NOT replace the
+ * state label.
+ */
+.assignment-panel-status-action {
     display: none;
+    white-space: nowrap;
+    opacity: 0.75;
 }
 
 .assignment-panel-status:hover .assignment-panel-status-action,
 .assignment-panel-status:focus-visible .assignment-panel-status-action {
     display: inline;
 }
-
-/* ---- State: online ---- */
 
 .assignment-panel-status.is-online {
     background: rgba(89, 193, 74, 0.12);
@@ -319,8 +363,6 @@
     animation: assignmentStatusPulse 2s ease-in-out infinite;
 }
 
-/* ---- State: offline ---- */
-
 .assignment-panel-status.is-offline {
     background: var(--gray-100);
     color: var(--gray-500);
@@ -337,12 +379,20 @@
     box-shadow: none;
 }
 
+.assignment-panel-status.is-inactive {
+    background: rgba(220, 53, 69, 0.1);
+    color: var(--danger);
+}
+
+.assignment-panel-status.is-inactive .assignment-panel-status-dot {
+    background: var(--danger);
+    box-shadow: none;
+}
+
 @keyframes assignmentStatusPulse {
     0%, 100% { box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.22); }
     50%      { box-shadow: 0 0 0 5px rgba(89, 193, 74, 0.10); }
 }
-
-/* ---- RIGHT — count + chevron ---- */
 
 .assignment-panel-meta {
     display: flex;
@@ -490,7 +540,7 @@
 }
 
 /* ============================================================
-   ASSIGNMENT ROW — three-band layout
+   ASSIGNMENT ROW
    ============================================================ */
 
 .assignment-row {
@@ -516,11 +566,15 @@
     box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
 }
 
+/* ============================================================
+   HEADER BAND — three-zone layout
+   ============================================================ */
+
 .assignment-row-top {
     display: flex;
     align-items: center;
     gap: 10px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     min-width: 0;
     cursor: pointer;
     border-radius: var(--radius-sm);
@@ -540,6 +594,30 @@
     background: var(--gray-50);
 }
 
+/* ---- Zone 1 — left cluster ---- */
+
+.assignment-row-thumb {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: var(--gray-100);
+    border: 1px solid var(--gray-200);
+    flex-shrink: 0;
+    box-sizing: border-box;
+}
+
+.assignment-row-thumb-image {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+}
+
 .assignment-row-order {
     font-size: var(--font-size-base);
     font-weight: 700;
@@ -547,6 +625,17 @@
     line-height: 1.2;
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
+}
+
+/* ---- Zone 2 — status & payment pills, centered in the free space ---- */
+
+.assignment-row-pills {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 auto;
+    justify-content: center;
+    min-width: 0;
 }
 
 .assignment-row-status {
@@ -566,51 +655,178 @@
 .assignment-row-status.badge-warning { background: #fff3cd; color: #856404; }
 .assignment-row-status.badge-primary { background: #cce5ff; color: #004085; }
 
-/* ---- Actions slot ----
- *
- * Holds up to four icon buttons in the worst case
- * (rider_pending: Decline, Accept, Message, Call). At normal
- * widths they sit on one line beside the status badge; flex-wrap
- * lets them fall to a second line on very narrow phones without
- * any width arithmetic. The gap matches the row's own gap so a
- * wrapped line is visually consistent with an unwrapped one.
- */
+.assignment-row-payment {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 10px;
+    height: 24px;
+    border-radius: var(--radius-full);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    line-height: 1;
+    white-space: nowrap;
+    border: 1.5px solid transparent;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+
+.assignment-row-payment-icon {
+    width: 14px;
+    height: 14px;
+    display: block;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.assignment-row-payment-label {
+    display: inline-block;
+    line-height: 1;
+}
+
+.assignment-row-payment-cod {
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+    color: #065f46;
+}
+
+.assignment-row-payment-cod .assignment-row-payment-icon {
+    filter: brightness(0) saturate(100%)
+            invert(28%) sepia(50%) saturate(700%)
+            hue-rotate(120deg) brightness(90%) contrast(90%);
+}
+
+.assignment-row-payment-wallet {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: #1e40af;
+}
+
+.assignment-row-payment-wallet .assignment-row-payment-icon {
+    filter: brightness(0) saturate(100%)
+            invert(24%) sepia(80%) saturate(1200%)
+            hue-rotate(210deg) brightness(90%) contrast(95%);
+}
+
+.assignment-row-payment-online {
+    background: #fef3c7;
+    border-color: #fde68a;
+    color: #92400e;
+}
+
+.assignment-row-payment-online .assignment-row-payment-icon {
+    filter: brightness(0) saturate(100%)
+            invert(30%) sepia(90%) saturate(1500%)
+            hue-rotate(20deg) brightness(90%) contrast(90%);
+}
+
+.assignment-row-payment-other {
+    background: var(--gray-100);
+    border-color: var(--gray-200);
+    color: var(--gray-700);
+}
+
+/* ---- Zone 3 — actions, right-aligned ---- */
+
 .assignment-row-actions {
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-left: auto;
+    margin-left: 0;
     flex-shrink: 0;
     flex-wrap: wrap;
     justify-content: flex-end;
+}
+
+/* ============================================================
+   META BAND
+   ============================================================ */
+
+.assignment-row-meta-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+    padding-left: 2px;
+}
+
+.assignment-row-summary {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    line-height: 1.5;
+    min-width: 0;
+    flex: 1 1 auto;
+    word-break: break-word;
+}
+
+.assignment-row-expand {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    flex-shrink: 0;
+    padding: 2px 6px;
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--gray-500);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.assignment-row-expand:hover,
+.assignment-row-expand:focus-visible {
+    background: var(--gray-100);
+    color: var(--text);
+    outline: none;
+}
+
+.assignment-row-expand-icon {
+    width: 14px;
+    height: 14px;
+    display: block;
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+    opacity: 0.7;
+}
+
+.assignment-row.is-collapsed .assignment-row-expand-icon {
+    transform: rotate(0deg);
+}
+
+.assignment-row:not(.is-collapsed) .assignment-row-expand-icon {
+    transform: rotate(180deg);
+}
+
+/* ============================================================
+   DETAILS BAND
+   ============================================================ */
+
+.assignment-row-details {
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+}
+
+.assignment-row:not(.is-collapsed) .assignment-row-details {
+    display: flex;
 }
 
 .assignment-row-meta {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 4px 16px;
-    overflow: hidden;
-    max-height: 240px;
-    opacity: 1;
-    transition: max-height 0.25s ease, opacity 0.2s ease, margin 0.25s ease;
-    margin-top: 0;
-}
-
-.assignment-row.is-collapsed .assignment-row-meta {
-    display: none;
-}
-
-.assignment-row-summary {
-    display: none;
-    font-size: var(--font-size-xs);
-    color: var(--gray-500);
-    line-height: 1.4;
     min-width: 0;
-    word-break: break-word;
-}
-
-.assignment-row.is-collapsed .assignment-row-summary {
-    display: block;
 }
 
 .assignment-row-line {
@@ -645,48 +861,156 @@
     font-variant-numeric: tabular-nums;
 }
 
-.assignment-row-expand {
+/* ============================================================
+   CUSTOMIZATION DROPDOWN
+   ============================================================ */
+
+.assignment-row-customs {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.assignment-row-customs-toggle {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
     gap: 4px;
     align-self: flex-start;
-    padding: 2px 6px;
-    background: none;
+    padding: 3px 10px;
     border: none;
-    border-radius: var(--radius-sm);
-    color: var(--gray-500);
+    border-radius: var(--radius-full);
+    background: rgba(89, 193, 74, 0.08);
+    color: var(--primary);
     font-size: 10px;
-    font-weight: 600;
+    font-weight: 700;
+    letter-spacing: 0.3px;
     text-transform: uppercase;
-    letter-spacing: 0.4px;
     cursor: pointer;
-    transition: background 0.15s ease, color 0.15s ease;
+    transition: background 0.15s ease;
+    font-family: inherit;
     -webkit-tap-highlight-color: transparent;
 }
 
-.assignment-row-expand:hover,
-.assignment-row-expand:focus-visible {
-    background: var(--gray-100);
-    color: var(--text);
-    outline: none;
+.assignment-row-customs-toggle:hover {
+    background: rgba(89, 193, 74, 0.16);
 }
 
-.assignment-row-expand-icon {
-    width: 12px;
-    height: 12px;
+.assignment-row-customs-toggle:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.assignment-row-customs-toggle-icon {
+    width: 14px;
+    height: 14px;
     display: block;
     flex-shrink: 0;
+    opacity: 0.85;
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
     transition: transform 0.2s ease;
-    opacity: 0.7;
 }
 
-.assignment-row.is-collapsed .assignment-row-expand-icon {
-    transform: rotate(0deg);
-}
-
-.assignment-row:not(.is-collapsed) .assignment-row-expand-icon {
+.assignment-row-customs-toggle[aria-expanded="true"] .assignment-row-customs-toggle-icon {
     transform: rotate(180deg);
+}
+
+.assignment-row-customs-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+}
+
+.assignment-row-customs-panel[hidden] {
+    display: none;
+}
+
+/* ---- Modification rows ---- */
+
+.assignment-row-customs-panel .cart-customs-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.assignment-row-customs-panel .cart-customs-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: var(--font-size-xs);
+    color: var(--gray-700);
+    line-height: 1.5;
+}
+
+.assignment-row-customs-panel .cart-customs-symbol {
+    width: 14px;
+    text-align: center;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.assignment-row-customs-panel .cart-customs-add .cart-customs-symbol {
+    color: var(--primary);
+}
+
+.assignment-row-customs-panel .cart-customs-remove .cart-customs-symbol {
+    color: var(--gray-500);
+}
+
+.assignment-row-customs-panel .cart-customs-name {
+    flex: 1;
+    min-width: 0;
+    word-break: break-word;
+}
+
+.assignment-row-customs-panel .cart-customs-removed {
+    color: var(--gray-500);
+    font-style: italic;
+    margin-left: 4px;
+}
+
+.assignment-row-customs-panel .cart-customs-price {
+    color: var(--gray-600);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* ---- Notes block ---- */
+
+.assignment-row-customs-panel .queue-customs-notes {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.assignment-row-customs-panel .queue-customs-notes-label {
+    margin: 0;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--gray-600);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.assignment-row-customs-panel .queue-customs-notes-text {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-700);
+    line-height: 1.5;
+    word-break: break-word;
+    padding: 6px 8px;
+    background: #fff9e6;
+    border-left: 2px solid var(--warning);
+    border-radius: var(--radius-sm);
 }
 
 /* ============================================================
@@ -824,7 +1148,7 @@
     position: fixed;
     inset: 0;
     z-index: 9999;
-    display: none; /* Hidden by default */
+    display: none;
     align-items: center;
     justify-content: center;
     padding: 20px;
@@ -834,7 +1158,7 @@
 }
 
 .assignment-notify-modal.active {
-    display: flex; /* Shown when active */
+    display: flex;
     opacity: 1;
 }
 
@@ -1037,7 +1361,7 @@
     position: fixed;
     inset: 0;
     z-index: 9999;
-    display: none; /* Hidden by default */
+    display: none;
     align-items: center;
     justify-content: center;
     padding: 20px;
@@ -1047,7 +1371,7 @@
 }
 
 .assignment-availability-modal.active {
-    display: flex; /* Shown when active */
+    display: flex;
     opacity: 1;
 }
 
@@ -1480,6 +1804,9 @@
     .assignment-row { padding: 10px 12px; gap: 6px; }
     .assignment-action-btn { width: 34px; height: 34px; }
     .assignment-action-icon { width: 15px; height: 15px; }
+    .assignment-row-thumb { width: 40px; height: 40px; }
+    .assignment-row-payment { height: 22px; font-size: 10px; padding: 0 8px; }
+    .assignment-row-payment-icon { width: 12px; height: 12px; }
     .rider-chat-modal-content { height: 90vh; }
     .assignment-row-meta { grid-template-columns: 1fr; }
 }
@@ -1511,17 +1838,48 @@
         font-size: 11px;
     }
 
-    .assignment-row-top { gap: 8px; }
+    .assignment-row-top {
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .assignment-row-thumb { width: 40px; height: 40px; }
+
     .assignment-row-order { font-size: var(--font-size-sm); }
-    .assignment-row-status { font-size: 10px; padding: 3px 8px; min-height: 20px; }
+
+    .assignment-row-pills {
+        order: 3;
+        flex-basis: 100%;
+        flex-grow: 0;
+        justify-content: center;
+        gap: 6px;
+    }
+
+    .assignment-row-payment {
+        height: 22px;
+        font-size: 10px;
+        padding: 0 8px;
+    }
+
+    .assignment-row-payment-icon { width: 12px; height: 12px; }
 
     .assignment-row-actions {
+        order: 2;
         margin-left: auto;
         gap: 4px;
     }
 
     .assignment-action-btn { width: 32px; height: 32px; }
     .assignment-action-icon { width: 14px; height: 14px; }
+
+    .assignment-row-meta-line { gap: 8px; }
+
+    .assignment-row-customs-toggle {
+        font-size: 9px;
+        padding: 3px 8px;
+    }
+
+    .assignment-row-customs-toggle-icon { width: 12px; height: 12px; }
 
     .assignment-list { max-height: 42vh; padding: 10px 10px 12px; }
 
@@ -1606,6 +1964,8 @@
     }
     .assignment-row { padding: 10px 10px; }
 
+    .assignment-row-thumb { width: 36px; height: 36px; }
+
     .assignment-action-btn { width: 30px; height: 30px; }
     .assignment-action-icon { width: 13px; height: 13px; }
 }
@@ -1623,9 +1983,18 @@
     .assignment-panel-status-dot,
     .assignment-row,
     .assignment-row-top,
+    .assignment-row-meta-line,
+    .assignment-row-details,
     .assignment-row-meta,
+    .assignment-row-thumb,
+    .assignment-row-thumb-image,
     .assignment-row-expand,
     .assignment-row-expand-icon,
+    .assignment-row-payment,
+    .assignment-row-payment-icon,
+    .assignment-row-customs-toggle,
+    .assignment-row-customs-toggle-icon,
+    .assignment-row-customs-panel,
     .assignment-action-btn,
     .assignment-notify-modal,
     .assignment-notify-modal .assignment-notify-content,
@@ -1639,4 +2008,4 @@
         transition: none !important;
         animation: none !important;
     }
-}
+}   

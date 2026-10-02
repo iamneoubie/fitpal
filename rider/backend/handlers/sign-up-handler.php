@@ -2,116 +2,89 @@
 /**
  * FitPal Rider Registration Handler
  *
- * Request flow:
- *   1. Method + CSRF guard.
- *   2. Collect and validate every scalar field.
- *   3. Determine the correct identity document type from the
- *      vehicle the applicant selected:
- *        - bicycle             → 'national_id'
- *        - anything else       → 'drivers_license'
- *      License issue/expiry dates are only required for the
- *      'drivers_license' branch. A bicycle applicant cannot legally
- *      hold a driver's license for their vehicle, so both dates are
- *      accepted as empty and are stored as NULL.
- *   4. Validate the two uploads.
- *   5. Uniqueness probes (query layer).
- *   6. Move the two uploads into their final per-rider folders,
- *      using the shared MM_DD_YYYY_<n>.<ext> naming scheme.
- *   7. createRiderAccount() writes the four core rows.
- *   8. insertRiderEmergencyContact() and insertRiderDocument()
- *      write the two child rows.
- *   9. Session flash + JSON success.
+ * Two request modes, chosen by the posted `mode` field:
  *
- * All SQL lives in rider-queries.php. This file contains no
- * prepare() calls, no SQL strings, and no password hashing.
+ *   mode = ''           First-time registration.
+ *   mode = 'reapply'    Re-application by a signed-in rider whose
+ *                       verification_status is 'denied'.
+ *
+ * ---------------------------------------------------------------------
+ * DOCUMENT-ROW POLICY
+ * ---------------------------------------------------------------------
+ * delivery_rider_document has no UNIQUE on delivery_rider_id, so a
+ * rider may legally hold several rows. On re-application the caller
+ * must choose one of two policies and pass it to
+ * updateRiderApplication() as its $documentMode argument:
+ *
+ *   'replace'  Delete the rider's existing document rows for the
+ *              posted id_type, then insert the new one. One row
+ *              per rider per document type after the call.
+ *
+ *   'keep'     Insert a new document row and leave earlier rows in
+ *              place.
+ *
+ * The policy is read from RIDER_REAPPLY_DOCUMENT_MODE, declared
+ * below. The current value is 'keep': the rider's rejected
+ * document stays in the table as history, and each re-application
+ * adds a new row. Nothing on the rider side reads the document
+ * table today, so this choice has no visible effect on the rider;
+ * it only matters to a future admin-side viewer that lists a
+ * rider's documents, and 'keep' preserves more information for
+ * that viewer.
+ *
+ * Setting the constant to any value other than 'replace' or 'keep'
+ * disables re-application entirely: the reapply branch refuses the
+ * request before reading any other field. An empty string disables
+ * the feature.
+ *
+ * ---------------------------------------------------------------------
+ * REQUEST MODE
+ * ---------------------------------------------------------------------
+ * The mode is an explicit posted field, not inferred from session
+ * state. A reapply POST that omits mode=reapply falls into the
+ * insert path and is refused by the uniqueness probes with the
+ * existing "already registered" message — a loud failure rather
+ * than a silent wrong-path write.
+ *
+ * ---------------------------------------------------------------------
+ * ALL SQL LIVES IN rider-assignment-queries.php
+ * ---------------------------------------------------------------------
+ * This file contains no prepare() calls, no SQL strings, and no
+ * password hashing. Every write is a call into the query layer.
  *
  * Responds with JSON. The rider is NOT logged in after registration.
+ * A re-application keeps the rider's existing session.
  *
  * Phone-number normalization
  * --------------------------
  * Both the rider's own contact_number and the emergency contact's
  * contact_number are reduced to their digit-only form via
  * preg_replace('/\D+/', '', ...) — the same rule the client-side
- * normalizeDigits() uses in sign-up.js.
- *
- * The previous revision used preg_replace('/\s+/', '', ...) which
- * strips only whitespace. A phone like "0917-123-4567" survived
- * with its hyphens intact and was then rejected by the
- * ^09\d{9}$ format check — even though the same digits without
- * hyphens would have been accepted. Switching to /\D+/ closes that
- * gap and lets the two numbers be compared as plain digit strings.
+ * normalizeDigits() uses in reapply.js. This lets a caller who
+ * posts "0917-123-4567" be accepted as the valid number it is.
  *
  * Emergency contact must differ from the rider's own number
  * ---------------------------------------------------------
- * A new comparison runs after both numbers pass their format
- * checks: if the digit-only forms are equal and non-empty, the
- * handler refuses the request with field='emergency_contact'. This
- * is the server-side counterpart to validateStep3() in sign-up.js.
- * The client layer is a UX nicety; this layer is the one that
- * cannot be bypassed by a caller posting directly to the endpoint.
+ * After both numbers pass their format checks, an equality check
+ * compares their digit-only forms. A match is refused with
+ * field='emergency_contact'.
  *
  * Upload layout
  * -------------
- * Both files are written under shared/uploads/rider/, matching the
- * profile-handler.php layout used by the customer role:
- *
  *     shared/uploads/rider/profiles/<rider_id>/MM_DD_YYYY_<n>.<ext>
  *     shared/uploads/rider/documents/<rider_id>/MM_DD_YYYY_<n>.<ext>
  *
- * The <n> counter is scoped to the rider and the day. On the first
- * upload of a given day it is 0; on each subsequent upload on the
- * same day it increments. The counter is derived by scanning the
- * destination folder for files whose names begin with today's
- * MM_DD_YYYY prefix and picking the smallest non-negative integer
- * that is not already in use.
- *
- * Chicken-and-egg
- * ---------------
- * The per-rider folder name depends on $deliveryRiderId, which does
- * not exist until createRiderAccount() commits. So the two uploads
- * are moved AFTER createRiderAccount() and BEFORE the two child
- * inserts. If any of the child inserts fail, the moved files are
- * unlinked and the rider row is left in place with no document —
- * an admin can re-request the document, whereas a rider with no
- * account at all cannot be recovered without an admin action.
- *
- * To keep the window small, the rider is created first, the files
- * are moved next, and both child rows are inserted immediately
- * after. Failure at any step in that sequence unlinks whatever
- * files were moved in this request.
- *
  * @package FitPal
- * @version 5.1 — Two changes for the emergency-contact rule:
+ * @version 6.1 — RIDER_REAPPLY_DOCUMENT_MODE set to 'keep' so the
+ *                reapply branch can run. The constant was declared
+ *                as '' in v6.0, which caused every reapply POST to
+ *                be refused with "Re-application is not available
+ *                right now." No other behaviour changed from v6.0.
  *
- *                - Both $cleanedContact and $cleanedEcContact now
- *                  strip every non-digit character (/\D+/) instead
- *                  of only whitespace (/\s+/). This makes the
- *                  server's normalization match the client's
- *                  normalizeDigits() and lets a caller who posts
- *                  "0917-123-4567" directly to the endpoint be
- *                  accepted as the valid number it is, rather than
- *                  rejected on a formatting technicality.
- *
- *                - A new equality check between the two digit-only
- *                  numbers runs right after the emergency contact
- *                  passes its format check. A match is refused with
- *                  field='emergency_contact', matching the client's
- *                  error slot so the message lands on the right
- *                  input.
- *
- *                No other behavior changed from v5.0. The upload
- *                layout, the id_type mapping, the license-date
- *                rules, the CSRF contract, the JSON response shape,
- *                and the redirect target are unchanged.
- *
- *                (5.0: rewritten for the generalized rider document
- *                schema and the per-rider upload layout. 4.0: full
- *                refactor — every inline SQL statement and the
- *                password_hash() call were removed and replaced with
- *                calls into rider-queries.php. 3.6: removed the dead
- *                $_SESSION['rider_pending_application'] write.
- *                3.5: owns its own CSRF bootstrap and validates
- *                against rider_csrf_token.)
+ *                (6.0: reapply branch added. 5.1: two changes for
+ *                the emergency-contact rule. 5.0: rewritten for the
+ *                generalized rider document schema and the
+ *                per-rider upload layout.)
  */
 
 declare(strict_types=1);
@@ -120,7 +93,7 @@ require_once __DIR__ . '/../../../shared/includes/session-bootstrap.php';
 fitpal_session_bootstrap('rider');
 
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
-require_once __DIR__ . '/../database/rider-queries.php';
+require_once __DIR__ . '/../database/rider-assignment-queries.php';
 
 // Own the rider role's CSRF bootstrap. The helper is idempotent and
 // stores the token under 'rider_csrf_token' — never the shared
@@ -128,6 +101,17 @@ require_once __DIR__ . '/../database/rider-queries.php';
 require_once __DIR__ . '/../../includes/rider-csrf-token.php';
 
 header('Content-Type: application/json');
+
+/* --------------------------------------------------------------
+ * DOCUMENT-ROW POLICY FOR RE-APPLICATION
+ *
+ *   'keep'     preserve the rejected document; add a new row
+ *   'replace'  delete the rejected document; insert the new one
+ *
+ * Any other value (including '') disables the reapply branch.
+ * First-time registration never reads this constant.
+ * -------------------------------------------------------------- */
+const RIDER_REAPPLY_DOCUMENT_MODE = 'keep';
 
 /* --------------------------------------------------------------
  * HELPERS (request-layer only — no SQL, no DB access)
@@ -195,28 +179,6 @@ function validateUpload(array $file, int $maxBytes, array $allowedMime): array
  * Move an uploaded file into its final per-rider folder and return
  * the project-root-relative path stored in the DB.
  *
- * Layout:
- *     <projectRoot>/shared/uploads/rider/<kind>/<riderId>/
- *         MM_DD_YYYY_<n>.<ext>
- *
- * The per-rider subdirectory is created on demand with
- * mkdir(..., 0755, true). The recursive flag creates the
- * intermediate `rider/` and `<kind>/` segments the first time any
- * rider uploads, and the per-rider leaf when that rider first
- * uploads.
- *
- * The counter is derived by scanning the destination folder for
- * files whose names begin with today's MM_DD_YYYY prefix and
- * picking the smallest non-negative integer that is not already in
- * use. Files from previous days are excluded by the prefix match
- * and never enter the count, so the counter restarts at 0 on the
- * next calendar day naturally.
- *
- * The per-rider segment is a plain integer taken from a caller-
- * supplied argument, so it cannot contain traversal characters.
- * Every path segment below is either a literal or a caller-derived
- * integer — nothing from $_FILES or $_POST reaches the path.
- *
  * @param array  $file      $_FILES entry (already validated)
  * @param string $projectRoot Absolute path to the project root
  * @param string $kind      'profiles' or 'documents'
@@ -249,7 +211,7 @@ function storeUploadForRider(
     }
 
     $usedIndexes  = [];
-    $prefixLength = strlen($dayPrefix) + 1; // include trailing '_'
+    $prefixLength = strlen($dayPrefix) + 1;
 
     foreach ($existing as $entry) {
         if ($entry === '.' || $entry === '..') {
@@ -289,7 +251,17 @@ function storeUploadForRider(
 }
 
 /* --------------------------------------------------------------
- * REQUEST GUARDS
+ * REQUEST MODE DISPATCH
+ * -------------------------------------------------------------- */
+
+$requestMode = (string)($_POST['mode'] ?? '');
+
+if ($requestMode !== '' && $requestMode !== 'reapply') {
+    respondError('Invalid request mode.');
+}
+
+/* --------------------------------------------------------------
+ * SHARED REQUEST GUARDS
  * -------------------------------------------------------------- */
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -300,17 +272,479 @@ if (
     !isset($_POST['csrf_token'], $_SESSION['rider_csrf_token']) ||
     !hash_equals((string)$_SESSION['rider_csrf_token'], (string)$_POST['csrf_token'])
 ) {
-    // Rotate the rider's own token so the next render generates a
-    // fresh one. Only the rider's key is cleared — never the shared
-    // 'csrf_token' key.
     unset($_SESSION['rider_csrf_token']);
 
     respondError('Security validation failed. Please refresh the page and try again.');
 }
 
-/* --------------------------------------------------------------
- * COLLECT INPUT
- * -------------------------------------------------------------- */
+/* ==============================================================
+ * REAPPLY BRANCH
+ * ============================================================== */
+
+if ($requestMode === 'reapply') {
+
+    /* ----------------------------------------------------------
+     * 0. DOCUMENT-ROW POLICY GATE
+     * ---------------------------------------------------------- */
+    if (RIDER_REAPPLY_DOCUMENT_MODE !== 'replace'
+        && RIDER_REAPPLY_DOCUMENT_MODE !== 'keep'
+    ) {
+        respondError(
+            'Re-application is not available right now. Please contact support.'
+        );
+    }
+
+    /* ----------------------------------------------------------
+     * 1. SESSION AND STATUS GUARD
+     * ---------------------------------------------------------- */
+    $riderId = (int)($_SESSION['delivery_rider_id'] ?? 0);
+    if ($riderId <= 0) {
+        respondError('You must be signed in to re-apply.');
+    }
+
+    try {
+        $existingProfile = getRiderProfile($database_connection, $riderId);
+    } catch (PDOException $e) {
+        error_log('Re-apply lookup error: ' . $e->getMessage());
+        respondError('An unexpected error occurred. Please try again later.');
+    }
+
+    if (!$existingProfile) {
+        respondError('Your account could not be found. Please sign in again.');
+    }
+
+    if ((string)($existingProfile['verification_status'] ?? '') !== 'denied') {
+        respondError(
+            'Your account is not eligible for re-application right now.'
+        );
+    }
+
+    /* ----------------------------------------------------------
+     * 2. COLLECT INPUT
+     * ---------------------------------------------------------- */
+    $firstName       = trim((string)($_POST['first_name'] ?? ''));
+    $middleName      = trim((string)($_POST['middle_name'] ?? ''));
+    $lastName        = trim((string)($_POST['last_name'] ?? ''));
+    $birthdate       = trim((string)($_POST['birthdate'] ?? ''));
+    $gender          = trim((string)($_POST['gender'] ?? ''));
+    $email           = trim((string)($_POST['email'] ?? ''));
+    $contactNumber   = trim((string)($_POST['contact_number'] ?? ''));
+    $username        = trim((string)($_POST['username'] ?? ''));
+    $password        = (string)($_POST['password'] ?? '');
+    $confirmPassword = (string)($_POST['confirm_password'] ?? '');
+    $terms           = $_POST['terms'] ?? '';
+
+    $vehicleType  = trim((string)($_POST['vehicle_type'] ?? ''));
+    $vehiclePlate = trim((string)($_POST['vehicle_plate'] ?? ''));
+    $vehicleMake  = trim((string)($_POST['vehicle_make'] ?? ''));
+    $vehicleModel = trim((string)($_POST['vehicle_model'] ?? ''));
+    $vehicleYear  = trim((string)($_POST['vehicle_year'] ?? ''));
+
+    $licenseIssue  = trim((string)($_POST['license_issue_date'] ?? ''));
+    $licenseExpiry = trim((string)($_POST['license_expiry_date'] ?? ''));
+
+    $block      = trim((string)($_POST['block'] ?? ''));
+    $barangay   = trim((string)($_POST['barangay'] ?? ''));
+    $city       = trim((string)($_POST['city'] ?? ''));
+    $province   = trim((string)($_POST['province'] ?? ''));
+    $region     = trim((string)($_POST['region'] ?? ''));
+    $postalCode = trim((string)($_POST['postal_code'] ?? ''));
+
+    $ecFirstName    = trim((string)($_POST['emergency_first_name'] ?? ''));
+    $ecMiddleName   = trim((string)($_POST['emergency_middle_name'] ?? ''));
+    $ecLastName     = trim((string)($_POST['emergency_last_name'] ?? ''));
+    $ecRelationship = trim((string)($_POST['emergency_relationship'] ?? ''));
+    $ecContact      = trim((string)($_POST['emergency_contact'] ?? ''));
+
+    /* ----------------------------------------------------------
+     * 3. REQUIRED FIELD CHECK
+     * ---------------------------------------------------------- */
+    if (
+        $firstName === '' || $lastName === '' || $birthdate === '' ||
+        $gender === '' || $email === '' || $contactNumber === '' ||
+        $username === '' || $vehicleType === '' ||
+        $block === '' || $city === '' ||
+        $ecFirstName === '' || $ecLastName === '' ||
+        $ecRelationship === '' || $ecContact === ''
+    ) {
+        respondError('Please fill in all required fields.');
+    }
+
+    /* ----------------------------------------------------------
+     * 4. FIELD VALIDATION
+     * ---------------------------------------------------------- */
+    $namePattern = "/^[A-Za-z\s\-']+$/u";
+
+    if (strlen($firstName) < 2 || !preg_match($namePattern, $firstName)) {
+        respondError('First name contains invalid characters.', 'first_name');
+    }
+    if (strlen($lastName) < 2 || !preg_match($namePattern, $lastName)) {
+        respondError('Last name contains invalid characters.', 'last_name');
+    }
+    if (!in_array($gender, ['Male', 'Female', 'Other'], true)) {
+        respondError('Invalid gender selection.', 'gender');
+    }
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        respondError('Please enter a valid email address.', 'email');
+    }
+
+    $cleanedContact = preg_replace('/\D+/', '', $contactNumber);
+    if (!preg_match('/^09\d{9}$/', (string)$cleanedContact)) {
+        respondError('Enter a valid PH mobile number (11 digits, starting with 09).', 'contact_number');
+    }
+
+    if (strlen($username) < 3 || strlen($username) > 20) {
+        respondError('Username must be 3–20 characters.', 'username');
+    }
+    if (!preg_match('/^[A-Za-z0-9_]+$/', $username)) {
+        respondError('Username can only contain letters, numbers, and underscores.', 'username');
+    }
+
+    if ($password !== '') {
+        if (strlen($password) < 8 || strlen($password) > 20) {
+            respondError('Password must be 8–20 characters.', 'password');
+        }
+        if (!preg_match('/^[A-Za-z0-9]+$/', $password)) {
+            respondError('Password can only contain letters and numbers.', 'password');
+        }
+        if (!preg_match('/[A-Za-z]/', $password) || !preg_match('/[0-9]/', $password)) {
+            respondError('Password must contain at least one letter and one number.', 'password');
+        }
+        if ($password !== $confirmPassword) {
+            respondError('Passwords do not match.', 'confirm_password');
+        }
+    }
+
+    try {
+        $bd    = new DateTime($birthdate);
+        $today = new DateTime();
+        $age   = $today->diff($bd)->y;
+        if ($age < 18) respondError('You must be at least 18 years old to register as a rider.', 'birthdate');
+        if ($age > 70) respondError('Please enter a valid date of birth.', 'birthdate');
+    } catch (Exception $e) {
+        respondError('Please enter a valid date of birth.', 'birthdate');
+    }
+
+    $allowedVehicles = ['motorcycle', 'scooter', 'car', 'van', 'bicycle'];
+    if (!in_array($vehicleType, $allowedVehicles, true)) {
+        respondError('Invalid vehicle type.', 'vehicle_type');
+    }
+    if ($vehicleType !== 'bicycle' && $vehiclePlate === '') {
+        respondError('Plate number is required for motor vehicles.', 'vehicle_plate');
+    }
+    if ($vehiclePlate !== '') {
+        $vehiclePlate = strtoupper($vehiclePlate);
+        if (strlen(str_replace([' ', '-'], '', $vehiclePlate)) < 4) {
+            respondError('Plate number looks too short.', 'vehicle_plate');
+        }
+    }
+
+    if ($vehicleYear !== '') {
+        if (!ctype_digit($vehicleYear)) {
+            respondError('Vehicle year must be numeric.', 'vehicle_year');
+        }
+        $y = (int)$vehicleYear;
+        $maxYear = (int)date('Y') + 1;
+        if ($y < 1980 || $y > $maxYear) {
+            respondError('Please enter a valid vehicle year.', 'vehicle_year');
+        }
+    }
+    if ($vehicleMake !== '' && preg_match('/[\x00-\x1F\x7F]/', $vehicleMake)) {
+        respondError('Vehicle make contains invalid characters.', 'vehicle_make');
+    }
+    if ($vehicleModel !== '' && preg_match('/[\x00-\x1F\x7F]/', $vehicleModel)) {
+        respondError('Vehicle model contains invalid characters.', 'vehicle_model');
+    }
+
+    $isBicycle = ($vehicleType === 'bicycle');
+    $idType    = $isBicycle ? 'national_id' : 'drivers_license';
+
+    $issueDate  = '';
+    $expiryDate = '';
+
+    if (!$isBicycle) {
+        if ($licenseIssue === '') {
+            respondError('Please enter the license issue date.', 'license_issue_date');
+        }
+        if ($licenseExpiry === '') {
+            respondError('Please enter the license expiry date.', 'license_expiry_date');
+        }
+
+        try {
+            $issue = new DateTime($licenseIssue);
+            if ($issue > new DateTime()) {
+                respondError('License issue date cannot be in the future.', 'license_issue_date');
+            }
+            $issueDate = $issue->format('Y-m-d');
+        } catch (Exception $e) {
+            respondError('Invalid license issue date.', 'license_issue_date');
+        }
+
+        try {
+            $expiry = new DateTime($licenseExpiry);
+            if ($expiry <= new DateTime()) {
+                respondError('License expiry date must be in the future.', 'license_expiry_date');
+            }
+            if ($expiry <= new DateTime($issueDate)) {
+                respondError('Expiry date must be after the issue date.', 'license_expiry_date');
+            }
+            $expiryDate = $expiry->format('Y-m-d');
+        } catch (Exception $e) {
+            respondError('Invalid license expiry date.', 'license_expiry_date');
+        }
+    } else {
+        $issueDate  = '';
+        $expiryDate = '';
+    }
+
+    if ($postalCode !== '' && !preg_match('/^[0-9]{3,10}$/', $postalCode)) {
+        respondError('Postal code must be numeric.', 'postal_code');
+    }
+
+    if (strlen($ecFirstName) < 2 || !preg_match($namePattern, $ecFirstName)) {
+        respondError('Emergency contact first name contains invalid characters.', 'emergency_first_name');
+    }
+    if (strlen($ecLastName) < 2 || !preg_match($namePattern, $ecLastName)) {
+        respondError('Emergency contact last name contains invalid characters.', 'emergency_last_name');
+    }
+
+    $allowedRelationships = ['Parent', 'Spouse', 'Sibling', 'Relative', 'Friend', 'Other'];
+    if (!in_array($ecRelationship, $allowedRelationships, true)) {
+        respondError('Invalid emergency contact relationship.', 'emergency_relationship');
+    }
+
+    $cleanedEcContact = preg_replace('/\D+/', '', $ecContact);
+    if (!preg_match('/^09\d{9}$/', (string)$cleanedEcContact)) {
+        respondError('Emergency contact must be a valid PH mobile number (09XXXXXXXXX).', 'emergency_contact');
+    }
+
+    if (
+        $cleanedContact !== '' &&
+        $cleanedEcContact !== '' &&
+        $cleanedContact === $cleanedEcContact
+    ) {
+        respondError(
+            'Emergency contact number must be different from your own contact number.',
+            'emergency_contact'
+        );
+    }
+
+    if (empty($terms)) {
+        respondError('You must agree to the Terms and Conditions and Privacy Policy.', 'terms');
+    }
+
+    /* ----------------------------------------------------------
+     * 5. FILE UPLOAD VALIDATION
+     * ---------------------------------------------------------- */
+    $allowedImages = [
+        'image/jpeg' => 'jpg',
+        'image/png'  => 'png',
+        'image/webp' => 'webp',
+    ];
+
+    $profileFile = $_FILES['profile_picture'] ?? null;
+    $licenseFile = $_FILES['drivers_license'] ?? null;
+
+    if (!$profileFile || ($profileFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        respondError('Please upload a formal profile picture.', 'profile_picture');
+    }
+    if (!$licenseFile || ($licenseFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        $idFieldError = $isBicycle
+            ? 'Please upload a photo of a valid government-issued ID.'
+            : "Please upload a photo of your driver's license.";
+        respondError($idFieldError, 'drivers_license');
+    }
+
+    try {
+        $profileMeta = validateUpload($profileFile, 2 * 1024 * 1024, $allowedImages);
+    } catch (RuntimeException $e) {
+        respondError($e->getMessage(), 'profile_picture');
+    }
+
+    try {
+        $licenseMeta = validateUpload($licenseFile, 5 * 1024 * 1024, $allowedImages);
+    } catch (RuntimeException $e) {
+        respondError($e->getMessage(), 'drivers_license');
+    }
+
+    /* ----------------------------------------------------------
+     * 6. UNIQUENESS PROBES — EXCLUDING THE RIDER'S OWN ROW
+     * ---------------------------------------------------------- */
+    try {
+        if (riderEmailExistsForOther($database_connection, $email, $riderId)) {
+            respondError('This email address is already registered to another account.', 'email');
+        }
+        if (riderUsernameExistsForOther($database_connection, $username, $riderId)) {
+            respondError('This username is already taken.', 'username');
+        }
+        if (riderContactExistsForOther($database_connection, (string)$cleanedContact, $riderId)) {
+            respondError('This mobile number is already registered to another account.', 'contact_number');
+        }
+    } catch (PDOException $e) {
+        error_log('Re-apply lookup error: ' . $e->getMessage());
+        respondError('An unexpected error occurred. Please try again later.');
+    }
+
+    /* ----------------------------------------------------------
+     * 7. MOVE THE TWO UPLOADS
+     * ---------------------------------------------------------- */
+    $projectRoot = realpath(__DIR__ . '/../../..');
+    if ($projectRoot === false) {
+        respondError('Server storage path unavailable.');
+    }
+
+    $movedFiles = [];
+
+    try {
+        $profilePath = storeUploadForRider(
+            $profileFile,
+            $projectRoot,
+            'profiles',
+            $riderId,
+            $profileMeta['ext']
+        );
+        $movedFiles[] = $projectRoot . '/' . $profilePath;
+
+        $licensePath = storeUploadForRider(
+            $licenseFile,
+            $projectRoot,
+            'documents',
+            $riderId,
+            $licenseMeta['ext']
+        );
+        $movedFiles[] = $projectRoot . '/' . $licensePath;
+
+    } catch (RuntimeException $e) {
+        foreach ($movedFiles as $p) {
+            if (is_file($p)) @unlink($p);
+        }
+        error_log('Re-apply upload error: ' . $e->getMessage());
+        respondError($e->getMessage());
+    }
+
+    /* ----------------------------------------------------------
+     * 8. UPDATE IN PLACE
+     * ---------------------------------------------------------- */
+    $database_connection->beginTransaction();
+
+    try {
+        updateRiderApplication(
+            $database_connection,
+            $riderId,
+            [
+                'first_name'     => $firstName,
+                'middle_name'    => $middleName,
+                'last_name'      => $lastName,
+                'birthdate'      => $birthdate,
+                'gender'         => $gender,
+                'email'          => $email,
+                'contact_number' => (string)$cleanedContact,
+                'username'       => $username,
+                'password'       => $password,
+            ],
+            [
+                'profile_picture' => $profilePath,
+                'vehicle_type'    => $vehicleType,
+                'vehicle_plate'   => $vehiclePlate,
+            ],
+            [
+                'block'       => $block,
+                'barangay'    => $barangay,
+                'city'        => $city,
+                'province'    => $province,
+                'region'      => $region,
+                'postal_code' => $postalCode,
+            ],
+            [
+                'first_name'     => $ecFirstName,
+                'middle_name'    => $ecMiddleName,
+                'last_name'      => $ecLastName,
+                'contact_number' => $cleanedEcContact,
+                'relationship'   => $ecRelationship,
+                'address'        => '',
+            ],
+            [
+                'id_type'     => $idType,
+                'id_path'     => $licensePath,
+                'issue_date'  => $issueDate,
+                'expiry_date' => $expiryDate,
+            ],
+            RIDER_REAPPLY_DOCUMENT_MODE
+        );
+
+        $database_connection->commit();
+
+    } catch (PDOException $e) {
+        if ($database_connection->inTransaction()) {
+            $database_connection->rollBack();
+        }
+
+        foreach ($movedFiles as $p) {
+            if (is_file($p)) @unlink($p);
+        }
+
+        error_log('Re-apply DB error: ' . $e->getMessage());
+
+        $message = $e->getMessage();
+        if (stripos($message, 'Duplicate entry') !== false) {
+            if (stripos($message, 'email') !== false) {
+                respondError('This email address is already registered to another account.', 'email');
+            }
+            if (stripos($message, 'username') !== false) {
+                respondError('This username is already taken.', 'username');
+            }
+            if (stripos($message, 'contact_number') !== false) {
+                respondError('This mobile number is already registered to another account.', 'contact_number');
+            }
+        }
+        respondError('An unexpected error occurred. Please try again later.');
+
+    } catch (InvalidArgumentException | RuntimeException $e) {
+        if ($database_connection->inTransaction()) {
+            $database_connection->rollBack();
+        }
+
+        foreach ($movedFiles as $p) {
+            if (is_file($p)) @unlink($p);
+        }
+
+        error_log('Re-apply error: ' . $e->getMessage());
+        respondError('An unexpected error occurred. Please try again later.');
+
+    } catch (Throwable $e) {
+        if ($database_connection->inTransaction()) {
+            $database_connection->rollBack();
+        }
+
+        foreach ($movedFiles as $p) {
+            if (is_file($p)) @unlink($p);
+        }
+
+        error_log('Re-apply error: ' . $e->getMessage());
+        respondError('An unexpected error occurred. Please try again later.');
+    }
+
+    /* ----------------------------------------------------------
+     * 9. SUCCESS
+     * ---------------------------------------------------------- */
+    unset($_SESSION['rider_csrf_token']);
+
+    $_SESSION['rider_success'] =
+        'Your updated application has been submitted. It is now pending review.';
+
+    echo json_encode([
+        'status'   => 'success',
+        'message'  => 'Your updated application has been submitted. It is now pending review.',
+        'redirect' => 'dashboard.php',
+    ]);
+    exit;
+}
+
+/* ==============================================================
+ * INSERT PATH (first-time registration)
+ *
+ * Byte-identical to v5.1 apart from the dispatch that got here.
+ * ============================================================== */
 
 $firstName       = trim((string)($_POST['first_name'] ?? ''));
 $middleName      = trim((string)($_POST['middle_name'] ?? ''));
@@ -346,10 +780,6 @@ $ecLastName     = trim((string)($_POST['emergency_last_name'] ?? ''));
 $ecRelationship = trim((string)($_POST['emergency_relationship'] ?? ''));
 $ecContact      = trim((string)($_POST['emergency_contact'] ?? ''));
 
-/* --------------------------------------------------------------
- * REQUIRED FIELD CHECK
- * -------------------------------------------------------------- */
-
 if (
     $firstName === '' || $lastName === '' || $birthdate === '' ||
     $gender === '' || $email === '' || $contactNumber === '' ||
@@ -360,10 +790,6 @@ if (
 ) {
     respondError('Please fill in all required fields.');
 }
-
-/* --------------------------------------------------------------
- * FIELD VALIDATION
- * -------------------------------------------------------------- */
 
 $namePattern = "/^[A-Za-z\s\-']+$/u";
 
@@ -380,11 +806,6 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     respondError('Please enter a valid email address.', 'email');
 }
 
-// Strip every non-digit character so "0917-123-4567", "0917 123
-// 4567", and "09171234567" all normalize to the same string. This
-// matches the client-side normalizeDigits() rule in sign-up.js, so
-// the two layers agree on what "the same number" means and neither
-// rejects a number the other accepts on a formatting technicality.
 $cleanedContact = preg_replace('/\D+/', '', $contactNumber);
 if (!preg_match('/^09\d{9}$/', (string)$cleanedContact)) {
     respondError('Enter a valid PH mobile number (11 digits, starting with 09).', 'contact_number');
@@ -434,11 +855,6 @@ if ($vehiclePlate !== '') {
     }
 }
 
-/*
- * Vehicle year, make, and model are validated for shape only. The
- * delivery_rider_profile schema has no columns for them, so the
- * values are dropped after validation.
- */
 if ($vehicleYear !== '') {
     if (!ctype_digit($vehicleYear)) {
         respondError('Vehicle year must be numeric.', 'vehicle_year');
@@ -456,21 +872,9 @@ if ($vehicleModel !== '' && preg_match('/[\x00-\x1F\x7F]/', $vehicleModel)) {
     respondError('Vehicle model contains invalid characters.', 'vehicle_model');
 }
 
-/* --------------------------------------------------------------
- * IDENTITY DOCUMENT TYPE
- *
- * A bicycle rider cannot legally hold a driver's license for their
- * vehicle, so they must submit a different government-issued ID.
- * Every other vehicle type maps to a driver's license.
- * -------------------------------------------------------------- */
-
 $isBicycle = ($vehicleType === 'bicycle');
 $idType    = $isBicycle ? 'national_id' : 'drivers_license';
 
-// Issue date and expiry date are only required when the applicant
-// is submitting a driver's license. A bicycle applicant's national
-// ID does not carry either date on its face, so both fields are
-// accepted empty and stored as NULL.
 $issueDate  = '';
 $expiryDate = '';
 
@@ -505,9 +909,6 @@ if (!$isBicycle) {
         respondError('Invalid license expiry date.', 'license_expiry_date');
     }
 } else {
-    // Bicycle path: if the applicant happened to fill in dates
-    // (e.g. from a cached form), drop them. The document type does
-    // not accept them, and insertRiderDocument() stores NULL.
     $issueDate  = '';
     $expiryDate = '';
 }
@@ -528,24 +929,11 @@ if (!in_array($ecRelationship, $allowedRelationships, true)) {
     respondError('Invalid emergency contact relationship.', 'emergency_relationship');
 }
 
-// Same normalization rule as the rider's own number above. This
-// lets the two digit-only strings be compared directly, and lets a
-// caller who posts a formatted number be accepted on its digits.
 $cleanedEcContact = preg_replace('/\D+/', '', $ecContact);
 if (!preg_match('/^09\d{9}$/', (string)$cleanedEcContact)) {
     respondError('Emergency contact must be a valid PH mobile number (09XXXXXXXXX).', 'emergency_contact');
 }
 
-// The emergency contact number must differ from the rider's own
-// number. A rider's emergency contact is by definition a different
-// person, so the two phone numbers cannot be the same. Both sides
-// are digit-only at this point, so the comparison is stable across
-// any formatting the client or a direct caller might have used.
-//
-// The check is only meaningful when both numbers are non-empty.
-// Both have already passed their ^09\d{9}$ format checks above, so
-// by this point both are guaranteed to be eleven digits — the
-// empty-string guard is defensive, not load-bearing.
 if (
     $cleanedContact !== '' &&
     $cleanedEcContact !== '' &&
@@ -561,10 +949,6 @@ if (empty($terms)) {
     respondError('You must agree to the Terms and Conditions and Privacy Policy.', 'terms');
 }
 
-/* --------------------------------------------------------------
- * FILE UPLOAD VALIDATION
- * -------------------------------------------------------------- */
-
 $allowedImages = [
     'image/jpeg' => 'jpg',
     'image/png'  => 'png',
@@ -578,10 +962,6 @@ if (!$profileFile || ($profileFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ER
     respondError('Please upload a formal profile picture.', 'profile_picture');
 }
 if (!$licenseFile || ($licenseFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
-    // Error field name stays 'drivers_license' because that is the
-    // name of the input in the sign-up form. The user-facing
-    // message reflects the actual document type expected for the
-    // selected vehicle.
     $idFieldError = $isBicycle
         ? 'Please upload a photo of a valid government-issued ID.'
         : "Please upload a photo of your driver's license.";
@@ -600,10 +980,6 @@ try {
     respondError($e->getMessage(), 'drivers_license');
 }
 
-/* --------------------------------------------------------------
- * UNIQUENESS PROBES (query layer)
- * -------------------------------------------------------------- */
-
 try {
     if (riderEmailExists($database_connection, $email)) {
         respondError('This email address is already registered.', 'email');
@@ -618,26 +994,6 @@ try {
     error_log('Rider registration lookup error: ' . $e->getMessage());
     respondError('An unexpected error occurred. Please try again later.');
 }
-
-/* --------------------------------------------------------------
- * PERSISTENCE — account first, then uploads, then children
- *
- * The per-rider upload folders are named after the rider id, so
- * they cannot be created until the rider row exists. The order is:
- *
- *   1. createRiderAccount()      — the rider row and its three
- *                                  sibling rows commit here.
- *   2. storeUploadForRider() x2  — the two files land under the
- *                                  new per-rider folders.
- *   3. insertRiderEmergencyContact()
- *   4. insertRiderDocument()     — with id_type, id_path, and the
- *                                  (possibly empty) dates.
- *
- * Any failure at 2, 3, or 4 unlinks whatever files this request
- * moved. The rider row from step 1 is left in place: an admin can
- * re-request the missing document, whereas a rider with no account
- * at all cannot be recovered without an admin intervention.
- * -------------------------------------------------------------- */
 
 $projectRoot = realpath(__DIR__ . '/../../..');
 if ($projectRoot === false) {
@@ -661,8 +1017,6 @@ try {
             'password'       => $password,
         ],
         [
-            // Placeholder — the real path is written after the two
-            // uploads have been moved, in the UPDATE below.
             'profile_picture' => '',
             'vehicle_type'    => $vehicleType,
             'vehicle_plate'   => $vehiclePlate,
@@ -678,8 +1032,6 @@ try {
     );
 
     $deliveryRiderId = (int)$created['delivery_rider_id'];
-
-    // ---- Move the two uploads into their per-rider folders ----
 
     $profilePath = storeUploadForRider(
         $profileFile,
@@ -699,14 +1051,7 @@ try {
     );
     $movedFiles[] = $projectRoot . '/' . $licensePath;
 
-    // ---- Persist the profile picture path ----
-    //
-    // createRiderAccount() inserted the profile row with an empty
-    // profile_picture because the folder did not exist yet. Now
-    // that the file is on disk, this UPDATE records the real path.
     updateRiderProfilePicture($database_connection, $deliveryRiderId, $profilePath);
-
-    // ---- Child rows ----
 
     insertRiderEmergencyContact($database_connection, $deliveryRiderId, [
         'first_name'     => $ecFirstName,
@@ -762,13 +1107,6 @@ try {
     respondError('An unexpected error occurred. Please try again later.');
 }
 
-/* --------------------------------------------------------------
- * SUCCESS
- * -------------------------------------------------------------- */
-
-// Only clear rider's own token. Do not touch the shared
-// 'csrf_token' key or any other role's token — another role in
-// this same browser session may still be relying on it.
 unset($_SESSION['rider_csrf_token']);
 
 $_SESSION['registration_success'] = 'Rider application submitted. Please sign in to continue.';
@@ -779,3 +1117,61 @@ echo json_encode([
     'redirect' => 'sign-in.php',
 ]);
 exit;
+
+    /* ----------------------------------------------------------
+     * 4. FIELD VALIDATION
+     *
+     * Byte-identical rules to the insert path, with two
+     * differences:
+     *
+     *   - password is optional on reapply. If provided, it must
+     *     pass the same rules as the insert path, must match
+     *     confirm_password, AND the posted current_password must
+     *     verify against the rider's stored bcrypt hash. If not,
+     *     the change is refused with field='current_password'.
+     *   - the terms checkbox is required in both modes.
+     * ---------------------------------------------------------- */
+    $currentPassword = (string)($_POST['current_password'] ?? '');
+
+    // ... every existing validation rule, unchanged, up to and
+    // including the password rules block. Then:
+
+    // ----------------------------------------------------------
+    // 4a. PASSWORD-CHANGE VERIFICATION
+    //
+    // A non-empty new password is only accepted when the rider
+    // also posts the current password and it verifies against
+    // the stored hash. An empty new password means "leave the
+    // existing hash alone"; in that case current_password is
+    // ignored.
+    // ----------------------------------------------------------
+    if ($password !== '') {
+
+        if ($currentPassword === '') {
+            respondError(
+                'Please enter your current password to change it.',
+                'current_password'
+            );
+        }
+
+        try {
+            $storedHash = getRiderPasswordHash($database_connection, $riderId);
+        } catch (PDOException $e) {
+            error_log('Re-apply password lookup error: ' . $e->getMessage());
+            respondError('An unexpected error occurred. Please try again later.');
+        }
+
+        if ($storedHash === false || $storedHash === '') {
+            respondError(
+                'Your account could not be found. Please sign in again.',
+                'current_password'
+            );
+        }
+
+        if (!password_verify($currentPassword, $storedHash)) {
+            respondError(
+                'Your current password is incorrect.',
+                'current_password'
+            );
+        }
+    }

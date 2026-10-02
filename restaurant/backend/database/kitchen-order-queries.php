@@ -51,20 +51,30 @@
  *     shapeKitchenOrderSummaryRow.
  *
  * ---------------------------------------------------------------------
- * THE KITCHEN CARD RENDERER IS NOT HERE
+ * IMAGE RESOLUTION
  * ---------------------------------------------------------------------
- * renderKitchenCard() and its render helpers (kitchenStatusLabel,
- * kitchenStatusBadge, kitchenMoney, kitchenDate,
- * kitchenBranchAddressLine, kitchenRiderVehicleLine) live in exactly
- * two files, because they are consumed by exactly two separate
- * request paths that never load in the same PHP request:
+ * getKitchenOrderItems() now returns BOTH the raw
+ * `product_image` value (the dietary_information.images folder) and
+ * a resolved `product_image_url` that a browser can load directly.
  *
- *     restaurant/pages/kitchen.php
- *     restaurant/backend/handlers/order-handler.php
+ * The resolution is done here, not in the page, because:
  *
- * This file is included by both of them, so it must not declare any
- * function that either declares. See the changelog for the earlier
- * fatal "Cannot redeclare" incident that this rule prevents.
+ *   - The page and the poll endpoint both render kitchen cards and
+ *     must produce byte-identical markup.
+ *   - The project-root URL the browser needs differs by request:
+ *     the page is at /restaurant/pages/, the poll endpoint is at
+ *     /restaurant/backend/handlers/. Deriving it once inside the
+ *     query layer keeps both callers honest.
+ *
+ * The project-root prefix is derived from $_SERVER['SCRIPT_NAME'].
+ * For the page it resolves to '../../'; for the poll endpoint it
+ * resolves to '../../../'. Both are correct relative to their own
+ * requests, and both produce a URL the browser can resolve.
+ *
+ * The two image helpers this uses — getProductImageBasePath() and
+ * getProductPrimaryFilename() — live in
+ * restaurant/backend/database/product-queries.php, which this file
+ * requires at the top.
  *
  * ---------------------------------------------------------------------
  * CONCURRENT-ORDER CAP
@@ -80,50 +90,29 @@
  *   - In the shared order-transaction layer, on the rider side.
  *   - In the schema trigger before_order_rider_assign.
  *
- * All three count the committed set, so the rule agrees across every
- * caller.
- *
  * @package FitPal
- * @version 8.0 — Renamed from order-queries.php to
- *                restaurant-kitchen-queries.php.
+ * @version 9.0 — getKitchenOrderItems() now returns a resolved
+ *                `product_image_url` alongside the raw
+ *                `product_image` column, so both the page and the
+ *                poll endpoint can render product thumbnails
+ *                without duplicating the resolution logic.
  *
- *                Removed:
- *                  - refundCustomerForCancelledOrder() — now lives
- *                    in shared/backend/database/order-transaction-
- *                    queries.php as part of refundOrderToWallet().
- *                  - cancelOrderAsRestaurant() — now lives in the
- *                    shared layer. The kitchen page and its handler
- *                    use it via the require_once below.
+ *                Requires restaurant/backend/database/product-queries.php
+ *                for the two helpers the resolution uses.
  *
- *                Retained with no signature change:
- *                  - getBranchKitchenOrders, getBranchCompletedOrders,
- *                    getBranchKitchenOrdersPaginated,
- *                    getBranchCompletedOrdersPaginated,
- *                    getKitchenOrderItems, getKitchenTabCounts,
- *                    hasActiveOrdersForBranch,
- *                    countActiveOrdersForBranch,
- *                    riderActiveOrderCount, riderHasActiveDelivery,
- *                    getAvailableRidersForBranch,
- *                    getKitchenOrderCounts, getKitchenOrderOwnership,
- *                    getOwnerKitchenSummary,
- *                    getOwnerBranchBreakdown, setOrderPreparing,
- *                    setOrderCancelledByRestaurant,
- *                    assignRiderToOrder, reassignRiderToOrder,
- *                    releaseRiderFromOrder,
- *                    shapeAvailableRiderRow,
- *                    shapeAvailableRiderList,
- *                    shapeKitchenOrderSummaryRow.
- *
- *                (7.3: removed presentation helpers. 7.2: refund
- *                money movement. 7.1: cancelled_by fix. 7.0:
- *                refunded status. 6.x: kitchen card data and rider
- *                roster shapers. 5.x: pagination and the
- *                concurrent-order cap. 3.0: rider_pending handoff.)
+ *                (8.0: renamed from order-queries.php to
+ *                restaurant-kitchen-queries.php. 7.3: removed
+ *                presentation helpers. 7.2: refund money movement.
+ *                7.1: cancelled_by fix. 7.0: refunded status. 6.x:
+ *                kitchen card data and rider roster shapers. 5.x:
+ *                pagination and the concurrent-order cap. 3.0:
+ *                rider_pending handoff.)
  */
 
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../../shared/backend/database/order-transaction-queries.php';
+require_once __DIR__ . '/product-queries.php';
 
 /* =============================================================
  * LIVE-STATUS CONSTANTS
@@ -212,6 +201,82 @@ if (!defined('KITCHEN_ORDER_JOINS')) {
 }
 
 /* =============================================================
+ * IMAGE URL RESOLUTION
+ * ============================================================= */
+
+if (!function_exists('kitchenProjectRootUrl')) {
+    /**
+     * Derive the project-root URL prefix for the current request.
+     *
+     * For a page at /restaurant/pages/kitchen.php this returns
+     * '../../'. For a handler at
+     * /restaurant/backend/handlers/kitchen-order-handler.php it
+     * returns '../../../'. Both are correct relative to their own
+     * request.
+     *
+     * @return string
+     */
+    function kitchenProjectRootUrl(): string
+    {
+        $scriptPath = $_SERVER['SCRIPT_NAME'] ?? '';
+
+        if ($scriptPath === '') {
+            return '';
+        }
+
+        $dirPath  = dirname($scriptPath);
+        $segments = array_filter(explode('/', $dirPath));
+        $depth    = count($segments);
+
+        if ($depth <= 0) {
+            return './';
+        }
+
+        return str_repeat('../', $depth);
+    }
+}
+
+if (!function_exists('kitchenResolveImageUrl')) {
+    /**
+     * Build a browser-loadable image URL from a raw
+     * dietary_information.images value.
+     *
+     * Delegates to getProductImageBasePath() and
+     * getProductPrimaryFilename() from product-queries.php, then
+     * prepends the project-root URL derived from the current
+     * request.
+     *
+     * Returns '' when the folder cannot be resolved or the folder
+     * contains no image file. Callers fall back to the shared
+     * restaurant icon in that case.
+     *
+     * @param string $imageFolder Raw dietary_information.images value.
+     * @return string
+     */
+    function kitchenResolveImageUrl(string $imageFolder): string
+    {
+        if ($imageFolder === '') {
+            return '';
+        }
+
+        $imageBase    = getProductImageBasePath($imageFolder);
+        $primaryImage = getProductPrimaryFilename($imageFolder);
+
+        if ($imageBase === '' || $primaryImage === '') {
+            return '';
+        }
+
+        $projectRootUrl = kitchenProjectRootUrl();
+
+        if ($projectRootUrl === '') {
+            return '';
+        }
+
+        return $projectRootUrl . $imageBase . $primaryImage;
+    }
+}
+
+/* =============================================================
  * READS — NON-PAGINATED
  * ============================================================= */
 
@@ -254,7 +319,7 @@ function getBranchCompletedOrders(PDO $db, int $branchId, int $limit = 30): arra
          FROM orders o "
          . KITCHEN_ORDER_JOINS . "
          WHERE qi.branch_id = :branch_id
-           AND o.order_status IN ('delivered','cancelled','refunded')
+           AND o.order_status IN ('delivered','cancelled','refunded','failed')
          GROUP BY o.order_id
          ORDER BY
             CASE
@@ -367,7 +432,7 @@ function getBranchCompletedOrdersPaginated(
            FROM orders o
            JOIN queue_item qi ON o.order_id = qi.order_id
           WHERE qi.branch_id = :branch_id
-            AND o.order_status IN ('delivered','cancelled','refunded')"
+            AND o.order_status IN ('delivered','cancelled','refunded','failed')"
     );
     $countStmt->execute([':branch_id' => $branchId]);
     $total = (int)$countStmt->fetchColumn();
@@ -384,7 +449,7 @@ function getBranchCompletedOrdersPaginated(
          FROM orders o "
          . KITCHEN_ORDER_JOINS . "
          WHERE qi.branch_id = :branch_id
-           AND o.order_status IN ('delivered','cancelled','refunded')
+           AND o.order_status IN ('delivered','cancelled','refunded','failed')
          GROUP BY o.order_id
          ORDER BY
             CASE
@@ -409,6 +474,21 @@ function getBranchCompletedOrdersPaginated(
     ];
 }
 
+/**
+ * Fetch the items for one kitchen order, enriched with their
+ * customizations and a resolved browser-loadable product image URL.
+ *
+ * The response carries both `product_image` (the raw
+ * dietary_information.images value) and `product_image_url` (a URL
+ * the browser can load directly). Callers render
+ * `product_image_url` and fall back to the shared restaurant icon
+ * when it is empty.
+ *
+ * @param PDO $db
+ * @param int $orderId
+ * @param int $branchId
+ * @return array<int, array<string, mixed>>
+ */
 function getKitchenOrderItems(PDO $db, int $orderId, int $branchId): array
 {
     if ($orderId <= 0 || $branchId <= 0) {
@@ -471,7 +551,15 @@ function getKitchenOrderItems(PDO $db, int $orderId, int $branchId): array
 
     foreach ($items as &$item) {
         $qiId = (int)$item['queue_item_id'];
+
         $item['customizations'] = $custByItem[$qiId] ?? [];
+
+        // Resolve the browser-loadable URL. Empty string when the
+        // folder cannot be resolved; the caller falls back to the
+        // shared restaurant icon.
+        $item['product_image_url'] = kitchenResolveImageUrl(
+            (string)($item['product_image'] ?? '')
+        );
     }
     unset($item);
 
@@ -504,7 +592,7 @@ function getKitchenTabCounts(PDO $db, int $branchId): array
             SUM(CASE WHEN o.order_status IN ('rider_pending','picking_up')
                                                     THEN 1 ELSE 0 END) AS waiting_on_rider,
             SUM(CASE WHEN o.order_status = 'delivering'    THEN 1 ELSE 0 END) AS out_for_delivery,
-            SUM(CASE WHEN o.order_status IN ('delivered','cancelled','refunded')
+            SUM(CASE WHEN o.order_status IN ('delivered','cancelled','refunded','failed')
                                                     THEN 1 ELSE 0 END) AS recent,
             SUM(CASE WHEN o.order_status IN ('pending','preparing','rider_pending','picking_up','delivering')
                                                     THEN 1 ELSE 0 END) AS total_live
@@ -568,13 +656,6 @@ function countActiveOrdersForBranch(PDO $db, int $branchId): int
     return (int)$stmt->fetchColumn();
 }
 
-/**
- * Count a rider's COMMITTED concurrent orders.
- *
- * Counts only 'picking_up' and 'delivering'. An order in
- * 'rider_pending' is a kitchen offer the rider has not yet decided
- * on; it does not occupy a delivery slot.
- */
 function riderActiveOrderCount(PDO $db, int $riderId, int $excludeOrderId = 0): int
 {
     if ($riderId <= 0) {
@@ -899,23 +980,6 @@ function setOrderPreparing(PDO $db, int $orderId, int $branchId): bool
     return $stmt->rowCount() > 0;
 }
 
-/**
- * Cancel an order on behalf of the restaurant.
- *
- * Thin wrapper over the shared layer's cancelOrderAsRestaurant().
- * It exists under this name so every existing call site keeps
- * working without a signature change. The status decision and the
- * cancelled_by biconditional are handled inside the shared
- * function.
- *
- * Requires: caller-owned transaction.
- *
- * @param PDO $db
- * @param int $orderId
- * @param int $branchId
- * @return string|false The new status ('cancelled' or 'refunded')
- *                      on success, or false on failure.
- */
 function setOrderCancelledByRestaurant(PDO $db, int $orderId, int $branchId): string|false
 {
     return cancelOrderAsRestaurant($db, $orderId, $branchId);
@@ -1098,12 +1162,6 @@ function reassignRiderToOrder(PDO $db, int $orderId, int $branchId, int $newRide
     }
 }
 
-/**
- * Hook for anything that must run on the previously-assigned rider
- * when the kitchen reassigns an order. Currently a no-op, retained
- * so a future change has a name to hang off without touching the
- * reassign flow itself.
- */
 function releaseRiderFromOrder(PDO $db, int $riderId, int $excludeOrderId = 0): void
 {
     // Intentionally empty.
@@ -1111,11 +1169,6 @@ function releaseRiderFromOrder(PDO $db, int $riderId, int $excludeOrderId = 0): 
 
 /* =============================================================
  * PURE SHAPERS
- *
- * Consumed by both restaurant/pages/kitchen.php and
- * restaurant/backend/handlers/order-handler.php. Both entry points
- * declare their own render helpers; neither declares these, so
- * declaring them here is the one place they can safely live.
  * ============================================================= */
 
 function shapeAvailableRiderRow(array $row): array

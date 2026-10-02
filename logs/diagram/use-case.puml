@@ -1,0 +1,55 @@
+@startuml
+left to right direction
+
+actor Customer
+actor Restaurant
+actor "Delivery Rider" as Rider
+actor Admin
+
+rectangle "FitPal Food Delivery System" {
+
+  usecase "Register / Login" as UC1
+  usecase "Browse Food Menu" as UC2
+  usecase "Manage Cart" as UC3
+  usecase "Place Order" as UC4
+  usecase "Customize Order" as UC5
+  usecase "Make Payment" as UC6
+  usecase "Track Order" as UC7
+  usecase "Give Feedback" as UC8
+
+  usecase "Manage Menu" as UC9
+  usecase "Manage Orders" as UC10
+  usecase "Update Order Status" as UC11
+
+  usecase "Manage Deliveries" as UC12
+  usecase "Update Delivery Status" as UC13
+
+  usecase "Manage Users" as UC14
+  usecase "Verify Accounts" as UC15
+}
+
+Customer --> UC1
+Customer --> UC2
+Customer --> UC3
+Customer --> UC4
+Customer --> UC7
+Customer --> UC8
+
+Restaurant --> UC1
+Restaurant --> UC9
+Restaurant --> UC10
+Restaurant --> UC11
+
+Rider --> UC1
+Rider --> UC12
+Rider --> UC13
+
+Admin --> UC14
+Admin --> UC15
+
+UC4 ..> UC5 : <<include>>
+UC4 ..> UC6 : <<include>>
+UC7 ..> UC11 : <<include>>
+UC7 ..> UC13 : <<include>>
+
+@enduml

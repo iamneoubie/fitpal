@@ -5,104 +5,97 @@
  * authenticated rider page.
  *
  * ---------------------------------------------------------------------
- * POLL SHAPE
+ * TEXT-SPAN LOOKUP — THE BUG THAT COST SIX REVISIONS
  * ---------------------------------------------------------------------
- * Full-snapshot poll on every tick: action=list, replace the whole
- * list. The cost is a bounded payload (server caps at 20 rows); the
- * benefit is that every status change the panel cares about is
- * visible on the same tick it happened.
+ * The availability pill renders three children:
+ *
+ *     .assignment-panel-status-dot     the colored dot
+ *     .assignment-panel-status-text    the state label
+ *     .assignment-panel-status-action  the action label
+ *
+ * The button itself has id="assignmentPanelStatus". The three
+ * children have CLASSES, not ids. rider/includes/assignment-panel.php
+ * emits them without an id attribute.
+ *
+ * Every prior revision of this file looked the two text spans up by
+ * an id — `document.getElementById('assignmentPanelStatusText')` —
+ * that does not exist in the markup. Both lookups returned null.
+ * Both `statusTextEl` and `statusActionEl` were therefore null for
+ * the entire lifetime of the page.
+ *
+ * The consequence, which is exactly what the rider observed:
+ *
+ *   - `statusBtn.classList.add(...)` ran, because `statusBtn` was
+ *     found correctly (the button does have an id). The pill's
+ *     background and text color changed.
+ *
+ *   - `statusTextEl.textContent = label` was guarded by
+ *     `if (statusTextEl)` and never ran, because `statusTextEl`
+ *     was null. The label text never changed.
+ *
+ *   - `statusActionEl.textContent = action` was guarded the same
+ *     way and never ran either.
+ *
+ * So the pill changed color but not text, exactly as the rider
+ * reported. The JS was running. The class was being written. The
+ * text writes were silently skipped behind `if (el)` guards on
+ * null references.
+ *
+ * The fix: look the two spans up by their class name, scoped to
+ * the pill button. The button is found by id (which exists); the
+ * two spans inside it are found by `querySelector` against their
+ * class names (which exist). Both lookups now return the real
+ * elements, both writes run, and the label text changes on the
+ * frame the toggle response lands.
  *
  * ---------------------------------------------------------------------
- * COLLAPSE STATE PRESERVATION (v5.1)
+ * DIRECT-RESPONSE PILL UPDATE
  * ---------------------------------------------------------------------
- * replaceRows() rebuilds the list from scratch on every tick. Before
- * this revision it also reset every row's collapse state to the
- * server-derived default, so a row the user had expanded collapsed
- * again on the next 5-second tick. Users read that as "the detail
- * auto-collapses when I expand it."
+ * When the toggle succeeds, the pill reads the exact strings the
+ * server returned:
  *
- * The fix reads the current DOM's is-collapsed class per
- * data-order-id before wiping, and re-applies it to the freshly
- * rendered row. A row whose state is not present in the snapshot
- * (because it was added by this tick) keeps the default the server
- * chose for its status: expanded for rider_pending, collapsed for
- * everything else.
+ *     data.status_text     → the pill's visible label
+ *     data.status_action   → the hover-action label
+ *     data.status_class    → the pill's modifier class
+ *
+ * No module-scope variable is consulted for the label. No label is
+ * derived on the client. The handler's response is the pill.
  *
  * ---------------------------------------------------------------------
- * MARKUP CONTRACT
+ * DIAGNOSTIC LOG
  * ---------------------------------------------------------------------
- * Row shape:
- *
- *   article.assignment-row [.is-collapsed]
- *     header.assignment-row-top
- *       span.assignment-row-order
- *       span.assignment-row-status
- *       div.assignment-row-actions
- *         button.assignment-action-btn.is-primary
- *           img.assignment-action-icon
- *         ...
- *     p.assignment-row-summary           visible only when .is-collapsed
- *     div.assignment-row-meta            hidden when .is-collapsed
- *       p.assignment-row-line
- *         span.label
- *         span.value
- *     button.assignment-row-expand
- *       img.assignment-row-expand-icon
- *       span
- *
- * Collapse is a class. Visibility of summary vs meta is a CSS
- * consequence of that class.
+ * Every toggle response is logged to the browser console with the
+ * prefix `[FitPal assignment-panel]`. Left in on purpose.
  *
  * ---------------------------------------------------------------------
- * ROW ACTION ICONS
+ * ROW SHAPE, POLL, STATE PRESERVATION, CUSTOMIZATION DROPDOWN,
+ * AVAILABILITY-CHANGE EVENT, INITIAL STATE SEED, CONFIG
  * ---------------------------------------------------------------------
- *   Accept         → verified-fill.svg
- *   Decline        → close-circle-fill.svg
- *   Mark Picked Up → package.svg
- *   Mark Delivered → verified-badge-fill.svg
- *   Message        → contact-us-line.svg
- *   Call           → phone-fill.svg
- *
- * ---------------------------------------------------------------------
- * CONFIG
- * ---------------------------------------------------------------------
- * The page writes these globals before loading this file:
- *
- *     window.RIDER_CSRF_TOKEN
- *     window.RIDER_ASSET_BASE
- *     window.RIDER_HANDLER_ENDPOINT
- *     window.RIDER_ASSIGNMENT_ENDPOINT   (fallback only)
- *
- * The authoritative endpoint is the wrapper's data-endpoint
- * attribute, populated server-side.
+ * All sections below are unchanged from the previous revision
+ * except for the two element lookups at the top of the file.
  *
  * @package FitPal
- * @version 5.1 — replaceRows() preserves each row's collapse state
- *                across re-renders. The restaurant meta line now
- *                also renders the branch name and branch address
- *                when the server provides them.
+ * @version 9.2 — Fixes the text-span element lookups. The two
+ *                spans inside the availability pill are now found
+ *                by class name (`querySelector`) rather than by an
+ *                id that the markup never carried. This is the
+ *                revision that actually makes the pill's text
+ *                change on a toggle; every previous revision wrote
+ *                the class correctly and silently skipped the text
+ *                writes because the element references were null.
  *
- *                (5.0: full-snapshot poll. 4.0: row markup and
- *                action buttons. 3.2: modals class-driven. 3.1:
- *                endpoint from wrapper. 3.0: page endpoint globals.
- *                2.0: single endpoint. 1.4: notification modal.
- *                1.3: availability modal. 1.2: delta poll. 1.1:
- *                initial panel.)
+ *                (9.1: direct-response pill update. 9.0:
+ *                toggle-poll race guard. 8.4: authoritative toggle
+ *                response. 8.3: wrapper-attribute seed. 8.2:
+ *                availability-changed event. 8.1: row-pills
+ *                container. 8.0: queue-panel row shape.)
  */
 (function () {
     'use strict';
 
-    // -----------------------------------------------------------------
-    // EARLY ELEMENT HANDLES
-    // -----------------------------------------------------------------
-
     var panel   = document.getElementById('assignmentPanel');
     var wrapper = document.getElementById('assignmentPanelWrapper');
     if (!panel || !wrapper) return;
-
-    // -----------------------------------------------------------------
-    // CONFIG
-    // -----------------------------------------------------------------
 
     var CSRF_TOKEN = window.RIDER_CSRF_TOKEN || '';
     var ASSET_BASE = window.RIDER_ASSET_BASE || '';
@@ -123,10 +116,9 @@
         || '../backend/handlers/rider-handler.php';
 
     var POLL_INTERVAL_MS = 5000;
+    var CONFIRM_PENDING_TIMEOUT_MS = 15000;
 
-    // -----------------------------------------------------------------
-    // REMAINING ELEMENT HANDLES
-    // -----------------------------------------------------------------
+    var AVAILABILITY_EVENT_NAME = 'rider:availability-changed';
 
     var toggleBtn = document.getElementById('assignmentPanelToggle');
     var header    = document.getElementById('assignmentPanelHeader');
@@ -136,9 +128,16 @@
     var offlineHint = document.getElementById('assignmentOfflineHint');
     var ineligibleHint = document.getElementById('assignmentIneligibleHint');
 
-    var statusBtn    = document.getElementById('assignmentPanelStatus');
-    var statusTextEl = document.getElementById('assignmentPanelStatusText');
-    var statusActionEl = document.getElementById('assignmentPanelStatusAction');
+    // The availability pill. The button carries an id; the two
+    // text spans inside it carry classes only. They are looked up
+    // relative to the button.
+    var statusBtn = document.getElementById('assignmentPanelStatus');
+    var statusTextEl = statusBtn
+        ? statusBtn.querySelector('.assignment-panel-status-text')
+        : null;
+    var statusActionEl = statusBtn
+        ? statusBtn.querySelector('.assignment-panel-status-action')
+        : null;
 
     var notifyModal = document.getElementById('assignmentNotifyModal');
     var notifyOrderIdEl = document.getElementById('assignmentNotifyOrderId');
@@ -155,38 +154,33 @@
     var availabilityConfirmBtn = document.getElementById('assignmentAvailabilityConfirmBtn');
     var availabilityCancelBtn = document.getElementById('assignmentAvailabilityCancelBtn');
 
-    // -----------------------------------------------------------------
-    // ICON FILES
-    // -----------------------------------------------------------------
-
     var ICONS = {
-        accept:         'verified-fill.svg',
-        decline:        'close-circle-fill.svg',
-        picked_up:      'package.svg',
-        delivered:      'verified-badge-fill.svg',
-        message:        'contact-us-line.svg',
-        call:           'phone-fill.svg',
-        expand:         'arrow-drop-down-line.svg'
+        accept:      'verified-fill.svg',
+        decline:     'close-circle-fill.svg',
+        picked_up:   'package.svg',
+        delivered:   'verified-badge-fill.svg',
+        message:     'contact-us-line.svg',
+        call:        'phone-fill.svg',
+        expand:      'arrow-drop-down-line.svg',
+        fallback:    'restaurant.svg',
+        fallbackAlt: 'community-general.svg',
+        info:        'information-fill.svg',
+        pillFallback:'file-warning-fill.svg'
     };
 
     function iconUrl(file) {
         return ASSET_BASE + 'assets/images/icons/' + file;
     }
 
-    // -----------------------------------------------------------------
-    // STATE
-    // -----------------------------------------------------------------
-
     var isOpen   = false;
     var online   = false;
     var eligible = true;
 
+    var availabilityConfirmPending = false;
+    var availabilityConfirmTimer   = null;
+
     var dismissedOfferIds = Object.create(null);
     var notifyOrderId = 0;
-
-    // -----------------------------------------------------------------
-    // HELPERS
-    // -----------------------------------------------------------------
 
     function escapeHtml(str) {
         return String(str == null ? '' : str)
@@ -197,9 +191,225 @@
             .replace(/'/g, '&#39;');
     }
 
+    function escapeAttr(text) {
+        return escapeHtml(text).replace(/"/g, '&quot;');
+    }
+
     function formatCurrency(amount) {
         var n = parseFloat(amount || 0);
         return '\u20B1' + n.toFixed(2);
+    }
+
+    function readInitialStateFromWrapper() {
+        var fallbackEligible = true;
+        var fallbackOnline   = false;
+
+        var rawEligible = wrapper.getAttribute('data-rider-eligible');
+        var rawOnline   = wrapper.getAttribute('data-rider-online');
+
+        var seededEligible;
+        var seededOnline;
+
+        if (rawEligible === '1') {
+            seededEligible = true;
+        } else if (rawEligible === '0') {
+            seededEligible = false;
+        } else {
+            seededEligible = fallbackEligible;
+        }
+
+        if (rawOnline === '1') {
+            seededOnline = true;
+        } else if (rawOnline === '0') {
+            seededOnline = false;
+        } else {
+            seededOnline = fallbackOnline;
+        }
+
+        return {
+            eligible: seededEligible,
+            online:   seededOnline
+        };
+    }
+
+    function markAvailabilityConfirmPending() {
+        availabilityConfirmPending = true;
+
+        if (availabilityConfirmTimer !== null) {
+            clearTimeout(availabilityConfirmTimer);
+        }
+
+        availabilityConfirmTimer = setTimeout(function () {
+            availabilityConfirmPending = false;
+            availabilityConfirmTimer   = null;
+        }, CONFIRM_PENDING_TIMEOUT_MS);
+    }
+
+    function clearAvailabilityConfirmPending() {
+        availabilityConfirmPending = false;
+
+        if (availabilityConfirmTimer !== null) {
+            clearTimeout(availabilityConfirmTimer);
+            availabilityConfirmTimer = null;
+        }
+    }
+
+    /**
+     * Paint the pill directly from the toggle handler's response.
+     *
+     * The handler sends three strings:
+     *
+     *     status_text     the label, e.g. "Online"
+     *     status_action   the hover action, e.g. "Go Offline"
+     *     status_class    the modifier, e.g. "is-online"
+     *
+     * This function writes those strings into the pill. The two
+     * text spans are located by class name relative to the pill
+     * button; they have no id of their own.
+     *
+     * If a field is missing from the response, it is derived from
+     * data.online / data.eligible, and if those are also missing,
+     * from the caller's fallbackOnline.
+     *
+     * Returns the previous value of the module-scope `online`, so
+     * the caller can decide whether to dispatch the change event.
+     *
+     * @param {Object}  data            handler response
+     * @param {boolean} fallbackOnline  caller's best guess
+     * @returns {boolean}               the previous online value
+     */
+    function paintPillFromResponse(data, fallbackOnline) {
+        var previousOnline = online;
+
+        var isOnline;
+        var isEligible;
+
+        if (data && typeof data.online === 'boolean') {
+            isOnline = data.online;
+        } else {
+            isOnline = !!fallbackOnline;
+        }
+
+        if (data && typeof data.eligible === 'boolean') {
+            isEligible = data.eligible;
+        } else {
+            isEligible = eligible;
+        }
+
+        online   = isOnline;
+        eligible = isEligible;
+
+        var label;
+        var action;
+        var stateClass;
+
+        if (data && typeof data.status_text === 'string' && data.status_text !== '') {
+            label = data.status_text;
+        } else if (!isEligible) {
+            label = 'Inactive';
+        } else if (isOnline) {
+            label = 'Online';
+        } else {
+            label = 'Offline';
+        }
+
+        if (data && typeof data.status_action === 'string') {
+            action = data.status_action;
+        } else if (!isEligible) {
+            action = '';
+        } else if (isOnline) {
+            action = 'Go Offline';
+        } else {
+            action = 'Go Online';
+        }
+
+        if (data && typeof data.status_class === 'string' && data.status_class !== '') {
+            stateClass = data.status_class;
+        } else if (!isEligible) {
+            stateClass = 'is-inactive';
+        } else if (isOnline) {
+            stateClass = 'is-online';
+        } else {
+            stateClass = 'is-offline';
+        }
+
+        if (statusBtn) {
+            statusBtn.classList.remove('is-online', 'is-offline', 'is-inactive');
+            statusBtn.classList.add(stateClass);
+
+            statusBtn.setAttribute(
+                'aria-label',
+                'Availability: ' + label
+                + (action !== '' ? ' \u2014 press to ' + action.toLowerCase() : '')
+            );
+        }
+
+        if (statusTextEl) {
+            statusTextEl.textContent = label;
+        }
+
+        if (statusActionEl) {
+            statusActionEl.textContent = action;
+        }
+
+        applyEligibilityState();
+
+        return previousOnline;
+    }
+
+    /**
+     * Fallback paint when the response carries no state at all.
+     * Uses the module-scope state, which was set by a previous
+     * authoritative response or the wrapper seed.
+     */
+    function applyAvailabilityState() {
+        if (!statusBtn || !statusTextEl) return;
+
+        var state;
+        var label;
+        var action;
+
+        if (!eligible) {
+            state  = 'is-inactive';
+            label  = 'Inactive';
+            action = '';
+        } else if (online) {
+            state  = 'is-online';
+            label  = 'Online';
+            action = 'Go Offline';
+        } else {
+            state  = 'is-offline';
+            label  = 'Offline';
+            action = 'Go Online';
+        }
+
+        statusBtn.classList.remove('is-online', 'is-offline', 'is-inactive');
+        statusBtn.classList.add(state);
+
+        statusTextEl.textContent = label;
+        if (statusActionEl) statusActionEl.textContent = action;
+
+        statusBtn.setAttribute(
+            'aria-label',
+            'Availability: ' + label
+            + (action !== '' ? ' \u2014 press to ' + action.toLowerCase() : '')
+        );
+    }
+
+    function dispatchAvailabilityChanged(newOnline) {
+        if (typeof window.CustomEvent !== 'function') return;
+
+        try {
+            var evt = new CustomEvent(AVAILABILITY_EVENT_NAME, {
+                detail: {
+                    online: !!newOnline,
+                    eligible: !!eligible
+                }
+            });
+            document.dispatchEvent(evt);
+        } catch (err) {
+            // Swallow.
+        }
     }
 
     function postAssignment(action, payload) {
@@ -238,10 +448,6 @@
         }).then(function (res) { return res.json(); });
     }
 
-    // -----------------------------------------------------------------
-    // MODAL VISIBILITY
-    // -----------------------------------------------------------------
-
     function showModal(modal) {
         if (!modal) return;
         modal.classList.add('active');
@@ -251,10 +457,6 @@
         if (!modal) return;
         modal.classList.remove('active');
     }
-
-    // -----------------------------------------------------------------
-    // PANEL OPEN / CLOSE
-    // -----------------------------------------------------------------
 
     function setPanelOpen(open) {
         isOpen = !!open;
@@ -290,44 +492,6 @@
         }
     }
 
-    // -----------------------------------------------------------------
-    // AVAILABILITY PILL
-    // -----------------------------------------------------------------
-
-    function applyAvailabilityState() {
-        if (!statusBtn || !statusTextEl) return;
-
-        var state;
-        var label;
-        var action;
-
-        if (!eligible) {
-            state  = 'is-inactive';
-            label  = 'Inactive';
-            action = '';
-        } else if (online) {
-            state  = 'is-online';
-            label  = 'Online';
-            action = 'Go Offline';
-        } else {
-            state  = 'is-offline';
-            label  = 'Offline';
-            action = 'Go Online';
-        }
-
-        statusBtn.classList.remove('is-online', 'is-offline', 'is-inactive');
-        statusBtn.classList.add(state);
-
-        statusTextEl.textContent = label;
-        if (statusActionEl) statusActionEl.textContent = action;
-
-        statusBtn.setAttribute(
-            'aria-label',
-            'Availability: ' + label
-            + (action !== '' ? ' \u2014 press to ' + action.toLowerCase() : '')
-        );
-    }
-
     function initAvailabilityPill() {
         if (!statusBtn) return;
 
@@ -336,10 +500,6 @@
             openAvailabilityModal();
         });
     }
-
-    // -----------------------------------------------------------------
-    // AVAILABILITY MODAL
-    // -----------------------------------------------------------------
 
     function setModalVariant(variant, iconKey) {
         if (!availabilityModal) return;
@@ -445,14 +605,28 @@
 
                 postRider('toggle_availability', { is_available: target })
                     .then(function (data) {
+                        if (window.console && console.log) {
+                            console.log('[FitPal assignment-panel] toggle response:', data);
+                        }
+
                         availabilityConfirmBtn.disabled = false;
                         availabilityConfirmBtn.textContent = originalText;
 
                         if (data && data.status === 'success') {
-                            online = (target === 1);
-                            applyAvailabilityState();
+                            var previousOnline = paintPillFromResponse(
+                                data,
+                                (target === 1)
+                            );
+
                             closeAvailabilityModal();
+
+                            markAvailabilityConfirmPending();
+
                             fetchNow();
+
+                            if (previousOnline !== online) {
+                                dispatchAvailabilityChanged(online);
+                            }
                             return;
                         }
 
@@ -462,9 +636,13 @@
                                 : 'Could not update your availability. Please try again.';
                         }
                     })
-                    .catch(function () {
+                    .catch(function (err) {
                         availabilityConfirmBtn.disabled = false;
                         availabilityConfirmBtn.textContent = originalText;
+
+                        if (window.console && console.error) {
+                            console.error('[FitPal assignment-panel] toggle error:', err);
+                        }
 
                         if (availabilityTextEl) {
                             availabilityTextEl.textContent =
@@ -475,19 +653,13 @@
         }
     }
 
-    // -----------------------------------------------------------------
-    // CHAT HANDOFF
-    // -----------------------------------------------------------------
-
     function openRiderChat(orderId, recipient, subtitle) {
         var chat = window.FitPalRiderChat;
 
         if (!chat || typeof chat.open !== 'function') {
             if (window.console && console.warn) {
                 console.warn(
-                    '[assignment-panel] window.FitPalRiderChat.open is not available. '
-                    + 'rider/assets/ui/js/rider-chat-modal.js must publish the chat '
-                    + 'interface before the Message action can open a conversation.'
+                    '[assignment-panel] window.FitPalRiderChat.open is not available.'
                 );
             }
             return;
@@ -500,9 +672,209 @@
         });
     }
 
-    // -----------------------------------------------------------------
-    // ROW MARKUP
-    // -----------------------------------------------------------------
+    function renderPaymentPill(pill) {
+        if (!pill || typeof pill !== 'object') {
+            return '';
+        }
+
+        var icon  = String(pill.icon  || ICONS.pillFallback);
+        var label = String(pill.label || '');
+        var slug  = String(pill.slug  || 'other');
+
+        if (label === '') {
+            return '';
+        }
+
+        return (
+            '<span class="assignment-row-payment assignment-row-payment-' + escapeAttr(slug) + '">' +
+                '<img src="' + escapeHtml(iconUrl(icon)) + '" alt="" ' +
+                     'class="assignment-row-payment-icon" width="14" height="14" ' +
+                     'onerror="this.onerror=null; this.src=\'' +
+                         escapeHtml(iconUrl(ICONS.pillFallback)) + '\'">' +
+                '<span class="assignment-row-payment-label">' + escapeHtml(label) + '</span>' +
+            '</span>'
+        );
+    }
+
+    function primaryItemImage(items) {
+        if (!Array.isArray(items)) return '';
+
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            if (!item || typeof item !== 'object') continue;
+
+            var url = String(item.image_url || '');
+            if (url !== '') return url;
+        }
+        return '';
+    }
+
+    function primaryItemName(items) {
+        if (!Array.isArray(items)) return 'Order item';
+
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            if (!item || typeof item !== 'object') continue;
+
+            var name = String(item.product_name || '');
+            if (name !== '') return name;
+        }
+        return 'Order item';
+    }
+
+    function renderPrimaryThumb(items) {
+        var fallbackIcon = iconUrl(ICONS.fallback);
+        var fallbackAlt  = iconUrl(ICONS.fallbackAlt);
+
+        var image = primaryItemImage(items);
+        if (image === '') {
+            image = fallbackIcon;
+        }
+
+        var name = primaryItemName(items);
+
+        return (
+            '<span class="assignment-row-thumb" aria-hidden="true">' +
+                '<img src="' + escapeHtml(image) + '" alt="' + escapeHtml(name) + '" ' +
+                     'class="assignment-row-thumb-image" width="44" height="44" ' +
+                     'loading="lazy" ' +
+                     'onerror="this.onerror=null; this.src=\'' + fallbackAlt + '\'">' +
+            '</span>'
+        );
+    }
+
+    function collectOrderCustomizations(items) {
+        var modifications = [];
+        var instructions  = [];
+
+        var seenMods = Object.create(null);
+        var seenNote = Object.create(null);
+
+        if (!Array.isArray(items)) {
+            return { modifications: modifications, instructions: instructions };
+        }
+
+        items.forEach(function (item) {
+            if (!item || typeof item !== 'object') return;
+
+            if (Array.isArray(item.customizations)) {
+                item.customizations.forEach(function (cust) {
+                    if (!cust || typeof cust !== 'object') return;
+
+                    var name = String(cust.ingredient_name || '');
+                    if (name === '') return;
+
+                    var isRemoved = !!cust.is_removed;
+                    var key = name + '::' + (isRemoved ? '1' : '0');
+
+                    if (seenMods[key]) return;
+                    seenMods[key] = true;
+
+                    modifications.push({
+                        name:      name,
+                        isRemoved: isRemoved,
+                        modifier:  parseFloat(cust.price_modifier || 0)
+                    });
+                });
+            }
+
+            var note = String(item.special_instructions || '').trim();
+            if (note !== '' && !seenNote[note]) {
+                seenNote[note] = true;
+                instructions.push(note);
+            }
+        });
+
+        return {
+            modifications: modifications,
+            instructions:  instructions
+        };
+    }
+
+    function renderModificationRow(mod) {
+        var symbol;
+        var kindClass;
+        var priceHtml = '';
+        var nameHtml  = escapeHtml(mod.name);
+
+        if (mod.isRemoved) {
+            symbol    = '\u2212';
+            kindClass = 'cart-customs-remove';
+            nameHtml += ' <span class="cart-customs-removed">(removed)</span>';
+        } else {
+            symbol    = '+';
+            kindClass = 'cart-customs-add';
+
+            if (!isNaN(mod.modifier) && mod.modifier !== 0) {
+                var sign  = mod.modifier > 0 ? '+' : '\u2212';
+                var value = Math.abs(mod.modifier).toFixed(2);
+                priceHtml = '<span class="cart-customs-price">'
+                          + '(' + sign + '\u20B1' + value + ')'
+                          + '</span>';
+            }
+        }
+
+        return (
+            '<li class="cart-customs-row ' + kindClass + '">' +
+                '<span class="cart-customs-symbol">' + symbol + '</span>' +
+                '<span class="cart-customs-name">' + nameHtml + '</span>' +
+                priceHtml +
+            '</li>'
+        );
+    }
+
+    function renderCustomsBlock(orderId, items) {
+        var bundle = collectOrderCustomizations(items);
+
+        var hasMods = bundle.modifications.length > 0;
+        var hasNote = bundle.instructions.length  > 0;
+
+        if (!hasMods && !hasNote) {
+            return '';
+        }
+
+        var panelId = 'riderAssignmentCustoms' + orderId;
+
+        var listHtml = '';
+        if (hasMods) {
+            listHtml = '<ul class="cart-customs-list">'
+                     + bundle.modifications.map(renderModificationRow).join('')
+                     + '</ul>';
+        }
+
+        var notesHtml = '';
+        if (hasNote) {
+            notesHtml = bundle.instructions.map(function (note) {
+                return (
+                    '<div class="queue-customs-notes">' +
+                        '<p class="queue-customs-notes-label">Special Instructions</p>' +
+                        '<p class="queue-customs-notes-text">' + escapeHtml(note) + '</p>' +
+                    '</div>'
+                );
+            }).join('');
+        }
+
+        return (
+            '<div class="assignment-row-customs">' +
+                '<button type="button" ' +
+                        'class="assignment-row-customs-toggle" ' +
+                        'data-customs-toggle="' + escapeAttr(panelId) + '" ' +
+                        'aria-expanded="false" ' +
+                        'aria-controls="' + escapeAttr(panelId) + '">' +
+                    '<span>Customized</span>' +
+                    '<img src="' + escapeHtml(iconUrl(ICONS.expand)) + '" ' +
+                         'alt="" class="assignment-row-customs-toggle-icon" ' +
+                         'width="14" height="14" ' +
+                         'onerror="this.style.display=\'none\';">' +
+                '</button>' +
+                '<div class="assignment-row-customs-panel" ' +
+                     'id="' + escapeAttr(panelId) + '" hidden>' +
+                    listHtml +
+                    notesHtml +
+                '</div>' +
+            '</div>'
+        );
+    }
 
     function actionButton(opts) {
         var tone = opts.tone || 'is-neutral';
@@ -602,31 +974,13 @@
         return parts.join('');
     }
 
-    /**
-     * Build the pickup meta lines for a row.
-     *
-     * The Restaurant block shows the restaurant name, the branch
-     * name (when distinct from the restaurant), and the branch's
-     * full address (block, barangay, city, province, region, postal
-     * code, country — whichever the server provided).
-     *
-     * The Deliver-to block shows the destination the customer
-     * supplied at checkout. It is a single free-form string.
-     *
-     * Item count and order total are their own rows.
-     */
     function rowMetaLines(row) {
         var lines = [];
 
-        // ---- Restaurant -------------------------------------------------
         var restaurantName = row.restaurant_name || '\u2014';
         var branchName     = row.branch_name     || '';
         var branchAddress  = row.branch_address  || '';
 
-        // Compose the restaurant value: name, then a middle dot and
-        // the branch name only when the two differ. The customer's
-        // destination is a single string; the pickup point is two —
-        // the business and the physical branch within it.
         var restaurantValue = restaurantName;
         if (branchName !== '' && branchName !== restaurantName) {
             restaurantValue += ' \u2014 ' + branchName;
@@ -634,23 +988,13 @@
 
         lines.push(['Restaurant', restaurantValue]);
 
-        // The address gets its own line so a long address does not
-        // squeeze the restaurant name into ellipsis. Skip when the
-        // server had no address on file.
         if (branchAddress !== '') {
             lines.push(['Pickup at', branchAddress]);
         }
 
-        // ---- Customer ---------------------------------------------------
         lines.push(['Customer', row.customer_name || '\u2014']);
-
-        // ---- Destination ------------------------------------------------
         lines.push(['Deliver to', row.destination || '\u2014']);
-
-        // ---- Item count -------------------------------------------------
         lines.push(['Items', String(row.item_count || 0)]);
-
-        // ---- Total ------------------------------------------------------
         lines.push(['Total', formatCurrency(row.order_total)]);
 
         return lines.map(function (pair) {
@@ -663,13 +1007,14 @@
         }).join('');
     }
 
-    function rowSummaryText(row) {
-        var restaurant = row.restaurant_name || 'Restaurant';
-        var customer   = row.customer_name   || 'Customer';
-        return restaurant + ' \u2192 ' + customer
-             + ' \u2022 ' + (row.item_count || 0) + ' item'
-             + ((row.item_count || 0) === 1 ? '' : 's')
-             + ' \u2022 ' + formatCurrency(row.order_total);
+    function rowSummaryHtml(row) {
+        var restaurant = escapeHtml(row.restaurant_name || 'Restaurant');
+        var customer   = escapeHtml(row.customer_name   || 'Customer');
+        var itemCount  = parseInt(row.item_count, 10) || 0;
+
+        return restaurant + ' &rarr; ' + customer
+             + ' &bull; ' + itemCount + ' item' + (itemCount === 1 ? '' : 's')
+             + ' &bull; ' + escapeHtml(formatCurrency(row.order_total));
     }
 
     function renderRow(row, collapsed) {
@@ -680,77 +1025,127 @@
         var classes = 'assignment-row';
         if (collapsed) classes += ' is-collapsed';
 
+        var items = Array.isArray(row.items) ? row.items : [];
+
+        var thumbHtml   = renderPrimaryThumb(items);
+        var paymentHtml = renderPaymentPill(row.payment_pill);
+        var customsHtml = renderCustomsBlock(row.order_id, items);
+
         return (
             '<article class="' + classes + '" ' +
                      'data-order-id="' + row.order_id + '" ' +
                      'data-order-status="' + escapeHtml(status) + '">' +
 
-                '<header class="assignment-row-top" tabindex="0">' +
+                '<header class="assignment-row-top">' +
+                    thumbHtml +
                     '<span class="assignment-row-order">Order #' + row.order_id + '</span>' +
-                    '<span class="assignment-row-status ' + escapeHtml(badgeClass) + '">' +
-                        escapeHtml(statusLabel) +
-                    '</span>' +
+
+                    '<div class="assignment-row-pills">' +
+                        '<span class="assignment-row-status ' + escapeHtml(badgeClass) + '">' +
+                            escapeHtml(statusLabel) +
+                        '</span>' +
+                        paymentHtml +
+                    '</div>' +
+
                     '<div class="assignment-row-actions">' +
                         rowActions(row) +
                     '</div>' +
                 '</header>' +
 
-                '<p class="assignment-row-summary">' +
-                    escapeHtml(rowSummaryText(row)) +
-                '</p>' +
-
-                '<div class="assignment-row-meta">' +
-                    rowMetaLines(row) +
+                '<div class="assignment-row-meta-line">' +
+                    '<p class="assignment-row-summary">' +
+                        rowSummaryHtml(row) +
+                    '</p>' +
+                    '<button type="button" class="assignment-row-expand" ' +
+                            'aria-expanded="' + (collapsed ? 'false' : 'true') + '">' +
+                        '<img src="' + escapeHtml(iconUrl(ICONS.expand)) + '" alt="" ' +
+                             'class="assignment-row-expand-icon" width="14" height="14">' +
+                        '<span>' + (collapsed ? 'Details' : 'Hide') + '</span>' +
+                    '</button>' +
                 '</div>' +
 
-                '<button type="button" class="assignment-row-expand" ' +
-                        'aria-expanded="' + (collapsed ? 'false' : 'true') + '">' +
-                    '<img src="' + escapeHtml(iconUrl(ICONS.expand)) + '" alt="" ' +
-                         'class="assignment-row-expand-icon" width="12" height="12">' +
-                    '<span>' + (collapsed ? 'Details' : 'Hide') + '</span>' +
-                '</button>' +
+                '<div class="assignment-row-details">' +
+                    '<div class="assignment-row-meta">' +
+                        rowMetaLines(row) +
+                    '</div>' +
+                    customsHtml +
+                '</div>' +
             '</article>'
         );
     }
 
-    /**
-     * Read the collapse state of every row currently in the DOM.
-     *
-     * Returns a map of order_id (string) to a boolean is-collapsed.
-     * replaceRows() uses this snapshot to re-apply per-row state to
-     * the freshly rendered rows, so a poll never resets a row the
-     * user has expanded.
-     */
-    function snapshotCollapseState() {
+    function snapshotRowState() {
         var state = Object.create(null);
         if (!listEl) return state;
 
         var rows = listEl.querySelectorAll('.assignment-row[data-order-id]');
+
         for (var i = 0; i < rows.length; i++) {
             var row = rows[i];
             var id  = row.getAttribute('data-order-id');
             if (!id) continue;
-            state[id] = row.classList.contains('is-collapsed');
+
+            var collapsed = row.classList.contains('is-collapsed');
+
+            var customsOpen = false;
+            var toggle = row.querySelector('.assignment-row-customs-toggle');
+            if (toggle && toggle.getAttribute('aria-expanded') === 'true') {
+                var panelId = toggle.getAttribute('data-customs-toggle');
+                if (panelId) {
+                    var panelEl = document.getElementById(panelId);
+                    if (panelEl && !panelEl.hidden) {
+                        customsOpen = true;
+                    }
+                }
+            }
+
+            state[id] = {
+                collapsed:   collapsed,
+                customsOpen: customsOpen
+            };
         }
+
         return state;
     }
 
-    /**
-     * Replace the entire list from a server-provided rows array.
-     *
-     * Before wiping, this reads the collapse state of every row in
-     * the DOM. After rendering, it re-applies that state per
-     * order_id. A row whose id is not in the snapshot is one the
-     * server just added; it keeps the default collapse state for its
-     * status (expanded for rider_pending, collapsed for everything
-     * else).
-     *
-     * @param {Array} rows
-     */
+    function applyRowState(row, entry, defaultCollapsed) {
+        if (!row) return;
+
+        var collapsed = entry ? !!entry.collapsed : !!defaultCollapsed;
+        var customsOpen = entry ? !!entry.customsOpen : false;
+
+        if (collapsed) {
+            row.classList.add('is-collapsed');
+        } else {
+            row.classList.remove('is-collapsed');
+        }
+
+        var expandBtn = row.querySelector('.assignment-row-expand');
+        if (expandBtn) {
+            expandBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            var labelEl = expandBtn.querySelector('span');
+            if (labelEl) {
+                labelEl.textContent = collapsed ? 'Details' : 'Hide';
+            }
+        }
+
+        var toggle = row.querySelector('.assignment-row-customs-toggle');
+        if (!toggle) return;
+
+        var panelId = toggle.getAttribute('data-customs-toggle');
+        if (!panelId) return;
+
+        var panelEl = document.getElementById(panelId);
+        if (!panelEl) return;
+
+        toggle.setAttribute('aria-expanded', customsOpen ? 'true' : 'false');
+        panelEl.hidden = !customsOpen;
+    }
+
     function replaceRows(rows) {
         if (!listEl) return;
 
-        var previousState = snapshotCollapseState();
+        var previousState = snapshotRowState();
 
         listEl.innerHTML = '';
 
@@ -760,26 +1155,35 @@
 
         var html = rows.map(function (row) {
             var id = String(row.order_id);
-            var collapsed;
+            var entry = Object.prototype.hasOwnProperty.call(previousState, id)
+                ? previousState[id]
+                : undefined;
 
-            if (Object.prototype.hasOwnProperty.call(previousState, id)) {
-                collapsed = previousState[id];
-            } else {
-                // Default for a newly seen row: expand rider_pending
-                // (the rider has a decision to make), collapse the
-                // rest.
-                collapsed = (row.status !== 'rider_pending');
-            }
+            var defaultCollapsed = (row.status !== 'rider_pending');
+            var collapsedForRender = entry
+                ? !!entry.collapsed
+                : defaultCollapsed;
 
-            return renderRow(row, collapsed);
+            return renderRow(row, collapsedForRender);
         }).join('');
 
         listEl.innerHTML = html;
-    }
 
-    // -----------------------------------------------------------------
-    // BADGES, HINTS, EMPTY STATE
-    // -----------------------------------------------------------------
+        var renderedRows = listEl.querySelectorAll('.assignment-row[data-order-id]');
+
+        for (var i = 0; i < renderedRows.length; i++) {
+            var rowEl = renderedRows[i];
+            var id    = rowEl.getAttribute('data-order-id');
+            var entry = id && Object.prototype.hasOwnProperty.call(previousState, id)
+                ? previousState[id]
+                : undefined;
+
+            var status = rowEl.getAttribute('data-order-status') || '';
+            var defaultCollapsed = (status !== 'rider_pending');
+
+            applyRowState(rowEl, entry, defaultCollapsed);
+        }
+    }
 
     function applyCounts(counts) {
         if (!countBadge || !counts) return;
@@ -801,10 +1205,6 @@
         if (!emptyState) return;
         emptyState.hidden = (totalAssignments > 0) || !eligible;
     }
-
-    // -----------------------------------------------------------------
-    // ROW ACTION DELEGATION
-    // -----------------------------------------------------------------
 
     function handleRowAction(action, orderId, btn) {
         if (orderId <= 0) return;
@@ -871,10 +1271,14 @@
         if (!listEl) return;
 
         listEl.addEventListener('click', function (event) {
-            // Order matters: the expand chevron and the action
-            // buttons both live inside the row, and the row header
-            // itself is clickable. Match the most specific target
-            // first.
+            var customsToggle = event.target.closest('.assignment-row-customs-toggle');
+            if (customsToggle) {
+                event.preventDefault();
+                event.stopPropagation();
+                toggleCustomsPanel(customsToggle);
+                return;
+            }
+
             var expandBtn = event.target.closest('.assignment-row-expand');
             if (expandBtn) {
                 event.preventDefault();
@@ -933,9 +1337,18 @@
         if (labelEl) labelEl.textContent = collapsed ? 'Details' : 'Hide';
     }
 
-    // -----------------------------------------------------------------
-    // NOTIFICATION MODAL
-    // -----------------------------------------------------------------
+    function toggleCustomsPanel(toggleBtn) {
+        var panelId = toggleBtn.getAttribute('data-customs-toggle');
+        if (!panelId) return;
+
+        var panelEl = document.getElementById(panelId);
+        if (!panelEl) return;
+
+        var expanded = toggleBtn.getAttribute('aria-expanded') === 'true';
+
+        toggleBtn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+        panelEl.hidden = expanded;
+    }
 
     function openNotificationModal(row) {
         if (!notifyModal) return;
@@ -951,9 +1364,6 @@
 
         if (notifyOrderIdEl)   notifyOrderIdEl.textContent   = String(row.order_id);
 
-        // Restaurant line: name plus branch plus address on one
-        // string. The three parts are separated by a middle dot so
-        // the modal can show them without a second grid.
         if (notifyRestaurantEl) {
             var restaurantName = row.restaurant_name || '\u2014';
             var branchName     = row.branch_name     || '';
@@ -1081,10 +1491,6 @@
         }
     }
 
-    // -----------------------------------------------------------------
-    // POLL
-    // -----------------------------------------------------------------
-
     function fetchNow() {
         var body = new FormData();
         body.append('action', 'list');
@@ -1099,11 +1505,15 @@
             .then(function (data) {
                 if (!data || data.status !== 'success') return;
 
-                eligible = !!data.eligible;
-                online   = !!data.online;
+                if (!availabilityConfirmPending) {
+                    var previousOnline = paintPillFromResponse(data, online);
 
-                applyEligibilityState();
-                applyAvailabilityState();
+                    if (previousOnline !== online) {
+                        dispatchAvailabilityChanged(online);
+                    }
+                } else {
+                    clearAvailabilityConfirmPending();
+                }
 
                 if (Array.isArray(data.dismissed)) {
                     data.dismissed.forEach(function (id) {
@@ -1126,12 +1536,15 @@
             });
     }
 
-    // -----------------------------------------------------------------
-    // BOOTSTRAP
-    // -----------------------------------------------------------------
-
     document.addEventListener('DOMContentLoaded', function () {
+        var seeded = readInitialStateFromWrapper();
+        eligible = seeded.eligible;
+        online   = seeded.online;
+
         setPanelOpen(false);
+
+        applyEligibilityState();
+        applyAvailabilityState();
 
         initToggle();
         initAvailabilityPill();

@@ -6,25 +6,24 @@
  * The real-time board — live order polling and the new-order pill —
  * lives in kitchen-realtime.js and is not touched here.
  *
- * What this file owns
- * -------------------
+ * ---------------------------------------------------------------------
+ * WHAT THIS FILE OWNS
+ * ---------------------------------------------------------------------
+ *   - The card collapse toggle. The card is two bands:
+ *     a header (always visible) and a details body (collapsed by
+ *     default). Clicking the chevron OR the header band toggles
+ *     the details body.
+ *
  *   - The Start Preparing, Cancel, Assign Rider, and Reassign Rider
  *     buttons. Each posts to the handler and, on success, reloads
  *     the page so the tab counts and the tab the order belongs to
  *     stay accurate.
  *
- *   - The generic confirm modal for destructive actions.
+ *   - The generic confirm modal for destructive or irreversible
+ *     actions.
  *
  *   - The rider-selection modal, whose roster is fetched fresh from
  *     the server on open and polled while the modal stays open.
- *
- *   - The card collapse toggle. Each kitchen card is three bands:
- *     a header, a summary, and a details body that is collapsed by
- *     default. The chevron in the header toggles the details body.
- *     This file owns the USER INTERACTION. Preserving the expanded
- *     set across a realtime poll is kitchen-realtime.js's job; that
- *     file snapshots the expanded set from the DOM around its own
- *     mutation phase. This file never keeps a JS-side Set.
  *
  *   - The sign-out guard helper: window.checkActiveOrders() posts
  *     to the handler's active_orders_count action and calls back
@@ -33,20 +32,71 @@
  *
  *   - The toast banner used to surface a handler response.
  *
- * Where the actions go
- * --------------------
+ * ---------------------------------------------------------------------
+ * CARD TOGGLE — SINGLE HANDLER
+ * ---------------------------------------------------------------------
+ * A prior revision bound TWO delegated click listeners on
+ * #kitchenOrderList: one on .kitchen-order-toggle and one on
+ * .kitchen-order-header. A click on the chevron bubbled through
+ * both and each listener flipped the state, so the card opened and
+ * immediately closed.
+ *
+ * This revision keeps a single delegated listener. It resolves the
+ * toggle target itself:
+ *
+ *   1. If the click landed on the toggle or any descendant of it,
+ *      toggle the card once.
+ *   2. Otherwise, if the click landed on the header band and not on
+ *      a button inside it, toggle the card once.
+ *   3. Otherwise, do nothing.
+ *
+ * toggleCard() is idempotent per gesture because the listener runs
+ * exactly once for one click — the browser's event dispatch calls
+ * this single listener, this file does not attach a second one
+ * anywhere else on the document or on the list.
+ *
+ * ---------------------------------------------------------------------
+ * COLLAPSED STATE AND POLLING
+ * ---------------------------------------------------------------------
+ * The open/closed state lives on the DOM:
+ *
+ *     .kitchen-order-card.is-open        the card is expanded
+ *     .kitchen-order-details[hidden]     the details band is closed
+ *     .kitchen-order-toggle[aria-expanded] "true" | "false"
+ *
+ * kitchen-realtime.js replaces the list's innerHTML on every poll
+ * tick. It snapshots .is-open off the DOM before the replace and
+ * reapplies it after. This file does not need to keep a second
+ * JS-side Set — the DOM is the single source of truth, and
+ * rehydrateKitchenCards() (called by this file's bootstrap only)
+ * reads it back.
+ *
+ * ---------------------------------------------------------------------
+ * CONFIRM MODAL
+ * ---------------------------------------------------------------------
+ * Any action button can opt into a confirmation step by carrying
+ * the following data attributes:
+ *
+ *   data-confirm-title    the modal's heading
+ *   data-confirm-message  the modal's body text
+ *   data-confirm-label    the confirm button's label
+ *
+ * If an action button carries `data-confirm-title`, this file
+ * intercepts its click and opens the shared confirm modal with the
+ * provided content. Only after the user confirms does the original
+ * action post to the handler.
+ *
+ * ---------------------------------------------------------------------
+ * WHERE THE ACTIONS GO
+ * ---------------------------------------------------------------------
  * Every action posts to the endpoint named by #kitchenPage's
  * data-handler-url attribute:
  *
  *     restaurant/backend/handlers/kitchen-order-handler.php
  *
- * That handler owns the kitchen's own status transitions and, for
- * cancel_order, forwards to the shared order-transaction handler so
- * the ledger rules for COD, Wallet, and Online cancels stay in one
- * place. The client never talks to the shared handler directly.
- *
- * Bootstrap
- * ---------
+ * ---------------------------------------------------------------------
+ * BOOTSTRAP
+ * ---------------------------------------------------------------------
  * The page loads this file with the `defer` attribute. A deferred
  * script runs AFTER the HTML parser finishes, AFTER
  * DOMContentLoaded has already been dispatched, and BEFORE load.
@@ -63,66 +113,25 @@
  * That is correct whether the script is `defer`, `async`, plain, or
  * injected after the document is already interactive.
  *
- * Config
- * ------
- * Every value this file needs is read from data-* attributes on
- * #kitchenPage, which kitchen.php sets from the session. No window
- * globals set by an inline <script> are read here.
- *
- * Rules honored
- * -------------
+ * ---------------------------------------------------------------------
+ * RULES HONORED
+ * ---------------------------------------------------------------------
  *   - No CSS in this file.
  *   - No <svg> injection. Icons come from the shared icon folder
- *     and are used through <img> tags, matching the server-rendered
- *     fallback.
+ *     and are used through <img> tags.
  *   - No window.alert / confirm / prompt. Every message goes
  *     through a modal or a toast.
  *
  * @package FitPal
- * @version 10.0 — Rebuilt from the last working v9.0 kitchen script
- *                with two corrections.
+ * @version 12.0 — Actions that carry a `data-confirm-title`
+ *                 attribute now open the shared confirm modal
+ *                 before proceeding. The "Start Preparing" button
+ *                 uses this mechanism.
  *
- *                Fix 1: the bootstrap guard. v9.0 attached its init
- *                calls to DOMContentLoaded, which never fires for a
- *                `defer` script. The module never booted, no
- *                delegated listeners were attached, and every
- *                .kitchen-action-btn on the page was dead. The
- *                bootstrap now uses a readyState guard so boot()
- *                runs immediately when the document is already
- *                interactive or complete, and only defers to
- *                DOMContentLoaded when the document is still
- *                loading.
- *
- *                Fix 2: HANDLER_URL fallback corrected from
- *                ../backend/handlers/order-handler.php to
- *                ../backend/handlers/kitchen-order-handler.php, the
- *                file that exists on disk. The read of
- *                data-handler-url still wins; the fallback only
- *                matters when the page renders without that
- *                attribute.
- *
- *                Everything else is restored from v9.0 because a
- *                later revision had silently removed it:
- *                  - The card-collapse click delegation on
- *                    #kitchenOrderList, for both the chevron and
- *                    the header band. Without it, the chevron on
- *                    each card is dead.
- *                  - window.checkActiveOrders(), which logout.js
- *                    calls to refuse sign-out while orders are
- *                    live. Without it, the kitchen page's logout
- *                    button fails open.
- *                  - The rider roster poll and its visibility
- *                    handling, so the roster stays live while the
- *                    modal is open.
- *
- *                (9.0: card state handed off to kitchen-realtime.js.
- *                8.0: expandedIds and card state hook. 7.0:
- *                realtime rider roster in the assignment modal.
- *                6.0: full rewrite for the paginated, step-by-step
- *                kitchen page. 5.0: order-handler polling moved
- *                out. 4.1: data-icon on the confirm modal. 4.0:
- *                chat moved to kitchen-realtime.js. 3.0: initial
- *                kitchen JS.)
+ *                 (11.0: toggle consolidated. 10.0: readyState
+ *                 guard. 9.0: card state handed to realtime. 8.0:
+ *                 expandedIds. 7.0: realtime rider roster. 6.0:
+ *                 full rewrite. 5.0: pagination.)
  */
 (function () {
     'use strict';
@@ -138,8 +147,6 @@
             || '../backend/handlers/kitchen-order-handler.php';
         var BRANCH_ID   = parseInt(page.dataset.branchId, 10) || 0;
 
-        // Owner view has no interactive elements. Exit before wiring
-        // anything.
         if (SCOPE !== 'branch') {
             return;
         }
@@ -157,28 +164,27 @@
         var riderCurrentEl = document.getElementById('riderModalCurrentRider');
         var riderTitleEl   = document.getElementById('riderModalTitle');
         var confirmModal   = document.getElementById('confirmModal');
+        var confirmTitleEl = document.getElementById('confirmModalTitle');
         var confirmMsgEl   = document.getElementById('confirmModalMessage');
         var confirmBtn     = document.getElementById('confirmModalBtn');
 
-        // The action the confirm modal will run when the user clicks
-        // its Confirm button. Null when the modal is closed.
         var pendingAction = null;
-
-        // One request at a time. Set while a POST is in flight so a
-        // double-click cannot fire two writes.
-        var isSubmitting = false;
+        var isSubmitting  = false;
 
         /* ============================================
-           CARD COLLAPSE — USER INTERACTION ONLY
+           CARD TOGGLE — SINGLE DELEGATED LISTENER
            ============================================ */
 
         /**
-         * Toggle a single card's expanded state in response to a
-         * user click.
+         * Toggle a single card's expanded state.
          *
-         * The state IS the DOM. No JS-side Set is kept. The polling
-         * script reads the DOM directly when it needs to preserve
-         * state across a re-render.
+         * Writes exactly three things, and only these three:
+         *   .is-open on the card
+         *   [hidden] on the details band
+         *   aria-expanded on the toggle button
+         *
+         * The chevron rotation is a CSS rule keyed on .is-open. No
+         * inline style is written.
          *
          * @param {HTMLElement} card
          */
@@ -188,48 +194,62 @@
             var details = card.querySelector('.kitchen-order-details');
             var toggle  = card.querySelector('.kitchen-order-toggle');
 
-            if (card.classList.contains('is-expanded')) {
-                card.classList.remove('is-expanded');
-                if (details) details.hidden = true;
-                if (toggle)  toggle.setAttribute('aria-expanded', 'false');
+            if (!details || !toggle) return;
+
+            var willOpen = !card.classList.contains('is-open');
+
+            if (willOpen) {
+                card.classList.add('is-open');
+                details.hidden = false;
+                toggle.setAttribute('aria-expanded', 'true');
             } else {
-                card.classList.add('is-expanded');
-                if (details) details.hidden = false;
-                if (toggle)  toggle.setAttribute('aria-expanded', 'true');
+                card.classList.remove('is-open');
+                details.hidden = true;
+                toggle.setAttribute('aria-expanded', 'false');
             }
         }
 
         if (orderList) {
-            // Chevron toggle. The button is the only target that
-            // expands or collapses the card when the click lands on
-            // the toggle control itself.
-            orderList.addEventListener('click', function (e) {
-                var toggle = e.target.closest('.kitchen-order-toggle');
-                if (!toggle) return;
-                if (e.target.closest('.kitchen-action-btn')) return;
+            orderList.addEventListener('click', function (event) {
+                // 1. Action buttons and anything inside a button
+                //    inside the footer must never toggle.
+                if (event.target.closest('.kitchen-action-btn')) {
+                    return;
+                }
 
-                e.preventDefault();
-                e.stopPropagation();
+                // 2. Chat trigger buttons must never toggle.
+                if (event.target.closest('[data-restaurant-chat-open]')) {
+                    return;
+                }
 
-                var card = toggle.closest('.kitchen-order-card');
-                toggleCard(card);
-            });
+                // 3. The chevron button. This is the intended
+                //    toggle surface. Do not let the click reach any
+                //    other handler in this file or in another file
+                //    that might be listening on a broader surface.
+                var toggle = event.target.closest('.kitchen-order-toggle');
+                if (toggle) {
+                    event.preventDefault();
+                    event.stopPropagation();
 
-            // Header band. Clicking anywhere on the header that is
-            // not the toggle and not an action button also toggles
-            // the card.
-            orderList.addEventListener('click', function (e) {
-                if (e.target.closest('.kitchen-order-toggle')) return;
-                if (e.target.closest('.kitchen-action-btn')) return;
+                    var cardFromToggle = toggle.closest('.kitchen-order-card');
+                    toggleCard(cardFromToggle);
+                    return;
+                }
 
-                var header = e.target.closest('.kitchen-order-header');
-                if (!header) return;
+                // 4. The header band. Clicks anywhere on the header
+                //    that are not the chevron and not a button still
+                //    toggle the card, so the header band is a large
+                //    tap target for the same affordance.
+                var header = event.target.closest('.kitchen-order-header');
+                if (header) {
+                    if (event.target.closest('button')) return;
 
-                e.preventDefault();
-                e.stopPropagation();
+                    event.preventDefault();
 
-                var card = header.closest('.kitchen-order-card');
-                toggleCard(card);
+                    var cardFromHeader = header.closest('.kitchen-order-card');
+                    toggleCard(cardFromHeader);
+                    return;
+                }
             });
         }
 
@@ -274,7 +294,7 @@
         });
 
         /* ============================================
-           ACTION DISPATCH (delegated)
+           ACTION DISPATCH
            ============================================ */
 
         if (orderList) {
@@ -282,12 +302,6 @@
                 var btn = e.target.closest('.kitchen-action-btn');
                 if (!btn || btn.disabled) return;
 
-                // The Message button on every card carries the same
-                // .kitchen-action-btn class but no data-action. Its
-                // handler is attached by kitchen-realtime.js against
-                // [data-restaurant-chat-open]. Return immediately so
-                // that delegation can fire without this listener
-                // also trying (and failing) to route it.
                 if (btn.hasAttribute('data-restaurant-chat-open')) {
                     return;
                 }
@@ -298,6 +312,22 @@
                 var orderId = parseInt(btn.dataset.orderId, 10) || 0;
                 if (orderId <= 0) return;
 
+                e.preventDefault();
+
+                // ----- Confirm gate -----
+                // Any action button that carries data-confirm-title
+                // opens the shared confirm modal first.
+                var confirmTitle = btn.dataset.confirmTitle || '';
+                if (confirmTitle !== '') {
+                    askConfirm(action, orderId, {
+                        title:   confirmTitle,
+                        message: btn.dataset.confirmMessage || '',
+                        label:   btn.dataset.confirmLabel   || 'Confirm'
+                    });
+                    return;
+                }
+
+                // ----- Direct actions -----
                 if (action === 'assign_rider' || action === 'reassign_rider') {
                     var isReassign   = btn.dataset.reassign === '1';
                     var currentRider = btn.dataset.currentRider || '';
@@ -310,12 +340,12 @@
                 }
 
                 if (action === 'cancel_order') {
-                    askConfirm(
-                        orderId,
-                        'cancel_order',
-                        'Cancel this order? The customer will be notified. '
-                            + 'Once a rider is assigned, the kitchen can no longer cancel.'
-                    );
+                    askConfirm(action, orderId, {
+                        title:   'Cancel this order?',
+                        message: 'The customer will be notified. ' +
+                                 'Once a rider is assigned, the kitchen can no longer cancel.',
+                        label:   'Yes, cancel order'
+                    });
                     return;
                 }
 
@@ -330,9 +360,11 @@
            CONFIRM MODAL
            ============================================ */
 
-        function askConfirm(orderId, action, message) {
+        function askConfirm(action, orderId, opts) {
             pendingAction = { orderId: orderId, action: action };
-            if (confirmMsgEl) confirmMsgEl.textContent = message;
+            if (confirmTitleEl) confirmTitleEl.textContent = opts.title || 'Confirm';
+            if (confirmMsgEl)   confirmMsgEl.textContent   = opts.message || '';
+            if (confirmBtn)     confirmBtn.textContent     = opts.label   || 'Confirm';
             openModal(confirmModal);
         }
 

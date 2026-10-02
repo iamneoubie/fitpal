@@ -6,106 +6,50 @@
  * ------
  *   1. Greeting header
  *   2. Four stat cards (available balance, deliveries, rating, today's earnings)
- *   3. Current Work strip
+ *   3. Current Work strip — carries the blocked face AND the re-apply
+ *      action for a denied rider. This strip is the single surface for
+ *      every non-verified state.
  *   4. Order liability strip — rendered only when the rider is
  *      carrying outstanding COD cash
  *   5. Two-column row: weekly chart | info card
- *   6. Verification warning (only when not verified)
+ *
+ * ---------------------------------------------------------------------
+ * NO SEPARATE VERIFICATION WARNING CARD
+ * ---------------------------------------------------------------------
+ * Earlier revisions rendered a second card below the two-column row
+ * whose content mirrored the Current Work strip's blocked face. For
+ * every non-verified status the two said the same thing twice. The
+ * card is removed. The strip is the only place the rider's
+ * verification state is stated on this page.
+ *
+ * The denied case carries one action: "Re-apply Now". Contact
+ * Support is not offered from this page; a rider who needs to reach
+ * support can do so from the footer's Contact link or from the
+ * profile page.
  *
  * ---------------------------------------------------------------------
  * WHERE THE NUMBERS ON THIS PAGE COME FROM
  * ---------------------------------------------------------------------
- * Three sources feed the dashboard:
+ *   Live work counts  — shared order-transaction layer, committed
+ *                        subset ('picking_up' and 'delivering').
+ *   Per-delivery payout — FITPAL_DELIVERY_BASE_FEE.
+ *   Order liability    — getRiderOutstandingCollections().
  *
- *   Live work counts (stat cards, Current Work strip)
- *       Every order status the dashboard tracks is written by the
- *       shared order-transaction layer. The rider-role dashboard
- *       reads the committed subset ('picking_up' and 'delivering')
- *       through the same queries the assignment panel and the
- *       deliveries page use.
- *
- *   Per-delivery payout
- *       The rider's earnings and today's/wk/30d sums are read from
- *       the `transaction` table (the `deposit` rows written by the
- *       shared layer's delivery credit pair). The per-delivery
- *       figure comes from FITPAL_DELIVERY_BASE_FEE via
- *       getRiderDashboardStats().
- *
- *   Order liability
- *       Under v2.4.0, a COD rider physically collects the order
- *       total from the customer at pickup. The amount they are
- *       currently carrying is the sum of the 'collected' rows in
- *       `rider_collection` for their own rider id. That table is
- *       written by the shared handler and read here through
- *       getRiderOutstandingCollections().
- *
- * The dashboard never writes to the ledger. It never moves a rider
- * between statuses; the assignment handler and the deliveries page
- * are the only surfaces that do.
- *
- * ---------------------------------------------------------------------
- * AVAILABLE BALANCE
- * ---------------------------------------------------------------------
- * Under v2.4.0 the rider is never debited. The accept-time debit
- * does not exist. The rider pays nothing at accept time; they
- * collect cash from the customer at pickup and settle it on
- * delivery. Their `financial_account.balance` therefore only ever
- * increases, by the delivery fee, on each successful delivery. It
- * is exactly what the rider has earned and can withdraw. The label
- * is "Available Balance."
- *
- * ---------------------------------------------------------------------
- * ORDER LIABILITY STRIP — SIGN CONVENTION
- * ---------------------------------------------------------------------
- * The strip tells the rider how much customer cash they are
- * currently carrying: "Order liability: −₱447.00."
- *
- * The number is presented with a leading minus sign because it
- * represents cash the rider is holding for someone else — money
- * that is not theirs and that they will hand back. The rider reads
- * the minus as "this much is not mine."
- *
- * Underneath, the value is a positive sum over a positive column.
- * `rider_collection.amount` carries CHECK (amount >= 0) and the
- * query layer returns a positive float. The minus sign is added
- * here, in the page, by the format call. The ledger column stays
- * positive because a negative value in a column that means
- * "amount" would violate the ACID contract the schema enforces.
- *
- * If the schema ever needed to represent a real negative balance,
- * it would do so with a signed column and an explicit constraint
- * that allows the range — the model in force does not, and does not
- * need to. The sign on this page is a view choice.
- *
- * ---------------------------------------------------------------------
- * CURRENT WORK STRIP — LIVE-STATUS AWARENESS
- * ---------------------------------------------------------------------
- * The rider's live work spans two statuses, both of which count as
- * active:
- *
- *   picking_up  — accepted; en route to or at the restaurant.
- *   delivering  — food in hand; en route to the customer.
- *
- * The strip runs three signals in priority order:
- *
- *   1. If not verified → the blocked face.
- *   2. If the rider has any live order → the working face.
- *   3. If neither, check availability → clear or offline face.
- *
- * Plural copy is dynamic so it reads correctly at every count from
- * 1 to the cap of 3.
+ * The dashboard never writes to the ledger and never moves a rider
+ * between statuses.
  *
  * @package FitPal
- * @version 4.7 — The collection strip becomes the Order liability
- *                strip. The amount is prefixed with a minus sign at
- *                the view layer; the underlying value stays a
- *                positive float from the query layer. The label and
- *                the hint text reflect the v2.4.0 model.
+ * @version 5.1 — Drops the "Contact Support" button from the Current
+ *                Work strip's blocked face. The denied case now
+ *                carries only "Re-apply Now". The suspended case
+ *                carries no action buttons at all; the copy alone
+ *                names the state.
  *
- *                (4.6: label reverted to "Available Balance"; strip
- *                added. 4.5: label renamed under the pre-v2.4.0
- *                model. 4.4: docblock records the shared layer.
- *                4.3: Current Work strip reads 'picking_up'.)
+ *                (5.0: verification warning card removed; strip is
+ *                the only surface for non-verified copy. 4.9: blocked
+ *                face branched on verification status. 4.8: card
+ *                gained the Re-apply Now action. 4.7: collection
+ *                strip becomes the Order liability strip.)
  */
 
 declare(strict_types=1);
@@ -132,11 +76,8 @@ $weeklyEarnings   = getRiderWeeklyEarnings($database_connection, $riderId);
 $chartScale       = getRiderChartScale($stats['week_earnings_max'] ?? 0);
 
 $assignedOrders   = getAssignedOrders($database_connection, $riderId);
-// Returns both picking_up and delivering orders.
 $activeDeliveries = getRiderActiveDeliveries($database_connection, $riderId);
 
-// Outstanding COD cash the rider is currently carrying. Returned
-// as a positive total from the query layer.
 $outstandingCollections = getRiderOutstandingCollections($database_connection, $riderId);
 
 // ============================================
@@ -158,8 +99,6 @@ $available  = (int)($profile['is_available'] ?? 0) === 1;
 
 $isVerified = ($status === 'verified');
 
-// Full display name — first + middle + last, collapsed to single
-// spaces, middle omitted when blank.
 $fullName = trim(
     preg_replace('/\s+/', ' ', $firstName . ' ' . $middleName . ' ' . $lastName)
 );
@@ -205,8 +144,6 @@ foreach ($weeklyEarnings as $day) {
 
 $today = date('Y-m-d');
 
-// Outstanding collections. Kept positive here; the minus sign is
-// added in the strip markup below.
 $collectionTotal = (float)($outstandingCollections['total'] ?? 0);
 $collectionCount = (int)($outstandingCollections['count'] ?? 0);
 
@@ -229,20 +166,58 @@ foreach ($activeDeliveries as $order) {
 $pickingUpCount  = count($pickingUpOrders);
 $deliveringCount = count($deliveringOrders);
 
-// The per-delivery payout the shared layer will credit on success.
 $riderPayoutPerDelivery = FITPAL_DELIVERY_BASE_FEE;
 $livePayoutTotal        = $activeCount * $riderPayoutPerDelivery;
 
 $currentWork = null;
 
 if (!$isVerified) {
-    $currentWork = [
-        'kind'   => 'blocked',
-        'icon'   => 'error-warning-line.svg',
-        'label'  => 'Verification required',
-        'title'  => 'Awaiting verification',
-        'text'   => 'Your account is ' . strtolower($statusLabel) . '. You cannot go online or accept orders until it is approved.',
-    ];
+
+    // ------------------------------------------------------------
+    // BLOCKED FACE
+    //
+    // The strip is the ONLY surface for the rider's non-verified
+    // state on this page. Each non-verified status renders its own
+    // title and body. Only the denied case carries an action:
+    // "Re-apply Now". Contact Support is not offered from this page.
+    // ------------------------------------------------------------
+    if ($status === 'denied') {
+        $currentWork = [
+            'kind'    => 'blocked',
+            'icon'    => 'close-circle-line.svg',
+            'label'   => 'Denied',
+            'title'   => 'Denied',
+            'text'    => 'Your application was denied. You can update your information and submit a new application.',
+            'actions' => [
+                [
+                    'href'  => 'reapply.php',
+                    'label' => 'Re-apply Now',
+                    'class' => 'btn btn-primary btn-sm rider-work-cta',
+                    'icon'  => 'arrow-right-long-line.svg',
+                    'icon_alt' => 'arrow-right-s-line.svg',
+                ],
+            ],
+        ];
+    } elseif ($status === 'suspended') {
+        $currentWork = [
+            'kind'    => 'blocked',
+            'icon'    => 'error-warning-line.svg',
+            'label'   => 'Suspended',
+            'title'   => 'Account suspended',
+            'text'    => 'Your account has been suspended. Please reach out through the Contact page.',
+            'actions' => [],
+        ];
+    } else {
+        $currentWork = [
+            'kind'    => 'blocked',
+            'icon'    => 'error-warning-line.svg',
+            'label'   => 'Verification required',
+            'title'   => 'Awaiting verification',
+            'text'    => 'Your account is ' . strtolower($statusLabel) . '. You cannot go online or accept orders until it is approved.',
+            'actions' => [],
+        ];
+    }
+
 } elseif ($activeCount > 0) {
     if ($pickingUpCount > 0 && $deliveringCount === 0) {
         if ($pickingUpCount === 1) {
@@ -276,13 +251,20 @@ if (!$isVerified) {
     }
 
     $currentWork = [
-        'kind'   => 'active',
-        'icon'   => 'riding-fill.svg',
-        'label'  => 'In progress',
-        'title'  => $title,
-        'text'   => $text,
-        'href'   => 'deliveries.php?tab=active',
-        'cta'    => 'Open Deliveries',
+        'kind'    => 'active',
+        'icon'    => 'riding-fill.svg',
+        'label'   => 'In progress',
+        'title'   => $title,
+        'text'    => $text,
+        'actions' => [
+            [
+                'href'  => 'deliveries.php?tab=active',
+                'label' => 'Open Deliveries',
+                'class' => 'btn btn-primary btn-sm rider-work-cta',
+                'icon'  => 'arrow-right-long-line.svg',
+                'icon_alt' => 'arrow-right-s-line.svg',
+            ],
+        ],
     ];
 } elseif ($assignedCount > 0) {
     if ($assignedCount === 1) {
@@ -295,29 +277,38 @@ if (!$isVerified) {
     }
 
     $currentWork = [
-        'kind'   => 'assigned',
-        'icon'   => 'package.svg',
-        'label'  => 'Action needed',
-        'title'  => $title,
-        'text'   => $text,
-        'href'   => 'deliveries.php?tab=assigned',
-        'cta'    => 'Review Assignment' . ($assignedCount === 1 ? '' : 's'),
+        'kind'    => 'assigned',
+        'icon'    => 'package.svg',
+        'label'   => 'Action needed',
+        'title'   => $title,
+        'text'    => $text,
+        'actions' => [
+            [
+                'href'  => 'deliveries.php?tab=assigned',
+                'label' => 'Review Assignment' . ($assignedCount === 1 ? '' : 's'),
+                'class' => 'btn btn-primary btn-sm rider-work-cta',
+                'icon'  => 'arrow-right-long-line.svg',
+                'icon_alt' => 'arrow-right-s-line.svg',
+            ],
+        ],
     ];
 } elseif ($available) {
     $currentWork = [
-        'kind'   => 'clear',
-        'icon'   => 'verified-fill.svg',
-        'label'  => 'Standing by',
-        'title'  => "You're clear",
-        'text'   => 'No active deliveries and no pending assignments. New orders will appear in the assignments panel.',
+        'kind'    => 'clear',
+        'icon'    => 'verified-fill.svg',
+        'label'   => 'Standing by',
+        'title'   => "You're clear",
+        'text'    => 'No active deliveries and no pending assignments. New orders will appear in the assignments panel.',
+        'actions' => [],
     ];
 } else {
     $currentWork = [
-        'kind'   => 'offline',
-        'icon'   => 'information-fill.svg',
-        'label'  => 'Offline',
-        'title'  => "You're offline",
-        'text'   => 'Toggle availability from the assignments panel at the bottom of the page to start receiving orders.',
+        'kind'    => 'offline',
+        'icon'    => 'information-fill.svg',
+        'label'   => 'Offline',
+        'title'   => "You're offline",
+        'text'    => 'Toggle availability from the assignments panel at the bottom of the page to start receiving orders.',
+        'actions' => [],
     ];
 }
 
@@ -325,7 +316,6 @@ if (!$isVerified) {
 $vehicleLabel = $vehicle !== '' ? ucfirst($vehicle) : 'Not recorded';
 $plateLabel   = $plate   !== '' ? $plate            : 'No plate recorded';
 
-// Vehicle icon.
 $vehicleIconMap = [
     'motorcycle' => ['riding-line.svg', 'taxi-line.svg'],
     'scooter'    => ['riding-line.svg', 'taxi-line.svg'],
@@ -338,7 +328,6 @@ $vehicleIconPair = $vehicleIconMap[$vehicle] ?? ['car-line.svg', 'taxi-line.svg'
 $vehicleIcon     = $vehicleIconPair[0];
 $vehicleIconAlt  = $vehicleIconPair[1];
 
-// Contact display — fall back to an em-dash when not on file.
 $contactLabel = $contact !== '' ? $contact : '—';
 $emailLabel   = $email   !== '' ? $email   : '—';
 
@@ -392,7 +381,6 @@ $emailLabel   = $email   !== '' ? $email   : '—';
              ============================================ -->
         <section class="rider-stats-grid" aria-label="Performance summary">
 
-            <!-- Available Balance -->
             <a href="earnings.php" class="rider-stat-card">
                 <div class="rider-stat-icon rider-stat-icon-wallet" aria-hidden="true">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/wallet-line.svg" alt=""
@@ -408,7 +396,6 @@ $emailLabel   = $email   !== '' ? $email   : '—';
                 </span>
             </a>
 
-            <!-- Total Deliveries -->
             <a href="deliveries.php?tab=history" class="rider-stat-card">
                 <div class="rider-stat-icon rider-stat-icon-deliveries" aria-hidden="true">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/order.svg" alt=""
@@ -429,7 +416,6 @@ $emailLabel   = $email   !== '' ? $email   : '—';
                 </span>
             </a>
 
-            <!-- Average Rating -->
             <div class="rider-stat-card">
                 <div class="rider-stat-icon rider-stat-icon-rating" aria-hidden="true">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/star-fill.svg" alt=""
@@ -444,7 +430,6 @@ $emailLabel   = $email   !== '' ? $email   : '—';
                 </div>
             </div>
 
-            <!-- Today's Earnings -->
             <div class="rider-stat-card">
                 <div class="rider-stat-icon rider-stat-icon-today" aria-hidden="true">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/coin-line.svg" alt=""
@@ -465,6 +450,10 @@ $emailLabel   = $email   !== '' ? $email   : '—';
 
         <!-- ============================================
              CURRENT WORK STRIP
+
+             This is the ONLY surface on the page that states the
+             rider's verification state. There is no separate
+             warning card below the two-column row any more.
              ============================================ -->
         <section
             class="rider-work-card rider-work-card-<?php echo htmlspecialchars($currentWork['kind'], ENT_QUOTES, 'UTF-8'); ?>"
@@ -487,24 +476,25 @@ $emailLabel   = $email   !== '' ? $email   : '—';
                 </p>
             </div>
 
-            <?php if (!empty($currentWork['href'])): ?>
-            <a href="<?php echo htmlspecialchars($currentWork['href'], ENT_QUOTES, 'UTF-8'); ?>" class="rider-work-cta">
-                <span><?php echo htmlspecialchars($currentWork['cta'], ENT_QUOTES, 'UTF-8'); ?></span>
-                <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-right-long-line.svg" alt=""
-                    class="rider-work-cta-icon" width="16" height="16"
-                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/arrow-right-s-line.svg'">
-            </a>
+            <?php if (!empty($currentWork['actions'])): ?>
+            <div class="rider-work-actions">
+                <?php foreach ($currentWork['actions'] as $action): ?>
+                <a href="<?php echo htmlspecialchars($action['href'], ENT_QUOTES, 'UTF-8'); ?>"
+                    class="<?php echo htmlspecialchars($action['class'], ENT_QUOTES, 'UTF-8'); ?>">
+                    <span><?php echo htmlspecialchars($action['label'], ENT_QUOTES, 'UTF-8'); ?></span>
+                    <?php if (!empty($action['icon'])): ?>
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/<?php echo htmlspecialchars($action['icon'], ENT_QUOTES, 'UTF-8'); ?>"
+                        alt="" class="rider-work-cta-icon" width="16" height="16"
+                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/<?php echo htmlspecialchars($action['icon_alt'], ENT_QUOTES, 'UTF-8'); ?>'">
+                    <?php endif; ?>
+                </a>
+                <?php endforeach; ?>
+            </div>
             <?php endif; ?>
         </section>
 
         <!-- ============================================
              ORDER LIABILITY STRIP
-             Renders only when the rider is carrying COD cash.
-
-             The amount is the positive sum returned by
-             getRiderOutstandingCollections(); the minus sign
-             is a view-layer prefix. The ledger column stays
-             positive, per the ACID contract.
              ============================================ -->
         <?php if ($collectionCount > 0): ?>
         <section class="rider-work-card rider-work-card-assigned" aria-label="Order liability">
@@ -534,7 +524,6 @@ $emailLabel   = $email   !== '' ? $email   : '—';
              ============================================ -->
         <div class="rider-dashboard-row rider-dashboard-row-primary">
 
-            <!-- Weekly Earnings Chart -->
             <section class="rider-card rider-chart-card" aria-labelledby="chart-title">
                 <div class="rider-card-header">
                     <h2 class="heading-5" id="chart-title">Earnings - Last 7 Days</h2>
@@ -617,7 +606,6 @@ $emailLabel   = $email   !== '' ? $email   : '—';
                 </div>
             </section>
 
-            <!-- Info Card: Profile + Vehicle + Status -->
             <aside class="rider-card rider-info-card" aria-labelledby="info-title">
                 <div class="rider-card-header">
                     <h2 class="heading-5" id="info-title">Profile</h2>
@@ -626,7 +614,6 @@ $emailLabel   = $email   !== '' ? $email   : '—';
 
                 <div class="rider-info-body">
 
-                    <!-- Identity -->
                     <dl class="rider-info-identity">
                         <div class="rider-info-row">
                             <dt>Name</dt>
@@ -642,7 +629,6 @@ $emailLabel   = $email   !== '' ? $email   : '—';
                         </div>
                     </dl>
 
-                    <!-- Vehicle -->
                     <div class="rider-info-vehicle">
                         <span class="rider-info-section-label">Vehicle</span>
 
@@ -661,7 +647,6 @@ $emailLabel   = $email   !== '' ? $email   : '—';
                         </div>
                     </div>
 
-                    <!-- Status meta -->
                     <dl class="rider-info-meta">
                         <div class="rider-info-meta-row">
                             <dt>Status</dt>
@@ -692,38 +677,6 @@ $emailLabel   = $email   !== '' ? $email   : '—';
                 </div>
             </aside>
         </div>
-
-        <!-- ============================================
-             VERIFICATION WARNING (if not verified)
-             ============================================ -->
-        <?php if (!$isVerified): ?>
-        <section class="rider-card rider-card-warning">
-            <div class="rider-card-body rider-warning-body">
-                <div class="rider-warning-icon" aria-hidden="true">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/error-warning-line.svg" alt=""
-                        onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/information-fill.svg'">
-                </div>
-                <div class="rider-warning-content">
-                    <p class="rider-warning-title">
-                        <?php echo htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8'); ?>
-                    </p>
-                    <p class="rider-warning-text">
-                        <?php if ($status === 'pending'): ?>
-                        Your account is under review. You'll be notified once verification is complete.
-                        You can't go online until then.
-                        <?php elseif ($status === 'denied'): ?>
-                        Your application was denied. Please contact support for more information.
-                        <?php elseif ($status === 'suspended'): ?>
-                        Your account has been suspended. Please contact support.
-                        <?php endif; ?>
-                    </p>
-                </div>
-                <a href="<?php echo $assetBase; ?>pages/contact.php" class="btn btn-outline btn-sm rider-warning-btn">
-                    Contact Support
-                </a>
-            </div>
-        </section>
-        <?php endif; ?>
 
     </div>
 </div>

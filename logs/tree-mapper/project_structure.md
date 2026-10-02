@@ -1,7 +1,7 @@
 # Web Project Structure
 
 **Project:** fitpal
-**Generated:** 2026-10-02 05:24:49
+**Generated:** 2026-10-02 23:06:10
 **Mode:** all
 
 ```
@@ -123,6 +123,7 @@ fitpal/
 │       ├── cart.php
 │       ├── checkout.php
 │       ├── dashboard.php
+│       ├── image-debug.php
 │       ├── menu.php
 │       ├── order-receipt.php
 │       ├── order-tracking.php
@@ -138,9 +139,11 @@ fitpal/
 │   │   └── rider-resto.md
 │   ├── content-fetcher-configuration/
 │   │   ├── all_path.py
-│   │   ├── directories_customer.py
-│   │   ├── directories_restaurant.py
-│   │   ├── directories_rider.py
+│   │   ├── dir-cutomer.py
+│   │   ├── dir-menu-product-detail.py
+│   │   ├── dir-restaurant.py
+│   │   ├── dir-rider.py
+│   │   ├── dir-shared.py
 │   │   └── technical.py
 │   ├── enhancement/
 │   │   └── logic.md
@@ -154,10 +157,11 @@ fitpal/
 │   ├── logic/
 │   │   └── business-logic.md
 │   ├── output/
-│   │   ├── all_path_fetched_codebase.md
+│   │   ├── dir-shared_fetched_codebase.md
 │   │   ├── directories_customer_fetched_codebase.md
 │   │   ├── directories_restaurant_fetched_codebase.md
-│   │   └── directories_rider_fetched_codebase.md
+│   │   ├── directories_rider_fetched_codebase.md
+│   │   └── technical_fetched_codebase.md
 │   ├── tree-mapper/
 │   │   └── project_structure.md
 │   ├── vscode/
@@ -176,7 +180,7 @@ fitpal/
 │   │   ├── css/
 │   │   │   ├── dashboard.css
 │   │   │   ├── header.css
-│   │   │   ├── orders.css
+│   │   │   ├── kitchen-orders.css
 │   │   │   ├── profile.css
 │   │   │   ├── sign-in.css
 │   │   │   └── sign-up.css
@@ -195,6 +199,7 @@ fitpal/
 │   │   ├── database/
 │   │   │   ├── chat-queries.php
 │   │   │   ├── kitchen-order-queries.php
+│   │   │   ├── product-queries.php
 │   │   │   ├── restaurant-connect.php
 │   │   │   └── restaurant-queries.php
 │   │   └── handlers/
@@ -240,6 +245,7 @@ fitpal/
 │   │           └── sign-up.js
 │   ├── backend/
 │   │   ├── database/
+│   │   │   ├── product-queries.php
 │   │   │   ├── rider-assignment-queries.php
 │   │   │   └── rider-connect.php
 │   │   └── handlers/
@@ -575,13 +581,33 @@ fitpal/
 │   │   ├── header.php
 │   │   ├── public-csrf-token.php
 │   │   ├── session-activity.php
-│   │   ├── session-bootstrap.php
-│   │   └── view-helpers.php
-│   └── pages/
-│       ├── about.php
-│       ├── contact.php
-│       ├── privacy-policy.php
-│       └── terms-conditions.php
+│   │   └── session-bootstrap.php
+│   ├── pages/
+│   │   ├── about.php
+│   │   ├── contact.php
+│   │   ├── privacy-policy.php
+│   │   └── terms-conditions.php
+│   └── uploads/
+│       ├── customer/
+│       │   └── profiles/
+│       │       └── 1/
+│       │           └── 10_02_2026_0.jpg
+│       ├── restaurant/
+│       │   └── permits/
+│       │       └── 10/
+│       │           ├── 10_02_2026_0.jpg
+│       │           ├── 10_02_2026_1.png
+│       │           ├── 10_02_2026_2.jpg
+│       │           └── 10_02_2026_3.png
+│       └── rider/
+│           ├── documents/
+│           │   └── 4/
+│           │       ├── 10_02_2026_0.jpg
+│           │       └── 10_02_2026_1.jpg
+│           └── profiles/
+│               └── 4/
+│                   ├── 10_02_2026_0.jpg
+│                   └── 10_02_2026_1.jpg
 ├── sql/
 │   ├── seed/
 │   │   ├── test/
@@ -609,16 +635,16 @@ fitpal/
 | File Type | Count |
 |-----------|-------|
 | HTML Files | 0 |
-| PHP Files | 113 |
+| PHP Files | 115 |
 | CSS Files | 49 |
 | JavaScript Files | 48 |
 | JSON Files | 2 |
-| Text/Markdown | 15 |
-| Image Files | 238 |
-| Other Files | 18 |
+| Text/Markdown | 16 |
+| Image Files | 247 |
+| Other Files | 20 |
 
-**Total Directories:** 113
-**Total Files:** 481
+**Total Directories:** 125
+**Total Files:** 495
 
 ---
 

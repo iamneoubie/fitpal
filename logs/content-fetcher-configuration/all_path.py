@@ -143,7 +143,7 @@ filesToCheck = [
     # ===== restaurant/assets/css =====
     "/restaurant/assets/css/dashboard.css",
     "/restaurant/assets/css/header.css",
-    "/restaurant/assets/css/orders.css",
+    "/restaurant/assets/css/kitchen-orders.css",
     "/restaurant/assets/css/profile.css",
     "/restaurant/assets/css/sign-in.css",
     "/restaurant/assets/css/sign-up.css",
@@ -162,6 +162,7 @@ filesToCheck = [
     # ===== restaurant/backend/database =====
     "/restaurant/backend/database/chat-queries.php",
     "/restaurant/backend/database/kitchen-order-queries.php",
+    "/restaurant/backend/database/product-queries.php",
     "/restaurant/backend/database/restaurant-connect.php",
     "/restaurant/backend/database/restaurant-queries.php",
 
@@ -209,6 +210,7 @@ filesToCheck = [
     "/rider/assets/ui/js/sign-up.js",
 
     # ===== rider/backend/database =====
+    "/rider/backend/database/product-queries.php",
     "/rider/backend/database/rider-assignment-queries.php",
     "/rider/backend/database/rider-connect.php",
 
@@ -264,7 +266,6 @@ filesToCheck = [
     "/shared/includes/public-csrf-token.php",
     "/shared/includes/session-activity.php",
     "/shared/includes/session-bootstrap.php",
-    "/shared/includes/view-helpers.php",
 
     # ===== shared/pages =====
     "/shared/pages/about.php",

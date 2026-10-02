@@ -12,82 +12,51 @@
  * ---------------------------------------------------------------------
  * The raw dietary_information.images value stored on each product is
  * resolved into a browser-loadable URL by resolveCartImageUrl()
- * below, which delegates to the helpers in product-queries.php:
- *
- *     getProductImageBasePath()    resolves the folder
- *     getProductPrimaryFilename()  finds the first image file
- *
- * The project-root URL prefix is derived from the current page's
- * asset base, so the URL is correct regardless of deployment depth.
- *
- * When the folder cannot be resolved, or contains no image file,
- * the function returns the shared restaurant icon so the customer
- * always sees a picture rather than a broken image.
+ * below.
  *
  * ---------------------------------------------------------------------
- * WHERE THE MONEY MOVEMENT GOES FROM HERE
+ * CUSTOMIZATION PANEL (v5.1.0)
  * ---------------------------------------------------------------------
- * This page's one write action is "Add to Order", which submits the
- * selected cart rows to cart-handler.php's push_to_queue action.
- * That action copies the selected rows into $_SESSION['order_queue']
- * as session queue lines. The lines carry every field the shared
- * order-transaction layer reads:
+ * Each cart row carries two independent things that belong inside
+ * the customization panel:
  *
- *     product_id
- *     restaurant_branch_id   (required; a line without it is dropped)
- *     quantity
- *     price                  effective unit price
- *     base_price
- *     customization_data     raw JSON of the customer's selections
+ *   - the ingredient modifications (add this, remove that)
+ *   - the customer's special-instructions free text
  *
- * When the customer later submits checkout, place-order-handler.php
- * calls createOrderFromQueue() in the shared order-transaction layer.
- * That function inserts the order, its queue_item rows, its
- * customization_instance rows, and the customer payment transaction
- * in one transaction, so a partial write is impossible.
+ * Before v5.1.0, the panel rendered only the modifications. A
+ * customer who customized a product purely by typing notes — the
+ * common case on the product-detail wizard — saw nothing at all,
+ * because the modifications list was empty and the toggle never
+ * appeared.
  *
- * The cart itself is never the source of truth for money. The
- * customer can edit or clear it freely without affecting any ledger
- * row, because no ledger row exists until the order is placed.
+ * This revision:
+ *
+ *   - reads $breakdown['special_instructions'] alongside
+ *     $breakdown['modifications']
+ *   - shows the "Customized" toggle whenever EITHER is present
+ *   - renders a "Special Instructions" block inside the panel when
+ *     the notes are present
+ *
+ * The notes text is HTML-escaped and rendered with nl2br() so a
+ * multi-line note keeps its line breaks.
  *
  * ---------------------------------------------------------------------
  * HANDLER TARGETS
  * ---------------------------------------------------------------------
- * Every fetch and form action this page emits targets a file that
- * exists on disk in the current tree:
- *
- *     cart-handler.php             ← add / update_quantity / remove_item
- *                                    / push_to_queue (form action on
- *                                    #cartPushToQueueForm; the fetch
- *                                    URL is set by window.FITPAL_CART
- *                                    for the item-level AJAX)
- *
- * ---------------------------------------------------------------------
- * SCOPE RULES APPLIED
- * ---------------------------------------------------------------------
- *  - No SQL in this file. Cart reads come from
- *    customer/backend/database/cart-queries.php.
- *  - No inline CSS. cart.css is loaded via <link> at the top.
- *  - No inline style attributes.
- *  - Button colors follow §7: Remove is a destructive action and
- *    uses the danger variant; Add to Order is a confirm action and
- *    uses the primary variant; Continue Shopping is neutral and
- *    uses the black-and-white variant.
- *  - No inline SVG. Icons come from shared/assets/images/icons/.
- *  - No window.alert / confirm / prompt. The remove action goes
- *    through a page-rendered modal, per §6 and §9.
- * ---------------------------------------------------------------------
+ *   cart-handler.php   ← push_to_queue (form action on
+ *                        #cartPushToQueueForm) and the item-level
+ *                        AJAX the JS reads from window.FITPAL_CART
  *
  * @package FitPal
- * @version 5.0 — Cart item images now resolve through
- *                resolveCartImageUrl(), which delegates to the
- *                helpers in product-queries.php. The raw column
- *                value is no longer used directly as an image src.
+ * @version 5.1.0 — Renders the customer's special instructions inside
+ *                  the customization panel. The "Customized" toggle
+ *                  now appears whenever a row has either ingredient
+ *                  modifications or special instructions.
  *
- *                (4.0: handler targets verified. 3.6: docblock
- *                records the money-flow path. 3.5: CSRF token
- *                inherited from header.php; local generation
- *                removed.)
+ *                  (5.0.0: cart item images resolve through
+ *                  resolveCartImageUrl(). 4.0.0: handler targets
+ *                  verified. 3.5.0: CSRF token inherited from
+ *                  header.php.)
  */
 
 declare(strict_types=1);
@@ -147,15 +116,6 @@ $hasAvailable = !empty($availableItems);
 /**
  * Build the browser-loadable URL for a cart item's product image.
  *
- * The raw dietary_information.images value is resolved through the
- * helpers in product-queries.php. The project-root URL prefix is
- * derived from the page's own $assetBase so the returned URL is
- * correct at any deployment depth.
- *
- * Returns the shared restaurant icon when the folder cannot be
- * resolved, when the folder contains no image file, or when the
- * raw path is empty.
- *
  * @param string $rawPath  Raw dietary_information.images value.
  * @param string $assetBase The page's asset base, ending in 'shared/'.
  * @return string A browser-loadable URL.
@@ -175,9 +135,6 @@ function resolveCartImageUrl(string $rawPath, string $assetBase): string
         return $fallback;
     }
 
-    // Trim the trailing 'shared/' off the asset base to get the
-    // project-root URL prefix, then append the resolved folder and
-    // the filename.
     $projectRootUrl = preg_replace('#shared/$#', '', $assetBase);
 
     if (!is_string($projectRootUrl) || $projectRootUrl === '') {
@@ -198,9 +155,6 @@ function buildCartPageUrl(int $page): string
 }
 
 require_once __DIR__ . '/../includes/header.php';
-
-// $csrfToken is provided by header.php, stored under the customer
-// role's own session key 'customer_csrf_token'.
 ?>
 
 <link rel="stylesheet" href="../assets/css/cart.css">
@@ -275,15 +229,17 @@ require_once __DIR__ . '/../includes/header.php';
                         $stock        = (int)$item['stock'];
                         $itemSubtotal = $price * $quantity;
 
-                        // Resolve the full image URL from the raw
-                        // dietary_information.images value.
                         $imageUrl = resolveCartImageUrl(
                             (string)($item['product_image'] ?? ''),
                             $assetBase
                         );
 
                         $breakdown  = getCartCustomizationBreakdown($item);
-                        $hasCustoms = !empty($breakdown['modifications']);
+
+                        $hasModifications   = !empty($breakdown['modifications']);
+                        $hasSpecialNotes    = $breakdown['special_instructions'] !== '';
+                        $hasCustoms         = $hasModifications || $hasSpecialNotes;
+
                         $customsId  = 'cart-customs-' . $cartId;
                     ?>
                     <div class="cart-item" data-cart-id="<?php echo $cartId; ?>"
@@ -329,6 +285,8 @@ require_once __DIR__ . '/../includes/header.php';
 
                             <div class="cart-customs-row-wrap" id="<?php echo $customsId; ?>" hidden>
                                 <div class="cart-customs-panel">
+
+                                    <?php if ($hasModifications): ?>
                                     <p class="cart-customs-heading">Customizations</p>
 
                                     <ul class="cart-customs-list">
@@ -352,6 +310,16 @@ require_once __DIR__ . '/../includes/header.php';
                                         </li>
                                         <?php endforeach; ?>
                                     </ul>
+                                    <?php endif; ?>
+
+                                    <?php if ($hasSpecialNotes): ?>
+                                    <div class="cart-customs-notes">
+                                        <p class="cart-customs-notes-label">Special Instructions</p>
+                                        <p class="cart-customs-notes-text">
+                                            <?php echo nl2br(htmlspecialchars($breakdown['special_instructions'], ENT_QUOTES, 'UTF-8')); ?>
+                                        </p>
+                                    </div>
+                                    <?php endif; ?>
 
                                     <div class="cart-customs-summary">
                                         <div class="cart-customs-summary-row">
@@ -431,6 +399,12 @@ require_once __DIR__ . '/../includes/header.php';
                             (string)($item['product_image'] ?? ''),
                             $assetBase
                         );
+
+                        $breakdown = getCartCustomizationBreakdown($item);
+                        $unavailHasModifications = !empty($breakdown['modifications']);
+                        $unavailHasNotes         = $breakdown['special_instructions'] !== '';
+                        $unavailHasCustoms       = $unavailHasModifications || $unavailHasNotes;
+                        $unavailCustomsId        = 'cart-customs-unavail-' . $cartId;
                     ?>
                     <div class="cart-item cart-item-unavailable" data-cart-id="<?php echo $cartId; ?>">
                         <div class="cart-item-select">
@@ -458,6 +432,48 @@ require_once __DIR__ . '/../includes/header.php';
                             <span class="cart-item-badge-unavailable">
                                 <?php echo htmlspecialchars($reason, ENT_QUOTES, 'UTF-8'); ?>
                             </span>
+
+                            <?php if ($unavailHasCustoms): ?>
+                            <button type="button" class="cart-customs-toggle" aria-expanded="false"
+                                aria-controls="<?php echo $unavailCustomsId; ?>">
+                                <span>Customized</span>
+                                <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-drop-down-line.svg" alt=""
+                                    class="cart-customs-toggle-icon" width="14" height="14">
+                            </button>
+
+                            <div class="cart-customs-row-wrap" id="<?php echo $unavailCustomsId; ?>" hidden>
+                                <div class="cart-customs-panel">
+                                    <?php if ($unavailHasModifications): ?>
+                                    <p class="cart-customs-heading">Customizations</p>
+                                    <ul class="cart-customs-list">
+                                        <?php foreach ($breakdown['modifications'] as $mod): ?>
+                                        <li
+                                            class="cart-customs-row cart-customs-<?php echo htmlspecialchars($mod['kind'], ENT_QUOTES, 'UTF-8'); ?>">
+                                            <span class="cart-customs-symbol">
+                                                <?php echo $mod['kind'] === 'remove' ? '−' : '+'; ?>
+                                            </span>
+                                            <span class="cart-customs-name">
+                                                <?php echo htmlspecialchars($mod['name'], ENT_QUOTES, 'UTF-8'); ?>
+                                                <?php if ($mod['kind'] === 'remove'): ?>
+                                                <span class="cart-customs-removed">(removed)</span>
+                                                <?php endif; ?>
+                                            </span>
+                                        </li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                    <?php endif; ?>
+
+                                    <?php if ($unavailHasNotes): ?>
+                                    <div class="cart-customs-notes">
+                                        <p class="cart-customs-notes-label">Special Instructions</p>
+                                        <p class="cart-customs-notes-text">
+                                            <?php echo nl2br(htmlspecialchars($breakdown['special_instructions'], ENT_QUOTES, 'UTF-8')); ?>
+                                        </p>
+                                    </div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <?php endif; ?>
                         </div>
 
                         <div class="cart-item-controls">

@@ -9,40 +9,43 @@
  * ---------------------------------------------------------------------
  * ACTIONS
  * ---------------------------------------------------------------------
- *   cancel_order        → customer cancels a pending order. Delegates
- *                         entirely to the shared order-transaction
- *                         handler, which owns the ledger rules for
- *                         all three payment methods.
+ *   cancel_order            → customer cancels a pending order.
+ *                             Delegates entirely to the shared
+ *                             order-transaction handler.
  *
- *   get_order_details   → return an order as JSON. Customer-scoped
- *                         read. Ownership is verified through the
- *                         shared layer's getOrderOwnership() before
- *                         the order is returned.
+ *   get_order_details       → return an order as JSON. Customer-scoped
+ *                             read.
  *
- *   get_tracking_status → read-only order_status + revision for the
- *                         tracking page's real-time poll. Owned by
- *                         tracking-queries.php.
+ *   get_tracking_status     → legacy: read-only order_status + revision
+ *                             for the tracking page's poll. Retained
+ *                             for backward compatibility. New callers
+ *                             use get_tracking_payload.
  *
- *   reorder             → rebuild the session order queue from a past
- *                         order, validating each product against the
- *                         current database state. The queue is a
- *                         session concern; only the reads go through
- *                         customer-order-queries.php.
+ *   get_order_card_state    → per-order status + derived flags for
+ *                             orders.php's list. Read-only.
+ *
+ *   get_tracking_payload    → full tracking state for
+ *                             order-tracking.php's sections. Read-only.
+ *
+ *   reorder                 → rebuild the session order queue from a
+ *                             past order.
  *
  * ---------------------------------------------------------------------
  * WHERE THE MONEY RULES LIVE
  * ---------------------------------------------------------------------
- * This file contains no money logic. It does not read the order's
- * payment method, does not choose between 'cancelled' and
- * 'refunded', and does not write any ledger row. All three of those
- * decisions belong to
+ * This file contains no money logic. Cancel and refund decisions
+ * live in shared/backend/handlers/order-transaction-handler.php.
  *
- *     shared/backend/handlers/order-transaction-handler.php
+ * ---------------------------------------------------------------------
+ * POLLING ENDPOINTS ARE READ-ONLY
+ * ---------------------------------------------------------------------
+ * get_order_card_state and get_tracking_payload never write to the
+ * database. They exist so the customer's orders page and tracking
+ * page can patch their own DOM in place when an order's state
+ * changes on the kitchen or rider side, without a full page reload.
  *
- * and are invoked by POSTing to that endpoint with
- * action=customer_cancel_order. Keeping the decision in one place
- * means the customer, restaurant, and rider cancel paths cannot
- * drift from each other.
+ * Both endpoints are scoped to the authenticated customer. Neither
+ * can return another customer's order.
  *
  * ---------------------------------------------------------------------
  * DEPENDENCY PATHS
@@ -55,38 +58,11 @@
  *
  *     fitpal/shared/backend/database/database-connect.php
  *
- * That is three directories up from this file's own directory,
- * then into shared/. The session bootstrap lives at:
+ * The session bootstrap lives at:
  *
  *     fitpal/shared/includes/session-bootstrap.php
  *
- * which is the same three-up depth. Every require in this file is
- * therefore of the form:
- *
- *     __DIR__ . '/../../../shared/...'
- *
- * A require that walks one level up instead of three (for example
- * '/../database/database-connect.php') resolves to
- * customer/backend/database/, which does not contain the
- * connection file and does not exist as a valid include path. The
- * previous revision of this file used that one-up path and
- * fataled on every request with:
- *
- *     Failed opening required
- *         '.../customer/backend/handlers/../database/database-connect.php'
- *
- * The corrected path is used below.
- *
- * ---------------------------------------------------------------------
- * PER-ROLE SESSION MODEL
- * ---------------------------------------------------------------------
- * The handler bootstraps the customer session before doing anything
- * else. Because the request that reaches this handler carries only
- * the customer cookie, the customer session is the only session
- * this code can see. The auth guard reads $_SESSION['customer_id']
- * and the CSRF check reads $_SESSION['customer_csrf_token'], both
- * inside the customer session and guaranteed to be the customer's
- * own.
+ * Both are three directories up from this file's own directory.
  *
  * ---------------------------------------------------------------------
  * RESPONSE SHAPE
@@ -96,82 +72,28 @@
  * and CSRF mismatches return 403.
  *
  * @package FitPal
- * @version 7.2 — The database-connection require path is corrected
- *                to walk three directories up into shared/.
+ * @version 7.4.0 — Adds two read-only polling endpoints:
+ *                  - get_order_card_state  for orders.php
+ *                  - get_tracking_payload  for order-tracking.php
  *
- *                Before this revision the require read
+ *                  Both return a revision hash the client compares
+ *                  against its last-seen value, so only changed
+ *                  orders trigger a DOM patch.
  *
- *                    __DIR__ . '/../database/database-connect.php'
- *
- *                which resolved to
- *
- *                    customer/backend/database/database-connect.php
- *
- *                a file that does not exist. Every request fataled
- *                on the require before any handler body ran.
- *
- *                The corrected require walks three directories up —
- *                handlers → backend → customer → fitpal — and then
- *                into shared/backend/database/. It matches the
- *                depth and the shared/ location that the session-
- *                bootstrap require two lines below already uses.
- *
- *                Every handler body, the auth guard, the CSRF
- *                branch, the action switch, and the response shape
- *                are byte-identical to v7.1.
- *
- *                (7.1: the file requires the connection itself
- *                rather than relying on the caller. 7.0: renamed
- *                from order-handler.php; cancel delegated to the
- *                shared layer. 6.0: per-role session migration.
- *                5.3: added get_tracking_status. 5.2: cancel
- *                restricted to 'pending' only. 5.1: CSRF validated
- *                against customer_csrf_token. 5.0: raw SQL moved to
- *                order-queries.php.)
+ *                  (7.3.0: reorder carries notes + image.
+ *                  7.2.0: connection require corrected to walk three
+ *                  directories up. 7.1.0: require added. 7.0.0:
+ *                  renamed from order-handler.php.)
  */
 
 declare(strict_types=1);
 
-/* --------------------------------------------------------------
- * DATABASE CONNECTION
- *
- * Required before anything else. The path walks three directories
- * up from this file's own directory into shared/, then into
- * backend/database/.
- *
- *     customer/backend/handlers/   ← this file's __DIR__
- *     customer/backend/            ← .. (1)
- *     customer/                    ← .. (2)
- *     fitpal/                      ← .. (3)
- *     fitpal/shared/backend/database/database-connect.php
- *
- * The require_once guard inside database-connect.php makes a
- * second require from the shared order-transaction handler cheap
- * and safe.
- * -------------------------------------------------------------- */
-
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
-
-/* --------------------------------------------------------------
- * SESSION BOOTSTRAP
- *
- * Must run before any include that might touch the session. This
- * handler belongs to the customer context. The path uses the same
- * three-up depth as the connection require above.
- * -------------------------------------------------------------- */
 
 require_once __DIR__ . '/../../../shared/includes/session-bootstrap.php';
 fitpal_session_bootstrap('customer');
 
-/* --------------------------------------------------------------
- * RESPONSE HEADERS
- * -------------------------------------------------------------- */
-
 header('Content-Type: application/json; charset=utf-8');
-
-/* --------------------------------------------------------------
- * AUTHENTICATION
- * -------------------------------------------------------------- */
 
 if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     http_response_code(401);
@@ -181,36 +103,8 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
 
 $customerId = (int)$_SESSION['customer_id'];
 
-/* --------------------------------------------------------------
- * QUERY LAYER
- *
- * customer-order-queries.php lives one directory up from this
- * file's parent, at customer/backend/database/. The path is
- * therefore __DIR__ . '/../database/...', which resolves to
- *
- *     customer/backend/database/customer-order-queries.php
- *
- * and that file exists.
- *
- * That file in turn pulls in the shared order-transaction layer,
- * so the customer-scoped reads and the shared cross-role
- * functions are both available after these two requires.
- * tracking-queries.php is separate because its timezone-aware
- * helpers are tracking-specific.
- * -------------------------------------------------------------- */
-
 require_once __DIR__ . '/../database/customer-order-queries.php';
 require_once __DIR__ . '/../database/tracking-queries.php';
-
-/* --------------------------------------------------------------
- * CSRF
- *
- * Validated against the customer context's own session key,
- * 'customer_csrf_token', inside the customer session. On mismatch
- * the customer's own token is rotated so the next page render
- * generates a fresh one; the shared 'csrf_token' key is never
- * touched.
- * -------------------------------------------------------------- */
 
 $givenToken = (string)($_POST['csrf_token'] ?? '');
 $sessToken  = (string)($_SESSION['customer_csrf_token'] ?? '');
@@ -229,10 +123,6 @@ if (
 
 $action = (string)($_POST['action'] ?? '');
 
-/* --------------------------------------------------------------
- * DISPATCH
- * -------------------------------------------------------------- */
-
 try {
     switch ($action) {
 
@@ -242,6 +132,14 @@ try {
 
         case 'get_tracking_status':
             handleGetTrackingStatus($database_connection, $customerId);
+            break;
+
+        case 'get_order_card_state':
+            handleGetOrderCardState($database_connection, $customerId);
+            break;
+
+        case 'get_tracking_payload':
+            handleGetTrackingPayload($database_connection, $customerId);
             break;
 
         case 'reorder':
@@ -280,10 +178,6 @@ try {
 
 /**
  * Return order details as JSON, scoped to the customer.
- *
- * Ownership is verified through the shared layer's
- * getOrderOwnership() before any order row is fetched, so a caller
- * cannot read another customer's order by supplying its id.
  */
 function handleGetOrderDetails(PDO $db, int $customerId): void
 {
@@ -313,21 +207,7 @@ function handleGetOrderDetails(PDO $db, int $customerId): void
 }
 
 /**
- * Read-only poll endpoint for the tracking page.
- *
- * Returns the current order_status and a revision hash for a single
- * order, scoped to the owner. The client compares the returned
- * revision to what it already holds and reloads the page only when
- * the revision differs.
- *
- * The revision is derived from order_status, delivered_at, and
- * delivery_rider_id. Any of those changing — the kitchen moving
- * the order forward, a rider being assigned or reassigned, the
- * rider accepting, the rider picking up, the order being delivered,
- * or the order being cancelled/refunded — produces a new hash.
- *
- * `updated_at` is deliberately excluded. It is touched by transient
- * bookkeeping writes that do not change what the customer sees.
+ * Legacy read-only poll endpoint for the tracking page.
  */
 function handleGetTrackingStatus(PDO $db, int $customerId): void
 {
@@ -358,23 +238,247 @@ function handleGetTrackingStatus(PDO $db, int $customerId): void
 }
 
 /**
+ * Per-order card state for orders.php.
+ *
+ * Returns one entry per order the customer owns, in the same order
+ * the page rendered them (newest first). Each entry carries the
+ * values the page's cards depend on.
+ *
+ * The `revision` field is a hash that changes only when the card's
+ * rendered state would change. The client compares each card's
+ * current revision to the returned one and only patches the cards
+ * whose revision changed.
+ *
+ * POST: csrf_token, action=get_order_card_state
+ */
+function handleGetOrderCardState(PDO $db, int $customerId): void
+{
+    $stmt = $db->prepare(
+        "SELECT
+            o.order_id,
+            o.order_status,
+            o.delivered_at
+         FROM orders o
+         WHERE o.customer_id = :customer_id
+         ORDER BY o.order_date DESC"
+    );
+    $stmt->execute([':customer_id' => $customerId]);
+
+    $cards = [];
+
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $orderId     = (int)$row['order_id'];
+        $status      = (string)$row['order_status'];
+        $deliveredAt = $row['delivered_at'] !== null
+            ? (string)$row['delivered_at']
+            : null;
+
+        $terminal  = in_array($status, ['delivered', 'cancelled', 'refunded', 'failed'], true);
+        $active    = in_array($status, ['pending', 'preparing', 'rider_pending', 'picking_up', 'delivering'], true);
+        $graceOpen = customerOrderHasOpenChatWindow($status, $deliveredAt);
+
+        $badgeClass = match ($status) {
+            'pending'       => 'badge-warning',
+            'preparing'     => 'badge-info',
+            'picking_up'    => 'badge-info',
+            'rider_pending' => 'badge-info',
+            'delivering'    => 'badge-primary',
+            'delivered'     => 'badge-success',
+            'cancelled'     => 'badge-danger',
+            'refunded'      => 'badge-secondary',
+            'failed'        => 'badge-danger',
+            default         => 'badge-secondary',
+        };
+
+        $badgeLabel = match ($status) {
+            'pending'       => 'Pending',
+            'preparing'     => 'Preparing',
+            'rider_pending' => 'Rider Pending',
+            'picking_up'    => 'Picking Up',
+            'delivering'    => 'For Delivery',
+            'delivered'     => 'Delivered',
+            'cancelled'     => 'Cancelled',
+            'refunded'      => 'Refunded',
+            'failed'        => 'Failed',
+            default         => ucfirst($status),
+        };
+
+        if ($status === 'delivered' && $graceOpen) {
+            $trackingKind  = 'message';
+            $trackingLabel = 'Message';
+        } elseif ($terminal) {
+            $trackingKind  = 'history';
+            $trackingLabel = 'Track History';
+        } else {
+            $trackingKind  = 'track';
+            $trackingLabel = 'Track Order';
+        }
+
+        $canCancel  = ($status === 'pending');
+        $canReview  = ($status === 'delivered');
+        $canReorder = $terminal;
+
+        $revision = sha1(implode('|', [
+            $status,
+            $deliveredAt ?? '',
+            $graceOpen ? '1' : '0',
+        ]));
+
+        $cards[] = [
+            'order_id'       => $orderId,
+            'order_status'   => $status,
+            'badge_class'    => $badgeClass,
+            'badge_label'    => $badgeLabel,
+            'is_terminal'    => $terminal,
+            'is_active'      => $active,
+            'grace_open'     => $graceOpen,
+            'can_cancel'     => $canCancel,
+            'can_review'     => $canReview,
+            'can_reorder'    => $canReorder,
+            'tracking_kind'  => $trackingKind,
+            'tracking_label' => $trackingLabel,
+            'revision'       => $revision,
+        ];
+    }
+
+    echo json_encode([
+        'status' => 'success',
+        'cards'  => $cards,
+    ]);
+}
+
+/**
+ * Full tracking payload for order-tracking.php.
+ *
+ * POST: csrf_token, action=get_tracking_payload, order_id
+ */
+function handleGetTrackingPayload(PDO $db, int $customerId): void
+{
+    $orderId = (int)($_POST['order_id'] ?? 0);
+
+    if ($orderId <= 0) {
+        echo json_encode(['status' => 'error', 'message' => 'Invalid order ID']);
+        return;
+    }
+
+    $order = getTrackableOrder($db, $orderId, $customerId);
+    if (!$order) {
+        echo json_encode(['status' => 'error', 'message' => 'Order not found']);
+        return;
+    }
+
+    $status      = (string)$order['order_status'];
+    $deliveredAt = $order['delivered_at'] !== null
+        ? (string)$order['delivered_at']
+        : null;
+
+    $statusMeta    = getTrackingStatusMeta($status);
+    $timelineIndex = getTrackingStepIndex($status);
+    $isTerminal    = in_array($status, ['cancelled', 'refunded'], true);
+
+    // ---- Restaurant ----
+    $restaurants   = getOrderRestaurants($db, $orderId);
+    $restaurantRow = $restaurants[0] ?? null;
+    $restaurantOut = null;
+    if ($restaurantRow) {
+        $restaurantOut = [
+            'restaurant_name' => getRestaurantDisplayName($restaurantRow),
+            'branch_name'     => (string)($restaurantRow['branch_name'] ?? ''),
+            'barangay'        => (string)($restaurantRow['barangay']    ?? ''),
+            'city'            => (string)($restaurantRow['city']        ?? ''),
+        ];
+    }
+
+    // ---- Rider ----
+    $riderRow = getOrderRiderDetails($db, $orderId);
+    $riderOut = null;
+    $hasRider = ($riderRow !== false);
+    if ($hasRider) {
+        $riderOut = [
+            'name'            => getRiderDisplayName($riderRow),
+            'vehicle_type'    => (string)($riderRow['vehicle_type']  ?? ''),
+            'vehicle_plate'   => (string)($riderRow['vehicle_plate'] ?? ''),
+            'average_rating'  => (float)($riderRow['average_rating'] ?? 0),
+            'profile_picture' => (string)($riderRow['profile_picture'] ?? ''),
+        ];
+    }
+
+    // ---- Chat gating ----
+    $deliveredGraceOpen = customerOrderDeliveredWithinGrace($order);
+
+    $showKitchenTab = !$isTerminal
+        && ($status !== 'delivered' || $deliveredGraceOpen);
+
+    $showRiderCard = $hasRider && !$isTerminal;
+
+    $riderCanBeMessaged = $hasRider
+        && !$isTerminal
+        && riderHasAcceptedOrder($db, $orderId);
+
+    $showRiderTab = $showRiderCard && $riderCanBeMessaged;
+
+    $chatIsReachable = $showKitchenTab || $showRiderTab;
+
+    $closedReason = '';
+    if (!$chatIsReachable) {
+        if ($status === 'delivered') {
+            $closedReason = 'The one-hour messaging window for this delivered order has ended.';
+        } elseif (in_array($status, ['cancelled', 'refunded'], true)) {
+            $closedReason = 'This order was ' . $status . '. Messaging is no longer available.';
+        } else {
+            $closedReason = 'Messaging is not available for this order.';
+        }
+    }
+
+    $defaultTab = $showKitchenTab
+        ? 'restaurant_account'
+        : ($showRiderTab ? 'delivery_rider' : 'restaurant_account');
+
+    $revision = sha1(implode('|', [
+        $status,
+        $deliveredAt ?? '',
+        $riderOut ? $riderOut['name'] : '',
+        $showKitchenTab ? '1' : '0',
+        $showRiderTab   ? '1' : '0',
+    ]));
+
+    echo json_encode([
+        'status'         => 'success',
+        'order_id'       => $orderId,
+        'order_status'   => $status,
+        'delivered_at'   => $deliveredAt,
+        'status_meta'    => $statusMeta,
+        'timeline_index' => $timelineIndex,
+        'is_terminal'    => $isTerminal,
+        'restaurant'     => $restaurantOut,
+        'rider'          => $riderOut,
+        'has_rider'      => $hasRider,
+        'chat'           => [
+            'can_message_kitchen' => $showKitchenTab,
+            'can_message_rider'   => $riderCanBeMessaged,
+            'show_rider_tab'      => $showRiderTab,
+            'default_tab'         => $defaultTab,
+            'closed_reason'       => $closedReason,
+            'is_reachable'        => $chatIsReachable,
+        ],
+        'revision'       => $revision,
+    ]);
+}
+
+/**
  * Rebuild the session order queue from a past order.
  *
  * For each line in the original order:
  *   1. Check the product still exists, is active, and is in stock.
- *      Branches and restaurants must be active too.
  *   2. Re-apply the original customizations against the CURRENT
- *      product_composition rules. Quantities are clamped to
- *      max_quantity; ingredients no longer in the composition are
- *      dropped.
+ *      product_composition rules.
  *   3. Compute a fresh unit price from base_price + modifiers.
- *      The historical price_at_time is only used to reconstruct
- *      what the customer asked for — never trusted as money.
- *   4. Merge with an existing queue line that has the same
+ *   4. Reconstruct the special-instructions notes entry.
+ *   5. Merge with an existing queue line that has the same
  *      (product_id + customization) signature, or append.
  *
- * Failures are collected per-line into `skipped` so the UI can show
- * exactly what could not be re-added and why.
+ * The line buildReorderLine() returns is stored in the queue
+ * exactly as returned.
  */
 function handleReorder(PDO $db, int $customerId): void
 {
@@ -407,9 +511,6 @@ function handleReorder(PDO $db, int $customerId): void
         $name      = (string)$item['product_name'];
         $qty       = (int)$item['quantity'];
 
-        // Rebuild the customization payload in the shape the queue
-        // expects — the same shape queue-handler.php's add action
-        // accepts from product-detail.js.
         $customizations = [];
         foreach (($item['customizations'] ?? []) as $cust) {
             $customizations[] = [
@@ -425,21 +526,21 @@ function handleReorder(PDO $db, int $customerId): void
         $customJson = !empty($customizations) ? json_encode($customizations) : null;
 
         $enriched = buildReorderLine($db, [
-            'product_id'         => $productId,
-            'quantity'           => $qty,
-            'customization_data' => $customJson,
+            'product_id'          => $productId,
+            'quantity'            => $qty,
+            'customization_data'  => $customJson,
+            'custom_instructions' => $item['custom_instructions'] ?? null,
         ], $skipped, $name);
 
         if ($enriched === null) {
             continue;
         }
 
-        $lineKey = $productId . '::' . sha1((string)$customJson);
-        $enriched['customizations'] = $customizations;
-        $enriched['line_key']       = $lineKey;
+        $hashInput = $enriched['customization_data'] ?? '';
+        $lineKey   = $productId . '::' . sha1((string)$hashInput);
 
-        // Merge with an existing line that has the same signature,
-        // or append.
+        $enriched['line_key'] = $lineKey;
+
         $merged = false;
         foreach ($queue as &$row) {
             $rowKey = $row['line_key']
@@ -454,6 +555,15 @@ function handleReorder(PDO $db, int $customerId): void
                 $max    = (int)($enriched['stock'] ?? 999);
                 $row['quantity'] = min($newQty, $max);
                 $row['price']    = $enriched['price'];
+
+                $row['image']              = $enriched['image'];
+                $row['customizations']     = $enriched['customizations'];
+                $row['customization_data'] = $enriched['customization_data'];
+                $row['name']               = $enriched['name'];
+                $row['restaurant_name']    = $enriched['restaurant_name'];
+                $row['branch_name']        = $enriched['branch_name'];
+                $row['stock']              = $enriched['stock'];
+
                 $merged = true;
                 break;
             }
@@ -521,22 +631,6 @@ function handleReorder(PDO $db, int $customerId): void
 
 /**
  * Hand a cancel request off to the shared order-transaction handler.
- *
- * This function does not read the order, does not read the payment
- * method, does not decide the final status, and does not write any
- * ledger row. It only forwards the order_id and the customer's CSRF
- * token to the shared handler and relays that handler's JSON body
- * back to the caller unchanged.
- *
- * The shared handler re-validates the customer role from the
- * session cookie and re-checks the CSRF token against
- * customer_csrf_token, so this delegation does not weaken the
- * request's authentication.
- *
- * The shared handler requires its own database connection (see its
- * own docblock). Including it here runs it in this file's scope,
- * where $database_connection was already assigned by this file's
- * own connection require at the top.
  */
 function handleCancelOrderDelegation(): never
 {
@@ -559,16 +653,9 @@ function handleCancelOrderDelegation(): never
         exit;
     }
 
-    // The shared handler reads $_POST and $_SESSION directly. It
-    // runs in the same PHP process and the same customer session,
-    // so $_POST and $_SESSION are still the ones this request
-    // arrived with. Set the action name the shared handler
-    // dispatches on, then include the shared handler. The shared
-    // handler terminates the request itself.
     $_POST['action'] = 'customer_cancel_order';
 
     require $endpoint;
 
-    // The shared handler always exits; this line is unreachable.
     exit;
 }

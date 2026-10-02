@@ -22,62 +22,99 @@
  * handler reads and writes it.
  *
  * ---------------------------------------------------------------------
- * QUEUE SHAPE CONTRACT (shared with the order-transaction layer)
+ * TWO SHAPES OF customization_data (v6.1.0)
  * ---------------------------------------------------------------------
  * queueEnrich() is the canonical producer of a session queue line.
  * Every writer of $_SESSION['order_queue'] — the customer queue
  * handler's `add` and `sync` actions, and the cart handler's
- * `push_to_queue` action — derives the line it writes from what
- * this function returns, or from an exact-shape reproduction of it.
+ * `push_to_queue` action — routes each line through it.
  *
- * The shared order-transaction layer reads those lines back through
- * createOrderFromQueue() in
- * shared/backend/database/order-transaction-queries.php. That
- * function expects, at minimum, the following fields on every line:
+ * The customization payload that arrives in `$item['customization_data']`
+ * comes in TWO different shapes depending on which writer supplied it:
+ *
+ *   1. FLAT ARRAY — a JSON array of entries.
+ *
+ *        [
+ *          {"ingredient_id":5, "selected_option":"selected", "quantity":1, ...},
+ *          {"type":"notes", "notes":"Less salt please."}
+ *        ]
+ *
+ *      Supplied by:
+ *        - queue-handler.php's `add` action, which receives the flat
+ *          array from product-detail.js and re-encodes it verbatim
+ *        - customer-order-handler.php's `reorder` action, whose
+ *          buildReorderLine() re-encodes the parsed array it built
+ *
+ *   2. WRAPPED OBJECT — a JSON object carrying the array under a
+ *      "customizations" key.
+ *
+ *        {"customizations": [
+ *          {"ingredient_id":5, "selected_option":"selected", "quantity":1, ...},
+ *          {"type":"notes", "notes":"Less salt please."}
+ *        ]}
+ *
+ *      Supplied by:
+ *        - cart-handler.php's `push_to_queue` action, which copies
+ *          the raw `cart.customization_data` column value — the
+ *          shape buildCartCustomizationPayload() wrote at add time
+ *
+ * Both shapes carry the same entries. The difference is only the
+ * wrapper.
+ *
+ * Before v6.1.0, queueEnrich() iterated over the decoded value
+ * directly. A flat array iterated over its entries (correct). A
+ * wrapped object iterated over ONE element — the array itself —
+ * and every entry was silently dropped because the loop expected
+ * `$entry['ingredient_id']` and got an array-of-entries instead.
+ *
+ * The symptom was exactly what a customer saw on the cart path: a
+ * customized cart row pushed to the queue arrived without its
+ * customizations, with no "Customized" pill and no dropdown,
+ * while the same product reordered from orders.php arrived
+ * correctly tagged.
+ *
+ * The unwrap below is the fix. It normalizes both shapes to the
+ * flat array of entries before the price loop and the enrichment
+ * loop run, so every writer produces a line the panel renders
+ * identically.
+ *
+ * ---------------------------------------------------------------------
+ * QUEUE LINE SHAPE
+ * ---------------------------------------------------------------------
+ * Every line carries, at minimum:
  *
  *     product_id              int
- *     restaurant_branch_id    int   ← required; a line missing it is
- *                                     silently dropped by the shared
- *                                     layer, which can leave the whole
- *                                     queue empty
- *     quantity                int
- *     price                   float effective unit price
+ *     name                    string
+ *     price                   float   effective unit price
  *     base_price              float
- *     customization_data      string|null raw JSON of the customer's
- *                                     selections
+ *     quantity                int
+ *     image                   string  BROWSER-LOADABLE URL
+ *     stock                   int
+ *     restaurant_name         string
+ *     branch_name             string
+ *     restaurant_branch_id    int
+ *     is_customizable         bool
+ *     customization_data      string|null  raw JSON as supplied
+ *     customizations          array        ENRICHED display array
  *
- * queueEnrich() produces every one of those fields, plus four
- * additional presentational fields (name, image, stock,
- * restaurant_name, branch_name) that the menu page's queue panel
- * renders but that the shared layer ignores.
+ * The `customizations` array is what the queue panel reads. Each
+ * entry has ingredient_id, ingredient_name, selected_option,
+ * quantity, price_modifier. A {type:'notes', notes:'...'} entry may
+ * also be present.
  *
- * The queue line is written into a session whose ownership belongs
- * to the caller. Two callers with the same (product_id, raw
- * customization JSON) signature must merge into one line; two
- * callers with the same product_id but different customizations
- * must not merge. That merge rule is the caller's, not this file's.
- *
- * If createOrderFromQueue() ever requires a field that this function
- * does not produce, that field belongs here — not in the individual
- * writers — so both writers and the shared layer stay consistent by
- * construction.
+ * The `customization_data` field is preserved verbatim so the
+ * shared order-transaction layer's createOrderFromQueue() can read
+ * it. That function reads the notes entry to write
+ * queue_item.custom_instructions and the ingredient entries to
+ * write customization_instance rows.
  *
  * ---------------------------------------------------------------------
  * IMAGE URL RESOLUTION
  * ---------------------------------------------------------------------
- * The `image` field returned by queueEnrich() is a browser-loadable
- * URL, not a raw database path. The raw value stored in
- * dietary_information.images is resolved through the helpers in
- * product-queries.php:
- *
- *     getProductImageBasePath()    resolves the folder
- *     getProductPrimaryFilename()  finds the first image file
- *
- * The project-root URL prefix is derived from $_SERVER['SCRIPT_NAME']
- * so the returned URL is correct regardless of which page called
- * this function. The depth calculation walks up from the script's
- * directory to the project root, then appends 'shared/' plus the
- * resolved folder plus the filename.
+ * The `image` field is a browser-loadable URL, not a raw database
+ * path. The raw value stored in dietary_information.images is
+ * resolved through the helpers in product-queries.php and the
+ * project-root URL prefix derived from $_SERVER['SCRIPT_NAME'].
  *
  * ---------------------------------------------------------------------
  * getProductCompositionRules() COLLISION GUARD
@@ -87,25 +124,15 @@
  * declares the canonical version; the second file's declaration is
  * skipped by the function_exists() guard.
  *
- * The two shapes are compatible for every current caller:
- * cart-handler.php's computeServerUnitPrice() reads
- * ['price_modifier'] and ['max_quantity']; queueEnrich() below
- * reads the same two keys. Both shapes carry those keys. To keep
- * the two shapes identical — so a future caller that reads
- * ['is_default'] or ['default_quantity'] works regardless of which
- * file loaded first — this file's version returns the full row
- * shape, matching what cart-queries.php returns.
- *
  * @package FitPal
- * @version 5.0 — getProductCompositionRules() is wrapped in a
- *                function_exists() guard so it does not fatal when
- *                cart-handler.php requires both this file and
- *                cart-queries.php in the same request.
+ * @version 6.1.0 — queueEnrich() unwraps the {"customizations":[...]}
+ *                  shape before iterating, so a cart-pushed line's
+ *                  customizations are no longer silently dropped.
+ *                  Both shapes now normalize to the same flat array.
  *
- *                (4.0: queueEnrich() resolves the full image URL.
- *                3.0: docblock records the queue shape contract.
- *                2.0: raw SQL from queue-handler.php moved here.
- *                1.0: initial queue query layer.)
+ *                  (6.0.0: queueEnrich() produces the enriched
+ *                  `customizations` array itself. 5.0.0: collision
+ *                  guard. 4.0.0: image URL resolution.)
  */
 
 declare(strict_types=1);
@@ -114,9 +141,6 @@ require_once __DIR__ . '/product-queries.php';
 
 /**
  * Fetch product details needed to enrich a queued item.
- *
- * Includes `base_price` so the queue enrich can compute the effective
- * unit price (base + customization modifiers) without a second query.
  *
  * @param PDO $db
  * @param int $productId
@@ -151,20 +175,12 @@ function getProductForQueue(PDO $db, int $productId): array|false
 }
 
 /**
- * Fetch the composition rules for a product — every ingredient that
- * can be selected or removed, with its price modifier, min/max
- * quantities, and required/default flags.
- *
- * Returns an array keyed by ingredient_id for O(1) lookup.
+ * Fetch the composition rules for a product.
  *
  * COLLISION GUARD: cart-queries.php declares a function with the
  * same name. Whichever file loads first declares the canonical
  * version; this guard makes the second file's declaration a
  * silent no-op.
- *
- * Both files return the same superset shape — every column the
- * query selects — so every caller sees compatible keys regardless
- * of load order.
  *
  * @param PDO $db
  * @param int $productId
@@ -206,17 +222,40 @@ if (!function_exists('getProductCompositionRules')) {
 }
 
 /**
+ * Batch-load ingredient names for a set of ingredient IDs.
+ *
+ * @param PDO $db
+ * @param array<int, int> $ingredientIds
+ * @return array<int, string>
+ */
+function queueLoadIngredientNames(PDO $db, array $ingredientIds): array
+{
+    $ids = array_values(array_unique(array_filter(
+        array_map('intval', $ingredientIds),
+        static fn(int $id): bool => $id > 0
+    )));
+
+    if (empty($ids)) {
+        return [];
+    }
+
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $stmt = $db->prepare(
+        "SELECT ingredient_id, name
+           FROM ingredient
+          WHERE ingredient_id IN ($placeholders)"
+    );
+    $stmt->execute($ids);
+
+    $out = [];
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $out[(int)$row['ingredient_id']] = (string)$row['name'];
+    }
+    return $out;
+}
+
+/**
  * Derive the project-root URL prefix for the current request.
- *
- * The returned string always ends with a forward slash and is the
- * URL path from the current script's directory up to the project
- * root. For a page at /customer/pages/menu.php it returns
- * '../../'. For a handler at
- * /customer/backend/handlers/queue-handler.php it returns
- * '../../../'.
- *
- * Used by queueEnrich() to build a browser-loadable image URL from
- * a project-root-relative folder path.
  *
  * @return string
  */
@@ -243,15 +282,7 @@ function queueProjectRootUrl(): string
  * Build a browser-loadable image URL from a raw
  * dietary_information.images value.
  *
- * Uses the helpers in product-queries.php to resolve the folder
- * that actually exists on disk, then prepends the project-root
- * URL prefix derived from the current request.
- *
- * Returns '' when the folder cannot be resolved or the folder
- * contains no image file. Callers fall back to the restaurant
- * icon in that case.
- *
- * @param string $imageFolder  Raw dietary_information.images value.
+ * @param string $imageFolder
  * @return string
  */
 function queueResolveImageUrl(string $imageFolder): string
@@ -277,41 +308,108 @@ function queueResolveImageUrl(string $imageFolder): string
 }
 
 /**
+ * Normalize a customization payload to a flat array of entries.
+ *
+ * Accepts both shapes that reach this file:
+ *
+ *   - a flat array of entries
+ *       [{ingredient_id:5, ...}, {type:'notes', ...}]
+ *
+ *   - a wrapped object carrying the array under "customizations"
+ *       {"customizations": [{ingredient_id:5, ...}, {type:'notes', ...}]}
+ *
+ * Returns an empty array when the input is null, empty, not
+ * decodable, or not an array. Never throws.
+ *
+ * This is the exact normalization parseCartCustomizations() in
+ * cart-queries.php performs before iterating. Both files must agree,
+ * because both consume the same underlying JSON written by
+ * buildCartCustomizationPayload().
+ *
+ * @param mixed $raw  A JSON string, an array, or null.
+ * @return array<int, array<string, mixed>>
+ */
+function queueNormalizeCustomizationPayload(mixed $raw): array
+{
+    if ($raw === null || $raw === '' || $raw === []) {
+        return [];
+    }
+
+    $decoded = null;
+    if (is_array($raw)) {
+        $decoded = $raw;
+    } elseif (is_string($raw)) {
+        $attempt = json_decode($raw, true);
+        if (is_array($attempt)) {
+            $decoded = $attempt;
+        }
+    }
+
+    if (!is_array($decoded) || empty($decoded)) {
+        return [];
+    }
+
+    // Unwrap the {"customizations":[...]} shape. A flat array does
+    // not have this key, so the check is a safe no-op for it.
+    if (isset($decoded['customizations']) && is_array($decoded['customizations'])) {
+        $decoded = $decoded['customizations'];
+    }
+
+    // Filter out entries that are not arrays. Every subsequent read
+    // assumes an array.
+    $out = [];
+    foreach ($decoded as $entry) {
+        if (is_array($entry)) {
+            $out[] = $entry;
+        }
+    }
+
+    return $out;
+}
+
+/**
  * Enrich a queued item with live product data from the database.
  *
  * Effective price is computed as:
  *     product.base_price
  *   + Σ(composition.price_modifier × requested_quantity)
  * for every composition row where the client indicated the
- * ingredient is present. The client sends
- * {ingredient_id, quantity, selected_option} and we ignore its
- * price_modifier entirely — the server is the single source of
- * truth for money.
+ * ingredient is present. The server is the single source of truth
+ * for money — the client's price_modifier is ignored.
  *
  * Returns null when the product is missing, inactive, or the
  * requested quantity cannot be satisfied by the current stock.
  *
  * ---------------------------------------------------------------------
- * WHAT THIS FUNCTION PRODUCES
+ * INPUT NORMALIZATION
  * ---------------------------------------------------------------------
- * The returned array is a session queue line. It carries every
- * field the shared order-transaction layer's
- * createOrderFromQueue() reads (product_id, restaurant_branch_id,
- * quantity, price, base_price, customization_data), plus four
- * presentational fields (name, image, stock, restaurant_name,
- * branch_name) that the menu page's queue panel renders.
+ * The `customization_data` field on $item may be supplied in either
+ * of the two shapes described in the file header. It is normalized
+ * to a flat array of entries by queueNormalizeCustomizationPayload()
+ * before the price loop and the enrichment loop run.
  *
- * The `image` field is a browser-loadable URL, not a raw database
- * path. See queueResolveImageUrl() for the resolution logic.
- *
- * Every writer of $_SESSION['order_queue'] builds its line from
- * this return value. Any change to the field set here is a change
- * to the shared contract; the callers in
- * customer/backend/handlers/queue-handler.php and
- * customer/backend/handlers/cart-handler.php must be reviewed in
- * the same commit.
+ * Without this normalization, a cart-pushed line — whose
+ * customization_data carries the {"customizations":[...]} wrapper
+ * — would iterate over its own wrapper object as a single entry and
+ * drop every ingredient. That was the observed failure: a
+ * customized cart row arrived in the queue panel with no
+ * "Customized" pill.
  *
  * ---------------------------------------------------------------------
+ * RETURNED SHAPE
+ * ---------------------------------------------------------------------
+ * The returned line carries both:
+ *
+ *   customization_data   the value the caller supplied, unchanged.
+ *                        createOrderFromQueue() reads it to write
+ *                        customization_instance rows and
+ *                        queue_item.custom_instructions.
+ *
+ *   customizations       the enriched display array the queue panel
+ *                        reads. Each entry has ingredient_id,
+ *                        ingredient_name, selected_option,
+ *                        quantity, price_modifier. A notes entry
+ *                        may also be present.
  *
  * @param PDO $db
  * @param array<string, mixed> $item
@@ -334,15 +432,12 @@ function queueEnrich(PDO $db, array $item): ?array
     if ($quantity > $maxStock) $quantity = $maxStock;
     if ($quantity <= 0) return null;
 
-    $customizations = [];
-    if (!empty($item['customization_data'])) {
-        $decoded = is_string($item['customization_data'])
-            ? json_decode($item['customization_data'], true)
-            : $item['customization_data'];
-        if (is_array($decoded)) {
-            $customizations = $decoded;
-        }
-    }
+    // Normalize the customization payload to a flat array of
+    // entries. This is where the wrapped shape produced by the cart
+    // handler is unwrapped. See the docblock above.
+    $customizations = queueNormalizeCustomizationPayload(
+        $item['customization_data'] ?? null
+    );
 
     $rules = getProductCompositionRules($db, $productId);
 
@@ -353,35 +448,84 @@ function queueEnrich(PDO $db, array $item): ?array
 
     $unitPrice = $basePrice;
 
+    // Batch-load ingredient names for every ingredient referenced by
+    // this line's customizations. One query per enrichment call.
+    $ingredientIds = [];
     foreach ($customizations as $cust) {
-        if (!is_array($cust)) continue;
         if (($cust['type'] ?? '') === 'notes') continue;
+        $iid = (int)($cust['ingredient_id'] ?? 0);
+        if ($iid > 0) $ingredientIds[] = $iid;
+    }
+    $ingredientNames = queueLoadIngredientNames($db, $ingredientIds);
+
+    // Build the enriched display array alongside the price
+    // calculation.
+    $enrichedCustomizations = [];
+
+    foreach ($customizations as $cust) {
+        // Notes entries are carried verbatim. They are not part of
+        // the price computation.
+        if (($cust['type'] ?? '') === 'notes') {
+            $text = isset($cust['notes']) ? trim((string)$cust['notes']) : '';
+            if ($text !== '') {
+                $enrichedCustomizations[] = [
+                    'type'  => 'notes',
+                    'notes' => $text,
+                ];
+            }
+            continue;
+        }
 
         $ingredientId = (int)($cust['ingredient_id'] ?? 0);
         if ($ingredientId <= 0) continue;
-        if (!isset($rules[$ingredientId])) continue;
 
         $option = (string)($cust['selected_option'] ?? 'selected');
-        if ($option === 'remove') continue;
+        $qty    = (int)($cust['quantity'] ?? 1);
+        if ($qty < 1) $qty = 1;
 
-        $requestedQty = (int)($cust['quantity'] ?? 0);
-        if ($requestedQty <= 0) continue;
+        $name = $ingredientNames[$ingredientId]
+             ?? ('Ingredient #' . $ingredientId);
 
-        $rule     = $rules[$ingredientId];
-        $modifier = (float)$rule['price_modifier'];
-        $maxQty   = (int)$rule['max_quantity'];
-        if ($maxQty > 0 && $requestedQty > $maxQty) {
-            $requestedQty = $maxQty;
+        $modifier = 0.0;
+        $appliedQty = $qty;
+
+        if (isset($rules[$ingredientId])) {
+            $rule = $rules[$ingredientId];
+
+            if ($option !== 'remove') {
+                $modifier = (float)$rule['price_modifier'];
+
+                $maxQty = (int)$rule['max_quantity'];
+                if ($maxQty > 0 && $appliedQty > $maxQty) {
+                    $appliedQty = $maxQty;
+                }
+
+                $unitPrice += $modifier * $appliedQty;
+            } else {
+                $modifier = 0.0;
+            }
+        } else {
+            // Ingredient no longer in the composition. Keep it in
+            // the display array marked as removed, do not affect the
+            // price.
+            $option     = 'remove';
+            $modifier   = 0.0;
+            $appliedQty = 1;
         }
 
-        $unitPrice += $modifier * $requestedQty;
+        $enrichedCustomizations[] = [
+            'ingredient_id'   => $ingredientId,
+            'ingredient_name' => $name,
+            'selected_option' => $option,
+            'quantity'        => $appliedQty,
+            'price_modifier'  => $modifier,
+        ];
     }
 
     if ($unitPrice < 0) {
         $unitPrice = 0.0;
     }
 
-    // Resolve the full image URL from the raw database folder path.
     $imageFolder = (string)($p['product_image'] ?? '');
     $imageUrl    = queueResolveImageUrl($imageFolder);
 
@@ -398,5 +542,6 @@ function queueEnrich(PDO $db, array $item): ?array
         'restaurant_branch_id' => (int)$p['restaurant_branch_id'],
         'is_customizable'      => (bool)$p['is_customizable'],
         'customization_data'   => $item['customization_data'] ?? null,
+        'customizations'       => $enrichedCustomizations,
     ];
 }

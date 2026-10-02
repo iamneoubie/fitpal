@@ -9,32 +9,38 @@
  *       Delivery, and Recent.
  *     - Each tab renders at most five cards. A pagination bar sits
  *       below the list and carries ?tab=<key>&page=<n>.
- *     - Each card is three bands:
- *         HEADER  — order id, date, status badge, chevron
- *         SUMMARY — Restaurant • Branch • Customer • Rider • Total
- *         DETAILS — pickup block, drop-off block, rider block,
- *                   item list, subtotal. Collapsed by default.
+ *     - Each card is a collapsible article. The header band is
+ *       always visible and includes the order number, first item
+ *       name, and status/payment pills.
+ *     - A summary band sits between the header and details. It
+ *       shows the subtotal and any special instructions, and is
+ *       visible only when the card is collapsed.
+ *     - The details band, visible when expanded, contains the full
+ *       route, the full special instructions block, the rider
+ *       block, a list of items with per-item prices and
+ *       customization modifiers, and a complete order totals
+ *       breakdown (Subtotal, Delivery Fee, Service Fee, VAT,
+ *       Total) modeled on the customer order receipt.
  *     - Step-by-step actions:
- *         New         → Start Preparing, Cancel
- *         Preparing   → Assign Rider, Cancel, Message
- *         Waiting     → Reassign Rider, Message
+ *         New              → Start Preparing (confirm modal), Cancel
+ *         Preparing        → Assign Rider, Cancel, Message
+ *         Waiting          → Reassign Rider, Message
  *         Out for Delivery → Message
- *         Recent      → Message, but only while the delivered
- *                       grace window is open.
+ *         Recent           → Message, but only while the delivered
+ *                            grace window is open.
  *     - The order list is live: kitchen-realtime.js polls
- *       kitchen-order-handler.php on a delta cursor.
+ *       kitchen-order-handler.php on a delta cursor and reapplies
+ *       the user's expanded / collapsed choice after every render.
  *     - The rider modal's roster is live: kitchen-order.js fetches
  *       and polls the roster while the modal stays open.
- *     - The Message button opens the shared chat modal. The modal's
- *       markup is in restaurant/includes/chat-modal.php, its
- *       behaviour is in
- *       restaurant/assets/ui/js/restaurant-chat-modal.js, and its
- *       endpoint is restaurant/backend/handlers/chat-handler.php.
+ *     - The Message button opens the shared chat modal.
  *
  *   Owner view (owner / partner)
  *     - Read-only summary across all branches.
  *
- * Access control:
+ * ---------------------------------------------------------------------
+ * ACCESS CONTROL
+ * ---------------------------------------------------------------------
  *   - Unauthenticated visitors are redirected to sign-in.
  *   - Any account that is not manager / staff / kitchen / owner /
  *     partner is redirected to the dashboard.
@@ -46,12 +52,16 @@
  *
  *     restaurant/backend/database/kitchen-order-queries.php
  *
- * Every function this page calls — getKitchenTabCounts,
- * getBranchKitchenOrdersPaginated, getBranchCompletedOrdersPaginated,
- * getKitchenOrderItems, getAvailableRidersForBranch,
- * shapeAvailableRiderList, shapeKitchenOrderSummaryRow,
- * getOwnerKitchenSummary, getOwnerBranchBreakdown — is declared
- * there.
+ * Every function this page calls is declared there or is pulled in
+ * transitively through that file. The query layer also requires
+ * restaurant/backend/database/product-queries.php so
+ * getKitchenOrderItems() can resolve a product thumbnail URL for
+ * each item.
+ *
+ * The order totals (delivery fee, service fee, VAT) are computed
+ * here and in the handler using calculateOrderFees() from the
+ * shared fee schedule, so the kitchen sees the same breakdown the
+ * customer saw at checkout.
  *
  * ---------------------------------------------------------------------
  * HANDLER ENDPOINTS
@@ -60,19 +70,11 @@
  * attributes:
  *
  *     data-handler-url  → ../backend/handlers/kitchen-order-handler.php
- *                          The endpoint for every kitchen action —
- *                          start_preparing, cancel_order,
- *                          assign_rider, reassign_rider,
- *                          available_riders, poll,
- *                          active_orders_count.
- *
  *     data-chat-url     → ../backend/handlers/chat-handler.php
- *                          The endpoint for the chat modal —
- *                          list, poll, send, read.
+ *     data-asset-base   → the page's own $assetBase
  *
  * kitchen-realtime.js, kitchen-order.js, and
- * restaurant-chat-modal.js all read those attributes rather than
- * carrying a literal, so each URL lives in one place.
+ * restaurant-chat-modal.js all read those attributes.
  *
  * ---------------------------------------------------------------------
  * STATUS FLOW
@@ -83,7 +85,7 @@
  *     pending / preparing → cancelled  (COD)
  *     pending / preparing → refunded   (Wallet / Online)
  *     delivering          → failed     (rider exceeded the grace
- *                                       window; see below)
+ *                                       window)
  *
  * Kitchen-side visibility:
  *
@@ -96,17 +98,13 @@
  * ---------------------------------------------------------------------
  * THE 'failed' STATUS
  * ---------------------------------------------------------------------
- * The 'failed' status is produced by the shared order-transaction
- * layer's sweepFailedDeliveries(), which moves an order from
- * 'delivering' to 'failed' when the rider does not mark it
- * delivered within FITPAL_RIDER_FAILED_DELIVERY_GRACE_SECONDS of
- * the moment it entered 'delivering'.
- *
- * A failed order is a closed order that never produced deliverable
- * food revenue. It is treated the same as a cancelled or refunded
- * order by every revenue aggregate in the project, and the kitchen
- * renders it on the Recent tab with a distinct red badge so branch
- * staff can see why the order closed.
+ * Produced by the shared order-transaction layer's
+ * sweepFailedDeliveries(), which moves an order from 'delivering' to
+ * 'failed' when the rider does not mark it delivered within
+ * FITPAL_RIDER_FAILED_DELIVERY_GRACE_SECONDS of the moment it entered
+ * 'delivering'. A failed order is a closed order that never produced
+ * deliverable food revenue. It is treated the same as a cancelled
+ * or refunded order by every revenue aggregate in the project.
  *
  * ---------------------------------------------------------------------
  * DELIVERED GRACE WINDOW
@@ -120,12 +118,26 @@
  * button and the gate agree by construction.
  *
  * ---------------------------------------------------------------------
+ * CARD TOGGLE CONTRACT
+ * ---------------------------------------------------------------------
+ * The card-collapse interaction is owned by exactly one file:
+ * restaurant/assets/ui/js/kitchen-order.js.
+ *
+ * The card carries `.is-open` when the details band is visible;
+ * the toggle carries aria-expanded="true" when the details band is
+ * visible; the details band is `hidden` when the card is closed.
+ *
+ * kitchen-realtime.js does NOT bind a click handler for the toggle.
+ * After every poll that replaces the card list, it reapplies the
+ * user's state by reading `.is-open` off the DOM before the
+ * replacement and writing it back after.
+ *
+ * ---------------------------------------------------------------------
  * TEMPLATE STRUCTURE
  * ---------------------------------------------------------------------
- * This file does NOT emit a DOCTYPE or a <head>. restaurant/includes/
- * header.php has already done that before this file runs, and has
- * opened <main class="main-content">. Everything this page emits
- * lives inside that <main>.
+ * restaurant/includes/header.php has already opened the DOCTYPE,
+ * <head>, and <main class="main-content"> before this file runs.
+ * Everything this page emits lives inside that <main>.
  *
  * Config for the client is carried on #kitchenPage via data-*
  * attributes. No inline script block sits in the body.
@@ -133,57 +145,32 @@
  * ---------------------------------------------------------------------
  * SCOPE RULES APPLIED
  * ---------------------------------------------------------------------
- *  - No inline CSS. orders.css is loaded by header.php's
+ *  - No inline CSS. kitchen-order.css is loaded by header.php's
  *     $pageCssMap for kitchen.php.
- *  - No inline JS. kitchen-realtime.js, kitchen-order.js, and
- *     restaurant-chat-modal.js are loaded at the bottom of the page
- *     for the branch view.
- *  - No SQL. All data comes from
- *     restaurant/backend/database/kitchen-order-queries.php.
+ *  - No inline JS. kitchen-order.js, kitchen-realtime.js, and
+ *     restaurant-chat-modal.js are loaded at the bottom of the page.
+ *  - No SQL. All data comes from the query layer.
  *  - Icons reference only files present under
  *     shared/assets/images/icons/.
  *  - Every modal on the page contains an <img> icon.
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 11.3 — The Message button now works.
+ * @version 17.0 — The customization list in the expanded details
+ *                 band now shows price modifiers, matching the
+ *                 customer order receipt format. A new confirmation
+ *                 modal is shown when the kitchen presses "Start
+ *                 Preparing" to prevent accidental state changes.
  *
- *                 The previous revision loaded kitchen-order.js and
- *                 kitchen-realtime.js, but neither of those files
- *                 binds a handler for [data-restaurant-chat-open].
- *                 kitchen-order.js explicitly returns early for any
- *                 button that carries that attribute, on the
- *                 assumption that some other script handles it, and
- *                 kitchen-realtime.js has no such handler. The
- *                 Message button was therefore a no-op: clicking it
- *                 did nothing.
- *
- *                 This revision adds
- *                 restaurant/assets/ui/js/restaurant-chat-modal.js
- *                 to the script block at the bottom of the branch
- *                 view. That file owns the chat modal — its open,
- *                 its close, its tab switching, its delta poll, its
- *                 send, and its read marker — and it attaches the
- *                 delegated [data-restaurant-chat-open] listener
- *                 that the Message button needs.
- *
- *                 Nothing else changed. Every function, every markup
- *                 block, the card renderer, the confirm modal, the
- *                 rider modal, the pagination renderer, the tab bar,
- *                 and the chat-modal include are byte-identical to
- *                 v11.2.
- *
- *                 (11.2: kitchen-order-queries.php and
- *                 kitchen-order-handler.php paths restored. 11.1:
- *                 kitchen-order.js script reference. 11.0: paths
- *                 restored. 10.3: documentation-only correction.
- *                 10.2: corrective rewrite for a runtime "Failed to
- *                 open stream" error. 10.0: 'failed' status. 9.0:
- *                 confirm modal rewrite. 8.0: card renderer synced.
- *                 7.0: collapsible cards. 6.0: realtime rider roster.
- *                 5.0: pagination and step-by-step actions. 4.0:
- *                 'picking_up'. 3.0: CSRF token inherited from
- *                 header.php. 2.0: rider_pending handoff.)
+ *                 (16.0: two-state card with totals breakdown.
+ *                 15.0: summary band. 14.0: card rewritten.
+ *                 13.0: full re-emission. 12.0: card rewritten.
+ *                 11.3: restaurant-chat-modal.js. 11.2: path fixes.
+ *                 11.1: kitchen-order.js. 11.0: path restore.
+ *                 10.0: 'failed' status. 9.0: confirm modal.
+ *                 8.0: card renderer synced. 7.0: collapsible
+ *                 cards. 6.0: realtime rider roster. 5.0:
+ *                 pagination.)
  */
 
 declare(strict_types=1);
@@ -230,175 +217,294 @@ require_once __DIR__ . '/../backend/database/kitchen-order-queries.php';
  * PAGE LOCALS (formatting only — declared before they are used)
  * -------------------------------------------------------------- */
 
-function kitchenMoney(float|string|null $amount): string
-{
-    return '₱' . number_format((float)($amount ?? 0), 2);
+if (!function_exists('kitchenMoney')) {
+    function kitchenMoney(float|string|null $amount): string
+    {
+        return '₱' . number_format((float)($amount ?? 0), 2);
+    }
 }
 
-function kitchenStatusLabel(string $status): string
-{
-    return match ($status) {
-        'pending'       => 'New',
-        'preparing'     => 'Preparing',
-        'rider_pending' => 'Waiting on Rider',
-        'picking_up'    => 'Picking Up',
-        'delivering'    => 'Out for Delivery',
-        'delivered'     => 'Delivered',
-        'cancelled'     => 'Cancelled',
-        'refunded'      => 'Refunded',
-        'failed'        => 'Failed',
-        default         => ucfirst($status),
-    };
+if (!function_exists('kitchenStatusLabel')) {
+    function kitchenStatusLabel(string $status): string
+    {
+        return match ($status) {
+            'pending'       => 'New',
+            'preparing'     => 'Preparing',
+            'rider_pending' => 'Waiting on Rider',
+            'picking_up'    => 'Picking Up',
+            'delivering'    => 'Out for Delivery',
+            'delivered'     => 'Delivered',
+            'cancelled'     => 'Cancelled',
+            'refunded'      => 'Refunded',
+            'failed'        => 'Failed',
+            default         => ucfirst($status),
+        };
+    }
 }
 
-function kitchenStatusBadge(string $status): string
-{
-    return match ($status) {
-        'pending'       => 'badge-warning',
-        'preparing'     => 'badge-info',
-        'rider_pending' => 'badge-primary',
-        'picking_up'    => 'badge-primary',
-        'delivering'    => 'badge-primary',
-        'delivered'     => 'badge-success',
-        'cancelled'     => 'badge-danger',
-        'refunded'      => 'badge-secondary',
-        'failed'        => 'badge-danger',
-        default         => 'badge-secondary',
-    };
+if (!function_exists('kitchenStatusBadge')) {
+    function kitchenStatusBadge(string $status): string
+    {
+        return match ($status) {
+            'pending'       => 'badge-warning',
+            'preparing'     => 'badge-info',
+            'rider_pending' => 'badge-primary',
+            'picking_up'    => 'badge-primary',
+            'delivering'    => 'badge-primary',
+            'delivered'     => 'badge-success',
+            'cancelled'     => 'badge-danger',
+            'refunded'      => 'badge-secondary',
+            'failed'        => 'badge-danger',
+            default         => 'badge-secondary',
+        };
+    }
 }
 
-function kitchenDate(string $date): string
-{
-    $ts = strtotime($date);
-    return $ts !== false ? date('M d, g:i A', $ts) : $date;
+if (!function_exists('kitchenDate')) {
+    function kitchenDate(string $date): string
+    {
+        $ts = strtotime($date);
+        return $ts !== false ? date('M d, g:i A', $ts) : $date;
+    }
 }
 
-function kitchenBranchAddressLine(array $order): string
-{
-    $parts = [];
-    foreach (['branch_block', 'branch_barangay', 'branch_city', 'branch_province'] as $key) {
-        $v = trim((string)($order[$key] ?? ''));
-        if ($v !== '') {
-            $parts[] = $v;
+if (!function_exists('kitchenBranchAddressLine')) {
+    function kitchenBranchAddressLine(array $order): string
+    {
+        $parts = [];
+        foreach (['branch_block', 'branch_barangay', 'branch_city', 'branch_province'] as $key) {
+            $v = trim((string)($order[$key] ?? ''));
+            if ($v !== '') {
+                $parts[] = $v;
+            }
         }
+        return implode(', ', $parts);
     }
-    return implode(', ', $parts);
 }
 
-function kitchenRiderVehicleLine(array $order): string
-{
-    $parts = [];
-    $vehicle = trim((string)($order['rider_vehicle_type'] ?? ''));
-    $plate   = trim((string)($order['rider_vehicle_plate'] ?? ''));
-    if ($vehicle !== '') $parts[] = $vehicle;
-    if ($plate   !== '') $parts[] = $plate;
-    return implode(' • ', $parts);
+if (!function_exists('kitchenRiderVehicleLine')) {
+    function kitchenRiderVehicleLine(array $order): string
+    {
+        $parts = [];
+        $vehicle = trim((string)($order['rider_vehicle_type'] ?? ''));
+        $plate   = trim((string)($order['rider_vehicle_plate'] ?? ''));
+        if ($vehicle !== '') $parts[] = $vehicle;
+        if ($plate   !== '') $parts[] = $plate;
+        return implode(' • ', $parts);
+    }
 }
 
-function kitchenCardHtml(
-    array $order,
-    string $assetBase,
-    bool $isCompleted = false,
-    bool $isNew = false
-): string {
-    $orderId      = (int)($order['order_id'] ?? 0);
-    $orderStatus  = (string)($order['order_status'] ?? '');
-    $items        = is_array($order['items'] ?? null) ? $order['items'] : [];
-    $itemCount    = (int)($order['item_count'] ?? count($items));
-    $subtotal     = (float)($order['subtotal'] ?? 0);
-
-    $customerName = trim(
-        (string)($order['customer_first_name'] ?? '') . ' ' .
-        (string)($order['customer_last_name'] ?? '')
-    );
-    if ($customerName === '') {
-        $customerName = 'Customer';
+if (!function_exists('kitchenPaymentMeta')) {
+    function kitchenPaymentMeta(string $method): array
+    {
+        return match ($method) {
+            'COD'    => ['icon' => 'coin-line.svg',    'label' => 'Cash on Delivery', 'slug' => 'cod'],
+            'Wallet' => ['icon' => 'wallet-fill.svg',  'label' => 'Wallet',           'slug' => 'wallet'],
+            'Online' => ['icon' => 'qr-code-line.svg', 'label' => 'Online Payment',   'slug' => 'online'],
+            default  => ['icon' => 'coin-line.svg',    'label' => $method,            'slug' => 'other'],
+        };
     }
-    $customerContact = (string)($order['customer_contact'] ?? '—');
-    $destination     = (string)($order['destination_address'] ?? '');
+}
 
-    $assignedRiderId   = isset($order['delivery_rider_id']) && $order['delivery_rider_id'] !== null
-        ? (int)$order['delivery_rider_id']
-        : 0;
-    $assignedRiderName = trim(
-        (string)($order['rider_first_name'] ?? '') . ' ' .
-        (string)($order['rider_last_name'] ?? '')
-    );
-    $riderContact = (string)($order['rider_contact'] ?? '');
+if (!function_exists('kitchenCollectSpecialInstructions')) {
+    function kitchenCollectSpecialInstructions(array $items): array
+    {
+        $out   = [];
+        $seen  = [];
 
-    $restaurantName = trim((string)($order['restaurant_name'] ?? ''));
-    $branchName     = trim((string)($order['branch_name'] ?? ''));
-    $branchAddress  = kitchenBranchAddressLine($order);
-    $riderVehicle   = kitchenRiderVehicleLine($order);
-
-    $summary = shapeKitchenOrderSummaryRow($order);
-    $riderSummary = $summary['rider_name'] !== '' ? $summary['rider_name'] : '—';
-
-    $canStartPreparing = !$isCompleted && $orderStatus === 'pending';
-    $canCancel         = !$isCompleted && in_array($orderStatus, ['pending', 'preparing'], true);
-    $canAssignRider    = !$isCompleted
-        && $orderStatus === 'preparing'
-        && $assignedRiderId === 0;
-    $canReassignRider  = !$isCompleted
-        && in_array($orderStatus, ['preparing', 'rider_pending'], true)
-        && $assignedRiderId > 0;
-
-    $canMessage = !$isCompleted
-        || ($summary['is_delivered'] && $summary['chat_grace_open']);
-
-    $riderBlockBadge = '';
-    if (!$isCompleted) {
-        if ($orderStatus === 'rider_pending') {
-            $riderBlockBadge = '<span class="badge badge-warning">Awaiting confirmation</span>';
-        } elseif ($orderStatus === 'picking_up') {
-            $riderBlockBadge = '<span class="badge badge-primary">Picking up</span>';
+        foreach ($items as $item) {
+            $notes = trim((string)($item['custom_instructions'] ?? ''));
+            if ($notes === '') {
+                continue;
+            }
+            if (isset($seen[$notes])) {
+                continue;
+            }
+            $seen[$notes] = true;
+            $out[]        = $notes;
         }
-    }
 
-    $closedAt = '';
-    if ($isCompleted) {
-        if ($orderStatus === 'delivered' && !empty($order['delivered_at'])) {
-            $closedAt = (string)$order['delivered_at'];
-        } elseif (!empty($order['updated_at'])) {
-            $closedAt = (string)$order['updated_at'];
-        } elseif (!empty($order['order_date'])) {
-            $closedAt = (string)$order['order_date'];
+        return $out;
+    }
+}
+
+if (!function_exists('kitchenPrimaryItemImage')) {
+    /**
+     * Return the first item's resolved image URL for the card
+     * thumbnail, or the shared restaurant icon when the order has
+     * no items or the URL could not be resolved.
+     *
+     * @param array<int, array<string, mixed>> $items
+     * @param string $assetBase
+     * @return string
+     */
+    function kitchenPrimaryItemImage(array $items, string $assetBase): string
+    {
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $url = trim((string)($item['product_image_url'] ?? ''));
+            if ($url !== '') {
+                return $url;
+            }
         }
+        return $assetBase . 'assets/images/icons/restaurant.svg';
     }
+}
 
-    $cardClass = 'kitchen-order-card'
-        . ($isCompleted ? ' kitchen-order-card-completed' : '')
-        . ($isNew ? ' is-new' : '');
+if (!function_exists('kitchenPrimaryItemName')) {
+    /**
+     * Return the first item's product name, or a fallback string
+     * when the order has no items.
+     *
+     * @param array<int, array<string, mixed>> $items
+     * @return string
+     */
+    function kitchenPrimaryItemName(array $items): string
+    {
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $name = trim((string)($item['product_name'] ?? ''));
+            if ($name !== '') {
+                return $name;
+            }
+        }
+        return 'Order Items';
+    }
+}
 
-    $detailsId = 'kitchenOrderDetails' . $orderId;
+if (!function_exists('kitchenCardHtml')) {
+    function kitchenCardHtml(
+        array $order,
+        string $assetBase,
+        bool $isCompleted = false
+    ): string {
+        $orderId       = (int)($order['order_id'] ?? 0);
+        $orderStatus   = (string)($order['order_status'] ?? '');
+        $paymentMethod = (string)($order['payment_method'] ?? '');
+        $items         = is_array($order['items'] ?? null) ? $order['items'] : [];
+        $itemCount     = (int)($order['item_count'] ?? count($items));
 
-    $summarySegments = [
-        $summary['restaurant_name'],
-        $summary['branch_name'],
-        $summary['customer_name'],
-        $riderSummary,
-        kitchenMoney($summary['order_total']),
-    ];
+        // Calculate the full order totals using the shared fee schedule.
+        $branchCount = 1;
+        $subtotal = 0.0;
+        foreach ($items as $item) {
+            $qty = (int)($item['quantity'] ?? 0);
+            $price = (float)($item['final_price'] ?? $item['unit_price'] ?? 0);
+            $subtotal += $qty * $price;
+        }
+        $fees = calculateOrderFees($branchCount, $subtotal);
+        $orderTotal = round($subtotal + $fees['delivery_fee'] + $fees['service_fee'] + $fees['vat'], 2);
 
-    ob_start();
-    ?>
+        $customerName = trim(
+            (string)($order['customer_first_name'] ?? '') . ' ' .
+            (string)($order['customer_last_name'] ?? '')
+        );
+        if ($customerName === '') {
+            $customerName = 'Customer';
+        }
+        $customerContact = trim((string)($order['customer_contact'] ?? ''));
+        $customerContactDigits = $customerContact !== ''
+            ? preg_replace('/[^0-9+]/', '', $customerContact)
+            : '';
+        $destination     = (string)($order['destination_address'] ?? '');
+
+        $assignedRiderId   = isset($order['delivery_rider_id']) && $order['delivery_rider_id'] !== null
+            ? (int)$order['delivery_rider_id']
+            : 0;
+        $assignedRiderName = trim(
+            (string)($order['rider_first_name'] ?? '') . ' ' .
+            (string)($order['rider_last_name'] ?? '')
+        );
+        $riderContact = trim((string)($order['rider_contact'] ?? ''));
+        $riderContactDigits = $riderContact !== ''
+            ? preg_replace('/[^0-9+]/', '', $riderContact)
+            : '';
+
+        $restaurantName = trim((string)($order['restaurant_name'] ?? ''));
+        $branchName     = trim((string)($order['branch_name'] ?? ''));
+        $branchAddress  = kitchenBranchAddressLine($order);
+        $riderVehicle   = kitchenRiderVehicleLine($order);
+
+        $paymentMeta = kitchenPaymentMeta($paymentMethod);
+
+        $specialInstructions = kitchenCollectSpecialInstructions($items);
+
+        $canStartPreparing = !$isCompleted && $orderStatus === 'pending';
+        $canCancel         = !$isCompleted && in_array($orderStatus, ['pending', 'preparing'], true);
+        $canAssignRider    = !$isCompleted
+            && $orderStatus === 'preparing'
+            && $assignedRiderId === 0;
+        $canReassignRider  = !$isCompleted
+            && in_array($orderStatus, ['preparing', 'rider_pending'], true)
+            && $assignedRiderId > 0;
+
+        $graceOpen   = (int)($order['chat_grace_open'] ?? 0) === 1;
+        $canMessage  = !$isCompleted || ($orderStatus === 'delivered' && $graceOpen);
+
+        $riderBlockBadge = '';
+        if (!$isCompleted) {
+            if ($orderStatus === 'rider_pending') {
+                $riderBlockBadge = '<span class="badge badge-warning">Awaiting confirmation</span>';
+            } elseif ($orderStatus === 'picking_up') {
+                $riderBlockBadge = '<span class="badge badge-primary">Picking up</span>';
+            }
+        }
+
+        $closedAt = '';
+        if ($isCompleted) {
+            if ($orderStatus === 'delivered' && !empty($order['delivered_at'])) {
+                $closedAt = (string)$order['delivered_at'];
+            } elseif (!empty($order['updated_at'])) {
+                $closedAt = (string)$order['updated_at'];
+            } elseif (!empty($order['order_date'])) {
+                $closedAt = (string)$order['order_date'];
+            }
+        }
+
+        $cardClass = 'kitchen-order-card'
+            . ($isCompleted ? ' kitchen-order-card-completed' : '');
+
+        $detailsId = 'kitchenOrderDetails' . $orderId;
+        $fallbackIcon = $assetBase . 'assets/images/icons/restaurant.svg';
+
+        // First item for the header
+        $primaryImage = kitchenPrimaryItemImage($items, $assetBase);
+        $primaryName  = kitchenPrimaryItemName($items);
+
+        ob_start();
+        ?>
 <article class="<?php echo $cardClass; ?>" data-order-id="<?php echo $orderId; ?>"
     data-order-status="<?php echo htmlspecialchars($orderStatus, ENT_QUOTES, 'UTF-8'); ?>">
 
     <header class="kitchen-order-header">
         <div class="kitchen-order-header-left">
-            <span class="kitchen-order-id">#<?php echo $orderId; ?></span>
-            <span class="kitchen-order-date">
-                <?php
-                echo $isCompleted && $closedAt !== ''
-                    ? htmlspecialchars(kitchenDate($closedAt), ENT_QUOTES, 'UTF-8')
-                    : htmlspecialchars(kitchenDate((string)($order['order_date'] ?? '')), ENT_QUOTES, 'UTF-8');
-                ?>
-            </span>
+            <div class="kitchen-order-thumb">
+                <img src="<?php echo htmlspecialchars($primaryImage, ENT_QUOTES, 'UTF-8'); ?>" alt=""
+                    onerror="this.onerror=null; this.src='<?php echo $fallbackIcon; ?>'">
+            </div>
+            <div class="kitchen-order-header-details">
+                <span class="kitchen-order-id">Order #<?php echo $orderId; ?></span>
+                <span
+                    class="kitchen-order-item-name"><?php echo htmlspecialchars($primaryName, ENT_QUOTES, 'UTF-8'); ?></span>
+            </div>
         </div>
+
         <div class="kitchen-order-header-right">
             <span class="badge <?php echo kitchenStatusBadge($orderStatus); ?>">
                 <?php echo kitchenStatusLabel($orderStatus); ?>
+            </span>
+            <span
+                class="kitchen-payment-pill kitchen-payment-pill-<?php echo htmlspecialchars($paymentMeta['slug'], ENT_QUOTES, 'UTF-8'); ?>">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/<?php echo htmlspecialchars($paymentMeta['icon'], ENT_QUOTES, 'UTF-8'); ?>"
+                    alt="" aria-hidden="true" class="kitchen-payment-pill-icon"
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
+                <span class="kitchen-payment-pill-label">
+                    <?php echo htmlspecialchars($paymentMeta['label'], ENT_QUOTES, 'UTF-8'); ?>
+                </span>
             </span>
             <button type="button" class="kitchen-order-toggle" data-row-expand="1"
                 aria-controls="<?php echo $detailsId; ?>" aria-expanded="false" aria-label="Toggle order details">
@@ -409,21 +515,34 @@ function kitchenCardHtml(
         </div>
     </header>
 
+    <!-- Summary band: visible only when collapsed -->
     <div class="kitchen-order-summary">
-        <?php foreach ($summarySegments as $i => $segment): ?>
-        <?php if ($i > 0): ?>
-        <span class="kitchen-order-summary-sep" aria-hidden="true">•</span>
+        <div class="kitchen-order-summary-info">
+            <span class="kitchen-order-summary-label">Subtotal</span>
+            <span class="kitchen-order-summary-value"><?php echo kitchenMoney($subtotal); ?></span>
+        </div>
+        <?php if (!empty($specialInstructions)): ?>
+        <div class="kitchen-order-summary-instructions">
+            <img src="<?php echo $assetBase; ?>assets/images/icons/information-fill.svg" alt="" aria-hidden="true"
+                onerror="this.onerror=null; this.style.display='none';">
+            <span><?php echo htmlspecialchars(implode(' | ', $specialInstructions), ENT_QUOTES, 'UTF-8'); ?></span>
+        </div>
         <?php endif; ?>
-        <span class="kitchen-order-summary-seg">
-            <?php echo htmlspecialchars((string)$segment, ENT_QUOTES, 'UTF-8'); ?>
-        </span>
-        <?php endforeach; ?>
     </div>
 
     <div class="kitchen-order-details" id="<?php echo $detailsId; ?>" hidden>
 
-        <div class="kitchen-route">
+        <div class="kitchen-order-meta-line">
+            <span class="kitchen-order-date">
+                <?php
+                echo $isCompleted && $closedAt !== ''
+                    ? htmlspecialchars(kitchenDate($closedAt), ENT_QUOTES, 'UTF-8')
+                    : htmlspecialchars(kitchenDate((string)($order['order_date'] ?? '')), ENT_QUOTES, 'UTF-8');
+                ?>
+            </span>
+        </div>
 
+        <div class="kitchen-route">
             <div class="kitchen-route-stop kitchen-route-stop-pickup">
                 <div class="kitchen-route-icon kitchen-route-icon-pickup" aria-hidden="true">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/restaurant.svg" alt=""
@@ -459,9 +578,21 @@ function kitchenCardHtml(
                     <span class="kitchen-route-name">
                         <?php echo htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8'); ?>
                     </span>
+                    <?php if ($customerContact !== ''): ?>
+                    <?php if ($customerContactDigits !== ''): ?>
+                    <a href="tel:<?php echo htmlspecialchars($customerContactDigits, ENT_QUOTES, 'UTF-8'); ?>"
+                        class="kitchen-route-contact kitchen-route-contact-link">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/phone-fill.svg" alt=""
+                            class="kitchen-route-contact-icon" width="14" height="14"
+                            onerror="this.onerror=null; this.style.display='none';">
+                        <span><?php echo htmlspecialchars($customerContact, ENT_QUOTES, 'UTF-8'); ?></span>
+                    </a>
+                    <?php else: ?>
                     <span class="kitchen-route-contact">
                         <?php echo htmlspecialchars($customerContact, ENT_QUOTES, 'UTF-8'); ?>
                     </span>
+                    <?php endif; ?>
+                    <?php endif; ?>
                     <?php if ($destination !== ''): ?>
                     <span class="kitchen-route-address">
                         <?php echo htmlspecialchars($destination, ENT_QUOTES, 'UTF-8'); ?>
@@ -471,6 +602,22 @@ function kitchenCardHtml(
             </div>
         </div>
 
+        <?php if (!empty($specialInstructions)): ?>
+        <div class="kitchen-special-instructions" role="note" aria-label="Special instructions">
+            <div class="kitchen-special-instructions-head">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/information-fill.svg" alt=""
+                    class="kitchen-special-instructions-icon" width="16" height="16"
+                    onerror="this.onerror=null; this.style.display='none';">
+                <span class="kitchen-special-instructions-title">Special Instructions</span>
+            </div>
+            <ul class="kitchen-special-instructions-list">
+                <?php foreach ($specialInstructions as $note): ?>
+                <li><?php echo nl2br(htmlspecialchars($note, ENT_QUOTES, 'UTF-8')); ?></li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+        <?php endif; ?>
+
         <div class="kitchen-rider-block">
             <span class="kitchen-rider-block-label">Rider</span>
             <?php if ($assignedRiderId > 0): ?>
@@ -479,9 +626,19 @@ function kitchenCardHtml(
                     <?php echo htmlspecialchars($assignedRiderName !== '' ? $assignedRiderName : ('#' . $assignedRiderId), ENT_QUOTES, 'UTF-8'); ?>
                 </span>
                 <?php if ($riderContact !== ''): ?>
+                <?php if ($riderContactDigits !== ''): ?>
+                <a href="tel:<?php echo htmlspecialchars($riderContactDigits, ENT_QUOTES, 'UTF-8'); ?>"
+                    class="kitchen-rider-block-contact kitchen-route-contact-link">
+                    <img src="<?php echo $assetBase; ?>assets/images/icons/phone-fill.svg" alt=""
+                        class="kitchen-route-contact-icon" width="14" height="14"
+                        onerror="this.onerror=null; this.style.display='none';">
+                    <span><?php echo htmlspecialchars($riderContact, ENT_QUOTES, 'UTF-8'); ?></span>
+                </a>
+                <?php else: ?>
                 <span class="kitchen-rider-block-contact">
                     <?php echo htmlspecialchars($riderContact, ENT_QUOTES, 'UTF-8'); ?>
                 </span>
+                <?php endif; ?>
                 <?php endif; ?>
                 <?php if ($riderVehicle !== ''): ?>
                 <span class="kitchen-rider-block-vehicle">
@@ -512,86 +669,123 @@ function kitchenCardHtml(
                     $itemQty   = (int)($item['quantity'] ?? 0);
                     $itemName  = (string)($item['product_name'] ?? 'Item');
                     $customs   = $item['customizations'] ?? [];
-                    $itemNotes = (string)($item['custom_instructions'] ?? '');
+                    $itemImage = trim((string)($item['product_image_url'] ?? ''));
+                    if ($itemImage === '') {
+                        $itemImage = $fallbackIcon;
+                    }
+                    $unitPrice = (float)($item['final_price'] ?? $item['unit_price'] ?? 0);
+                    $itemTotal = $unitPrice * $itemQty;
                 ?>
                 <li class="kitchen-item">
-                    <div class="kitchen-item-line">
-                        <span class="kitchen-item-qty"><?php echo $itemQty; ?>&times;</span>
-                        <span class="kitchen-item-name">
-                            <?php echo htmlspecialchars($itemName, ENT_QUOTES, 'UTF-8'); ?>
-                        </span>
-                    </div>
+                    <div class="kitchen-item-row">
+                        <div class="kitchen-item-image">
+                            <img src="<?php echo htmlspecialchars($itemImage, ENT_QUOTES, 'UTF-8'); ?>"
+                                alt="<?php echo htmlspecialchars($itemName, ENT_QUOTES, 'UTF-8'); ?>" loading="lazy"
+                                onerror="this.onerror=null; this.src='<?php echo $fallbackIcon; ?>'">
+                        </div>
+                        <div class="kitchen-item-body">
+                            <div class="kitchen-item-line">
+                                <span class="kitchen-item-qty"><?php echo $itemQty; ?>&times;</span>
+                                <span class="kitchen-item-name">
+                                    <?php echo htmlspecialchars($itemName, ENT_QUOTES, 'UTF-8'); ?>
+                                </span>
+                                <span class="kitchen-item-price"><?php echo kitchenMoney($itemTotal); ?></span>
+                            </div>
 
-                    <?php if (!empty($customs)): ?>
-                    <ul class="kitchen-item-customs">
-                        <?php foreach ($customs as $cust):
-                            $custName = (string)($cust['ingredient_name'] ?? '');
-                            if ($custName === '') continue;
-                            $isRemoved = (int)($cust['is_removed'] ?? 0) === 1;
-                            $custQty   = (int)($cust['quantity'] ?? 1);
-                        ?>
-                        <li class="kitchen-item-custom <?php echo $isRemoved ? 'is-removed' : ''; ?>">
-                            <?php if ($isRemoved): ?>
-                            <span class="kitchen-custom-mark">&minus;</span>
-                            <span class="kitchen-custom-text">
-                                <?php echo htmlspecialchars($custName, ENT_QUOTES, 'UTF-8'); ?>
-                                <em>(remove)</em>
-                            </span>
-                            <?php else: ?>
-                            <span class="kitchen-custom-mark">+</span>
-                            <span class="kitchen-custom-text">
-                                <?php echo htmlspecialchars($custName, ENT_QUOTES, 'UTF-8'); ?>
-                                <?php if ($custQty > 1): ?> &times; <?php echo $custQty; ?><?php endif; ?>
-                            </span>
+                            <?php if (!empty($customs)): ?>
+                            <ul class="kitchen-item-customs">
+                                <?php foreach ($customs as $cust):
+                                    $custName = (string)($cust['ingredient_name'] ?? '');
+                                    if ($custName === '') continue;
+                                    $isRemoved = (int)($cust['is_removed'] ?? 0) === 1;
+                                    $custQty   = (int)($cust['quantity'] ?? 1);
+                                    $priceMod  = (float)($cust['price_at_time'] ?? 0);
+                                    $priceLabel = '';
+                                    if ($priceMod > 0) {
+                                        $priceLabel = '(+' . kitchenMoney($priceMod * $custQty) . ')';
+                                    } elseif ($priceMod < 0) {
+                                        $priceLabel = '(−' . kitchenMoney(abs($priceMod) * $custQty) . ')';
+                                    }
+                                ?>
+                                <li class="kitchen-item-custom <?php echo $isRemoved ? 'is-removed' : ''; ?>">
+                                    <?php if ($isRemoved): ?>
+                                    <span class="kitchen-custom-mark">&minus;</span>
+                                    <span class="kitchen-custom-text">
+                                        <?php echo htmlspecialchars($custName, ENT_QUOTES, 'UTF-8'); ?>
+                                        <em>(removed)</em>
+                                    </span>
+                                    <?php else: ?>
+                                    <span class="kitchen-custom-mark">+</span>
+                                    <span class="kitchen-custom-text">
+                                        <?php echo htmlspecialchars($custName, ENT_QUOTES, 'UTF-8'); ?>
+                                        <?php if ($custQty > 1): ?> &times; <?php echo $custQty; ?><?php endif; ?>
+                                    </span>
+                                    <?php if ($priceLabel !== ''): ?>
+                                    <span class="kitchen-custom-price"><?php echo $priceLabel; ?></span>
+                                    <?php endif; ?>
+                                    <?php endif; ?>
+                                </li>
+                                <?php endforeach; ?>
+                            </ul>
                             <?php endif; ?>
-                        </li>
-                        <?php endforeach; ?>
-                    </ul>
-                    <?php endif; ?>
-
-                    <?php if ($itemNotes !== ''): ?>
-                    <p class="kitchen-item-notes">
-                        <strong>Note:</strong>
-                        <?php echo nl2br(htmlspecialchars($itemNotes, ENT_QUOTES, 'UTF-8')); ?>
-                    </p>
-                    <?php endif; ?>
+                        </div>
+                    </div>
                 </li>
                 <?php endforeach; ?>
             </ul>
         </div>
 
-        <div class="kitchen-order-total">
-            <span class="kitchen-order-total-label">Subtotal</span>
-            <span class="kitchen-order-total-value">
-                <?php echo kitchenMoney($subtotal); ?>
-            </span>
+        <!-- Full order totals breakdown -->
+        <div class="kitchen-order-totals">
+            <div class="kitchen-totals-row">
+                <span class="kitchen-totals-label">Subtotal</span>
+                <span class="kitchen-totals-value"><?php echo kitchenMoney($subtotal); ?></span>
+            </div>
+            <div class="kitchen-totals-row">
+                <span class="kitchen-totals-label">Delivery Fee</span>
+                <span class="kitchen-totals-value"><?php echo kitchenMoney($fees['delivery_fee']); ?></span>
+            </div>
+            <div class="kitchen-totals-row">
+                <span class="kitchen-totals-label">Service Fee</span>
+                <span class="kitchen-totals-value"><?php echo kitchenMoney($fees['service_fee']); ?></span>
+            </div>
+            <div class="kitchen-totals-row">
+                <span class="kitchen-totals-label">VAT</span>
+                <span class="kitchen-totals-value"><?php echo kitchenMoney($fees['vat']); ?></span>
+            </div>
+            <div class="kitchen-totals-row kitchen-totals-grand">
+                <span class="kitchen-totals-label">Total</span>
+                <span class="kitchen-totals-value"><?php echo kitchenMoney($orderTotal); ?></span>
+            </div>
         </div>
     </div>
 
     <footer class="kitchen-order-actions">
         <?php if ($canCancel): ?>
-        <button type="button" class="btn btn-outline btn-sm kitchen-action-btn" data-action="cancel_order"
+        <button type="button" class="btn btn-danger kitchen-action-btn" data-action="cancel_order"
             data-order-id="<?php echo $orderId; ?>">
             Cancel
         </button>
         <?php endif; ?>
 
         <?php if ($canStartPreparing): ?>
-        <button type="button" class="btn btn-primary btn-sm kitchen-action-btn" data-action="start_preparing"
-            data-order-id="<?php echo $orderId; ?>">
+        <button type="button" class="btn btn-primary kitchen-action-btn" data-action="start_preparing"
+            data-order-id="<?php echo $orderId; ?>" data-confirm-title="Start preparing Order #<?php echo $orderId; ?>?"
+            data-confirm-message="This will mark the order as being prepared. This action cannot be undone."
+            data-confirm-label="Yes, start preparing">
             Start Preparing
         </button>
         <?php endif; ?>
 
         <?php if ($canAssignRider): ?>
-        <button type="button" class="btn btn-outline btn-sm kitchen-action-btn" data-action="assign_rider"
+        <button type="button" class="btn btn-primary kitchen-action-btn" data-action="assign_rider"
             data-order-id="<?php echo $orderId; ?>" data-reassign="0" data-toggle-modal="rider-modal">
             Assign Rider
         </button>
         <?php endif; ?>
 
         <?php if ($canReassignRider): ?>
-        <button type="button" class="btn btn-outline btn-sm kitchen-action-btn" data-action="reassign_rider"
+        <button type="button" class="btn btn-primary kitchen-action-btn" data-action="reassign_rider"
             data-order-id="<?php echo $orderId; ?>" data-reassign="1"
             data-current-rider="<?php echo htmlspecialchars($assignedRiderName !== '' ? $assignedRiderName : ('#' . $assignedRiderId), ENT_QUOTES, 'UTF-8'); ?>"
             data-toggle-modal="rider-modal">
@@ -600,47 +794,49 @@ function kitchenCardHtml(
         <?php endif; ?>
 
         <?php if ($canMessage): ?>
-        <button type="button" class="btn btn-neutral btn-sm kitchen-action-btn" data-restaurant-chat-open
+        <button type="button" class="btn btn-neutral kitchen-action-btn" data-restaurant-chat-open
             data-restaurant-chat-order-id="<?php echo $orderId; ?>" data-restaurant-chat-counterparty="customer"
             data-restaurant-chat-subtitle="Order #<?php echo $orderId; ?> • <?php echo htmlspecialchars($customerName, ENT_QUOTES, 'UTF-8'); ?>">
-            <img src="<?php echo $assetBase; ?>assets/images/icons/chat-line.svg" alt="" class="btn-icon" width="16"
-                height="16"
-                onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg'">
+            <img src="<?php echo $assetBase; ?>assets/images/icons/contact-us-line.svg" alt="" class="btn-icon"
+                width="16" height="16"
+                onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/contact-us-fill.svg'">
             <span>Message</span>
         </button>
         <?php endif; ?>
     </footer>
 </article>
 <?php
-    return (string)ob_get_clean();
+        return (string)ob_get_clean();
+    }
 }
 
-function kitchenPaginationHtml(string $tab, int $page, int $totalPages): string
-{
-    if ($totalPages <= 1) {
-        return '';
-    }
+if (!function_exists('kitchenPaginationHtml')) {
+    function kitchenPaginationHtml(string $tab, int $page, int $totalPages, string $assetBase): string
+    {
+        if ($totalPages <= 1) {
+            return '';
+        }
 
-    $prevUrl = 'kitchen.php?tab=' . urlencode($tab) . '&page=' . max(1, $page - 1);
-    $nextUrl = 'kitchen.php?tab=' . urlencode($tab) . '&page=' . min($totalPages, $page + 1);
+        $prevUrl = 'kitchen.php?tab=' . urlencode($tab) . '&page=' . max(1, $page - 1);
+        $nextUrl = 'kitchen.php?tab=' . urlencode($tab) . '&page=' . min($totalPages, $page + 1);
 
-    ob_start();
-    ?>
+        ob_start();
+        ?>
 <nav class="kitchen-pagination" aria-label="Order pages">
     <?php if ($page > 1): ?>
     <a href="<?php echo htmlspecialchars($prevUrl, ENT_QUOTES, 'UTF-8'); ?>" class="kitchen-pagination-link"
         data-page-link data-tab="<?php echo htmlspecialchars($tab, ENT_QUOTES, 'UTF-8'); ?>"
         data-page="<?php echo $page - 1; ?>">
-        <img src="<?php echo $GLOBALS['assetBaseForPagination'] ?? '../../shared/'; ?>assets/images/icons/arrow-left-s-line.svg"
-            alt="" class="kitchen-pagination-icon" width="14" height="14"
-            onerror="this.onerror=null; this.src='<?php echo $GLOBALS['assetBaseForPagination'] ?? '../../shared/'; ?>assets/images/icons/arrow-left-line.svg'">
+        <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-s-line.svg" alt=""
+            class="kitchen-pagination-icon" width="14" height="14"
+            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg'">
         <span>Previous</span>
     </a>
     <?php else: ?>
     <span class="kitchen-pagination-link is-disabled">
-        <img src="<?php echo $GLOBALS['assetBaseForPagination'] ?? '../../shared/'; ?>assets/images/icons/arrow-left-s-line.svg"
-            alt="" class="kitchen-pagination-icon" width="14" height="14"
-            onerror="this.onerror=null; this.src='<?php echo $GLOBALS['assetBaseForPagination'] ?? '../../shared/'; ?>assets/images/icons/arrow-left-line.svg'">
+        <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-left-s-line.svg" alt=""
+            class="kitchen-pagination-icon" width="14" height="14"
+            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/arrow-left-line.svg'">
         <span>Previous</span>
     </span>
     <?php endif; ?>
@@ -654,63 +850,68 @@ function kitchenPaginationHtml(string $tab, int $page, int $totalPages): string
         data-page-link data-tab="<?php echo htmlspecialchars($tab, ENT_QUOTES, 'UTF-8'); ?>"
         data-page="<?php echo $page + 1; ?>">
         <span>Next</span>
-        <img src="<?php echo $GLOBALS['assetBaseForPagination'] ?? '../../shared/'; ?>assets/images/icons/arrow-right-s-line.svg"
-            alt="" class="kitchen-pagination-icon" width="14" height="14"
-            onerror="this.onerror=null; this.src='<?php echo $GLOBALS['assetBaseForPagination'] ?? '../../shared/'; ?>assets/images/icons/arrow-right-long-line.svg'">
+        <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-right-s-line.svg" alt=""
+            class="kitchen-pagination-icon" width="14" height="14"
+            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/arrow-right-long-line.svg'">
     </a>
     <?php else: ?>
     <span class="kitchen-pagination-link is-disabled">
         <span>Next</span>
-        <img src="<?php echo $GLOBALS['assetBaseForPagination'] ?? '../../shared/'; ?>assets/images/icons/arrow-right-s-line.svg"
-            alt="" class="kitchen-pagination-icon" width="14" height="14"
-            onerror="this.onerror=null; this.src='<?php echo $GLOBALS['assetBaseForPagination'] ?? '../../shared/'; ?>assets/images/icons/arrow-right-long-line.svg'">
+        <img src="<?php echo $assetBase; ?>assets/images/icons/arrow-right-s-line.svg" alt=""
+            class="kitchen-pagination-icon" width="14" height="14"
+            onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/arrow-right-long-line.svg'">
     </span>
     <?php endif; ?>
 </nav>
 <?php
-    return (string)ob_get_clean();
+        return (string)ob_get_clean();
+    }
 }
 
-function kitchenTabTitle(string $tab): string
-{
-    return match ($tab) {
-        'new'              => 'New Orders',
-        'preparing'        => 'Preparing',
-        'waiting_on_rider' => 'Waiting on Rider',
-        'out_for_delivery' => 'Out for Delivery',
-        'recent'           => 'Recent Orders',
-        default            => 'Orders',
-    };
+if (!function_exists('kitchenTabTitle')) {
+    function kitchenTabTitle(string $tab): string
+    {
+        return match ($tab) {
+            'new'              => 'New Orders',
+            'preparing'        => 'Preparing',
+            'waiting_on_rider' => 'Waiting on Rider',
+            'out_for_delivery' => 'Out for Delivery',
+            'recent'           => 'Recent Orders',
+            default            => 'Orders',
+        };
+    }
 }
 
-function kitchenTabEmptyCopy(string $tab): array
-{
-    return match ($tab) {
-        'new' => [
-            'title' => 'No new orders',
-            'text'  => 'New orders will appear here as soon as they are placed.',
-        ],
-        'preparing' => [
-            'title' => 'Nothing is being prepared',
-            'text'  => 'Press Start Preparing on a new order and it will show up here.',
-        ],
-        'waiting_on_rider' => [
-            'title' => 'No orders waiting on a rider',
-            'text'  => 'Orders waiting on rider confirmation, and riders on their way to pick up, appear here.',
-        ],
-        'out_for_delivery' => [
-            'title' => 'Nothing is out for delivery',
-            'text'  => 'Orders a rider has picked up appear here until they are delivered.',
-        ],
-        'recent' => [
-            'title' => 'No recent orders yet',
-            'text'  => 'Delivered, cancelled, refunded, and failed orders appear here.',
-        ],
-        default => [
-            'title' => 'No orders',
-            'text'  => 'There is nothing to show in this tab.',
-        ],
-    };
+if (!function_exists('kitchenTabEmptyCopy')) {
+    function kitchenTabEmptyCopy(string $tab): array
+    {
+        return match ($tab) {
+            'new' => [
+                'title' => 'No new orders',
+                'text'  => 'New orders will appear here as soon as they are placed.',
+            ],
+            'preparing' => [
+                'title' => 'Nothing is being prepared',
+                'text'  => 'Press Start Preparing on a new order and it will show up here.',
+            ],
+            'waiting_on_rider' => [
+                'title' => 'No orders waiting on a rider',
+                'text'  => 'Orders waiting on rider confirmation, and riders on their way to pick up, appear here.',
+            ],
+            'out_for_delivery' => [
+                'title' => 'Nothing is out for delivery',
+                'text'  => 'Orders a rider has picked up appear here until they are delivered.',
+            ],
+            'recent' => [
+                'title' => 'No recent orders yet',
+                'text'  => 'Delivered, cancelled, refunded, and failed orders appear here.',
+            ],
+            default => [
+                'title' => 'No orders',
+                'text'  => 'There is nothing to show in this tab.',
+            ],
+        };
+    }
 }
 
 /* --------------------------------------------------------------
@@ -753,8 +954,6 @@ $pagination      = [
     'page'       => 1,
     'perPage'    => KITCHEN_DEFAULT_PER_PAGE,
 ];
-
-$GLOBALS['assetBaseForPagination'] = $assetBase;
 
 if ($isOwner) {
 
@@ -1055,8 +1254,7 @@ if (!$isOwner) {
                     echo kitchenCardHtml(
                         $order,
                         $assetBase,
-                        $activeTab === 'recent',
-                        false
+                        $activeTab === 'recent'
                     );
                 }
             endif; ?>
@@ -1067,7 +1265,8 @@ if (!$isOwner) {
         echo kitchenPaginationHtml(
             $activeTab,
             (int)$pagination['page'],
-            (int)$pagination['totalPages']
+            (int)$pagination['totalPages'],
+            $assetBase
         );
         ?>
 

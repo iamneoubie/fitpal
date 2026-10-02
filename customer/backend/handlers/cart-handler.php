@@ -18,63 +18,25 @@
  * This handler contains NO SQL. All data access goes through
  * customer/backend/database/cart-queries.php.
  *
- * This file is NOT safe to require from a page — it runs a full
- * request dispatch at load time. Display helpers that pages need
- * (e.g. getCartCustomizationBreakdown) live in cart-queries.php.
- *
  * ---------------------------------------------------------------------
- * QUEUE SHAPE CONTRACT (shared with the order-transaction layer)
+ * QUEUE SHAPE (v9.1.0)
  * ---------------------------------------------------------------------
- * push_to_queue writes session queue lines that are later read by
- * createOrderFromQueue() in
- * shared/backend/database/order-transaction-queries.php. That
- * function expects, at minimum, the following fields on every line:
+ * push_to_queue writes session queue lines. Every writer of
+ * $_SESSION['order_queue'] must produce a line with the same shape,
+ * or the queue panel renders inconsistently. The shape is documented
+ * in customer/backend/database/queue-queries.php and produced by
+ * queueEnrich().
  *
- *     product_id              int
- *     restaurant_branch_id    int   ← required; a line missing it is
- *                                     silently dropped by the shared
- *                                     layer, which can leave the whole
- *                                     queue empty
- *     quantity                int
- *     price                   float effective unit price
- *     base_price              float
- *     customization_data      string|null raw JSON from cart.customization_data
+ * Before v9.1.0, this handler built the queue line by hand. That
+ * line carried `customization_data` (raw JSON) but no
+ * `customizations` (the enriched display array the queue panel
+ * reads), so a cart-pushed line never rendered its "Customized"
+ * dropdown even when the cart row was customized.
  *
- * The queue line produced by push_to_queue in this file carries every
- * one of those fields, plus four additional presentational fields
- * (name, image, stock, restaurant_name, branch_name) that the menu
- * page's queue panel renders but that the shared layer ignores.
- *
- * ---------------------------------------------------------------------
- * IMAGE URL RESOLUTION
- * ---------------------------------------------------------------------
- * The cart row carries the raw dietary_information.images value in
- * `product_image`. That raw value is NOT a browser-loadable URL — it
- * is a project-root-relative folder path that may omit the literal
- * `restaurant/` segment the manifest folder actually carries.
- *
- * The previous revision of this file copied the raw value into the
- * queue line's `image` field, which meant the checkout page and the
- * queue panel (after a reload that re-read the queue from the
- * session) rendered a broken image or fell back to the restaurant
- * icon. The queue had a valid image when it was created by
- * queue-handler.php's `add` action (which routes through
- * queueEnrich()), but not when it was created by push_to_queue.
- *
- * This revision resolves the raw value through the same helper that
- * queueEnrich() uses:
- *
- *     resolveCartImageForQueue()
- *
- * That helper delegates to getProductImageBasePath() and
- * getProductPrimaryFilename() from product-queries.php, then
- * prepends the project-root URL derived from the current request.
- * The queue line's `image` field is therefore always a browser-
- * loadable URL, regardless of which path created the line.
- *
- * When the folder cannot be resolved, the helper returns an empty
- * string. The checkout page and the queue panel already fall back
- * to the shared restaurant icon in that case.
+ * This revision routes each cart row through queueEnrich(), which
+ * produces the enriched display array alongside the raw JSON. The
+ * cart-pushed line now has the same shape as a line added through
+ * the menu.
  *
  * ---------------------------------------------------------------------
  * PER-ROLE SESSION MODEL
@@ -85,38 +47,21 @@
  * customer session and guaranteed to be the customer's own.
  *
  * @package FitPal
- * @version 9.0 — push_to_queue now resolves the product image into
- *                a browser-loadable URL through
- *                resolveCartImageForQueue(), which delegates to the
- *                same helpers queueEnrich() uses. Queue lines
- *                written by the cart therefore carry a valid image
- *                URL, and the checkout page and queue panel render
- *                the real product image instead of the fallback
- *                icon.
+ * @version 9.1.0 — push_to_queue routes each cart row through
+ *                  queueEnrich() so the queue line carries the same
+ *                  enriched `customizations` array every other
+ *                  writer produces. The queue panel now renders the
+ *                  "Customized" dropdown on cart-pushed lines.
  *
- *                Every other behavior — the action set, the merge
- *                rules, the field set on the queue line — is
- *                byte-identical to v8.0.
- *
- *                (8.0: docblock records the queue shape contract.
- *                7.0: per-role session migration. 6.3: push_to_queue
- *                writes every field createOrderFromQueue() requires.
- *                6.2: CSRF validated against customer_csrf_token.
- *                6.1: pure helpers moved to cart-queries.php.)
+ *                  (9.0.0: push_to_queue resolves the product image
+ *                  into a browser-loadable URL. 8.0.0: queue shape
+ *                  contract. 7.0.0: per-role session migration.)
  */
 
 declare(strict_types=1);
 
-// ---------------------------------------------------------------------
-// SESSION BOOTSTRAP
-// ---------------------------------------------------------------------
-
 require_once __DIR__ . '/../../../shared/includes/session-bootstrap.php';
 fitpal_session_bootstrap('customer');
-
-// ---------------------------------------------------------------------
-// AJAX DETECTION
-// ---------------------------------------------------------------------
 
 $isAjax = (
     isset($_SERVER['HTTP_X_REQUESTED_WITH']) &&
@@ -157,19 +102,11 @@ function cartSuccess(array $payload, bool $isAjax, string $redirect = '../../pag
     exit;
 }
 
-// ---------------------------------------------------------------------
-// AUTHENTICATION
-// ---------------------------------------------------------------------
-
 if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     cartFail('Please sign in to manage your cart.', $isAjax, '../../pages/sign-in.php');
 }
 
 $customerId = (int)$_SESSION['customer_id'];
-
-// ---------------------------------------------------------------------
-// CSRF
-// ---------------------------------------------------------------------
 
 $givenToken = (string)($_POST['csrf_token'] ?? '');
 $sessToken  = (string)($_SESSION['customer_csrf_token'] ?? '');
@@ -182,23 +119,13 @@ if (
     cartFail('Security validation failed. Please try again.', $isAjax);
 }
 
-// ---------------------------------------------------------------------
-// DEPENDENCIES
-// ---------------------------------------------------------------------
-
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/cart-queries.php';
 
-// queue-queries.php is required for its image-resolution helpers.
-// It is safe to include: it only declares functions, it does not
-// dispatch a request, and it re-requires product-queries.php which
-// declares getProductImageBasePath() and
-// getProductPrimaryFilename().
+// queue-queries.php declares queueEnrich() and the image-resolution
+// helpers. It is safe to include: it only declares functions, it
+// does not dispatch a request.
 require_once __DIR__ . '/../database/queue-queries.php';
-
-// ---------------------------------------------------------------------
-// ACTION RESOLUTION
-// ---------------------------------------------------------------------
 
 $action = (string)($_POST['action'] ?? '');
 
@@ -208,10 +135,6 @@ if ($action === '') {
         $action = 'add';
     }
 }
-
-// ---------------------------------------------------------------------
-// DISPATCH
-// ---------------------------------------------------------------------
 
 try {
     switch ($action) {
@@ -261,16 +184,6 @@ try {
 
 /**
  * Compute the effective unit price for a cart line.
- *
- * Base price plus the sum of every selected ingredient's modifier
- * multiplied by its requested quantity. Quantities are clamped to
- * the ingredient's max_quantity from product_composition. Removed
- * and unknown ingredients contribute nothing.
- *
- * @param float $basePrice
- * @param array<int, array<string, mixed>> $customizations
- * @param array<int, array{ingredient_id:int, price_modifier:float, min_quantity:int, max_quantity:int}> $rules
- * @return float
  */
 function computeServerUnitPrice(
     float $basePrice,
@@ -307,51 +220,6 @@ function computeServerUnitPrice(
     return max(0.0, $unitPrice);
 }
 
-/**
- * Resolve a cart row's raw dietary_information.images value into a
- * browser-loadable URL for the session queue line.
- *
- * Delegates to the helpers in product-queries.php:
- *
- *     getProductImageBasePath()    resolves the folder
- *     getProductPrimaryFilename()  finds the first image file
- *
- * The project-root URL prefix is derived from the current request's
- * script depth, matching what queueEnrich() does. The result is the
- * same URL that queueEnrich() would produce for the same product,
- * so a queue line written by the cart and a queue line written by
- * the menu page's "Add to Order" button carry identical image
- * fields.
- *
- * Returns an empty string when the folder cannot be resolved. The
- * checkout page and queue panel fall back to the restaurant icon
- * in that case.
- *
- * @param string $rawPath  Raw dietary_information.images value.
- * @return string
- */
-function resolveCartImageForQueue(string $rawPath): string
-{
-    if ($rawPath === '') {
-        return '';
-    }
-
-    $imageBase    = getProductImageBasePath($rawPath);
-    $primaryImage = getProductPrimaryFilename($rawPath);
-
-    if ($imageBase === '' || $primaryImage === '') {
-        return '';
-    }
-
-    $projectRootUrl = queueProjectRootUrl();
-
-    if ($projectRootUrl === '') {
-        return '';
-    }
-
-    return $projectRootUrl . $imageBase . $primaryImage;
-}
-
 /* -----------------------------------------------------------------
  * ACTION HANDLERS
  * ----------------------------------------------------------------- */
@@ -380,7 +248,6 @@ function handleAdd(PDO $db, int $customerId, bool $isAjax): void
 
     $db->beginTransaction();
 
-    // Lock the product row. Everything below reads from this snapshot.
     $product = getProductForCart($db, $productId);
     if (!$product) {
         throw new RuntimeException('Product not found.');
@@ -398,7 +265,6 @@ function handleAdd(PDO $db, int $customerId, bool $isAjax): void
 
     $serverUnitPrice = computeServerUnitPrice($basePrice, $customizations, $rules);
 
-    // Log client/server total mismatch. The server price is authoritative.
     if ($clientTotal > 0) {
         $expectedTotal = $serverUnitPrice * $quantity;
         if (abs($expectedTotal - $clientTotal) > 0.01) {
@@ -514,36 +380,19 @@ function handleGetCount(PDO $db, int $customerId): void
 /**
  * Push only the SELECTED cart rows into the session order_queue.
  *
- * Expects $_POST['cart_ids'] to be an array of cart_id integers.
- * Rows that are inactive or out of stock are skipped even if selected.
+ * Each cart row is routed through queueEnrich(), which:
+ *   - validates the product is still active and in stock
+ *   - computes a fresh effective unit price from the current
+ *     composition rules (the cart's stored price is not trusted as
+ *     money)
+ *   - resolves the product image into a browser-loadable URL
+ *   - builds the enriched `customizations` array the queue panel
+ *     reads
+ *   - preserves the raw customization_data JSON for
+ *     createOrderFromQueue()
  *
- * Session queue line shape
- * ------------------------
- * Every line written here carries the same fields that
- * createOrderFromQueue() in
- * shared/backend/database/order-transaction-queries.php reads:
- *
- *   line_key               product + customization signature
- *   product_id             int
- *   name                   string
- *   price                  float  effective unit price (server-authoritative)
- *   base_price             float  product base price
- *   quantity               int    capped at product stock
- *   image                  string browser-loadable URL
- *   stock                  int
- *   restaurant_branch_id   int    required by createOrderFromQueue()
- *   restaurant_name        string
- *   branch_name            string
- *   customization_data     string|null  raw JSON from cart.customization_data
- *
- * Image field
- * -----------
- * The `image` field is a browser-loadable URL produced by
- * resolveCartImageForQueue(), not the raw dietary_information.images
- * value the cart row carries. This matches what queueEnrich()
- * produces for a queue line added via the menu page, so a queue
- * line's image renders identically regardless of which page added
- * it.
+ * The returned line already carries every field a session queue
+ * line needs. Only `line_key` is added here.
  *
  * Merge rule
  * ----------
@@ -553,8 +402,8 @@ function handleGetCount(PDO $db, int $customerId): void
  * lines, matching the cart table's own
  * unique_cart_item (customer_id, product_id, customization_hash)
  * constraint. When a merge happens, every mutable field is
- * refreshed from the cart row so a stale price or a dropped
- * customization cannot survive the merge.
+ * refreshed from the fresh enriched line so a stale price or a
+ * dropped customization cannot survive the merge.
  */
 function handlePushToQueue(PDO $db, int $customerId, bool $isAjax): void
 {
@@ -580,12 +429,8 @@ function handlePushToQueue(PDO $db, int $customerId, bool $isAjax): void
         $_SESSION['order_queue'] = [];
     }
 
-    // Index existing queue lines by their full signature (product_id
-    // plus the raw customization JSON the cart row carries) so a
-    // merge only fires when the customization actually matches.
-    // Indexing by product_id alone would collapse two cart rows for
-    // the same product with different customizations into one queue
-    // line, discarding the second customization set.
+    // Index existing queue lines by their signature so a merge only
+    // fires when the customization payload actually matches.
     $indexBySignature = [];
     foreach ($_SESSION['order_queue'] as $i => $line) {
         $signature = queueLineSignatureFromLine($line);
@@ -598,75 +443,62 @@ function handlePushToQueue(PDO $db, int $customerId, bool $isAjax): void
     $skippedCount = 0;
 
     foreach ($rows as $row) {
-        $isActive = ((int)($row['is_active'] ?? 0) === 1);
-        $stock    = (int)($row['stock'] ?? 0);
-
-        if (!$isActive || $stock <= 0) {
-            $skippedCount++;
-            continue;
-        }
-
         $productId = (int)($row['product_id'] ?? 0);
-        $branchId  = (int)($row['restaurant_branch_id'] ?? 0);
         $quantity  = (int)($row['quantity'] ?? 0);
 
-        // A cart row that somehow lost its branch reference cannot
-        // become a valid queue line. Skip it rather than write a
-        // line createOrderFromQueue() will silently drop.
-        if ($productId <= 0 || $branchId <= 0 || $quantity <= 0) {
+        if ($productId <= 0 || $quantity <= 0) {
             $skippedCount++;
             continue;
         }
 
-        $lineKey = 'p::' . $productId . '::' . sha1((string)($row['customization_data'] ?? ''));
+        // Route the cart row through queueEnrich(). The enrich call
+        // validates active/in-stock, computes the effective price,
+        // resolves the image URL, and builds the enriched
+        // customizations array. It returns null when the product is
+        // no longer available.
+        $enriched = queueEnrich($db, [
+            'product_id'         => $productId,
+            'quantity'           => $quantity,
+            'customization_data' => $row['customization_data'] ?? null,
+        ]);
 
-        // Resolve the raw image path into a browser-loadable URL.
-        // This is the fix: the previous revision copied the raw
-        // dietary_information.images value into the queue line, which
-        // the checkout page and queue panel could not render.
-        $imageUrl = resolveCartImageForQueue((string)($row['product_image'] ?? ''));
+        if ($enriched === null) {
+            $skippedCount++;
+            continue;
+        }
 
-        $newLine = [
-            'line_key'             => $lineKey,
-            'product_id'           => $productId,
-            'name'                 => (string)($row['name'] ?? ''),
-            'price'                => (float)($row['price'] ?? 0),
-            'base_price'           => (float)($row['base_price'] ?? 0),
-            'quantity'             => $quantity,
-            'image'                => $imageUrl,
-            'stock'                => $stock,
-            'restaurant_branch_id' => $branchId,
-            'restaurant_name'      => (string)($row['business_name'] ?? ''),
-            'branch_name'          => (string)($row['branch_name'] ?? ''),
-            'customization_data'   => $row['customization_data'] ?? null,
-        ];
+        // Line key matches the signature queue-handler.php's add
+        // action computes for the same product + customization pair,
+        // so a cart-pushed line merges with a line already added
+        // through the menu instead of sitting alongside it.
+        $rawCustomData = (string)($row['customization_data'] ?? '');
+        $lineKey       = 'p::' . $productId . '::' . sha1($rawCustomData);
 
-        $signature = queueLineSignatureFromLine($newLine);
+        $enriched['line_key'] = $lineKey;
+
+        $signature = queueLineSignatureFromLine($enriched);
 
         if ($signature !== '' && isset($indexBySignature[$signature])) {
             $idx = $indexBySignature[$signature];
 
             $currentQty = (int)($_SESSION['order_queue'][$idx]['quantity'] ?? 0);
             $mergedQty  = $currentQty + $quantity;
+            $stock      = (int)($enriched['stock'] ?? 999);
             if ($mergedQty > $stock) {
                 $mergedQty = $stock;
             }
 
-            // Refresh every mutable field from the cart row. The
-            // queue line must reflect the current price, image, and
-            // names, not whatever it carried on the first push.
-            $_SESSION['order_queue'][$idx]['quantity']             = $mergedQty;
-            $_SESSION['order_queue'][$idx]['price']                = $newLine['price'];
-            $_SESSION['order_queue'][$idx]['base_price']           = $newLine['base_price'];
-            $_SESSION['order_queue'][$idx]['stock']                = $stock;
-            $_SESSION['order_queue'][$idx]['image']                = $newLine['image'];
-            $_SESSION['order_queue'][$idx]['name']                 = $newLine['name'];
-            $_SESSION['order_queue'][$idx]['restaurant_branch_id'] = $branchId;
-            $_SESSION['order_queue'][$idx]['restaurant_name']      = $newLine['restaurant_name'];
-            $_SESSION['order_queue'][$idx]['branch_name']          = $newLine['branch_name'];
-            $_SESSION['order_queue'][$idx]['customization_data']   = $newLine['customization_data'];
+            // Refresh every mutable field from the fresh enriched
+            // line. The queue line must reflect the current price,
+            // image, names, and customizations, not whatever it
+            // carried on the first push.
+            $_SESSION['order_queue'][$idx] = array_merge(
+                $_SESSION['order_queue'][$idx],
+                $enriched,
+                ['quantity' => $mergedQty]
+            );
         } else {
-            $_SESSION['order_queue'][] = $newLine;
+            $_SESSION['order_queue'][] = $enriched;
             $indexBySignature[$signature] = count($_SESSION['order_queue']) - 1;
         }
 
@@ -691,20 +523,6 @@ function handlePushToQueue(PDO $db, int $customerId, bool $isAjax): void
 
 /**
  * Build the merge signature for a queue line.
- *
- * The signature is the product id joined with the SHA-1 of the raw
- * customization JSON. Two lines with the same product but different
- * customization payloads therefore have different signatures and
- * never merge. Two lines with the same product and the same
- * customization payload always merge.
- *
- * The `line_key` field, when present on the line, is preferred —
- * it is the same value computed by handlePushToQueue() and by
- * queue-handler.php's add action.
- *
- * Returns '' when the line has no usable product id, which makes
- * the caller treat the line as unindexable rather than merging it
- * into an unrelated bucket.
  *
  * @param array<string, mixed> $line
  * @return string

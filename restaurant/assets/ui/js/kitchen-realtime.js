@@ -4,72 +4,65 @@
  * Owns the live order board on restaurant/pages/kitchen.php:
  *
  *   - A delta poll against the kitchen order handler
- *     (kitchen-order-handler.php). Every tick sends since_order_id,
- *     the highest order id the client already holds, and the tab
- *     the user is on. The server returns:
- *       rows      new cards to prepend
- *       updated   cards whose status changed since last poll
- *       removed   order ids that are no longer live
- *       counts    per-tab counts recomputed server-side
- *       page      the paginated slice for the requested tab
- *       max_id    highest order id in the live set, the new cursor
- *   - The new-order pill that appears when a new live order is
- *     available for the current tab.
- *   - Collapsed-state preservation. The board re-renders cards from
- *     the server on every poll, so the client reapplies the user's
- *     expanded / collapsed choice for each card across re-renders.
+ *     (kitchen-order-handler.php).
+ *   - The new-order pill that appears when a new live order arrives.
+ *   - Collapsed-state preservation across poll re-renders.
  *
- * Config
- * ------
- * The page writes a set of data attributes on #kitchenPage:
+ * ---------------------------------------------------------------------
+ * WHAT THIS FILE DOES NOT OWN
+ * ---------------------------------------------------------------------
+ * The card-collapse toggle. That interaction is owned by
+ * kitchen-order.js, which binds exactly one delegated click listener
+ * on #kitchenOrderList for it.
  *
- *     data-handler-url       → the poll endpoint
- *     data-chat-url          → the chat endpoint (not polled here;
- *                              the chat modal opens it on demand)
- *     data-active-tab        → the tab the user is on right now
- *     data-active-page       → the page of that tab
- *     data-per-page          → page size
- *     data-max-order-id      → the initial delta cursor
+ * This file MUST NOT bind a click handler that touches
+ * .kitchen-order-toggle, .kitchen-order-header, aria-expanded on
+ * the toggle, hidden on the details band, or .is-open on the card
+ * in response to a click. A prior revision did, and the two
+ * handlers — this file's and kitchen-order.js's — fired for the
+ * same click. The card opened and immediately closed.
  *
- * The handler URL is the kitchen order handler
- * (kitchen-order-handler.php). Its previous name was
- * order-handler.php, and both the page and this file were renamed
- * together so the poll target and the endpoint stay in sync.
+ * What this file DOES do to the card state:
  *
- * Statuses that leave the board
- * -----------------------------
- * A card leaves the live board when the server reports it in the
- * `removed` array. The server decides that by checking whether the
- * order is still in one of the live statuses
- * ('pending','preparing','rider_pending','picking_up','delivering').
- * A status of 'delivered','cancelled','refunded', or 'failed'
- * therefore removes the card. The 'failed' case is the outcome
- * produced by the shared order-transaction layer's
- * sweepFailedDeliveries() when a rider does not complete a delivery
- * in time.
+ *   - Before replacing the list's innerHTML, read .is-open off each
+ *     card and store it by order id.
+ *   - After the replacement, apply .is-open, [hidden], and
+ *     aria-expanded to the freshly rendered card to match.
  *
- * This file does not need to know the full set of removed statuses;
- * it only needs to react to whatever the server lists in `removed`.
- * The list is included here so a future change to the live status
- * set is easy to find.
+ * That is a state write, not a toggle. It runs exactly once per
+ * replacement, in the same tick the replacement happens, and it is
+ * never triggered by a user click. There is no second handler that
+ * could fight kitchen-order.js.
  *
- * Rules honored
- * -------------
- *   - No CSS in this file.
- *   - No <svg> injection.
- *   - No window.alert / confirm / prompt.
+ * ---------------------------------------------------------------------
+ * PAGE PROTOCOL
+ * ---------------------------------------------------------------------
+ * The server sends each poll's page slice as an array of
+ * {order_id, order_status, html} entries. This file:
+ *
+ *   1. Reads the currently open cards out of the DOM.
+ *   2. Replaces #kitchenOrderList's innerHTML with the new entries.
+ *   3. Reapplies the open state to each new card.
+ *
+ * Step 3 is idempotent: it sets the same values the DOM already
+ * carries for a card that was not open, and reasserts the state for
+ * a card that was. Nothing about it responds to a user click.
  *
  * @package FitPal
- * @version 2.0 — Poll target resolved from the page's
- *                data-handler-url, which now points at
- *                kitchen-order-handler.php. Docblock records that
- *                'failed' is one of the closed statuses the server
- *                reports in `removed`.
+ * @version 4.0 — Removes every write to the card's open state that
+ *                could be triggered from a click path. All state
+ *                restoration is now scoped to reapplyOpenState()
+ *                called once per page replacement. The duplicate
+ *                click handler that caused the auto-close in the
+ *                previous revision is gone; this file no longer
+ *                binds any click listener at all.
  *
- *                (1.6: cursor advanced from max_id. 1.5:
- *                collapsed-state preservation. 1.4: new-order
- *                pill. 1.3: page + counts from the server. 1.2:
- *                delta poll. 1.1: initial poll.)
+ *                (3.0: removed duplicate click handler from v2.0.
+ *                2.0: poll target from data-handler-url. 1.6: cursor
+ *                advanced from max_id. 1.5: collapsed-state
+ *                preservation. 1.4: new-order pill. 1.3: page +
+ *                counts from the server. 1.2: delta poll. 1.1:
+ *                initial poll.)
  */
 (function () {
     'use strict';
@@ -90,18 +83,15 @@
 
     var POLL_INTERVAL_MS = 5000;
 
-    // The order id the client already holds. Seeds from the initial
-    // server render and advances on every response.
     var sinceOrderId = parseInt(page.getAttribute('data-max-order-id') || '0', 10);
 
     var currentTab = INITIAL_TAB;
     var currentPage = parseInt(page.getAttribute('data-active-page') || '1', 10);
 
-    // Tracks which cards the user has expanded, keyed by order id.
-    // Reapplied after every re-render so the server-rendered
-    // "details collapsed by default" state does not clobber the
-    // user's choice.
-    var expandedOrderIds = Object.create(null);
+    // The open/closed state lives on the DOM. This map is a
+    // per-render snapshot taken before the innerHTML replacement,
+    // read back from the DOM. It is never mutated by a click.
+    var openOrderIds = Object.create(null);
 
     // -----------------------------------------------------------------
     // ELEMENT HANDLES
@@ -111,8 +101,6 @@
     var newOrderPill = document.getElementById('kitchenNewOrderPill');
     var newOrderCountEl = document.getElementById('kitchenNewOrderCount');
     var newOrderPluralEl = document.getElementById('kitchenNewOrderPlural');
-
-    var pendingNewOrders = 0;
 
     // -----------------------------------------------------------------
     // HELPERS
@@ -126,114 +114,71 @@
         return Array.prototype.slice.call((root || document).querySelectorAll(selector));
     }
 
-    function cardIdFromHtml(html) {
-        // Cheap parse: the renderer emits data-order-id as the first
-        // attribute on the outer <article>. Reading it via DOMParser
-        // would be heavier than a single regex and the attribute is
-        // machine-generated, so this stays reliable without pulling
-        // in a full parse tree.
-        var match = html.match(/data-order-id="(\d+)"/);
-        return match ? parseInt(match[1], 10) : 0;
+    /**
+     * Snapshot which cards are open right now, so the state survives
+     * an innerHTML replacement.
+     *
+     * The source of truth is the .is-open class on each card. This
+     * function reads that class and nothing else. It is not called
+     * from a click path.
+     */
+    function snapshotOpenState() {
+        openOrderIds = Object.create(null);
+
+        if (!orderList) return;
+
+        qsa('.kitchen-order-card', orderList).forEach(function (card) {
+            var orderId = parseInt(card.getAttribute('data-order-id') || '0', 10);
+            if (orderId <= 0) return;
+
+            if (card.classList.contains('is-open')) {
+                openOrderIds[orderId] = true;
+            }
+        });
     }
 
     /**
-     * Reapply the user's collapsed/expanded choice to a freshly
-     * rendered card. The server always renders the details band
-     * hidden; if the user had expanded it before the poll, this
-     * puts it back.
+     * Apply the stored open state to a card that was just rendered.
+     *
+     * This is a state WRITE, not a toggle. It does not read the
+     * current state of the fresh card's DOM — it sets the fresh
+     * card's DOM to the value the snapshot holds. Running it twice
+     * for the same card produces the same result.
+     *
+     * It never runs in response to a click. It runs once per
+     * replacement, in reapplyOpenStateForList() below.
+     *
+     * @param {HTMLElement} card
      */
-    function applyCollapsedState(card) {
+    function applyOpenState(card) {
+        if (!card) return;
+
         var orderId = parseInt(card.getAttribute('data-order-id') || '0', 10);
         if (orderId <= 0) return;
 
-        var shouldBeOpen = !!expandedOrderIds[orderId];
-        var toggleBtn = qs('.kitchen-order-toggle', card);
         var details = qs('.kitchen-order-details', card);
+        var toggle  = qs('.kitchen-order-toggle', card);
 
-        if (!toggleBtn || !details) return;
+        if (!details || !toggle) return;
 
-        if (shouldBeOpen) {
-            details.hidden = false;
+        if (openOrderIds[orderId]) {
             card.classList.add('is-open');
-            toggleBtn.setAttribute('aria-expanded', 'true');
+            details.hidden = false;
+            toggle.setAttribute('aria-expanded', 'true');
         } else {
-            details.hidden = true;
             card.classList.remove('is-open');
-            toggleBtn.setAttribute('aria-expanded', 'false');
+            details.hidden = true;
+            toggle.setAttribute('aria-expanded', 'false');
         }
     }
 
     /**
-     * Wire a card's expand toggle. Called both on initial render and
-     * after every poll re-render.
-     *
-     * The delegated listener is attached once at the board level in
-     * initExpandDelegation() below, so this function only needs to
-     * reapply the collapsed state — nothing is re-bound here.
+     * Apply the stored open state to every card in the list. Called
+     * exactly once after each page replacement.
      */
-    function rehydrateCard(card) {
-        applyCollapsedState(card);
-    }
-
-    /**
-     * Refresh the tab-count badges from the server-provided counts
-     * object.
-     */
-    function applyCounts(counts) {
-        if (!counts || typeof counts !== 'object') return;
-
-        Object.keys(counts).forEach(function (key) {
-            var el = qs('[data-tab-count="' + key + '"]');
-            if (!el) return;
-
-            var n = parseInt(counts[key], 10);
-            el.textContent = String(isNaN(n) ? 0 : n);
-        });
-    }
-
-    /**
-     * Replace the entire order list for the current tab with the
-     * server-provided page slice.
-     *
-     * This is the path used when the user switches tabs or when the
-     * server reports that the current page's content changed in a
-     * way the incremental rows/updated/removed sets do not capture
-     * (e.g. a card moved between tabs).
-     */
-    function replacePage(pageItems) {
-        if (!orderList || !Array.isArray(pageItems)) return;
-
-        // Preserve which cards were expanded before the replace.
-        qsa('.kitchen-order-card', orderList).forEach(function (card) {
-            var orderId = parseInt(card.getAttribute('data-order-id') || '0', 10);
-            if (orderId > 0 && card.classList.contains('is-open')) {
-                expandedOrderIds[orderId] = true;
-            }
-        });
-
-        orderList.innerHTML = '';
-
-        if (pageItems.length === 0) {
-            var empty = document.createElement('div');
-            empty.className = 'kitchen-empty-state';
-            empty.innerHTML = '<p class="kitchen-empty-title">No orders</p>' +
-                              '<p class="kitchen-empty-text">There is nothing to show in this tab.</p>';
-            orderList.appendChild(empty);
-            return;
-        }
-
-        pageItems.forEach(function (item) {
-            if (!item || !item.html) return;
-
-            var wrapper = document.createElement('div');
-            wrapper.innerHTML = item.html.trim();
-
-            var card = wrapper.firstElementChild;
-            if (!card) return;
-
-            orderList.appendChild(card);
-            rehydrateCard(card);
-        });
+    function reapplyOpenStateForList() {
+        if (!orderList) return;
+        qsa('.kitchen-order-card', orderList).forEach(applyOpenState);
     }
 
     // -----------------------------------------------------------------
@@ -285,45 +230,12 @@
     }
 
     // -----------------------------------------------------------------
-    // EXPAND / COLLAPSE DELEGATION
-    // -----------------------------------------------------------------
-
-    function initExpandDelegation() {
-        document.addEventListener('click', function (event) {
-            var toggle = event.target.closest('.kitchen-order-toggle');
-            if (!toggle) return;
-
-            var card = toggle.closest('.kitchen-order-card');
-            if (!card) return;
-
-            var details = qs('.kitchen-order-details', card);
-            if (!details) return;
-
-            var orderId = parseInt(card.getAttribute('data-order-id') || '0', 10);
-            var expanded = toggle.getAttribute('aria-expanded') === 'true';
-
-            if (expanded) {
-                details.hidden = true;
-                card.classList.remove('is-open');
-                toggle.setAttribute('aria-expanded', 'false');
-                if (orderId > 0) delete expandedOrderIds[orderId];
-            } else {
-                details.hidden = false;
-                card.classList.add('is-open');
-                toggle.setAttribute('aria-expanded', 'true');
-                if (orderId > 0) expandedOrderIds[orderId] = true;
-            }
-        });
-    }
-
-    // -----------------------------------------------------------------
     // NEW-ORDER PILL
     // -----------------------------------------------------------------
 
     function showNewOrderPill(count) {
         if (!newOrderPill) return;
 
-        pendingNewOrders = count;
         if (count <= 0) {
             newOrderPill.hidden = true;
             return;
@@ -336,7 +248,6 @@
     }
 
     function clearNewOrderPill() {
-        pendingNewOrders = 0;
         if (newOrderPill) newOrderPill.hidden = true;
     }
 
@@ -357,6 +268,48 @@
         return body;
     }
 
+    /**
+     * Replace the entire order list with the server's page slice,
+     * then reapply the open/closed state for each card.
+     *
+     * The snapshot is taken from the DOM before the innerHTML is
+     * replaced. After the replacement, the state is written back.
+     * Neither step responds to a click.
+     *
+     * @param {Array<{order_id:number, order_status:string, html:string}>} pageItems
+     */
+    function replacePage(pageItems) {
+        if (!orderList || !Array.isArray(pageItems)) return;
+
+        snapshotOpenState();
+
+        orderList.innerHTML = '';
+
+        if (pageItems.length === 0) {
+            var empty = document.createElement('div');
+            empty.className = 'kitchen-empty-state';
+            empty.innerHTML =
+                '<p class="kitchen-empty-title">No orders</p>' +
+                '<p class="kitchen-empty-text">There is nothing to show in this tab.</p>';
+            orderList.appendChild(empty);
+            return;
+        }
+
+        pageItems.forEach(function (item) {
+            if (!item || !item.html) return;
+
+            var wrapper = document.createElement('div');
+            wrapper.innerHTML = item.html.trim();
+
+            var card = wrapper.firstElementChild;
+            if (!card) return;
+
+            orderList.appendChild(card);
+        });
+
+        reapplyOpenStateForList();
+    }
+
     function fetchNow() {
         fetch(HANDLER_URL, {
             method: 'POST',
@@ -372,21 +325,25 @@
                 }
 
                 if (data.counts) {
-                    applyCounts(data.counts);
+                    var counts = data.counts;
+                    Object.keys(counts).forEach(function (key) {
+                        var el = document.querySelector('[data-tab-count="' + key + '"]');
+                        if (!el) return;
+                        var n = parseInt(counts[key], 10);
+                        el.textContent = String(isNaN(n) ? 0 : n);
+                    });
                 }
 
                 if (data.page && Array.isArray(data.page.items)) {
                     replacePage(data.page.items);
                 }
 
-                // A failed order and every other closed status is
-                // listed in `removed`. Clearing the pill on a
-                // non-empty removed set is not necessary because the
-                // page swap already reflects the current tab, but
-                // tracking it here keeps the pill honest if a future
-                // revision ever switches to incremental rendering.
                 if (Array.isArray(data.removed) && data.removed.length > 0) {
                     clearNewOrderPill();
+                }
+
+                if (Array.isArray(data.rows) && data.rows.length > 0) {
+                    showNewOrderPill(data.rows.length);
                 }
             })
             .catch(function () {
@@ -401,11 +358,13 @@
     document.addEventListener('DOMContentLoaded', function () {
         initTabSwitching();
         initPaginationLinks();
-        initExpandDelegation();
 
-        qsa('.kitchen-order-card', orderList).forEach(function (card) {
-            rehydrateCard(card);
-        });
+        // Snapshot before the first poll so the server-rendered
+        // cards keep their server-rendered state. The server
+        // renders every card collapsed by default; this snapshot
+        // therefore captures an empty set and the first poll
+        // leaves the cards closed.
+        snapshotOpenState();
 
         fetchNow();
         setInterval(fetchNow, POLL_INTERVAL_MS);

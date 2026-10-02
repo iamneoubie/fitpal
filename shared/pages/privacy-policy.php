@@ -1,42 +1,46 @@
 <?php
 /**
  * FitPal Privacy Policy Page
- * 
- * This is the public privacy policy page for the demonstration project.
- * 
- * Usage: Direct access via web browser
- * 
+ *
+ * Public-facing privacy policy for the demonstration project.
+ * Belongs to the public context and runs on its own PHP session
+ * (PHPSESSID_PUBLIC), separate from every authenticated role's
+ * session.
+ *
  * @package FitPal
- * @version 1.0
+ * @version 2.0 — Per-role session migration (Option B). The page
+ *                now bootstraps the public session itself before
+ *                including the shared header, which resolves the
+ *                "Configuration Error" that appeared when the
+ *                header's precondition check failed. The local
+ *                asset-base function was removed in favor of the
+ *                $assetBase provided by the header. The redundant
+ *                <link> for the page CSS was removed, as the shared
+ *                header now handles it.
+ *
+ *                (1.0: initial page.)
  */
 
 declare(strict_types=1);
 
-// Session is now handled by header.php
-// No need to start session here
+// ---------------------------------------------------------------------
+// SESSION BOOTSTRAP
+//
+// Must run BEFORE any other include that might touch the session.
+// Under Option B, this page belongs to the public context.
+// ---------------------------------------------------------------------
 
-// Include shared header (handles session)
+require_once __DIR__ . '/../includes/session-bootstrap.php';
+fitpal_session_bootstrap('public');
+
+// ---------------------------------------------------------------------
+// HEADER
+//
+// The shared header verifies that the active session is the public
+// session and provides the $assetBase variable.
+// ---------------------------------------------------------------------
+
 require_once __DIR__ . '/../includes/header.php';
-
-/**
- * Get the base path for assets based on current file location
- * 
- * @return string The asset base path
- */
-function getPrivacyAssetBase(): string {
-    $scriptPath = $_SERVER['SCRIPT_NAME'];
-    $dirPath = dirname($scriptPath);
-    $segments = array_filter(explode('/', $dirPath));
-    $depth = count($segments);
-    
-    if ($depth <= 0) {
-        return './shared/';
-    }
-    
-    return str_repeat('../', $depth) . 'shared/';
-}
-
-$assetBase = getPrivacyAssetBase();
 
 // Policy sections data
 $policySections = [
@@ -103,7 +107,7 @@ $policySections = [
             [
                 'Passwords are hashed using PHP\'s password_hash()',
                 'Prepared statements prevent SQL injection',
-                'Session management with 30-minute timeout',
+                'Session management with a 30-minute timeout',
                 'Not secure for production use'
             ]
         ]
@@ -148,14 +152,6 @@ $policySections = [
     ]
 ];
 ?>
-<!-- ============================================
-    PRIVACY POLICY PAGE CSS
-    ============================================ -->
-<link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/privacy-policy.css">
-
-<!-- ============================================
-    PRIVACY POLICY CONTENT
-    ============================================ -->
 
 <div class="content">
 
@@ -186,7 +182,8 @@ $policySections = [
                 </div>
 
                 <?php foreach ($policySections as $section): ?>
-                <div id="section-<?php echo $section['id']; ?>" class="privacy-block">
+                <div id="section-<?php echo htmlspecialchars($section['id'], ENT_QUOTES, 'UTF-8'); ?>"
+                    class="privacy-block">
                     <p class="privacy-block-title">
                         <?php echo htmlspecialchars($section['title'], ENT_QUOTES, 'UTF-8'); ?></p>
 

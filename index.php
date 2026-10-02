@@ -13,7 +13,6 @@
  *   - shared/includes/session-bootstrap.php  (public session)
  *   - shared/includes/header.php             (public chrome)
  *   - shared/includes/footer.php             (footer markup)
- *   - shared/includes/view-helpers.php       (presentation helpers)
  *   - shared/backend/database/database-connect.php
  *   - shared/backend/database/landing-queries.php
  *
@@ -43,39 +42,105 @@
  * active customer session and redirects them to their dashboard.
  *
  * ---------------------------------------------------------------------
- * ADD-TO-CART REMOVED FROM THIS PAGE
+ * PRODUCT IMAGE RESOLUTION (v5.0)
  * ---------------------------------------------------------------------
- * Before this revision, the featured-product cards rendered an
- * inline form that POSTed to
- * customer/backend/handlers/cart-handler.php. That form carried
- * $_SESSION['csrf_token'], but the cart handler validates against
- * $_SESSION['customer_csrf_token'], so every submission failed
- * with "Security validation failed."
+ * This page renders product images by using the `image_base` and
+ * `primary_image` fields returned by getFeaturedProducts() in
+ * landing-queries.php. Those fields are resolved from the raw
+ * `dietary_information.images` path by the shared helpers in
+ * customer/backend/database/product-queries.php, ensuring the
+ * landing page, the customer menu, and the product detail page all
+ * display the same correct image for a given product.
  *
- * Under Option B the mismatch is structural: this page runs on
- * the public session, so it cannot read the customer session at
- * all. The inline form is removed entirely. Each featured product
- * card now links to
- * customer/pages/product-detail.php?id=<product_id>, which is the
- * correct place to add an item to a cart because it runs on the
- * customer session.
+ * The local helper `resolveLandingPageImageUrl()` builds the final
+ * browser-loadable URL from the page's own `$assetBase` and the
+ * resolved folder/filename fields.
+ *
+ * ---------------------------------------------------------------------
+ * VIEW HELPERS (v5.2)
+ * ---------------------------------------------------------------------
+ * This page uses three pure presentation helpers — formatPrice(),
+ * truncateText(), and parseTagList() — which were previously
+ * declared in shared/includes/view-helpers.php. That file has been
+ * removed from the project. The three helpers are declared inline
+ * here, each behind a function_exists() guard, because this page
+ * is now their only consumer in the shared/public scope.
  *
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 4.0 — Per-role session migration (Option B). The page
- *                bootstraps the public session before any other
- *                include. The inline add-to-cart form and the
- *                logged-in CTA branch are removed because the
- *                public session cannot read the customer session.
- *                Featured-product cards now link to the product
- *                detail page.
+ * @version 5.2 — Removed the require_once for the deleted
+ *                shared/includes/view-helpers.php file and inlined
+ *                the three pure helpers (formatPrice, truncateText,
+ *                parseTagList) this page consumes.
  *
- *                (3.2: removed inline CSS link and duplicated
- *                asset-base helper.)
+ *                (5.1: restored the require for view-helpers.php.
+ *                5.0: resolves product images using image_base and
+ *                primary_image from landing-queries.php.)
  */
 
 declare(strict_types=1);
+
+// ---------------------------------------------------------------------
+// VIEW HELPERS
+//
+// Inlined because shared/includes/view-helpers.php no longer exists.
+// Each declaration is behind a function_exists() guard so a future
+// reintroduction of that file (or a page that already declares
+// these functions) does not trigger a redeclaration fatal.
+// ---------------------------------------------------------------------
+
+if (!function_exists('formatPrice')) {
+    /**
+     * Format a numeric price as Philippine pesos.
+     *
+     * @param int|float|string $price
+     * @return string
+     */
+    function formatPrice(int|float|string $price): string
+    {
+        return '₱' . number_format((float)$price, 2);
+    }
+}
+
+if (!function_exists('truncateText')) {
+    /**
+     * Truncate a string to a maximum length, appending an ellipsis
+     * if the string was cut.
+     *
+     * @param string $text
+     * @param int $length
+     * @return string
+     */
+    function truncateText(string $text, int $length = 70): string
+    {
+        $text = trim($text);
+        if (strlen($text) <= $length) {
+            return $text;
+        }
+        return substr($text, 0, $length) . '...';
+    }
+}
+
+if (!function_exists('parseTagList')) {
+    /**
+     * Split a comma-separated tag list into a clean, trimmed array.
+     * Empty entries are filtered out.
+     *
+     * @param string $raw
+     * @return array<int, string>
+     */
+    function parseTagList(string $raw): array
+    {
+        if ($raw === '') {
+            return [];
+        }
+        return array_values(array_filter(
+            array_map('trim', explode(',', $raw)),
+            static fn(string $v): bool => $v !== ''
+        ));
+    }
+}
 
 // ---------------------------------------------------------------------
 // SESSION BOOTSTRAP
@@ -102,7 +167,6 @@ require_once __DIR__ . '/shared/includes/header.php';
 // ---------------------------------------------------------------------
 
 require_once __DIR__ . '/shared/backend/database/landing-queries.php';
-require_once __DIR__ . '/shared/includes/view-helpers.php';
 
 $featuredProducts = [];
 $stats            = ['restaurants' => 0, 'products' => 0, 'customers' => 0];
@@ -115,6 +179,35 @@ try {
 }
 
 $hasProducts = !empty($featuredProducts);
+
+/**
+ * Build a browser-loadable URL for a featured product's primary image.
+ *
+ * @param string $projectRootUrl The project-root-relative URL prefix.
+ * @param string $imageBase      The resolved folder path from the reader.
+ * @param string $primaryImage   The primary filename from the reader.
+ * @param string $fallback       The fallback icon URL.
+ * @return string
+ */
+function resolveLandingPageImageUrl(
+    string $projectRootUrl,
+    string $imageBase,
+    string $primaryImage,
+    string $fallback
+): string {
+    if ($projectRootUrl === '' || $imageBase === '' || $primaryImage === '') {
+        return $fallback;
+    }
+    return $projectRootUrl . $imageBase . $primaryImage;
+}
+
+// Derive the project-root URL from $assetBase.
+$projectRootUrl = preg_replace('#shared/$#', '', $assetBase);
+if (!is_string($projectRootUrl)) {
+    $projectRootUrl = '';
+}
+$productImageFallback = $assetBase . 'assets/images/icons/restaurant.svg';
+
 ?>
 
 <div class="content">
@@ -312,9 +405,12 @@ $hasProducts = !empty($featuredProducts);
                     $dietaryTags = parseTagList($product['dietary_tags'] ?? '');
                     $allergens   = parseTagList($product['allergens'] ?? '');
 
-                    $productImage = !empty($product['product_image'])
-                        ? htmlspecialchars($product['product_image'], ENT_QUOTES, 'UTF-8')
-                        : $assetBase . 'assets/images/icons/restaurant.svg';
+                    $productImage = resolveLandingPageImageUrl(
+                        $projectRootUrl,
+                        (string)($product['image_base']    ?? ''),
+                        (string)($product['primary_image'] ?? ''),
+                        $productImageFallback
+                    );
 
                     $productDetailUrl = $assetBase . '../customer/pages/product-detail.php?id=' . $productId;
                 ?>
@@ -323,9 +419,9 @@ $hasProducts = !empty($featuredProducts);
                     <a href="<?php echo htmlspecialchars($productDetailUrl, ENT_QUOTES, 'UTF-8'); ?>"
                         class="product-image-link">
                         <div class="product-image">
-                            <img src="<?php echo $productImage; ?>"
+                            <img src="<?php echo htmlspecialchars($productImage, ENT_QUOTES, 'UTF-8'); ?>"
                                 alt="<?php echo htmlspecialchars($productName, ENT_QUOTES, 'UTF-8'); ?>" loading="lazy"
-                                onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/restaurant.svg'">
+                                onerror="this.onerror=null; this.src='<?php echo $productImageFallback; ?>'">
                         </div>
                     </a>
 
@@ -380,15 +476,6 @@ $hasProducts = !empty($featuredProducts);
                             </div>
                         </div>
                     </div>
-
-                    <!--
-                        The inline add-to-cart form was removed in v4.0.
-                        This page runs on the public session and cannot
-                        read the customer session's CSRF token. The
-                        featured card links to the product detail page
-                        instead, which runs on the customer session and
-                        is where add-to-cart belongs.
-                    -->
                     <div class="product-actions">
                         <a href="<?php echo htmlspecialchars($productDetailUrl, ENT_QUOTES, 'UTF-8'); ?>"
                             class="btn btn-primary btn-sm">
@@ -440,3 +527,4 @@ $hasProducts = !empty($featuredProducts);
 
 <?php
 require_once __DIR__ . '/shared/includes/footer.php';
+?>

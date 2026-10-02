@@ -1,8 +1,41 @@
 -- =====================================================
--- DATABASE: fitpal_food_delivery v2.5.0
+-- DATABASE: fitpal_food_delivery v2.6.0
 -- Dietary Meal Ordering and Restaurant Nutrition Analytics System
 -- WITH FULL CUSTOMIZABLE MEAL SUPPORT
 -- ACID / TCL Compliant
+--
+-- v2.6.0 changes (rider average rating maintenance)
+-- --------------------------------------------------
+-- delivery_rider_profile.average_rating is now maintained by
+-- three AFTER triggers on the `rating` table:
+--
+--     after_rating_insert_rider_avg
+--     after_rating_update_rider_avg
+--     after_rating_delete_rider_avg
+--
+-- Each recomputes the affected rider's average from every
+-- rider-type rating on file. The UPDATE trigger handles the
+-- re-point case (a rating moved from one rider to another) by
+-- recomputing for BOTH the old and the new rider.
+--
+-- Before v2.6.0 the column was declared and read but never
+-- written by any trigger, procedure, or application path, so
+-- a rider's average stayed at its default 0.0 no matter how
+-- many rider-type ratings were recorded against them. The
+-- three new triggers close that gap.
+--
+-- The column is treated as a DERIVED value, exactly like
+-- delivery_rider_profile.total_deliveries, which has been
+-- maintained by the after_order_delivered trigger since v1.0.
+-- The application layer reads the column; it never writes it.
+--
+-- A one-time backfill for existing rows is provided in the
+-- companion seed file (Section 11 of all-in-one.sql). A
+-- fresh database built from the seed therefore starts with
+-- correct averages for every rider.
+--
+-- No table, column, index, procedure, view, or other trigger
+-- changed.
 --
 -- v2.5.0 changes (rider liability settlement)
 -- -------------------------------------------
@@ -1403,6 +1436,100 @@ END IF;
 IF subject_exists = 0 THEN
     SIGNAL SQLSTATE '45000'
     SET MESSAGE_TEXT = 'Rating subject does not exist';
+END IF;
+END$$
+
+-- =====================================================
+-- RIDER AVERAGE RATING TRIGGERS (v2.6.0)
+--
+-- delivery_rider_profile.average_rating is a DERIVED column.
+-- It must always equal the mean of every row in `rating`
+-- where rating_type = 'rider' and rider_id points at the
+-- rider in question. Nothing in the application layer is
+-- allowed to write it directly.
+--
+-- These three triggers keep it correct for every write path:
+--
+--     after_rating_insert_rider_avg    INSERT
+--     after_rating_update_rider_avg    UPDATE
+--     after_rating_delete_rider_avg    DELETE
+--
+-- UPDATE and DELETE must use BOTH OLD and NEW rider_id,
+-- because a rating can be re-pointed from one rider to
+-- another. When that happens, two averages change: the old
+-- rider's and the new rider's.
+--
+-- The average is rounded to one decimal place to match the
+-- DECIMAL(2,1) column type. A rider with no rider-type
+-- ratings has their average reset to 0.0, matching the
+-- column default.
+-- =====================================================
+
+CREATE TRIGGER after_rating_insert_rider_avg
+AFTER INSERT ON rating
+FOR EACH ROW
+BEGIN
+IF NEW.rating_type = 'rider' AND NEW.rider_id IS NOT NULL THEN
+    UPDATE delivery_rider_profile
+        SET average_rating = COALESCE(
+            (SELECT ROUND(AVG(score), 1)
+               FROM rating
+              WHERE rating_type = 'rider'
+                AND rider_id = NEW.rider_id),
+            0.0
+        )
+        WHERE delivery_rider_id = NEW.rider_id;
+END IF;
+END$$
+
+CREATE TRIGGER after_rating_update_rider_avg
+AFTER UPDATE ON rating
+FOR EACH ROW
+BEGIN
+IF NEW.rating_type = 'rider' AND NEW.rider_id IS NOT NULL THEN
+    UPDATE delivery_rider_profile
+        SET average_rating = COALESCE(
+            (SELECT ROUND(AVG(score), 1)
+               FROM rating
+              WHERE rating_type = 'rider'
+                AND rider_id = NEW.rider_id),
+            0.0
+        )
+        WHERE delivery_rider_id = NEW.rider_id;
+END IF;
+
+IF OLD.rating_type = 'rider'
+    AND OLD.rider_id IS NOT NULL
+    AND (NEW.rider_id IS NULL
+         OR NEW.rider_id <> OLD.rider_id
+         OR NEW.rating_type <> 'rider')
+THEN
+    UPDATE delivery_rider_profile
+        SET average_rating = COALESCE(
+            (SELECT ROUND(AVG(score), 1)
+               FROM rating
+              WHERE rating_type = 'rider'
+                AND rider_id = OLD.rider_id),
+            0.0
+        )
+        WHERE delivery_rider_id = OLD.rider_id;
+END IF;
+END$$
+
+CREATE TRIGGER after_rating_delete_rider_avg
+AFTER DELETE ON rating
+FOR EACH ROW
+BEGIN
+IF OLD.rating_type = 'rider' AND OLD.rider_id IS NOT NULL THEN
+    UPDATE delivery_rider_profile
+        SET average_rating = COALESCE(
+            (SELECT ROUND(AVG(score), 1)
+               FROM rating
+              WHERE rating_type = 'rider'
+                AND rider_id = OLD.rider_id),
+            0.0
+        )
+        WHERE delivery_rider_id = OLD.rider_id;
 END IF;
 END$$
 

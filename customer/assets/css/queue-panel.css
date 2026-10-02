@@ -1,9 +1,32 @@
 /**
  * FitPal Customer Queue Panel Styles
- * Version 3.5 — Remove button enlarged; 32px cancel icon at every breakpoint.
+ * Version 3.6 — Adds the customization dropdown to each queue item.
+ *                Every line that carries a non-empty customizations
+ *                array now renders a "Customized" toggle beneath the
+ *                price, and the panel it expands carries the same
+ *                modification list shape the cart page renders.
+ *
+ *                The nested modifications reuse the cart.css class
+ *                names (.cart-customs-list, .cart-customs-row,
+ *                .cart-customs-symbol, .cart-customs-name,
+ *                .cart-customs-price) so the two surfaces read as
+ *                the same component. Queue-scoped styles
+ *                (.queue-customs-*) carry only the wrapper, the
+ *                toggle, and the notes block, because those are the
+ *                parts that differ from cart.
+ *
+ *                The toggle's chevron rotates via CSS, keyed on
+ *                [aria-expanded="true"]. The JS flips the attribute
+ *                and the target panel's `hidden` attribute; it does
+ *                not touch the icon. That keeps the rotation in
+ *                CSS where it belongs.
+ *
+ *                (3.5: Remove button enlarged; 32px cancel icon at
+ *                every breakpoint. 3.4: mobile queue item grid
+ *                layout.)
  *
  * @package FitPal
- * @version 3.5
+ * @version 3.6
  */
 
 /* ============================================
@@ -249,6 +272,164 @@
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
+}
+
+/* ============================================
+   CUSTOMIZATION DROPDOWN
+   ============================================ */
+
+.queue-customs-wrap {
+    margin-top: 6px;
+}
+
+.queue-customs-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border: none;
+    border-radius: var(--radius-full);
+    background: rgba(89, 193, 74, 0.08);
+    color: var(--primary);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    font-family: inherit;
+}
+
+.queue-customs-toggle:hover {
+    background: rgba(89, 193, 74, 0.16);
+}
+
+.queue-customs-toggle:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.queue-customs-toggle-icon {
+    width: 14px;
+    height: 14px;
+    display: block;
+    flex-shrink: 0;
+    opacity: 0.85;
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+    transition: transform 0.2s ease;
+}
+
+.queue-customs-toggle[aria-expanded="true"] .queue-customs-toggle-icon {
+    transform: rotate(180deg);
+}
+
+.queue-customs-row-wrap {
+    margin-top: 8px;
+}
+
+.queue-customs-row-wrap[hidden] {
+    display: none;
+}
+
+.queue-customs-panel {
+    padding: 10px 12px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* ---- Notes block ---- */
+
+.queue-customs-notes {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.queue-customs-notes-label {
+    margin: 0;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--gray-600);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.queue-customs-notes-text {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-700);
+    line-height: 1.5;
+    word-break: break-word;
+    padding: 6px 8px;
+    background: #fff9e6;
+    border-left: 2px solid var(--warning);
+    border-radius: var(--radius-sm);
+}
+
+/* ---- Modification rows ----
+ *
+ * These class names come from cart.css and are reused here so a
+ * modification line reads identically on both surfaces. The rules
+ * below are the minimum needed to render them inside a
+ * .queue-customs-panel; cart.css's own rules are not loaded on the
+ * menu page, so queue-panel.css must carry them itself.
+ * ----------------------------------------------------------------- */
+
+.queue-customs-panel .cart-customs-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.queue-customs-panel .cart-customs-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: var(--font-size-xs);
+    color: var(--gray-700);
+    line-height: 1.5;
+}
+
+.queue-customs-panel .cart-customs-symbol {
+    width: 14px;
+    text-align: center;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.queue-customs-panel .cart-customs-add .cart-customs-symbol {
+    color: var(--primary);
+}
+
+.queue-customs-panel .cart-customs-remove .cart-customs-symbol {
+    color: var(--gray-500);
+}
+
+.queue-customs-panel .cart-customs-name {
+    flex: 1;
+    min-width: 0;
+    word-break: break-word;
+}
+
+.queue-customs-panel .cart-customs-removed {
+    color: var(--gray-500);
+    font-style: italic;
+    margin-left: 4px;
+}
+
+.queue-customs-panel .cart-customs-price {
+    color: var(--gray-600);
+    font-weight: 600;
+    white-space: nowrap;
 }
 
 /* ============================================
@@ -739,7 +920,6 @@
         font-size: var(--font-size-sm);
         line-height: 1.3;
         display: -webkit-box;
-        -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
     }
@@ -791,6 +971,11 @@
         min-width: 0;
         text-align: right;
         margin-left: auto;
+    }
+
+    /* Customization panel on mobile: full width */
+    .queue-customs-wrap {
+        grid-column: 1 / -1;
     }
 
     /* ---- Footer ---- */

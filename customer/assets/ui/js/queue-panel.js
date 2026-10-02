@@ -27,17 +27,44 @@
  * Every other transition is user-driven via the header toggle. The
  * panel only reverts to collapsed when the queue empties.
  *
- * @package FitPal
- * @version 6.3 — Panel now opens expanded on first load with items
- *                and after every successful add. isOpen starts true
- *                and updateVisibility() no longer resets it on a
- *                normal render; only an empty queue forces it back
- *                to false.
+ * ---------------------------------------------------------------------
+ * CUSTOMIZATION DISPLAY (v6.4)
+ * ---------------------------------------------------------------------
+ * Each queue line returned by queue-handler.php carries a parsed
+ * `customizations` array. It is the same array the cart and orders
+ * pages render: every entry has ingredient_name, price_modifier,
+ * selected_option, and quantity. A notes entry ({type:'notes',
+ * notes:'...'}) may also be present.
  *
- *                (6.2: fixed expanded-state desync by normalizing
- *                the inner panel class in updateVisibility().
- *                6.1: remove button uses shared cancel icon, no
- *                inline SVG.)
+ * When a line carries a non-empty customizations array, renderItem()
+ * emits a "Customized" toggle below the price. Clicking the toggle
+ * reveals a panel listing every modification and, when present, the
+ * customer's special instructions.
+ *
+ * The toggle's expanded state is per-render. Re-rendering the queue
+ * (after an add, a quantity change, or a remove) resets every toggle
+ * to collapsed. That is deliberate: a re-render is a fresh snapshot
+ * of the queue, and the customer's next action is more likely to be
+ * a further edit than a review of the same panel they were already
+ * looking at.
+ *
+ * The panel is built with the same class names the cart and orders
+ * pages use (.cart-customs-panel, .cart-customs-list, etc.) where
+ * they are semantically identical, and with queue-scoped class
+ * names (.queue-customs-*) where the layout differs. This keeps the
+ * CSS in queue-panel.css self-contained while letting a reader who
+ * has already seen cart.css recognize the shape.
+ *
+ * @package FitPal
+ * @version 6.4 — Adds the customization dropdown to each queue item.
+ *                Every line that carries customizations now renders
+ *                a "Customized" toggle that expands to list its
+ *                modifications and, when present, its special
+ *                instructions.
+ *
+ *                (6.3: panel opens expanded on first load and after
+ *                every successful add. 6.2: expanded-state desync
+ *                fixed. 6.1: remove button uses shared cancel icon.)
  */
 (function () {
     'use strict';
@@ -184,13 +211,147 @@
         updateVisibility(totalItems);
     }
 
+    /**
+     * Build the modification list HTML for one queue item.
+     *
+     * Every entry is normalized to a display row:
+     *
+     *   { name, price, kind, quantity }
+     *
+     *   kind = 'remove' when selected_option is 'remove' or the
+     *          price modifier is negative.
+     *   kind = 'add'    otherwise.
+     *
+     * Entries with no ingredient_name are dropped. A notes entry is
+     * not a modification; it is rendered separately as the special
+     * instructions block below the list.
+     */
+    function buildCustomsRows(customizations) {
+        if (!Array.isArray(customizations) || customizations.length === 0) {
+            return '';
+        }
+
+        var rows = '';
+
+        customizations.forEach(function (c) {
+            if (!c || typeof c !== 'object') return;
+            if ((c.type || '') === 'notes') return;
+
+            var name = c.ingredient_name || c.name || '';
+            if (!name) return;
+
+            var option    = c.selected_option || 'selected';
+            var qty       = parseInt(c.quantity, 10) || 1;
+            var modifier  = parseFloat(c.price_modifier);
+            if (isNaN(modifier)) modifier = 0;
+
+            var isRemoved = (option === 'remove') || modifier < 0;
+
+            var kindClass = isRemoved ? 'cart-customs-remove' : 'cart-customs-add';
+            var symbol    = isRemoved ? '−' : '+';
+
+            var nameHtml = escapeHtml(name);
+            if (isRemoved) {
+                nameHtml += ' <span class="cart-customs-removed">(removed)</span>';
+            } else if (qty > 1) {
+                nameHtml += ' × ' + qty;
+            }
+
+            var priceHtml = '';
+            if (!isRemoved && modifier !== 0) {
+                var sign  = modifier > 0 ? '+' : '−';
+                var value = Math.abs(modifier * qty).toFixed(2);
+                priceHtml = '<span class="cart-customs-price">'
+                          + '(' + sign + '₱' + value + ')'
+                          + '</span>';
+            }
+
+            rows += ''
+                + '<li class="cart-customs-row ' + kindClass + '">'
+                +   '<span class="cart-customs-symbol">' + symbol + '</span>'
+                +   '<span class="cart-customs-name">' + nameHtml + '</span>'
+                +   priceHtml
+                + '</li>';
+        });
+
+        return rows;
+    }
+
+    /**
+     * Extract the special-instructions text from a line's
+     * customizations array. Returns '' when the customer typed
+     * nothing.
+     */
+    function extractSpecialInstructions(customizations) {
+        if (!Array.isArray(customizations) || customizations.length === 0) {
+            return '';
+        }
+
+        for (var i = 0; i < customizations.length; i++) {
+            var c = customizations[i];
+            if (!c || typeof c !== 'object') continue;
+            if ((c.type || '') !== 'notes') continue;
+            var text = typeof c.notes === 'string' ? c.notes.trim() : '';
+            if (text !== '') return text;
+        }
+
+        return '';
+    }
+
     function renderItem(item, index) {
         var itemTotal = (item.price || 0) * (item.quantity || 0);
         var assetBase = window.FITPAL_ASSET_BASE || '../../shared/';
         var fallback  = assetBase + 'assets/images/icons/restaurant.svg';
         var cancelIcon= assetBase + 'assets/images/icons/remove-circle-line.svg';
+        var chevron   = assetBase + 'assets/images/icons/arrow-drop-down-line.svg';
         var img       = (item.image && item.image.trim() !== '') ? item.image : fallback;
         var key       = rowKey(item);
+
+        var customizations = Array.isArray(item.customizations)
+            ? item.customizations
+            : [];
+
+        var customsRows = buildCustomsRows(customizations);
+        var notes       = extractSpecialInstructions(customizations);
+
+        var hasCustomsBlock = customsRows !== '' || notes !== '';
+
+        var customsBlock = '';
+
+        if (hasCustomsBlock) {
+            var panelId = 'queue-customs-' + index;
+
+            var notesBlock = '';
+            if (notes !== '') {
+                notesBlock = ''
+                    + '<div class="queue-customs-notes">'
+                    +   '<p class="queue-customs-notes-label">Special Instructions</p>'
+                    +   '<p class="queue-customs-notes-text">' + escapeHtml(notes) + '</p>'
+                    + '</div>';
+            }
+
+            customsBlock = ''
+                + '<div class="queue-customs-wrap">'
+                +   '<button type="button" class="queue-customs-toggle"'
+                +          ' data-customs-toggle="' + escapeAttr(panelId) + '"'
+                +          ' aria-expanded="false"'
+                +          ' aria-controls="' + escapeAttr(panelId) + '">'
+                +     '<span>Customized</span>'
+                +     '<img src="' + escapeAttr(chevron) + '" alt=""'
+                +          ' class="queue-customs-toggle-icon"'
+                +          ' width="14" height="14"'
+                +          ' onerror="this.style.display=\'none\';">'
+                +   '</button>'
+                +   '<div class="queue-customs-row-wrap" id="' + escapeAttr(panelId) + '" hidden>'
+                +     '<div class="queue-customs-panel">'
+                +       (customsRows !== ''
+                            ? '<ul class="cart-customs-list">' + customsRows + '</ul>'
+                            : '')
+                +       notesBlock
+                +     '</div>'
+                +   '</div>'
+                + '</div>';
+        }
 
         return ''
             + '<div class="queue-item" data-index="' + index + '"'
@@ -208,6 +369,7 @@
                         ? '<span class="queue-item-restaurant">• ' + escapeHtml(item.restaurant_name) + '</span>'
                         : '')
             +     '</div>'
+            +     customsBlock
             +   '</div>'
             +   '<div class="queue-item-actions">'
             +     '<div class="queue-item-qty">'
@@ -377,6 +539,29 @@
             b.addEventListener('click', function (e) {
                 e.preventDefault(); e.stopPropagation();
                 openRemoveModal(parseInt(this.dataset.index, 10));
+            });
+        });
+
+        // Customization toggle. Clicking it flips aria-expanded on the
+        // button and `hidden` on the target panel. The chevron rotation
+        // is a CSS rule keyed on [aria-expanded="true"], so this handler
+        // does not touch the icon.
+        document.querySelectorAll('#queueItemsContainer .queue-customs-toggle').forEach(function (btn) {
+            var b = btn.cloneNode(true);
+            btn.parentNode.replaceChild(b, btn);
+            b.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                var panelId = this.getAttribute('data-customs-toggle');
+                if (!panelId) return;
+
+                var panel = document.getElementById(panelId);
+                if (!panel) return;
+
+                var expanded = this.getAttribute('aria-expanded') === 'true';
+                this.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+                panel.hidden = expanded;
             });
         });
     }
@@ -606,7 +791,7 @@
             }
         });
 
-        console.log('Queue Panel v6.3 initialized');
+        console.log('Queue Panel v6.4 initialized');
     }
 
     if (document.readyState === 'loading') {

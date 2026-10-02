@@ -1,35 +1,28 @@
 /**
  * FitPal Customer Cart Page Styles
- * Version 2.9 — The page shell now stretches to the viewport so the
- *                empty state fills the vertical space between the
- *                page header and the bottom of the page instead of
- *                leaving dead white space beneath a short card.
- *                Mirrors the chain used in menu.css v3.4 and
- *                orders.css v3.6:
+ * Version 2.10 — Adds a Special Instructions block inside the
+ *                 customization panel.
  *
- *                  .content          flex: 1
- *                  .cart-page        flex: 1, flex-column
- *                  .container        flex: 1, flex-column
- *                  .empty-state      flex: 1 (stretch)
- *                  .cart-container   flex: 1, flex-column
+ *                 The customer's free-text notes are stored inside
+ *                 the same customization_data JSON as the ingredient
+ *                 modifications, as a {type:'notes'} entry. Before
+ *                 this revision the cart page rendered only the
+ *                 modifications, so a customer who customized a
+ *                 product purely by typing notes saw nothing.
  *
- *                The non-empty path is unaffected: each .cart-section,
- *                .cart-pagination, and .cart-summary keeps its natural
- *                height via flex: 0 0 auto, so the container does not
- *                stretch them. Only the empty state (rendered when the
- *                cart has no rows) actually grows to fill the space.
+ *                 The three new rules are:
  *
- *                Also carries forward the scrollbar-gutter guard from
- *                v2.8 unchanged.
+ *                     .cart-customs-notes          the block
+ *                     .cart-customs-notes-label    its heading
+ *                     .cart-customs-notes-text     its body
+ *
+ *                 Everything else is byte-identical to v2.9.
  *
  * @package FitPal
- * @version 2.9
+ * @version 2.10
  */
 
-/* Reserve the scrollbar gutter permanently. With this in place, the
-   viewport's usable width is identical whether a scrollbar is visible
-   or not, so nothing reflows when the body scrollbar is hidden by a
-   modal scroll lock. */
+/* Reserve the scrollbar gutter permanently. */
 html {
     scrollbar-gutter: stable;
 }
@@ -198,8 +191,6 @@ html {
     gap: 20px;
 }
 
-/* Non-empty children keep their natural height. Only the empty
-   state (rendered outside the container) actually stretches. */
 .cart-container > .cart-section,
 .cart-container > .cart-pagination,
 .cart-container > .cart-summary,
@@ -638,6 +629,35 @@ html {
     color: var(--gray-600);
     font-weight: 600;
     white-space: nowrap;
+}
+
+/* ---- Special Instructions block ---- */
+
+.cart-customs-notes {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.cart-customs-notes-label {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    color: var(--gray-600);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.cart-customs-notes-text {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-700);
+    line-height: 1.55;
+    word-break: break-word;
+    padding: 8px 10px;
+    background: #fff9e6;
+    border-left: 3px solid var(--warning);
+    border-radius: var(--radius-sm);
 }
 
 .cart-customs-summary {

@@ -48,6 +48,23 @@
  * delivered_at and is not re-evaluated by the poll.
  *
  * ---------------------------------------------------------------------
+ * AVAILABILITY-CHANGE REACTIONS
+ * ---------------------------------------------------------------------
+ * The assignment panel fires a rider:availability-changed event
+ * whenever the rider's online / offline state changes. deliveries.js
+ * listens for that event and rewrites the body copy of whichever
+ * empty state is on screen.
+ *
+ * That listener needs to know whether the empty-state copy it is
+ * looking at is availability-driven or verification-driven. An
+ * unverified rider's empty states render verification copy, which
+ * must not be overwritten by an availability event. The listener
+ * decides this by reading `isVerified` from the page's config
+ * object. This page therefore emits `isVerified` alongside the
+ * other config fields. When the field is absent, the listener
+ * defaults to treating the rider as verified.
+ *
+ * ---------------------------------------------------------------------
  * WHERE THE STATUSES ON THIS PAGE COME FROM
  * ---------------------------------------------------------------------
  * Every status this page reads is written by the shared
@@ -82,21 +99,19 @@
  * the buttons once the window elapses.
  *
  * @package FitPal
- * @version 5.5 — The History panel's content is now rendered on
- *                every request, with no server-side `?tab=history`
- *                guard. The previous revision guarded the panel
- *                content on `$activeTab === 'history'`, so a
- *                client-side tab switch (which deliveries.js
- *                performs without re-fetching the page) made an
- *                empty panel visible. All three panels now render
- *                their full content on every request, matching the
- *                Active and Assigned panels and matching the
- *                client-side tab-switching contract.
+ * @version 5.6 — Emits `isVerified` on the page's
+ *                window.FITPAL_RIDER_DELIVERIES config object so
+ *                deliveries.js can decide whether an empty state's
+ *                copy is availability-driven or verification-driven
+ *                before it rewrites that copy in response to the
+ *                rider:availability-changed event.
  *
- *                (5.4: asset paths on this page now use
- *                $assetBase. History tab renders Message buttons
- *                for delivered orders within the 1-hour window.
- *                5.3: Active and Assigned panels gain a
+ *                (5.5: the History panel's content is now rendered
+ *                on every request, with no server-side
+ *                `?tab=history` guard. 5.4: asset paths on this
+ *                page use $assetBase. History tab renders Message
+ *                buttons for delivered orders within the 1-hour
+ *                window. 5.3: Active and Assigned panels gain a
  *                client-side poll. 5.2: docblock records the
  *                shared layer. 5.1: 'picking_up' added to Active.)
  */
@@ -775,7 +790,8 @@ window.FITPAL_RIDER_DELIVERIES = {
     payout: <?php echo (float)$riderPayoutPerDelivery; ?>,
     activeTab: '<?php echo htmlspecialchars($activeTab, ENT_QUOTES, 'UTF-8'); ?>',
     panelEndpoint: '<?php echo htmlspecialchars($deliveriesEndpoint, ENT_QUOTES, 'UTF-8'); ?>',
-    messageGraceSeconds: <?php echo (int)$historyGraceSeconds; ?>
+    messageGraceSeconds: <?php echo (int)$historyGraceSeconds; ?>,
+    isVerified: <?php echo $isVerified ? 'true' : 'false'; ?>
 };
 </script>
 <script src="../assets/ui/js/deliveries.js" defer></script>

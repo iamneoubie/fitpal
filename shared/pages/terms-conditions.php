@@ -1,42 +1,46 @@
 <?php
 /**
  * FitPal Terms & Conditions Page
- * 
- * This is the public terms and conditions page for the demonstration project.
- * 
- * Usage: Direct access via web browser
- * 
+ *
+ * Public-facing terms and conditions for the demonstration project.
+ * Belongs to the public context and runs on its own PHP session
+ * (PHPSESSID_PUBLIC), separate from every authenticated role's
+ * session.
+ *
  * @package FitPal
- * @version 1.0
+ * @version 2.0 — Per-role session migration (Option B). The page
+ *                now bootstraps the public session itself before
+ *                including the shared header, which resolves the
+ *                "Configuration Error" that appeared when the
+ *                header's precondition check failed. The local
+ *                asset-base function was removed in favor of the
+ *                $assetBase provided by the header. The redundant
+ *                <link> for the page CSS was removed, as the shared
+ *                header now handles it.
+ *
+ *                (1.0: initial page.)
  */
 
 declare(strict_types=1);
 
-// Session is now handled by header.php
-// No need to start session here
+// ---------------------------------------------------------------------
+// SESSION BOOTSTRAP
+//
+// Must run BEFORE any other include that might touch the session.
+// Under Option B, this page belongs to the public context.
+// ---------------------------------------------------------------------
 
-// Include shared header (handles session)
+require_once __DIR__ . '/../includes/session-bootstrap.php';
+fitpal_session_bootstrap('public');
+
+// ---------------------------------------------------------------------
+// HEADER
+//
+// The shared header verifies that the active session is the public
+// session and provides the $assetBase variable.
+// ---------------------------------------------------------------------
+
 require_once __DIR__ . '/../includes/header.php';
-
-/**
- * Get the base path for assets based on current file location
- * 
- * @return string The asset base path
- */
-function getTermsAssetBase(): string {
-    $scriptPath = $_SERVER['SCRIPT_NAME'];
-    $dirPath = dirname($scriptPath);
-    $segments = array_filter(explode('/', $dirPath));
-    $depth = count($segments);
-    
-    if ($depth <= 0) {
-        return './shared/';
-    }
-    
-    return str_repeat('../', $depth) . 'shared/';
-}
-
-$assetBase = getTermsAssetBase();
 
 // Terms sections data
 $termsSections = [
@@ -145,14 +149,6 @@ $termsSections = [
     ]
 ];
 ?>
-<!-- ============================================
-    TERMS & CONDITIONS PAGE CSS
-    ============================================ -->
-<link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/terms-conditions.css">
-
-<!-- ============================================
-    TERMS & CONDITIONS CONTENT
-    ============================================ -->
 
 <div class="content">
 
@@ -184,7 +180,8 @@ $termsSections = [
                 </div>
 
                 <?php foreach ($termsSections as $section): ?>
-                <div id="section-<?php echo $section['id']; ?>" class="terms-block">
+                <div id="section-<?php echo htmlspecialchars($section['id'], ENT_QUOTES, 'UTF-8'); ?>"
+                    class="terms-block">
                     <p class="terms-block-title"><?php echo htmlspecialchars($section['title'], ENT_QUOTES, 'UTF-8'); ?>
                     </p>
 

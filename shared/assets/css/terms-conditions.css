@@ -1,10 +1,26 @@
 /**
  * FitPal Terms & Conditions Page Styles
- * Content spans full width with proper padding.
+ *
+ * Belongs to the public context. Loaded by shared/includes/header.php
+ * via its $pageCssMap when the current page is terms-conditions.php.
+ *
+ * Every color, radius, and spacing value is drawn from the
+ * variables declared in shared/assets/css/global.css. No hard-coded
+ * values that duplicate a variable, and no new variables declared
+ * here.
+ *
+ * @package FitPal
+ * @version 2.0 — Re-aligned with the revised terms-conditions.php.
+ *                All hard-coded values replaced with global.css
+ *                variables. Page shell (.content) now declares
+ *                flex: 1 per §8. Hero and section paddings
+ *                normalized to a single shorthand.
+ *
+ *                (1.0: initial terms and conditions layout.)
  */
 
 /* ============================================
-   CONTENT WRAPPER - Full width
+   CONTENT WRAPPER
    ============================================ */
 
 .content {
@@ -17,17 +33,15 @@
 }
 
 /* ============================================
-   HERO SECTION - Full width
+   HERO
    ============================================ */
 
 .terms-hero {
-    padding: var(--spacing-10) 0 var(--spacing-6) 0;
+    padding: var(--spacing-10) var(--spacing-4) var(--spacing-6) var(--spacing-4);
     background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
     color: var(--white);
     text-align: center;
     width: 100%;
-    padding-left: var(--spacing-4);
-    padding-right: var(--spacing-4);
 }
 
 .terms-hero-content {
@@ -37,9 +51,10 @@
 
 .terms-hero-title {
     font-size: var(--font-size-3xl);
-    font-weight: 700;
+    font-weight: var(--font-weight-bold);
     color: var(--white);
-    margin-bottom: var(--spacing-2);
+    margin: 0 0 var(--spacing-2) 0;
+    line-height: var(--line-height-tight);
 }
 
 .terms-hero-title span {
@@ -53,15 +68,13 @@
 }
 
 /* ============================================
-   TERMS CONTENT - Full width
+   TERMS CONTENT
    ============================================ */
 
 .terms-section {
-    padding: var(--spacing-8) 0 var(--spacing-12) 0;
+    padding: var(--spacing-8) var(--spacing-4) var(--spacing-12) var(--spacing-4);
     background-color: var(--white);
     width: 100%;
-    padding-left: var(--spacing-4);
-    padding-right: var(--spacing-4);
 }
 
 .terms-content {
@@ -75,7 +88,7 @@
 
 .terms-disclaimer {
     background-color: #fff3cd;
-    border-left: 4px solid #ffc107;
+    border-left: 4px solid var(--warning);
     padding: var(--spacing-4) var(--spacing-5);
     border-radius: var(--radius-base);
     margin-bottom: var(--spacing-8);
@@ -85,7 +98,7 @@
     font-size: var(--font-size-base);
     color: #856404;
     margin: 0;
-    line-height: 1.6;
+    line-height: var(--line-height-relaxed);
 }
 
 .terms-disclaimer-text strong {
@@ -110,17 +123,18 @@
 
 .terms-block-title {
     font-size: var(--font-size-xl);
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
     color: var(--text);
     margin: 0 0 var(--spacing-2) 0;
     padding-top: var(--spacing-2);
     scroll-margin-top: 80px;
+    line-height: var(--line-height-tight);
 }
 
 .terms-block-text {
     font-size: var(--font-size-base);
     color: var(--gray-600);
-    line-height: 1.7;
+    line-height: var(--line-height-relaxed);
     margin: 0 0 var(--spacing-2) 0;
 }
 
@@ -135,7 +149,7 @@
     padding-left: var(--spacing-5);
     font-size: var(--font-size-base);
     color: var(--gray-600);
-    line-height: 1.7;
+    line-height: var(--line-height-relaxed);
     margin-bottom: var(--spacing-1);
 }
 
@@ -144,7 +158,7 @@
     position: absolute;
     left: 0;
     color: var(--primary);
-    font-weight: bold;
+    font-weight: var(--font-weight-bold);
 }
 
 .terms-block-list li strong {
@@ -162,15 +176,13 @@
 }
 
 /* ============================================
-   AGREEMENT SECTION - Full width
+   AGREEMENT
    ============================================ */
 
 .terms-agreement {
-    padding: var(--spacing-8) 0 var(--spacing-12) 0;
+    padding: var(--spacing-8) var(--spacing-4) var(--spacing-12) var(--spacing-4);
     background-color: var(--gray-50);
     width: 100%;
-    padding-left: var(--spacing-4);
-    padding-right: var(--spacing-4);
 }
 
 .terms-agreement-box {
@@ -187,7 +199,7 @@
 .terms-agreement-text {
     font-size: var(--font-size-base);
     color: var(--gray-700);
-    line-height: 1.8;
+    line-height: var(--line-height-relaxed);
     margin-bottom: var(--spacing-6);
 }
 
@@ -207,14 +219,12 @@
 }
 
 /* ============================================
-   RESPONSIVE
+   RESPONSIVE — MOBILE
    ============================================ */
 
 @media (max-width: 768px) {
     .terms-hero {
-        padding: var(--spacing-6) 0 var(--spacing-4) 0;
-        padding-left: var(--spacing-3);
-        padding-right: var(--spacing-3);
+        padding: var(--spacing-6) var(--spacing-3) var(--spacing-4) var(--spacing-3);
     }
 
     .terms-hero-title {
@@ -226,9 +236,7 @@
     }
 
     .terms-section {
-        padding: var(--spacing-6) 0 var(--spacing-8) 0;
-        padding-left: var(--spacing-3);
-        padding-right: var(--spacing-3);
+        padding: var(--spacing-6) var(--spacing-3) var(--spacing-8) var(--spacing-3);
     }
 
     .terms-block-title {
@@ -236,10 +244,7 @@
         scroll-margin-top: 70px;
     }
 
-    .terms-block-text {
-        font-size: var(--font-size-sm);
-    }
-
+    .terms-block-text,
     .terms-block-list li {
         font-size: var(--font-size-sm);
     }
@@ -253,9 +258,7 @@
     }
 
     .terms-agreement {
-        padding: var(--spacing-6) 0 var(--spacing-8) 0;
-        padding-left: var(--spacing-3);
-        padding-right: var(--spacing-3);
+        padding: var(--spacing-6) var(--spacing-3) var(--spacing-8) var(--spacing-3);
     }
 
     .terms-agreement-box {

@@ -1,0 +1,66 @@
+@startuml
+' ============= FITPAL - SIMPLIFIED ARCHITECTURE =============
+skinparam linetype ortho
+skinparam backgroundColor White
+skinparam componentStyle rectangle
+skinparam defaultFontSize 13
+skinparam shadowing false
+skinparam roundcorner 6
+
+skinparam component {
+    BorderColor #2E4053
+    BackgroundColor #F8F9F9
+    FontColor #1C2833
+    FontStyle bold
+}
+
+skinparam package {
+    BorderColor #2E4053
+    BackgroundColor #FDFEFE
+    FontColor #1C2833
+    FontSize 15
+    FontStyle bold
+}
+
+title <size:18><b>FitPal Platform</b>\n<size:13>System Architecture</size>
+
+' ============= CLIENT =============
+package "PRESENTATION LAYER" <<client>> #F8F9F9 {
+    component "Public Portal" as Public
+    component "Customer Portal" as Customer
+    component "Restaurant Portal" as Restaurant
+    component "Rider Portal" as Rider
+    component "Admin Portal" as Admin
+}
+
+' ============= APPLICATION =============
+package "APPLICATION LAYER\nPHP 8.x / Apache" <<application>> #FFF8E7 {
+    component "Front Controller\n& Routing" as Router
+    component "Handlers\n(Business Logic)" as Handlers
+    component "Queries\n(Data Access)" as Queries
+    component "Cross-Cutting\n(CSRF, Session, Validation)" as CrossCutting
+}
+
+' ============= DATA =============
+package "DATA LAYER" <<data>> #E8F5E9 {
+    database "MySQL Database" as MySQL
+    folder "File Storage\n(uploads/)" as Files
+    folder "Static Assets\n(css/js/images)" as Assets
+}
+
+' ============= CONNECTIONS =============
+Public --> Router
+Customer --> Router
+Restaurant --> Router
+Rider --> Router
+Admin --> Router
+
+Router --> Handlers
+Handlers --> Queries
+Handlers --> CrossCutting
+
+Queries --> MySQL
+Handlers --> Files
+Assets --> Router
+
+@enduml

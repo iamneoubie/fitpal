@@ -80,6 +80,75 @@
  * `transaction` table and no trigger reads it.
  *
  * ---------------------------------------------------------------------
+ * QUEUE LINE INPUT SHAPES (v3.2.0)
+ * ---------------------------------------------------------------------
+ * createOrderFromQueue() reads each session queue line and extracts
+ * two things from it:
+ *
+ *   - the ingredient customizations, written to
+ *     customization_instance
+ *   - the customer's special instructions, written to
+ *     queue_item.custom_instructions
+ *
+ * The customization payload arrives on the line as either:
+ *
+ *   customizations         the ENRICHED flat array attached by
+ *                          queueEnrich() (both the menu add and the
+ *                          cart push_to_queue paths) or by
+ *                          buildReorderLine() (the reorder path).
+ *                          Each entry has ingredient_id,
+ *                          ingredient_name, selected_option,
+ *                          quantity, price_modifier; a
+ *                          {type:'notes', notes:'...'} entry may
+ *                          also be present.
+ *
+ *   customization_data     the RAW value the writer received. On
+ *                          the menu and reorder paths this is a
+ *                          flat JSON array. On the cart path this
+ *                          is the wrapped shape
+ *                          {"customizations":[...]} that
+ *                          buildCartCustomizationPayload() writes
+ *                          to the cart table.
+ *
+ * Before v3.2.0 this function read ONLY customization_data, iterated
+ * over its decoded value as a flat array of entries, and — on the
+ * cart path — silently iterated over the wrapper object as a single
+ * entry. The result was:
+ *
+ *   - the notes entry was never found, so
+ *     queue_item.custom_instructions stayed NULL on every cart-path
+ *     order
+ *   - the customization_instance loop iterated over the wrapper
+ *     object, found no ingredient_id, and wrote no rows at all
+ *
+ * The fix in v3.2.0 is to PREFER the enriched `customizations` array
+ * whenever it is present, because it is always flat and always
+ * carries the notes entry. Only when it is absent does this function
+ * fall back to decoding customization_data, and that fallback now
+ * unwraps the {"customizations":[...]} shape before iterating.
+ *
+ * Both producers (queueEnrich and buildReorderLine) attach a
+ * non-empty `customizations` array to every line they return, so
+ * the preferred path is the one taken in practice. The fallback
+ * exists for a line written by a caller that predates this
+ * revision or that only set customization_data.
+ *
+ * ---------------------------------------------------------------------
+ * SPECIAL INSTRUCTIONS
+ * ---------------------------------------------------------------------
+ * The customer's free-text notes live on the queue line as a
+ * {type:'notes', notes:'...'} entry among the customization
+ * entries. createOrderFromQueue() splits the array into two
+ * destinations:
+ *
+ *   - the notes entry is written to queue_item.custom_instructions
+ *   - every other entry is written to customization_instance
+ *
+ * The notes entry has no ingredient_id and does not belong in
+ * customization_instance, which is why it is separated here rather
+ * than being allowed to fall through.
+ *
+ * ---------------------------------------------------------------------
  * FAILED-DELIVERY SWEEP (v2.5.0)
  * ---------------------------------------------------------------------
  * sweepFailedDeliveries() fails any order in 'picking_up' OR
@@ -87,41 +156,18 @@
  * FITPAL_RIDER_FAILED_DELIVERY_GRACE_SECONDS. The window is
  * currently 45 minutes (2700 seconds), defined in fee-queries.php.
  *
- * Because updated_at changes on every status transition, the timer
- * resets each time the rider moves the order forward. A rider has
- * 45 minutes to go from picking_up to delivering, and a fresh 45
- * minutes to go from delivering to delivered. Total allowed time is
- * up to 90 minutes.
- *
- * When the sweep fails an order:
- *   1. The order_status is set to 'failed'.
- *   2. settleFailedRiderLiability() is called, which writes the
- *      liability `payment` transaction and clears
- *      orders.rider_liability_amount.
- *   3. Any rider_collection row for the order is voided.
- *
- * All three steps run in one transaction per order. A failure in
- * any step rolls back that order's transition only; the sweep
- * continues with the next candidate.
- *
  * @package FitPal
- * @version 3.0.0 — Adds the v2.5.0 rider liability model.
+ * @version 3.2.0 — createOrderFromQueue() now prefers the enriched
+ *                  `customizations` array on each queue line over
+ *                  the raw `customization_data` field, and unwraps
+ *                  the {"customizations":[...]} shape when it falls
+ *                  back to the raw field. Cart-path orders now write
+ *                  both their ingredient customizations and their
+ *                  special instructions.
  *
- *                  - recordRiderLiability() writes the liability
- *                    column on accept, for every payment method.
- *                  - creditDeliveryPayouts() clears the column on
- *                    successful delivery.
- *                  - settleFailedRiderLiability() writes the
- *                    failure debit and clears the column.
- *                  - sweepFailedDeliveries() now covers
- *                    'picking_up' as well as 'delivering', and
- *                    calls settleFailedRiderLiability() for every
- *                    order it fails.
- *                  - rider_collection semantics are unchanged.
- *
- *                  (2.5.0: collection row moved to accept time.
- *                  2.0: rider collection model. 1.1: cancelled_by.
- *                  1.0: initial shared order-transaction queries.)
+ *                  (3.1.0: wrote queue_item.custom_instructions from
+ *                  the notes entry. 3.0.0: v2.5.0 rider liability
+ *                  model.)
  */
 
 declare(strict_types=1);
@@ -131,6 +177,100 @@ require_once __DIR__ . '/fee-queries.php';
 /* =============================================================
  * ORDER CREATION
  * ============================================================= */
+
+/**
+ * Normalize a queue line's customization payload to a flat array
+ * of entries.
+ *
+ * Reads two sources on the line, in order of preference:
+ *
+ *   1. $line['customizations'] — the enriched flat array attached
+ *      by queueEnrich() or buildReorderLine(). Always flat, always
+ *      carries a notes entry when one exists.
+ *
+ *   2. $line['customization_data'] — the raw JSON string or array
+ *      the writer stored. Decoded, then unwrapped if it carries the
+ *      {"customizations":[...]} wrapper the cart table uses.
+ *
+ * Returns an empty array when neither source yields a non-empty
+ * flat array. Never throws.
+ *
+ * @param array<string, mixed> $line
+ * @return array<int, array<string, mixed>>
+ */
+function normalizeQueueLineCustomizations(array $line): array
+{
+    // Preferred source: the enriched flat array.
+    if (!empty($line['customizations']) && is_array($line['customizations'])) {
+        $flat = [];
+        foreach ($line['customizations'] as $entry) {
+            if (is_array($entry)) {
+                $flat[] = $entry;
+            }
+        }
+        if (!empty($flat)) {
+            return $flat;
+        }
+    }
+
+    // Fallback: decode the raw field.
+    $raw = $line['customization_data'] ?? null;
+    if ($raw === null || $raw === '' || $raw === []) {
+        return [];
+    }
+
+    $decoded = null;
+    if (is_array($raw)) {
+        $decoded = $raw;
+    } elseif (is_string($raw)) {
+        $attempt = json_decode($raw, true);
+        if (is_array($attempt)) {
+            $decoded = $attempt;
+        }
+    }
+
+    if (!is_array($decoded) || empty($decoded)) {
+        return [];
+    }
+
+    // Unwrap the {"customizations":[...]} shape. A flat array does
+    // not have this key, so the check is a safe no-op for it.
+    if (isset($decoded['customizations']) && is_array($decoded['customizations'])) {
+        $decoded = $decoded['customizations'];
+    }
+
+    $flat = [];
+    foreach ($decoded as $entry) {
+        if (is_array($entry)) {
+            $flat[] = $entry;
+        }
+    }
+    return $flat;
+}
+
+/**
+ * Extract the customer's special-instructions text from a flat list
+ * of customization entries.
+ *
+ * Returns the first non-empty {type:'notes', notes:'...'} entry's
+ * notes text, or null when no such entry exists.
+ *
+ * @param array<int, array<string, mixed>> $customizations
+ * @return string|null
+ */
+function extractQueueLineSpecialInstructions(array $customizations): ?string
+{
+    foreach ($customizations as $entry) {
+        if (($entry['type'] ?? '') !== 'notes') {
+            continue;
+        }
+        $text = isset($entry['notes']) ? trim((string)$entry['notes']) : '';
+        if ($text !== '') {
+            return $text;
+        }
+    }
+    return null;
+}
 
 function createOrderFromQueue(
     PDO $db,
@@ -164,28 +304,28 @@ function createOrderFromQueue(
             continue;
         }
 
-        $customizations = [];
-        if (!empty($qItem['customization_data'])) {
-            $decoded = is_string($qItem['customization_data'])
-                ? json_decode($qItem['customization_data'], true)
-                : $qItem['customization_data'];
+        // Normalize the customization payload. Prefers the enriched
+        // flat array; falls back to the raw field, unwrapping the
+        // {"customizations":[...]} shape if present.
+        $customizations = normalizeQueueLineCustomizations($qItem);
 
-            if (is_array($decoded)) {
-                $customizations = $decoded;
-            }
-        }
+        // Pull the notes entry out of the flat array. It is written
+        // to queue_item.custom_instructions, not to
+        // customization_instance.
+        $specialInstructions = extractQueueLineSpecialInstructions($customizations);
 
         if (!in_array($branchId, $distinctBranches, true)) {
             $distinctBranches[] = $branchId;
         }
 
         $cartItems[] = [
-            'product_id'     => $productId,
-            'branch_id'      => $branchId,
-            'quantity'       => $quantity,
-            'price'          => (float)($qItem['price'] ?? 0),
-            'base_price'     => (float)($qItem['base_price'] ?? 0),
-            'customizations' => $customizations,
+            'product_id'           => $productId,
+            'branch_id'            => $branchId,
+            'quantity'             => $quantity,
+            'price'                => (float)($qItem['price'] ?? 0),
+            'base_price'           => (float)($qItem['base_price'] ?? 0),
+            'customizations'       => $customizations,
+            'special_instructions' => $specialInstructions,
         ];
     }
 
@@ -291,25 +431,37 @@ function createOrderFromQueue(
         $price     = (float)$item['price'];
         $product   = $products[$productId];
 
-        $isCustomized = !empty($item['customizations']) ? 1 : 0;
+        // An item with no ingredient modifications but with a notes
+        // entry is still a customization from the customer's point
+        // of view: queue_item.is_customized drives the "Customized"
+        // badge on the orders page.
+        $hasAnyCustomization = !empty($item['customizations'])
+                            || $item['special_instructions'] !== null;
+
+        $isCustomized = $hasAnyCustomization ? 1 : 0;
+
+        $specialInstructions = $item['special_instructions'];
 
         $queueStmt = $db->prepare(
             "INSERT INTO queue_item
                 (order_id, branch_id, product_id, queue_quantity, unit_price,
-                 is_customized, base_price_snapshot, final_price)
+                 is_customized, base_price_snapshot, final_price,
+                 custom_instructions)
              VALUES
                 (:order_id, :branch_id, :product_id, :quantity, :unit_price,
-                 :is_customized, :base_price, :final_price)"
+                 :is_customized, :base_price, :final_price,
+                 :custom_instructions)"
         );
         $queueStmt->execute([
-            ':order_id'      => $orderId,
-            ':branch_id'     => (int)$item['branch_id'],
-            ':product_id'    => $productId,
-            ':quantity'      => $quantity,
-            ':unit_price'    => $price,
-            ':is_customized' => $isCustomized,
-            ':base_price'    => (float)($product['base_price'] ?: $price),
-            ':final_price'   => $price,
+            ':order_id'            => $orderId,
+            ':branch_id'           => (int)$item['branch_id'],
+            ':product_id'          => $productId,
+            ':quantity'            => $quantity,
+            ':unit_price'          => $price,
+            ':is_customized'       => $isCustomized,
+            ':base_price'          => (float)($product['base_price'] ?: $price),
+            ':final_price'         => $price,
+            ':custom_instructions' => $specialInstructions,
         ]);
         $queueItemId = (int)$db->lastInsertId();
 
@@ -630,30 +782,6 @@ function refundOrderToWallet(PDO $db, int $orderId): bool
  * RIDER LIABILITY (v2.5.0)
  * ============================================================= */
 
-/**
- * Set orders.rider_liability_amount for an accepted order.
- *
- * Called from acceptOrder() in rider-assignment-queries.php, in
- * the caller's transaction, right after the status transition and
- * right alongside recordRiderCollection(). For every payment
- * method the liability is the full order total: subtotal plus
- * delivery fee plus service fee plus VAT.
- *
- * Idempotent by construction: the UPDATE is a plain SET, so
- * calling it twice leaves the same value. A direct caller who
- * wants to reset the liability should not need this function;
- * creditDeliveryPayouts() and settleFailedRiderLiability() are
- * the two paths that clear it.
- *
- * Requires: caller-owned transaction.
- *
- * @param PDO $db
- * @param int $riderId
- * @param int $orderId
- * @return float|false The recorded liability, or false when the
- *                     order is not owned by this rider or its
- *                     totals cannot be resolved.
- */
 function recordRiderLiability(PDO $db, int $riderId, int $orderId): float|false
 {
     if ($riderId <= 0 || $orderId <= 0) {
@@ -697,33 +825,6 @@ function recordRiderLiability(PDO $db, int $riderId, int $orderId): float|false
     return $amount;
 }
 
-/**
- * Write the failure settlement for a rider liability.
- *
- * Called from two places:
- *
- *   1. sweepFailedDeliveries(), immediately after the sweep has
- *      transitioned the order to 'failed'.
- *   2. Any future explicit failure or rider-side cancel path that
- *      ends an order with a liability still recorded.
- *
- * Writes a `payment` transaction against the rider's financial
- * account for the liability amount, with the description prefix
- * 'Rider liability for order #' that the transaction triggers
- * exempt from the insufficient-balance guard. Clears
- * orders.rider_liability_amount so the earnings page stops
- * counting the order as outstanding.
- *
- * If the order has no liability recorded (already cleared, or
- * never recorded), this function is a no-op. It does not throw.
- *
- * Requires: caller-owned transaction.
- *
- * @param PDO $db
- * @param int $orderId
- * @return float|false The settled amount, or false when nothing
- *                     was settled.
- */
 function settleFailedRiderLiability(PDO $db, int $orderId): float|false
 {
     if ($orderId <= 0) {
@@ -787,8 +888,6 @@ function settleFailedRiderLiability(PDO $db, int $orderId): float|false
         ':order_id'   => $orderId,
     ]);
     if ($dupStmt->fetchColumn() !== false) {
-        // Already settled. Clear the column anyway so the reader
-        // stops counting it.
         $clearStmt = $db->prepare(
             "UPDATE orders
                 SET rider_liability_amount = NULL
@@ -830,32 +929,6 @@ function settleFailedRiderLiability(PDO $db, int $orderId): float|false
  * RIDER COLLECTION (COD CASH CUSTODY, v2.4.0 — unchanged)
  * ============================================================= */
 
-/**
- * Record the rider's cash responsibility for a COD order.
- *
- * Called from acceptOrder() in the rider query layer, inside the
- * caller's open transaction. Only COD orders produce a row; the
- * function reads the order's payment method itself, so a direct
- * caller cannot accidentally create a collection for an Online or
- * Wallet order.
- *
- * Idempotency: the rider_collection table carries a UNIQUE key on
- * (delivery_rider_id, order_id). A retry of accept for the same
- * pair is a no-op.
- *
- * This function is unchanged from v2.4.0. The v2.5.0 liability
- * model is orthogonal: recordRiderLiability() writes the new
- * column for every order, while this function continues to write
- * the COD-only custody row.
- *
- * Requires: caller-owned transaction.
- *
- * @param PDO $db
- * @param int $riderId
- * @param int $orderId
- * @return int|false The rider_collection_id on success, or false
- *                   when the order is not COD.
- */
 function recordRiderCollection(PDO $db, int $riderId, int $orderId): int|false
 {
     if ($riderId <= 0 || $orderId <= 0) {
@@ -905,11 +978,6 @@ function recordRiderCollection(PDO $db, int $riderId, int $orderId): int|false
     return $rowId > 0 ? $rowId : false;
 }
 
-/**
- * Mark a rider's collection row as settled or void.
- *
- * Requires: caller-owned transaction.
- */
 function settleRiderCollection(
     PDO $db,
     int $riderId,
@@ -955,11 +1023,6 @@ function settleRiderCollection(
 
 /* =============================================================
  * DELIVERY CREDIT PAIR
- *
- * Writes the rider fee deposit and the restaurant subtotal deposit
- * on successful delivery. Also clears orders.rider_liability_amount
- * (v2.5.0) and settles the rider_collection row for a COD order
- * (v2.4.0).
  * ============================================================= */
 
 function creditDeliveryPayouts(PDO $db, int $riderId, int $orderId): array
@@ -1082,10 +1145,6 @@ function creditDeliveryPayouts(PDO $db, int $riderId, int $orderId): array
         'Settled on successful delivery'
     );
 
-    // v2.5.0: clear the liability column. The credit pair above is
-    // what the rider earns; the liability figure exists only for
-    // the period between accept and delivery, and is closed on
-    // success.
     $clearLiability = $db->prepare(
         "UPDATE orders
             SET rider_liability_amount = NULL
@@ -1102,20 +1161,6 @@ function creditDeliveryPayouts(PDO $db, int $riderId, int $orderId): array
 
 /* =============================================================
  * FAILED-DELIVERY SWEEP (v2.5.0)
- *
- * Widened to cover 'picking_up' as well as 'delivering'. The
- * window is FITPAL_RIDER_FAILED_DELIVERY_GRACE_SECONDS from
- * fee-queries.php.
- *
- * Because the WHERE clause filters on updated_at, the timer
- * resets on every status transition. A rider has 45 minutes to go
- * from picking_up to delivering, and a fresh 45 minutes to go
- * from delivering to delivered.
- *
- * For every order the sweep fails, it calls
- * settleFailedRiderLiability() in the same per-order transaction.
- * That function writes the rider liability `payment` transaction
- * and clears the liability column.
  * ============================================================= */
 
 function sweepFailedDeliveries(PDO $db): int
@@ -1162,18 +1207,8 @@ function sweepFailedDeliveries(PDO $db): int
             if ($update->rowCount() > 0) {
                 $failedCount++;
 
-                // v2.5.0: settle the rider's liability for the
-                // failed order. This writes a `payment` transaction
-                // against the rider's account for the liability
-                // amount and clears the liability column. The
-                // transaction-trigger exemption for the
-                // 'Rider liability for order #' prefix is what
-                // allows the debit to exceed a zero balance.
                 settleFailedRiderLiability($db, $orderId);
 
-                // v2.4.0: void the COD cash-custody row, if any.
-                // A Wallet or Online order has no rider_collection
-                // row, so this is a no-op for those orders.
                 if ($paymentMethod === 'COD' && $riderId > 0) {
                     settleRiderCollection(
                         $db,

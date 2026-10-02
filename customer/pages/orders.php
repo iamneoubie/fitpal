@@ -19,13 +19,13 @@
  *     getProductImageBasePath()    resolves the folder
  *     getProductPrimaryFilename()  finds the first image file
  *
- * The project-root URL prefix is derived from the page's own
- * $assetBase so the URL is correct at any deployment depth.
- *
- * When the folder cannot be resolved, when the folder contains no
- * image file, or when the raw path is empty, the function returns
- * the shared restaurant icon so the customer always sees a picture
- * rather than a broken image.
+ * ---------------------------------------------------------------------
+ * REAL-TIME POLL
+ * ---------------------------------------------------------------------
+ * Each .order-card carries a data-revision attribute computed from
+ * (status + delivered_at + grace_open). customer-order.js polls
+ * get_order_card_state every few seconds and patches only the cards
+ * whose revision changed. Nothing else is touched.
  *
  * ---------------------------------------------------------------------
  * CARD LAYOUT (top to bottom)
@@ -33,81 +33,36 @@
  *   .order-card-header
  *       left    — Order # and date
  *       center  — payment pill
- *       right   — status badge
+ *       right   — status badge         (class js-order-badge)
  *
  *   .order-card-body
  *       per-item rows, each independently expandable
  *
  *   .order-card-totals
- *       a single button row showing "Total ₱X.XX" + chevron
- *       clicking it reveals .order-totals-detail in place
+ *       single button row: "Total ₱X.XX ⌄"
  *
  *   .order-card-footer
- *       action buttons only — no payment pill here
+ *       action buttons only            (wrapper class js-order-actions)
  *
  * ---------------------------------------------------------------------
  * FILTER TABS
  * ---------------------------------------------------------------------
- * Nine tabs, wallet-style (rectangular, full-width row, no count
- * badges). Order left to right:
- *
- *     Active | All | Pending | Preparing | For Delivery |
- *     Delivered | Cancelled | Refunded | Failed
- *
- * "Active" is the default tab and matches every non-terminal
- * status:
- *
- *     pending, preparing, rider_pending, picking_up, delivering
- *
- * A customer landing on the page with a live order sees it first.
- * The other tabs match one exact status, or 'all' for no filter.
- *
- * The Active tab is a client-side filter: the markup carries every
- * order card and customer-order.js hides the ones that do not
- * match. A card is "active" when its data-status is one of the
- * five live statuses; the tab does not depend on a server round
- * trip.
+ * Nine tabs, wallet-style. "Active" is the default and matches every
+ * non-terminal status.
  *
  * ---------------------------------------------------------------------
- * TERMINAL-STATUS ACTIONS (delivered / cancelled / refunded / failed)
+ * TERMINAL-STATUS ACTIONS
  * ---------------------------------------------------------------------
- * Every terminal order renders the same actions in the same order
- * so a customer scanning their history sees one consistent shape
- * regardless of how the order ended:
+ *   delivered:
+ *       1. Message OR Track History   (btn-neutral)
+ *       2. Review                     (btn-primary)
+ *       3. View Receipt               (btn-neutral)
+ *       4. Reorder                    (btn-primary)
  *
- *     delivered:
- *         1. Message OR Track History   (neutral black)
- *         2. Review                     (primary green)
- *         3. View Receipt               (neutral black)
- *         4. Reorder                    (primary green)
- *
- *     cancelled / refunded / failed:
- *         1. Track History              (neutral black)
- *         2. View Receipt               (neutral black)
- *         3. Reorder                    (primary green)
- *
- * Review is offered only on delivered orders. A cancelled, refunded,
- * or failed order has no food to review.
- *
- * ---------------------------------------------------------------------
- * REVIEW FLOW
- * ---------------------------------------------------------------------
- * The Review button links to review.php?order_id=X. The review page
- * owns the feedback form; the modal that used to live on this page
- * has been removed because the page covers the same flow with more
- * room. feedback-handler.php is unchanged and still serves the
- * submit_review action that review.php posts to.
- *
- * ---------------------------------------------------------------------
- * BUTTON COLORS (§7)
- * ---------------------------------------------------------------------
- *   Message / Track Order / Track History / View Receipt
- *                                              → btn-neutral  (black)
- *   Reorder                                    → btn-primary  (green)
- *   Review                                     → btn-primary  (green)
- *   Cancel Order                               → btn-danger   (red)
- *
- * No action button uses outline or transparent styling.
+ *   cancelled / refunded / failed:
+ *       1. Track History              (btn-neutral)
+ *       2. View Receipt               (btn-neutral)
+ *       3. Reorder                    (btn-primary)
  *
  * ---------------------------------------------------------------------
  * CLIENT CONFIG
@@ -116,20 +71,15 @@
  *   window.FITPAL_ORDERS.assetBase      project-root-relative
  *   window.FITPAL_ORDERS.handlerUrl     customer-order-handler.php
  *
- * The page's client script is customer-order.js.
- *
  * @package FitPal
- * @version 10.0 — Order item images now resolve through
- *                 resolveOrderItemImageUrl(), which delegates to the
- *                 helpers in product-queries.php. The raw column
- *                 value is no longer used directly as an image src.
+ * @version 11.0 — Adds data-revision per card and js-* classes on
+ *                 the badge, footer actions, and tracking button so
+ *                 customer-order.js can patch them without a reload.
  *
- *                 (9.0: filter tabs rewritten wallet-style with an
- *                 Active default. Review footer button added for
- *                 delivered orders. 8.0: three-column card header;
- *                 chevron totals dropdown. 7.0: consistent terminal-
- *                 status layout. 6.0: config object's handlerUrl.
- *                 5.0: renamed customer order query layer.)
+ *                 (10.0: order item images resolved through
+ *                 product-queries.php. 9.0: wallet-style filter tabs;
+ *                 Review footer button. 8.0: chevron totals
+ *                 dropdown. 7.0: consistent terminal-status layout.)
  */
 declare(strict_types=1);
 
@@ -240,18 +190,9 @@ function formatOrderDateTime(string $date): string
 /**
  * Build the browser-loadable URL for an order item's product image.
  *
- * The raw dietary_information.images value is resolved through the
- * helpers in product-queries.php. The project-root URL prefix is
- * derived from the page's own $assetBase so the returned URL is
- * correct at any deployment depth.
- *
  * Returns the shared restaurant icon when the folder cannot be
  * resolved, when the folder contains no image file, or when the
  * raw path is empty.
- *
- * @param string $rawPath   Raw dietary_information.images value.
- * @param string $assetBase The page's asset base, ending in 'shared/'.
- * @return string A browser-loadable URL.
  */
 function resolveOrderItemImageUrl(string $rawPath, string $assetBase): string
 {
@@ -268,9 +209,6 @@ function resolveOrderItemImageUrl(string $rawPath, string $assetBase): string
         return $fallback;
     }
 
-    // Trim the trailing 'shared/' off the asset base to get the
-    // project-root URL prefix, then append the resolved folder and
-    // the filename.
     $projectRootUrl = preg_replace('#shared/$#', '', $assetBase);
 
     if (!is_string($projectRootUrl) || $projectRootUrl === '') {
@@ -323,14 +261,6 @@ function isTerminalStatus(string $status): bool
     return in_array($status, ['delivered', 'cancelled', 'refunded', 'failed'], true);
 }
 
-/**
- * Live statuses — the ones the Active tab collects.
- *
- * Kept as a function so the list lives in exactly one place. The
- * same five statuses are what orders.php renders as "Track Order"
- * rather than "Track History", and what the customer can still
- * cancel from (for the 'pending' subset).
- */
 function isActiveStatus(string $status): bool
 {
     return in_array(
@@ -340,15 +270,6 @@ function isActiveStatus(string $status): bool
     );
 }
 
-/**
- * Build the tracking-button descriptor for an order row.
- *
- * Option B:
- *   delivered, inside grace        → "Message"       (neutral)
- *   delivered, past grace          → "Track History" (neutral)
- *   cancelled / refunded / failed  → "Track History" (neutral)
- *   live statuses                  → "Track Order"   (neutral)
- */
 function getTrackingButtonDescriptor(string $status, ?string $deliveredAt): array
 {
     $graceOpen = customerOrderHasOpenChatWindow($status, $deliveredAt);
@@ -441,19 +362,7 @@ $restaurantIconFallback = $assetBase . 'assets/images/icons/restaurant.svg';
         <?php else: ?>
 
         <!-- ============================================
-             FILTER TABS — wallet-style, no count badges
-             Left to right:
-                 Active  (default — every non-terminal status)
-                 All
-                 Pending
-                 Preparing
-                 For Delivery
-                 Delivered
-                 Cancelled
-                 Refunded
-                 Failed
-             The Active tab matches a set of statuses; every other
-             tab matches one exact status, or 'all' for no filter.
+             FILTER TABS
              ============================================ -->
         <nav class="filter-tabs" id="filterTabs" aria-label="Order filters">
             <button type="button" class="filter-tab active" data-filter="active" aria-current="page">
@@ -488,7 +397,9 @@ $restaurantIconFallback = $assetBase . 'assets/images/icons/restaurant.svg';
         <!-- ============================================
              ORDERS LIST
              ============================================ -->
-        <div class="orders-list" id="ordersList">
+        <div class="orders-list" id="ordersList" data-orders-page="1"
+            data-csrf-token="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>"
+            data-handler-url="../backend/handlers/customer-order-handler.php">
             <?php foreach ($orders as $order):
                 $orderId     = (int)$order['order_id'];
                 $status      = (string)$order['order_status'];
@@ -510,15 +421,21 @@ $restaurantIconFallback = $assetBase . 'assets/images/icons/restaurant.svg';
                 $paymentMeta = getPaymentMethodMeta((string)$order['payment_method']);
 
                 $totalsId = 'order-totals-' . $orderId;
+
+                $cardRevision = sha1(implode('|', [
+                    $status,
+                    (string)($deliveredAt ?? ''),
+                    $graceOpen ? '1' : '0',
+                ]));
             ?>
             <div class="order-card" data-order-id="<?php echo $orderId; ?>"
                 data-status="<?php echo htmlspecialchars($status, ENT_QUOTES, 'UTF-8'); ?>"
                 data-active="<?php echo $active ? '1' : '0'; ?>" data-terminal="<?php echo $terminal ? '1' : '0'; ?>"
-                data-grace-open="<?php echo $graceOpen ? '1' : '0'; ?>">
+                data-grace-open="<?php echo $graceOpen ? '1' : '0'; ?>"
+                data-revision="<?php echo htmlspecialchars($cardRevision, ENT_QUOTES, 'UTF-8'); ?>">
 
                 <!-- ============================================
                      ORDER CARD HEADER
-                     [ Order # + date ]   [ Payment pill ]   [ Badge ]
                      ============================================ -->
                 <div class="order-card-header">
                     <div class="order-header-left">
@@ -538,7 +455,7 @@ $restaurantIconFallback = $assetBase . 'assets/images/icons/restaurant.svg';
                     </div>
 
                     <div class="order-header-right">
-                        <span class="badge <?php echo getOrderStatusBadgeClass($status); ?>">
+                        <span class="badge js-order-badge <?php echo getOrderStatusBadgeClass($status); ?>">
                             <?php echo getOrderStatusLabel($status); ?>
                         </span>
                     </div>
@@ -556,8 +473,6 @@ $restaurantIconFallback = $assetBase . 'assets/images/icons/restaurant.svg';
                         <?php foreach ($items as $index => $item):
                             $productId   = (int)$item['product_id'];
 
-                            // Resolve the full image URL from the raw
-                            // dietary_information.images value.
                             $itemImage = resolveOrderItemImageUrl(
                                 (string)($item['product_image'] ?? ''),
                                 $assetBase
@@ -681,10 +596,6 @@ $restaurantIconFallback = $assetBase . 'assets/images/icons/restaurant.svg';
 
                 <!-- ============================================
                      ORDER CARD TOTALS — DROPDOWN
-                     The whole row is a button: "Total ₱X.XX ⌄".
-                     Clicking it reveals the fee breakdown below.
-                     The chevron rotates 180° via
-                     [aria-expanded="true"].
                      ============================================ -->
                 <div class="order-card-totals" data-collapsed="true">
                     <button type="button" class="order-totals-toggle" aria-expanded="false"
@@ -726,16 +637,9 @@ $restaurantIconFallback = $assetBase . 'assets/images/icons/restaurant.svg';
 
                 <!-- ============================================
                      ORDER CARD FOOTER — ACTIONS ONLY
-                     Order (delivered):
-                         [Message | Track History]  [Review]
-                         [View Receipt]  [Reorder]
-                     Order (cancelled / refunded / failed):
-                         [Track History]  [View Receipt]  [Reorder]
-                     Order (live):
-                         [Track Order]  [Cancel Order]
                      ============================================ -->
                 <div class="order-card-footer">
-                    <div class="order-footer-actions">
+                    <div class="order-footer-actions js-order-actions">
                         <?php if ($canCancel): ?>
                         <button type="button" class="btn btn-danger btn-sm cancel-order-btn"
                             data-order-id="<?php echo $orderId; ?>"
@@ -746,11 +650,11 @@ $restaurantIconFallback = $assetBase . 'assets/images/icons/restaurant.svg';
 
                         <?php if ($trackBtn['show']): ?>
                         <a href="order-tracking.php?id=<?php echo $orderId; ?>"
-                            class="btn btn-neutral btn-sm tracking-btn"
+                            class="btn btn-neutral btn-sm tracking-btn js-tracking-btn"
                             data-tracking-label="<?php echo htmlspecialchars($trackBtn['label'], ENT_QUOTES, 'UTF-8'); ?>"
                             data-tracking-kind="<?php echo htmlspecialchars($trackBtn['kind'], ENT_QUOTES, 'UTF-8'); ?>">
                             <span
-                                class="tracking-btn-label"><?php echo htmlspecialchars($trackBtn['label'], ENT_QUOTES, 'UTF-8'); ?></span>
+                                class="tracking-btn-label js-tracking-label"><?php echo htmlspecialchars($trackBtn['label'], ENT_QUOTES, 'UTF-8'); ?></span>
                         </a>
                         <?php endif; ?>
 

@@ -1,8 +1,10 @@
 /**
  * FitPal Restaurant Kitchen Styles
  *
- * Styles for restaurant/pages/kitchen.php — the branch kitchen list
- * and the owner summary view.
+ * Renamed from orders.css to kitchen-order.css in the same revision
+ * that renamed the kitchen-order card renderer. The stylesheet drives
+ * restaurant/pages/kitchen.php — the branch kitchen list and the
+ * owner summary view.
  *
  * Scope rules:
  *   - This file contains presentation only. No JS hooks beyond what
@@ -28,65 +30,52 @@
  * tab bar and the footer. Non-empty cards keep their natural height
  * via flex: 0 0 auto.
  *
- * Kitchen order card (v3.0)
- * -------------------------
- * The card is now three bands stacked inside a single article:
+ * Kitchen order card
+ * ------------------
+ * The card is a two-state component:
  *
- *   .kitchen-order-header      always visible
- *   .kitchen-order-summary     always visible, one line
- *   .kitchen-order-details     collapsed by default
- *   .kitchen-order-actions     always visible (footer)
+ *   COLLAPSED:
+ *     .kitchen-order-header    always visible
+ *     .kitchen-order-summary   visible only when collapsed
  *
- * The header carries the toggle chevron. The details band carries
- * the pickup block, drop-off block, rider block, item list, and
- * subtotal. orders.js toggles `.kitchen-order-details[hidden]` via
- * a delegated click on `[data-row-expand]` and remembers the
- * expanded state per order_id across poll re-renders.
+ *   EXPANDED:
+ *     .kitchen-order-header    always visible
+ *     .kitchen-order-details   visible only when expanded
+ *     .kitchen-order-actions   always visible (footer)
  *
- * New-order highlight
- * -------------------
- * The poll handler marks a freshly-arrived card with .is-new. The
- * card carries a subtle left-border accent at rest. JS removes the
- * class after a short delay so the accent fades on the next poll
- * cycle. No animation is declared here; the transition is a plain
- * border-color change.
+ * The header is a two-zone flex layout:
  *
- * Confirm modal (v5.0)
- * --------------------
- * The generic confirmation modal now mirrors the logout modal's
- * visual language:
+ *   .kitchen-order-header-left   thumb + order id + item name
+ *   .kitchen-order-header-right  status badge + payment pill + chevron
  *
- *   .kitchen-confirm-content        narrow, centered card
- *     .kitchen-confirm-icon         circular icon badge, top
- *     .kitchen-confirm-title        "Cancel this order?"
- *     .kitchen-confirm-body         the message
- *     .kitchen-confirm-actions      two-button row
- *       .kitchen-btn-cancel         black / white
- *       .kitchen-btn-danger         red / white
+ * The summary band sits directly under the header and is hidden
+ * when the card is expanded (`.is-open`). It shows the order
+ * subtotal and a compact, single-line list of any special
+ * instructions.
  *
- * A modal MUST contain an <img> icon (general rules, §9). The icon
- * is supplied by the markup in kitchen.php; this file only paints
- * the badge around it. The destructive button uses the .danger
- * background/white-text rule from §7.
+ * The details band carries the order date, route, full special
+ * instructions block, rider block, a list of items with per-item
+ * prices and customization modifiers, and a full order totals
+ * breakdown (Subtotal, Delivery Fee, Service Fee, VAT, Total).
+ *
+ * kitchen-order.js toggles `.kitchen-order-details[hidden]` via a
+ * delegated click on `[data-row-expand]` and remembers the expanded
+ * state per order_id across poll re-renders. kitchen-realtime.js
+ * reapplies the state after every render and does NOT bind a second
+ * click handler.
  *
  * @package FitPal
- * @version 5.0 — Confirm modal visual rewrite:
- *                  - New .kitchen-confirm-icon, .kitchen-confirm-title,
- *                    .kitchen-confirm-body, .kitchen-confirm-actions.
- *                  - New .kitchen-btn-cancel (black/white) and
- *                    .kitchen-btn-danger (red/white).
- *                  - Removed .kitchen-confirm-text (superseded by
- *                    .kitchen-confirm-body).
- *                  - On narrow viewports the confirm actions
- *                    stack full-width.
- *                  - All other rules unchanged.
+ * @version 11.0 — Action buttons are now uniform width via a CSS
+ *                grid on the footer, and taller. The status and
+ *                payment pills have a consistent minimum height
+ *                and vertical centering. The chevron toggle button
+ *                is aligned to match the pill height.
  *
- *                (4.0: three-band collapsible kitchen card. 3.0:
- *                pagination, tab bar as anchor row, new-order pill,
- *                empty-state stretch. 2.1: per-rider slot label.
- *                2.0: Waiting on Rider + Out for Delivery tabs,
- *                muted completed cards, awaiting-confirmation
- *                badge. 1.1: Mark Ready styles. 1.0: initial.)
+ *                (10.0: customization price modifiers, taller
+ *                buttons. 9.0: summary band hidden when expanded,
+ *                totals breakdown. 8.0: summary band. 7.0: card
+ *                header rewrite. 6.0: renamed. 5.0: confirm modal.
+ *                4.0: three-band card. 3.0: pagination.)
  */
 
 /* ============================================
@@ -379,8 +368,6 @@ html {
 
 /* ============================================
    BRANCH VIEW — TAB BAR
-   Horizontally scrollable row of anchor tabs. Never stacks
-   vertically, at any viewport, per the general rules.
    ============================================ */
 
 .kitchen-tabs {
@@ -468,9 +455,6 @@ html {
 
 /* ============================================
    NEW-ORDER PILL
-   Hidden until JS unhides it. Carries the count of orders that
-   arrived since the last poll and a CTA that reloads the current
-   tab at page 1.
    ============================================ */
 
 .kitchen-new-order-pill {
@@ -547,14 +531,12 @@ html {
     min-height: 0;
 }
 
-/* Non-empty children keep their natural height. Only the empty
-   state (rendered when the list is empty) stretches. */
 .kitchen-orders > .kitchen-order-card {
     flex: 0 0 auto;
 }
 
 /* ============================================
-   KITCHEN ORDER CARD (three-band)
+   KITCHEN ORDER CARD
    ============================================ */
 
 .kitchen-order-card {
@@ -570,12 +552,11 @@ html {
     border-color: var(--gray-300);
 }
 
-.kitchen-order-card.is-new {
-    border-left: 3px solid var(--primary);
+.kitchen-order-card.is-open {
+    border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.10);
 }
 
-/* Closed orders: muted card body, lighter border. */
 .kitchen-order-card-completed {
     border-color: var(--gray-100);
     background: var(--gray-50);
@@ -586,46 +567,82 @@ html {
     border-bottom-color: var(--gray-100);
 }
 
-.kitchen-order-card-completed .kitchen-item {
+.kitchen-order-card-completed .kitchen-order-summary {
     background: transparent;
 }
 
-.kitchen-order-card-completed .kitchen-order-total {
+.kitchen-order-card-completed .kitchen-order-details {
     background: transparent;
-    border-color: var(--gray-200);
 }
 
 /* --- Header band --- */
 
 .kitchen-order-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    justify-content: space-between;
+    gap: 12px;
     padding: 14px 20px;
     background: var(--gray-50);
     border-bottom: 1px solid var(--gray-200);
-    gap: 12px;
-    flex-wrap: wrap;
+    box-sizing: border-box;
+    min-height: 72px;
 }
 
 .kitchen-order-header-left {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 12px;
     min-width: 0;
-    flex-wrap: wrap;
+    flex: 1 1 auto;
+}
+
+.kitchen-order-thumb {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: var(--gray-100);
+    border: 1px solid var(--gray-200);
+    flex-shrink: 0;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.kitchen-order-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.kitchen-order-header-details {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
 }
 
 .kitchen-order-id {
     font-size: var(--font-size-base);
     font-weight: 700;
     color: var(--text);
+    line-height: 1.2;
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.kitchen-order-date {
+.kitchen-order-item-name {
     font-size: var(--font-size-xs);
     color: var(--gray-500);
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .kitchen-order-header-right {
@@ -633,6 +650,105 @@ html {
     align-items: center;
     gap: 10px;
     flex-shrink: 0;
+}
+
+/* --- Status badge --- */
+
+.kitchen-page .badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 14px;
+    border-radius: var(--radius-full);
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    height: 32px;
+    min-height: 32px;
+    box-sizing: border-box;
+}
+
+.kitchen-page .badge-warning   { background: #fff3cd; color: #856404; }
+.kitchen-page .badge-info      { background: #d1ecf1; color: #0c5460; }
+.kitchen-page .badge-primary   { background: #cce5ff; color: #004085; }
+.kitchen-page .badge-success   { background: #d4edda; color: #155724; }
+.kitchen-page .badge-danger    { background: #f8d7da; color: #721c24; }
+.kitchen-page .badge-secondary { background: var(--gray-200); color: var(--gray-600); }
+
+/* --- Payment pill --- */
+
+.kitchen-payment-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 14px;
+    height: 32px;
+    border-radius: var(--radius-full);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    line-height: 1;
+    white-space: nowrap;
+    border: 1.5px solid transparent;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+
+.kitchen-payment-pill-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.kitchen-payment-pill-label {
+    display: inline-block;
+    line-height: 1;
+}
+
+.kitchen-payment-pill-cod {
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+    color: #065f46;
+}
+
+.kitchen-payment-pill-cod .kitchen-payment-pill-icon {
+    filter: brightness(0) saturate(100%)
+            invert(28%) sepia(50%) saturate(700%)
+            hue-rotate(120deg) brightness(90%) contrast(90%);
+}
+
+.kitchen-payment-pill-wallet {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: #1e40af;
+}
+
+.kitchen-payment-pill-wallet .kitchen-payment-pill-icon {
+    filter: brightness(0) saturate(100%)
+            invert(24%) sepia(80%) saturate(1200%)
+            hue-rotate(210deg) brightness(90%) contrast(95%);
+}
+
+.kitchen-payment-pill-online {
+    background: #fef3c7;
+    border-color: #fde68a;
+    color: #92400e;
+}
+
+.kitchen-payment-pill-online .kitchen-payment-pill-icon {
+    filter: brightness(0) saturate(100%)
+            invert(30%) sepia(90%) saturate(1500%)
+            hue-rotate(20deg) brightness(90%) contrast(90%);
+}
+
+.kitchen-payment-pill-other {
+    background: var(--gray-100);
+    border-color: var(--gray-200);
+    color: var(--gray-700);
 }
 
 /* --- Toggle chevron --- */
@@ -650,6 +766,7 @@ html {
     cursor: pointer;
     transition: background 0.15s ease;
     -webkit-tap-highlight-color: transparent;
+    flex-shrink: 0;
 }
 
 .kitchen-order-toggle:hover {
@@ -678,44 +795,68 @@ html {
     opacity: 1;
 }
 
-/* When the details band is shown, flip the chevron.
-   The card carries .is-expanded (set by orders.js). */
-.kitchen-order-card.is-expanded .kitchen-order-toggle-icon {
+.kitchen-order-card.is-open .kitchen-order-toggle-icon {
     transform: rotate(180deg);
 }
 
-/* --- Summary band --- */
+/* --- Summary band (collapsed only) --- */
 
 .kitchen-order-summary {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: 6px;
+    justify-content: space-between;
+    gap: 16px;
     padding: 10px 20px;
     background: var(--white);
     border-bottom: 1px solid var(--gray-100);
-    font-size: var(--font-size-sm);
-    color: var(--gray-700);
-    line-height: 1.4;
-    word-break: break-word;
-}
-
-.kitchen-order-summary-seg {
-    min-width: 0;
-    max-width: 100%;
-}
-
-.kitchen-order-summary-sep {
-    color: var(--gray-400);
+    font-size: var(--font-size-xs);
+    color: var(--gray-600);
     flex-shrink: 0;
-    user-select: none;
 }
 
-.kitchen-order-card-completed .kitchen-order-summary {
-    background: transparent;
+.kitchen-order-card.is-open .kitchen-order-summary {
+    display: none;
 }
 
-/* --- Details band (collapsed by default) --- */
+.kitchen-order-summary-info {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.kitchen-order-summary-label {
+    font-weight: 600;
+    color: var(--gray-500);
+}
+
+.kitchen-order-summary-value {
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+
+.kitchen-order-summary-instructions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    color: #856404;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.kitchen-order-summary-instructions img {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    filter: brightness(0) saturate(100%)
+            invert(60%) sepia(90%) saturate(900%)
+            hue-rotate(0deg) brightness(90%) contrast(95%);
+}
+
+/* --- Details band (expanded only) --- */
 
 .kitchen-order-details {
     padding: 16px 20px;
@@ -728,6 +869,13 @@ html {
 
 .kitchen-order-details[hidden] {
     display: none;
+}
+
+.kitchen-order-meta-line {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--gray-100);
 }
 
 /* ---- Route (pickup + drop-off) ---- */
@@ -824,6 +972,35 @@ html {
     word-break: break-word;
 }
 
+.kitchen-route-contact-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--primary-dark);
+    font-weight: 600;
+    text-decoration: none;
+    line-height: 1.4;
+    transition: color 0.15s ease;
+    word-break: break-word;
+    align-self: flex-start;
+}
+
+.kitchen-route-contact-link:hover,
+.kitchen-route-contact-link:focus-visible {
+    color: var(--primary);
+    text-decoration: underline;
+}
+
+.kitchen-route-contact-icon {
+    width: 14px;
+    height: 14px;
+    display: block;
+    flex-shrink: 0;
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
 .kitchen-route-address {
     font-size: var(--font-size-xs);
     color: var(--gray-600);
@@ -836,6 +1013,62 @@ html {
     height: 16px;
     margin-left: 17px;
     border-left: 2px dashed var(--gray-200);
+}
+
+/* ---- Special instructions ---- */
+
+.kitchen-special-instructions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    background: #fff9e6;
+    border: 1px solid #fde68a;
+    border-left: 4px solid var(--warning);
+    border-radius: var(--radius-base);
+    box-sizing: border-box;
+}
+
+.kitchen-special-instructions-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.kitchen-special-instructions-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+    filter: brightness(0) saturate(100%)
+            invert(60%) sepia(90%) saturate(900%)
+            hue-rotate(0deg) brightness(90%) contrast(95%);
+}
+
+.kitchen-special-instructions-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: #6b4c00;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    line-height: 1.2;
+}
+
+.kitchen-special-instructions-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.kitchen-special-instructions-list li {
+    font-size: var(--font-size-sm);
+    color: #6b4c00;
+    line-height: 1.5;
+    word-break: break-word;
 }
 
 /* ---- Rider block ---- */
@@ -930,6 +1163,37 @@ html {
     background: var(--gray-50);
 }
 
+.kitchen-item-row {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.kitchen-item-image {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: var(--gray-100);
+    border: 1px solid var(--gray-200);
+    flex-shrink: 0;
+}
+
+.kitchen-item-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.kitchen-item-body {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
 .kitchen-item-line {
     display: flex;
     align-items: baseline;
@@ -952,11 +1216,21 @@ html {
     word-break: break-word;
     line-height: 1.35;
     min-width: 0;
+    flex: 1;
+}
+
+.kitchen-item-price {
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .kitchen-item-customs {
     list-style: none;
-    margin: 6px 0 0 0;
+    margin: 4px 0 0 0;
     padding: 0 0 0 4px;
     display: flex;
     flex-direction: column;
@@ -992,16 +1266,29 @@ html {
 .kitchen-custom-text {
     word-break: break-word;
     min-width: 0;
+    flex: 1;
 }
 
-.kitchen-item-custom.is-removed .kitchen-custom-text em {
+.kitchen-custom-text em {
     font-style: italic;
     color: var(--gray-500);
     margin-left: 3px;
 }
 
+.kitchen-item-custom.is-removed .kitchen-custom-text em {
+    color: var(--gray-500);
+}
+
+.kitchen-custom-price {
+    font-weight: 600;
+    color: var(--gray-600);
+    white-space: nowrap;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}
+
 .kitchen-item-notes {
-    margin: 8px 0 0 0;
+    margin: 6px 0 0 0;
     padding: 6px 10px;
     font-size: var(--font-size-xs);
     color: #856404;
@@ -1017,42 +1304,71 @@ html {
     font-weight: 700;
 }
 
-/* ---- Subtotal ---- */
+/* ---- Order totals breakdown ---- */
 
-.kitchen-order-total {
+.kitchen-order-totals {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 12px;
+    border-top: 1px solid var(--gray-100);
+    margin-top: 4px;
+}
+
+.kitchen-totals-row {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
     gap: 12px;
-    padding: 10px 14px;
-    background: rgba(89, 193, 74, 0.06);
-    border: 1px solid rgba(89, 193, 74, 0.15);
-    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
 }
 
-.kitchen-order-total-label {
-    font-size: 10px;
-    font-weight: 700;
-    color: var(--gray-500);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+.kitchen-totals-label {
+    font-weight: 500;
 }
 
-.kitchen-order-total-value {
-    font-size: var(--font-size-lg);
-    font-weight: 700;
-    color: var(--primary-dark);
+.kitchen-totals-value {
+    font-weight: 600;
+    color: var(--text);
     font-variant-numeric: tabular-nums;
 }
 
-/* --- Action footer --- */
+.kitchen-totals-grand {
+    margin-top: 4px;
+    padding-top: 8px;
+    border-top: 1px solid var(--gray-200);
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: var(--text);
+}
+
+.kitchen-totals-grand .kitchen-totals-label {
+    font-weight: 700;
+    color: var(--text);
+}
+
+.kitchen-totals-grand .kitchen-totals-value {
+    font-weight: 700;
+    color: var(--primary-dark);
+}
+
+/* ============================================
+   ACTION FOOTER
+   Buttons are laid out in a CSS grid so every
+   button occupies an equal-width column. On
+   mobile the grid collapses to a single column
+   via media query, so buttons still stack
+   full-width.
+   ============================================ */
 
 .kitchen-order-actions {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
     gap: 8px;
     justify-content: flex-end;
-    padding: 12px 20px;
+    padding: 14px 20px;
     background: var(--gray-50);
     border-top: 1px solid var(--gray-200);
 }
@@ -1062,8 +1378,19 @@ html {
 }
 
 .kitchen-action-btn {
-    min-width: 120px;
+    min-width: 0;
+    width: 100%;
     justify-content: center;
+    padding: 12px 20px;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-base);
+    box-sizing: border-box;
+    white-space: nowrap;
 }
 
 /* ============================================
@@ -1384,9 +1711,7 @@ html {
 }
 
 /* ============================================
-   CONFIRM MODAL (v5.0)
-   Mirrors the logout-modal structure so the two
-   destructive dialogs share one visual language.
+   CONFIRM MODAL
    ============================================ */
 
 .kitchen-confirm-content {
@@ -1410,7 +1735,6 @@ html {
     width: 28px;
     height: 28px;
     display: block;
-    /* Tint the icon to match the danger red of the confirm button. */
     filter: brightness(0) saturate(100%)
             invert(40%) sepia(90%) saturate(600%)
             hue-rotate(330deg) brightness(90%) contrast(85%);
@@ -1460,7 +1784,6 @@ html {
     transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-/* Neutral / cancel — black background, white text. */
 .kitchen-btn-cancel {
     background: #1a1a1a;
     color: #ffffff;
@@ -1475,7 +1798,6 @@ html {
     outline: none;
 }
 
-/* Destructive / confirm — danger red, white text. */
 .kitchen-btn-danger {
     background: var(--danger);
     color: #ffffff;
@@ -1489,30 +1811,6 @@ html {
     color: #ffffff;
     outline: none;
 }
-
-/* ============================================
-   BADGES
-   ============================================ */
-
-.kitchen-page .badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 4px 12px;
-    border-radius: var(--radius-full);
-    font-size: var(--font-size-xs);
-    font-weight: 600;
-    line-height: 1;
-    white-space: nowrap;
-    min-height: 24px;
-}
-
-.kitchen-page .badge-warning   { background: #fff3cd; color: #856404; }
-.kitchen-page .badge-info      { background: #d1ecf1; color: #0c5460; }
-.kitchen-page .badge-primary   { background: #cce5ff; color: #004085; }
-.kitchen-page .badge-success   { background: #d4edda; color: #155724; }
-.kitchen-page .badge-danger    { background: #f8d7da; color: #721c24; }
-.kitchen-page .badge-secondary { background: var(--gray-200); color: var(--gray-600); }
 
 /* ============================================
    TEXTAREA
@@ -1612,13 +1910,30 @@ html {
         font-size: 10px;
     }
 
+    /* On tablet and below, the header stacks to two rows:
+       [ thumb + order details ] [ status + payment + chevron ]
+    */
     .kitchen-order-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
         padding: 12px 16px;
     }
 
+    .kitchen-order-header-left {
+        width: 100%;
+    }
+
+    .kitchen-order-header-right {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
     .kitchen-order-summary {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
         padding: 10px 16px;
-        font-size: var(--font-size-xs);
     }
 
     .kitchen-order-details {
@@ -1642,15 +1957,15 @@ html {
         height: 12px;
     }
 
+    /* Action footer collapses to a single column. */
     .kitchen-order-actions {
+        grid-auto-flow: row;
+        grid-template-columns: 1fr;
         padding: 12px 16px;
-        flex-direction: column;
-        align-items: stretch;
     }
 
     .kitchen-action-btn {
         width: 100%;
-        min-width: 0;
     }
 
     .kitchen-modal-content {
@@ -1712,9 +2027,8 @@ html {
         font-size: var(--font-size-sm);
     }
 
-    .kitchen-order-summary {
-        padding: 10px 14px;
-        gap: 4px;
+    .kitchen-order-header {
+        padding: 12px 14px;
     }
 
     .kitchen-order-details {
@@ -1723,6 +2037,16 @@ html {
 
     .kitchen-item {
         padding: 8px 10px;
+    }
+
+    .kitchen-item-row {
+        grid-template-columns: 40px minmax(0, 1fr);
+        gap: 10px;
+    }
+
+    .kitchen-item-image {
+        width: 40px;
+        height: 40px;
     }
 
     .kitchen-rider-block {
@@ -1764,7 +2088,6 @@ html {
         font-size: 11px;
     }
 
-    /* Confirm modal: stack the two buttons full-width. */
     .kitchen-confirm-content {
         max-width: calc(100vw - 24px);
     }
@@ -1824,16 +2147,6 @@ html {
 
 /* ============================================================
    RESTAURANT CHAT MODAL
-   ============================================================
-   Mirrors the customer and rider chat modal styling so all three
-   roles render the chat panel with identical structure, spacing,
-   and behaviour. The class names are prefixed with
-   `.restaurant-chat-` to avoid any collision with the kitchen
-   page's existing modal styles (which use `.kitchen-modal-`).
-
-   The block is scoped under `.restaurant-chat-modal-content` and
-   `.restaurant-chat-` so nothing here reaches the kitchen's
-   existing confirm and rider modals.
    ============================================================ */
 
 .restaurant-chat-modal-content {

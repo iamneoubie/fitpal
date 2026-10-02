@@ -3,7 +3,7 @@
  *
  * Scope
  * -----
- * Three responsibilities:
+ * Four responsibilities:
  *
  *   1. The confirm-modal flow for every delivery action button
  *      (Accept, Decline, Mark Picked Up, Mark Delivered).
@@ -23,6 +23,16 @@
  *      buttons and replaces them with a short muted note. A
  *      capture-phase click guard on [data-rider-chat-open] closes
  *      the race between a window expiring and the next tick firing.
+ *
+ *   4. Availability-change reactions. When the assignment panel
+ *      fires the document-level rider:availability-changed event,
+ *      this file updates the empty-state copy in the Active and
+ *      Assigned panels when one of those panels is showing its
+ *      empty state. Both panels render their empty state with
+ *      server-side copy that branches on the rider's availability
+ *      at first paint, so a rider who goes online or offline
+ *      while looking at an empty panel would otherwise see stale
+ *      copy until they reload.
  *
  * ---------------------------------------------------------------------
  * POLL SHAPE
@@ -52,6 +62,34 @@
  * buttons all match rider/pages/deliveries.php byte-for-byte so the
  * two renders produce identical DOM and there is no visual drift
  * between the first paint and the first poll.
+ *
+ * ---------------------------------------------------------------------
+ * AVAILABILITY-CHANGE REACTIONS
+ * ---------------------------------------------------------------------
+ * The assignment panel is the single writer of the rider's
+ * availability on the client. When it changes the value — either
+ * because the rider confirmed a toggle in the availability modal,
+ * or because the server reported a different value on the panel's
+ * next poll — it fires:
+ *
+ *   document  'rider:availability-changed'
+ *             { detail: { online: boolean, eligible: boolean } }
+ *
+ * This block listens for that event and rewrites the offline-only
+ * body copy of whichever empty state is currently on screen.
+ *
+ * The Active panel's empty state and the Assigned panel's empty
+ * state each render a single <p class="rider-deliveries-empty-text">
+ * whose body depends on whether the rider is offline and, for an
+ * unverified rider, on the verification status. The listener
+ * refuses to touch either one when the rider's account is not
+ * verified: the verification copy is not availability-driven and
+ * must not be clobbered.
+ *
+ * The listener is guarded so it does nothing when the empty state
+ * is not in the DOM at all (i.e., the panel has rows). This file
+ * never renders an empty state on its own; only the server does,
+ * and only when the corresponding list is empty.
  *
  * ---------------------------------------------------------------------
  * CHAT HANDOFF
@@ -91,25 +129,21 @@
  * picks the correct icon and button colour.
  *
  * @package FitPal
- * @version 7.0 — Adds the post-delivery messaging-window guard.
+ * @version 8.0 — Adds availability-change reactions. When the
+ *                assignment panel announces a change via
+ *                rider:availability-changed, this file rewrites the
+ *                body copy of whichever deliveries empty state is
+ *                on screen. The poll, the tab switching, the confirm
+ *                flow, the History-tab messaging-window guard, the
+ *                row renderers, and the toast are unchanged from
+ *                v7.0.
  *
- *                - A 30-second interval reads each History actions
- *                  block's data-message-window-ends timestamp and,
- *                  when the window has closed, removes the block's
- *                  buttons and replaces them with a muted note.
- *                - A capture-phase click listener on
- *                  [data-rider-chat-open] stops any click that
- *                  targets an already-expired History block, in
- *                  case the tick has not yet fired.
- *                - The poll, the tab switching, the confirm flow,
- *                  the row renderers, and the toast are unchanged
- *                  from v6.0.
- *
- *                (6.0: full-snapshot poll of the Active and
- *                Assigned lists. 5.1: chat handling delegated to
- *                the shared rider-chat-modal.js. 5.0: chat handling
- *                removed. 4.2: data-icon added. 4.1: confirm button
- *                colour driven by modal attributes.)
+ *                (7.0: post-delivery messaging-window guard. 6.0:
+ *                full-snapshot poll of the Active and Assigned
+ *                lists. 5.1: chat handling delegated to the shared
+ *                rider-chat-modal.js. 5.0: chat handling removed.
+ *                4.2: data-icon added. 4.1: confirm button colour
+ *                driven by modal attributes.)
  */
 (function () {
     'use strict';
@@ -122,6 +156,15 @@
         var PANEL_ENDPOINT = CFG.panelEndpoint || '../backend/handlers/assignment-handler.php';
         var PAYOUT = parseFloat(CFG.payout || 0);
         var CURRENT_TAB = CFG.activeTab || 'active';
+
+        // The rider's verification status at first paint. The
+        // availability listener uses it to decide whether an empty
+        // state's body copy is availability-driven or
+        // verification-driven. Defaults to true when the page did
+        // not publish the field, matching the server's default of
+        // rendering the availability-driven copy when the rider
+        // cannot be shown as unverified.
+        var RIDER_IS_VERIFIED = (CFG.isVerified !== false);
 
         var POLL_INTERVAL_MS = 5000;
         var MESSAGE_WINDOW_TICK_MS = 30000;
@@ -543,6 +586,96 @@
                     // Silent. Next tick retries.
                 });
         }
+
+        // ============================================
+        // AVAILABILITY-CHANGE REACTIONS
+        //
+        // The assignment panel fires rider:availability-changed
+        // whenever the rider's online / offline state changes,
+        // either locally or from the server. This block listens
+        // and, when an empty state is on screen, rewrites the
+        // body copy of the offline-only variant to the online
+        // variant (or vice versa).
+        //
+        // Two empty states exist on this page:
+        //
+        //   Active tab — #deliveriesActiveEmpty
+        //     Offline copy: "Go online from the assignments panel
+        //       at the bottom of the page to start receiving
+        //       deliveries."
+        //     Online copy: "You're online. When the kitchen assigns
+        //       you an order and you accept it, it will appear
+        //       here."
+        //
+        //   Assigned tab — #deliveriesAssignedEmpty
+        //     Offline copy: "You're offline. Go online from the
+        //       assignments panel at the bottom of the page so the
+        //       kitchen can assign you orders."
+        //     Online copy: "When the kitchen assigns you an order,
+        //       it will appear here for you to accept or decline."
+        //
+        // Neither empty state carries the rider's verified status
+        // in its id or class names, so this block reads the
+        // verification flag once from the page config and refuses
+        // to touch either empty state when the rider is not
+        // verified. The verification copy is not availability-
+        // driven and must not be clobbered.
+        //
+        // The block is a no-op when the empty state is not in the
+        // DOM. That happens when the corresponding list has rows,
+        // which is the normal case for a working rider.
+        // ============================================
+
+        function applyActiveEmptyCopy(isOnline) {
+            var state = document.getElementById('deliveriesActiveEmpty');
+            if (!state) return;
+
+            var text = state.querySelector('.rider-deliveries-empty-text');
+            if (!text) return;
+
+            if (isOnline) {
+                text.textContent =
+                    "You're online. When the kitchen assigns you an order "
+                    + "and you accept it, it will appear here.";
+            } else {
+                text.textContent =
+                    'Go online from the assignments panel at the bottom '
+                    + 'of the page to start receiving deliveries.';
+            }
+        }
+
+        function applyAssignedEmptyCopy(isOnline) {
+            var state = document.getElementById('deliveriesAssignedEmpty');
+            if (!state) return;
+
+            var text = state.querySelector('.rider-deliveries-empty-text');
+            if (!text) return;
+
+            if (isOnline) {
+                text.textContent =
+                    'When the kitchen assigns you an order, it will appear '
+                    + 'here for you to accept or decline.';
+            } else {
+                text.textContent =
+                    "You're offline. Go online from the assignments panel "
+                    + "at the bottom of the page so the kitchen can assign "
+                    + "you orders.";
+            }
+        }
+
+        document.addEventListener('rider:availability-changed', function (event) {
+            if (!event || !event.detail) return;
+
+            // An unverified rider's empty-state copy is
+            // verification-driven, not availability-driven. Do not
+            // touch it.
+            if (!RIDER_IS_VERIFIED) return;
+
+            var isOnline = !!event.detail.online;
+
+            applyActiveEmptyCopy(isOnline);
+            applyAssignedEmptyCopy(isOnline);
+        });
 
         // ============================================
         // MESSAGING WINDOW GUARD — HISTORY TAB

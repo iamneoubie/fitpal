@@ -21,25 +21,39 @@
  * No $_POST, no header(), no echo.
  *
  * ---------------------------------------------------------------------
+ * SPECIAL INSTRUCTIONS (v8.1.0)
+ * ---------------------------------------------------------------------
+ * The customer's free-text notes live inside the cart row's
+ * customization_data JSON, as a {type:'notes', notes:'...'} entry:
+ *
+ *     {"customizations": [
+ *        {ingredient_id:5, selected_option:"selected", ...},
+ *        {type:"notes", notes:"Less salt please."}
+ *     ]}
+ *
+ * parseCartCustomizations() drops that entry, because it has no
+ * ingredient_id and does not belong in the modification list. The
+ * drop is correct — the notes are not a modification — but before
+ * v8.1.0 nothing else consumed them, so they were invisible on the
+ * cart page.
+ *
+ * extractCartSpecialInstructions() is the missing reader. It
+ * decodes the same JSON and returns the notes text as a plain
+ * string, or '' when the customer typed nothing. It runs during
+ * enrichCartItemsWithCustomizations(), which stores the result on
+ * $item['special_instructions']. getCartCustomizationBreakdown()
+ * forwards that value to the page under the same key.
+ *
+ * The write path is unchanged. buildCartCustomizationPayload()
+ * already stores the full array including the notes entry, so the
+ * data was on disk all along — only the read path was missing.
+ *
+ * ---------------------------------------------------------------------
  * IMAGE PATH RESOLUTION
  * ---------------------------------------------------------------------
  * The `product_image` column returned by the reads below is the raw
- * dietary_information.images value — a project-root-relative folder
- * path that may omit the literal `restaurant/` segment the manifest
- * folder actually carries. It is NOT a browser-loadable URL on its
- * own.
- *
- * Pages that render a cart image resolve the raw value through the
- * helpers in product-queries.php:
- *
- *     getProductImageBasePath()    resolves the folder that exists
- *     getProductPrimaryFilename()  finds the first image file
- *
- * This file requires product-queries.php so that every caller of
- * this file automatically has those helpers available. The
- * resolution itself is done by the page (cart.php's
- * resolveCartImageUrl()), because the page knows its own asset base
- * and the query layer does not.
+ * dietary_information.images value. Pages resolve it through the
+ * helpers in product-queries.php before rendering.
  *
  * ---------------------------------------------------------------------
  * getProductCompositionRules() COLLISION GUARD
@@ -49,32 +63,18 @@
  * declares the canonical version; the second file's declaration is
  * skipped by the function_exists() guard.
  *
- * The two shapes are compatible for every current caller:
- * cart-handler.php's computeServerUnitPrice() reads
- * ['price_modifier'] and ['max_quantity']; queue-queries.php's
- * queueEnrich() reads the same two keys. Both shapes carry those
- * keys. To keep the two shapes identical — so a future caller that
- * reads ['is_default'] or ['default_quantity'] works regardless of
- * which file loaded first — this file's version returns the full
- * row shape, matching what queue-queries.php returns.
- *
  * @package FitPal
- * @version 8.0 — getProductCompositionRules() is wrapped in a
- *                function_exists() guard and returns the full
- *                product_composition row shape. This fixes the
- *                "Cannot redeclare getProductCompositionRules()"
- *                fatal that fired when cart-handler.php required
- *                both this file and queue-queries.php.
+ * @version 8.1.0 — Adds extractCartSpecialInstructions() and wires
+ *                  it into enrichCartItemsWithCustomizations() and
+ *                  getCartCustomizationBreakdown(). The cart page
+ *                  can now render the customer's special
+ *                  instructions alongside the ingredient
+ *                  modifications.
  *
- *                No query in this file changed shape. The
- *                `product_image` field remains the raw column
- *                value; resolution happens in the page.
- *
- *                (7.0: requires product-queries.php so callers can
- *                resolve the raw `product_image` value. 6.1: pure
- *                cart-feature functions co-located here. 6.0:
- *                paginated read with image column. 5.0: cart
- *                customization breakdown helper.)
+ *                  (8.0.0: getProductCompositionRules() guard.
+ *                  7.0.0: requires product-queries.php.
+ *                  6.0.0: paginated read. 5.0.0: cart customization
+ *                  breakdown helper.)
  */
 
 declare(strict_types=1);
@@ -214,8 +214,7 @@ function getCartItemsWithProductDetailsPaginated(
 }
 
 /**
- * Totals for the whole cart (units + rows). Used for the empty-state
- * decision and the header badge.
+ * Totals for the whole cart (units + rows).
  *
  * @param PDO $db
  * @param int $customerId
@@ -238,8 +237,7 @@ function getCartTotals(PDO $db, int $customerId): array
 }
 
 /**
- * Total unit count for the cart (used by the header badge and the
- * cart-handler's AJAX responses).
+ * Total unit count for the cart.
  *
  * @param PDO $db
  * @param int $customerId
@@ -256,10 +254,6 @@ function getCartCount(PDO $db, int $customerId): int
 
 /**
  * Fetch a product's cart-relevant fields, with a row lock.
- *
- * Called inside the add flow so the stock and price are stable across
- * the read-check-write sequence. The lock is what prevents two
- * concurrent "add" requests from both seeing stale stock.
  *
  * @param PDO $db
  * @param int $productId
@@ -279,8 +273,7 @@ function getProductForCart(PDO $db, int $productId): array|false
 
 /**
  * Fetch a cart row plus the product's current stock, with locks on
- * both. Used by the quantity-update flow so the clamp against
- * `p.stock` cannot race against a concurrent stock change.
+ * both.
  *
  * @param PDO $db
  * @param int $cartId
@@ -304,8 +297,7 @@ function getCartItemForUpdate(PDO $db, int $cartId, int $customerId): array|fals
 
 /**
  * Find an existing cart row for the same customer + product +
- * customization signature. When $customizationHash is null, matches
- * the oldest row for the product regardless of customization.
+ * customization signature.
  *
  * @param PDO $db
  * @param int $customerId
@@ -352,20 +344,12 @@ function getCartItemByProduct(
 }
 
 /**
- * Fetch the composition rules for a product — every ingredient that
- * can be selected or removed, with its price modifier, min/max
- * quantities, and required/default flags.
- *
- * Returns an array keyed by ingredient_id for O(1) lookup.
+ * Fetch the composition rules for a product.
  *
  * COLLISION GUARD: queue-queries.php declares a function with the
  * same name. Whichever file loads first declares the canonical
  * version; this guard makes the second file's declaration a
  * silent no-op.
- *
- * Both files return the same superset shape — every column the
- * query selects — so every caller sees compatible keys regardless
- * of load order.
  *
  * @param PDO $db
  * @param int $productId
@@ -408,11 +392,7 @@ if (!function_exists('getProductCompositionRules')) {
 
 /**
  * Load the rows needed to copy selected cart lines into the session
- * order queue. Joins in the branch / restaurant / image metadata so
- * the caller can build a queue line without any further queries.
- *
- * Only rows that belong to $customerId are returned. If $selectedIds
- * is empty, returns an empty array.
+ * order queue.
  *
  * @param PDO $db
  * @param int $customerId
@@ -578,18 +558,22 @@ function clearCart(PDO $db, int $customerId): void
 
 /* ---------------------------------------------------------------
  * ROW SHAPING (pure — no DB access)
- *
- * These functions operate on rows returned by the reads above.
- * They live here because this is the only cart file that is safe
- * to include from a page.
  * --------------------------------------------------------------- */
 
 /**
- * Enrich an array of cart rows with their parsed customizations.
- * Modifies $items in place.
+ * Enrich an array of cart rows with their parsed customizations and
+ * their special-instructions text. Modifies $items in place.
  *
- * Loads all ingredient names in one query and all composition rules
- * in one query per product set, so we don't N+1.
+ * Sets on every row:
+ *
+ *   customizations         the ingredient modifications, each with
+ *                          ingredient_name and price_modifier
+ *   special_instructions   the customer's free-text note, or ''
+ *
+ * The notes text is pulled from the raw customization_data JSON
+ * BEFORE parseCartCustomizations() drops the notes entry. That is
+ * the only opportunity to see it: once parseCartCustomizations()
+ * has run, the notes entry is gone from the array it returns.
  *
  * @param PDO $db
  * @param array<int, array<string, mixed>> $items
@@ -600,9 +584,17 @@ function enrichCartItemsWithCustomizations(PDO $db, array &$items): void
     if (empty($items)) return;
 
     // Parse all customization payloads first, collect ingredient IDs.
+    // The notes text is extracted in the same pass so it is captured
+    // before parseCartCustomizations() drops the notes entry.
     $allIngredientIds = [];
     foreach ($items as &$item) {
-        $raw = parseCartCustomizations($item['customization_data'] ?? null);
+        $rawJson = $item['customization_data'] ?? null;
+
+        $item['_special_instructions'] = extractCartSpecialInstructions(
+            is_string($rawJson) ? $rawJson : null
+        );
+
+        $raw = parseCartCustomizations(is_string($rawJson) ? $rawJson : null);
         foreach ($raw as $c) {
             $iid = (int)($c['ingredient_id'] ?? 0);
             if ($iid > 0) $allIngredientIds[$iid] = true;
@@ -686,8 +678,11 @@ function enrichCartItemsWithCustomizations(PDO $db, array &$items): void
             ];
         }
 
-        $item['customizations'] = $resolved;
+        $item['customizations']       = $resolved;
+        $item['special_instructions'] = $item['_special_instructions'];
+
         unset($item['_raw_customizations']);
+        unset($item['_special_instructions']);
         unset($item['customization_data']);
     }
     unset($item);
@@ -722,13 +717,16 @@ function computeCartCustomizationHash(array $customizations): string
 }
 
 /**
- * Decode cart.customization_data into a normalized list.
+ * Decode cart.customization_data into a normalized list of
+ * ingredient modifications.
  *
  * Accepts both shapes:
  *   {"customizations": [...]}
  *   [...]
  *
- * Drops notes entries and entries with no ingredient_id.
+ * Drops notes entries and entries with no ingredient_id. Notes are
+ * NOT a modification and do not belong in this list; they are
+ * returned by extractCartSpecialInstructions() instead.
  *
  * @param string|null $json
  * @return array<int, array<string, mixed>>
@@ -755,12 +753,78 @@ function parseCartCustomizations(?string $json): array
 }
 
 /**
- * Build a display-ready breakdown of a cart line's customization data.
+ * Extract the customer's special-instructions text from a raw
+ * customization_data JSON string.
  *
- * Uses the enriched `customizations` array produced by
- * enrichCartItemsWithCustomizations(). Returns the base price, the
- * list of modifications (additions and removals), the total modifier
- * amount, the derived unit price, and the line total.
+ * The customer's notes are stored inside the same JSON as the
+ * ingredient modifications, as a single {type:'notes', notes:'...'}
+ * entry:
+ *
+ *     {"customizations": [
+ *        {ingredient_id:5, selected_option:"selected", ...},
+ *        {type:"notes", notes:"Less salt please."}
+ *     ]}
+ *
+ * This function decodes that JSON and returns the notes text as a
+ * plain trimmed string. It returns '' when:
+ *
+ *   - the JSON is null or empty
+ *   - the JSON is not decodable
+ *   - the decoded value is not an array
+ *   - no {type:'notes'} entry is present
+ *   - the notes value is not a non-empty string after trimming
+ *
+ * The shape is normalized the same way parseCartCustomizations()
+ * normalizes it, so a caller can pass the same JSON to both
+ * functions and get consistent results: parseCartCustomizations()
+ * returns the ingredient entries, this function returns the notes.
+ *
+ * @param string|null $json
+ * @return string
+ */
+function extractCartSpecialInstructions(?string $json): string
+{
+    if (empty($json)) return '';
+
+    $decoded = json_decode($json, true);
+    if (!is_array($decoded)) return '';
+
+    if (isset($decoded['customizations']) && is_array($decoded['customizations'])) {
+        $decoded = $decoded['customizations'];
+    }
+
+    foreach ($decoded as $cust) {
+        if (!is_array($cust)) continue;
+        if (!isset($cust['type']) || $cust['type'] !== 'notes') continue;
+
+        $notes = $cust['notes'] ?? '';
+        if (!is_string($notes)) return '';
+
+        $trimmed = trim($notes);
+        if ($trimmed === '') return '';
+
+        return $trimmed;
+    }
+
+    return '';
+}
+
+/**
+ * Build a display-ready breakdown of a cart line's customization
+ * data.
+ *
+ * Uses the enriched `customizations` and `special_instructions`
+ * fields produced by enrichCartItemsWithCustomizations().
+ *
+ * Returns:
+ *
+ *   base_price              the product's base price
+ *   modifications           list of ingredient modifications, each
+ *                           with name, price, kind, quantity
+ *   modifier_total          sum of every modification's price
+ *   unit_price              base_price + modifier_total
+ *   line_total              unit_price × quantity
+ *   special_instructions    the customer's free-text note, or ''
  *
  * This is a display helper, not a query. It lives here because
  * cart.php needs to call it, and this file is the only cart file
@@ -772,7 +836,8 @@ function parseCartCustomizations(?string $json): array
  *     modifications: array<int, array{name:string, price:float, kind:string, quantity:int}>,
  *     modifier_total: float,
  *     unit_price: float,
- *     line_total: float
+ *     line_total: float,
+ *     special_instructions: string
  * }
  */
 function getCartCustomizationBreakdown(array $item): array
@@ -784,6 +849,11 @@ function getCartCustomizationBreakdown(array $item): array
 
     $quantity = (int)($item['quantity'] ?? 1);
     $customs  = $item['customizations'] ?? [];
+
+    $specialInstructions = '';
+    if (isset($item['special_instructions']) && is_string($item['special_instructions'])) {
+        $specialInstructions = trim($item['special_instructions']);
+    }
 
     $modifications = [];
     $modifierTotal = 0.0;
@@ -825,10 +895,11 @@ function getCartCustomizationBreakdown(array $item): array
     if ($unitPrice < 0) $unitPrice = 0.0;
 
     return [
-        'base_price'     => $basePrice,
-        'modifications'  => $modifications,
-        'modifier_total' => $modifierTotal,
-        'unit_price'     => $unitPrice,
-        'line_total'     => $unitPrice * $quantity,
+        'base_price'           => $basePrice,
+        'modifications'        => $modifications,
+        'modifier_total'       => $modifierTotal,
+        'unit_price'           => $unitPrice,
+        'line_total'           => $unitPrice * $quantity,
+        'special_instructions' => $specialInstructions,
     ];
 }

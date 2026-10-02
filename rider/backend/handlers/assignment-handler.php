@@ -8,55 +8,66 @@
  * ---------------------------------------------------------------------
  * ACTIONS
  * ---------------------------------------------------------------------
- *   list            → full snapshot for a rider.
- *   poll            → delta fetch.
+ *   list            → full snapshot for a rider, with each order's
+ *                     item list and payment-method pill attached.
+ *                     Now also returns the rider's `is_available`
+ *                     flag so the panel can reflect the availability
+ *                     state in real time.
+ *   poll            → delta fetch, with each new or updated order's
+ *                     item list and payment-method pill attached.
+ *                     Now also returns the rider's `is_available`
+ *                     flag.
  *   accept          → accept a rider_pending assignment. Runs
- *                     acceptOrder() which transitions the order
- *                     AND writes the COD collection row, both inside
- *                     one transaction. Then forwards to the shared
- *                     order-transaction handler for the sweeper.
+ *                     acceptOrder() which transitions the order,
+ *                     writes the rider liability, and writes the
+ *                     COD collection row, all inside one transaction.
+ *                     Then forwards to the shared order-transaction
+ *                     handler for the sweeper.
  *   decline         → decline a rider_pending assignment.
  *   mark_picked_up  → picking_up → delivering. Pure status
- *                     transition; no collection write here.
+ *                     transition; the liability and collection rows
+ *                     were written at accept.
  *   mark_delivered  → close a delivering order as delivered.
  *                     Delegates to the shared handler.
  *   dismiss         → notification-dismissal bookkeeping.
  *
  * ---------------------------------------------------------------------
- * ATOMIC ACCEPT
+ * WHY THE RIDER'S `is_available` FLAG IS RETURNED
  * ---------------------------------------------------------------------
- * acceptOrder() in rider-assignment-queries.php now performs TWO
- * writes inside this handler's transaction:
+ * The rider's availability is toggled by the assignment panel's own
+ * availability modal, which posts to rider-handler.php with
+ * action=toggle_availability. The panel's poll (this file's `list`
+ * action) then fetches the current state to keep the UI in sync.
  *
- *   1. orders.order_status: rider_pending → picking_up.
- *   2. rider_collection INSERT for a COD order.
+ * Before this revision, the `list` action did NOT return
+ * `is_available` at all. The panel's JS was already reading
+ * `data.online` from the response, and the server was not providing
+ * it, so `online` stayed undefined and the pill never updated
+ * without a page refresh.
  *
- * Both commit or roll back together. The earlier design wrote the
- * collection at pickup in a separate request and left a window in
- * which an accepted order had no liability record. That window is
- * closed.
+ * The fix is to fetch `is_available` from
+ * `delivery_rider_profile` on every `list` and `poll` call and
+ * return it as `online` in the response.
  *
  * ---------------------------------------------------------------------
- * WHERE THE MONEY RULES LIVE
+ * RESPONSE SHAPE
  * ---------------------------------------------------------------------
- * Delivery credit pair, collection settle/void, and the failed-
- * delivery sweep all live in:
- *
- *     shared/backend/handlers/order-transaction-handler.php
- *     shared/backend/database/order-transaction-queries.php
+ * JSON. Business-rule refusals return HTTP 200 with
+ * {status:'error', message:'...'}; only auth failures return 401
+ * and CSRF mismatches return 403.
  *
  * @package FitPal
- * @version 2.3 — acceptOrder() now writes the collection. Docs
- *                updated. mark_picked_up handler unchanged; the
- *                forward to the shared handler is retained for its
- *                opportunistic sweep.
+ * @version 3.2 — `handleList` and `handlePoll` now fetch and return
+ *                the rider's `is_available` flag from the database,
+ *                so the assignment panel's availability pill updates
+ *                in real time without a page refresh.
  *
- *                (2.2: mark_picked_up forwards for the COD
- *                collection. 2.1: accept runs the status transition
- *                before forwarding. 2.0: accept and mark_delivered
- *                delegate to the shared handler. 1.2: committed-
- *                order cap on accept. 1.1: picking_up status.
- *                1.0: initial.)
+ *                (3.1: payment pill per row. 3.0: item list per
+ *                row. 2.3: acceptOrder writes collection. 2.2:
+ *                mark_picked_up forwards. 2.1: accept runs
+ *                transition. 2.0: accept + delivered delegate.
+ *                1.2: committed-order cap. 1.1: picking_up. 1.0:
+ *                initial.)
  */
 
 declare(strict_types=1);
@@ -79,6 +90,7 @@ $riderId = (int)$_SESSION['delivery_rider_id'];
 
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/rider-assignment-queries.php';
+require_once __DIR__ . '/../database/product-queries.php';
 
 require_once __DIR__ . '/../../includes/rider-csrf-token.php';
 
@@ -183,12 +195,23 @@ function handleList(PDO $db, int $riderId): array
     ));
     $_SESSION['rider_dismissed_assignment_ids'] = $dismissed;
 
+    $shapedRows = [];
+    foreach ($rows as $row) {
+        $orderId = (int)($row['order_id'] ?? 0);
+
+        $items = $orderId > 0
+            ? getRiderOrderItemsWithDetails($db, $orderId)
+            : [];
+
+        $shapedRows[] = shapeAssignmentRow($row, $items);
+    }
+
     return [
         'status'    => 'success',
         'eligible'  => $eligible,
         'online'    => $online,
         'counts'    => $counts,
-        'rows'      => array_map('shapeAssignmentRow', $rows),
+        'rows'      => $shapedRows,
         'max_id'    => $maxId,
         'dismissed' => array_values(array_map('intval', $dismissed)),
     ];
@@ -223,12 +246,23 @@ function handlePoll(PDO $db, int $riderId): array
         }
     }
 
+    $shapedRows = [];
+    foreach ($rows as $row) {
+        $orderId = (int)($row['order_id'] ?? 0);
+
+        $items = $orderId > 0
+            ? getRiderOrderItemsWithDetails($db, $orderId)
+            : [];
+
+        $shapedRows[] = shapeAssignmentRow($row, $items);
+    }
+
     return [
         'status'   => 'success',
         'eligible' => true,
         'online'   => $online,
         'counts'   => $counts,
-        'rows'     => array_map('shapeAssignmentRow', $rows),
+        'rows'     => $shapedRows,
         'max_id'   => $maxId,
     ];
 }
@@ -236,11 +270,11 @@ function handlePoll(PDO $db, int $riderId): array
 /**
  * Accept a rider_pending assignment.
  *
- * The status transition and the COD collection write both happen
- * inside acceptOrder(). This handler wraps them in one transaction.
- * The subsequent forward to the shared handler is for the
- * opportunistic failed-delivery sweep; the accept path there is a
- * pure verification.
+ * The status transition, the rider liability write, and the COD
+ * collection write all happen inside acceptOrder(). This handler
+ * wraps them in one transaction. The subsequent forward to the
+ * shared handler is for the opportunistic failed-delivery sweep;
+ * the accept path there is a pure verification.
  *
  * @param PDO $db
  * @param int $riderId
@@ -299,10 +333,6 @@ function handleAccept(PDO $db, int $riderId): array
     $db->beginTransaction();
 
     try {
-        // acceptOrder() does BOTH writes: the status transition and,
-        // for a COD order, the rider_collection insert that makes
-        // the rider's cash responsibility visible on the dashboard
-        // and earnings page.
         $accepted = acceptOrder($db, $riderId, $orderId);
 
         if (!$accepted) {
@@ -321,9 +351,6 @@ function handleAccept(PDO $db, int $riderId): array
         throw $e;
     }
 
-    // Forward to the shared handler for the failed-delivery sweep.
-    // The shared handler's accept branch verifies the order and
-    // returns; it performs no additional write.
     forwardToSharedHandler('rider_accept_assignment', $orderId);
 }
 
@@ -367,10 +394,11 @@ function handleDecline(PDO $db, int $riderId): array
 /**
  * Move a picking_up order to delivering.
  *
- * Pure status transition. The COD collection row was already
- * written by acceptOrder(). The forward to the shared handler is
- * for the opportunistic sweep; the shared handler's pickup branch
- * verifies the order and returns.
+ * Pure status transition. The rider liability column and the COD
+ * collection row were already written by acceptOrder(). The
+ * forward to the shared handler is for the opportunistic sweep;
+ * the shared handler's pickup branch verifies the order and
+ * returns.
  *
  * @param PDO $db
  * @param int $riderId
@@ -469,9 +497,63 @@ function forwardToSharedHandler(string $sharedAction, int $orderId): never
     exit;
 }
 
-function shapeAssignmentRow(array $row): array
+/**
+ * Build the payment-method pill payload for one order.
+ *
+ * Mirrors the mapping used by the kitchen board's
+ * kitchenPaymentMeta() in restaurant/backend/handlers/
+ * kitchen-order-handler.php, so the same method renders with the
+ * same icon, label, and colour slug on both surfaces.
+ *
+ * @param string $paymentMethod
+ * @return array{icon: string, label: string, slug: string}
+ */
+function riderPaymentPill(string $paymentMethod): array
 {
-    $status = (string)($row['order_status'] ?? '');
+    return match ($paymentMethod) {
+        'COD' => [
+            'icon'  => 'coin-line.svg',
+            'label' => 'Cash on Delivery',
+            'slug'  => 'cod',
+        ],
+        'Wallet' => [
+            'icon'  => 'wallet-fill.svg',
+            'label' => 'Wallet',
+            'slug'  => 'wallet',
+        ],
+        'Online' => [
+            'icon'  => 'qr-code-line.svg',
+            'label' => 'Online Payment',
+            'slug'  => 'online',
+        ],
+        default => [
+            'icon'  => 'coin-line.svg',
+            'label' => $paymentMethod !== '' ? $paymentMethod : '—',
+            'slug'  => 'other',
+        ],
+    };
+}
+
+/**
+ * Shape one panel row for JSON.
+ *
+ * Attaches the order's item list as `items` on the shaped row and
+ * a payment-method pill as `payment_pill`. Each item carries its
+ * product name, quantity, browser-loadable image URL, customization
+ * rows, and the customer's special instructions.
+ *
+ * The panel row shaper normalizes the item list so a caller never
+ * has to defend against a missing key. An order with no items
+ * produces an empty `items` array.
+ *
+ * @param array<string, mixed> $row
+ * @param array<int, array<string, mixed>> $items
+ * @return array<string, mixed>
+ */
+function shapeAssignmentRow(array $row, array $items = []): array
+{
+    $status        = (string)($row['order_status'] ?? '');
+    $paymentMethod = (string)($row['payment_method'] ?? '');
 
     $messageChannel = panelMessageChannel($status);
     $messageEnabled = false;
@@ -500,6 +582,8 @@ function shapeAssignmentRow(array $row): array
         'status_label'     => panelStatusLabel($status),
         'status_badge'     => panelStatusBadge($status),
         'order_date'       => (string)($row['order_date'] ?? ''),
+        'payment_method'   => $paymentMethod,
+        'payment_pill'     => riderPaymentPill($paymentMethod),
         'customer_name'    => (string)($row['customer_name'] ?? 'Customer'),
         'customer_contact' => (string)($row['customer_contact'] ?? ''),
         'restaurant_name'  => (string)($row['restaurant_name'] ?? ''),
@@ -511,7 +595,76 @@ function shapeAssignmentRow(array $row): array
         'message_enabled'  => $messageEnabled,
         'call_number'      => $callNumber,
         'call_label'       => $callLabel,
+        'items'            => shapeAssignmentItems($items),
     ];
+}
+
+/**
+ * Shape one order's item list for the panel.
+ *
+ * Each item exposes the fields the panel's renderer reads:
+ *
+ *   product_name          string
+ *   quantity              int
+ *   image_url             string  browser-loadable, or '' when the
+ *                                 image could not be resolved
+ *   is_customized         bool
+ *   customizations        array   one row per ingredient change
+ *   special_instructions  string  the customer's notes, or ''
+ *
+ * @param array<int, array<string, mixed>> $items
+ * @return array<int, array<string, mixed>>
+ */
+function shapeAssignmentItems(array $items): array
+{
+    if (empty($items)) {
+        return [];
+    }
+
+    $shaped = [];
+
+    foreach ($items as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $customizations = [];
+
+        if (isset($item['customizations']) && is_array($item['customizations'])) {
+            foreach ($item['customizations'] as $cust) {
+                if (!is_array($cust)) {
+                    continue;
+                }
+
+                $name = trim((string)($cust['ingredient_name'] ?? ''));
+                if ($name === '') {
+                    continue;
+                }
+
+                $customizations[] = [
+                    'ingredient_name' => $name,
+                    'quantity'        => (int)($cust['quantity'] ?? 1),
+                    'is_removed'      => (bool)($cust['is_removed'] ?? false),
+                    'price_modifier'  => (float)($cust['price_at_time'] ?? 0),
+                ];
+            }
+        }
+
+        $notes = $item['custom_instructions'] ?? null;
+
+        $shaped[] = [
+            'product_name'         => (string)($item['product_name'] ?? 'Item'),
+            'quantity'             => (int)($item['quantity'] ?? 0),
+            'image_url'            => (string)($item['product_image_url'] ?? ''),
+            'is_customized'        => (bool)($item['is_customized'] ?? false),
+            'customizations'       => $customizations,
+            'special_instructions' => $notes !== null
+                ? (string)$notes
+                : '',
+        ];
+    }
+
+    return $shaped;
 }
 
 function clearDismissedId(int $orderId): void

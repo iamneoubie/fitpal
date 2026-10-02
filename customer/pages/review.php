@@ -3,74 +3,38 @@
  * FitPal Customer Review Page
  *
  * Write-review wizard for a delivered order. Three tabs, whose
- * content is driven by what the order actually contains:
- *
- *     [ Products ]  [ Restaurant ]  [ Rider ]
- *
- * Products   — one rating card per product line in the order. Each
- *              card carries its own star picker AND its own comment
- *              textarea.
- * Restaurant — one rating card per distinct branch the order
- *              touched. Each card carries its own star picker and
- *              comment textarea.
- * Rider      — one rating card for the assigned rider, with its
- *              own star picker and comment textarea. When the
- *              order has no rider, the tab shows an empty state.
- *
- * The customer moves through the tabs in any order. Back / Next
- * buttons at the bottom of each panel step through the tabs
- * linearly, and the tabs themselves remain directly clickable. On
- * the Rider panel the Next button becomes Submit Review.
+ * content is driven by what the order actually contains.
  *
  * ---------------------------------------------------------------------
- * PER-SUBJECT COMMENTS
+ * PRODUCT IMAGE RESOLUTION
  * ---------------------------------------------------------------------
- * The `feedback` table has one `feedback_content` column per order
- * (unique key unique_feedback_per_author). Per-subject comments
- * cannot each own their own `feedback` row. This page and its
- * handler therefore store the comments inside the single envelope
- * as JSON:
+ * The raw `dietary_information.images` value is a folder path, not a
+ * browser-loadable URL. This page resolves it through the helpers in
+ * product-queries.php, exactly the way menu.php, orders.php, and
+ * product-detail.php do:
  *
- *     {"comments": {
- *        "product:45": "…",
- *        "restaurant:7": "…",
- *        "rider:3": "…"
- *     }}
+ *     getProductImageBasePath()    resolves the folder
+ *     getProductPrimaryFilename()  finds the first image file
  *
- * A subject that was rated but not commented gets no key. An
- * envelope with no comments at all stores NULL.
+ * The project-root URL prefix is derived from the page's own
+ * $assetBase so the URL is correct at any deployment depth.
  *
  * ---------------------------------------------------------------------
- * SELF-CONTAINED READS
+ * RIDER PROFILE PICTURE RESOLUTION
  * ---------------------------------------------------------------------
- * This page does NOT require feedback-queries.php. The reads it
- * needs are declared locally below. The write on Submit lives in
- * feedback-handler.php.
- *
- * ---------------------------------------------------------------------
- * NO DRAFT
- * ---------------------------------------------------------------------
- * Ratings and comments live in memory for the duration of the page
- * view. A refresh discards them. Nothing is persisted until Submit.
- *
- * ---------------------------------------------------------------------
- * SCOPE RULES APPLIED
- * ---------------------------------------------------------------------
- *  - No inline CSS. review.css is loaded via the customer header's
- *    $pageCssMap.
- *  - No inline JS beyond the window.FITPAL_REVIEW data bag at the
- *    bottom. review.js is the behaviour.
- *  - No inline SVG. Icons come from shared/assets/images/icons/.
- *  - No modal on this page.
- * ---------------------------------------------------------------------
+ * The `delivery_rider_profile.profile_picture` column stores a
+ * project-root-relative path (e.g.
+ * 'shared/uploads/rider/profiles/4/10_02_2026_0.jpg'). This page
+ * prepends the project-root URL derived from $assetBase, so the
+ * browser request matches a file on disk.
  *
  * @package FitPal
- * @version 4.0 — Three tabs. Per-subject comment textareas on every
- *                rating card. Back / Next navigation under each
- *                panel. Overall tab removed.
+ * @version 4.1 — Fixes product image and rider profile picture
+ *                resolution.
  *
- *                (3.0: inlined the reads. 2.0: four-tab wizard.
- *                1.0: initial single-product form.)
+ *                (4.0: three tabs, per-subject comments, Back/Next
+ *                navigation. 3.0: inlined the reads. 2.0: four-tab
+ *                wizard. 1.0: initial single-product form.)
  */
 
 declare(strict_types=1);
@@ -96,6 +60,11 @@ if ($orderId <= 0) {
 
 require_once __DIR__ . '/../backend/database/customer-connect.php';
 require_once __DIR__ . '/../backend/database/customer-order-queries.php';
+
+// FIX: product-queries.php is required so the image-resolution
+// helpers (getProductImageBasePath, getProductPrimaryFilename) are
+// available.
+require_once __DIR__ . '/../backend/database/product-queries.php';
 
 $customerId = (int)$_SESSION['customer_id'];
 
@@ -412,23 +381,118 @@ if ($alreadyReviewed) {
  * HELPERS
  * ============================================================= */
 
-if (!function_exists('reviewItemImage')) {
-    function reviewItemImage(string $imagePath, string $assetBase): string
+// FIX: project-root URL and fallback URLs are computed here, before
+// header.php is included, so the page-local helpers below can close
+// over them.
+
+// ---------------------------------------------------------------------
+// PROJECT-ROOT URL
+//
+// $assetBase ends with 'shared/'. Trimming that suffix yields the URL
+// of the directory that contains shared/. Every project-root-relative
+// path can then be appended to this prefix.
+// ---------------------------------------------------------------------
+$projectRootUrl = '';
+
+/**
+ * Compute the project-root URL prefix from the page's own asset base.
+ * Defined as a function so it can be called before $assetBase exists
+ * (header.php provides $assetBase).
+ *
+ * @param string $assetBase
+ * @return string
+ */
+if (!function_exists('reviewProjectRootUrl')) {
+    function reviewProjectRootUrl(string $assetBase): string
     {
-        if ($imagePath === '') {
-            return $assetBase . 'assets/images/icons/restaurant.svg';
+        if ($assetBase === '') {
+            return '';
         }
-        return htmlspecialchars($imagePath, ENT_QUOTES, 'UTF-8');
+        $trimmed = preg_replace('#shared/$#', '', $assetBase);
+        return is_string($trimmed) ? $trimmed : '';
+    }
+}
+
+if (!function_exists('reviewItemImage')) {
+    /**
+     * Resolve a product's raw dietary_information.images value into a
+     * browser-loadable URL.
+     *
+     * Mirrors resolveOrderItemImageUrl() in orders.php and
+     * resolveCartImageUrl() in cart.php. The raw column value is a
+     * folder path; the reader resolves it against the folder shapes
+     * that actually exist on disk and returns:
+     *
+     *     image_base       resolved folder (project-root-relative)
+     *     primary filename first image-*.{ext} inside it
+     *
+     * The browser URL is the project root URL + image_base + filename.
+     *
+     * @param string $rawPath   Raw dietary_information.images value.
+     * @param string $assetBase The page's asset base, ending in 'shared/'.
+     * @return string
+     */
+    function reviewItemImage(string $rawPath, string $assetBase): string
+    {
+        $fallback = $assetBase . 'assets/images/icons/restaurant.svg';
+
+        if ($rawPath === '') {
+            return $fallback;
+        }
+
+        $imageBase    = getProductImageBasePath($rawPath);
+        $primaryImage = getProductPrimaryFilename($rawPath);
+
+        if ($imageBase === '' || $primaryImage === '') {
+            return $fallback;
+        }
+
+        $projectRoot = reviewProjectRootUrl($assetBase);
+        if ($projectRoot === '') {
+            return $fallback;
+        }
+
+        return htmlspecialchars(
+            $projectRoot . $imageBase . $primaryImage,
+            ENT_QUOTES,
+            'UTF-8'
+        );
     }
 }
 
 if (!function_exists('reviewRiderImage')) {
+    /**
+     * Resolve a rider's stored profile_picture path into a
+     * browser-loadable URL.
+     *
+     * The column stores a project-root-relative path such as
+     * 'shared/uploads/rider/profiles/4/10_02_2026_0.jpg'. The page
+     * prepends the project root URL derived from $assetBase, exactly
+     * the way customer/includes/header.php resolves the customer's own
+     * profile picture.
+     *
+     * @param string|null $path     Raw profile_picture value.
+     * @param string      $assetBase The page's asset base, ending in 'shared/'.
+     * @return string
+     */
     function reviewRiderImage(?string $path, string $assetBase): string
     {
+        $fallback = $assetBase . 'assets/images/icons/riding-line.svg';
+
         if ($path === null || $path === '') {
-            return $assetBase . 'assets/images/icons/riding-line.svg';
+            return $fallback;
         }
-        return htmlspecialchars($path, ENT_QUOTES, 'UTF-8');
+
+        $projectRoot = reviewProjectRootUrl($assetBase);
+        if ($projectRoot === '') {
+            return $fallback;
+        }
+
+        return htmlspecialchars(
+            $projectRoot . $path,
+            ENT_QUOTES,
+            'UTF-8'
+        );
     }
 }
 
@@ -445,6 +509,9 @@ if (!function_exists('reviewScoreStars')) {
 }
 
 require_once __DIR__ . '/../includes/header.php';
+
+// $assetBase and $csrfToken are now available from header.php.
+$projectRootUrl = reviewProjectRootUrl($assetBase);
 ?>
 
 <link rel="stylesheet" href="../assets/css/review.css">
@@ -638,7 +705,13 @@ require_once __DIR__ . '/../includes/header.php';
                     $productName = (string)($item['product_name'] ?? 'Product');
                     $quantity    = (int)($item['quantity'] ?? 0);
                     $unitPrice   = (float)($item['unit_price'] ?? 0);
-                    $itemImage   = reviewItemImage((string)($item['product_image'] ?? ''), $assetBase);
+
+                    // FIX: resolve the raw dietary_information.images
+                    // folder path into a browser-loadable URL.
+                    $itemImage = reviewItemImage(
+                        (string)($item['product_image'] ?? ''),
+                        $assetBase
+                    );
                 ?>
                 <article class="review-card" data-rating-type="product" data-rating-id="<?php echo $queueItemId; ?>"
                     data-rating-label="<?php echo htmlspecialchars($productName, ENT_QUOTES, 'UTF-8'); ?>">
@@ -797,7 +870,13 @@ require_once __DIR__ . '/../includes/header.php';
                 $riderId     = (int)$riderItem['rider_id'];
                 $riderName   = (string)$riderItem['display_name'];
                 $vehicleType = (string)($riderItem['vehicle_type'] ?? '');
-                $riderImage  = reviewRiderImage($riderItem['profile_picture'] ?? null, $assetBase);
+
+                // FIX: resolve the rider's stored profile_picture path
+                // into a browser-loadable URL.
+                $riderImage  = reviewRiderImage(
+                    $riderItem['profile_picture'] ?? null,
+                    $assetBase
+                );
             ?>
             <div class="review-card-list">
                 <article class="review-card" data-rating-type="rider" data-rating-id="<?php echo $riderId; ?>"

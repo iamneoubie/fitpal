@@ -14,42 +14,49 @@
  *                                                              ↓
  *                                                         delivered
  *
- * The 'picking_up' stage sits between 'rider_pending' and
- * 'delivering'. A rider who accepts a rider_pending offer is in
- * 'picking_up' — on the way to or at the restaurant, food not yet
- * in hand. The rider then taps "Mark Picked Up" to move the order
- * to 'delivering', and finally "Mark Delivered" to close it.
- *
  * ---------------------------------------------------------------------
  * REACHABILITY
  * ---------------------------------------------------------------------
- * This page is reachable for every order the customer owns — live,
- * delivered, cancelled, or refunded. Only the chat is time-limited.
- * See CHAT GATING below.
+ * This page is reachable for every order the customer owns. Only
+ * the chat is time-limited.
  *
  * ---------------------------------------------------------------------
- * CHAT GATING (mirrors the handler)
+ * REAL-TIME POLL
  * ---------------------------------------------------------------------
- *   - Kitchen tab     → rendered for every order that is not
- *                       cancelled/refunded, plus a one-hour window
- *                       after delivery.
- *   - Rider tab       → rendered only when the order has a rider
- *                       assigned AND the order is not
- *                       cancelled/refunded. Live from 'picking_up'
- *                       through the one-hour post-delivery window.
+ * #trackingPage publishes data-handler-url and a status revision.
+ * order-tracking.js polls get_tracking_payload every few seconds,
+ * compares the returned revision to the last-seen value, and
+ * patches the status card, timeline, and chat-closed notice in
+ * place when it changes.
+ *
+ * The patched regions are marked with stable ids the script
+ * queries:
+ *
+ *     #trackingStatusTitle
+ *     #trackingStatusDescription
+ *     #trackingStatusBadge
+ *     #trackingStatusIconImg
+ *     #trackingTimelineCard
+ *     #trackingChatClosedWrapper
+ *
+ * Everything else on the page is left alone by the poll.
+ *
+ * ---------------------------------------------------------------------
+ * CHAT GATING
+ * ---------------------------------------------------------------------
+ *   - Kitchen tab     → every non-terminal order, plus a one-hour
+ *                       window after delivery.
+ *   - Rider tab       → only when the order has a rider assigned
+ *                       AND the rider has accepted.
  *
  * When BOTH chat channels are closed, the page renders a
- * "messaging closed" notice and the chat modal is not rendered at
- * all.
+ * "messaging closed" notice and the chat modal is not rendered.
  *
  * ---------------------------------------------------------------------
  * CHAT MODAL CONTRACT
  * ---------------------------------------------------------------------
- * The chat modal's markup is server-rendered here. Its runtime
- * class names are the boundary between this page, order-tracking.js,
- * and order-tracking.css. Those three files MUST agree on the exact
- * strings below. If any one of them changes a string, the other two
- * must change in the same commit.
+ * The chat modal's element ids and class names are the boundary
+ * between this page, order-tracking.js, and order-tracking.css.
  *
  * Element ids the JS queries:
  *   #customerChatModal
@@ -63,65 +70,23 @@
  *   #chatOpenBtn
  *   #chatOpenBtnRestaurant
  *
- * Tab selector the JS queries:
- *   .customer-chat-tab[data-recipient]
- *
- * Message node shape emitted by the JS at runtime:
- *   <div class="customer-chat-message customer-chat-message-sent">
- *       <span class="customer-chat-message-sender">You</span>
- *       <span class="customer-chat-message-text">…</span>
- *       <span class="customer-chat-message-time">…</span>
- *   </div>
- *
- *   <div class="customer-chat-message customer-chat-message-received">
- *       <span class="customer-chat-message-sender">Restaurant</span>
- *       <span class="customer-chat-message-text">…</span>
- *       <span class="customer-chat-message-time">…</span>
- *   </div>
- *
- *   <div class="customer-chat-system">…</div>
- *
- * The outer `.customer-chat-message` carries the bubble surface,
- * padding, radius, and max-width. The two modifier classes
- * `-sent` and `-received` carry ONLY the alignment and the colour.
- * The CSS in order-tracking.css matches those exact strings.
- *
- * ---------------------------------------------------------------------
- * REAL-TIME UPDATES
- * ---------------------------------------------------------------------
- * The page renders once, server-side. On top of that, a light poll
- * (order-tracking.js) hits the customer order handler's
- * `get_tracking_status` action every few seconds with the current
- * revision token. When the revision changes, the client reconciles
- * the modal's gating flags in place.
- *
- * The poll endpoint is published on #trackingPage as
- * data-handler-url, pointing at customer-order-handler.php.
- *
  * ---------------------------------------------------------------------
  * SCOPE RULES APPLIED
  * ---------------------------------------------------------------------
  *  - No SQL. Data comes from tracking-queries.php.
- *  - No inline CSS. order-tracking.css is loaded at the top.
- *  - No inline JS. order-tracking.js is loaded at the bottom.
- *  - No <svg> tags. Shared icons from shared/assets/images/icons/.
+ *  - No inline CSS.
+ *  - No inline JS beyond the FITPAL_CSRF_TOKEN bootstrap.
+ *  - No <svg> tags.
  * ---------------------------------------------------------------------
  *
  * @package FitPal
- * @version 3.1 — Docblock records the runtime class-name contract
- *                between this page, order-tracking.js, and
- *                order-tracking.css, so a future revision of any
- *                one of them has one place to confirm the exact
- *                strings. No markup change from v3.0.
+ * @version 4.0 — Adds stable ids to the status card, timeline, and
+ *                chat-closed notice so order-tracking.js can patch
+ *                them in place when the poll detects a status
+ *                change.
  *
- *                (3.0: poll endpoint declared on #trackingPage's
- *                data-handler-url attribute. 2.0: poll URL points
- *                at the renamed customer order handler. 1.5:
- *                reachable for every order. 1.4: picking_up
- *                support, 1-hour grace, real-time tracking. 1.3:
- *                chat gating. 1.2: CSRF inherited from header.
- *                1.1: fixed rider/restaurant buttons opening the
- *                same tab.)
+ *                (3.1: documented chat-modal class-name contract.
+ *                3.0: poll endpoint declared on data-handler-url.)
  */
 
 declare(strict_types=1);
@@ -224,6 +189,15 @@ $defaultChatTab = $showKitchenTab
 $liveSnapshot    = getOrderLiveSnapshot($database_connection, $orderId, $customerId);
 $initialRevision = $liveSnapshot['revision'] ?? '';
 
+// Status revision: what the page's patched sections depend on.
+$statusRevision = sha1(implode('|', [
+    $orderStatus,
+    (string)($order['delivered_at'] ?? ''),
+    $hasRider ? getRiderDisplayName($rider) : '',
+    $showKitchenTab ? '1' : '0',
+    $showRiderTab   ? '1' : '0',
+]));
+
 /**
  * Format a peso amount for display on this page.
  */
@@ -234,8 +208,7 @@ function trackFmt(float|string|null $amount): string
 
 require_once __DIR__ . '/../includes/header.php';
 
-// $csrfToken is provided by header.php, stored under
-// 'customer_csrf_token'.
+// $csrfToken and $assetBase are provided by header.php.
 ?>
 
 <link rel="stylesheet" href="../assets/css/order-tracking.css">
@@ -247,6 +220,8 @@ require_once __DIR__ . '/../includes/header.php';
     data-can-message-rider="<?php echo $riderCanBeMessaged ? '1' : '0'; ?>"
     data-order-status="<?php echo htmlspecialchars($orderStatus, ENT_QUOTES, 'UTF-8'); ?>"
     data-revision="<?php echo htmlspecialchars($initialRevision, ENT_QUOTES, 'UTF-8'); ?>"
+    data-status-revision="<?php echo htmlspecialchars($statusRevision, ENT_QUOTES, 'UTF-8'); ?>"
+    data-asset-base="<?php echo htmlspecialchars($assetBase, ENT_QUOTES, 'UTF-8'); ?>"
     data-handler-url="../backend/handlers/customer-order-handler.php">
 
     <div class="container">
@@ -278,25 +253,27 @@ require_once __DIR__ . '/../includes/header.php';
         <!-- ============================================
              STATUS SUMMARY
              ============================================ -->
-        <section class="tracking-status-card" aria-label="Order status">
+        <section class="tracking-status-card" id="trackingStatusCard" aria-label="Order status">
             <div class="tracking-status-left">
-                <div class="tracking-status-icon">
-                    <img src="<?php echo $assetBase; ?>assets/images/icons/<?php echo htmlspecialchars($statusMeta['icon'], ENT_QUOTES, 'UTF-8'); ?>"
+                <div class="tracking-status-icon" id="trackingStatusIcon">
+                    <img id="trackingStatusIconImg"
+                        src="<?php echo $assetBase; ?>assets/images/icons/<?php echo htmlspecialchars($statusMeta['icon'], ENT_QUOTES, 'UTF-8'); ?>"
                         alt=""
                         onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/information-fill.svg'">
                 </div>
                 <div class="tracking-status-info">
                     <p class="tracking-status-label">Current Status</p>
-                    <p class="tracking-status-title">
+                    <p class="tracking-status-title" id="trackingStatusTitle">
                         <?php echo htmlspecialchars($statusMeta['label'], ENT_QUOTES, 'UTF-8'); ?>
                     </p>
-                    <p class="tracking-status-description">
+                    <p class="tracking-status-description" id="trackingStatusDescription">
                         <?php echo htmlspecialchars($statusMeta['description'], ENT_QUOTES, 'UTF-8'); ?>
                     </p>
                 </div>
             </div>
             <div class="tracking-status-right">
-                <span class="badge <?php echo htmlspecialchars($statusMeta['badge'], ENT_QUOTES, 'UTF-8'); ?>">
+                <span class="badge <?php echo htmlspecialchars($statusMeta['badge'], ENT_QUOTES, 'UTF-8'); ?>"
+                    id="trackingStatusBadge">
                     <?php echo htmlspecialchars($statusMeta['label'], ENT_QUOTES, 'UTF-8'); ?>
                 </span>
                 <p class="tracking-order-id">Order #<?php echo $orderId; ?></p>
@@ -309,8 +286,8 @@ require_once __DIR__ . '/../includes/header.php';
         <!-- ============================================
              PROGRESS TIMELINE
              ============================================ -->
-        <?php if (!$isTerminal): ?>
-        <section class="tracking-timeline-card" aria-label="Order progress">
+        <section class="tracking-timeline-card" id="trackingTimelineCard" aria-label="Order progress"
+            <?php echo $isTerminal ? 'style="display: none;"' : ''; ?>>
             <p class="tracking-timeline-heading">Order Progress</p>
             <div class="tracking-timeline">
                 <?php foreach ($timelineSteps as $index => $step):
@@ -338,30 +315,29 @@ require_once __DIR__ . '/../includes/header.php';
                 <?php endforeach; ?>
             </div>
         </section>
-        <?php endif; ?>
 
         <!-- ============================================
              CHAT-CLOSED NOTICE
              ============================================ -->
-        <?php if (!$chatIsReachable && $chatClosedReason !== ''): ?>
-        <div class="tracking-chat-closed-notice" role="status">
-            <img src="<?php echo $assetBase; ?>assets/images/icons/information-fill.svg" alt=""
-                class="tracking-chat-closed-icon" width="18" height="18"
-                onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
-            <p class="tracking-chat-closed-text">
-                <?php echo htmlspecialchars($chatClosedReason, ENT_QUOTES, 'UTF-8'); ?>
-            </p>
+        <div id="trackingChatClosedWrapper">
+            <?php if (!$chatIsReachable && $chatClosedReason !== ''): ?>
+            <div class="tracking-chat-closed-notice" role="status">
+                <img src="<?php echo $assetBase; ?>assets/images/icons/information-fill.svg" alt=""
+                    class="tracking-chat-closed-icon" width="18" height="18"
+                    onerror="this.onerror=null; this.src='<?php echo $assetBase; ?>assets/images/icons/file-warning-fill.svg'">
+                <p class="tracking-chat-closed-text">
+                    <?php echo htmlspecialchars($chatClosedReason, ENT_QUOTES, 'UTF-8'); ?>
+                </p>
+            </div>
+            <?php endif; ?>
         </div>
-        <?php endif; ?>
 
         <!-- ============================================
              MAIN ROW
              ============================================ -->
         <div class="tracking-row">
 
-            <!-- LEFT COLUMN: rider + restaurant -->
             <div>
-
                 <!-- Rider Card -->
                 <?php if ($showRiderCard): ?>
                 <section class="tracking-card" style="margin-bottom: 24px;" aria-labelledby="rider-card-title">
@@ -497,10 +473,9 @@ require_once __DIR__ . '/../includes/header.php';
                     </div>
                 </section>
                 <?php endif; ?>
-
             </div>
 
-            <!-- RIGHT COLUMN: order summary -->
+            <!-- Order Summary -->
             <aside class="tracking-card" aria-labelledby="summary-card-title">
                 <div class="card-header">
                     <h2 class="heading-5" id="summary-card-title">Order Summary</h2>
@@ -616,5 +591,9 @@ require_once __DIR__ . '/../includes/header.php';
 </div>
 <?php endif; ?>
 
+<script>
+window.FITPAL_CSRF_TOKEN = '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>';
+window.FITPAL_ASSET_BASE = '<?php echo $assetBase; ?>';
+</script>
 <script src="../assets/ui/js/order-tracking.js" defer></script>
 <?php require_once __DIR__ . '/../../shared/includes/footer.php'; ?>

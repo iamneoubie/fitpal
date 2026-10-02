@@ -25,48 +25,21 @@
  * This handler contains NO SQL. All data access goes through
  * customer/backend/database/queue-queries.php.
  *
- * This file is NOT safe to require from a page — it runs a full
- * request dispatch at load time. Pure helpers that pages need
- * (queueEnrich, getProductForQueue) live in queue-queries.php.
- *
  * ---------------------------------------------------------------------
- * QUEUE SHAPE CONTRACT (shared with the order-transaction layer)
+ * QUEUE LINE SHAPE (v8.0.0)
  * ---------------------------------------------------------------------
- * The `add` and `sync` actions write queue lines whose fields are
- * consumed by createOrderFromQueue() in
- * shared/backend/database/order-transaction-queries.php. That
- * function expects, at minimum, the following fields on every line:
+ * Every line this handler writes is produced by queueEnrich(),
+ * which attaches both:
  *
- *     product_id              int
- *     restaurant_branch_id    int   ← required; a line missing it is
- *                                     silently dropped by the shared
- *                                     layer, which can leave the whole
- *                                     queue empty
- *     quantity                int
- *     price                   float effective unit price
- *     base_price              float
- *     customization_data      string|null raw JSON of the customer's
- *                                     selections
+ *   customization_data   raw JSON, read by createOrderFromQueue()
+ *   customizations       enriched display array, read by the queue
+ *                        panel to render its "Customized" dropdown
  *
- * The canonical producer of a queue line is queueEnrich() in
- * customer/backend/database/queue-queries.php. Both this handler
- * and the cart handler (cart-handler.php's push_to_queue action)
- * write lines through that same enrichment path or an exact-shape
- * reproduction of it. If queueEnrich() ever changes the field set,
- * this handler follows it automatically because it calls
- * queueEnrich() directly.
- *
- * The queue line's `line_key` is a hash of the product id plus the
- * raw customization JSON. Two lines with the same product but
- * different customizations never merge. Two lines with the same
- * product and the same customization payload always merge, and
- * every mutable field is refreshed from the latest enrichment so a
- * stale price cannot survive a merge.
- *
- * If createOrderFromQueue() ever requires a field that queueEnrich()
- * does not produce, that field must be added to queueEnrich() — not
- * patched into this handler — so the cart handler and this handler
- * stay consistent by construction.
+ * Before v8.0.0, the add action overwrote the enriched array with
+ * the raw client array after calling queueEnrich(). The raw array
+ * has no ingredient_name, so the queue panel's render dropped every
+ * entry. Removing that override is the fix: queueEnrich()'s
+ * enriched array is what the panel needs.
  *
  * ---------------------------------------------------------------------
  * PER-ROLE SESSION MODEL
@@ -78,30 +51,20 @@
  * inside the customer session, guaranteed to be the customer's own.
  *
  * @package FitPal
- * @version 7.0 — Docblock records the queue shape contract against
- *                the shared order-transaction layer. No behavioural
- *                change: the action set, the JSON/Form input
- *                handling, the merge rules, and the queue write
- *                order are exactly as they were in the previous
- *                revision.
+ * @version 8.0.0 — The add action no longer overwrites the enriched
+ *                  `customizations` array with the raw client
+ *                  array. queueEnrich() produces the enriched array
+ *                  itself, and the queue panel reads exactly what
+ *                  queueEnrich() returned.
  *
- *                (6.0: per-role session migration. 5.1: CSRF
- *                validated against customer_csrf_token. 5.0:
- *                queueEnrich moved to queue-queries.php.)
+ *                  (7.0.0: queue shape contract. 6.0.0: per-role
+ *                  session migration.)
  */
 
 declare(strict_types=1);
 
-// ---------------------------------------------------------------------
-// SESSION BOOTSTRAP
-// ---------------------------------------------------------------------
-
 require_once __DIR__ . '/../../../shared/includes/session-bootstrap.php';
 fitpal_session_bootstrap('customer');
-
-// ---------------------------------------------------------------------
-// INPUT — JSON OR FORM
-// ---------------------------------------------------------------------
 
 $raw    = file_get_contents('php://input');
 $json   = ($raw !== '' && $raw !== false) ? json_decode($raw, true) : null;
@@ -111,10 +74,6 @@ $input  = $isJson ? $json : $_POST;
 $isAjax = $isJson
     || (isset($_SERVER['HTTP_X_REQUESTED_WITH'])
         && strtolower((string)$_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
-
-// ---------------------------------------------------------------------
-// AUTHENTICATION
-// ---------------------------------------------------------------------
 
 if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     if ($isAjax) {
@@ -129,29 +88,13 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
 
 $customerId = (int)$_SESSION['customer_id'];
 
-// ---------------------------------------------------------------------
-// DEPENDENCIES
-// ---------------------------------------------------------------------
-
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/queue-queries.php';
-
-// ---------------------------------------------------------------------
-// ACTION RESOLUTION
-// ---------------------------------------------------------------------
 
 $action = (string)($input['action'] ?? '');
 if ($action === '' && ($input['queue_action'] ?? '') === 'queue') {
     $action = 'add';
 }
-
-// ---------------------------------------------------------------------
-// CSRF
-//
-// The get action is read-only and does not require a token. Every
-// other action does. Validated against the customer context's own
-// key, 'customer_csrf_token', inside the customer session.
-// ---------------------------------------------------------------------
 
 $requiresCsrf = !in_array($action, ['get', ''], true);
 
@@ -172,9 +115,9 @@ if ($requiresCsrf) {
     }
 }
 
-// ---------------------------------------------------------------------
-// SESSION QUEUE HELPERS (request-layer concerns — stay here)
-// ---------------------------------------------------------------------
+/* -----------------------------------------------------------------
+ * SESSION QUEUE HELPERS (request-layer concerns — stay here)
+ * ----------------------------------------------------------------- */
 
 function queueGet(): array
 {
@@ -189,7 +132,6 @@ function queuePut(array $queue): void
 
 /**
  * Normalize incoming customizations to a JSON string (or null).
- * Also returns the decoded array for immediate use.
  *
  * @return array{0: ?string, 1: array<int, array<string, mixed>>}
  */
@@ -216,21 +158,11 @@ function queueNormalizeCustomizations(mixed $raw): array
     return [json_encode($decoded), $decoded];
 }
 
-/**
- * Build a stable identity hash for a queue line. Two lines with the
- * same product but different customizations must NOT merge.
- */
 function queueLineKey(int $productId, ?string $customizationJson): string
 {
     return $productId . '::' . sha1((string)$customizationJson);
 }
 
-/**
- * Terminate the request with a response payload.
- *
- * AJAX callers get JSON. Non-AJAX callers get a session flash plus a
- * redirect back to the menu.
- */
 function queueRespond(array $payload, bool $isAjax, string $redirect = '../../pages/menu.php'): never
 {
     if ($isAjax) {
@@ -249,10 +181,6 @@ function queueRespond(array $payload, bool $isAjax, string $redirect = '../../pa
     exit;
 }
 
-// ---------------------------------------------------------------------
-// DISPATCH
-// ---------------------------------------------------------------------
-
 try {
     switch ($action) {
 
@@ -264,7 +192,7 @@ try {
         case 'add': {
             $productId  = (int)($input['product_id'] ?? 0);
             $quantity   = max(1, (int)($input['quantity'] ?? 1));
-            [$customJson, $parsedCustomizations] = queueNormalizeCustomizations(
+            [$customJson] = queueNormalizeCustomizations(
                 $input['customizations'] ?? null
             );
 
@@ -272,6 +200,10 @@ try {
                 queueRespond(['status' => 'error', 'message' => 'Invalid product selected.'], $isAjax);
             }
 
+            // queueEnrich() now produces BOTH the raw
+            // customization_data and the enriched customizations
+            // array the panel reads. No caller attaches its own
+            // array.
             $enriched = queueEnrich($database_connection, [
                 'product_id'         => $productId,
                 'quantity'           => $quantity,
@@ -282,8 +214,7 @@ try {
                 queueRespond(['status' => 'error', 'message' => 'That product is not available.'], $isAjax);
             }
 
-            $enriched['customizations'] = $parsedCustomizations;
-            $enriched['line_key']       = queueLineKey($productId, $customJson);
+            $enriched['line_key'] = queueLineKey($productId, $customJson);
 
             $queue = queueGet();
             $found = false;
@@ -300,20 +231,24 @@ try {
                     );
 
                 if ($rowKey === $enriched['line_key']) {
-                    $row['quantity'] = min(
+                    $mergedQty = min(
                         (int)$row['quantity'] + $quantity,
                         (int)$enriched['stock']
                     );
+
                     $rebuilt = queueEnrich($database_connection, [
                         'product_id'         => $productId,
-                        'quantity'           => (int)$row['quantity'],
+                        'quantity'           => $mergedQty,
                         'customization_data' => $customJson,
                     ]);
+
                     if ($rebuilt !== null) {
-                        $rebuilt['customizations'] = $parsedCustomizations;
-                        $rebuilt['line_key']       = $enriched['line_key'];
+                        $rebuilt['line_key'] = $enriched['line_key'];
                         $row = $rebuilt;
+                    } else {
+                        $row['quantity'] = $mergedQty;
                     }
+
                     $found = true;
                     break;
                 }
@@ -429,6 +364,10 @@ try {
                     $item['customization_data'] ?? null
                 );
 
+                // Re-enrich from the database. queueEnrich() produces
+                // the enriched `customizations` array as well as the
+                // raw customization_data, so the panel keeps its
+                // dropdown across syncs.
                 $enriched = queueEnrich($database_connection, [
                     'product_id'         => $productId,
                     'quantity'           => $quantity,
@@ -436,6 +375,15 @@ try {
                 ]);
 
                 if ($enriched !== null) {
+                    // Preserve the client's line_key when one was
+                    // supplied. Sync is a re-enrich, not a fresh add;
+                    // the identity of the line does not change.
+                    if (isset($item['line_key']) && is_string($item['line_key']) && $item['line_key'] !== '') {
+                        $enriched['line_key'] = $item['line_key'];
+                    } else {
+                        $enriched['line_key'] = queueLineKey($productId, $customJson);
+                    }
+
                     $new[] = $enriched;
                 }
             }

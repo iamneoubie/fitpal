@@ -29,13 +29,36 @@
  * ---------------------------------------------------------------------
  * SHARED RIDER CHROME
  * ---------------------------------------------------------------------
- * On every authenticated rider page, this header pulls in FOUR
- * things:
+ * On every authenticated rider page EXCEPT reapply.php, this
+ * header pulls in FOUR things:
  *
  *   1. rider/includes/rider-chat-modal.php
  *   2. rider/includes/assignment-panel.php
  *   3. <script src="../assets/ui/js/rider-chat-modal.js">
  *   4. <script src="../assets/ui/js/assignment-panel.js">
+ *
+ * On reapply.php, only the chat modal and its script are pulled in.
+ * The assignment panel is suppressed: a rider filling out a
+ * re-application form has no live assignments to manage, and the
+ * panel's bottom-anchored overlay would sit on top of the form's
+ * submit buttons on small viewports.
+ *
+ * The chat modal is NOT suppressed on reapply.php. It is inert
+ * until opened, and a rider mid-application may still want to
+ * message the kitchen about an unrelated delivery that has not yet
+ * been reassigned. The two components are independent and this
+ * header treats them independently.
+ *
+ * ---------------------------------------------------------------------
+ * PAGE-SPECIFIC CSS
+ * ---------------------------------------------------------------------
+ * $pageCssMap maps a page's basename to a stylesheet under
+ * rider/assets/css/. reapply.php is deliberately NOT in the map:
+ * it emits its own <link> to rider/assets/css/reapply.css directly
+ * in its own markup, because reapply.css is a purpose-built file
+ * and not a shared one. Do not add reapply.php to this map unless
+ * you also remove the <link> from reapply.php, or the page will
+ * load two stylesheets whose rules overlap.
  *
  * ---------------------------------------------------------------------
  * SIGN-OUT GUARD
@@ -43,16 +66,11 @@
  * The header renders TWO modals:
  *
  *   #logoutModal
- *     The normal Yes/No confirmation. Shown only after the
- *     pre-flight check in logout.js reports the rider is eligible
- *     to sign out.
+ *     The normal Yes/No confirmation.
  *
  *   #riderBlockSignOutModal
- *     The blocking modal. Shown when the pre-flight check reports
- *     the rider is NOT eligible — either because they still have
- *     live orders, or because they are still online. Single OK
- *     button; informational only. logout.js writes the body text
- *     because the correct copy depends on WHICH condition failed.
+ *     The blocking modal. Single OK button; informational only.
+ *     logout.js writes the body text.
  *
  * ---------------------------------------------------------------------
  * AVATAR
@@ -66,24 +84,36 @@
  *   3. The fallback user glyph, when the initial is also empty.
  *
  * ---------------------------------------------------------------------
- * CACHE BUSTING
+ * CACHE BUSTING — RIDER SCRIPTS ARE ALWAYS FETCHED FRESH
  * ---------------------------------------------------------------------
- * Every stylesheet link and every script tag carries a
- * ?v=<version> query string built from the file's modification
- * time AND its byte size. When APP_ENV=development is set, the
- * version is a fresh time() on every request.
+ * The four rider-side scripts that drive the live assignment
+ * panel and the live logout flow are fetched fresh on every
+ * authenticated rider page load:
+ *
+ *     ../assets/ui/js/header.js
+ *     ../assets/ui/js/logout.js
+ *     ../assets/ui/js/rider-chat-modal.js
+ *     ../assets/ui/js/assignment-panel.js
+ *
+ * For those four, the ?v= query string is `(string)time()` on
+ * every request. Stylesheets and every other script keep the
+ * content-hash version. See the file's earlier revisions for the
+ * full rationale.
  *
  * @package FitPal
- * @version 4.0 — Automatic idle logout removed. The header no
- *                longer calls trackSessionActivity()'s return
- *                value to decide whether to expire the session.
- *                It records the timestamp for reference and
- *                proceeds. Sign-out is now manual only.
+ * @version 6.1 — The assignment panel and its script are no longer
+ *                included on reapply.php. The chat modal and its
+ *                script are still included everywhere. The
+ *                suppression is a single basename check on
+ *                $_SERVER['PHP_SELF']; no flag and no per-page
+ *                variable is introduced.
  *
- *                (3.0: per-role session migration. 2.8: added
- *                #riderBlockSignOutModal. 2.7: docblock-only
- *                update. 2.6: avatar picture support. 2.5: version
- *                helper appends filesize().)
+ *                (6.0: the four live rider scripts are fetched
+ *                fresh on every page load. 5.0: content-hash
+ *                version for assets. 4.0: automatic idle logout
+ *                removed. 3.0: per-role session migration. 2.8:
+ *                added #riderBlockSignOutModal. 2.6: avatar picture
+ *                support. 2.5: version helper appended filesize().)
  */
 
 declare(strict_types=1);
@@ -92,9 +122,7 @@ declare(strict_types=1);
 // PRECONDITION CHECK
 //
 // Under Option B, the rider session must be the active session
-// before this header can render. If it is not, the entry-point
-// file forgot to bootstrap — refuse to render rather than emit
-// rider chrome against the wrong session.
+// before this header can render.
 // ---------------------------------------------------------------------
 
 if (!function_exists('fitpal_session_current_context')) {
@@ -126,7 +154,8 @@ if (fitpal_session_current_context() !== 'rider') {
     <p style="margin:0 0 12px;">
         This page was reached without a rider session being started.
         The entry-point file must call
-        <code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;">fitpal_session_bootstrap('rider')</code>
+        <code
+            style="font-family:monospace;background:#f3f4f6;padding:2px 6px;border-radius:4px;">fitpal_session_bootstrap('rider')</code>
         before including the rider header.
     </p>
     <p style="margin:0;color:#6b7280;font-size:14px;">
@@ -141,13 +170,6 @@ if (fitpal_session_current_context() !== 'rider') {
 
 // ---------------------------------------------------------------------
 // SESSION ACTIVITY
-//
-// The last-activity timestamp is recorded for reference, but it is
-// not used to expire the session. Sign-out is a manual action:
-// the user presses the logout button, the sign-out handler runs,
-// and the rider session is destroyed. The browser's own session-
-// cookie lifetime is the only other mechanism that ends this
-// session.
 // ---------------------------------------------------------------------
 
 require_once __DIR__ . '/../../shared/includes/session-activity.php';
@@ -158,10 +180,6 @@ if (!empty($_SESSION['delivery_rider_id'])) {
 
 // ---------------------------------------------------------------------
 // CSRF TOKEN (rider context)
-//
-// getRiderCsrfToken() verifies the active session is the rider
-// session before returning a token, so the value here is always
-// the rider's token and never any other role's.
 // ---------------------------------------------------------------------
 
 require_once __DIR__ . '/rider-csrf-token.php';
@@ -193,13 +211,17 @@ function getRiderAssetBase(): string
 $assetBase = getRiderAssetBase();
 
 // ---------------------------------------------------------------------
-// ASSET VERSION HELPER
+// ASSET VERSION HELPERS
 // ---------------------------------------------------------------------
 
 $isDevEnv = (getenv('APP_ENV') === 'development');
 
 /**
- * Build the cache-busting version string for a local asset.
+ * Build the cache-busting version string for a cached asset.
+ *
+ * @param string $absolutePath
+ * @param bool   $isDevEnv
+ * @return string
  */
 function riderAssetVersion(string $absolutePath, bool $isDevEnv): string
 {
@@ -211,17 +233,24 @@ function riderAssetVersion(string $absolutePath, bool $isDevEnv): string
         return '0';
     }
 
-    $mtime = filemtime($absolutePath);
-    $size  = filesize($absolutePath);
+    $hash = @md5_file($absolutePath);
 
-    if ($mtime === false) {
-        $mtime = 0;
-    }
-    if ($size === false) {
-        $size = 0;
+    if ($hash === false) {
+        return '0';
     }
 
-    return $mtime . '-' . $size;
+    return substr($hash, 0, 12);
+}
+
+/**
+ * Build the cache-busting version string for a script that is
+ * always fetched fresh.
+ *
+ * @return string
+ */
+function riderFreshAssetVersion(): string
+{
+    return (string)time();
 }
 
 // ---------------------------------------------------------------------
@@ -233,13 +262,8 @@ $sharedHeaderCss = __DIR__ . '/../../shared/assets/css/header.css';
 $riderHeaderCss  = __DIR__ . '/../assets/css/header.css';
 $riderPanelCss   = __DIR__ . '/../assets/css/assignment-panel.css';
 
-$riderHeaderJs = __DIR__ . '/../assets/ui/js/header.js';
-$riderLogoutJs = __DIR__ . '/../assets/ui/js/logout.js';
-$riderChatJs   = __DIR__ . '/../assets/ui/js/rider-chat-modal.js';
-$riderPanelJs  = __DIR__ . '/../assets/ui/js/assignment-panel.js';
-
 // ---------------------------------------------------------------------
-// ASSET VERSIONS
+// ASSET VERSIONS — STYLESHEETS (content-hash)
 // ---------------------------------------------------------------------
 
 $sharedGlobalVer = riderAssetVersion($sharedGlobalCss, $isDevEnv);
@@ -247,10 +271,14 @@ $sharedHeaderVer = riderAssetVersion($sharedHeaderCss, $isDevEnv);
 $riderHeaderVer  = riderAssetVersion($riderHeaderCss,  $isDevEnv);
 $riderPanelVer   = riderAssetVersion($riderPanelCss,   $isDevEnv);
 
-$riderHeaderJsVer = riderAssetVersion($riderHeaderJs, $isDevEnv);
-$riderLogoutJsVer = riderAssetVersion($riderLogoutJs, $isDevEnv);
-$riderChatJsVer   = riderAssetVersion($riderChatJs,   $isDevEnv);
-$riderPanelJsVer  = riderAssetVersion($riderPanelJs,  $isDevEnv);
+// ---------------------------------------------------------------------
+// ASSET VERSIONS — LIVE RIDER SCRIPTS (always fresh)
+// ---------------------------------------------------------------------
+
+$riderHeaderJsVer = riderFreshAssetVersion();
+$riderLogoutJsVer = riderFreshAssetVersion();
+$riderChatJsVer   = riderFreshAssetVersion();
+$riderPanelJsVer  = riderFreshAssetVersion();
 
 // ---------------------------------------------------------------------
 // FETCH RIDER DATA (if logged in)
@@ -309,6 +337,10 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
 // ---------------------------------------------------------------------
 // PAGE-SPECIFIC CSS PRELOADING
+//
+// reapply.php is deliberately absent from this map. It emits its own
+// <link> to reapply.css directly in its own markup. See the file
+// header for the rationale.
 // ---------------------------------------------------------------------
 
 $pageCssMap = [
@@ -335,6 +367,22 @@ if (!empty($pageCssFile) && file_exists(__DIR__ . '/../assets/css/' . $pageCssFi
 
 $riderChatEndpoint       = '../../rider/backend/handlers/message-handler.php';
 $riderAssignmentEndpoint = '../../rider/backend/handlers/assignment-handler.php';
+
+// ---------------------------------------------------------------------
+// ASSIGNMENT PANEL VISIBILITY
+//
+// The assignment panel is chrome for pages where the rider is
+// working live orders. On reapply.php the rider is filling out a
+// form, not managing assignments, and the panel's fixed-position
+// overlay would sit on top of the form's own action buttons on
+// small viewports.
+//
+// The chat modal is independent of the assignment panel and is
+// NOT suppressed by this flag. A rider mid-application may still
+// want to message the kitchen.
+// ---------------------------------------------------------------------
+
+$showAssignmentPanel = ($currentPage !== 'reapply.php');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -356,7 +404,7 @@ $riderAssignmentEndpoint = '../../rider/backend/handlers/assignment-handler.php'
     <link rel="stylesheet" href="<?php echo $pageCssPath; ?>?v=<?php echo $pageCssVer; ?>">
     <?php endif; ?>
 
-    <?php if ($isLoggedIn): ?>
+    <?php if ($isLoggedIn && $showAssignmentPanel): ?>
     <link rel="stylesheet" href="../assets/css/assignment-panel.css?v=<?php echo $riderPanelVer; ?>">
     <?php endif; ?>
 </head>
@@ -585,31 +633,26 @@ $riderAssignmentEndpoint = '../../rider/backend/handlers/assignment-handler.php'
         // ============================================================
         // SHARED RIDER CHROME
         //
-        // Two includes and two scripts, loaded on every authenticated
-        // rider page. They own non-overlapping concerns:
-        //
-        //   rider-chat-modal.php + rider-chat-modal.js
-        //     → the chat modal, its open/close/tabs/send, its delta
-        //       poll, and the delegated [data-rider-chat-open]
-        //       listener that opens it from any page.
-        //
-        //   assignment-panel.php + assignment-panel.js
-        //     → the bottom-anchored assignment panel, its poll, its
-        //       row rendering, accept/decline, and the assignment
-        //       notification modal.
-        //
-        // Do NOT merge these files. Do NOT let one include a copy of
-        // the other.
+        // Chat modal:  always rendered on authenticated pages.
+        // Assignment panel: rendered everywhere EXCEPT reapply.php.
+        // See the ASSIGNMENT PANEL VISIBILITY section above.
         // ============================================================
 
         // 1. Chat modal markup. One instance per page.
         require_once __DIR__ . '/rider-chat-modal.php';
+        ?>
 
+        <script src="../assets/ui/js/rider-chat-modal.js?v=<?php echo $riderChatJsVer; ?>" defer></script>
+
+        <?php if ($showAssignmentPanel): ?>
+
+        <?php
         // 2. Assignment panel markup + its notification modal.
         require_once __DIR__ . '/assignment-panel.php';
         ?>
 
-        <script src="../assets/ui/js/rider-chat-modal.js?v=<?php echo $riderChatJsVer; ?>" defer></script>
         <script src="../assets/ui/js/assignment-panel.js?v=<?php echo $riderPanelJsVer; ?>" defer></script>
+
+        <?php endif; ?>
 
         <?php endif; ?>
