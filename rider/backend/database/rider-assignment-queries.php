@@ -2,44 +2,69 @@
 /**
  * FitPal Rider Assignment Queries
  *
- * (Header of the v13.0 file, unchanged, except for the note below.)
+ * Data-access layer for the rider role. Every SQL statement the
+ * rider role issues lives in this file. Handlers and pages call the
+ * functions here; nothing else prepares a statement against the
+ * rider tables.
  *
  * ---------------------------------------------------------------------
- * PASSWORD HASH READER (v14.0)
+ * DOCUMENT-ROW REPLACEMENT
  * ---------------------------------------------------------------------
- * getRiderPasswordHash() returns the rider's stored bcrypt hash and
- * nothing else. It exists as a separate reader from
- * getRiderProfile() on purpose:
+ * updateRiderApplication() takes a bool $replaceDocument.
  *
- *   - getRiderProfile() is called by the dashboard, the header,
- *     the profile page, and the assignment panel. None of those
- *     callers have any use for a credential. Returning the hash to
- *     all of them would put the value in array variables in every
- *     request that renders a rider page.
+ * When true, the function deletes EVERY document row for the rider
+ * before inserting the new one. A rider holds exactly one identity
+ * document on file, whatever its id_type. There is no scenario in
+ * which a rider is simultaneously holding a valid drivers_license
+ * and a valid national_id on the same application.
  *
- *   - The only caller that needs the hash is
- *     sign-up-handler.php's reapply branch, and only in the branch
- *     where the rider is trying to change their password. That
- *     caller fetches it directly through this reader.
+ * The previous string mode deleted only rows whose id_type matched
+ * the posted document, which let a rider who changed id_type between
+ * applications accumulate one row per id_type they had ever used.
+ * getRiderLatestDocument() read the highest document_id so the
+ * reapply form always loaded the correct document, but the table
+ * carried dead rows that nothing read.
  *
- * The reader returns false when the rider has no row, and a string
- * (possibly the empty string if the column were empty, which the
- * schema does not permit) otherwise.
+ * The reapply handler always passes true.
+ *
+ * ---------------------------------------------------------------------
+ * PANEL ROW READERS
+ * ---------------------------------------------------------------------
+ * The three panel readers — getPanelAssignments(),
+ * getPanelAssignmentsSince(), and getPanelAssignmentRow() — share
+ * one column list and one FROM/JOIN clause. A change to the selected
+ * columns is one edit.
+ *
+ * ---------------------------------------------------------------------
+ * OUTSTANDING LIABILITY
+ * ---------------------------------------------------------------------
+ * getRiderOutstandingLiability() reads orders.rider_liability_amount
+ * across every live order the rider is holding, regardless of
+ * payment method. The value is a liability, not a collection. The
+ * rider_collection table is separate: it is the COD cash-custody
+ * record and is COD-only by design. This reader never touches it.
  *
  * @package FitPal
- * @version 14.0 — Adds getRiderPasswordHash() in Section 1. No
- *                 other function, SQL string, or index changed.
+ * @version 16.0 — formatRiderCurrency() and truncateText() removed;
+ *                 both are one-line expressions and are inlined at
+ *                 their call sites. getRiderRecentDeliveries() and
+ *                 getRiderDeliveryCounts() removed; both had zero
+ *                 callers after the v5.0 dashboard rewrite. File
+ *                 header shortened.
  *
- *                 (13.0: getRiderEmergencyContact(),
- *                 getRiderLatestDocument(), and the two added
- *                 columns on getRiderProfile()'s SELECT. 12.0:
- *                 updateRiderApplication() and the *ForOther
- *                 probes. 11.1: getRiderProfile() normalizes
- *                 `is_available`. 11.0: item list fetched
- *                 separately. 10.0: uniform rider liability.
- *                 9.2: panel readers select full branch address.
- *                 9.1: COD collection. 9.0: rider collection.
- *                 8.0: merged.)
+ *                 (15.0: getRiderPasswordHash() removed.
+ *                 updateRiderApplication() takes a bool and deletes
+ *                 every document row for the rider on replace.
+ *                 getRiderOutstandingCollections() renamed to
+ *                 getRiderOutstandingLiability(). Panel readers share
+ *                 one column list. 14.0: getRiderPasswordHash().
+ *                 13.0: getRiderEmergencyContact(),
+ *                 getRiderLatestDocument(). 12.0:
+ *                 updateRiderApplication(). 11.1: getRiderProfile()
+ *                 normalizes is_available. 11.0: item list fetched
+ *                 separately. 10.0: uniform rider liability. 9.2:
+ *                 panel readers select full branch address. 9.1: COD
+ *                 collection. 9.0: rider collection. 8.0: merged.)
  */
 
 declare(strict_types=1);
@@ -144,46 +169,8 @@ function isRiderActive(PDO $db, int $riderId): bool
     return (bool)$stmt->fetchColumn();
 }
 
-/**
- * Read the rider's stored password hash.
- *
- * Returns the bcrypt hash string, or false when no row exists.
- *
- * This reader exists as a separate function from getRiderProfile()
- * so the credential is only fetched by the one caller that needs
- * it — sign-up-handler.php's reapply branch, and only in the branch
- * where the rider is trying to change their password. Every other
- * caller of getRiderProfile() gets no password column.
- *
- * The returned string is a hash, not a plaintext password. It is
- * safe to compare with password_verify() and unsafe to render.
- *
- * @param PDO $db
- * @param int $riderId
- * @return string|false
- */
-function getRiderPasswordHash(PDO $db, int $riderId): string|false
-{
-    $stmt = $db->prepare(
-        "SELECT password
-           FROM delivery_rider
-          WHERE delivery_rider_id = :rider_id
-          LIMIT 1"
-    );
-    $stmt->execute([':rider_id' => $riderId]);
-    $hash = $stmt->fetchColumn();
-
-    if ($hash === false) {
-        return false;
-    }
-
-    return (string)$hash;
-}
-
 /* =============================================================
- * SECTIONS 2–10
- *
- * Byte-identical to v13.0. Every function below is unchanged.
+ * SECTION 2 — ACCOUNT STATE
  * ============================================================= */
 
 function setRiderAvailability(PDO $db, int $riderId, int $isAvailable): bool
@@ -241,6 +228,10 @@ function updateRiderProfilePicture(PDO $db, int $riderId, string $relativePath):
 
     return $stmt->rowCount() > 0;
 }
+
+/* =============================================================
+ * SECTION 3 — ASSIGNMENT FLOW
+ * ============================================================= */
 
 function getAssignedOrders(PDO $db, int $riderId, int $limit = 20): array
 {
@@ -352,6 +343,10 @@ function declineOrder(PDO $db, int $riderId, int $orderId): bool
     return $stmt->rowCount() === 1;
 }
 
+/* =============================================================
+ * SECTION 4 — UNIQUENESS PROBES
+ * ============================================================= */
+
 function riderEmailExists(PDO $db, string $email): bool
 {
     $stmt = $db->prepare("SELECT 1 FROM delivery_rider WHERE email = ? LIMIT 1");
@@ -417,6 +412,10 @@ function riderContactExistsForOther(PDO $db, string $contact, int $excludeRiderI
     ]);
     return $stmt->fetchColumn() !== false;
 }
+
+/* =============================================================
+ * SECTION 5 — REGISTRATION AND RE-APPLICATION
+ * ============================================================= */
 
 function createRiderAccount(PDO $db, array $account, array $profile, array $address): array
 {
@@ -506,6 +505,35 @@ function createRiderAccount(PDO $db, array $account, array $profile, array $addr
     }
 }
 
+/**
+ * Update a rider's application in place.
+ *
+ * Document-row policy
+ * -------------------
+ * When $replaceDocument is true, every document row for the rider
+ * is deleted before the new one is inserted. A rider holds exactly
+ * one identity document on file, whatever its id_type.
+ *
+ * When false, the new document row is inserted and older rows are
+ * left in place. The reapply handler always passes true.
+ *
+ * Account-password policy
+ * -----------------------
+ * The $account array may carry a 'password' key. If it is present
+ * and non-empty, the stored hash is rewritten. If it is absent or
+ * empty, the stored hash is left alone. The reapply handler never
+ * passes a password.
+ *
+ * @param PDO    $db
+ * @param int    $riderId
+ * @param array  $account
+ * @param array  $profile
+ * @param array  $address
+ * @param array  $emergency
+ * @param array  $document
+ * @param bool   $replaceDocument
+ * @return array{delivery_rider_id:int, financial_account_id:int}
+ */
 function updateRiderApplication(
     PDO $db,
     int $riderId,
@@ -514,15 +542,8 @@ function updateRiderApplication(
     array $address,
     array $emergency,
     array $document,
-    string $documentMode
+    bool $replaceDocument
 ): array {
-    if ($documentMode !== 'replace' && $documentMode !== 'keep') {
-        throw new InvalidArgumentException(
-            "updateRiderApplication(): \$documentMode must be 'replace' or 'keep', "
-            . "got '" . $documentMode . "'."
-        );
-    }
-
     if ($riderId <= 0) {
         throw new RuntimeException('updateRiderApplication(): invalid rider id.');
     }
@@ -597,7 +618,8 @@ function updateRiderApplication(
         ':rider_id'        => $riderId,
     ]);
 
-    $addressId = 0;
+    /* ---- Address: update the rider's existing row in place ---- */
+
     $addressStmt = $db->prepare(
         "SELECT delivery_rider_address_id
            FROM delivery_rider_address
@@ -609,8 +631,6 @@ function updateRiderApplication(
     $existingAddressId = $addressStmt->fetchColumn();
 
     if ($existingAddressId !== false && (int)$existingAddressId > 0) {
-        $addressId = (int)$existingAddressId;
-
         $updateAddress = $db->prepare(
             "UPDATE delivery_rider_address
                 SET block       = :block,
@@ -624,19 +644,15 @@ function updateRiderApplication(
         $updateAddress->execute([
             ':block'       => (string)$address['block'],
             ':barangay'    => ((string)($address['barangay'] ?? '')) !== ''
-                ? (string)$address['barangay']
-                : null,
+                ? (string)$address['barangay'] : null,
             ':city'        => (string)$address['city'],
             ':province'    => ((string)($address['province'] ?? '')) !== ''
-                ? (string)$address['province']
-                : null,
+                ? (string)$address['province'] : null,
             ':region'      => ((string)($address['region'] ?? '')) !== ''
-                ? (string)$address['region']
-                : null,
+                ? (string)$address['region'] : null,
             ':postal_code' => ((string)($address['postal_code'] ?? '')) !== ''
-                ? (string)$address['postal_code']
-                : null,
-            ':address_id'  => $addressId,
+                ? (string)$address['postal_code'] : null,
+            ':address_id'  => (int)$existingAddressId,
         ]);
     } else {
         $insertAddress = $db->prepare(
@@ -651,23 +667,19 @@ function updateRiderApplication(
             ':rider_id'    => $riderId,
             ':block'       => (string)$address['block'],
             ':barangay'    => ((string)($address['barangay'] ?? '')) !== ''
-                ? (string)$address['barangay']
-                : null,
+                ? (string)$address['barangay'] : null,
             ':city'        => (string)$address['city'],
             ':province'    => ((string)($address['province'] ?? '')) !== ''
-                ? (string)$address['province']
-                : null,
+                ? (string)$address['province'] : null,
             ':region'      => ((string)($address['region'] ?? '')) !== ''
-                ? (string)$address['region']
-                : null,
+                ? (string)$address['region'] : null,
             ':postal_code' => ((string)($address['postal_code'] ?? '')) !== ''
-                ? (string)$address['postal_code']
-                : null,
+                ? (string)$address['postal_code'] : null,
         ]);
-        $addressId = (int)$db->lastInsertId();
     }
 
-    $emergencyId = 0;
+    /* ---- Emergency contact: update in place ---- */
+
     $ecStmt = $db->prepare(
         "SELECT emergency_contact_id
            FROM delivery_rider_emergency_contact
@@ -679,8 +691,6 @@ function updateRiderApplication(
     $existingEcId = $ecStmt->fetchColumn();
 
     if ($existingEcId !== false && (int)$existingEcId > 0) {
-        $emergencyId = (int)$existingEcId;
-
         $updateEc = $db->prepare(
             "UPDATE delivery_rider_emergency_contact
                 SET first_name     = :first_name,
@@ -694,15 +704,13 @@ function updateRiderApplication(
         $updateEc->execute([
             ':first_name'     => (string)$emergency['first_name'],
             ':middle_name'    => ((string)($emergency['middle_name'] ?? '')) !== ''
-                ? (string)$emergency['middle_name']
-                : null,
+                ? (string)$emergency['middle_name'] : null,
             ':last_name'      => (string)$emergency['last_name'],
             ':contact_number' => (string)$emergency['contact_number'],
             ':relationship'   => (string)$emergency['relationship'],
             ':address'        => ((string)($emergency['address'] ?? '')) !== ''
-                ? (string)$emergency['address']
-                : null,
-            ':emergency_id'   => $emergencyId,
+                ? (string)$emergency['address'] : null,
+            ':emergency_id'   => (int)$existingEcId,
         ]);
     } else {
         $insertEc = $db->prepare(
@@ -717,28 +725,23 @@ function updateRiderApplication(
             ':rider_id'       => $riderId,
             ':first_name'     => (string)$emergency['first_name'],
             ':middle_name'    => ((string)($emergency['middle_name'] ?? '')) !== ''
-                ? (string)$emergency['middle_name']
-                : null,
+                ? (string)$emergency['middle_name'] : null,
             ':last_name'      => (string)$emergency['last_name'],
             ':contact_number' => (string)$emergency['contact_number'],
             ':relationship'   => (string)$emergency['relationship'],
             ':address'        => ((string)($emergency['address'] ?? '')) !== ''
-                ? (string)$emergency['address']
-                : null,
+                ? (string)$emergency['address'] : null,
         ]);
-        $emergencyId = (int)$db->lastInsertId();
     }
 
-    if ($documentMode === 'replace') {
+    /* ---- Document: replace every row, or append a new one ---- */
+
+    if ($replaceDocument) {
         $deleteDocs = $db->prepare(
             "DELETE FROM delivery_rider_document
-              WHERE delivery_rider_id = :rider_id
-                AND id_type = :id_type"
+              WHERE delivery_rider_id = :rider_id"
         );
-        $deleteDocs->execute([
-            ':rider_id' => $riderId,
-            ':id_type'  => (string)$document['id_type'],
-        ]);
+        $deleteDocs->execute([':rider_id' => $riderId]);
     }
 
     $insertDoc = $db->prepare(
@@ -752,11 +755,9 @@ function updateRiderApplication(
         ':id_type'     => (string)$document['id_type'],
         ':id_path'     => (string)$document['id_path'],
         ':issue_date'  => ((string)($document['issue_date'] ?? '')) !== ''
-            ? (string)$document['issue_date']
-            : null,
+            ? (string)$document['issue_date'] : null,
         ':expiry_date' => ((string)($document['expiry_date'] ?? '')) !== ''
-            ? (string)$document['expiry_date']
-            : null,
+            ? (string)$document['expiry_date'] : null,
     ]);
 
     return [
@@ -806,6 +807,10 @@ function insertRiderDocument(PDO $db, int $riderId, array $data): int
 
     return (int)$db->lastInsertId();
 }
+
+/* =============================================================
+ * SECTION 6 — DASHBOARD, EARNINGS, HISTORY
+ * ============================================================= */
 
 function getRiderDashboardStats(PDO $db, int $riderId): array
 {
@@ -964,42 +969,6 @@ function getRiderWeeklyEarnings(PDO $db, int $riderId, int $days = 7): array
     return $series;
 }
 
-function getRiderRecentDeliveries(PDO $db, int $riderId, int $limit = 5): array
-{
-    $stmt = $db->prepare(
-        "SELECT
-            o.order_id,
-            CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
-            o.destination_address,
-            o.delivered_at,
-            o.order_date,
-            COALESCE((
-                SELECT SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price))
-                FROM queue_item qi
-                WHERE qi.order_id = o.order_id
-            ), 0) AS order_total
-         FROM orders o
-         JOIN customer c ON o.customer_id = c.customer_id
-         WHERE o.delivery_rider_id = :rider_id
-           AND o.order_status = 'delivered'
-         ORDER BY o.delivered_at DESC
-         LIMIT :limit"
-    );
-    $stmt->bindValue(':rider_id', $riderId, PDO::PARAM_INT);
-    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-    $stmt->execute();
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    $payout = FITPAL_DELIVERY_BASE_FEE;
-
-    foreach ($rows as &$row) {
-        $row['rider_earning'] = $payout;
-    }
-    unset($row);
-
-    return $rows;
-}
-
 function getRiderChartScale(float $maxAmount): array
 {
     if ($maxAmount <= 0) {
@@ -1039,7 +1008,20 @@ function getRiderChartScale(float $maxAmount): array
     ];
 }
 
-function getRiderOutstandingCollections(PDO $db, int $riderId): array
+/**
+ * Return the rider's outstanding order liability.
+ *
+ * The value is the sum of orders.rider_liability_amount across every
+ * live order the rider is holding, regardless of payment method. It
+ * is the customer money the rider is carrying between accept and
+ * delivery.
+ *
+ * This is not the same figure as the rider_collection table. That
+ * table is the COD cash-custody record and is COD-only by design.
+ *
+ * @return array{total: float, count: int}
+ */
+function getRiderOutstandingLiability(PDO $db, int $riderId): array
 {
     $stmt = $db->prepare(
         "SELECT
@@ -1089,9 +1071,7 @@ function getRiderActiveDeliveries(PDO $db, int $riderId, int $sinceOrderId = 0):
         return [];
     }
 
-    if ($sinceOrderId > 0) {
-        $stmt = $db->prepare(
-            "SELECT
+    $base = "SELECT
                 o.order_id,
                 o.order_status,
                 o.order_date,
@@ -1108,10 +1088,13 @@ function getRiderActiveDeliveries(PDO $db, int $riderId, int $sinceOrderId = 0):
              LEFT JOIN restaurant_branch rb ON qi.branch_id = rb.restaurant_branch_id
              LEFT JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
              WHERE o.delivery_rider_id = :rider_id
-               AND o.order_status IN ('picking_up','delivering')
-               AND o.order_id > :since_order_id
-             GROUP BY o.order_id
-             ORDER BY o.order_id ASC"
+               AND o.order_status IN ('picking_up','delivering')";
+
+    if ($sinceOrderId > 0) {
+        $stmt = $db->prepare(
+            $base . " AND o.order_id > :since_order_id
+                      GROUP BY o.order_id
+                      ORDER BY o.order_id ASC"
         );
         $stmt->execute([
             ':rider_id'       => $riderId,
@@ -1121,26 +1104,8 @@ function getRiderActiveDeliveries(PDO $db, int $riderId, int $sinceOrderId = 0):
     }
 
     $stmt = $db->prepare(
-        "SELECT
-            o.order_id,
-            o.order_status,
-            o.order_date,
-            o.destination_address,
-            CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
-            c.contact_number AS customer_contact,
-            rb.branch_name,
-            r.business_name AS restaurant_name,
-            COUNT(DISTINCT qi.queue_item_id) AS item_count,
-            COALESCE(SUM(qi.queue_quantity * COALESCE(qi.final_price, qi.unit_price)), 0) AS order_total
-         FROM orders o
-         JOIN customer c ON o.customer_id = c.customer_id
-         LEFT JOIN queue_item qi ON o.order_id = qi.order_id
-         LEFT JOIN restaurant_branch rb ON qi.branch_id = rb.restaurant_branch_id
-         LEFT JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
-         WHERE o.delivery_rider_id = :rider_id
-           AND o.order_status IN ('picking_up','delivering')
-         GROUP BY o.order_id
-         ORDER BY o.order_date ASC"
+        $base . " GROUP BY o.order_id
+                  ORDER BY o.order_date ASC"
     );
     $stmt->execute([':rider_id' => $riderId]);
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -1172,30 +1137,6 @@ function getRiderDeliveryHistory(PDO $db, int $riderId, int $limit = 10): array
     $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
     $stmt->execute();
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
-}
-
-function getRiderDeliveryCounts(PDO $db, int $riderId): array
-{
-    $stmt = $db->prepare(
-        "SELECT
-            SUM(CASE WHEN order_status IN ('picking_up','delivering') THEN 1 ELSE 0 END) AS active,
-            SUM(CASE WHEN order_status = 'delivered'
-                      AND DATE(delivered_at) = CURDATE() THEN 1 ELSE 0 END) AS today,
-            SUM(CASE WHEN order_status = 'delivered'
-                      AND delivered_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) THEN 1 ELSE 0 END) AS week,
-            SUM(CASE WHEN order_status = 'delivered' THEN 1 ELSE 0 END) AS total
-         FROM orders
-         WHERE delivery_rider_id = :rider_id"
-    );
-    $stmt->execute([':rider_id' => $riderId]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
-
-    return [
-        'active' => (int)($row['active'] ?? 0),
-        'today'  => (int)($row['today']  ?? 0),
-        'week'   => (int)($row['week']   ?? 0),
-        'total'  => (int)($row['total']  ?? 0),
-    ];
 }
 
 function getRiderTransactions(PDO $db, int $riderId, int $limit = 10, int $offset = 0): array
@@ -1273,6 +1214,10 @@ function requestRiderWithdrawal(PDO $db, int $riderId, float $amount): int|false
     return (int)$db->lastInsertId();
 }
 
+/* =============================================================
+ * SECTION 7 — RIDER-OWNED PROFILE ROWS
+ * ============================================================= */
+
 function getRiderDefaultAddress(PDO $db, int $riderId): array|false
 {
     $stmt = $db->prepare(
@@ -1339,20 +1284,73 @@ function getRiderLatestDocument(PDO $db, int $riderId): array|false
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
-function formatRiderCurrency(int|float|string|null $amount): string
+/* =============================================================
+ * SECTION 8 — PANEL READERS
+ * ============================================================= */
+
+/**
+ * The column list every panel reader selects.
+ *
+ * One definition, three readers. A change to the selected columns
+ * happens here and nowhere else.
+ */
+function panelAssignmentColumns(): string
 {
-    return '₱' . number_format((float)($amount ?? 0), 2);
+    return "
+        o.order_id,
+        o.order_status,
+        o.order_date,
+        o.destination_address,
+        o.payment_method,
+        c.customer_id,
+        CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
+        c.contact_number AS customer_contact,
+        rb.restaurant_branch_id,
+        rb.branch_name,
+        rb.block        AS branch_block,
+        rb.barangay     AS branch_barangay,
+        rb.city         AS branch_city,
+        rb.province     AS branch_province,
+        rb.region       AS branch_region,
+        rb.postal_code  AS branch_postal_code,
+        rb.country      AS branch_country,
+        r.restaurant_id,
+        r.business_name AS restaurant_name,
+        (
+            SELECT ra.contact_number
+              FROM restaurant_account ra
+             WHERE ra.restaurant_id = r.restaurant_id
+               AND ra.is_active = 1
+             ORDER BY FIELD(ra.role, 'owner', 'manager', 'staff') ASC,
+                      ra.restaurant_account_id ASC
+             LIMIT 1
+        ) AS kitchen_contact,
+        (
+            SELECT COUNT(*)
+              FROM queue_item qi
+             WHERE qi.order_id = o.order_id
+        ) AS item_count,
+        (
+            SELECT COALESCE(SUM(qi.queue_quantity
+                                * COALESCE(qi.final_price, qi.unit_price)), 0)
+              FROM queue_item qi
+             WHERE qi.order_id = o.order_id
+        ) AS order_total
+    ";
 }
 
-if (!function_exists('truncateText')) {
-    function truncateText(string $text, int $length = 70): string
-    {
-        $text = trim($text);
-        if (strlen($text) <= $length) {
-            return $text;
-        }
-        return substr($text, 0, $length) . '...';
-    }
+/**
+ * The FROM and JOIN clause every panel reader uses.
+ */
+function panelAssignmentFrom(): string
+{
+    return "
+        FROM orders o
+        JOIN customer c ON o.customer_id = c.customer_id
+        JOIN queue_item qi0 ON qi0.order_id = o.order_id
+        JOIN restaurant_branch rb ON qi0.branch_id = rb.restaurant_branch_id
+        JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
+    ";
 }
 
 function getPanelAssignments(PDO $db, int $riderId, int $limit = 20): array
@@ -1361,60 +1359,18 @@ function getPanelAssignments(PDO $db, int $riderId, int $limit = 20): array
         return [];
     }
 
-    $stmt = $db->prepare(
-        "SELECT
-            o.order_id,
-            o.order_status,
-            o.order_date,
-            o.destination_address,
-            o.payment_method,
-            c.customer_id,
-            CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
-            c.contact_number AS customer_contact,
-            rb.restaurant_branch_id,
-            rb.branch_name,
-            rb.block        AS branch_block,
-            rb.barangay     AS branch_barangay,
-            rb.city         AS branch_city,
-            rb.province     AS branch_province,
-            rb.region       AS branch_region,
-            rb.postal_code  AS branch_postal_code,
-            rb.country      AS branch_country,
-            r.restaurant_id,
-            r.business_name AS restaurant_name,
-            (
-                SELECT ra.contact_number
-                  FROM restaurant_account ra
-                 WHERE ra.restaurant_id = r.restaurant_id
-                   AND ra.is_active = 1
-                 ORDER BY FIELD(ra.role, 'owner', 'manager', 'staff') ASC,
-                          ra.restaurant_account_id ASC
-                 LIMIT 1
-            ) AS kitchen_contact,
-            (
-                SELECT COUNT(*)
-                  FROM queue_item qi
-                 WHERE qi.order_id = o.order_id
-            ) AS item_count,
-            (
-                SELECT COALESCE(SUM(qi.queue_quantity
-                                    * COALESCE(qi.final_price, qi.unit_price)), 0)
-                  FROM queue_item qi
-                 WHERE qi.order_id = o.order_id
-            ) AS order_total
-         FROM orders o
-         JOIN customer c ON o.customer_id = c.customer_id
-         JOIN queue_item qi0 ON qi0.order_id = o.order_id
-         JOIN restaurant_branch rb ON qi0.branch_id = rb.restaurant_branch_id
-         JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
-         WHERE o.delivery_rider_id = :rider_id
-           AND o.order_status IN ('rider_pending', 'picking_up', 'delivering')
-         GROUP BY o.order_id
-         ORDER BY
-            FIELD(o.order_status, 'rider_pending', 'picking_up', 'delivering') ASC,
-            o.order_date ASC
-         LIMIT :limit"
-    );
+    $sql =
+        "SELECT " . panelAssignmentColumns() .
+        panelAssignmentFrom() .
+        " WHERE o.delivery_rider_id = :rider_id
+            AND o.order_status IN ('rider_pending', 'picking_up', 'delivering')
+          GROUP BY o.order_id
+          ORDER BY
+             FIELD(o.order_status, 'rider_pending', 'picking_up', 'delivering') ASC,
+             o.order_date ASC
+          LIMIT :limit";
+
+    $stmt = $db->prepare($sql);
     $stmt->bindValue(':rider_id', $riderId, PDO::PARAM_INT);
     $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
     $stmt->execute();
@@ -1427,58 +1383,16 @@ function getPanelAssignmentsSince(PDO $db, int $riderId, int $sinceOrderId): arr
         return [];
     }
 
-    $stmt = $db->prepare(
-        "SELECT
-            o.order_id,
-            o.order_status,
-            o.order_date,
-            o.destination_address,
-            o.payment_method,
-            c.customer_id,
-            CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
-            c.contact_number AS customer_contact,
-            rb.restaurant_branch_id,
-            rb.branch_name,
-            rb.block        AS branch_block,
-            rb.barangay     AS branch_barangay,
-            rb.city         AS branch_city,
-            rb.province     AS branch_province,
-            rb.region       AS branch_region,
-            rb.postal_code  AS branch_postal_code,
-            rb.country      AS branch_country,
-            r.restaurant_id,
-            r.business_name AS restaurant_name,
-            (
-                SELECT ra.contact_number
-                  FROM restaurant_account ra
-                 WHERE ra.restaurant_id = r.restaurant_id
-                   AND ra.is_active = 1
-                 ORDER BY FIELD(ra.role, 'owner', 'manager', 'staff') ASC,
-                          ra.restaurant_account_id ASC
-                 LIMIT 1
-            ) AS kitchen_contact,
-            (
-                SELECT COUNT(*)
-                  FROM queue_item qi
-                 WHERE qi.order_id = o.order_id
-            ) AS item_count,
-            (
-                SELECT COALESCE(SUM(qi.queue_quantity
-                                    * COALESCE(qi.final_price, qi.unit_price)), 0)
-                  FROM queue_item qi
-                 WHERE qi.order_id = o.order_id
-            ) AS order_total
-         FROM orders o
-         JOIN customer c ON o.customer_id = c.customer_id
-         JOIN queue_item qi0 ON qi0.order_id = o.order_id
-         JOIN restaurant_branch rb ON qi0.branch_id = rb.restaurant_branch_id
-         JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
-         WHERE o.delivery_rider_id = :rider_id
-           AND o.order_id > :since_order_id
-           AND o.order_status IN ('rider_pending', 'picking_up', 'delivering')
-         GROUP BY o.order_id
-         ORDER BY o.order_id ASC"
-    );
+    $sql =
+        "SELECT " . panelAssignmentColumns() .
+        panelAssignmentFrom() .
+        " WHERE o.delivery_rider_id = :rider_id
+            AND o.order_id > :since_order_id
+            AND o.order_status IN ('rider_pending', 'picking_up', 'delivering')
+          GROUP BY o.order_id
+          ORDER BY o.order_id ASC";
+
+    $stmt = $db->prepare($sql);
     $stmt->execute([
         ':rider_id'       => $riderId,
         ':since_order_id' => $sinceOrderId,
@@ -1492,58 +1406,16 @@ function getPanelAssignmentRow(PDO $db, int $riderId, int $orderId): array|false
         return false;
     }
 
-    $stmt = $db->prepare(
-        "SELECT
-            o.order_id,
-            o.order_status,
-            o.order_date,
-            o.destination_address,
-            o.payment_method,
-            c.customer_id,
-            CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
-            c.contact_number AS customer_contact,
-            rb.restaurant_branch_id,
-            rb.branch_name,
-            rb.block        AS branch_block,
-            rb.barangay     AS branch_barangay,
-            rb.city         AS branch_city,
-            rb.province     AS branch_province,
-            rb.region       AS branch_region,
-            rb.postal_code  AS branch_postal_code,
-            rb.country      AS branch_country,
-            r.restaurant_id,
-            r.business_name AS restaurant_name,
-            (
-                SELECT ra.contact_number
-                  FROM restaurant_account ra
-                 WHERE ra.restaurant_id = r.restaurant_id
-                   AND ra.is_active = 1
-                 ORDER BY FIELD(ra.role, 'owner', 'manager', 'staff') ASC,
-                          ra.restaurant_account_id ASC
-                 LIMIT 1
-            ) AS kitchen_contact,
-            (
-                SELECT COUNT(*)
-                  FROM queue_item qi
-                 WHERE qi.order_id = o.order_id
-            ) AS item_count,
-            (
-                SELECT COALESCE(SUM(qi.queue_quantity
-                                    * COALESCE(qi.final_price, qi.unit_price)), 0)
-                  FROM queue_item qi
-                 WHERE qi.order_id = o.order_id
-            ) AS order_total
-         FROM orders o
-         JOIN customer c ON o.customer_id = c.customer_id
-         JOIN queue_item qi0 ON qi0.order_id = o.order_id
-         JOIN restaurant_branch rb ON qi0.branch_id = rb.restaurant_branch_id
-         JOIN restaurant r ON rb.restaurant_id = r.restaurant_id
-         WHERE o.order_id = :order_id
-           AND o.delivery_rider_id = :rider_id
-           AND o.order_status IN ('rider_pending', 'picking_up', 'delivering')
-         GROUP BY o.order_id
-         LIMIT 1"
-    );
+    $sql =
+        "SELECT " . panelAssignmentColumns() .
+        panelAssignmentFrom() .
+        " WHERE o.order_id = :order_id
+            AND o.delivery_rider_id = :rider_id
+            AND o.order_status IN ('rider_pending', 'picking_up', 'delivering')
+          GROUP BY o.order_id
+          LIMIT 1";
+
+    $stmt = $db->prepare($sql);
     $stmt->execute([
         ':order_id' => $orderId,
         ':rider_id' => $riderId,

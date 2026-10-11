@@ -7,95 +7,92 @@
  *   2. financial_account            (account_type = 'restaurant')
  *   3. restaurant_branch
  *   4. restaurant_account           (role = 'owner', branch_id = NULL)
- *   5. restaurant_permit × 1..5     (permit photos)
+ *   5. restaurant_permit × 1..N     (one row per uploaded permit)
  *
  * ---------------------------------------------------------------------
- * UPLOAD LAYOUT (v3.0)
+ * SELF-CONTAINED
+ * ---------------------------------------------------------------------
+ * This handler is a direct HTTP entry point. It does NOT require any
+ * other handler file.
+ *
+ * A previous revision required restaurant-reapply-handler.php in
+ * order to reuse its fitpal_validate_* functions. That was a bug.
+ * restaurant-reapply-handler.php is itself an entry point: its
+ * top-level code runs its own authentication check the moment it is
+ * loaded, and returns 401 "Not authenticated" on any request that
+ * has no restaurant session. A registration request has no
+ * restaurant session — the user is registering precisely because
+ * they do not have one — so requiring the reapply handler caused
+ * the registration POST to short-circuit into a 401 before this
+ * file's body ever ran.
+ *
+ * The validators this file needs are defined here, inlined, with
+ * the same names and the same function_exists guards that the
+ * reapply handler uses. If both files are ever loaded in the same
+ * request, the guards make the second set of definitions a no-op.
+ *
+ * ---------------------------------------------------------------------
+ * PERMIT STORAGE
  * ---------------------------------------------------------------------
  * Permit files are written to:
  *
- *     shared/uploads/restaurant/permits/<restaurant_account_id>/MM_DD_YYYY_<n>.<ext>
+ *     shared/uploads/restaurant/permits/<restaurant_id>/
+ *         image-1.<ext>
+ *         image-2.<ext>
+ *         ...
  *
- * The <n> counter is scoped to the account and the day. On the first
- * upload of a given day for a given account it is 0; on each
- * subsequent upload on the same day it increments. The counter is
- * derived by scanning the destination folder for files whose names
- * begin with today's MM_DD_YYYY prefix and picking the smallest
- * non-negative integer that is not already in use.
+ * One restaurant_permit row is inserted per uploaded permit.
+ * restaurant_permit.original_name is NOT NULL in the schema, so
+ * every row carries a generated label of the form:
  *
- * This mirrors the rider role's per-account, per-day layout exactly
- * (see rider/backend/handlers/rider-handler.php and
- * rider/backend/handlers/sign-up-handler.php).
+ *     RESTAURANT-<id>-PERMIT-<YYYY-MM-DD>-<HH-MM-SS>
+ *
+ * with the slot number appended when more than one permit is
+ * uploaded in the same second:
+ *
+ *     RESTAURANT-<id>-PERMIT-<YYYY-MM-DD>-<HH-MM-SS>-<slot>
+ *
+ * display_order is written as the slot number (1-based) so the
+ * reader can order multiple permits deterministically.
+ *
+ * A previous revision called createRestaurantPermit() from the
+ * query layer, which writes NULL for original_name by design for
+ * the slot model. That call violated the NOT NULL constraint on
+ * every request. This handler now owns its own INSERT so it can
+ * supply a real original_name value on every row.
  *
  * ---------------------------------------------------------------------
- * CHICKEN-AND-EGG ORDERING
+ * WRITE ORDER
  * ---------------------------------------------------------------------
- * The per-account folder name depends on $ownerAccountId, which does
- * not exist until createRestaurantOwnerAccount() commits. So the
- * permit files are moved AFTER the owner account is created and
- * BEFORE the restaurant_permit rows are inserted.
- *
- * The full write order is:
- *
  *   1. createRestaurant()
  *   2. createRestaurantFinancialAccount()
  *   3. createRestaurantBranch()
- *   4. createRestaurantOwnerAccount()   → $ownerAccountId now exists
- *   5. storePermitFile() × N            → files land under
- *                                          permits/<ownerAccountId>/
- *   6. createRestaurantPermit() × N     → rows point at those paths
+ *   4. createRestaurantOwnerAccount()
+ *   5. storePermitSlot() × N    → files land under
+ *                                  permits/<restaurantId>/image-<n>.<ext>
+ *   6. insertRestaurantPermitRow() × N → one row per uploaded permit
  *   7. COMMIT
  *
- * If any step after 5 fails, the moved files are unlinked and the
- * transaction is rolled back, so the account row never survives
- * without its permits.
- *
- * The previous revision created the owner account AFTER moving the
- * files, which is why it could not key the folder on the account id
- * — it did not have one yet. The reorder above is what makes the
- * per-account layout possible.
+ * If any step after 5 fails, the written files are unlinked and the
+ * transaction is rolled back.
  *
  * ---------------------------------------------------------------------
- * PROFILE PICTURE PATH (RESERVED)
+ * CSRF
  * ---------------------------------------------------------------------
- * The schema has no profile_picture column on any restaurant table
- * (restaurant, restaurant_account, restaurant_branch). The rider role
- * has one on delivery_rider_profile; the restaurant role does not.
- *
- * The intended location for a restaurant profile picture, if the
- * schema is later extended, is:
- *
- *     shared/uploads/restaurant/profiles/<restaurant_account_id>/MM_DD_YYYY_<n>.<ext>
- *
- * That path is the same shape as the permit path, one level of
- * "kind" apart, and matches the rider role's profiles/documents
- * split. No code here writes to it, because there is no column to
- * record the resulting path.
- *
- * A helper, storeAccountUpload(), is provided below and is ready to
- * serve either kind ('permits' or 'profiles') once the schema has
- * somewhere to store the profile result.
+ * Validated against the restaurant role's own session key,
+ * restaurant_csrf_token. The shared key csrf_token is never read,
+ * written, or cleared.
  *
  * @package FitPal
- * @version 3.0 — Per-account, per-day permit layout:
- *                  - storePermitFile() replaced by
- *                    storeAccountUpload(), which takes the account id
- *                    and a kind ('permits' or 'profiles') and writes
- *                    under shared/uploads/restaurant/<kind>/<id>/.
- *                  - The MM_DD_YYYY_<n> counter logic is lifted
- *                    verbatim from the rider role's
- *                    buildRiderUploadFilename().
- *                  - createRestaurantOwnerAccount() is now called
- *                    BEFORE the permits are stored, so the account id
- *                    is available as the folder key.
- *                  - On failure, moved files are unlinked and the
- *                    transaction is rolled back.
- *                  - No other behavior changed. CSRF still validated
- *                    against restaurant_csrf_token; response shape
- *                    unchanged.
+ * @version 7.0 — The handler owns its own restaurant_permit INSERT
+ *                and writes a generated original_name for every
+ *                row. The NULL original_name violation is gone.
  *
- *                (2.0: own CSRF bootstrap, rotate on mismatch.
- *                1.2: restaurant_csrf_token. 1.0: initial.)
+ *                (6.0: aligned the write side with the slot-model
+ *                read side. 5.0: self-contained rewrite. 4.0:
+ *                required the reapply handler. 3.0: per-account
+ *                upload layout. 2.0: own CSRF bootstrap.
+ *                1.0: initial.)
  */
 
 declare(strict_types=1);
@@ -105,13 +102,13 @@ fitpal_session_bootstrap('restaurant');
 
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/restaurant-queries.php';
-
-// Own the restaurant role's CSRF bootstrap. The helper is idempotent
-// and stores the token under 'restaurant_csrf_token' — never the
-// shared 'csrf_token' key.
 require_once __DIR__ . '/../../includes/restaurant-csrf-token.php';
 
 header('Content-Type: application/json');
+
+/* =============================================================
+ * CONSTANTS
+ * ============================================================= */
 
 const MAX_PERMITS         = 5;
 const MAX_PERMIT_BYTES    = 5 * 1024 * 1024;
@@ -121,17 +118,205 @@ const ALLOWED_PERMIT_MIME = [
     'image/webp' => 'webp',
 ];
 
+/* =============================================================
+ * RESPONSE HELPER
+ * ============================================================= */
+
 function respondError(string $message, string $field = ''): void
 {
     echo json_encode(['status' => 'error', 'message' => $message, 'field' => $field]);
     exit;
 }
 
+/* =============================================================
+ * VALIDATORS
+ * ============================================================= */
+
+if (!function_exists('fitpal_validate_name_field')) {
+    function fitpal_validate_name_field(string $value, string $field, string $label): array
+    {
+        $pattern = "/^[A-Za-z\s\-']+$/u";
+
+        if (strlen($value) < 2) {
+            return [$field => $label . ' must be at least 2 characters.'];
+        }
+        if (!preg_match($pattern, $value)) {
+            return [$field => $label . ' contains invalid characters.'];
+        }
+        return [];
+    }
+}
+
+if (!function_exists('fitpal_validate_contact_number')) {
+    function fitpal_validate_contact_number(string $value, string $field, string $label): array
+    {
+        $cleaned = (string)preg_replace('/\D+/', '', $value);
+
+        if ($cleaned === '') {
+            return [$field => $label . ' is required.'];
+        }
+        if (!preg_match('/^09\d{9}$/', $cleaned)) {
+            return [$field => $label . ' must be a valid PH mobile number (11 digits, starting with 09).'];
+        }
+        return [];
+    }
+}
+
+if (!function_exists('fitpal_normalize_contact_number')) {
+    function fitpal_normalize_contact_number(string $value): string
+    {
+        return (string)preg_replace('/\D+/', '', $value);
+    }
+}
+
+if (!function_exists('fitpal_validate_username')) {
+    function fitpal_validate_username(string $value, string $field = 'username'): array
+    {
+        if ($value === '') {
+            return [$field => 'Username is required.'];
+        }
+        if (strlen($value) < 3 || strlen($value) > 20) {
+            return [$field => 'Username must be 3–20 characters.'];
+        }
+        if (!preg_match('/^[A-Za-z0-9_]+$/', $value)) {
+            return [$field => 'Username can only contain letters, numbers, and underscores.'];
+        }
+        return [];
+    }
+}
+
+if (!function_exists('fitpal_validate_email')) {
+    function fitpal_validate_email(string $value, string $field = 'email'): array
+    {
+        if ($value === '') {
+            return [$field => 'Email address is required.'];
+        }
+        if (!filter_var($value, FILTER_VALIDATE_EMAIL)) {
+            return [$field => 'Please enter a valid email address.'];
+        }
+        return [];
+    }
+}
+
+if (!function_exists('fitpal_validate_business_name')) {
+    function fitpal_validate_business_name(string $value, string $field = 'business_name'): array
+    {
+        if (strlen($value) < 2) {
+            return [$field => 'Business name must be at least 2 characters.'];
+        }
+        if (strlen($value) > 100) {
+            return [$field => 'Business name must be at most 100 characters.'];
+        }
+        return [];
+    }
+}
+
+if (!function_exists('fitpal_validate_cuisine_type')) {
+    function fitpal_validate_cuisine_type(string $value, string $field = 'cuisine_type'): array
+    {
+        if (strlen($value) < 2) {
+            return [$field => 'Cuisine type must be at least 2 characters.'];
+        }
+        if (strlen($value) > 50) {
+            return [$field => 'Cuisine type must be at most 50 characters.'];
+        }
+        return [];
+    }
+}
+
+if (!function_exists('fitpal_validate_business_description')) {
+    function fitpal_validate_business_description(string $value, string $field = 'description'): array
+    {
+        if (strlen($value) > 2000) {
+            return [$field => 'Description is too long (max 2000 characters).'];
+        }
+        return [];
+    }
+}
+
+if (!function_exists('fitpal_validate_dietary_tags')) {
+    function fitpal_validate_dietary_tags(string $value, string $field = 'dietary_tags'): array
+    {
+        if (strlen($value) > 200) {
+            return [$field => 'Dietary tags are too long (max 200 characters).'];
+        }
+        return [];
+    }
+}
+
+if (!function_exists('fitpal_validate_branch_name')) {
+    function fitpal_validate_branch_name(string $value, string $field = 'branch_name'): array
+    {
+        if (strlen($value) < 2) {
+            return [$field => 'Branch name must be at least 2 characters.'];
+        }
+        if (strlen($value) > 50) {
+            return [$field => 'Branch name must be at most 50 characters.'];
+        }
+        return [];
+    }
+}
+
+if (!function_exists('fitpal_validate_address_field')) {
+    function fitpal_validate_address_field(
+        string $value,
+        string $field,
+        string $label,
+        bool $required
+    ): array {
+        if ($required && $value === '') {
+            return [$field => $label . ' is required.'];
+        }
+        if (strlen($value) > 120) {
+            return [$field => $label . ' is too long (max 120 characters).'];
+        }
+        return [];
+    }
+}
+
+if (!function_exists('fitpal_validate_postal_code')) {
+    function fitpal_validate_postal_code(string $value, string $field = 'postal_code'): array
+    {
+        if ($value === '') {
+            return [];
+        }
+        if (!preg_match('/^[0-9]{3,10}$/', $value)) {
+            return [$field => 'Postal code must be numeric (3–10 digits).'];
+        }
+        return [];
+    }
+}
+
+/* =============================================================
+ * PERMIT FILE HELPERS
+ * ============================================================= */
+
 /**
- * Validate an uploaded image file and return its extension.
+ * Absolute path to a restaurant's permit folder.
  *
- * @param array $file  $_FILES entry
- * @return string      Lowercase extension without a dot
+ *     shared/uploads/restaurant/permits/<restaurant_id>/
+ */
+function permitAbsoluteFolder(int $restaurantId): string
+{
+    $projectRoot = realpath(__DIR__ . '/../../..');
+    if ($projectRoot === false) {
+        throw new RuntimeException('Server storage path unavailable.');
+    }
+    return $projectRoot . '/shared/uploads/restaurant/permits/' . $restaurantId;
+}
+
+/**
+ * Project-root-relative path to a restaurant's permit folder,
+ * ending with a slash.
+ */
+function permitRelativeFolder(int $restaurantId): string
+{
+    return 'shared/uploads/restaurant/permits/' . $restaurantId . '/';
+}
+
+/**
+ * Validate one uploaded permit file and return its extension.
+ *
  * @throws RuntimeException
  */
 function validatePermitFile(array $file): string
@@ -168,145 +353,145 @@ function validatePermitFile(array $file): string
 }
 
 /**
- * Build the next MM_DD_YYYY_<n>.<ext> filename for a destination
- * folder.
+ * Move one uploaded permit file into the restaurant's permit folder
+ * as image-<slot>.<ext>.
  *
- * The counter is scoped to the folder and the day. Files from
- * previous days are excluded by the prefix match and never enter the
- * count, so the counter restarts at 0 on the next calendar day.
- *
- * This is the same shape the rider role uses in
- * rider/backend/handlers/rider-handler.php's buildRiderUploadFilename().
- *
- * @param string $uploadDir  Absolute path to the destination folder.
- * @param string $ext        Lowercase extension without a dot.
- * @return string            Filename, e.g. "09_28_2026_0.jpg".
+ * @return string Absolute path that was written.
+ * @throws RuntimeException
  */
-function buildAccountUploadFilename(string $uploadDir, string $ext): string
-{
-    $dayPrefix = date('m_d_Y');
-
-    $existing = @scandir($uploadDir);
-    if ($existing === false) {
-        $existing = [];
+function storePermitSlot(
+    array $file,
+    int $restaurantId,
+    int $slot,
+    string $ext
+): string {
+    if ($slot < 1 || $slot > MAX_PERMITS) {
+        throw new RuntimeException('Invalid permit slot.');
     }
 
-    $usedIndexes  = [];
-    $prefixLength = strlen($dayPrefix) + 1; // include trailing '_'
+    $folder = permitAbsoluteFolder($restaurantId);
 
-    foreach ($existing as $entry) {
-        if ($entry === '.' || $entry === '..') {
-            continue;
+    if (!is_dir($folder)) {
+        if (!mkdir($folder, 0755, true) && !is_dir($folder)) {
+            throw new RuntimeException('Could not create the permit folder.');
         }
-        if (strpos($entry, $dayPrefix . '_') !== 0) {
-            continue;
-        }
-
-        $rest   = substr($entry, $prefixLength);
-        $dotPos = strpos($rest, '.');
-        if ($dotPos === false) {
-            continue;
-        }
-
-        $counterPart = substr($rest, 0, $dotPos);
-        if ($counterPart === '' || !ctype_digit($counterPart)) {
-            continue;
-        }
-
-        $usedIndexes[(int)$counterPart] = true;
     }
 
-    $nextIndex = 0;
-    while (isset($usedIndexes[$nextIndex])) {
-        $nextIndex++;
+    foreach (glob($folder . '/image-' . $slot . '.*') ?: [] as $existing) {
+        if (is_file($existing)) {
+            @unlink($existing);
+        }
     }
 
-    return $dayPrefix . '_' . $nextIndex . '.' . $ext;
+    $target = $folder . '/image-' . $slot . '.' . $ext;
+
+    if (!move_uploaded_file($file['tmp_name'], $target)) {
+        throw new RuntimeException('Could not save permit file.');
+    }
+
+    @chmod($target, 0644);
+
+    return $target;
 }
 
 /**
- * Move an uploaded image into its final per-account folder and return
- * the project-root-relative path stored in the DB.
+ * Build the generated original_name for a permit row.
  *
- * Layout:
+ * Format:
  *
- *     <projectRoot>/shared/uploads/restaurant/<kind>/<accountId>/
- *         MM_DD_YYYY_<n>.<ext>
+ *     RESTAURANT-<id>-PERMIT-<YYYY-MM-DD>-<HH-MM-SS>
  *
- * $kind is either 'permits' or 'profiles'. The per-account
- * subdirectory is created on demand with mkdir(..., 0755, true). The
- * recursive flag creates the intermediate `restaurant/` and `<kind>/`
- * segments the first time any restaurant uploads, and the per-account
- * leaf when that account first uploads.
+ * When more than one permit belongs to the same second, the slot
+ * number is appended so the names are unique within the batch:
  *
- * The per-account segment is a plain integer taken from a caller-
- * supplied argument, so it cannot contain traversal characters.
- * Every path segment below is either a literal or a caller-derived
- * integer — nothing from $_FILES or $_POST reaches the path.
+ *     RESTAURANT-<id>-PERMIT-<YYYY-MM-DD>-<HH-MM-SS>-<slot>
  *
- * @param array  $file        $_FILES entry (already validated)
- * @param string $projectRoot Absolute path to the project root
- * @param string $kind        'permits' or 'profiles'
- * @param int    $accountId   restaurant_account_id (positive integer)
- * @param string $ext         Lowercase extension without a dot
- * @return string             Project-root-relative path
- * @throws RuntimeException
+ * @param int $restaurantId
+ * @param int $slot       1-based slot number within the upload batch.
+ * @param int $totalSlots Total number of slots in this batch.
+ * @param int $timestamp  Unix timestamp to stamp into the name.
+ * @return string
  */
-function storeAccountUpload(
-    array $file,
-    string $projectRoot,
-    string $kind,
-    int $accountId,
-    string $ext
+function buildPermitOriginalName(
+    int $restaurantId,
+    int $slot,
+    int $totalSlots,
+    int $timestamp
 ): string {
-    if (!in_array($kind, ['permits', 'profiles'], true)) {
-        throw new RuntimeException('Invalid upload kind.');
-    }
-    if ($accountId <= 0) {
-        throw new RuntimeException('Invalid account id for upload.');
-    }
+    $datePart = date('Y-m-d', $timestamp);
+    $timePart = date('H-i-s', $timestamp);
 
-    $relativeDir = 'shared/uploads/restaurant/' . $kind . '/' . $accountId;
-    $uploadDir   = $projectRoot . '/' . $relativeDir;
+    $base = sprintf(
+        'RESTAURANT-%d-PERMIT-%s-%s',
+        $restaurantId,
+        $datePart,
+        $timePart
+    );
 
-    if (!is_dir($uploadDir)) {
-        if (!mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
-            throw new RuntimeException('Could not create upload directory.');
-        }
+    if ($totalSlots > 1) {
+        $base .= '-' . $slot;
     }
 
-    $filename = buildAccountUploadFilename($uploadDir, $ext);
-
-    $fullPath = $uploadDir . '/' . $filename;
-
-    if (!move_uploaded_file($file['tmp_name'], $fullPath)) {
-        throw new RuntimeException('Could not save file.');
-    }
-
-    return $relativeDir . '/' . $filename;
+    return $base;
 }
 
-/* -------------------------------------------------------------- */
+/**
+ * Insert one restaurant_permit row.
+ *
+ * The handler owns this INSERT because the schema declares
+ * original_name as NOT NULL, and the query layer's
+ * createRestaurantPermit() writes NULL by design for the slot
+ * model. This function supplies a real original_name for every row.
+ *
+ * @return int  The permit_id of the new row.
+ * @throws PDOException
+ */
+function insertRestaurantPermitRow(
+    PDO $db,
+    int $restaurantId,
+    string $folderPath,
+    string $originalName,
+    int $displayOrder
+): int {
+    $stmt = $db->prepare(
+        "INSERT INTO restaurant_permit
+            (restaurant_id, file_path, original_name, display_order)
+         VALUES
+            (:restaurant_id, :file_path, :original_name, :display_order)"
+    );
+    $stmt->execute([
+        ':restaurant_id' => $restaurantId,
+        ':file_path'     => $folderPath,
+        ':original_name' => $originalName,
+        ':display_order' => $displayOrder,
+    ]);
+    return (int)$db->lastInsertId();
+}
+
+/* =============================================================
+ * REQUEST METHOD
+ * ============================================================= */
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     respondError('Invalid request method.');
 }
 
+/* =============================================================
+ * CSRF
+ * ============================================================= */
+
 if (
     !isset($_POST['csrf_token'], $_SESSION['restaurant_csrf_token']) ||
     !hash_equals((string)$_SESSION['restaurant_csrf_token'], (string)$_POST['csrf_token'])
 ) {
-    // Rotate the restaurant's own token so the next render generates
-    // a fresh one. Only the restaurant's key is cleared — never the
-    // shared 'csrf_token' key.
     unset($_SESSION['restaurant_csrf_token']);
 
     respondError('Security validation failed. Please refresh the page and try again.');
 }
 
-/* --------------------------------------------------------------
+/* =============================================================
  * COLLECT INPUT
- * -------------------------------------------------------------- */
+ * ============================================================= */
 
 $firstName       = trim((string)($_POST['first_name'] ?? ''));
 $middleName      = trim((string)($_POST['middle_name'] ?? ''));
@@ -332,9 +517,9 @@ $postalCode = trim((string)($_POST['postal_code'] ?? ''));
 
 $terms = $_POST['terms'] ?? '';
 
-/* --------------------------------------------------------------
- * REQUIRED + FIELD VALIDATION
- * -------------------------------------------------------------- */
+/* =============================================================
+ * REQUIRED FIELD CHECK
+ * ============================================================= */
 
 if (
     $firstName === '' || $lastName === '' || $email === '' ||
@@ -342,75 +527,88 @@ if (
     $businessName === '' || $cuisineType === '' ||
     $branchName === '' || $block === '' || $city === ''
 ) {
+    if ($firstName === '')      respondError('First name is required.', 'first_name');
+    if ($lastName === '')       respondError('Last name is required.', 'last_name');
+    if ($email === '')          respondError('Email address is required.', 'email');
+    if ($contactNumber === '')  respondError('Contact number is required.', 'contact_number');
+    if ($username === '')       respondError('Username is required.', 'username');
+    if ($password === '')       respondError('Password is required.', 'password');
+    if ($businessName === '')   respondError('Business name is required.', 'business_name');
+    if ($cuisineType === '')    respondError('Cuisine type is required.', 'cuisine_type');
+    if ($branchName === '')     respondError('Branch name is required.', 'branch_name');
+    if ($block === '')          respondError('Block / Street / Unit is required.', 'block');
+    if ($city === '')           respondError('City / Municipality is required.', 'city');
+
     respondError('Please fill in all required fields.');
 }
 
-$namePattern = "/^[A-Za-z\s\-']+$/u";
-if (strlen($firstName) < 2 || !preg_match($namePattern, $firstName)) {
-    respondError('First name contains invalid characters.', 'first_name');
-}
-if (strlen($lastName) < 2 || !preg_match($namePattern, $lastName)) {
-    respondError('Last name contains invalid characters.', 'last_name');
-}
-if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    respondError('Please enter a valid email address.', 'email');
+/* =============================================================
+ * FIELD VALIDATION
+ * ============================================================= */
+
+$errors = [];
+
+$errors += fitpal_validate_name_field($firstName, 'first_name', 'First name');
+$errors += fitpal_validate_name_field($lastName,  'last_name',  'Last name');
+
+if ($middleName !== '') {
+    $errors += fitpal_validate_name_field($middleName, 'middle_name', 'Middle name');
 }
 
-$cleanedContact = preg_replace('/\s+/', '', $contactNumber);
-if (!preg_match('/^09\d{9}$/', (string)$cleanedContact)) {
-    respondError('Enter a valid PH mobile number (11 digits, starting with 09).', 'contact_number');
-}
+$errors += fitpal_validate_email($email);
+$errors += fitpal_validate_contact_number($contactNumber, 'contact_number', 'Contact number');
+$errors += fitpal_validate_username($username);
 
-if (strlen($username) < 3 || strlen($username) > 20) {
-    respondError('Username must be 3–20 characters.', 'username');
-}
-if (!preg_match('/^[A-Za-z0-9_]+$/', $username)) {
-    respondError('Username can only contain letters, numbers, and underscores.', 'username');
-}
+$errors += fitpal_validate_business_name($businessName);
+$errors += fitpal_validate_cuisine_type($cuisineType);
+$errors += fitpal_validate_business_description($businessDescription, 'business_description');
+$errors += fitpal_validate_dietary_tags($dietaryTags);
+
+$errors += fitpal_validate_branch_name($branchName);
+$errors += fitpal_validate_address_field($block,    'block',    'Block / Street / Unit', true);
+$errors += fitpal_validate_address_field($barangay, 'barangay', 'Barangay',              false);
+$errors += fitpal_validate_address_field($city,     'city',     'City / Municipality',   true);
+$errors += fitpal_validate_address_field($province, 'province', 'Province',              false);
+$errors += fitpal_validate_address_field($region,   'region',   'Region',                false);
+$errors += fitpal_validate_postal_code($postalCode);
 
 if (strlen($password) < 8 || strlen($password) > 20) {
-    respondError('Password must be 8–20 characters.', 'password');
-}
-if (!preg_match('/^[A-Za-z0-9]+$/', $password)) {
-    respondError('Password can only contain letters and numbers.', 'password');
-}
-if (!preg_match('/[A-Za-z]/', $password) || !preg_match('/[0-9]/', $password)) {
-    respondError('Password must contain at least one letter and one number.', 'password');
-}
-if ($password !== $confirmPassword) {
-    respondError('Passwords do not match.', 'confirm_password');
+    $errors['password'] = 'Password must be 8–20 characters.';
+} elseif (!preg_match('/^[A-Za-z0-9]+$/', $password)) {
+    $errors['password'] = 'Password can only contain letters and numbers.';
+} elseif (!preg_match('/[A-Za-z]/', $password) || !preg_match('/[0-9]/', $password)) {
+    $errors['password'] = 'Password must contain at least one letter and one number.';
+} elseif ($password !== $confirmPassword) {
+    $errors['confirm_password'] = 'Passwords do not match.';
 }
 
-if (strlen($businessName) < 2) {
-    respondError('Business name must be at least 2 characters.', 'business_name');
+if (!empty($errors)) {
+    $firstField = array_key_first($errors);
+
+    echo json_encode([
+        'status'  => 'error',
+        'field'   => $firstField,
+        'errors'  => $errors,
+        'message' => $errors[$firstField],
+    ]);
+    exit;
 }
-if (strlen($cuisineType) < 2) {
-    respondError('Cuisine type is required.', 'cuisine_type');
-}
-if (strlen($businessDescription) > 2000) {
-    respondError('Business description is too long.', 'business_description');
-}
-if (strlen($branchName) < 2) {
-    respondError('Branch name is required.', 'branch_name');
-}
-if ($block === '') {
-    respondError('Block / Street / Unit is required.', 'block');
-}
-if ($city === '') {
-    respondError('City or municipality is required.', 'city');
-}
-if ($postalCode !== '' && !preg_match('/^[0-9]{3,10}$/', $postalCode)) {
-    respondError('Postal code must be numeric.', 'postal_code');
-}
+
+$cleanedContact = fitpal_normalize_contact_number($contactNumber);
+
+/* =============================================================
+ * TERMS
+ * ============================================================= */
+
 if (empty($terms)) {
     respondError('You must agree to the Terms and Conditions and Privacy Policy.', 'terms');
 }
 
-/* --------------------------------------------------------------
- * PERMIT FILE VALIDATION (validation only — files not moved yet)
- * -------------------------------------------------------------- */
+/* =============================================================
+ * PERMIT FILE VALIDATION
+ * ============================================================= */
 
-$permitFiles = [];
+$permitSlots = [];
 
 if (isset($_FILES['permits']) && is_array($_FILES['permits']['name'])) {
     $count = count($_FILES['permits']['name']);
@@ -418,10 +616,16 @@ if (isset($_FILES['permits']) && is_array($_FILES['permits']['name'])) {
         respondError('You can upload at most ' . MAX_PERMITS . ' permits.', 'permits');
     }
 
+    $slotCounter = 0;
     for ($i = 0; $i < $count; $i++) {
         $err = $_FILES['permits']['error'][$i] ?? UPLOAD_ERR_NO_FILE;
         if ($err === UPLOAD_ERR_NO_FILE) {
             continue;
+        }
+
+        $slotCounter++;
+        if ($slotCounter > MAX_PERMITS) {
+            break;
         }
 
         $file = [
@@ -435,22 +639,26 @@ if (isset($_FILES['permits']) && is_array($_FILES['permits']['name'])) {
         try {
             $ext = validatePermitFile($file);
         } catch (RuntimeException $e) {
-            respondError('Permit ' . ($i + 1) . ': ' . $e->getMessage(), 'permits');
+            respondError('Permit ' . $slotCounter . ': ' . $e->getMessage(), 'permits');
         }
 
-        $permitFiles[] = ['file' => $file, 'ext' => $ext];
+        $permitSlots[] = [
+            'slot' => $slotCounter,
+            'file' => $file,
+            'ext'  => $ext,
+        ];
     }
 }
 
-if (empty($permitFiles)) {
+if (empty($permitSlots)) {
     respondError('Please upload at least one permit photo.', 'permits');
 }
 
-/* --------------------------------------------------------------
- * DATABASE TRANSACTION + FILE MOVES
- * -------------------------------------------------------------- */
+/* =============================================================
+ * TRANSACTION
+ * ============================================================= */
 
-$movedFiles = [];
+$writtenFiles = [];
 
 try {
     if (restaurantEmailExists($database_connection, $email)) {
@@ -459,21 +667,15 @@ try {
     if (restaurantUsernameExists($database_connection, $username)) {
         respondError('This username is already taken.', 'username');
     }
-    if (restaurantContactExists($database_connection, (string)$cleanedContact)) {
+    if (restaurantContactExists($database_connection, $cleanedContact)) {
         respondError('This mobile number is already registered.', 'contact_number');
     }
     if (restaurantBusinessNameExists($database_connection, $businessName)) {
         respondError('This business name is already registered.', 'business_name');
     }
 
-    $projectRoot = realpath(__DIR__ . '/../../..');
-    if ($projectRoot === false) {
-        respondError('Server storage path unavailable.');
-    }
-
     $database_connection->beginTransaction();
 
-    // 1. Restaurant row
     $restaurantId = createRestaurant($database_connection, [
         'business_name' => $businessName,
         'description'   => $businessDescription,
@@ -481,10 +683,8 @@ try {
         'dietary_tags'  => $dietaryTags,
     ]);
 
-    // 2. Financial account for the branch
     $financialAccountId = createRestaurantFinancialAccount($database_connection);
 
-    // 3. Branch
     $branchCode = generateBranchCode($database_connection, $businessName);
     createRestaurantBranch(
         $database_connection,
@@ -502,49 +702,57 @@ try {
         ]
     );
 
-    // 4. Owner account — this is what gives us the folder key.
     $hashedPassword = password_hash($password, PASSWORD_BCRYPT);
-    $ownerAccountId = createRestaurantOwnerAccount($database_connection, $restaurantId, [
+    createRestaurantOwnerAccount($database_connection, $restaurantId, [
         'first_name'     => $firstName,
         'middle_name'    => $middleName,
         'last_name'      => $lastName,
         'email'          => $email,
-        'contact_number' => (string)$cleanedContact,
+        'contact_number' => $cleanedContact,
         'username'       => $username,
         'password'       => $hashedPassword,
     ]);
 
-    // 5. Move the permit files into the per-account folder.
-    //    Layout: shared/uploads/restaurant/permits/<ownerAccountId>/
-    foreach ($permitFiles as $p) {
-        $path = storeAccountUpload(
-            $p['file'],
-            $projectRoot,
-            'permits',
-            $ownerAccountId,
-            $p['ext']
+    // Move the permit files into the restaurant-keyed permit folder.
+    foreach ($permitSlots as $slot) {
+        $written = storePermitSlot(
+            $slot['file'],
+            $restaurantId,
+            (int)$slot['slot'],
+            $slot['ext']
         );
-        $movedFiles[] = $projectRoot . '/' . $path;
+        $writtenFiles[] = $written;
+    }
 
-        // 6. Record the permit row pointing at the moved file.
-        createRestaurantPermit(
+    // Insert one restaurant_permit row per uploaded permit, with a
+    // generated non-null original_name.
+    $folderPath   = permitRelativeFolder($restaurantId);
+    $totalSlots   = count($permitSlots);
+    $batchStamp   = time();
+
+    foreach ($permitSlots as $slot) {
+        $originalName = buildPermitOriginalName(
+            $restaurantId,
+            (int)$slot['slot'],
+            $totalSlots,
+            $batchStamp
+        );
+
+        insertRestaurantPermitRow(
             $database_connection,
             $restaurantId,
-            $path,
-            (string)$p['file']['name'],
-            count($movedFiles) - 1
+            $folderPath,
+            $originalName,
+            (int)$slot['slot']
         );
     }
 
     $database_connection->commit();
 
-    // Only clear restaurant's own token. Do not touch the shared
-    // 'csrf_token' key or any other role's token — another role in
-    // this same browser session may still be relying on it.
     unset($_SESSION['restaurant_csrf_token']);
 
     $_SESSION['registration_success'] =
-        'Restaurant application submitted with ' . count($permitFiles) . ' permit(s). ' .
+        'Restaurant application submitted with ' . count($permitSlots) . ' permit(s). ' .
         'Please sign in after verification.';
 
     echo json_encode([
@@ -558,7 +766,7 @@ try {
     if ($database_connection->inTransaction()) {
         $database_connection->rollBack();
     }
-    foreach ($movedFiles as $p) {
+    foreach ($writtenFiles as $p) {
         if (is_file($p)) @unlink($p);
     }
     error_log('Restaurant registration DB error: ' . $e->getMessage());
@@ -576,7 +784,7 @@ try {
     if ($database_connection->inTransaction()) {
         $database_connection->rollBack();
     }
-    foreach ($movedFiles as $p) {
+    foreach ($writtenFiles as $p) {
         if (is_file($p)) @unlink($p);
     }
     error_log('Restaurant registration error: ' . $e->getMessage());

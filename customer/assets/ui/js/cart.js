@@ -1,6 +1,8 @@
 /**
  * FitPal Customer Cart Page JavaScript
- * Version 2.0 — Cart handler URL now read from window.FITPAL_CART.
+ * Version 2.1 — Ensures the remove handler is delegated to the
+ *                cart container so it works for both available and
+ *                unavailable items.
  *
  * Handles:
  *  - Quantity stepper (+ / −) with min/max clamping
@@ -53,25 +55,14 @@
  *     body scrollbar.
  *
  * @package FitPal
- * @version 2.0 — The cart handler URL is now read from
- *                window.FITPAL_CART.handlerUrl. The previous
- *                revision hard-coded '../backend/handlers/
- *                cart-handler.php' at each fetch site. The endpoint
- *                is now declared in exactly one place — the page —
- *                and this file reads it.
+ * @version 2.1 — The remove-item handler is now bound to the cart
+ *                container (`#cartItems` and the unavailable items
+ *                container) via event delegation, ensuring that
+ *                remove buttons on unavailable items are clickable.
  *
- *                When FITPAL_CART is absent, the file falls back to
- *                the form's own action attribute, then to the same
- *                literal path the page's markup names.
- *
- *                No behavioural change to the quantity stepper, the
- *                remove modal, the selection summary, the
- *                customization toggle, or the push-to-queue
- *                submission.
- *
- *                (1.9: scroll lock ordering around the modal fade.
- *                1.8: customization toggle. 1.7: selection summary.
- *                1.6: remove modal. 1.5: server sync debounce.)
+ *                (2.0: Cart handler URL now read from
+ *                window.FITPAL_CART.handlerUrl. 1.9: scroll lock
+ *                ordering around the modal fade.)
  */
 (function () {
     'use strict';
@@ -89,6 +80,10 @@
 
         var cartSubtotalEl     = document.getElementById('cartSubtotal');
         var cartItemsContainer = document.getElementById('cartItems');
+
+        // The unavailable items live outside #cartItems. We grab
+        // the whole cart container to delegate events across both.
+        var cartPageContainer  = document.querySelector('.cart-container');
 
         var removeModal        = document.getElementById('cartRemoveModal');
         var removeModalName    = document.getElementById('cartModalItemName');
@@ -276,9 +271,9 @@
         // ============================================
         // QUANTITY + REMOVE + CUSTOMS TOGGLE (delegated)
         // ============================================
-        if (cartItemsContainer) {
+        if (cartPageContainer) {
 
-            cartItemsContainer.addEventListener('click', function (e) {
+            cartPageContainer.addEventListener('click', function (e) {
                 const minusBtn = e.target.closest('.qty-minus');
                 const plusBtn  = e.target.closest('.qty-plus');
 
@@ -337,7 +332,7 @@
                 }
             });
 
-            cartItemsContainer.addEventListener('change', function (e) {
+            cartPageContainer.addEventListener('change', function (e) {
                 const input = e.target.closest('.qty-input');
                 if (!input) return;
 
@@ -363,7 +358,7 @@
                 }
             });
 
-            cartItemsContainer.addEventListener('wheel', function (e) {
+            cartPageContainer.addEventListener('wheel', function (e) {
                 if (e.target.closest('.qty-input')) e.target.blur();
             }, { passive: true });
         }
@@ -413,8 +408,8 @@
             if (cartId <= 0) return;
             syncRemove(cartId)
                 .then(function () {
-                    const remaining = cartItemsContainer
-                        ? cartItemsContainer.querySelectorAll('.cart-item').length
+                    const remaining = cartPageContainer
+                        ? cartPageContainer.querySelectorAll('.cart-item').length
                         : 0;
                     if (itemEl) itemEl.remove();
                     if (remaining <= 1) { window.location.reload(); return; }

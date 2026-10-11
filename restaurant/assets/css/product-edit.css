@@ -1,0 +1,1583 @@
+/**
+ * FitPal Restaurant Product Edit/Create Styles
+ *
+ * Drives the product form page:
+ *   restaurant/pages/product-edit.php
+ *
+ * ---------------------------------------------------------------------
+ * LAYOUT
+ * ---------------------------------------------------------------------
+ * The page is built around a tabbed form (Details, Images,
+ * Customization). This file owns the layout for:
+ *
+ *   - The page shell and title header.
+ *   - The tab bar and the panels it controls.
+ *   - The form sections inside each panel.
+ *   - The custom searchable ingredient picker used in the
+ *     composition editor.
+ *   - The grid layout for the composition rows themselves.
+ *
+ * ---------------------------------------------------------------------
+ * COMPOSITION ROW GRID (v1.1)
+ * ---------------------------------------------------------------------
+ * The desktop row is a nine-column grid:
+ *
+ *     [ ingredient ] [ min ] [ max ] [ default ] [ qty ]
+ *     [ price ] [ order ] [ flags ] [ remove ]
+ *
+ * The order and flags columns were previously sized wider than
+ * their content needed, which pushed the numeric fields apart and
+ * made the row read as a long strip of empty inputs. v1.1 shrinks
+ * both:
+ *
+ *     order    72px → 56px
+ *     flags   116px → 96px
+ *
+ * The freed width is handed to the ingredient picker, which is the
+ * only column that benefits from extra room. The picker itself now
+ * also stretches to fill whatever column width is available rather
+ * than reserving a fixed inner width.
+ *
+ * @package FitPal
+ * @version 1.1 — Tightened composition-row grid. Order column
+ *                narrowed to 56px, flags column narrowed to 96px,
+ *                ingredient column absorbs the freed width.
+ *
+ *                (1.0: initial split from products.css.)
+ */
+
+/* ============================================================
+   PAGE SHELL
+   ============================================================ */
+
+.restaurant-product-edit-page {
+    padding: 24px 0 40px 0;
+    background: var(--gray-50);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100vh - 70px);
+}
+
+.restaurant-product-edit-page .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 16px;
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+/* ============================================================
+   PAGE TITLE HEADER
+   ============================================================ */
+
+.page-title-header {
+    margin: 0 0 20px 0;
+    padding: 0 0 14px 0;
+    border-bottom: 2px solid var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+}
+
+.page-title-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+
+.page-title-header-top h1 {
+    margin: 0;
+    font-size: var(--font-size-2xl);
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.2;
+    text-align: right;
+    margin-left: auto;
+}
+
+.back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    background: #1a1a1a;
+    color: #ffffff;
+    border: none;
+    border-radius: var(--radius-base);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    font-family: inherit;
+    text-decoration: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.back-btn:hover,
+.back-btn:focus-visible {
+    background: #000000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    color: #ffffff;
+    outline: none;
+}
+
+.back-btn-icon {
+    width: 20px;
+    height: 20px;
+    display: block;
+    flex-shrink: 0;
+    filter: brightness(0) invert(1);
+}
+
+/* ============================================================
+   ALERTS
+   ============================================================ */
+
+.restaurant-product-edit-page .alert {
+    padding: 12px 18px;
+    border-radius: var(--radius-base);
+    margin: 0 0 20px 0;
+    border: 1px solid transparent;
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+    flex-shrink: 0;
+}
+
+/* ============================================================
+   PRODUCT TABS
+   ============================================================ */
+
+.product-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    padding: 4px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+    margin: 0 0 16px 0;
+    flex-shrink: 0;
+}
+
+.product-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border: none;
+    border-radius: var(--radius-base);
+    background: transparent;
+    color: var(--gray-600);
+    font-family: inherit;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+    min-height: 44px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.product-tab:hover {
+    background: var(--gray-50);
+    color: var(--text);
+}
+
+.product-tab:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.product-tab.active {
+    background: var(--primary);
+    color: #ffffff;
+}
+
+.product-tab-index {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+    border-radius: 50%;
+    background: var(--gray-200);
+    color: var(--gray-700);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.product-tab.active .product-tab-index {
+    background: rgba(255, 255, 255, 0.28);
+    color: #ffffff;
+}
+
+.product-tab-label {
+    display: inline-block;
+    line-height: 1;
+}
+
+.product-tab-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+    animation: productTabFade 0.18s ease;
+}
+
+.product-tab-panel[hidden] {
+    display: none;
+}
+
+@keyframes productTabFade {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   PRODUCT FORM
+   ============================================================ */
+
+.product-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    flex: 1;
+}
+
+/* ============================================================
+   FORM SECTION
+   ============================================================ */
+
+.form-section {
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--gray-200);
+    padding: 18px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.form-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.form-section-title {
+    margin: 0;
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    color: var(--text);
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--primary);
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.form-section-header .form-section-title {
+    width: auto;
+    border-bottom: none;
+    padding-bottom: 0;
+    flex: 1;
+    min-width: 0;
+}
+
+.form-section-intro {
+    margin: 0;
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    line-height: 1.6;
+}
+
+/* ============================================================
+   FORM CONTROLS
+   ============================================================ */
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.form-row-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.form-label {
+    display: block;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    color: var(--gray-700);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.form-label .req {
+    color: var(--danger);
+    margin-left: 2px;
+}
+
+.form-control {
+    display: block;
+    width: 100%;
+    padding: 9px 12px;
+    border: 1.5px solid var(--gray-300);
+    border-radius: var(--radius-base);
+    background: var(--white);
+    color: var(--text);
+    font-family: inherit;
+    font-size: var(--font-size-sm);
+    line-height: 1.4;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
+}
+
+.form-control.error {
+    border-color: var(--danger);
+    background: #fff5f5;
+}
+
+.form-control.error:focus {
+    box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.15);
+}
+
+textarea.form-control {
+    min-height: 88px;
+    resize: none;
+    line-height: 1.55;
+}
+
+.form-hint {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    line-height: 1.5;
+}
+
+.form-error {
+    font-size: var(--font-size-xs);
+    color: var(--danger);
+    min-height: 14px;
+    line-height: 1.4;
+}
+
+.form-control[type="number"]::-webkit-outer-spin-button,
+.form-control[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* ============================================================
+   SWITCH FIELD
+   ============================================================ */
+
+.switch-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+    font-weight: 500;
+    font-size: var(--font-size-sm);
+    color: var(--text);
+    padding: 4px 0;
+    min-height: 40px;
+}
+
+.switch-field input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+}
+
+.switch-track {
+    position: relative;
+    width: 40px;
+    height: 22px;
+    background: var(--gray-300);
+    border-radius: var(--radius-full);
+    transition: background 0.2s ease;
+    flex-shrink: 0;
+}
+
+.switch-track::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    background: #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease;
+}
+
+.switch-field input[type="checkbox"]:checked + .switch-track {
+    background: var(--primary);
+}
+
+.switch-field input[type="checkbox"]:checked + .switch-track::after {
+    transform: translateX(18px);
+}
+
+.switch-field input[type="checkbox"]:focus-visible + .switch-track {
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.3);
+}
+
+.switch-label {
+    font-size: var(--font-size-sm);
+    color: var(--text);
+}
+
+/* ============================================================
+   IMAGE SLOT GRID (TAB 2)
+   ============================================================ */
+
+.image-slot-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+    width: 100%;
+}
+
+.image-slot {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    border-radius: var(--radius-base);
+    overflow: hidden;
+    background: var(--gray-50);
+    border: 2px dashed var(--gray-300);
+    transition: border-color 0.15s ease, background 0.15s ease;
+    box-sizing: border-box;
+}
+
+.image-slot:hover,
+.image-slot:focus-within {
+    border-color: var(--primary);
+    background: rgba(89, 193, 74, 0.04);
+}
+
+.image-slot.has-image,
+.image-slot.has-new-image {
+    border-style: solid;
+    border-color: var(--gray-200);
+    background: var(--white);
+}
+
+.image-slot.has-image:hover,
+.image-slot.has-new-image:hover {
+    border-color: var(--primary);
+}
+
+.image-slot.is-main {
+    border-color: var(--primary);
+}
+
+.image-slot.is-broken .image-slot-empty {
+    display: flex;
+}
+
+.image-slot-frame {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.image-slot-preview {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border-radius: calc(var(--radius-base) - 2px);
+}
+
+.image-slot-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    height: 100%;
+    padding: 10px;
+    box-sizing: border-box;
+    pointer-events: none;
+}
+
+.image-slot.has-image .image-slot-empty,
+.image-slot.has-new-image .image-slot-empty {
+    display: none;
+}
+
+.image-slot-empty-icon {
+    width: 24px;
+    height: 24px;
+    display: block;
+    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+    opacity: 0.75;
+}
+
+.image-slot-empty-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--gray-500);
+    text-align: center;
+    line-height: 1.3;
+}
+
+.image-slot-badge {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    padding: 2px 7px;
+    border-radius: var(--radius-full);
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    line-height: 1.4;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.image-slot-badge-main {
+    background: var(--primary);
+    color: #ffffff;
+}
+
+.image-slot-badge-index {
+    background: rgba(255, 255, 255, 0.9);
+    color: var(--gray-700);
+    border: 1px solid var(--gray-200);
+    backdrop-filter: blur(4px);
+}
+
+.image-slot-badge-new {
+    top: auto;
+    bottom: 5px;
+    left: 5px;
+    background: #1a1a1a;
+    color: #ffffff;
+}
+
+.image-slot-badge-new[hidden] {
+    display: none;
+}
+
+.image-slot-remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(5, 10, 4, 0.72);
+    color: #ffffff;
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    z-index: 3;
+    transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.image-slot-remove:hover,
+.image-slot-remove:focus-visible {
+    background: var(--danger);
+    outline: none;
+}
+
+.image-slot-remove:active {
+    transform: scale(0.92);
+}
+
+.image-slot-remove[hidden] {
+    display: none;
+}
+
+.image-slot-hit {
+    position: absolute;
+    inset: 0;
+    cursor: pointer;
+    z-index: 1;
+}
+
+/* ============================================================
+   COMPOSITION EDITOR (TAB 3)
+   ============================================================ */
+
+.composition-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-top: 1px solid var(--gray-100);
+    padding-top: 12px;
+    margin-top: 4px;
+}
+
+/* Header row — nine columns matching the data row exactly. */
+.composition-header {
+    display: grid;
+    grid-template-columns:
+        minmax(240px, 2.4fr)  /* ingredient — absorbs freed width */
+        56px                  /* min */
+        56px                  /* max */
+        84px                  /* default */
+        60px                  /* qty */
+        84px                  /* price ± */
+        56px                  /* order  — was 72px */
+        96px                  /* flags  — was 116px */
+        40px;                 /* remove */
+    gap: 8px;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--gray-600);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.composition-col {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.composition-col-actions {
+    text-align: center;
+}
+
+.composition-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.composition-row {
+    display: grid;
+    grid-template-columns:
+        minmax(240px, 2.4fr)
+        56px
+        56px
+        84px
+        60px
+        84px
+        56px
+        96px
+        40px;
+    gap: 8px;
+    align-items: center;
+    padding: 10px 12px;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    background: var(--white);
+    transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+    box-sizing: border-box;
+}
+
+.composition-row:hover {
+    border-color: var(--gray-300);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.composition-row.has-error {
+    border-color: var(--danger);
+    background: #fff5f5;
+}
+
+.composition-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.composition-field-label {
+    display: none;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    line-height: 1.2;
+}
+
+/* Numeric inputs. */
+.composition-row input[type="number"] {
+    width: 100%;
+    padding: 7px 9px;
+    font-size: 13px;
+    border: 1.5px solid var(--gray-300);
+    border-radius: var(--radius-base);
+    background: var(--white);
+    color: var(--text);
+    font-family: inherit;
+    box-sizing: border-box;
+    min-width: 0;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.composition-row input[type="number"]:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
+}
+
+.composition-row input[type="number"].error {
+    border-color: var(--danger);
+    background: #fff5f5;
+}
+
+/* ---- Ingredient picker ----
+   A custom combobox. The field shows the chosen name (or a
+   placeholder). The panel is a floating list of options. The
+   picker fills its entire grid column so no dead space is left
+   between the picker and the min column. */
+
+.ingredient-picker {
+    position: relative;
+    width: 100%;
+}
+
+.ingredient-picker-field {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-height: 38px;
+    padding: 6px 34px 6px 12px;
+    border: 1.5px solid var(--gray-300);
+    border-radius: var(--radius-base);
+    background: var(--white);
+    box-sizing: border-box;
+    cursor: text;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ingredient-picker.is-open .ingredient-picker-field,
+.ingredient-picker-field:hover {
+    border-color: var(--gray-400);
+}
+
+.ingredient-picker.is-open .ingredient-picker-field {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
+}
+
+.ingredient-picker-search {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    outline: none;
+    background: transparent;
+    padding: 0;
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.4;
+}
+
+.ingredient-picker-search::placeholder {
+    color: var(--gray-400);
+}
+
+.ingredient-picker-chip {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    padding: 2px 9px;
+    background: rgba(89, 193, 74, 0.14);
+    color: var(--primary-dark);
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: var(--radius-full);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 0;
+}
+
+.ingredient-picker-chip[hidden] {
+    display: none;
+}
+
+.ingredient-picker-chevron {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    width: 8px;
+    height: 8px;
+    margin-top: -4px;
+    pointer-events: none;
+    border-right: 1.5px solid var(--gray-500);
+    border-bottom: 1.5px solid var(--gray-500);
+    transform: rotate(45deg);
+    transition: transform 0.15s ease;
+}
+
+.ingredient-picker.is-open .ingredient-picker-chevron {
+    transform: rotate(-135deg);
+    margin-top: -2px;
+}
+
+/* ---- Panel ---- */
+
+.ingredient-picker-panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 40;
+    max-height: 260px;
+    overflow-y: auto;
+    padding: 6px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14);
+    box-sizing: border-box;
+    animation: ingredientPickerFade 0.14s ease;
+}
+
+.ingredient-picker-panel[hidden] {
+    display: none;
+}
+
+.ingredient-picker-panel::-webkit-scrollbar {
+    width: 8px;
+}
+
+.ingredient-picker-panel::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.ingredient-picker-panel::-webkit-scrollbar-thumb {
+    background: var(--gray-300);
+    border-radius: 4px;
+}
+
+.ingredient-picker-panel::-webkit-scrollbar-thumb:hover {
+    background: var(--gray-400);
+}
+
+@keyframes ingredientPickerFade {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.ingredient-picker-option {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    padding: 9px 12px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.1s ease, color 0.1s ease;
+    box-sizing: border-box;
+}
+
+.ingredient-picker-option:hover,
+.ingredient-picker-option.is-highlighted {
+    background: rgba(89, 193, 74, 0.12);
+    color: var(--primary-dark);
+}
+
+.ingredient-picker-option-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ingredient-picker-option-meta {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--gray-500);
+    white-space: nowrap;
+}
+
+.ingredient-picker-option:hover .ingredient-picker-option-meta,
+.ingredient-picker-option.is-highlighted .ingredient-picker-option-meta {
+    color: var(--primary-dark);
+    opacity: 0.85;
+}
+
+.ingredient-picker-empty {
+    padding: 14px 12px;
+    font-size: 13px;
+    color: var(--gray-500);
+    text-align: center;
+}
+
+/* ---- Flags ---- */
+
+.composition-field-flags {
+    flex-direction: column;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: flex-start;
+}
+
+.flag-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 9px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: var(--radius-full);
+    background: var(--gray-100);
+    color: var(--gray-600);
+    cursor: pointer;
+    user-select: none;
+    border: 1.5px solid transparent;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    white-space: nowrap;
+    min-height: 26px;
+}
+
+.flag-toggle input[type="checkbox"] {
+    display: none;
+}
+
+.flag-toggle.is-on {
+    background: rgba(89, 193, 74, 0.15);
+    color: var(--primary-dark);
+    border-color: rgba(89, 193, 74, 0.35);
+}
+
+.flag-toggle.is-on.flag-required {
+    background: rgba(255, 193, 7, 0.15);
+    color: #856404;
+    border-color: rgba(255, 193, 7, 0.4);
+}
+
+/* ---- Remove button ---- */
+
+.composition-field-actions {
+    align-items: center;
+    justify-content: center;
+}
+
+.remove-row-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: var(--radius-base);
+    border: 1.5px solid var(--gray-200);
+    background: var(--white);
+    color: var(--gray-500);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+    padding: 0;
+}
+
+.remove-row-btn:hover,
+.remove-row-btn:focus-visible {
+    background: var(--danger);
+    color: #ffffff;
+    border-color: var(--danger);
+    outline: none;
+}
+
+.remove-row-btn:active {
+    transform: scale(0.94);
+}
+
+.remove-row-btn img {
+    width: 14px;
+    height: 14px;
+    display: block;
+    transition: filter 0.15s ease;
+}
+
+.remove-row-btn:hover img,
+.remove-row-btn:focus-visible img {
+    filter: brightness(0) invert(1);
+}
+
+/* ---- Add ingredient ---- */
+
+.add-ingredient-btn {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    border: 1.5px dashed var(--gray-300);
+    background: var(--white);
+    color: var(--gray-700);
+    border-radius: var(--radius-base);
+    cursor: pointer;
+    font-family: inherit;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+    min-height: 40px;
+}
+
+.add-ingredient-btn:hover,
+.add-ingredient-btn:focus-visible {
+    border-color: var(--primary);
+    color: var(--primary-dark);
+    background: rgba(89, 193, 74, 0.05);
+    outline: none;
+}
+
+.add-ingredient-btn .btn-icon {
+    width: 14px;
+    height: 14px;
+    display: block;
+    flex-shrink: 0;
+    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+/* ============================================================
+   FORM ACTIONS
+   ============================================================ */
+
+.form-section-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 14px 18px;
+    background: var(--white);
+}
+
+.form-section-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 11px 16px;
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    border-radius: var(--radius-base);
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    min-height: 44px;
+    text-align: center;
+    transition: background 0.15s ease, box-shadow 0.15s ease;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.form-section-actions .btn-secondary {
+    background: #1a1a1a;
+    color: #ffffff;
+}
+
+.form-section-actions .btn-secondary:hover,
+.form-section-actions .btn-secondary:focus-visible {
+    background: #000000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    outline: none;
+}
+
+.form-section-actions .btn-primary {
+    background: var(--primary);
+    color: #ffffff;
+}
+
+.form-section-actions .btn-primary:hover,
+.form-section-actions .btn-primary:focus-visible {
+    background: var(--primary-dark);
+    box-shadow: 0 4px 12px rgba(89, 193, 74, 0.28);
+    outline: none;
+}
+
+.form-section-actions .btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* ============================================================
+   MODALS
+   ============================================================ */
+
+.modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.modal.is-open {
+    display: flex;
+}
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 10, 4, 0.55);
+    cursor: pointer;
+    z-index: 1;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+}
+
+.modal.is-open .modal-overlay {
+    opacity: 1;
+}
+
+.modal-content {
+    position: relative;
+    z-index: 2;
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    padding: 30px 26px 22px;
+    max-width: 460px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.22);
+    transform: scale(0.96) translateY(-6px);
+    opacity: 0;
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.18s ease;
+    box-sizing: border-box;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+}
+
+.modal-content-narrow {
+    max-width: 420px;
+}
+
+.modal.is-open .modal-content {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+}
+
+.modal-icon {
+    width: 68px;
+    height: 68px;
+    margin: 0 auto 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: var(--gray-100);
+}
+
+.modal-icon img {
+    width: 30px;
+    height: 30px;
+    display: block;
+    filter: brightness(0) saturate(100%) invert(45%) sepia(0%) saturate(0%)
+            brightness(95%) contrast(90%);
+}
+
+.modal-icon-default {
+    background: var(--gray-100);
+}
+
+.modal-icon-default img {
+    filter: brightness(0) saturate(100%) invert(45%) sepia(0%) saturate(0%)
+            brightness(95%) contrast(90%);
+}
+
+.modal-icon-primary {
+    background: rgba(89, 193, 74, 0.12);
+}
+
+.modal-icon-primary img {
+    filter: brightness(0) saturate(100%) invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.modal-icon-danger {
+    background: rgba(220, 53, 69, 0.10);
+}
+
+.modal-icon-danger img {
+    filter: brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(600%)
+            hue-rotate(330deg) brightness(90%) contrast(85%);
+}
+
+.modal-icon-warning {
+    background: rgba(255, 193, 7, 0.14);
+}
+
+.modal-icon-warning img {
+    filter: brightness(0) saturate(100%) invert(60%) sepia(90%) saturate(900%)
+            hue-rotate(0deg) brightness(90%) contrast(95%);
+}
+
+.modal-title {
+    margin: 0 0 8px 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.3;
+}
+
+.modal-message {
+    margin: 0 0 22px 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    line-height: 1.6;
+    word-break: break-word;
+}
+
+.modal-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.modal-actions-single {
+    grid-template-columns: 1fr;
+}
+
+.modal-btn {
+    width: 100%;
+    padding: 12px 18px;
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    border: 2px solid transparent;
+    min-height: 46px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    text-decoration: none;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+
+.modal-btn-cancel {
+    background: #1a1a1a;
+    color: #ffffff;
+    border-color: #1a1a1a;
+}
+
+.modal-btn-cancel:hover,
+.modal-btn-cancel:focus-visible {
+    background: #000000;
+    border-color: #000000;
+    color: #ffffff;
+    outline: none;
+}
+
+.modal-btn-confirm {
+    background: var(--primary);
+    color: #ffffff;
+    border-color: var(--primary);
+}
+
+.modal-btn-confirm:hover,
+.modal-btn-confirm:focus-visible {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+    outline: none;
+}
+
+.modal-btn-danger {
+    background: var(--danger);
+    color: #ffffff;
+    border-color: var(--danger);
+}
+
+.modal-btn-danger:hover,
+.modal-btn-danger:focus-visible {
+    background: #b91c1c;
+    border-color: #b91c1c;
+    outline: none;
+}
+
+.modal-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* ============================================================
+   RESPONSIVE — TABLET (<= 1024px)
+   ============================================================ */
+
+@media (max-width: 1024px) {
+    .form-row-4 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .image-slot-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .composition-header {
+        display: none;
+    }
+
+    .composition-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        padding: 12px;
+    }
+
+    .composition-field-label {
+        display: block;
+    }
+
+    .composition-field-actions {
+        grid-column: 1 / -1;
+        justify-content: flex-end;
+    }
+}
+
+/* ============================================================
+   RESPONSIVE — TABLET PORTRAIT (<= 768px)
+   ============================================================ */
+
+@media (max-width: 768px) {
+    .restaurant-product-edit-page {
+        padding: 16px 0 32px 0;
+    }
+
+    .page-title-header {
+        gap: 12px;
+    }
+
+    .page-title-header-top {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: nowrap;
+    }
+
+    .page-title-header-top h1 {
+        font-size: var(--font-size-xl);
+        text-align: right;
+    }
+
+    .product-tabs {
+        gap: 4px;
+        padding: 4px;
+    }
+
+    .product-tab {
+        padding: 10px 8px;
+        gap: 6px;
+        font-size: var(--font-size-xs);
+    }
+
+    .product-tab-index {
+        width: 20px;
+        height: 20px;
+        min-width: 20px;
+        font-size: 11px;
+    }
+
+    .form-row,
+    .form-row-4 {
+        grid-template-columns: 1fr;
+    }
+
+    .form-section {
+        padding: 14px;
+    }
+
+    .form-section-actions {
+        grid-template-columns: 1fr;
+        gap: 10px;
+        padding: 12px 14px;
+    }
+
+    .image-slot-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+    }
+}
+
+/* ============================================================
+   RESPONSIVE — MOBILE (<= 576px)
+   ============================================================ */
+
+@media (max-width: 576px) {
+    .page-title-header-top h1 {
+        font-size: var(--font-size-lg);
+    }
+
+    .back-btn {
+        padding: 8px 12px;
+        font-size: var(--font-size-xs);
+    }
+
+    .back-btn-icon {
+        width: 16px;
+        height: 16px;
+    }
+
+    .product-tab {
+        flex-direction: column;
+        gap: 4px;
+        padding: 8px 6px;
+        min-height: 56px;
+    }
+
+    .product-tab-label {
+        font-size: 11px;
+        text-align: center;
+        white-space: normal;
+        line-height: 1.15;
+    }
+
+    .form-section {
+        padding: 12px;
+        gap: 10px;
+    }
+
+    .composition-row {
+        grid-template-columns: 1fr;
+        padding: 12px;
+        gap: 10px;
+    }
+
+    .composition-field-actions {
+        grid-column: auto;
+        justify-content: flex-end;
+    }
+
+    .composition-field-flags {
+        flex-direction: row;
+    }
+
+    .image-slot-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .image-slot-empty-label {
+        font-size: 10px;
+    }
+
+    .image-slot-badge {
+        font-size: 9px;
+        padding: 2px 6px;
+    }
+
+    .image-slot-remove {
+        width: 22px;
+        height: 22px;
+        font-size: 14px;
+    }
+
+    .modal {
+        padding: 16px;
+    }
+
+    .modal-content {
+        padding: 24px 20px 20px;
+        max-width: calc(100vw - 32px);
+    }
+
+    .modal-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .modal-btn {
+        width: 100%;
+    }
+}
+
+/* ============================================================
+   REDUCED MOTION
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    .product-tab-panel,
+    .image-slot,
+    .composition-row,
+    .remove-row-btn,
+    .flag-toggle,
+    .ingredient-picker-panel,
+    .ingredient-picker-chevron,
+    .modal,
+    .modal-overlay,
+    .modal-content {
+        transition: none !important;
+        animation: none !important;
+        transform: none !important;
+    }
+}

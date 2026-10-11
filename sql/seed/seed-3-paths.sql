@@ -1,8 +1,8 @@
 -- =====================================================
 -- FitPal Seed Data — 3 of 3: PATHS
--- Version 7.1
+-- Version 8.0
 --
--- ALIGNED WITH: fitpal_food_delivery schema v1.3.1
+-- ALIGNED WITH: fitpal_food_delivery schema v2.5.0
 --
 -- RUN ORDER (strict):
 --   1. seed-1-core.sql      (structure & essential values)
@@ -13,21 +13,77 @@
 -- --------------
 -- Everything that points at a file on disk:
 --   * *_profile.profile_picture     (UPDATE)
---   * restaurant_permit rows        (INSERT)
+--   * restaurant_permit rows        (INSERT)  ← slot model
 --   * delivery_rider_document rows  (INSERT)
---   * dietary_information.images    (UPDATE)  ← new in v7.1
+--   * dietary_information.images    (UPDATE)
 --
--- v7.1 — product image folder paths
--- ---------------------------------
--- dietary_information.images now stores a project-root-relative
+-- -----------------------------------------------------
+-- v8.0 — PERMIT STORAGE MOVED TO THE SLOT MODEL
+-- -----------------------------------------------------
+-- The restaurant role's permit storage now matches the
+-- shape used by every other media table in the project:
+--
+--     ONE row per restaurant in restaurant_permit.
+--     file_path stores the FOLDER, ending with a slash.
+--     The five slots are the files image-1.* through
+--     image-5.* inside that folder.
+--     display_order is written as 0 and is never read.
+--
+-- This is the model declared by
+-- restaurant/backend/database/restaurant-queries.php (v10.0):
+--
+--     createRestaurantPermit($db, $restaurantId, $folderPath)
+--     getRestaurantPermits($db, $restaurantId)  →  slot-keyed map
+--
+-- The previous revision of this file inserted THREE rows
+-- per restaurant, each carrying a full file path and a
+-- distinct display_order (0, 1, 2). That layout is
+-- abandoned. This revision inserts ONE row per
+-- restaurant.
+--
+-- The folder referenced by every seeded restaurant is the
+-- shared manifest folder:
+--
+--     shared/assets/images/manifest/permits/
+--         image-1.png
+--         image-2.jpg
+--
+-- Slots 1 and 2 resolve to those two files. Slots 3, 4,
+-- and 5 are empty. getRestaurantPermits() therefore
+-- returns a two-entry map for every seeded restaurant.
+--
+-- original_name is NOT NULL in the schema. Every seeded
+-- row carries a distinct label ('Seeded Permit 1',
+-- 'Seeded Permit 2', 'Seeded Permit 3') so the three
+-- rows are distinguishable in an audit even though they
+-- all point at the same folder.
+--
+-- Once a real owner signs in and uses the re-apply or
+-- upload flow, the handler and the queries write to
+-- shared/uploads/restaurant/permits/<restaurant_id>/ and
+-- the restaurant_permit row is rewritten to point there.
+-- The manifest folder is a seed-only starting point; it
+-- is not touched after the seed runs.
+--
+-- IDEMPOTENCY
+-- -----------
+-- Section 2 begins with DELETE statements scoped to the
+-- seed's own restaurants. Re-running this file replaces
+-- every restaurant_permit row with a fresh slot-model
+-- row. No orphan is left behind.
+--
+-- -----------------------------------------------------
+-- v7.1 — product image folder paths (unchanged)
+-- -----------------------------------------------------
+-- dietary_information.images stores a project-root-relative
 -- FOLDER path per product, the same shape that
 -- customer_profile.profile_picture stores a file path.
 --
 -- The reader (getProductImageFilenames() in
--- customer/backend/database/product-queries.php) globs that folder
--- for image-1.*, image-2.*, ... image-5.* and returns the ordered
--- list of filenames. The page resolves each filename against its
--- own $assetBase and renders it.
+-- customer/backend/database/product-queries.php) globs that
+-- folder for image-1.*, image-2.*, ... image-5.* and returns
+-- the ordered list of filenames. The page resolves each
+-- filename against its own $assetBase and renders it.
 --
 -- Example value:
 --   shared/assets/images/manifest/products/asian-fusion-fit/004-nori-hand-roll/
@@ -37,14 +93,10 @@
 -- The 30 products in seed-1-core.sql are grouped ten per
 -- restaurant. The 30 manifest folders on disk are also grouped
 -- ten per restaurant, but their slug suffixes do NOT match the
--- product insert order. For example, Green Bowl Cafe inserts
--- "Garden Harvest Bowl" first, but the folder on disk for that
--- product is 004-garden-harvest-bowl, not 001-….
---
--- A positional match would therefore assign every product the
--- wrong folder. Each UPDATE below is keyed on
--- (restaurant.business_name, product.name) and writes the exact
--- folder slug for that product on the right-hand side of SET.
+-- product insert order. Each UPDATE below is keyed on
+-- (restaurant.business_name, product.name) and writes the
+-- exact folder slug for that product on the right-hand side
+-- of SET.
 --
 -- The ten products per restaurant are matched to their folders
 -- as follows (product.name → folder slug):
@@ -100,8 +152,9 @@
 -- folder is renamed on disk, update the matching string here.
 --
 -- PREREQUISITE — these files must exist on disk:
---   shared/assets/images/manifest/permits/business-permit.png
---   shared/assets/images/manifest/permits/sanitary-permit.jpg
+--   shared/assets/images/manifest/permits/
+--     image-1.png
+--     image-2.jpg
 --   shared/assets/images/manifest/drivers-license/drivers-license-1.jpg
 --   shared/assets/images/manifest/drivers-license/drivers-license-2.jpg
 --   shared/assets/images/manifest/national-id/national-id-1.jpg
@@ -115,7 +168,10 @@
 --
 -- These are the curated seed assets. Runtime rider uploads live
 -- under shared/uploads/rider/documents/<rider_id>/ and are written
--- by sign-up-handler.php, NOT by this seed.
+-- by sign-up-handler.php, NOT by this seed. Runtime restaurant
+-- permit uploads live under
+-- shared/uploads/restaurant/permits/<restaurant_id>/ and are
+-- written by sign-up-handler.php and restaurant-reapply-handler.php.
 --
 -- IDEMPOTENCY
 -- -----------
@@ -129,8 +185,9 @@
 -- leaves the same value in place.
 --
 -- PRINCIPLES SATISFIED HERE
---   * Every restaurant gets exactly three permit rows
---     (display_order 0..2, contiguous).
+--   * Every restaurant gets EXACTLY ONE permit row, carrying a
+--     folder path ending in a slash, display_order = 0, and a
+--     non-empty original_name.
 --   * Every rider gets exactly one identity document row.
 --   * Every rider's id_path is DISTINCT (V20).
 --   * Bicycle riders submit a non-driver's-license id_type (V18).
@@ -163,7 +220,7 @@ START TRANSACTION;
 -- WHERE customer_id = (SELECT customer_id FROM customer WHERE email = 'user@example.com');
 
 -- =====================================================
--- 1b. RIDER PROFILE PICTURES  (v7.0)
+-- 1b. RIDER PROFILE PICTURES
 -- =====================================================
 -- Assign a DISTINCT manifest profile image to each rider.
 -- The subquery picks the Nth profile-N.jpg where N is the
@@ -191,8 +248,19 @@ SET
     drp.profile_picture = assign.profile_picture;
 
 -- =====================================================
--- 2. RESTAURANT PERMITS  (3 rows per restaurant)
+-- 2. RESTAURANT PERMITS  (SLOT MODEL — 1 row per restaurant)
 -- =====================================================
+-- file_path carries the FOLDER, ending with a slash.
+-- The five slots are image-1.* through image-5.* inside
+-- that folder. display_order is 0 and unused.
+-- original_name is NOT NULL in the schema; the seed
+-- supplies a distinct label per restaurant so the three
+-- rows are distinguishable in an audit even though they
+-- all point at the same folder.
+--
+-- Each block deletes the restaurant's existing permit
+-- rows first, so re-running this file replaces them with
+-- a fresh slot-model row and never leaves an orphan.
 
 -- 2.1 Green Bowl Cafe
 DELETE FROM restaurant_permit
@@ -211,16 +279,8 @@ INSERT INTO
         original_name,
         display_order
     )
-SELECT r.restaurant_id, v.file_path, v.original_name, v.display_order
+SELECT r.restaurant_id, 'shared/assets/images/manifest/permits/', 'Seeded Permit 1', 0
 FROM restaurant r
-    JOIN (
-        SELECT
-            'shared/assets/images/manifest/permits/business-permit.png' AS file_path, 'DTI-Certificate-of-Business-Name.png' AS original_name, 0 AS display_order
-        UNION ALL
-        SELECT 'shared/assets/images/manifest/permits/business-permit.png', 'Mayors-Permit-2026.png', 1
-        UNION ALL
-        SELECT 'shared/assets/images/manifest/permits/sanitary-permit.jpg', 'Sanitary-Permit.jpg', 2
-    ) v
 WHERE
     r.business_name = 'Green Bowl Cafe';
 
@@ -241,16 +301,8 @@ INSERT INTO
         original_name,
         display_order
     )
-SELECT r.restaurant_id, v.file_path, v.original_name, v.display_order
+SELECT r.restaurant_id, 'shared/assets/images/manifest/permits/', 'Seeded Permit 2', 0
 FROM restaurant r
-    JOIN (
-        SELECT
-            'shared/assets/images/manifest/permits/business-permit.png' AS file_path, 'DTI-Registration-Keto-Kitchen.png' AS original_name, 0 AS display_order
-        UNION ALL
-        SELECT 'shared/assets/images/manifest/permits/business-permit.png', 'Business-Permit-Makati.png', 1
-        UNION ALL
-        SELECT 'shared/assets/images/manifest/permits/sanitary-permit.jpg', 'Sanitary-Permit-KK.jpg', 2
-    ) v
 WHERE
     r.business_name = 'Keto Kitchen';
 
@@ -271,16 +323,8 @@ INSERT INTO
         original_name,
         display_order
     )
-SELECT r.restaurant_id, v.file_path, v.original_name, v.display_order
+SELECT r.restaurant_id, 'shared/assets/images/manifest/permits/', 'Seeded Permit 3', 0
 FROM restaurant r
-    JOIN (
-        SELECT
-            'shared/assets/images/manifest/permits/business-permit.png' AS file_path, 'DTI-AFF-Registration.png' AS original_name, 0 AS display_order
-        UNION ALL
-        SELECT 'shared/assets/images/manifest/permits/business-permit.png', 'Mayors-Permit-Quezon-City.png', 1
-        UNION ALL
-        SELECT 'shared/assets/images/manifest/permits/sanitary-permit.jpg', 'Business-Permit-AFF.jpg', 2
-    ) v
 WHERE
     r.business_name = 'Asian Fusion Fit';
 
@@ -363,7 +407,7 @@ WHERE
     dr.email = 'rider3@fitpal.com';
 
 -- =====================================================
--- 4. PRODUCT IMAGE FOLDER PATHS  (v7.1 — new)
+-- 4. PRODUCT IMAGE FOLDER PATHS
 -- =====================================================
 -- dietary_information.images gets a project-root-relative FOLDER
 -- path per product. The reader globs that folder for image-1.*
@@ -378,10 +422,6 @@ WHERE
 -- because product only stores a restaurant_branch_id, and this
 -- file must not depend on the specific branch_id values assigned
 -- by seed-1.
---
--- A helper variable is captured for each restaurant to keep the
--- UPDATE bodies short and to make the intent legible: the folder
--- prefix is written once and the slug is appended per product.
 
 -- -----------------------------------------------------
 -- 4.1 Green Bowl Cafe
@@ -708,7 +748,7 @@ COMMIT;
 -- =====================================================
 -- VERIFICATION — PATHS
 -- =====================================================
-SELECT '=== seed-3-paths.sql loaded (v7.1) ===' AS status;
+SELECT '=== seed-3-paths.sql loaded (v8.0, slot-model permits) ===' AS status;
 
 -- V10. Every rider has an identity document row.
 --      Surfaces id_type so a reviewer can see what each rider submitted.
@@ -719,8 +759,13 @@ FROM
     LEFT JOIN delivery_rider_document drd ON drd.delivery_rider_id = dr.delivery_rider_id
 ORDER BY dr.delivery_rider_id;
 
--- V12. Every restaurant has at least one permit row.
-SELECT r.restaurant_id, r.business_name, COUNT(rp.permit_id) AS permit_count
+-- V12. SLOT-MODEL PERMIT CHECK — every restaurant has EXACTLY ONE
+--      permit row.
+--
+--      Under the slot model there is one row per restaurant and
+--      the row carries the folder path. A restaurant with zero
+--      rows or with more than one row is malformed.
+SELECT r.restaurant_id, r.business_name, COUNT(rp.permit_id) AS permit_row_count
 FROM
     restaurant r
     LEFT JOIN restaurant_permit rp ON rp.restaurant_id = r.restaurant_id
@@ -728,36 +773,33 @@ GROUP BY
     r.restaurant_id,
     r.business_name
 HAVING
-    permit_count = 0;
+    permit_row_count <> 1;
 
--- V13. No permit row has a NULL or empty original_name.
+-- V13. SLOT-MODEL PERMIT CHECK — every permit row's file_path ends
+--      with a slash, its display_order is 0, and its original_name
+--      is a non-empty string.
+--
+--      A row that does not end with a slash is holding a file path
+--      from the old model, not a folder. A row with a non-zero
+--      display_order was written by the old model. A row with an
+--      empty original_name violates the NOT NULL constraint's
+--      intent.
 SELECT
-    permit_id,
-    restaurant_id,
-    file_path,
-    original_name
-FROM restaurant_permit
-WHERE
-    original_name IS NULL
-    OR original_name = '';
-
--- V14. Permit display_order values within each restaurant are
---      contiguous starting at 0.
-SELECT
+    rp.permit_id,
     rp.restaurant_id,
-    COUNT(*) AS permit_count,
-    MIN(rp.display_order) AS min_order,
-    MAX(rp.display_order) AS max_order,
+    rp.file_path,
+    rp.original_name,
+    rp.display_order,
     CASE
-        WHEN MIN(rp.display_order) <> 0 THEN 'not_zero_based'
-        WHEN MAX(rp.display_order) <> COUNT(*) - 1 THEN 'not_contiguous'
+        WHEN RIGHT(rp.file_path, 1) <> '/' THEN 'path_not_a_folder'
+        WHEN rp.display_order <> 0 THEN 'non_zero_display_order'
+        WHEN rp.original_name IS NULL
+        OR rp.original_name = '' THEN 'empty_original_name'
         ELSE 'ok'
-    END AS order_state
+    END AS row_state
 FROM restaurant_permit rp
-GROUP BY
-    rp.restaurant_id
 HAVING
-    order_state <> 'ok';
+    row_state <> 'ok';
 
 -- V17. No rider document row has a NULL id_type.
 SELECT
@@ -816,7 +858,7 @@ WHERE
     drp.profile_picture IS NULL
     OR drp.profile_picture = '';
 
--- V23. (v7.1) Every seeded product's dietary_information.images is
+-- V23. Every seeded product's dietary_information.images is
 --      non-NULL, non-empty, and ends with a forward slash. A value
 --      that fails this check cannot be globbed by the reader.
 SELECT di.dietary_information_id, di.images, p.name AS product_name
@@ -828,7 +870,7 @@ WHERE
     OR di.images = ''
     OR RIGHT(di.images, 1) <> '/';
 
--- V24. (v7.1) Every seeded product's dietary_information.images
+-- V24. Every seeded product's dietary_information.images
 --      starts with the expected manifest prefix. MySQL cannot see
 --      the disk, so this check is a string-prefix guard: it catches
 --      a mistyped prefix but not a missing folder.
@@ -841,7 +883,7 @@ WHERE
     AND di.images <> ''
     AND di.images NOT LIKE 'shared/assets/images/manifest/products/%/';
 
--- V25. (v7.1) No two products share the same dietary_information.images
+-- V25. No two products share the same dietary_information.images
 --      folder path. A collision means two products would render the
 --      same images.
 SELECT
@@ -866,7 +908,7 @@ GROUP BY
 HAVING
     product_count > 1;
 
--- V26. (v7.1) Distribution sanity: exactly 30 rows share the
+-- V26. Distribution sanity: exactly 30 rows share the
 --      manifest/products prefix, ten per restaurant slug. This is
 --      a read-out, not a failure condition; a human reviewer can
 --      see at a glance that the counts are 10/10/10.

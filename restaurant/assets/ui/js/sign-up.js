@@ -1,11 +1,61 @@
 /**
  * FitPal Restaurant Registration JavaScript
  *
- * Two-step form with name/email filtering, password feedback,
- * permit upload grid (1-5 photos), and fetch submission.
+ * Five-step form with name/email/address filtering, password
+ * feedback, permit upload grid (1–5 photos), review summary, and
+ * fetch submission.
+ *
+ * ---------------------------------------------------------------------
+ * STEP LAYOUT
+ * ---------------------------------------------------------------------
+ *   1  Account Holder    first_name, middle_name, last_name, email,
+ *                        contact_number, username
+ *   2  Security          password, confirm_password
+ *   3  Business Details  business_name, cuisine_type,
+ *                        business_description, dietary_tags
+ *   4  Branch & Permits  branch_name, block, barangay, city,
+ *                        province, region, postal_code,
+ *                        permit slots, terms checkbox
+ *   5  Review & Submit   read-only summary
+ *
+ * ---------------------------------------------------------------------
+ * FILTER CLASSES
+ * ---------------------------------------------------------------------
+ *   .name-field       letters, spaces, hyphens, apostrophes only;
+ *                     each word capitalized.
+ *
+ *   .address-field    letters, digits, spaces, commas, periods,
+ *                     hyphens, apostrophes, slashes, hash. Each
+ *                     word capitalized. Used for block / street /
+ *                     unit and barangay.
+ *
+ *   .email-field      lowercased.
+ *   .digits-field     digits and spaces only.
+ *   .username-field   letters, numbers, underscore only.
+ *   .capitalize-field first letter of first word only, no other
+ *                     restriction. Used for Business Description.
+ *
+ * ---------------------------------------------------------------------
+ * VALIDATION
+ * ---------------------------------------------------------------------
+ * Each step validates on Next Step. Submitting on Step 5 runs every
+ * step's validator in order and routes the user to the first
+ * failing step.
  *
  * @package FitPal
- * @version 1.1 — Adds permit upload grid.
+ * @version 2.0 — Five-step wizard. Step 2 is the password pair.
+ *                Step 3 is the business details. Step 4 is branch
+ *                address + permit grid + terms. Step 5 is a review
+ *                summary before submit. Validators split into
+ *                validateStep1 through validateStep5. Address
+ *                filter applied to block / barangay / city /
+ *                province / region. Business Description wired to
+ *                capitalizeField().
+ *
+ *                (1.3: address-field class. 1.2:
+ *                business_description, dietary_tags, barangay,
+ *                province, region, postal_code required. 1.1:
+ *                permit upload grid. 1.0: initial.)
  */
 
 (function () {
@@ -34,12 +84,18 @@
         var email = document.getElementById('email');
         var contactNumber = document.getElementById('contact_number');
         var username = document.getElementById('username');
+
+        // Step 2 — Security
         var password = document.getElementById('password');
         var confirmPassword = document.getElementById('confirm_password');
 
-        // Step 2 — Business
+        // Step 3 — Business
         var businessName = document.getElementById('business_name');
         var cuisineType = document.getElementById('cuisine_type');
+        var businessDescription = document.getElementById('business_description');
+        var dietaryTags = document.getElementById('dietary_tags');
+
+        // Step 4 — Branch & Permits
         var branchName = document.getElementById('branch_name');
         var block = document.getElementById('block');
         var barangay = document.getElementById('barangay');
@@ -53,7 +109,7 @@
         var termsError = document.getElementById('termsError');
         var registerBtn = document.getElementById('registerBtn');
 
-        // Errors
+        // Error nodes
         var firstNameError = document.getElementById('firstNameError');
         var lastNameError = document.getElementById('lastNameError');
         var emailError = document.getElementById('emailError');
@@ -63,19 +119,27 @@
         var confirmError = document.getElementById('confirmError');
         var businessNameError = document.getElementById('businessNameError');
         var cuisineTypeError = document.getElementById('cuisineTypeError');
+        var businessDescriptionError = document.getElementById('businessDescriptionError');
+        var dietaryTagsError = document.getElementById('dietaryTagsError');
         var branchNameError = document.getElementById('branchNameError');
         var blockError = document.getElementById('blockError');
+        var barangayError = document.getElementById('barangayError');
         var cityError = document.getElementById('cityError');
+        var provinceError = document.getElementById('provinceError');
+        var regionError = document.getElementById('regionError');
         var postalError = document.getElementById('postalError');
         var permitsError = document.getElementById('permitsError');
 
-        var stepTitles = [
-            'Step 1 of 2 — Account Holder',
-            'Step 2 of 2 — Business Details'
-        ];
+        var STEP_TITLES = {
+            1: 'Step 1 of 5 — Account Holder',
+            2: 'Step 2 of 5 — Security',
+            3: 'Step 3 of 5 — Business Details',
+            4: 'Step 4 of 5 — Branch & Permits',
+            5: 'Step 5 of 5 — Review & Submit'
+        };
 
         var currentStep = 1;
-        var totalSteps = 2;
+        var totalSteps = 5;
         var isSubmitting = false;
 
         var NAME_PATTERN = /^[A-Za-z\s\-']+$/;
@@ -136,7 +200,7 @@
                 el.classList.remove('error');
             });
 
-            if (step === 2 && termsGroup) {
+            if (step === 4 && termsGroup) {
                 termsGroup.classList.remove('error');
                 if (termsError) {
                     termsError.textContent = '';
@@ -149,6 +213,41 @@
             if (el && typeof el.focus === 'function') {
                 setTimeout(function () { el.focus(); }, 80);
             }
+        }
+
+        function focusField(input) {
+            if (!input) return;
+            try { input.focus(); } catch (e) { /* noop */ }
+            if (typeof input.scrollIntoView === 'function') {
+                input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        /* ============================================
+           FIRST-LETTER CAPITALIZATION
+           ============================================ */
+
+        function capitalizeField(input) {
+            if (!input) return;
+
+            input.addEventListener('input', function () {
+                var original = this.value;
+                if (original.length === 0) return;
+
+                var first = original.charAt(0);
+                var upperFirst = first.toUpperCase();
+
+                if (first === upperFirst) return;
+
+                var caret = this.selectionStart;
+                this.value = upperFirst + original.slice(1);
+
+                if (caret !== null) {
+                    try {
+                        this.setSelectionRange(caret, caret);
+                    } catch (e) { /* noop */ }
+                }
+            });
         }
 
         /* ============================================
@@ -173,6 +272,37 @@
             input.addEventListener('blur', function () {
                 if (this.value.length > 0) {
                     var capitalized = this.value.replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+                    if (this.value !== capitalized) this.value = capitalized;
+                }
+            });
+        }
+
+        function setupAddressInput(input, errorEl) {
+            if (!input) return;
+
+            var allowed = /[^A-Za-z0-9\s\-',.\/#ñÑ]/g;
+            var wordStart = /(^|[\s\-'.\/,])([a-zñ])/g;
+
+            input.addEventListener('input', function () {
+                var start = this.selectionStart;
+                var filtered = this.value.replace(allowed, '');
+                var capitalized = filtered.replace(wordStart, function (m, p, c) {
+                    return p + c.toUpperCase();
+                });
+
+                if (this.value !== capitalized) {
+                    this.value = capitalized;
+                    var newStart = Math.min(start, this.value.length);
+                    try { this.setSelectionRange(newStart, newStart); } catch (e) { /* noop */ }
+                }
+                if (errorEl) clearFieldError(this, errorEl);
+            });
+
+            input.addEventListener('blur', function () {
+                if (this.value.length > 0) {
+                    var capitalized = this.value.replace(wordStart, function (m, p, c) {
+                        return p + c.toUpperCase();
+                    });
                     if (this.value !== capitalized) this.value = capitalized;
                 }
             });
@@ -226,15 +356,14 @@
         setupNameInput(firstName, firstNameError);
         setupNameInput(middleName, null);
         setupNameInput(lastName, lastNameError);
-
         setupNameInput(businessName, businessNameError);
         setupNameInput(branchName, branchNameError);
 
-        setupNameInput(block, blockError);
-        setupNameInput(barangay, null);
-        setupNameInput(city, cityError);
-        setupNameInput(province, null);
-        setupNameInput(region, null);
+        setupAddressInput(block, blockError);
+        setupAddressInput(barangay, barangayError);
+        setupAddressInput(city, cityError);
+        setupAddressInput(province, provinceError);
+        setupAddressInput(region, regionError);
 
         setupEmailInput(email);
         setupDigitsOnly(contactNumber, contactError);
@@ -242,6 +371,19 @@
         setupAlphanumOnly(password);
         setupAlphanumOnly(confirmPassword);
         setupPostal(postalCode);
+
+        capitalizeField(businessDescription);
+
+        if (businessDescription) {
+            businessDescription.addEventListener('input', function () {
+                clearFieldError(this, businessDescriptionError);
+            });
+        }
+        if (dietaryTags) {
+            dietaryTags.addEventListener('input', function () {
+                clearFieldError(this, dietaryTagsError);
+            });
+        }
 
         /* ============================================
            PASSWORD TOGGLES
@@ -473,6 +615,13 @@
                 valid = false;
             }
 
+            return valid;
+        }
+
+        function validateStep2() {
+            var valid = true;
+            clearStepErrors(2);
+
             var pwVal = password ? password.value : '';
             if (!pwVal) {
                 showFieldError(password, passwordError, 'Please create a password.');
@@ -497,9 +646,9 @@
             return valid;
         }
 
-        function validateStep2() {
+        function validateStep3() {
             var valid = true;
-            clearStepErrors(2);
+            clearStepErrors(3);
 
             var bnVal = businessName ? businessName.value.trim() : '';
             if (bnVal.length < 2) {
@@ -513,6 +662,25 @@
                 valid = false;
             }
 
+            var bdVal = businessDescription ? businessDescription.value.trim() : '';
+            if (bdVal.length < 2) {
+                showFieldError(businessDescription, businessDescriptionError, 'Business description is required.');
+                valid = false;
+            }
+
+            var dtVal = dietaryTags ? dietaryTags.value.trim() : '';
+            if (dtVal.length < 1) {
+                showFieldError(dietaryTags, dietaryTagsError, 'Dietary tags are required.');
+                valid = false;
+            }
+
+            return valid;
+        }
+
+        function validateStep4() {
+            var valid = true;
+            clearStepErrors(4);
+
             var brVal = branchName ? branchName.value.trim() : '';
             if (brVal.length < 2) {
                 showFieldError(branchName, branchNameError, 'Branch name is required.');
@@ -525,9 +693,36 @@
                 valid = false;
             }
 
+            var barangayVal = barangay ? barangay.value.trim() : '';
+            if (!barangayVal) {
+                showFieldError(barangay, barangayError, 'Barangay is required.');
+                valid = false;
+            }
+
             var cityVal = city ? city.value.trim() : '';
             if (!cityVal) {
                 showFieldError(city, cityError, 'City or municipality is required.');
+                valid = false;
+            }
+
+            var provinceVal = province ? province.value.trim() : '';
+            if (!provinceVal) {
+                showFieldError(province, provinceError, 'Province is required.');
+                valid = false;
+            }
+
+            var regionVal = region ? region.value.trim() : '';
+            if (!regionVal) {
+                showFieldError(region, regionError, 'Region is required.');
+                valid = false;
+            }
+
+            var postalVal = postalCode ? postalCode.value.trim() : '';
+            if (!postalVal) {
+                showFieldError(postalCode, postalError, 'Postal code is required.');
+                valid = false;
+            } else if (!/^[0-9]{3,10}$/.test(postalVal)) {
+                showFieldError(postalCode, postalError, 'Postal code must be 3–10 digits.');
                 valid = false;
             }
 
@@ -554,28 +749,93 @@
             return valid;
         }
 
-        function validateStep(step) {
-            switch (step) {
-                case 1: return validateStep1();
-                case 2: return validateStep2();
-                default: return true;
-            }
+        /**
+         * Step 5 is a read-only review. It has no inputs of its own.
+         * It re-runs every earlier step's validator and returns the
+         * number of the first failing step, or 0 when all pass.
+         *
+         * @returns {number}
+         */
+        function validateAllStepsBeforeReview() {
+            if (!validateStep1()) return 1;
+            if (!validateStep2()) return 2;
+            if (!validateStep3()) return 3;
+            if (!validateStep4()) return 4;
+            return 0;
+        }
+
+        /* ============================================
+           REVIEW SUMMARY
+           ============================================ */
+
+        function setText(id, value) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            el.textContent = value !== '' ? value : '—';
+        }
+
+        function buildReviewSummary() {
+            var fn = firstName ? firstName.value.trim() : '';
+            var mn = middleName ? middleName.value.trim() : '';
+            var ln = lastName ? lastName.value.trim() : '';
+
+            var fullName = [fn, mn, ln].filter(Boolean).join(' ');
+
+            setText('reviewName', fullName);
+            setText('reviewEmail', email ? email.value.trim() : '');
+            setText('reviewContact', contactNumber ? contactNumber.value.trim() : '');
+            setText('reviewUsername', username ? username.value.trim() : '');
+
+            setText('reviewBusinessName', businessName ? businessName.value.trim() : '');
+            setText('reviewCuisineType', cuisineType ? cuisineType.value.trim() : '');
+            setText('reviewDietaryTags', dietaryTags ? dietaryTags.value.trim() : '');
+
+            setText('reviewBranchName', branchName ? branchName.value.trim() : '');
+
+            var addressParts = [];
+            [block, barangay, city, province, region, postalCode].forEach(function (el) {
+                if (el && el.value.trim() !== '') {
+                    addressParts.push(el.value.trim());
+                }
+            });
+
+            setText('reviewBranchAddress', addressParts.join(', '));
+
+            var permitCount = fileObjects.length;
+            var permitText = permitCount === 0
+                ? '—'
+                : (permitCount === 1 ? '1 permit uploaded' : permitCount + ' permits uploaded');
+            setText('reviewPermitStatus', permitText);
         }
 
         /* ============================================
            STEP NAVIGATION
            ============================================ */
 
+        function validateStep(step) {
+            switch (step) {
+                case 1: return validateStep1();
+                case 2: return validateStep2();
+                case 3: return validateStep3();
+                case 4: return validateStep4();
+                default: return true;
+            }
+        }
+
         function goToStep(step) {
-            if (step > currentStep && !validateStep(currentStep)) {
-                return;
+            if (step < 1 || step > totalSteps) return;
+            if (step === currentStep) return;
+
+            if (step > currentStep) {
+                if (!validateStep(currentStep)) return;
             }
 
             currentStep = step;
             if (currentStepInput) currentStepInput.value = String(step);
 
-            steps.forEach(function (el, i) {
-                el.style.display = (i + 1 === step) ? 'block' : 'none';
+            steps.forEach(function (el) {
+                var isCurrent = (parseInt(el.id.replace('step', ''), 10) === step);
+                el.style.display = isCurrent ? 'block' : 'none';
             });
 
             progressSteps.forEach(function (el, i) {
@@ -588,11 +848,15 @@
                 el.classList.toggle('completed', i + 1 < step);
             });
 
-            if (stepSubtitle) {
-                stepSubtitle.textContent = stepTitles[step - 1] || ('Step ' + step + ' of ' + totalSteps);
+            if (stepSubtitle && STEP_TITLES[step]) {
+                stepSubtitle.textContent = STEP_TITLES[step];
             }
 
             hideBanner();
+
+            if (step === 5) {
+                buildReviewSummary();
+            }
 
             var stepEl = document.getElementById('step' + step);
             if (stepEl) {
@@ -710,22 +974,26 @@
            ============================================ */
 
         var SERVER_FIELD_MAP = {
-            first_name: { input: firstName, errorEl: firstNameError, step: 1 },
-            last_name: { input: lastName, errorEl: lastNameError, step: 1 },
-            email: { input: email, errorEl: emailError, step: 1 },
-            contact_number: { input: contactNumber, errorEl: contactError, step: 1 },
-            username: { input: username, errorEl: usernameError, step: 1 },
-            password: { input: password, errorEl: passwordError, step: 1 },
-            confirm_password: { input: confirmPassword, errorEl: confirmError, step: 1 },
-
-            business_name: { input: businessName, errorEl: businessNameError, step: 2 },
-            cuisine_type: { input: cuisineType, errorEl: cuisineTypeError, step: 2 },
-            branch_name: { input: branchName, errorEl: branchNameError, step: 2 },
-            block: { input: block, errorEl: blockError, step: 2 },
-            city: { input: city, errorEl: cityError, step: 2 },
-            postal_code: { input: postalCode, errorEl: postalError, step: 2 },
-            permits: { input: null, errorEl: permitsError, step: 2 },
-            terms: { input: null, errorEl: null, step: 2 }
+            first_name:            { input: firstName,           errorEl: firstNameError,           step: 1 },
+            last_name:             { input: lastName,            errorEl: lastNameError,            step: 1 },
+            email:                 { input: email,               errorEl: emailError,               step: 1 },
+            contact_number:        { input: contactNumber,       errorEl: contactError,             step: 1 },
+            username:              { input: username,            errorEl: usernameError,            step: 1 },
+            password:              { input: password,            errorEl: passwordError,            step: 2 },
+            confirm_password:      { input: confirmPassword,     errorEl: confirmError,             step: 2 },
+            business_name:         { input: businessName,        errorEl: businessNameError,        step: 3 },
+            cuisine_type:          { input: cuisineType,         errorEl: cuisineTypeError,         step: 3 },
+            business_description:  { input: businessDescription, errorEl: businessDescriptionError, step: 3 },
+            dietary_tags:          { input: dietaryTags,         errorEl: dietaryTagsError,         step: 3 },
+            branch_name:           { input: branchName,          errorEl: branchNameError,          step: 4 },
+            block:                 { input: block,               errorEl: blockError,               step: 4 },
+            barangay:              { input: barangay,            errorEl: barangayError,            step: 4 },
+            city:                  { input: city,                errorEl: cityError,                step: 4 },
+            province:              { input: province,            errorEl: provinceError,            step: 4 },
+            region:                { input: region,              errorEl: regionError,              step: 4 },
+            postal_code:           { input: postalCode,          errorEl: postalError,              step: 4 },
+            permits:               { input: null,                errorEl: permitsError,             step: 4 },
+            terms:                 { input: null,                errorEl: null,                     step: 4 }
         };
 
         /* ============================================
@@ -742,8 +1010,17 @@
                     return;
                 }
 
-                if (!validateStep1()) { goToStep(1); return; }
-                if (!validateStep2()) { goToStep(2); return; }
+                clearAllErrors();
+
+                var firstFailingStep = validateAllStepsBeforeReview();
+                if (firstFailingStep > 0) {
+                    console.warn(
+                        '[sign-up] Submit blocked: step ' + firstFailingStep + ' failed validation.'
+                    );
+                    showBanner('Step ' + firstFailingStep + ' needs attention. Please correct it before submitting.');
+                    goToStep(firstFailingStep);
+                    return;
+                }
 
                 isSubmitting = true;
                 if (registerBtn) {
@@ -785,7 +1062,7 @@
                                 termsError.style.display = 'block';
                             }
                             if (termsGroup) termsGroup.classList.add('error');
-                            goToStep(2);
+                            goToStep(4);
                             return;
                         }
 
@@ -803,6 +1080,9 @@
                             if (target.step < currentStep) {
                                 goToStep(target.step);
                             }
+                            setTimeout(function () {
+                                if (target.input) focusField(target.input);
+                            }, 120);
                             return;
                         }
 
@@ -817,6 +1097,13 @@
                         showBanner('An unexpected error occurred. Please try again.');
                     });
             });
+        }
+
+        function clearAllErrors() {
+            for (var s = 1; s <= totalSteps; s++) {
+                clearStepErrors(s);
+            }
+            hideBanner();
         }
 
         /* ============================================

@@ -15,10 +15,7 @@
  * Modal layout:
  *   Business Info tab  → sub-tabs: Details · Description
  *   Branches tab       → flat list of branch cards
- *   Permits tab        → flat list of restaurant_permit rows, each
- *                        rendered as an image preview with the
- *                        original filename as title and
- *                        display_order as a badge
+ *   Permits tab        → one card per filled permit file
  *   Accounts tab       → flat list of account holder cards
  *   Verification tab   → flat current-status summary
  *
@@ -30,16 +27,47 @@
  *     denied    → [Verify] [Suspend]
  *     suspended → [Remove Suspension]  (returns to 'pending')
  *
+ * ---------------------------------------------------------------------
+ * PERMITS TAB
+ * ---------------------------------------------------------------------
+ * The restaurant role's re-apply handler stores permits in a single
+ * per-restaurant folder with five fixed file names:
+ *
+ *     shared/uploads/restaurant/permits/<restaurant_id>/
+ *         permit-1.jpg
+ *         permit-2.png
+ *         permit-3.webp
+ *         permit-4.jpg
+ *         permit-5.png
+ *
+ * getRestaurantPermits() in admin-queries.php returns five entries
+ * keyed 1..5. Each entry carries:
+ *
+ *     slot        1..5
+ *     filename    the file for that permit, or ''
+ *     url         project-root-relative URL, or ''
+ *     folder      the folder path as stored, ending with a slash
+ *     has_permit  true when a file exists for the permit
+ *
+ * This page renders ONE card per permit that actually has a file.
+ * A permit with no file produces no output. If no permits exist at
+ * all, the tab shows the existing "No permits on file" empty state.
+ *
+ * The user-facing label for each card is `permit-N`, where N is the
+ * slot index. The tab badge reports how many permits are on file.
+ *
  * No inline CSS. No inline JS. Styles come from admin-tables.css
  * plus the compact-override block at the end of restaurants.css.
  * Behaviour comes from the shared admin-modal.js.
  *
  * @package FitPal
- * @version 12.0 — Page header markup adjusted so the title is
- *                 top-left and the back button is top-right,
- *                 matching the customer role's pattern and the
- *                 admin-tables.css layout.
- *                 (10.0: Footer is state-driven.)
+ * @version 14.0 — Permits tab renders one card per filled permit,
+ *                 skipping empty slots entirely, and labels each
+ *                 card `permit-N`. The tab badge reports the count
+ *                 of filled permits.
+ *
+ *                 (13.0: slot-based iteration. 12.0: page header
+ *                 markup. 10.0: state-driven footer.)
  */
 declare(strict_types=1);
 
@@ -76,13 +104,21 @@ $openRestaurant = null;
 $openBranches = [];
 $openAccounts = [];
 $openPermits = [];
+$openPermitFilled = [];
 
 if ($openId > 0) {
     $openRestaurant = getRestaurantDetails($database_connection, $openId);
     if ($openRestaurant) {
         $openBranches = getRestaurantBranches($database_connection, $openId);
         $openAccounts = getRestaurantAccounts($database_connection, $openId);
-        $openPermits  = getRestaurantPermits($database_connection, $openId);
+
+        $allSlots = getRestaurantPermits($database_connection, $openId);
+
+        foreach ($allSlots as $slotEntry) {
+            if (!empty($slotEntry['has_permit'])) {
+                $openPermitFilled[] = $slotEntry;
+            }
+        }
     }
 }
 
@@ -350,7 +386,7 @@ function buildRestaurantUrl(array $overrides = []): string
                 Branches <span class="tab-count"><?php echo count($openBranches); ?></span>
             </button>
             <button type="button" class="admin-modal-tab" data-tab="permits" role="tab">
-                Permits <span class="tab-count"><?php echo count($openPermits); ?></span>
+                Permits <span class="tab-count"><?php echo count($openPermitFilled); ?></span>
             </button>
             <button type="button" class="admin-modal-tab" data-tab="accounts" role="tab">
                 Accounts <span class="tab-count"><?php echo count($openAccounts); ?></span>
@@ -492,33 +528,30 @@ function buildRestaurantUrl(array $overrides = []): string
                     <img src="<?php echo $assetBase; ?>assets/images/icons/file-image-fill.svg" alt="" width="14"
                         height="14" class="btn-icon-no-filter">
                     Permits &amp; Documents
-                    <span class="section-count"><?php echo count($openPermits); ?></span>
+                    <span class="section-count"><?php echo count($openPermitFilled); ?></span>
                 </h3>
-                <?php if (empty($openPermits)): ?>
+
+                <?php if (empty($openPermitFilled)): ?>
                 <div class="admin-doc-empty">
                     <img src="<?php echo $assetBase; ?>assets/images/icons/file-image-fill.svg" alt="">
                     <span>No permits on file.</span>
                 </div>
                 <?php else: ?>
-                <?php foreach ($openPermits as $permit):
-                    $permitUrl = adminAssetUrl($assetBase, (string)$permit['file_path']);
-                ?>
+                <?php foreach ($openPermitFilled as $permit): ?>
                 <div class="admin-doc-block">
                     <div class="admin-doc-head">
                         <p class="admin-doc-title">
-                            <?php echo htmlspecialchars((string)$permit['original_name'], ENT_QUOTES, 'UTF-8'); ?>
+                            permit-<?php echo (int)$permit['slot']; ?>
                         </p>
                         <div class="admin-doc-meta">
                             <span class="badge badge-secondary">
-                                #<?php echo (int)$permit['display_order']; ?>
+                                <?php echo htmlspecialchars((string)$permit['filename'], ENT_QUOTES, 'UTF-8'); ?>
                             </span>
-                            <span>Uploaded:
-                                <?php echo htmlspecialchars(formatAdminDateShort((string)$permit['created_at']), ENT_QUOTES, 'UTF-8'); ?></span>
                         </div>
                     </div>
                     <div class="admin-doc-image">
-                        <img src="<?php echo htmlspecialchars($permitUrl, ENT_QUOTES, 'UTF-8'); ?>"
-                            alt="<?php echo htmlspecialchars((string)$permit['original_name'], ENT_QUOTES, 'UTF-8'); ?>">
+                        <img src="<?php echo htmlspecialchars((string)$permit['url'], ENT_QUOTES, 'UTF-8'); ?>"
+                            alt="permit-<?php echo (int)$permit['slot']; ?>">
                     </div>
                 </div>
                 <?php endforeach; ?>

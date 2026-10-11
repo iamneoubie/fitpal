@@ -301,6 +301,7 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
     <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/global.css">
     <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/header.css">
     <link rel="stylesheet" href="../assets/css/header.css">
+    <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/format-date.css">
     <link rel="stylesheet" href="../assets/css/admin-shared.css">
 
     <?php if ($pageCssPath !== ''): ?>
@@ -476,6 +477,8 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
             </div>
         </div>
     </div>
+
+    <script src="<?php echo $assetBase; ?>assets/ui/js/format-date.js" defer></script>
 
     <main class="main-content" role="main">
 

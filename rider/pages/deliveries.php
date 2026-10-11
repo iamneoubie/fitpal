@@ -48,6 +48,41 @@
  * delivered_at and is not re-evaluated by the poll.
  *
  * ---------------------------------------------------------------------
+ * PAGE-LOCAL VIEW HELPERS
+ * ---------------------------------------------------------------------
+ * This page declares a small set of functions and one closure that
+ * shape values for display and that nothing else in the rider role
+ * uses. They are declared in this file rather than in the query
+ * layer because they are view-layer concerns; the query layer
+ * returns rows, and the view decides how to render them.
+ *
+ *   formatRiderDate()          timestamp → "M d, g:i A"
+ *   getDeliveryStatusClass()   order status → badge class
+ *   getDeliveryStatusLabel()   order status → display label
+ *   truncateText()             string → ellipsized string
+ *   historyRowMessageable()    delivered_at → bool
+ *   historyRowWindowEndsMs()   delivered_at → epoch ms
+ *   $formatCurrency            number → "₱1,234.56"
+ *
+ * truncateText() and the currency formatter were both formerly
+ * helpers in rider/backend/database/rider-assignment-queries.php.
+ * Both were removed in that file's v16.0 cleanup on the grounds
+ * that each is a one-line expression to be inlined at its call
+ * sites, and both call-site sweeps were incomplete:
+ *
+ *   - truncateText() was still called on this page's Assigned tab.
+ *     It is restored here as a page-local function.
+ *
+ *   - formatRiderCurrency() was still called on this page's Active
+ *     and Assigned tabs. It is replaced here by a page-local
+ *     $formatCurrency closure, matching the pattern already used by
+ *     dashboard.php and earnings.php. The closure body is identical
+ *     to the one on those two pages.
+ *
+ * Keeping both helpers in this file means a change to the query
+ * layer cannot orphan this page a third time.
+ *
+ * ---------------------------------------------------------------------
  * AVAILABILITY-CHANGE REACTIONS
  * ---------------------------------------------------------------------
  * The assignment panel fires a rider:availability-changed event
@@ -65,26 +100,6 @@
  * defaults to treating the rider as verified.
  *
  * ---------------------------------------------------------------------
- * WHERE THE STATUSES ON THIS PAGE COME FROM
- * ---------------------------------------------------------------------
- * Every status this page reads is written by the shared
- * order-transaction layer:
- *
- *     shared/backend/database/order-transaction-queries.php
- *
- *   'rider_pending'  set by the kitchen's assignRiderToOrder().
- *   'picking_up'     set by the rider's accept path.
- *   'delivering'     set by the rider's mark-picked-up transition.
- *   'delivered'      set by the rider's mark-delivered transition.
- *   'failed'         set by sweepFailedDeliveries().
- *   'cancelled' and
- *   'refunded'       set by the customer or restaurant cancel paths.
- *
- * The per-delivery earning shown on every card is read from the
- * shared fee schedule (FITPAL_DELIVERY_BASE_FEE), the same constant
- * the shared layer uses when it writes the delivery credit.
- *
- * ---------------------------------------------------------------------
  * POST-DELIVERY MESSAGING WINDOW (1 HOUR)
  * ---------------------------------------------------------------------
  * A delivered order stays messageable for one hour after delivery.
@@ -99,21 +114,28 @@
  * the buttons once the window elapses.
  *
  * @package FitPal
- * @version 5.6 — Emits `isVerified` on the page's
- *                window.FITPAL_RIDER_DELIVERIES config object so
- *                deliveries.js can decide whether an empty state's
- *                copy is availability-driven or verification-driven
- *                before it rewrites that copy in response to the
- *                rider:availability-changed event.
+ * @version 5.8 — Replaces every formatRiderCurrency() call with the
+ *                page-local $formatCurrency closure, matching the
+ *                pattern already used by dashboard.php and
+ *                earnings.php. The function was a v16.0 removal
+ *                from rider-assignment-queries.php that was
+ *                supposed to be inlined at its call sites; the
+ *                currency call sites on this page were missed and
+ *                the page fataled with a Call to undefined function
+ *                error. Declaring the closure here means a change
+ *                to the query layer cannot orphan the page again.
+ *                The truncateText() declaration added in 5.7 is
+ *                retained unchanged.
  *
- *                (5.5: the History panel's content is now rendered
- *                on every request, with no server-side
- *                `?tab=history` guard. 5.4: asset paths on this
- *                page use $assetBase. History tab renders Message
- *                buttons for delivered orders within the 1-hour
- *                window. 5.3: Active and Assigned panels gain a
- *                client-side poll. 5.2: docblock records the
- *                shared layer. 5.1: 'picking_up' added to Active.)
+ *                (5.7: declares truncateText() locally. 5.6: emits
+ *                `isVerified` on the page's config object. 5.5:
+ *                History panel content rendered on every request.
+ *                5.4: asset paths on this page use $assetBase;
+ *                History tab renders Message buttons for delivered
+ *                orders within the 1-hour window. 5.3: Active and
+ *                Assigned panels gain a client-side poll. 5.2:
+ *                docblock records the shared layer. 5.1:
+ *                'picking_up' added to Active.)
  */
 
 declare(strict_types=1);
@@ -150,7 +172,7 @@ $riderPayoutPerDelivery = FITPAL_DELIVERY_BASE_FEE;
 /**
  * Post-delivery messaging grace window, in seconds.
  *
- * Matches FITPAL_RIDER_FAILED_DELIVERY_GRACE_SECONDS in
+ * Matches FITPAL_RIDER_MESSAGE_GRACE_SECONDS in
  * shared/backend/database/fee-queries.php so the two windows that
  * bracket a delivery have the same length. Referenced here as a
  * view-layer constant: the page decides whether to render the
@@ -257,6 +279,51 @@ function getDeliveryStatusLabel(string $status): string
         default         => ucfirst($status),
     };
 }
+
+/**
+ * Shorten a display string to at most $max characters, appending an
+ * ellipsis when the input was longer.
+ *
+ * Used on the Assigned tab's drop-off address line. A destination
+ * address is the only unbounded string on a card row; without a
+ * cap, a long address wraps to several lines and pushes the
+ * action buttons out of the card's fixed vertical rhythm.
+ *
+ * The ellipsis is a single U+2026 HORIZONTAL ELLIPSIS character, not
+ * three periods. When the input is at or under the limit, the input
+ * is returned unchanged and no ellipsis is appended.
+ *
+ * @param string $text
+ * @param int    $max  Maximum length in bytes before truncation.
+ * @return string
+ */
+function truncateText(string $text, int $max = 70): string
+{
+    if ($max <= 0) {
+        return '';
+    }
+
+    if (strlen($text) <= $max) {
+        return $text;
+    }
+
+    return rtrim(substr($text, 0, $max - 1)) . "\u{2026}";
+}
+
+/**
+ * Currency formatter for every peso amount on this page.
+ *
+ * The rider role has no shared formatter file. Each of the three
+ * rider pages that renders a peso amount — dashboard.php,
+ * earnings.php, and this one — declares its own closure with this
+ * exact body. The closure body matches the two sibling pages
+ * byte-for-byte so a reader can compare them side by side.
+ *
+ * @var callable(int|float|string|null): string
+ */
+$formatCurrency = static function (int|float|string|null $amount): string {
+    return '₱' . number_format((float)($amount ?? 0), 2);
+};
 
 require_once __DIR__ . '/../includes/header.php';
 
@@ -445,12 +512,12 @@ $historyGraceSeconds = FITPAL_RIDER_MESSAGE_GRACE_SECONDS;
                         </span>
                         <span class="rider-fact">
                             <span class="rider-fact-label">Order</span>
-                            <span class="rider-fact-value"><?php echo formatRiderCurrency($orderTotal); ?></span>
+                            <span class="rider-fact-value"><?php echo $formatCurrency($orderTotal); ?></span>
                         </span>
                         <span class="rider-fact">
                             <span class="rider-fact-label">Your Earning</span>
                             <span class="rider-fact-value rider-fact-value-highlight">
-                                <?php echo formatRiderCurrency($riderPayoutPerDelivery); ?>
+                                <?php echo $formatCurrency($riderPayoutPerDelivery); ?>
                             </span>
                         </span>
                     </div>
@@ -594,12 +661,12 @@ $historyGraceSeconds = FITPAL_RIDER_MESSAGE_GRACE_SECONDS;
                         </span>
                         <span class="rider-fact">
                             <span class="rider-fact-label">Order</span>
-                            <span class="rider-fact-value"><?php echo formatRiderCurrency($orderTotal); ?></span>
+                            <span class="rider-fact-value"><?php echo $formatCurrency($orderTotal); ?></span>
                         </span>
                         <span class="rider-fact">
                             <span class="rider-fact-label">Your Earning</span>
                             <span class="rider-fact-value rider-fact-value-highlight">
-                                <?php echo formatRiderCurrency($riderPayoutPerDelivery); ?>
+                                <?php echo $formatCurrency($riderPayoutPerDelivery); ?>
                             </span>
                         </span>
                     </div>
@@ -740,7 +807,7 @@ $historyGraceSeconds = FITPAL_RIDER_MESSAGE_GRACE_SECONDS;
                                 <?php echo getDeliveryStatusLabel($orderStatus); ?>
                             </span>
                             <p class="rider-history-earning">
-                                <?php echo $isDelivered ? '+' : ''; ?><?php echo formatRiderCurrency($isDelivered ? $riderPayoutPerDelivery : 0); ?>
+                                <?php echo $isDelivered ? '+' : ''; ?><?php echo $formatCurrency($isDelivered ? $riderPayoutPerDelivery : 0); ?>
                             </p>
                         </div>
                     </div>

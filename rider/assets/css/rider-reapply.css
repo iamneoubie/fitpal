@@ -1,65 +1,52 @@
 /**
  * FitPal Rider Re-Application Page Styles
  *
- * Stylesheet for rider/pages/reapply.php. Purpose-built, not shared
- * with sign-up.css.
+ * Six-step wizard. Progress bar holds six `.progress-step` nodes
+ * connected by five `.progress-line` nodes.
+ *
+ * Purpose-built, not shared with sign-up.css.
  *
  * ---------------------------------------------------------------------
  * WHY THIS FILE EXISTS SEPARATELY FROM sign-up.css
  * ---------------------------------------------------------------------
- * sign-up.php and reapply.php both render a five-step wizard. The
- * two pages share the same field classes and the same progress-bar
- * classes, but sign-up.css is loaded by
- * rider/includes/header.php only when the current page is
- * sign-up.php, and reapply.php is not in the header's
- * $pageCssMap. reapply.php therefore emits its own <link> to this
- * file.
+ * sign-up.php and rider-reapply.php both render a six-step wizard.
+ * The two pages share the same field classes, the same progress-bar
+ * classes, and the same review-summary classes, but sign-up.css is
+ * loaded by rider/includes/header.php only when the current page is
+ * sign-up.php, and rider-reapply.php is not in the header's
+ * $pageCssMap. rider-reapply.php therefore emits its own <link> to
+ * this file.
  *
  * The rules below are the same rules sign-up.css has, except for
  * two differences:
  *
- *   - The wizard-only rules (.register-progress, .progress-step,
- *     .progress-line, .register-step, and the stepFade keyframe)
- *     were missing from v1.0 of this file, because v1.0 styled a
- *     single form. They are present in v2.0.
- *
  *   - There is no rule that styles a `.btn-next` button's disabled
- *     state from a wizard gate, because reapply.php does not
- *     disable the Next buttons. The rider can move between steps
- *     freely; only the final submit runs the full validation.
+ *     state from a wizard gate, because rider-reapply.php does not
+ *     disable the Next buttons.
  *
- * If you change sign-up.css's progress bar, and you want the
- * reapply wizard to track the change, you edit this file too. The
- * two are intentionally not coupled by an import.
+ *   - There is no password-toggle rule. The re-apply page does not
+ *     collect a password.
  *
- * ---------------------------------------------------------------------
- * DESIGN TOKENS
- * ---------------------------------------------------------------------
- * Every color, radius, spacing value, and font size in this file is
- * drawn from the CSS variables declared in
- * shared/assets/css/global.css.
+ * If you change sign-up.css's progress bar or review summary, and
+ * you want the reapply wizard to track the change, you edit this
+ * file too. The two are intentionally not coupled by an import.
  *
  * ---------------------------------------------------------------------
- * VEHICLE-TYPE-DEPENDENT VISIBILITY
+ * REVIEW SUMMARY — STEP 6
  * ---------------------------------------------------------------------
- * The vehicle-type-dependent rules at the bottom of this file are
- * unchanged from v1.0. They key on the page-level attribute
- * `.register-page[data-vehicle-type="bicycle"]`, written by
- * reapply.js.
- *
- * ---------------------------------------------------------------------
- * TEXTAREA
- * ---------------------------------------------------------------------
- * No <textarea> appears on this page.
+ * Step 6 renders the same review-summary block sign-up.php renders.
+ * rider-reapply.js fills every `.review-value` slot the moment Step 6
+ * becomes visible. The rules for the block are byte-identical to the
+ * ones in sign-up.css.
  *
  * @package FitPal
- * @version 2.0 — Adds the wizard rules that v1.0 omitted: the
- *                progress bar, the .register-step wrapper and its
- *                fade-in animation, and the .active / .completed
- *                states. No rule from v1.0 changed.
+ * @version 5.0 — Six-step wizard. Progress-bar geometry widened
+ *                slightly at every breakpoint so six step labels
+ *                fit cleanly.
  *
- *                (1.0: initial reapply.css for the single-form
- *                layout.)
+ *                (4.0: review-summary block added. 3.0:
+ *                password-wrapper rules removed. 2.0: wizard rules
+ *                added. 1.0: initial reapply.css.)
  */
 
 /* ============================================
@@ -108,7 +95,7 @@
 }
 
 /* ============================================
-   PROGRESS — FIVE STEPS
+   PROGRESS — SIX STEPS
    ============================================ */
 
 .register-progress {
@@ -116,7 +103,7 @@
     align-items: center;
     justify-content: space-between;
     margin-bottom: 30px;
-    padding: 0 6px;
+    padding: 0 4px;
 }
 
 .progress-step {
@@ -130,8 +117,8 @@
 }
 
 .progress-step .step-number {
-    width: 32px;
-    height: 32px;
+    width: 30px;
+    height: 30px;
     border-radius: var(--radius-full);
     background: var(--gray-200);
     color: var(--gray-500);
@@ -139,7 +126,7 @@
     align-items: center;
     justify-content: center;
     font-weight: var(--font-weight-bold);
-    font-size: var(--font-size-xs);
+    font-size: 11px;
     transition: all var(--transition-base);
     flex-shrink: 0;
 }
@@ -156,7 +143,7 @@
 }
 
 .progress-step .step-label {
-    font-size: 10px;
+    font-size: 9px;
     color: var(--gray-400);
     text-align: center;
     font-weight: var(--font-weight-medium);
@@ -177,10 +164,10 @@
     flex: 1;
     height: 2px;
     background: var(--gray-200);
-    margin: 0 3px;
+    margin: 0 2px;
     position: relative;
-    top: -14px;
-    min-width: 8px;
+    top: -13px;
+    min-width: 6px;
 }
 
 .progress-line.completed {
@@ -375,44 +362,60 @@
 }
 
 /* ============================================
-   PASSWORD TOGGLE
+   REVIEW SUMMARY — STEP 6
    ============================================ */
 
-.password-wrapper {
-    position: relative;
-    width: 100%;
-}
-
-.password-wrapper .form-control {
-    padding-right: 48px;
-}
-
-.password-toggle {
-    position: absolute;
-    right: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 6px;
+.review-summary {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    opacity: 0.5;
-    transition: opacity var(--transition-fast);
-    border-radius: var(--radius-sm);
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 20px;
 }
 
-.password-toggle:hover {
-    opacity: 1;
-    background: rgba(0, 0, 0, 0.04);
+.review-section {
+    padding: 14px 16px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
 }
 
-.password-toggle img {
-    width: 20px;
-    height: 20px;
-    display: block;
+.review-section-title {
+    margin: 0 0 8px 0;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+
+.review-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    font-size: var(--font-size-sm);
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--gray-200);
+}
+
+.review-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.review-label {
+    color: var(--gray-500);
+    font-weight: var(--font-weight-semibold);
+    flex-shrink: 0;
+    min-width: 120px;
+}
+
+.review-value {
+    color: var(--text);
+    text-align: right;
+    word-break: break-word;
+    flex: 1;
+    font-weight: var(--font-weight-medium);
 }
 
 /* ============================================
@@ -970,6 +973,15 @@
         margin-bottom: 14px;
     }
 
+    .review-label {
+        min-width: 100px;
+        font-size: var(--font-size-xs);
+    }
+
+    .review-value {
+        font-size: var(--font-size-xs);
+    }
+
     .step-actions {
         flex-direction: column;
         gap: 10px;
@@ -983,13 +995,13 @@
 
     .register-progress {
         padding: 0 2px;
-        gap: 2px;
+        gap: 1px;
         margin-bottom: 22px;
     }
 
     .progress-step .step-number {
-        width: 26px;
-        height: 26px;
+        width: 24px;
+        height: 24px;
         font-size: 10px;
     }
 
@@ -998,8 +1010,9 @@
     }
 
     .progress-line {
-        top: -12px;
-        margin: 0 2px;
+        top: -11px;
+        margin: 0 1px;
+        min-width: 4px;
     }
 
     .upload-block-grid {
@@ -1053,6 +1066,27 @@
         font-size: var(--font-size-xs);
     }
 
+    .review-section {
+        padding: 12px 14px;
+    }
+
+    .review-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        padding: 5px 0;
+    }
+
+    .review-label {
+        min-width: 0;
+        font-size: 10px;
+    }
+
+    .review-value {
+        text-align: left;
+        font-size: var(--font-size-xs);
+    }
+
     .step-actions {
         flex-direction: column;
         align-items: stretch;
@@ -1075,8 +1109,8 @@
     }
 
     .progress-step .step-number {
-        width: 22px;
-        height: 22px;
+        width: 20px;
+        height: 20px;
         font-size: 9px;
     }
 
@@ -1085,9 +1119,9 @@
     }
 
     .progress-line {
-        top: -10px;
-        margin: 0 1px;
-        min-width: 4px;
+        top: -9px;
+        margin: 0 0.5px;
+        min-width: 2px;
     }
 
     .terms-group {
@@ -1210,13 +1244,14 @@
     }
 
     .progress-step .step-number {
-        width: 20px;
-        height: 20px;
+        width: 18px;
+        height: 18px;
         font-size: 8px;
     }
 
     .progress-line {
-        min-width: 3px;
+        min-width: 2px;
+        top: -8px;
     }
 
     .upload-block-body .upload-dropzone {
@@ -1254,9 +1289,13 @@
     .progress-step .step-number,
     .progress-step .step-label,
     .step-actions .btn,
-    .password-toggle,
     .terms-group,
     .custom-checkbox,
+    .review-summary,
+    .review-section,
+    .review-row,
+    .review-label,
+    .review-value,
     .upload-dropzone,
     .upload-remove {
         transition: none !important;

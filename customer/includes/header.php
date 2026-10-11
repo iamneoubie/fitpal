@@ -331,6 +331,7 @@ $customerHandlerEndpoint = '../backend/handlers/profile-handler.php';
 
     <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/global.css">
     <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/header.css">
+    <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/format-date.css">
     <link rel="stylesheet" href="../assets/css/header.css">
 
     <?php if (!empty($pageCssPath)): ?>
@@ -585,6 +586,7 @@ $customerHandlerEndpoint = '../backend/handlers/profile-handler.php';
     window.FITPAL_ASSET_BASE = '<?php echo $assetBase; ?>';
     window.CUSTOMER_HANDLER_ENDPOINT = '<?php echo htmlspecialchars($customerHandlerEndpoint, ENT_QUOTES, 'UTF-8'); ?>';
     </script>
+    <script src="<?php echo $assetBase; ?>assets/ui/js/format-date.js" defer></script>
 
     <main class="main-content" role="main">
 

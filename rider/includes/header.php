@@ -29,7 +29,7 @@
  * ---------------------------------------------------------------------
  * SHARED RIDER CHROME
  * ---------------------------------------------------------------------
- * On every authenticated rider page EXCEPT reapply.php, this
+ * On every authenticated rider page EXCEPT rider-reapply.php, this
  * header pulls in FOUR things:
  *
  *   1. rider/includes/rider-chat-modal.php
@@ -37,14 +37,14 @@
  *   3. <script src="../assets/ui/js/rider-chat-modal.js">
  *   4. <script src="../assets/ui/js/assignment-panel.js">
  *
- * On reapply.php, only the chat modal and its script are pulled in.
- * The assignment panel is suppressed: a rider filling out a
- * re-application form has no live assignments to manage, and the
- * panel's bottom-anchored overlay would sit on top of the form's
- * submit buttons on small viewports.
+ * On rider-reapply.php, only the chat modal and its script are
+ * pulled in. The assignment panel is suppressed: a rider filling
+ * out a re-application form has no live assignments to manage, and
+ * the panel's bottom-anchored overlay would sit on top of the
+ * form's submit buttons on small viewports.
  *
- * The chat modal is NOT suppressed on reapply.php. It is inert
- * until opened, and a rider mid-application may still want to
+ * The chat modal is NOT suppressed on rider-reapply.php. It is
+ * inert until opened, and a rider mid-application may still want to
  * message the kitchen about an unrelated delivery that has not yet
  * been reassigned. The two components are independent and this
  * header treats them independently.
@@ -53,11 +53,12 @@
  * PAGE-SPECIFIC CSS
  * ---------------------------------------------------------------------
  * $pageCssMap maps a page's basename to a stylesheet under
- * rider/assets/css/. reapply.php is deliberately NOT in the map:
- * it emits its own <link> to rider/assets/css/reapply.css directly
- * in its own markup, because reapply.css is a purpose-built file
- * and not a shared one. Do not add reapply.php to this map unless
- * you also remove the <link> from reapply.php, or the page will
+ * rider/assets/css/. rider-reapply.php is deliberately NOT in the
+ * map: it emits its own <link> to
+ * rider/assets/css/rider-reapply.css directly in its own markup,
+ * because rider-reapply.css is a purpose-built file and not a
+ * shared one. Do not add rider-reapply.php to this map unless you
+ * also remove the <link> from rider-reapply.php, or the page will
  * load two stylesheets whose rules overlap.
  *
  * ---------------------------------------------------------------------
@@ -97,32 +98,27 @@
  *
  * For those four, the ?v= query string is `(string)time()` on
  * every request. Stylesheets and every other script keep the
- * content-hash version. See the file's earlier revisions for the
- * full rationale.
+ * content-hash version.
  *
  * @package FitPal
- * @version 6.1 — The assignment panel and its script are no longer
- *                included on reapply.php. The chat modal and its
- *                script are still included everywhere. The
- *                suppression is a single basename check on
- *                $_SERVER['PHP_SELF']; no flag and no per-page
- *                variable is introduced.
+ * @version 6.2 — The assignment-panel suppression check now names
+ *                rider-reapply.php, not reapply.php. The file was
+ *                renamed; the previous check would have stopped
+ *                suppressing the panel, and the panel would have
+ *                rendered on top of the re-application form.
  *
- *                (6.0: the four live rider scripts are fetched
- *                fresh on every page load. 5.0: content-hash
- *                version for assets. 4.0: automatic idle logout
+ *                (6.1: suppressed panel on reapply.php. 6.0: four
+ *                live rider scripts fetched fresh. 5.0:
+ *                content-hash version. 4.0: automatic idle logout
  *                removed. 3.0: per-role session migration. 2.8:
  *                added #riderBlockSignOutModal. 2.6: avatar picture
- *                support. 2.5: version helper appended filesize().)
+ *                support.)
  */
 
 declare(strict_types=1);
 
 // ---------------------------------------------------------------------
 // PRECONDITION CHECK
-//
-// Under Option B, the rider session must be the active session
-// before this header can render.
 // ---------------------------------------------------------------------
 
 if (!function_exists('fitpal_session_current_context')) {
@@ -194,11 +190,6 @@ require_once __DIR__ . '/../backend/database/rider-connect.php';
 // PATH DETECTION
 // ---------------------------------------------------------------------
 
-/**
- * Get the base path to shared/ from the currently executing page.
- *
- * @return string Asset base path ending with 'shared/'
- */
 function getRiderAssetBase(): string
 {
     $scriptPath = $_SERVER['SCRIPT_NAME'];
@@ -216,13 +207,6 @@ $assetBase = getRiderAssetBase();
 
 $isDevEnv = (getenv('APP_ENV') === 'development');
 
-/**
- * Build the cache-busting version string for a cached asset.
- *
- * @param string $absolutePath
- * @param bool   $isDevEnv
- * @return string
- */
 function riderAssetVersion(string $absolutePath, bool $isDevEnv): string
 {
     if ($isDevEnv) {
@@ -242,12 +226,6 @@ function riderAssetVersion(string $absolutePath, bool $isDevEnv): string
     return substr($hash, 0, 12);
 }
 
-/**
- * Build the cache-busting version string for a script that is
- * always fetched fresh.
- *
- * @return string
- */
 function riderFreshAssetVersion(): string
 {
     return (string)time();
@@ -338,9 +316,8 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 // ---------------------------------------------------------------------
 // PAGE-SPECIFIC CSS PRELOADING
 //
-// reapply.php is deliberately absent from this map. It emits its own
-// <link> to reapply.css directly in its own markup. See the file
-// header for the rationale.
+// rider-reapply.php is deliberately absent from this map. It emits
+// its own <link> to rider-reapply.css directly in its own markup.
 // ---------------------------------------------------------------------
 
 $pageCssMap = [
@@ -372,17 +349,16 @@ $riderAssignmentEndpoint = '../../rider/backend/handlers/assignment-handler.php'
 // ASSIGNMENT PANEL VISIBILITY
 //
 // The assignment panel is chrome for pages where the rider is
-// working live orders. On reapply.php the rider is filling out a
-// form, not managing assignments, and the panel's fixed-position
-// overlay would sit on top of the form's own action buttons on
-// small viewports.
+// working live orders. On rider-reapply.php the rider is filling
+// out a form, not managing assignments, and the panel's fixed-
+// position overlay would sit on top of the form's own action
+// buttons on small viewports.
 //
 // The chat modal is independent of the assignment panel and is
-// NOT suppressed by this flag. A rider mid-application may still
-// want to message the kitchen.
+// NOT suppressed by this flag.
 // ---------------------------------------------------------------------
 
-$showAssignmentPanel = ($currentPage !== 'reapply.php');
+$showAssignmentPanel = ($currentPage !== 'rider-reapply.php');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -398,6 +374,7 @@ $showAssignmentPanel = ($currentPage !== 'reapply.php');
 
     <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/global.css?v=<?php echo $sharedGlobalVer; ?>">
     <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/header.css?v=<?php echo $sharedHeaderVer; ?>">
+    <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/format-date.css">
     <link rel="stylesheet" href="../assets/css/header.css?v=<?php echo $riderHeaderVer; ?>">
 
     <?php if (!empty($pageCssPath)): ?>
@@ -621,6 +598,7 @@ $showAssignmentPanel = ($currentPage !== 'reapply.php');
     window.RIDER_ASSIGNMENT_CSRF = '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>';
     window.RIDER_HANDLER_ENDPOINT = '../backend/handlers/rider-handler.php';
     </script>
+    <script src="<?php echo $assetBase; ?>assets/ui/js/format-date.js" defer></script>
 
     <main class="main-content" role="main">
 
@@ -634,11 +612,9 @@ $showAssignmentPanel = ($currentPage !== 'reapply.php');
         // SHARED RIDER CHROME
         //
         // Chat modal:  always rendered on authenticated pages.
-        // Assignment panel: rendered everywhere EXCEPT reapply.php.
-        // See the ASSIGNMENT PANEL VISIBILITY section above.
+        // Assignment panel: rendered everywhere EXCEPT rider-reapply.php.
         // ============================================================
 
-        // 1. Chat modal markup. One instance per page.
         require_once __DIR__ . '/rider-chat-modal.php';
         ?>
 
@@ -647,7 +623,6 @@ $showAssignmentPanel = ($currentPage !== 'reapply.php');
         <?php if ($showAssignmentPanel): ?>
 
         <?php
-        // 2. Assignment panel markup + its notification modal.
         require_once __DIR__ . '/assignment-panel.php';
         ?>
 

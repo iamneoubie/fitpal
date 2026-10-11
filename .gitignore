@@ -12,6 +12,7 @@ logs/output
 logs/tree-mapper/
 *env
 *txt
-/shared/uploads/*
+shared/uploads/*
+out/*
 logs/content-fetcher-configuration/all_path.py
 logs/content-fetcher-configuration/all_path.py

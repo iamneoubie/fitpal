@@ -1,0 +1,1241 @@
+/**
+ * FitPal Restaurant Re-Application Styles
+ *
+ * Drives restaurant/pages/restaurant-reapply.php — the five-step
+ * wizard an owner sees when their verification was denied.
+ *
+ * ---------------------------------------------------------------------
+ * GEOMETRY — MIRRORS sign-up.php EXACTLY
+ * ---------------------------------------------------------------------
+ * Same shell, same card, same padding, same progress-bar family as
+ * restaurant/pages/sign-up.php:
+ *
+ *   .register-page        padding: 20px 16px
+ *   .container            max-width: 700px
+ *   .register-card        padding: 32px 24px, radius --radius-xl
+ *   .register-progress    five steps at 28px number, 10px label
+ *   .register-step        one panel visible at a time
+ *   .step-actions         Back / Next / Submit row
+ *
+ * The only additions over sign-up are the permit slot grid and the
+ * review summary on step 5. Everything else is byte-identical in
+ * intent to sign-up's layout.
+ *
+ * ---------------------------------------------------------------------
+ * PERMIT SLOT STATES
+ * ---------------------------------------------------------------------
+ *   empty              .permit-slot (dashed, "Add permit")
+ *   server permit      .permit-slot.has-permit
+ *   local replacement  .permit-slot.has-new-file
+ *   marked removal     .permit-slot.is-op-remove
+ *   broken preview     .permit-slot.is-broken
+ *
+ * The .is-broken state is what shows "Preview unavailable" instead
+ * of a plain white square when a server permit's image URL 404s.
+ *
+ * @package FitPal
+ * @version 3.0 — Matches sign-up geometry. Container narrowed to
+ *                700px. Progress bar numbers shrunk so five steps
+ *                fit in the sign-up width. Status banner rules
+ *                removed.
+ *
+ *                (2.0: five-step wizard with .is-broken state.
+ *                1.0: single-page form.)
+ */
+
+/* ============================================================
+   PAGE SHELL
+   ============================================================ */
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 0;
+    min-height: calc(100vh - 70px);
+}
+
+.register-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 16px;
+    background: linear-gradient(135deg, var(--gray-50) 0%, var(--white) 100%);
+    flex: 1;
+    min-height: calc(100vh - 70px);
+}
+
+.register-page .container {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 20px 16px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* ============================================================
+   CARD
+   ============================================================ */
+
+.register-card {
+    max-width: 700px;
+    width: 100%;
+    background: var(--white);
+    border-radius: var(--radius-xl);
+    padding: 32px 24px;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--gray-200);
+    margin: 16px 0;
+    box-sizing: border-box;
+}
+
+/* ============================================================
+   PROGRESS BAR — FIVE STEPS
+   Geometry sized so the five steps and four connectors fit in
+   the 700px container without overflow at every breakpoint.
+   ============================================================ */
+
+.register-progress {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 30px;
+    padding: 0 4px;
+}
+
+.progress-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    position: relative;
+    min-width: 0;
+}
+
+.progress-step .step-number {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-full);
+    background: var(--gray-200);
+    color: var(--gray-500);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: var(--font-weight-bold);
+    font-size: 11px;
+    transition: all var(--transition-base);
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.progress-step.active .step-number {
+    background: var(--primary);
+    color: var(--white);
+    box-shadow: 0 0 0 4px rgba(89, 193, 74, 0.2);
+}
+
+.progress-step.completed .step-number {
+    background: var(--primary);
+    color: var(--white);
+}
+
+.progress-step .step-label {
+    font-size: 9px;
+    color: var(--gray-400);
+    text-align: center;
+    font-weight: var(--font-weight-medium);
+    transition: color var(--transition-base);
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.progress-step.active .step-label,
+.progress-step.completed .step-label {
+    color: var(--primary);
+}
+
+.progress-line {
+    flex: 1;
+    height: 2px;
+    background: var(--gray-200);
+    margin: 0 2px;
+    position: relative;
+    top: -13px;
+    min-width: 6px;
+}
+
+.progress-line.completed {
+    background: var(--primary);
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+
+.register-header {
+    text-align: center;
+    margin-bottom: 28px;
+}
+
+.register-header .heading-2 {
+    margin: 0 0 4px 0;
+    color: var(--text);
+}
+
+.register-header .heading-2 span {
+    color: var(--primary);
+}
+
+.register-header .text-muted {
+    color: var(--gray-500);
+    font-size: var(--font-size-base);
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* ============================================================
+   ALERTS
+   ============================================================ */
+
+.register-card .alert {
+    padding: 12px 16px;
+    border-radius: var(--radius-base);
+    margin-bottom: 20px;
+    border: 2px solid transparent;
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+    word-wrap: break-word;
+}
+
+.register-card .alert-danger {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+.register-card .alert-success {
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+
+/* ============================================================
+   STEPS
+   ============================================================ */
+
+.register-step {
+    animation: restaurantReapplyStepFade 0.3s ease;
+}
+
+@keyframes restaurantReapplyStepFade {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.step-description {
+    margin-bottom: 20px;
+    color: var(--gray-600);
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+    padding: 12px 16px;
+    background: var(--gray-50);
+    border-radius: var(--radius-base);
+    border-left: 3px solid var(--primary);
+}
+
+.step-description p {
+    margin: 0;
+}
+
+/* ============================================================
+   FORM CONTROLS — match sign-up exactly
+   ============================================================ */
+
+.register-form .form-group {
+    margin-bottom: 16px;
+    flex: 1;
+    min-width: 0;
+}
+
+.register-form .form-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 0;
+}
+
+.register-form .form-row-3 .form-group {
+    flex: 1;
+}
+
+.register-form .form-label {
+    display: block;
+    font-weight: var(--font-weight-semibold);
+    color: var(--gray-700);
+    margin-bottom: 4px;
+    font-size: var(--font-size-sm);
+    line-height: 1.4;
+}
+
+.register-form .form-control {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid var(--gray-300);
+    border-radius: var(--radius-base);
+    font-size: var(--font-size-base);
+    font-family: inherit;
+    color: var(--text);
+    background-color: var(--white);
+    height: 48px;
+    box-sizing: border-box;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.register-form .form-control:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(89, 193, 74, 0.15);
+}
+
+.register-form .form-control.error {
+    border-color: var(--danger);
+    background: #fff8f8;
+}
+
+.register-form .form-control.error:focus {
+    box-shadow: 0 0 0 4px rgba(220, 53, 69, 0.15);
+}
+
+.register-form .form-control::placeholder {
+    color: var(--gray-400);
+    font-size: var(--font-size-sm);
+}
+
+.register-form textarea.form-control {
+    height: auto;
+    min-height: 100px;
+    resize: none;
+    line-height: 1.55;
+    padding: 12px 16px;
+}
+
+.register-form .form-error {
+    color: var(--danger);
+    font-size: var(--font-size-sm);
+    margin-top: 4px;
+    display: block;
+    font-weight: var(--font-weight-medium);
+    line-height: 1.4;
+    min-height: 0;
+}
+
+.register-form .form-error:empty {
+    display: none;
+}
+
+.register-form .form-hint {
+    color: var(--gray-500);
+    font-size: var(--font-size-xs);
+    margin-top: 4px;
+    line-height: 1.4;
+}
+
+.text-danger {
+    color: var(--danger);
+}
+
+.text-muted {
+    color: var(--gray-500);
+}
+
+/* ============================================================
+   STEP ACTIONS
+   ============================================================ */
+
+.step-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+    flex-wrap: wrap;
+}
+
+.step-actions .btn {
+    padding: 12px 24px;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    border-radius: var(--radius-base);
+    min-width: 120px;
+    min-height: 46px;
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-family: inherit;
+    border: 2px solid transparent;
+    box-sizing: border-box;
+    transition: background-color var(--transition-fast),
+                border-color var(--transition-fast),
+                color var(--transition-fast),
+                transform 0.1s ease;
+}
+
+.step-actions .btn:active {
+    transform: scale(0.98);
+}
+
+.step-actions .btn-outline.btn-prev {
+    background-color: var(--black);
+    color: var(--white);
+    border-color: var(--black);
+}
+
+.step-actions .btn-outline.btn-prev:hover,
+.step-actions .btn-outline.btn-prev:focus-visible {
+    background-color: var(--black);
+    border-color: var(--black);
+    opacity: 0.85;
+    outline: none;
+}
+
+.step-actions .btn-primary {
+    background-color: var(--primary);
+    color: var(--white);
+    border-color: var(--primary);
+}
+
+.step-actions .btn-primary:hover,
+.step-actions .btn-primary:focus-visible {
+    background-color: var(--primary-dark);
+    border-color: var(--primary-dark);
+    outline: none;
+}
+
+.step-actions .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* ============================================================
+   PERMIT SLOT GRID
+   ============================================================ */
+
+.permit-slot-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+    width: 100%;
+    margin-bottom: 4px;
+}
+
+.permit-slot {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    border: 2px dashed var(--gray-300);
+    border-radius: var(--radius-base);
+    background: var(--gray-50);
+    overflow: hidden;
+    box-sizing: border-box;
+    cursor: pointer;
+    transition: border-color 0.15s ease,
+                background-color 0.15s ease,
+                box-shadow 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.permit-slot:hover {
+    border-color: var(--primary);
+    background: rgba(89, 193, 74, 0.05);
+}
+
+.permit-slot:focus-visible {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.25);
+}
+
+/* ---- Server-permit state ---- */
+
+.permit-slot.has-permit {
+    border-style: solid;
+    border-color: var(--gray-200);
+    background: var(--white);
+}
+
+.permit-slot.has-permit:hover {
+    border-color: var(--primary);
+}
+
+/* ---- Local-replacement state ---- */
+
+.permit-slot.has-new-file {
+    border-style: solid;
+    border-color: var(--primary);
+    background: var(--white);
+}
+
+/* ---- Marked-for-removal state ---- */
+
+.permit-slot.is-op-remove {
+    border-style: solid;
+    border-color: var(--danger);
+    background: #fff5f5;
+}
+
+.permit-slot.is-op-remove:hover {
+    border-color: #b91c1c;
+}
+
+.permit-slot.is-op-remove .permit-slot-preview {
+    opacity: 0.3;
+    filter: grayscale(1);
+}
+
+/* ---- Broken-preview state ---- */
+
+.permit-slot.is-broken {
+    border-style: dashed;
+    border-color: var(--danger);
+    background: #fff5f5;
+}
+
+.permit-slot.is-broken .permit-slot-empty-icon {
+    filter: brightness(0) saturate(100%)
+            invert(40%) sepia(90%) saturate(600%)
+            hue-rotate(330deg) brightness(90%) contrast(85%);
+    opacity: 0.85;
+}
+
+.permit-slot.is-broken .permit-slot-empty-label {
+    color: var(--danger);
+    font-weight: 700;
+}
+
+/* ---- Slot frame ---- */
+
+.permit-slot-frame {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ---- Preview image ---- */
+
+.permit-slot-preview {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border-radius: calc(var(--radius-base) - 2px);
+}
+
+/* ---- Empty hint ---- */
+
+.permit-slot-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px;
+    box-sizing: border-box;
+    pointer-events: none;
+    width: 100%;
+    height: 100%;
+}
+
+.permit-slot.has-permit .permit-slot-empty,
+.permit-slot.has-new-file .permit-slot-empty {
+    display: none;
+}
+
+.permit-slot-empty-icon {
+    width: 22px;
+    height: 22px;
+    display: block;
+    opacity: 0.75;
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.permit-slot-empty-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--gray-500);
+    text-align: center;
+    line-height: 1.3;
+}
+
+/* ---- Slot badge ---- */
+
+.permit-slot-badge {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    padding: 2px 7px;
+    border-radius: var(--radius-full);
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    line-height: 1.4;
+    z-index: 2;
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+.permit-slot-badge-index {
+    background: rgba(255, 255, 255, 0.9);
+    color: var(--gray-700);
+    border: 1px solid var(--gray-200);
+    backdrop-filter: blur(4px);
+}
+
+.permit-slot.is-op-remove .permit-slot-badge-index {
+    background: var(--danger);
+    color: #ffffff;
+    border-color: var(--danger);
+}
+
+.permit-slot.is-broken .permit-slot-badge-index {
+    background: var(--danger);
+    color: #ffffff;
+    border-color: var(--danger);
+}
+
+.permit-slot-badge-new {
+    top: auto;
+    bottom: 5px;
+    left: 5px;
+    background: #1a1a1a;
+    color: #ffffff;
+}
+
+.permit-slot-badge-new[hidden] {
+    display: none;
+}
+
+/* ---- Slot remove button ---- */
+
+.permit-slot-remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(5, 10, 4, 0.72);
+    color: #ffffff;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    z-index: 3;
+    transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.permit-slot-remove:hover,
+.permit-slot-remove:focus-visible {
+    background: var(--danger);
+    outline: none;
+}
+
+.permit-slot-remove:active {
+    transform: scale(0.92);
+}
+
+.permit-slot-remove[hidden] {
+    display: none;
+}
+
+/* ---- Slot hit area ---- */
+
+.permit-slot-hit {
+    position: absolute;
+    inset: 0;
+    cursor: pointer;
+    z-index: 1;
+}
+
+/* ---- Slot removal banner ---- */
+
+.permit-slot-removal-banner {
+    position: absolute;
+    inset: auto 0 0 0;
+    padding: 3px 6px;
+    background: var(--danger);
+    color: #ffffff;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    text-align: center;
+    z-index: 2;
+}
+
+.permit-slot-removal-banner[hidden] {
+    display: none;
+}
+
+/* ============================================================
+   PERMIT FOOTER
+   ============================================================ */
+
+.permit-footer {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding-top: 14px;
+    margin-top: 12px;
+    border-top: 1px solid var(--gray-100);
+}
+
+.permit-footer-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.permit-footer-count {
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.3;
+}
+
+.permit-footer-hint {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    line-height: 1.4;
+}
+
+#permitsError {
+    display: block;
+    min-height: 0;
+}
+
+#permitsError:empty {
+    display: none;
+}
+
+/* ============================================================
+   REVIEW SUMMARY — STEP 5
+   ============================================================ */
+
+.review-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 8px;
+}
+
+.review-section {
+    padding: 14px 16px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+}
+
+.review-section-title {
+    margin: 0 0 8px 0;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+
+.review-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    font-size: var(--font-size-sm);
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--gray-200);
+}
+
+.review-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.review-label {
+    color: var(--gray-500);
+    font-weight: var(--font-weight-semibold);
+    flex-shrink: 0;
+    min-width: 120px;
+}
+
+.review-value {
+    color: var(--text);
+    text-align: right;
+    word-break: break-word;
+    flex: 1;
+    font-weight: var(--font-weight-medium);
+}
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+
+.register-footer {
+    margin-top: 24px;
+    text-align: center;
+    padding-top: 20px;
+    border-top: 1px solid var(--gray-200);
+}
+
+.register-footer .text-muted {
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    margin: 0;
+    line-height: 1.6;
+}
+
+.register-footer .text-muted a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: var(--font-weight-semibold);
+}
+
+.register-footer .text-muted a:hover {
+    color: var(--primary-dark);
+    text-decoration: underline;
+}
+
+/* ============================================================
+   NOTIFIER MODAL
+   ============================================================ */
+
+.reapply-notifier {
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 10, 4, 0.55);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 20px;
+    box-sizing: border-box;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+.reapply-notifier.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.reapply-notifier-content {
+    background: var(--white);
+    border-radius: var(--radius-xl);
+    padding: 36px 28px 28px 28px;
+    max-width: 420px;
+    width: 100%;
+    text-align: center;
+    box-shadow: var(--shadow-xl);
+    animation: reapplyNotifierIn 0.28s ease;
+    box-sizing: border-box;
+}
+
+@keyframes reapplyNotifierIn {
+    from {
+        opacity: 0;
+        transform: scale(0.94) translateY(-16px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.reapply-notifier-icon {
+    width: 68px;
+    height: 68px;
+    margin: 0 auto 18px;
+    border-radius: 50%;
+    background: rgba(89, 193, 74, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.reapply-notifier-icon img {
+    width: 32px;
+    height: 32px;
+    display: block;
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.reapply-notifier-title {
+    margin: 0 0 8px 0;
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.3;
+}
+
+.reapply-notifier-message {
+    margin: 0 0 24px 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    line-height: 1.6;
+    word-break: break-word;
+}
+
+.reapply-notifier-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px 32px;
+    border-radius: var(--radius-base);
+    background: var(--primary);
+    color: var(--white);
+    border: 2px solid var(--primary);
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    min-height: 50px;
+    min-width: 140px;
+    box-sizing: border-box;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.reapply-notifier-btn:hover,
+.reapply-notifier-btn:focus-visible {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+    outline: none;
+}
+
+/* ============================================================
+   RESPONSIVE — TABLET (≤ 768px)
+   ============================================================ */
+
+@media (max-width: 768px) {
+    .register-page {
+        padding: 16px 12px;
+    }
+
+    .register-card {
+        padding: 24px 16px;
+        border-radius: var(--radius-lg);
+    }
+
+    .register-header .heading-2 {
+        font-size: var(--font-size-2xl);
+    }
+
+    .register-form .form-row,
+    .register-form .form-row-3 {
+        flex-direction: column;
+        gap: 0;
+    }
+
+    .register-form .form-group {
+        margin-bottom: 14px;
+    }
+
+    .step-actions {
+        flex-direction: column;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    .step-actions .btn {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .register-progress {
+        padding: 0 2px;
+        gap: 1px;
+        margin-bottom: 22px;
+    }
+
+    .progress-step .step-number {
+        width: 24px;
+        height: 24px;
+        font-size: 10px;
+    }
+
+    .progress-step .step-label {
+        font-size: 8px;
+    }
+
+    .progress-line {
+        top: -11px;
+        margin: 0 1px;
+        min-width: 4px;
+    }
+
+    .permit-slot-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .review-label {
+        min-width: 100px;
+        font-size: var(--font-size-xs);
+    }
+
+    .review-value {
+        font-size: var(--font-size-xs);
+    }
+}
+
+/* ============================================================
+   RESPONSIVE — MOBILE (≤ 480px)
+   ============================================================ */
+
+@media (max-width: 480px) {
+    .register-page {
+        padding: 10px 8px;
+    }
+
+    .register-card {
+        padding: 16px 10px;
+        border-radius: var(--radius-lg);
+    }
+
+    .register-header .heading-2 {
+        font-size: var(--font-size-2xl);
+    }
+
+    .register-header .text-muted {
+        font-size: var(--font-size-sm);
+    }
+
+    .register-form .form-control {
+        height: 40px;
+        font-size: var(--font-size-sm);
+        padding: 8px 10px;
+    }
+
+    .register-form .form-label {
+        font-size: var(--font-size-xs);
+    }
+
+    .step-description {
+        font-size: var(--font-size-xs);
+        padding: 8px 10px;
+    }
+
+    .step-description p {
+        font-size: var(--font-size-xs);
+    }
+
+    .step-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+        margin-top: 16px;
+    }
+
+    .step-actions .btn {
+        width: 100%;
+        min-width: unset;
+        padding: 10px 12px;
+        font-size: var(--font-size-sm);
+        min-height: 38px;
+    }
+
+    .register-progress {
+        padding: 0;
+        gap: 0;
+        margin-bottom: 18px;
+    }
+
+    .progress-step .step-number {
+        width: 20px;
+        height: 20px;
+        font-size: 9px;
+    }
+
+    .progress-step .step-label {
+        font-size: 7px;
+    }
+
+    .progress-line {
+        top: -9px;
+        margin: 0 0.5px;
+        min-width: 2px;
+    }
+
+    .permit-slot-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .permit-slot-empty-label {
+        font-size: 9px;
+    }
+
+    .permit-slot-remove {
+        width: 20px;
+        height: 20px;
+        font-size: 12px;
+    }
+
+    .permit-footer {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+    }
+
+    .review-section {
+        padding: 12px 14px;
+    }
+
+    .review-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        padding: 5px 0;
+    }
+
+    .review-label {
+        min-width: 0;
+        font-size: 10px;
+    }
+
+    .review-value {
+        text-align: left;
+        font-size: var(--font-size-xs);
+    }
+
+    .reapply-notifier-content {
+        padding: 24px 18px 20px 18px;
+    }
+
+    .reapply-notifier-icon {
+        width: 56px;
+        height: 56px;
+    }
+
+    .reapply-notifier-icon img {
+        width: 26px;
+        height: 26px;
+    }
+
+    .reapply-notifier-title {
+        font-size: var(--font-size-base);
+    }
+
+    .reapply-notifier-message {
+        font-size: var(--font-size-xs);
+    }
+
+    .reapply-notifier-btn {
+        width: 100%;
+        min-width: 0;
+        font-size: var(--font-size-sm);
+    }
+}
+
+/* ============================================================
+   RESPONSIVE — VERY SMALL PHONE (≤ 375px)
+   ============================================================ */
+
+@media (max-width: 375px) {
+    .register-card {
+        padding: 12px 8px;
+    }
+
+    .register-header .heading-2 {
+        font-size: var(--font-size-xl);
+    }
+
+    .register-form .form-control {
+        height: 36px;
+        font-size: var(--font-size-xs);
+        padding: 6px 8px;
+    }
+
+    .register-form .form-label {
+        font-size: 11px;
+    }
+
+    .register-form .form-error,
+    .register-form .form-hint {
+        font-size: 10px;
+    }
+
+    .step-actions .btn {
+        padding: 8px 10px;
+        font-size: var(--font-size-xs);
+        min-height: 34px;
+    }
+
+    .progress-step .step-label {
+        font-size: 6px;
+    }
+
+    .progress-step .step-number {
+        width: 18px;
+        height: 18px;
+        font-size: 8px;
+    }
+
+    .progress-line {
+        min-width: 2px;
+        top: -8px;
+    }
+
+    .permit-slot-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+    }
+}
+
+/* ============================================================
+   REDUCED MOTION
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    .register-step,
+    .progress-step .step-number,
+    .progress-step .step-label,
+    .progress-line,
+    .step-actions .btn,
+    .permit-slot,
+    .permit-slot-remove,
+    .reapply-notifier,
+    .reapply-notifier-content,
+    .reapply-notifier-btn,
+    .review-section,
+    .review-row {
+        transition: none !important;
+        animation: none !important;
+    }
+}

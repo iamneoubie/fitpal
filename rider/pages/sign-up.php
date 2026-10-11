@@ -2,83 +2,72 @@
 /**
  * FitPal Rider Registration Page
  *
- * Five-step rider application:
+ * Six-step rider application:
  *   Step 1 — Personal Information
  *   Step 2 — Vehicle Details
- *   Step 3 — Address & Emergency Contact
- *   Step 4 — Verification Uploads (Formal Photo + Driver's License
- *            or other government-issued ID)
- *   Step 5 — Review & Submit
+ *   Step 3 — Address
+ *   Step 4 — Emergency Contact
+ *   Step 5 — Verification Uploads
+ *   Step 6 — Review & Submit
  *
- * The two required uploads live on Step 4 so the handler can read them
- * from the same request. They are presented side by side (photo left,
- * ID right) in a two-column grid that collapses to a single column on
- * tablet and mobile:
- *   4A. Formal Photo         → $_FILES['profile_picture']
- *   4B. Driver's License     → $_FILES['drivers_license']
- *       (the input name stays 'drivers_license' for the whole page
- *        because that is the field the handler reads; the DISPLAY
- *        label and the required dates change based on the vehicle
- *        type the applicant selected in Step 2)
+ * ---------------------------------------------------------------------
+ * WHY ADDRESS AND EMERGENCY CONTACT ARE SEPARATE STEPS
+ * ---------------------------------------------------------------------
+ * Earlier revisions grouped the rider's own address and the emergency
+ * contact into one step. That step carried two logically distinct
+ * concerns:
  *
- * Vehicle-type-driven layout
- * --------------------------
- * Two regions of the page depend on the vehicle type selected in
- * Step 2:
+ *   - The rider's own address, which is the address the platform
+ *     holds on file for the rider.
+ *   - A second person's name and phone number, which is who to call
+ *     if something happens to the rider on a delivery.
  *
- *   Step 2 — Motor-vehicle-only fields
- *     The plate, make, model, and year inputs apply only to a motor
- *     vehicle. When the applicant selects 'bicycle', the entire
- *     block is hidden: a bicycle has no plate, and the applicant has
- *     no make/model/year to record for it. The inputs are wrapped in
- *     a single #vehicleMotorOnlyFields container so CSS can hide
- *     them together.
+ * Splitting them gives each its own screen, its own section heading,
+ * and its own progress-step label. The rider no longer scrolls past
+ * one concern to reach the other.
  *
- *   Step 4 — Identity-document block
- *     The block renders both shapes (Driver's License and Valid
- *     Government ID). CSS keyed on the page-level data attribute
- *     shows exactly one of them, and hides the license-date row
- *     when the vehicle is a bicycle.
+ * ---------------------------------------------------------------------
+ * REQUIRED FIELDS
+ * ---------------------------------------------------------------------
+ * On Step 2, vehicle_make, vehicle_model, and vehicle_year are
+ * required for every non-bicycle vehicle. They are hidden and not
+ * required when the vehicle is a bicycle. The `required` attribute
+ * is toggled by sign-up.js as the vehicle type changes, matching the
+ * pattern already used for the two license date inputs.
  *
- * Both swaps are driven by a single attribute on the page root:
+ * On Step 3, every address field is required: block, barangay, city,
+ * province, region, and postal_code.
  *
- *     .register-page[data-vehicle-type="bicycle"]
+ * The server-side validation in sign-up-handler.php enforces both
+ * rules independently, so a client that skips JavaScript cannot
+ * bypass them.
  *
- * sign-up.js keeps that attribute in sync with the vehicle_type
- * select. No inline style or inline script is used anywhere on the
- * page — every swap is a CSS rule reading that attribute.
+ * ---------------------------------------------------------------------
+ * UPLOADS
+ * ---------------------------------------------------------------------
+ * Step 5 holds the two required uploads:
+ *   5A. Formal Photo       → $_FILES['profile_picture']
+ *   5B. Driver's License   → $_FILES['drivers_license']
+ *       (input name stays 'drivers_license' for the whole page; the
+ *        DISPLAY label changes based on the vehicle type selected in
+ *        Step 2)
  *
- * License dates (issue_date / expiry_date) are only required when
- * the vehicle is not a bicycle. The two date inputs carry the
- * `required` attribute by default, and sign-up.js removes it when
- * the vehicle is switched to bicycle. When the applicant switches
- * back, sign-up.js restores it.
- *
- * Step 5 shows the review summary, the terms checkbox, and the final
- * submit button.
- *
- * Visual layout mirrors the customer register card so both flows
- * feel like the same product:
- *   - max-width: 700px on .register-card
- *   - align-items: center on .register-page
- *   - 32px / 24px card padding
+ * License dates (issue_date / expiry_date) are only required when the
+ * vehicle is not a bicycle. The two date inputs carry `required` by
+ * default and sign-up.js removes it for a bicycle.
  *
  * @package FitPal
- * @version 6.6 — The plate, make, model, and year form-groups are
- *                now wrapped in a single #vehicleMotorOnlyFields
- *                container inside Step 2. CSS hides the whole
- *                container when the vehicle is a bicycle, so the
- *                three optional fields no longer render for a
- *                bicycle applicant. Removed the previous
- *                #vehiclePlateGroup id, whose per-group hide rule
- *                was the only Step 2 visibility rule and left the
- *                three optional fields visible.
+ * @version 7.0 — Six-step wizard. Address (Step 3) and Emergency
+ *                Contact (Step 4) are split into their own steps.
+ *                Uploads moves from Step 4 to Step 5. Verify moves
+ *                from Step 5 to Step 6. Step 2's make/model/year
+ *                fields gain the `required` attribute. Step 3's
+ *                barangay/province/region/postal_code lose their
+ *                "(Optional)" notes and gain the `*` marker.
  *
- *                (6.5: added #vehiclePlateGroup. 6.4: Step 4's
- *                identity block became vehicle-type-aware. 6.3:
- *                dropped the page-local CSRF bootstrap; the rider
- *                role's token is now assigned by includes/header.php
- *                via rider-csrf-token.php.)
+ *                (6.6: #vehicleMotorOnlyFields wrapper. 6.5:
+ *                #vehiclePlateGroup. 6.4: vehicle-type-aware
+ *                identity block. 6.3: page-local CSRF dropped.)
  */
 
 declare(strict_types=1);
@@ -91,7 +80,6 @@ if (!empty($_SESSION['delivery_rider_id'])) {
     exit;
 }
 
-// ===== HEADER (starts DB, assigns $csrfToken, renders <head> + <header>) =====
 require_once __DIR__ . '/../includes/header.php';
 
 $errorMessage = $_SESSION['rider_registration_error'] ?? '';
@@ -119,8 +107,7 @@ $relationshipOptions = [
     <div class="container">
         <div class="register-card">
 
-            <!-- Progress -->
-            <div class="register-progress" role="progressbar" aria-valuenow="1" aria-valuemin="1" aria-valuemax="5"
+            <div class="register-progress" role="progressbar" aria-valuenow="1" aria-valuemin="1" aria-valuemax="6"
                 aria-label="Registration progress">
                 <div class="progress-step active" data-step="1">
                     <span class="step-number">1</span>
@@ -139,18 +126,23 @@ $relationshipOptions = [
                 <div class="progress-line" id="progressLine3"></div>
                 <div class="progress-step" data-step="4">
                     <span class="step-number">4</span>
-                    <span class="step-label">Uploads</span>
+                    <span class="step-label">Emergency</span>
                 </div>
                 <div class="progress-line" id="progressLine4"></div>
                 <div class="progress-step" data-step="5">
                     <span class="step-number">5</span>
+                    <span class="step-label">Uploads</span>
+                </div>
+                <div class="progress-line" id="progressLine5"></div>
+                <div class="progress-step" data-step="6">
+                    <span class="step-number">6</span>
                     <span class="step-label">Verify</span>
                 </div>
             </div>
 
             <div class="register-header">
                 <p class="heading-2">Become a <span>FitPal Rider</span></p>
-                <p class="text-muted" id="stepSubtitle">Step 1 of 5 — Personal Information</p>
+                <p class="text-muted" id="stepSubtitle">Step 1 of 6 — Personal Information</p>
             </div>
 
             <?php if (!empty($errorMessage)): ?>
@@ -343,49 +335,55 @@ $relationshipOptions = [
                              .register-page[data-vehicle-type="bicycle"]
                                  #vehicleMotorOnlyFields { display: none; }
 
-                         sign-up.js also clears the values inside this block
-                         when the vehicle becomes bicycle, so a value typed
-                         while 'motorcycle' was selected does not linger in
-                         the DOM after the switch.
+                         sign-up.js also:
+                           - clears the values inside this block when the
+                             vehicle becomes bicycle, so a value typed while
+                             'motorcycle' was selected does not linger in the
+                             DOM after the switch.
+                           - removes the `required` attribute from plate,
+                             make, model, and year when the vehicle is a
+                             bicycle, and restores it when the vehicle
+                             switches back.
                          ============================================================ -->
                     <div id="vehicleMotorOnlyFields">
 
                         <div class="form-row">
                             <div class="form-group">
                                 <label for="vehicle_plate" class="form-label">
-                                    Plate Number
+                                    Plate Number <span class="text-danger">*</span>
                                 </label>
                                 <input type="text" id="vehicle_plate" name="vehicle_plate" class="form-control"
-                                    placeholder="e.g. ABC 1234" autocomplete="off" maxlength="10">
+                                    placeholder="e.g. ABC 1234" autocomplete="off" maxlength="10" required>
                                 <div class="form-error" id="vehiclePlateError"></div>
-                                <div class="form-hint">Required for motor vehicles</div>
                             </div>
                         </div>
 
                         <div class="form-row">
                             <div class="form-group">
                                 <label for="vehicle_make" class="form-label">
-                                    Make / Brand <span class="text-muted">(Optional)</span>
+                                    Make / Brand <span class="text-danger">*</span>
                                 </label>
                                 <input type="text" id="vehicle_make" name="vehicle_make" class="form-control"
-                                    placeholder="e.g. Honda" autocomplete="off" maxlength="40">
+                                    placeholder="e.g. Honda" autocomplete="off" maxlength="40" required>
+                                <div class="form-error" id="vehicleMakeError"></div>
                             </div>
 
                             <div class="form-group">
                                 <label for="vehicle_model" class="form-label">
-                                    Model <span class="text-muted">(Optional)</span>
+                                    Model <span class="text-danger">*</span>
                                 </label>
                                 <input type="text" id="vehicle_model" name="vehicle_model" class="form-control"
-                                    placeholder="e.g. Click 125i" autocomplete="off" maxlength="40">
+                                    placeholder="e.g. Click 125i" autocomplete="off" maxlength="40" required>
+                                <div class="form-error" id="vehicleModelError"></div>
                             </div>
 
                             <div class="form-group">
                                 <label for="vehicle_year" class="form-label">
-                                    Year <span class="text-muted">(Optional)</span>
+                                    Year <span class="text-danger">*</span>
                                 </label>
                                 <input type="number" id="vehicle_year" name="vehicle_year" class="form-control"
                                     placeholder="e.g. 2022" min="1980" max="<?php echo (int)date('Y') + 1; ?>"
-                                    autocomplete="off" inputmode="numeric">
+                                    autocomplete="off" inputmode="numeric" required>
                                 <div class="form-error" id="vehicleYearError"></div>
                             </div>
                         </div>
@@ -402,12 +400,16 @@ $relationshipOptions = [
                 </div>
 
                 <!-- ============================================================
-                     STEP 3 — Address & Emergency Contact
+                     STEP 3 — Address
+
+                     The rider's own address. There is no label dropdown
+                     (Home / Office / Base); the sign-up path writes exactly
+                     one address row per rider and marks it as the default.
                      ============================================================ -->
                 <div class="register-step" id="step3" style="display: none;">
 
                     <div class="step-description">
-                        <p>Where should we send delivery notices and important documents?</p>
+                        <p>Where should we reach you for delivery-related notices?</p>
                     </div>
 
                     <div class="form-row">
@@ -422,10 +424,11 @@ $relationshipOptions = [
 
                         <div class="form-group">
                             <label for="barangay" class="form-label">
-                                Barangay <span class="text-muted">(Optional)</span>
+                                Barangay <span class="text-danger">*</span>
                             </label>
                             <input type="text" id="barangay" name="barangay" class="form-control"
-                                placeholder="e.g. Barangay San Antonio" autocomplete="address-line2">
+                                placeholder="e.g. Barangay San Antonio" autocomplete="address-line2" required>
+                            <div class="form-error" id="barangayError"></div>
                         </div>
                     </div>
 
@@ -441,34 +444,55 @@ $relationshipOptions = [
 
                         <div class="form-group">
                             <label for="province" class="form-label">
-                                Province <span class="text-muted">(Optional)</span>
+                                Province <span class="text-danger">*</span>
                             </label>
                             <input type="text" id="province" name="province" class="form-control"
-                                placeholder="e.g. Metro Manila" autocomplete="address-level1">
+                                placeholder="e.g. Metro Manila" autocomplete="address-level1" required>
+                            <div class="form-error" id="provinceError"></div>
                         </div>
                     </div>
 
                     <div class="form-row">
                         <div class="form-group">
                             <label for="region" class="form-label">
-                                Region <span class="text-muted">(Optional)</span>
+                                Region <span class="text-danger">*</span>
                             </label>
                             <input type="text" id="region" name="region" class="form-control" placeholder="e.g. NCR"
-                                autocomplete="address-level1">
+                                autocomplete="address-level1" required>
+                            <div class="form-error" id="regionError"></div>
                         </div>
 
                         <div class="form-group">
                             <label for="postal_code" class="form-label">
-                                Postal Code <span class="text-muted">(Optional)</span>
+                                Postal Code <span class="text-danger">*</span>
                             </label>
                             <input type="text" id="postal_code" name="postal_code" class="form-control"
-                                placeholder="e.g. 1605" autocomplete="postal-code" maxlength="10" inputmode="numeric">
+                                placeholder="e.g. 1605" autocomplete="postal-code" maxlength="10" inputmode="numeric"
+                                required>
                             <div class="form-error" id="postalError"></div>
                         </div>
                     </div>
 
-                    <div class="section-divider">
-                        <span>Emergency Contact</span>
+                    <div class="step-actions">
+                        <button type="button" class="btn btn-outline btn-prev" data-prev="2">
+                            Back
+                        </button>
+                        <button type="button" class="btn btn-primary btn-next" data-next="4">
+                            Next Step
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                     STEP 4 — Emergency Contact
+                     ============================================================ -->
+                <div class="register-step" id="step4" style="display: none;">
+
+                    <div class="step-description">
+                        <p>
+                            Who should we contact if something happens to you while
+                            you're on a delivery?
+                        </p>
                     </div>
 
                     <div class="form-row">
@@ -527,19 +551,19 @@ $relationshipOptions = [
                     </div>
 
                     <div class="step-actions">
-                        <button type="button" class="btn btn-outline btn-prev" data-prev="2">
+                        <button type="button" class="btn btn-outline btn-prev" data-prev="3">
                             Back
                         </button>
-                        <button type="button" class="btn btn-primary btn-next" data-next="4">
+                        <button type="button" class="btn btn-primary btn-next" data-next="5">
                             Next Step
                         </button>
                     </div>
                 </div>
 
                 <!-- ============================================================
-                     STEP 4 — Verification Uploads
+                     STEP 5 — Verification Uploads
                      ============================================================ -->
-                <div class="register-step" id="step4" style="display: none;">
+                <div class="register-step" id="step5" style="display: none;">
 
                     <div class="step-description">
                         <p>
@@ -550,12 +574,9 @@ $relationshipOptions = [
                         </p>
                     </div>
 
-                    <!-- Two uploads side by side (stacks on mobile) -->
                     <div class="upload-block-grid">
 
-                        <!-- 4A — FORMAL PHOTO (LEFT) -->
                         <div class="upload-block" id="uploadBlockPhoto">
-
                             <div class="upload-block-header">
                                 <div class="upload-block-number" aria-hidden="true">1</div>
                                 <div class="upload-block-heading">
@@ -601,22 +622,10 @@ $relationshipOptions = [
                             </div>
                         </div>
 
-                        <!-- 4B — IDENTITY DOCUMENT (RIGHT)
-                             Two shapes live in this one block. CSS keyed
-                             on the page-level data-vehicle-type attribute
-                             shows exactly one of them. Both shapes share
-                             the same dropzone, the same file input, and
-                             the same remove button, so whichever is
-                             visible at submit time submits the same
-                             $_FILES['drivers_license'] entry. Only the
-                             header copy and the guidelines list change. -->
                         <div class="upload-block" id="uploadBlockLicense">
-
                             <div class="upload-block-header">
                                 <div class="upload-block-number" aria-hidden="true">2</div>
                                 <div class="upload-block-heading">
-
-                                    <!-- Driver's License shape -->
                                     <div class="upload-block-heading-drivers-license">
                                         <h3 class="upload-block-title">
                                             Driver's License <span class="text-danger">*</span>
@@ -625,8 +634,6 @@ $relationshipOptions = [
                                             Photo of your valid driver's license.
                                         </p>
                                     </div>
-
-                                    <!-- Valid Government ID shape -->
                                     <div class="upload-block-heading-government-id">
                                         <h3 class="upload-block-title">
                                             Valid Government ID <span class="text-danger">*</span>
@@ -661,14 +668,12 @@ $relationshipOptions = [
                                     </div>
                                 </div>
 
-                                <!-- Driver's License shape guidelines -->
                                 <ul class="upload-guidelines upload-guidelines-drivers-license">
                                     <li>All four corners of the card visible</li>
                                     <li>Name, number, expiry must be readable</li>
                                     <li>No glare, blur, or partial crops</li>
                                 </ul>
 
-                                <!-- Valid Government ID shape guidelines -->
                                 <ul class="upload-guidelines upload-guidelines-government-id">
                                     <li>All four corners of the card visible</li>
                                     <li>Name, ID number must be readable</li>
@@ -680,11 +685,6 @@ $relationshipOptions = [
                         </div>
                     </div>
 
-                    <!-- License dates: full-width row under the pair.
-                         Hidden when the vehicle is a bicycle because a
-                         national ID carries neither date on its face.
-                         sign-up.js toggles the `required` attribute on
-                         the two inputs as the vehicle type changes. -->
                     <div class="form-row upload-block-dates" id="licenseDatesRow">
                         <div class="form-group">
                             <label for="license_issue_date" class="form-label">
@@ -707,19 +707,19 @@ $relationshipOptions = [
                     </div>
 
                     <div class="step-actions">
-                        <button type="button" class="btn btn-outline btn-prev" data-prev="3">
+                        <button type="button" class="btn btn-outline btn-prev" data-prev="4">
                             Back
                         </button>
-                        <button type="button" class="btn btn-primary btn-next" data-next="5">
+                        <button type="button" class="btn btn-primary btn-next" data-next="6">
                             Next Step
                         </button>
                     </div>
                 </div>
 
                 <!-- ============================================================
-                     STEP 5 — Review & Submit
+                     STEP 6 — Review & Submit
                      ============================================================ -->
-                <div class="register-step" id="step5" style="display: none;">
+                <div class="register-step" id="step6" style="display: none;">
 
                     <div class="step-description">
                         <p>
@@ -799,10 +799,6 @@ $relationshipOptions = [
                                 <span class="review-label" id="reviewIdDocLabel">Driver's License</span>
                                 <span class="review-value" id="reviewLicensePhoto">—</span>
                             </div>
-                            <!-- License Validity row is hidden for bicycle
-                                 applicants. sign-up.js toggles the parent
-                                 .review-row's display based on the same
-                                 vehicle-type flag it uses for Step 4. -->
                             <div class="review-row" id="reviewLicenseDatesRow">
                                 <span class="review-label">License Validity</span>
                                 <span class="review-value" id="reviewLicenseDates">—</span>
@@ -827,7 +823,7 @@ $relationshipOptions = [
                     </div>
 
                     <div class="step-actions">
-                        <button type="button" class="btn btn-outline btn-prev" data-prev="4">
+                        <button type="button" class="btn btn-outline btn-prev" data-prev="5">
                             Back
                         </button>
                         <button type="submit" class="btn btn-primary" id="registerBtn">
@@ -847,7 +843,6 @@ $relationshipOptions = [
     </div>
 </div>
 
-<!-- Notification modal -->
 <div id="notifierModal" class="notifier hidden" role="dialog" aria-modal="true" aria-labelledby="notifierTitle"
     aria-describedby="notifierMessage">
     <div class="notifier-content">

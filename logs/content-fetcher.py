@@ -8,13 +8,13 @@ Revised to output to /logs/output/ folder and use .md format
 import os
 import sys
 import re
-from pathlib import Path
+from pathlib import Path        
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple
 import glob
 import tempfile
 
-# Text colors for terminal output
+# Text colors for terminal output   
 class Colors:
     GREEN = '\033[1;32m'
     YELLOW = '\033[1;33m'

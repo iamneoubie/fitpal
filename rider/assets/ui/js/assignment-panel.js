@@ -306,7 +306,7 @@
         if (data && typeof data.status_text === 'string' && data.status_text !== '') {
             label = data.status_text;
         } else if (!isEligible) {
-            label = 'Inactive';
+            label = 'Pending';
         } else if (isOnline) {
             label = 'Online';
         } else {

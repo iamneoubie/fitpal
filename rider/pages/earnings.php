@@ -43,12 +43,11 @@
  *       "Rider liability for order #".
  *
  *   Collection History (Transactions tab, second section)
- *       Rows in `rider_collection` for the rider. This table
- *       remains COD-only: it is the audit trail of physical cash
- *       the rider has handled. It is separate from the uniform
- *       liability figure below, which now applies to every
- *       payment method and is read from
- *       orders.rider_liability_amount.
+ *       Rows in `rider_collection` for the rider. This table is
+ *       COD-only: it is the audit trail of physical cash the
+ *       rider has handled. It is separate from the uniform
+ *       liability figure below, which applies to every payment
+ *       method and is read from orders.rider_liability_amount.
  *
  * ---------------------------------------------------------------------
  * BALANCE HERO — THE NET FIGURE
@@ -63,10 +62,10 @@
  * when positive.
  *
  * `rider_liability_total` is the sum of
- * `orders.rider_liability_amount` across every order the rider is
- * currently holding — regardless of payment method. It is the
- * amount of customer money the rider is carrying between accept
- * and delivery.
+ * `orders.rider_liability_amount` across every live order the
+ * rider is currently holding — regardless of payment method. It is
+ * the amount of customer money the rider is carrying between
+ * accept and delivery.
  *
  * The subtraction is a VIEW-LAYER operation performed in PHP. No
  * column in the database is ever written negative by this page.
@@ -90,7 +89,7 @@
  * duplication is intentional: the hero note is prose that explains
  * the arithmetic in passing, while the tile is a labelled figure
  * the rider can find by scanning the grid rather than reading a
- * sentence. Riders asked for both; both are rendered.
+ * sentence.
  *
  * The tile's leading minus sign is a view-layer prefix, identical
  * to the one on the hero amount. The column behind it stays
@@ -114,22 +113,29 @@
  *
  * All SQL lives in rider-assignment-queries.php.
  *
- * @package FitPal
- * @version 6.0 — The hero note and the standalone liability tile
- *                now describe the figure as a rider liability
- *                across every payment method, matching the v2.5.0
- *                model. The words "COD collection" are removed
- *                from both strings; the underlying value is read
- *                from orders.rider_liability_amount via
- *                getRiderOutstandingCollections(). The Collection
- *                History section in the Transactions tab is
- *                unchanged and remains COD-only — it reads
- *                rider_collection, which is a different record.
+ * ---------------------------------------------------------------------
+ * CURRENCY FORMATTING
+ * ---------------------------------------------------------------------
+ * The rider role has no shared presentation-includes file. This
+ * page defines a single $formatCurrency closure and uses it for
+ * every peso amount. The hero's signed amount is built from the
+ * same closure so there is exactly one place on the page that
+ * decides how a currency value is rendered.
  *
- *                (5.6: standalone Order liability tile restored.
- *                5.5: hero shows the net figure. 5.4: standalone
- *                tile removed; hero carried the liability line.
- *                5.2: Overview strip and Collection History.)
+ * @package FitPal
+ * @version 6.1 — getRiderOutstandingCollections() renamed to
+ *                getRiderOutstandingLiability(). Every
+ *                formatRiderCurrency() call is inlined as a
+ *                $formatCurrency closure defined at the top of the
+ *                page. formatSignedRiderCurrency() is now expressed
+ *                in terms of that closure.
+ *
+ *                (6.0: hero note and liability tile describe the
+ *                rider liability model across every payment
+ *                method. 5.6: standalone Order liability tile
+ *                restored. 5.5: hero shows the net figure. 5.4:
+ *                standalone tile removed. 5.2: Overview strip and
+ *                Collection History.)
  */
 
 declare(strict_types=1);
@@ -162,7 +168,7 @@ $totalPages   = max(1, (int)ceil($totalTxns / $perPage));
 
 // Uniform liability total (every payment method, v2.5.0) and the
 // COD-only cash-custody history (v2.4.0, unchanged).
-$outstanding = getRiderOutstandingCollections($database_connection, $riderId);
+$outstanding = getRiderOutstandingLiability($database_connection, $riderId);
 $collections = getRiderCollectionHistory($database_connection, $riderId, 10);
 
 $balance       = (float)($profile['balance'] ?? 0);
@@ -171,8 +177,28 @@ $weekEarnings  = (float)($stats['week_earnings'] ?? 0);
 $monthEarnings = (float)($stats['month_earnings'] ?? 0);
 $totalEarnings = (float)($stats['total_earnings'] ?? 0);
 
-$collectionTotal = (float)($outstanding['total'] ?? 0);
-$collectionCount = (int)($outstanding['count'] ?? 0);
+$liabilityTotal = (float)($outstanding['total'] ?? 0);
+$liabilityCount = (int)($outstanding['count'] ?? 0);
+
+// ---------------------------------------------------------------------
+// CURRENCY FORMATTERS (inline)
+//
+// The rider role has no shared formatter file. These two closures
+// are the only place on this page that decides how a currency
+// value is rendered.
+// ---------------------------------------------------------------------
+
+$formatCurrency = static function (int|float|string|null $amount): string {
+    return '₱' . number_format((float)($amount ?? 0), 2);
+};
+
+$formatSignedCurrency = static function (int|float|string|null $amount) use ($formatCurrency): string {
+    $value = (float)($amount ?? 0);
+    $magnitude = $formatCurrency(abs($value));
+    return $value < 0
+        ? "\u{2212}" . $magnitude   // U+2212 MINUS SIGN
+        : $magnitude;
+};
 
 // ---------------------------------------------------------------------
 // NET FIGURE FOR THE HERO CARD
@@ -184,26 +210,8 @@ $collectionCount = (int)($outstanding['count'] ?? 0);
 // result is a view-layer sum and is never written back.
 // ---------------------------------------------------------------------
 
-$displayedBalance = $balance - $collectionTotal;
-$isCarryingCash   = ($collectionCount > 0);
-
-/**
- * Format a signed currency value with an explicit minus sign for
- * negatives. formatRiderCurrency() renders only the magnitude, so
- * it is not used for the hero's net figure or the liability tile.
- *
- * @param float $amount
- * @return string  e.g. "−₱279.00" or "₱500.00"
- */
-function formatSignedRiderCurrency(float $amount): string
-{
-    $magnitude = '₱' . number_format(abs($amount), 2);
-    return $amount < 0
-        ? "\u{2212}" . $magnitude   // U+2212 MINUS SIGN
-        : $magnitude;
-}
-
-// $csrfToken is provided by header.php (rider_csrf_token).
+$displayedBalance = $balance - $liabilityTotal;
+$isCarryingCash   = ($liabilityCount > 0);
 
 $chartCeiling = $chartScale['ceiling'];
 $today        = date('Y-m-d');
@@ -377,18 +385,18 @@ require_once __DIR__ . '/../includes/header.php';
                 <div class="rider-balance-left">
                     <span class="rider-balance-label">Available Balance</span>
                     <span class="rider-balance-amount">
-                        <?php echo htmlspecialchars(formatSignedRiderCurrency($displayedBalance), ENT_QUOTES, 'UTF-8'); ?>
+                        <?php echo htmlspecialchars($formatSignedCurrency($displayedBalance), ENT_QUOTES, 'UTF-8'); ?>
                     </span>
 
                     <?php if ($isCarryingCash): ?>
                     <span class="rider-balance-note">
-                        <?php echo htmlspecialchars(formatRiderCurrency($balance), ENT_QUOTES, 'UTF-8'); ?>
+                        <?php echo htmlspecialchars($formatCurrency($balance), ENT_QUOTES, 'UTF-8'); ?>
                         balance
                         &minus;
-                        <?php echo htmlspecialchars(formatRiderCurrency($collectionTotal), ENT_QUOTES, 'UTF-8'); ?>
+                        <?php echo htmlspecialchars($formatCurrency($liabilityTotal), ENT_QUOTES, 'UTF-8'); ?>
                         rider liability across
-                        <?php echo $collectionCount; ?>
-                        order<?php echo $collectionCount === 1 ? '' : 's'; ?>.
+                        <?php echo $liabilityCount; ?>
+                        order<?php echo $liabilityCount === 1 ? '' : 's'; ?>.
                     </span>
                     <?php elseif ($canWithdraw): ?>
                     <span class="rider-balance-note">Withdrawals require a minimum of ₱100.00</span>
@@ -400,7 +408,7 @@ require_once __DIR__ . '/../includes/header.php';
                     <?php else: ?>
                     <span class="rider-balance-note">
                         You need
-                        <?php echo htmlspecialchars(formatRiderCurrency($withdrawShortfall), ENT_QUOTES, 'UTF-8'); ?>
+                        <?php echo htmlspecialchars($formatCurrency($withdrawShortfall), ENT_QUOTES, 'UTF-8'); ?>
                         more before you can withdraw. Minimum is ₱100.00.
                     </span>
                     <?php endif; ?>
@@ -417,7 +425,7 @@ require_once __DIR__ . '/../includes/header.php';
             <div class="rider-earnings-stats">
                 <div class="rider-earnings-stat">
                     <span class="rider-earnings-stat-label">Today</span>
-                    <span class="rider-earnings-stat-value"><?php echo formatRiderCurrency($todayEarnings); ?></span>
+                    <span class="rider-earnings-stat-value"><?php echo $formatCurrency($todayEarnings); ?></span>
                     <span class="rider-earnings-stat-hint">
                         <?php echo (int)($stats['today_deliveries'] ?? 0); ?>
                         deliver<?php echo ($stats['today_deliveries'] ?? 0) === 1 ? 'y' : 'ies'; ?>
@@ -425,7 +433,7 @@ require_once __DIR__ . '/../includes/header.php';
                 </div>
                 <div class="rider-earnings-stat">
                     <span class="rider-earnings-stat-label">This Week</span>
-                    <span class="rider-earnings-stat-value"><?php echo formatRiderCurrency($weekEarnings); ?></span>
+                    <span class="rider-earnings-stat-value"><?php echo $formatCurrency($weekEarnings); ?></span>
                     <span class="rider-earnings-stat-hint">
                         <?php echo (int)($stats['week_deliveries'] ?? 0); ?>
                         deliver<?php echo ($stats['week_deliveries'] ?? 0) === 1 ? 'y' : 'ies'; ?>
@@ -433,7 +441,7 @@ require_once __DIR__ . '/../includes/header.php';
                 </div>
                 <div class="rider-earnings-stat">
                     <span class="rider-earnings-stat-label">This Month</span>
-                    <span class="rider-earnings-stat-value"><?php echo formatRiderCurrency($monthEarnings); ?></span>
+                    <span class="rider-earnings-stat-value"><?php echo $formatCurrency($monthEarnings); ?></span>
                     <span class="rider-earnings-stat-hint">
                         <?php echo (int)($stats['month_deliveries'] ?? 0); ?>
                         deliver<?php echo ($stats['month_deliveries'] ?? 0) === 1 ? 'y' : 'ies'; ?>
@@ -441,7 +449,7 @@ require_once __DIR__ . '/../includes/header.php';
                 </div>
                 <div class="rider-earnings-stat">
                     <span class="rider-earnings-stat-label">All Time</span>
-                    <span class="rider-earnings-stat-value"><?php echo formatRiderCurrency($totalEarnings); ?></span>
+                    <span class="rider-earnings-stat-value"><?php echo $formatCurrency($totalEarnings); ?></span>
                     <span class="rider-earnings-stat-hint">
                         <?php echo (int)($stats['total_deliveries'] ?? 0); ?> total
                     </span>
@@ -465,11 +473,11 @@ require_once __DIR__ . '/../includes/header.php';
             <div class="rider-earnings-stat rider-earnings-stat-liability">
                 <span class="rider-earnings-stat-label">Order liability</span>
                 <span class="rider-earnings-stat-value">
-                    <?php echo htmlspecialchars(formatSignedRiderCurrency(-$collectionTotal), ENT_QUOTES, 'UTF-8'); ?>
+                    <?php echo htmlspecialchars($formatSignedCurrency(-$liabilityTotal), ENT_QUOTES, 'UTF-8'); ?>
                 </span>
                 <span class="rider-earnings-stat-hint">
-                    Across <?php echo $collectionCount; ?>
-                    in-flight order<?php echo $collectionCount === 1 ? '' : 's'; ?>;
+                    Across <?php echo $liabilityCount; ?>
+                    in-flight order<?php echo $liabilityCount === 1 ? '' : 's'; ?>;
                     clears on delivery or failure.
                 </span>
             </div>
@@ -508,7 +516,7 @@ require_once __DIR__ . '/../includes/header.php';
                                 ?>
                                 <div class="rider-chart-column"
                                     data-day="<?php echo htmlspecialchars($day['short'], ENT_QUOTES, 'UTF-8'); ?>"
-                                    data-amount="<?php echo htmlspecialchars(formatRiderCurrency($day['amount']), ENT_QUOTES, 'UTF-8'); ?>">
+                                    data-amount="<?php echo htmlspecialchars($formatCurrency($day['amount']), ENT_QUOTES, 'UTF-8'); ?>">
                                     <div class="rider-chart-bar-track">
                                         <div class="rider-chart-bar <?php echo $isToday ? 'is-today' : ''; ?> <?php echo $hasValue ? '' : 'is-empty'; ?>"
                                             style="height: <?php echo $pct; ?>%"></div>
@@ -578,7 +586,7 @@ require_once __DIR__ . '/../includes/header.php';
                         </div>
                         <div class="rider-txn-amount-col">
                             <span class="rider-txn-amount <?php echo $isCredit ? 'credit' : 'debit'; ?>">
-                                <?php echo ($isCredit ? '+' : '−') . formatRiderCurrency($amount); ?>
+                                <?php echo ($isCredit ? '+' : '−') . $formatCurrency($amount); ?>
                             </span>
                             <?php if ($status !== 'completed'): ?>
                             <span class="rider-txn-status <?php echo $status === 'pending' ? 'pending' : 'failed'; ?>">
@@ -668,7 +676,7 @@ require_once __DIR__ . '/../includes/header.php';
                         </div>
                         <div class="rider-txn-amount-col">
                             <span class="rider-txn-amount debit">
-                                <?php echo formatRiderCurrency($colAmount); ?>
+                                <?php echo $formatCurrency($colAmount); ?>
                             </span>
                             <span
                                 class="rider-txn-status <?php echo htmlspecialchars($statusClass, ENT_QUOTES, 'UTF-8'); ?>">
@@ -702,8 +710,8 @@ require_once __DIR__ . '/../includes/header.php';
 
         <div class="modal-body">
             <p class="rider-withdraw-note">
-                Available balance: <strong><?php echo formatRiderCurrency($balance); ?></strong>.
-                Minimum ₱100.00 &bull; Maximum <?php echo formatRiderCurrency($balance); ?>.
+                Available balance: <strong><?php echo $formatCurrency($balance); ?></strong>.
+                Minimum ₱100.00 &bull; Maximum <?php echo $formatCurrency($balance); ?>.
             </p>
 
             <div class="rider-withdraw-amount-wrap">

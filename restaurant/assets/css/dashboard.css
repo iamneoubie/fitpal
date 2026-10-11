@@ -2,7 +2,23 @@
  * FitPal Restaurant Dashboard Styles
  *
  * @package FitPal
- * @version 1.0
+ * @version 5.0 — Replaces the denied-only .restaurant-reapply-banner
+ *                with .restaurant-verification-banner, which carries
+ *                two tones: tone-pending (amber, informational) and
+ *                tone-danger (red, blocking). The banner serves the
+ *                dashboard's three non-verified statuses:
+ *
+ *                  pending     → tone-pending, no action
+ *                  denied      → tone-danger,  Re-apply action
+ *                  suspended   → tone-danger,  no action
+ *
+ *                Every rule above DASHBOARD CONTROLS is preserved
+ *                from earlier versions because the DOM above the
+ *                banner is unchanged.
+ *
+ *                (4.0: .restaurant-reapply-banner. 3.0: header chip
+ *                + reapply + custom combobox. 2.0: four-tab
+ *                analytics. 1.0: initial.)
  */
 
 html {
@@ -32,13 +48,15 @@ html {
     box-sizing: border-box;
 }
 
-/* Header */
+/* ============================================================
+   HEADER — greeting + controls
+   ============================================================ */
 
 .restaurant-dashboard-header {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: 24px;
+    margin-bottom: 20px;
     flex-wrap: wrap;
     gap: 16px;
 }
@@ -66,14 +84,180 @@ html {
     line-height: 1.5;
 }
 
-.restaurant-dashboard-actions {
+.restaurant-dashboard-controls {
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-wrap: wrap;
     flex-shrink: 0;
 }
 
-/* Alerts */
+/* ============================================================
+   VERIFICATION BANNER — full-width strip
+   ============================================================
+   Two tones:
+
+     .tone-pending   amber strip, informational.
+                     Used for verification_status = 'pending'.
+
+     .tone-danger    red strip, blocking.
+                     Used for verification_status = 'denied'
+                     and 'suspended'.
+
+   The DOM is identical for both tones; only the CSS variables
+   that drive background, border, and text colour change.
+   ============================================================ */
+
+.restaurant-verification-banner {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 20px;
+    margin-bottom: 20px;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    box-sizing: border-box;
+}
+
+.restaurant-verification-banner-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.restaurant-verification-banner-icon img {
+    width: 22px;
+    height: 22px;
+    display: block;
+}
+
+.restaurant-verification-banner-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.restaurant-verification-banner-title {
+    margin: 0;
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.restaurant-verification-banner-message {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+.restaurant-verification-banner-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 22px;
+    color: #ffffff;
+    border: 2px solid transparent;
+    border-radius: var(--radius-base);
+    font-family: inherit;
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+    min-height: 46px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: transform 0.1s ease, box-shadow 0.15s ease;
+}
+
+.restaurant-verification-banner-action:active {
+    transform: scale(0.985);
+}
+
+.restaurant-verification-banner-action img {
+    width: 16px;
+    height: 16px;
+    display: block;
+    filter: brightness(0) invert(1);
+    flex-shrink: 0;
+}
+
+/* ---------- Tone: pending (amber, informational) ---------- */
+
+.restaurant-verification-banner.tone-pending {
+    background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+    border: 1px solid #fde68a;
+    border-left: 4px solid var(--warning);
+}
+
+.restaurant-verification-banner.tone-pending .restaurant-verification-banner-icon {
+    background: rgba(255, 193, 7, 0.18);
+}
+
+.restaurant-verification-banner.tone-pending .restaurant-verification-banner-icon img {
+    filter: brightness(0) saturate(100%)
+            invert(60%) sepia(90%) saturate(900%)
+            hue-rotate(0deg) brightness(90%) contrast(95%);
+}
+
+.restaurant-verification-banner.tone-pending .restaurant-verification-banner-title {
+    color: #78350f;
+}
+
+.restaurant-verification-banner.tone-pending .restaurant-verification-banner-message {
+    color: #92400e;
+}
+
+/* ---------- Tone: danger (red, blocking) ---------- */
+
+.restaurant-verification-banner.tone-danger {
+    background: linear-gradient(135deg, #fef2f2 0%, #fff5f5 100%);
+    border: 1px solid #fecaca;
+    border-left: 4px solid var(--danger);
+}
+
+.restaurant-verification-banner.tone-danger .restaurant-verification-banner-icon {
+    background: rgba(220, 53, 69, 0.12);
+}
+
+.restaurant-verification-banner.tone-danger .restaurant-verification-banner-icon img {
+    filter: brightness(0) saturate(100%)
+            invert(40%) sepia(90%) saturate(600%)
+            hue-rotate(330deg) brightness(90%) contrast(85%);
+}
+
+.restaurant-verification-banner.tone-danger .restaurant-verification-banner-title {
+    color: #7f1d1d;
+}
+
+.restaurant-verification-banner.tone-danger .restaurant-verification-banner-message {
+    color: #991b1b;
+}
+
+.restaurant-verification-banner.tone-danger .restaurant-verification-banner-action {
+    background: var(--danger);
+    border-color: var(--danger);
+    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.18);
+}
+
+.restaurant-verification-banner.tone-danger .restaurant-verification-banner-action:hover,
+.restaurant-verification-banner.tone-danger .restaurant-verification-banner-action:focus-visible {
+    background: #b91c1c;
+    border-color: #b91c1c;
+    outline: none;
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.28);
+}
+
+/* ============================================================
+   ALERTS
+   ============================================================ */
 
 .alert {
     padding: 12px 18px;
@@ -96,7 +280,9 @@ html {
     border-color: #f5c6cb;
 }
 
-/* Stat cards */
+/* ============================================================
+   STAT CARDS
+   ============================================================ */
 
 .restaurant-stats-grid {
     display: grid;
@@ -117,6 +303,20 @@ html {
     border: 1px solid var(--gray-100);
     min-height: 92px;
     box-sizing: border-box;
+    text-decoration: none;
+    color: inherit;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+a.restaurant-stat-card:hover {
+    border-color: var(--gray-200);
+    box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.08));
+    transform: translateY(-1px);
+}
+
+a.restaurant-stat-card:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
 }
 
 .restaurant-stat-info {
@@ -158,7 +358,9 @@ html {
     font-weight: var(--font-weight-semibold);
 }
 
-/* Cards */
+/* ============================================================
+   CARDS
+   ============================================================ */
 
 .restaurant-card {
     background: var(--white);
@@ -169,6 +371,10 @@ html {
     overflow: hidden;
     display: flex;
     flex-direction: column;
+}
+
+.restaurant-card:last-child {
+    margin-bottom: 0;
 }
 
 .restaurant-card-header {
@@ -189,7 +395,294 @@ html {
     font-weight: var(--font-weight-semibold);
 }
 
-/* Weekly chart */
+/* ============================================================
+   PERIOD COMBOBOX
+   ============================================================ */
+
+.period-combo {
+    position: relative;
+    display: inline-block;
+    min-width: 176px;
+    flex-shrink: 0;
+}
+
+.period-combo-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 14px;
+    background: var(--white);
+    border: 1.5px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    box-shadow: var(--shadow-sm);
+    font-family: inherit;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+    min-height: 44px;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.period-combo-button:hover {
+    border-color: var(--gray-300);
+}
+
+.period-combo-button:focus-visible {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.2);
+}
+
+.period-combo.is-open .period-combo-button {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15);
+}
+
+.period-combo-button-left {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex: 1;
+}
+
+.period-combo-button-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+    opacity: 0.7;
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.period-combo-button-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.period-combo-button-chevron {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+    opacity: 0.55;
+    transition: transform 0.15s ease;
+    pointer-events: none;
+}
+
+.period-combo.is-open .period-combo-button-chevron {
+    transform: rotate(180deg);
+}
+
+.period-combo-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 100%;
+    z-index: 40;
+    margin: 0;
+    padding: 6px;
+    list-style: none;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14);
+    box-sizing: border-box;
+    animation: periodComboIn 0.14s ease;
+}
+
+.period-combo-menu[hidden] {
+    display: none;
+}
+
+@keyframes periodComboIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.period-combo-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    font-family: inherit;
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+    box-sizing: border-box;
+    white-space: nowrap;
+    transition: background 0.1s ease, color 0.1s ease;
+    min-height: 40px;
+}
+
+.period-combo-option:hover,
+.period-combo-option:focus-visible {
+    background: rgba(89, 193, 74, 0.1);
+    color: var(--primary-dark);
+    outline: none;
+}
+
+.period-combo-option.is-selected {
+    background: rgba(89, 193, 74, 0.14);
+    color: var(--primary-dark);
+    font-weight: 700;
+}
+
+.period-combo-option-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.period-combo-option-check {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+    opacity: 0;
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.period-combo-option.is-selected .period-combo-option-check {
+    opacity: 1;
+}
+
+/* ============================================================
+   ANALYTICS WRAPPER — tab bar + panels
+   ============================================================ */
+
+.restaurant-analytics {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-bottom: 24px;
+}
+
+.restaurant-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    padding: 4px;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 16px;
+    box-sizing: border-box;
+}
+
+.restaurant-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border: none;
+    border-radius: var(--radius-base);
+    background: transparent;
+    color: var(--gray-600);
+    font-family: inherit;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s ease, color 0.15s ease;
+    min-height: 44px;
+    text-align: center;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.restaurant-tab:hover {
+    background: var(--gray-50);
+    color: var(--text);
+}
+
+.restaurant-tab:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.restaurant-tab.active {
+    background: var(--primary);
+    color: #ffffff;
+}
+
+.restaurant-tab-icon {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+    opacity: 0.7;
+}
+
+.restaurant-tab.active .restaurant-tab-icon {
+    opacity: 1;
+    filter: brightness(0) invert(1);
+}
+
+/* ============================================================
+   TAB PANELS
+   ============================================================ */
+
+.restaurant-tab-panels {
+    position: relative;
+}
+
+.restaurant-tab-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    animation: restaurantTabPanelIn 0.18s ease;
+}
+
+.restaurant-tab-panel[hidden] {
+    display: none;
+}
+
+@keyframes restaurantTabPanelIn {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.restaurant-tab-panel .restaurant-card {
+    margin-bottom: 0;
+}
+
+/* ============================================================
+   REVENUE PANEL — bar chart
+   ============================================================ */
 
 .restaurant-chart-body {
     padding: 20px;
@@ -202,7 +695,7 @@ html {
     display: grid;
     grid-template-columns: auto 1fr;
     gap: 10px;
-    height: 220px;
+    height: 240px;
     position: relative;
 }
 
@@ -273,7 +766,7 @@ html {
     flex: 1;
     display: flex;
     align-items: stretch;
-    gap: 10px;
+    gap: 8px;
     padding-bottom: 22px;
     position: relative;
     z-index: 1;
@@ -372,7 +865,410 @@ html {
     color: var(--gray-400);
 }
 
-/* Branch list (owner) */
+/* ============================================================
+   TRENDING PANEL — ranked list with delta pill
+   ============================================================ */
+
+.restaurant-trending-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.restaurant-trending-row {
+    display: grid;
+    grid-template-columns: 32px 1fr auto auto;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--gray-100);
+}
+
+.restaurant-trending-row:last-child {
+    border-bottom: none;
+}
+
+.restaurant-trending-rank {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-full);
+    background: var(--gray-100);
+    color: var(--gray-600);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    line-height: 1;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+}
+
+.restaurant-trending-row:nth-child(1) .restaurant-trending-rank {
+    background: var(--primary);
+    color: #ffffff;
+}
+
+.restaurant-trending-row:nth-child(2) .restaurant-trending-rank {
+    background: rgba(89, 193, 74, 0.2);
+    color: var(--primary-dark);
+}
+
+.restaurant-trending-row:nth-child(3) .restaurant-trending-rank {
+    background: rgba(89, 193, 74, 0.12);
+    color: var(--primary-dark);
+}
+
+.restaurant-trending-info {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.restaurant-trending-name {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.restaurant-trending-meta {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    line-height: 1.4;
+}
+
+.restaurant-trending-delta {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 4px 10px;
+    border-radius: var(--radius-full);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+    min-width: 56px;
+    justify-content: center;
+}
+
+.restaurant-trending-delta.is-up {
+    background: rgba(89, 193, 74, 0.15);
+    color: #065f46;
+}
+
+.restaurant-trending-delta.is-down {
+    background: rgba(220, 53, 69, 0.12);
+    color: #991b1b;
+}
+
+.restaurant-trending-delta.is-flat {
+    background: var(--gray-100);
+    color: var(--gray-600);
+}
+
+.restaurant-trending-revenue {
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    color: var(--primary);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    min-width: 80px;
+    text-align: right;
+}
+
+/* ============================================================
+   DAYS PANEL — best day + weekday chart
+   ============================================================ */
+
+.restaurant-best-day {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px;
+    background: linear-gradient(135deg, rgba(89, 193, 74, 0.08) 0%, rgba(89, 193, 74, 0.02) 100%);
+    flex-wrap: wrap;
+}
+
+.restaurant-best-day-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-full);
+    background: rgba(89, 193, 74, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.restaurant-best-day-icon img {
+    width: 24px;
+    height: 24px;
+    display: block;
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.restaurant-best-day-info {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.restaurant-best-day-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--primary-dark);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    line-height: 1;
+}
+
+.restaurant-best-day-name {
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.25;
+    word-break: break-word;
+}
+
+.restaurant-best-day-stats {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    flex-shrink: 0;
+    text-align: right;
+}
+
+.restaurant-best-day-amount {
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    color: var(--primary-dark);
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+}
+
+.restaurant-best-day-orders {
+    font-size: var(--font-size-xs);
+    color: var(--gray-500);
+    line-height: 1.3;
+}
+
+.restaurant-weekday-chart {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.restaurant-weekday-row {
+    display: grid;
+    grid-template-columns: 60px 1fr 100px;
+    align-items: center;
+    gap: 12px;
+}
+
+.restaurant-weekday-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.3;
+    text-align: right;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.restaurant-weekday-bar-track {
+    position: relative;
+    height: 24px;
+    background: var(--gray-100);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+}
+
+.restaurant-weekday-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, var(--secondary) 0%, var(--primary) 100%);
+    border-radius: var(--radius-full);
+    transition: width 0.4s ease;
+    min-width: 3px;
+}
+
+.restaurant-weekday-bar.is-best {
+    background: linear-gradient(90deg, var(--primary) 0%, var(--primary-dark) 100%);
+    box-shadow: 0 1px 6px rgba(89, 193, 74, 0.3);
+}
+
+.restaurant-weekday-bar.is-empty {
+    width: 0 !important;
+}
+
+.restaurant-weekday-value {
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.restaurant-weekday-value-sub {
+    display: block;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--gray-500);
+    letter-spacing: 0.2px;
+}
+
+/* ============================================================
+   CATEGORIES PANEL — share bars
+   ============================================================ */
+
+.restaurant-category-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.restaurant-category-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--gray-100);
+}
+
+.restaurant-category-row:last-child {
+    border-bottom: none;
+}
+
+.restaurant-category-row-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    min-width: 0;
+}
+
+.restaurant-category-name {
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.restaurant-category-amount {
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    color: var(--primary);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.restaurant-category-share-track {
+    width: 100%;
+    height: 10px;
+    background: var(--gray-100);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+}
+
+.restaurant-category-share-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--secondary) 0%, var(--primary) 100%);
+    border-radius: var(--radius-full);
+    transition: width 0.4s ease;
+    min-width: 3px;
+}
+
+.restaurant-category-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    font-size: 11px;
+    color: var(--gray-500);
+    line-height: 1.4;
+}
+
+.restaurant-category-meta-strong {
+    font-weight: 700;
+    color: var(--gray-700);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   EMPTY STATES — shared by every panel
+   ============================================================ */
+
+.restaurant-tab-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 48px 24px;
+    text-align: center;
+}
+
+.restaurant-tab-empty-icon {
+    width: 56px;
+    height: 56px;
+    margin-bottom: 8px;
+    border-radius: var(--radius-full);
+    background: var(--gray-100);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px;
+    box-sizing: border-box;
+}
+
+.restaurant-tab-empty-icon img {
+    width: 100%;
+    height: 100%;
+    max-width: 28px;
+    max-height: 28px;
+    object-fit: contain;
+    opacity: 0.45;
+    filter: brightness(0) saturate(100%)
+            invert(48%) sepia(70%) saturate(450%)
+            hue-rotate(75deg) brightness(95%) contrast(85%);
+}
+
+.restaurant-tab-empty-title {
+    margin: 0;
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--text);
+}
+
+.restaurant-tab-empty-text {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--gray-500);
+    max-width: 380px;
+    line-height: 1.5;
+}
+
+/* ============================================================
+   BRANCH OVERVIEW (owner only)
+   ============================================================ */
 
 .restaurant-branch-list {
     display: flex;
@@ -428,51 +1324,9 @@ html {
     white-space: nowrap;
 }
 
-/* Top products (branch) */
-
-.restaurant-product-list {
-    display: flex;
-    flex-direction: column;
-}
-
-.restaurant-product-row {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    align-items: center;
-    gap: 16px;
-    padding: 14px 20px;
-    border-bottom: 1px solid var(--gray-100);
-}
-
-.restaurant-product-row:last-child {
-    border-bottom: none;
-}
-
-.restaurant-product-info {
-    min-width: 0;
-}
-
-.restaurant-product-name {
-    margin: 0 0 2px 0;
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    color: var(--text);
-}
-
-.restaurant-product-meta {
-    margin: 0;
-    font-size: var(--font-size-xs);
-    color: var(--gray-500);
-}
-
-.restaurant-product-revenue {
-    font-size: var(--font-size-base);
-    font-weight: var(--font-weight-bold);
-    color: var(--primary);
-    white-space: nowrap;
-}
-
-/* Empty state */
+/* ============================================================
+   EMPTY STATE — branch overview / no products
+   ============================================================ */
 
 .restaurant-empty-state {
     text-align: center;
@@ -492,7 +1346,9 @@ html {
     margin: 0;
 }
 
-/* Badges */
+/* ============================================================
+   BADGES
+   ============================================================ */
 
 .badge {
     display: inline-flex;
@@ -532,7 +1388,9 @@ html {
     color: var(--gray-600);
 }
 
-/* Responsive */
+/* ============================================================
+   RESPONSIVE — TABLET (≤ 992px)
+   ============================================================ */
 
 @media (max-width: 992px) {
     .restaurant-stats-grid {
@@ -540,9 +1398,13 @@ html {
     }
 
     .restaurant-weekly-chart {
-        height: 200px;
+        height: 220px;
     }
 }
+
+/* ============================================================
+   RESPONSIVE — TABLET PORTRAIT (≤ 768px)
+   ============================================================ */
 
 @media (max-width: 768px) {
     .restaurant-dashboard-page {
@@ -558,8 +1420,31 @@ html {
         font-size: var(--font-size-2xl);
     }
 
+    .restaurant-dashboard-controls {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .period-combo {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .restaurant-verification-banner {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 16px;
+    }
+
+    .restaurant-verification-banner-action {
+        width: 100%;
+        justify-content: center;
+        padding: 12px 18px;
+    }
+
     .restaurant-weekly-chart {
-        height: 180px;
+        height: 200px;
     }
 
     .restaurant-chart-summary {
@@ -576,6 +1461,82 @@ html {
         border-bottom: none;
     }
 
+    .restaurant-tabs {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 3px;
+        padding: 3px;
+    }
+
+    .restaurant-tab {
+        flex-direction: column;
+        padding: 8px 4px;
+        font-size: 11px;
+        gap: 4px;
+        min-height: 56px;
+        white-space: normal;
+        line-height: 1.15;
+        text-align: center;
+    }
+
+    .restaurant-tab-icon {
+        width: 16px;
+        height: 16px;
+    }
+
+    .restaurant-trending-row {
+        grid-template-columns: 28px 1fr auto;
+        gap: 10px;
+        padding: 12px 16px;
+    }
+
+    .restaurant-trending-delta {
+        grid-column: 2 / 3;
+        justify-self: start;
+        min-width: 0;
+        padding: 3px 8px;
+        font-size: 10px;
+    }
+
+    .restaurant-trending-revenue {
+        grid-column: 3 / 4;
+        grid-row: 1 / 2;
+        min-width: 0;
+        font-size: var(--font-size-sm);
+    }
+
+    .restaurant-trending-rank {
+        width: 28px;
+        height: 28px;
+        font-size: var(--font-size-xs);
+    }
+
+    .restaurant-best-day {
+        padding: 16px;
+    }
+
+    .restaurant-best-day-stats {
+        align-items: flex-start;
+        text-align: left;
+        flex-basis: 100%;
+    }
+
+    .restaurant-best-day-amount {
+        font-size: var(--font-size-lg);
+    }
+
+    .restaurant-weekday-row {
+        grid-template-columns: 46px 1fr 76px;
+        gap: 8px;
+    }
+
+    .restaurant-weekday-value {
+        font-size: var(--font-size-xs);
+    }
+
+    .restaurant-category-row {
+        padding: 14px 16px;
+    }
+
     .restaurant-branch-row {
         grid-template-columns: 1fr auto;
         row-gap: 6px;
@@ -586,6 +1547,10 @@ html {
         justify-self: start;
     }
 }
+
+/* ============================================================
+   RESPONSIVE — MOBILE (≤ 480px)
+   ============================================================ */
 
 @media (max-width: 480px) {
     .restaurant-stats-grid {
@@ -604,5 +1569,160 @@ html {
 
     .restaurant-stat-label {
         font-size: 10px;
+    }
+
+    .restaurant-dashboard-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .period-combo {
+        width: 100%;
+    }
+
+    .restaurant-verification-banner-icon {
+        width: 38px;
+        height: 38px;
+    }
+
+    .restaurant-verification-banner-icon img {
+        width: 18px;
+        height: 18px;
+    }
+
+    .restaurant-verification-banner-title {
+        font-size: var(--font-size-sm);
+    }
+
+    .restaurant-verification-banner-message {
+        font-size: var(--font-size-xs);
+    }
+
+    .restaurant-tabs {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 3px;
+        padding: 3px;
+    }
+
+    .restaurant-tab {
+        min-height: 52px;
+        font-size: 11px;
+    }
+
+    .restaurant-chart-columns {
+        gap: 4px;
+    }
+
+    .restaurant-chart-label {
+        font-size: 9px;
+    }
+
+    .restaurant-trending-row {
+        grid-template-columns: 24px 1fr;
+        padding: 12px 14px;
+        gap: 8px;
+    }
+
+    .restaurant-trending-rank {
+        width: 24px;
+        height: 24px;
+        font-size: 11px;
+    }
+
+    .restaurant-trending-name {
+        font-size: var(--font-size-xs);
+    }
+
+    .restaurant-trending-meta {
+        font-size: 10px;
+    }
+
+    .restaurant-trending-delta {
+        grid-column: 2 / 3;
+        justify-self: start;
+    }
+
+    .restaurant-trending-revenue {
+        grid-column: 2 / 3;
+        justify-self: start;
+        text-align: left;
+        font-size: var(--font-size-xs);
+    }
+
+    .restaurant-best-day {
+        padding: 14px;
+        gap: 12px;
+    }
+
+    .restaurant-best-day-icon {
+        width: 40px;
+        height: 40px;
+    }
+
+    .restaurant-best-day-icon img {
+        width: 20px;
+        height: 20px;
+    }
+
+    .restaurant-best-day-name {
+        font-size: var(--font-size-base);
+    }
+
+    .restaurant-weekday-row {
+        grid-template-columns: 40px 1fr 66px;
+        gap: 6px;
+    }
+
+    .restaurant-weekday-label {
+        font-size: 10px;
+    }
+
+    .restaurant-weekday-value {
+        font-size: 11px;
+    }
+
+    .restaurant-weekday-value-sub {
+        font-size: 9px;
+    }
+
+    .restaurant-weekday-bar-track {
+        height: 20px;
+    }
+
+    .restaurant-category-row {
+        padding: 12px 14px;
+    }
+
+    .restaurant-category-name {
+        font-size: var(--font-size-xs);
+    }
+
+    .restaurant-category-amount {
+        font-size: var(--font-size-xs);
+    }
+
+    .restaurant-category-meta {
+        font-size: 10px;
+    }
+}
+
+/* ============================================================
+   REDUCED MOTION
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    .restaurant-tab,
+    .restaurant-tab-panel,
+    .restaurant-trending-delta,
+    .restaurant-weekday-bar,
+    .restaurant-category-share-bar,
+    .period-combo-button,
+    .period-combo-menu,
+    .period-combo-option,
+    .restaurant-verification-banner-action,
+    .restaurant-stat-card {
+        transition: none !important;
+        animation: none !important;
     }
 }

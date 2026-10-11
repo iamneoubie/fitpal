@@ -1,91 +1,50 @@
 /**
  * FitPal Rider Re-Application Page JavaScript
  *
- * Client-side behaviour for rider/pages/reapply.php. Five
+ * Client-side behaviour for rider/pages/rider-reapply.php. Six
  * responsibilities:
  *
- *   1. Step gating for the five-step wizard. Only one
- *      .register-step is visible at a time; the progress bar's
- *      .active and .completed states track which step the rider
- *      is on; the Next and Back buttons move between steps and
- *      validate the departing step first.
- *
- *   2. Input filters and real-time validation, on the same rules
- *      sign-up-handler.php enforces server-side.
- *
- *   3. Vehicle-type-dependent UI swaps — the page-level
- *      data-vehicle-type attribute, the `required` toggle on the
- *      two license date inputs, and the id_type-dependent heading
- *      swaps that reapply.css keys on the same attribute.
- *
- *   4. Upload dropzone previews for the two file inputs
- *      (profile_picture, drivers_license).
- *
- *   5. Form submission via fetch, with the handler's JSON response
- *      routed to the correct inline field error, banner, or — if
- *      the error is on a step the rider has already passed — back
- *      to the step that owns the field.
+ *   1. Step gating for the six-step wizard.
+ *   2. Input filters and real-time validation.
+ *   3. Vehicle-type-dependent UI swaps.
+ *   4. Upload dropzone previews.
+ *   5. Review-summary build on Step 6.
+ *   6. Form submission via fetch.
  *
  * ---------------------------------------------------------------------
- * WHY THIS IS NOT sign-up.js
+ * SIX STEPS
  * ---------------------------------------------------------------------
- * The two pages look similar but are structurally different:
- *
- *   sign-up.php    five-step wizard, password required.
- *   reapply.php    five-step wizard, password optional, every
- *                  field pre-filled from the rider's existing row.
- *
- * A shared script would need to feature-detect which page it is
- * on and branch at every entry point. Keeping a separate file means
- * each page's JS can be read top to bottom without skipping
- * "if the form is prefilled, do X; otherwise do Y" clauses.
+ *   Step 1  Personal
+ *   Step 2  Vehicle
+ *   Step 3  Address
+ *   Step 4  Emergency Contact
+ *   Step 5  Verification Uploads
+ *   Step 6  Review & Submit
  *
  * ---------------------------------------------------------------------
- * PASSWORD FIELDS ARE OPTIONAL
+ * NO PASSWORD FIELDS
  * ---------------------------------------------------------------------
- * Both password inputs start empty and stay empty unless the rider
- * types into them. The validation rule is:
- *
- *   - Both blank  → no password change; the handler leaves the
- *                   existing hash alone.
- *   - Both filled → the new password must meet the rules and the
- *                   two values must match. The handler rewrites the
- *                   hash.
- *   - Only one filled → refused with an inline error on the
- *                   blank field, because half a password is never a
- *                   valid submission.
- *
- * The handler cannot pre-fill these fields, because
- * delivery_rider.password holds a bcrypt hash and a hash is not
- * reversible. There is nothing to fetch into the inputs.
+ * This page does not collect or validate a password. The re-apply
+ * flow does not touch the rider's credentials; the rider keeps the
+ * password they already have.
  *
  * ---------------------------------------------------------------------
- * WHAT THIS FILE DOES NOT DO
+ * REVIEW SUMMARY ON STEP 6
  * ---------------------------------------------------------------------
- *   - It does not inject markup. Every element it manipulates is
- *     rendered by reapply.php.
- *   - It does not compute the POST target from the DOM. The endpoint
- *     is a literal string, matching the form's own action attribute.
- *   - It does not pre-fill the two license date inputs. The page
- *     renders them empty and this file keeps them empty; the rider
- *     is expected to enter the new document's dates.
- *   - It does not use window.alert, window.confirm, or
- *     window.prompt. Every message is either an inline field error
- *     or the top banner.
- *   - It does not add inline CSS. The upload dropzone's `.has-file`
- *     and `.is-dragover` classes, and the wizard's `.active` /
- *     `.completed` classes on the progress bar, are styled by
- *     reapply.css.
+ * buildReviewSummary() reads every input on Steps 1–5 and writes
+ * each value slot's textContent. It runs when the rider reaches
+ * Step 6, and again on every subsequent transition into Step 6.
  *
  * @package FitPal
- * @version 2.1 — The "confirm only, no new password" inline error
- *                message is reworded to match the page's hint text.
- *                No validation logic, filter, dropzone, password
- *                toggle, vehicle-type swap, step gate, or submit
- *                behaviour changed from v2.0.
+ * @version 5.0 — Six-step wizard. Address and Emergency Contact
+ *                split into their own steps. Uploads renumbered to
+ *                Step 5. Verify renumbered to Step 6. Step 2's
+ *                make/model/year inputs gain `required` toggling
+ *                alongside the plate. Step 3's four previously
+ *                optional address fields now validate as required.
  *
- *                (2.0: five-step wizard gating added. 1.1: comment
- *                update. 1.0: initial reapply-page script.)
+ *                (4.0: buildReviewSummary added. 3.0: password
+ *                branches removed. 2.0: five-step wizard.)
  */
 
 (function () {
@@ -99,18 +58,17 @@
         var form = document.getElementById('registerForm');
         if (!form) return;
 
-        // Literal endpoint. Matches the <form action> reapply.php
-        // renders. Never read from form.action at request time.
         var ENDPOINT = '../backend/handlers/sign-up-handler.php';
 
-        var TOTAL_STEPS = 5;
+        var TOTAL_STEPS = 6;
 
         var STEP_TITLES = [
-            'Step 1 of 5 — Personal Information',
-            'Step 2 of 5 — Vehicle',
-            'Step 3 of 5 — Address & Emergency Contact',
-            'Step 4 of 5 — Verification Uploads',
-            'Step 5 of 5 — Review & Submit',
+            'Step 1 of 6 — Personal Information',
+            'Step 2 of 6 — Vehicle',
+            'Step 3 of 6 — Address',
+            'Step 4 of 6 — Emergency Contact',
+            'Step 5 of 6 — Verification Uploads',
+            'Step 6 of 6 — Review & Submit',
         ];
 
         // ============================================
@@ -121,7 +79,6 @@
         var registerError = document.getElementById('registerError');
         var errorMessage  = document.getElementById('errorMessage');
 
-        // Wizard elements
         var steps          = document.querySelectorAll('.register-step');
         var progressSteps  = document.querySelectorAll('.progress-step');
         var progressLines  = document.querySelectorAll('.progress-line');
@@ -130,7 +87,6 @@
         var nextButtons    = document.querySelectorAll('.btn-next');
         var prevButtons    = document.querySelectorAll('.btn-prev');
 
-        // Personal
         var firstName       = document.getElementById('first_name');
         var middleName      = document.getElementById('middle_name');
         var lastName        = document.getElementById('last_name');
@@ -139,30 +95,26 @@
         var email           = document.getElementById('email');
         var contactNumber   = document.getElementById('contact_number');
         var username        = document.getElementById('username');
-        var password        = document.getElementById('password');
-        var confirmPassword = document.getElementById('confirm_password');
 
-        // Vehicle
         var vehicleType  = document.getElementById('vehicle_type');
         var vehiclePlate = document.getElementById('vehicle_plate');
         var vehicleMake  = document.getElementById('vehicle_make');
         var vehicleModel = document.getElementById('vehicle_model');
         var vehicleYear  = document.getElementById('vehicle_year');
 
-        // Address + Emergency
-        var block               = document.getElementById('block');
-        var barangay            = document.getElementById('barangay');
-        var city                = document.getElementById('city');
-        var province            = document.getElementById('province');
-        var region              = document.getElementById('region');
-        var postalCode          = document.getElementById('postal_code');
+        var block      = document.getElementById('block');
+        var barangay   = document.getElementById('barangay');
+        var city       = document.getElementById('city');
+        var province   = document.getElementById('province');
+        var region     = document.getElementById('region');
+        var postalCode = document.getElementById('postal_code');
+
         var emergencyFirstName  = document.getElementById('emergency_first_name');
         var emergencyMiddleName = document.getElementById('emergency_middle_name');
         var emergencyLastName   = document.getElementById('emergency_last_name');
         var emergencyRel        = document.getElementById('emergency_relationship');
         var emergencyContact    = document.getElementById('emergency_contact');
 
-        // Uploads + license dates
         var profileInput      = document.getElementById('profile_picture');
         var profileDropzone   = document.getElementById('profileDropzone');
         var profilePreview    = document.getElementById('profilePreview');
@@ -184,13 +136,14 @@
         var licenseIssueError  = document.getElementById('licenseIssueError');
         var licenseExpiryError = document.getElementById('licenseExpiryError');
 
-        // Terms + Submit
         var termsCheckbox = document.getElementById('terms');
         var termsGroup    = document.getElementById('termsGroup');
         var termsError    = document.getElementById('termsError');
         var registerBtn   = document.getElementById('registerBtn');
 
-        // Error elements
+        var reviewIdDocLabel      = document.getElementById('reviewIdDocLabel');
+        var reviewLicenseDatesRow = document.getElementById('reviewLicenseDatesRow');
+
         var firstNameError          = document.getElementById('firstNameError');
         var lastNameError           = document.getElementById('lastNameError');
         var birthdateError          = document.getElementById('birthdateError');
@@ -198,13 +151,16 @@
         var emailError              = document.getElementById('emailError');
         var contactError            = document.getElementById('contactError');
         var usernameError           = document.getElementById('usernameError');
-        var passwordError           = document.getElementById('passwordError');
-        var confirmError            = document.getElementById('confirmError');
         var vehicleTypeError        = document.getElementById('vehicleTypeError');
         var vehiclePlateError       = document.getElementById('vehiclePlateError');
+        var vehicleMakeError        = document.getElementById('vehicleMakeError');
+        var vehicleModelError       = document.getElementById('vehicleModelError');
         var vehicleYearError        = document.getElementById('vehicleYearError');
         var blockError              = document.getElementById('blockError');
+        var barangayError           = document.getElementById('barangayError');
         var cityError               = document.getElementById('cityError');
+        var provinceError           = document.getElementById('provinceError');
+        var regionError             = document.getElementById('regionError');
         var postalError             = document.getElementById('postalError');
         var emergencyFirstNameError = document.getElementById('emergencyFirstNameError');
         var emergencyLastNameError  = document.getElementById('emergencyLastNameError');
@@ -221,15 +177,6 @@
         // SHARED HELPERS
         // ============================================
 
-        /**
-         * Reduce a phone number to its digit-only form.
-         *
-         * Matches the server-side rule in sign-up-handler.php,
-         * which uses preg_replace('/\D+/', '', ...).
-         *
-         * @param {string} value
-         * @returns {string}
-         */
         function normalizeDigits(value) {
             return String(value || '').replace(/[^0-9]/g, '');
         }
@@ -239,17 +186,6 @@
             if (!/^09\d{9}$/.test(cleaned)) {
                 return { valid: false, message: 'Enter a valid PH mobile number (11 digits, starting with 09).' };
             }
-            return { valid: true, message: '' };
-        }
-
-        function isValidPassword(pw) {
-            if (pw.length < 8) return { valid: false, message: 'Password must be at least 8 characters.' };
-            if (pw.length > 20) return { valid: false, message: 'Password must be no more than 20 characters.' };
-            if (!/^[A-Za-z0-9]+$/.test(pw)) {
-                return { valid: false, message: 'Password can only contain letters and numbers.' };
-            }
-            if (!/[0-9]/.test(pw)) return { valid: false, message: 'Password must contain at least one number.' };
-            if (!/[A-Za-z]/.test(pw)) return { valid: false, message: 'Password must contain at least one letter.' };
             return { valid: true, message: '' };
         }
 
@@ -286,7 +222,7 @@
                 el.classList.remove('error');
             });
 
-            if (stepNumber === 5 && termsGroup) {
+            if (stepNumber === 6 && termsGroup) {
                 termsGroup.classList.remove('error');
                 if (termsError) {
                     termsError.textContent = '';
@@ -400,13 +336,6 @@
             });
         }
 
-        function setupAlphanumOnly(input) {
-            if (!input) return;
-            input.addEventListener('input', function () {
-                this.value = this.value.replace(/[^A-Za-z0-9]/g, '');
-            });
-        }
-
         function setupPlate(input) {
             if (!input) return;
             input.addEventListener('input', function () {
@@ -423,51 +352,25 @@
             });
         }
 
-        // Wire the filters.
         setupNameInput(firstName, firstNameError);
         setupNameInput(middleName, null);
         setupNameInput(lastName, lastNameError);
         setupNameInput(block, blockError);
-        setupNameInput(barangay, null);
+        setupNameInput(barangay, barangayError);
         setupNameInput(city, cityError);
-        setupNameInput(province, null);
-        setupNameInput(region, null);
+        setupNameInput(province, provinceError);
+        setupNameInput(region, regionError);
         setupNameInput(emergencyFirstName, emergencyFirstNameError);
         setupNameInput(emergencyMiddleName, null);
         setupNameInput(emergencyLastName, emergencyLastNameError);
-        setupTitleCaseInput(vehicleMake, null);
-        setupTitleCaseInput(vehicleModel, null);
+        setupTitleCaseInput(vehicleMake, vehicleMakeError);
+        setupTitleCaseInput(vehicleModel, vehicleModelError);
         setupEmailInput(email);
         setupDigitsOnly(contactNumber, contactError);
         setupDigitsOnly(emergencyContact, emergencyContactError);
         setupAlphanumUnderscore(username);
-        setupAlphanumOnly(password);
-        setupAlphanumOnly(confirmPassword);
         setupPlate(vehiclePlate);
         setupPostal(postalCode);
-
-        // ============================================
-        // PASSWORD TOGGLES
-        // ============================================
-
-        function setupPasswordToggle(toggleId, inputId, iconId) {
-            var btn   = document.getElementById(toggleId);
-            var input = document.getElementById(inputId);
-            var icon  = document.getElementById(iconId);
-            if (!btn || !input || !icon) return;
-
-            btn.addEventListener('click', function () {
-                var isPassword = input.type === 'password';
-                input.type = isPassword ? 'text' : 'password';
-                var iconFile = isPassword ? 'password-unhide.svg' : 'password-hide.svg';
-                icon.src = '../../shared/assets/images/icons/' + iconFile;
-                icon.alt = isPassword ? 'Hide password' : 'Show password';
-                this.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
-            });
-        }
-
-        setupPasswordToggle('togglePassword', 'password', 'passwordIcon');
-        setupPasswordToggle('toggleConfirmPassword', 'confirm_password', 'confirmPasswordIcon');
 
         // ============================================
         // FILE UPLOAD HELPERS
@@ -565,7 +468,7 @@
                     input.files = transfer.files;
                 } catch (err) {
                     if (window.console && console.warn) {
-                        console.warn('[reapply] Could not attach dropped file to input.');
+                        console.warn('[rider-reapply] Could not attach dropped file to input.');
                     }
                 }
                 validateAndSet(file);
@@ -636,59 +539,38 @@
                 if (vehicleModel) vehicleModel.value = '';
                 if (vehicleYear)  vehicleYear.value  = '';
 
+                if (vehiclePlate) vehiclePlate.removeAttribute('required');
+                if (vehicleMake)  vehicleMake.removeAttribute('required');
+                if (vehicleModel) vehicleModel.removeAttribute('required');
+                if (vehicleYear)  vehicleYear.removeAttribute('required');
+
                 clearFieldError(vehiclePlate, vehiclePlateError);
+                clearFieldError(vehicleMake,  vehicleMakeError);
+                clearFieldError(vehicleModel, vehicleModelError);
                 clearFieldError(vehicleYear,  vehicleYearError);
                 clearFieldError(licenseIssue, licenseIssueError);
                 clearFieldError(licenseExpiry, licenseExpiryError);
+            } else if (selectedValue !== '') {
+                if (vehiclePlate) vehiclePlate.setAttribute('required', 'required');
+                if (vehicleMake)  vehicleMake.setAttribute('required', 'required');
+                if (vehicleModel) vehicleModel.setAttribute('required', 'required');
+                if (vehicleYear)  vehicleYear.setAttribute('required', 'required');
+            }
+
+            if (reviewIdDocLabel) {
+                reviewIdDocLabel.textContent = isBicycle
+                    ? 'Valid Government ID'
+                    : "Driver's License";
+            }
+
+            if (reviewLicenseDatesRow) {
+                reviewLicenseDatesRow.style.display = isBicycle ? 'none' : '';
             }
         }
 
         if (vehicleType) {
             vehicleType.addEventListener('change', applyVehicleTypeDependentUI);
             applyVehicleTypeDependentUI();
-        }
-
-        // ============================================
-        // REAL-TIME PASSWORD FEEDBACK
-        // ============================================
-
-        if (password) {
-            password.addEventListener('input', function () {
-                var val = this.value;
-                if (val.length === 0) {
-                    clearFieldError(this, passwordError);
-                    return;
-                }
-                var check = isValidPassword(val);
-                if (check.valid) {
-                    clearFieldError(this, passwordError);
-                } else {
-                    showFieldError(this, passwordError, check.message);
-                }
-
-                if (confirmPassword && confirmPassword.value) {
-                    if (confirmPassword.value === val) {
-                        clearFieldError(confirmPassword, confirmError);
-                    } else {
-                        showFieldError(confirmPassword, confirmError, 'Passwords do not match.');
-                    }
-                }
-            });
-        }
-
-        if (confirmPassword) {
-            confirmPassword.addEventListener('input', function () {
-                var val = this.value;
-                if (!val) {
-                    clearFieldError(this, confirmError);
-                    return;
-                }
-                if (val === (password ? password.value : '')) {
-                    clearFieldError(this, confirmError);
-                } else {
-                    showFieldError(confirmPassword, confirmError, 'Passwords do not match.');
-                }
-            });
         }
 
         // ============================================
@@ -829,35 +711,6 @@
                 valid = false;
             }
 
-            // Passwords are OPTIONAL on this page.
-            //
-            //   both blank   → keep the current password
-            //   both filled  → new password, validated and matched
-            //   only one set → refused
-            var pwVal = password ? password.value : '';
-            var cpVal = confirmPassword ? confirmPassword.value : '';
-            if (pwVal !== '') {
-                var pwCheck = isValidPassword(pwVal);
-                if (!pwCheck.valid) {
-                    showFieldError(password, passwordError, pwCheck.message);
-                    valid = false;
-                }
-                if (cpVal === '') {
-                    showFieldError(confirmPassword, confirmError, 'Please confirm your new password.');
-                    valid = false;
-                } else if (pwVal !== cpVal) {
-                    showFieldError(confirmPassword, confirmError, 'Passwords do not match.');
-                    valid = false;
-                }
-            } else if (cpVal !== '') {
-                showFieldError(
-                    password,
-                    passwordError,
-                    'Please enter a new password, or leave both fields blank to keep your current one.'
-                );
-                valid = false;
-            }
-
             return valid;
         }
 
@@ -881,14 +734,29 @@
                     showFieldError(vehiclePlate, vehiclePlateError, 'Plate number looks too short.');
                     valid = false;
                 }
-            }
 
-            if (vehicleYear && vehicleYear.value) {
-                var y = parseInt(vehicleYear.value, 10);
-                var maxYear = new Date().getFullYear() + 1;
-                if (isNaN(y) || y < 1980 || y > maxYear) {
-                    showFieldError(vehicleYear, vehicleYearError, 'Please enter a valid year.');
+                var makeVal = vehicleMake ? vehicleMake.value.trim() : '';
+                if (!makeVal) {
+                    showFieldError(vehicleMake, vehicleMakeError, 'Make / Brand is required for motor vehicles.');
                     valid = false;
+                }
+
+                var modelVal = vehicleModel ? vehicleModel.value.trim() : '';
+                if (!modelVal) {
+                    showFieldError(vehicleModel, vehicleModelError, 'Model is required for motor vehicles.');
+                    valid = false;
+                }
+
+                if (!vehicleYear || !vehicleYear.value) {
+                    showFieldError(vehicleYear, vehicleYearError, 'Year is required for motor vehicles.');
+                    valid = false;
+                } else {
+                    var y = parseInt(vehicleYear.value, 10);
+                    var maxYear = new Date().getFullYear() + 1;
+                    if (isNaN(y) || y < 1980 || y > maxYear) {
+                        showFieldError(vehicleYear, vehicleYearError, 'Please enter a valid year.');
+                        valid = false;
+                    }
                 }
             }
 
@@ -905,17 +773,45 @@
                 valid = false;
             }
 
+            var barangayVal = barangay ? barangay.value.trim() : '';
+            if (!barangayVal) {
+                showFieldError(barangay, barangayError, 'Barangay is required.');
+                valid = false;
+            }
+
             var cityVal = city ? city.value.trim() : '';
             if (!cityVal) {
                 showFieldError(city, cityError, 'City or municipality is required.');
                 valid = false;
             }
 
-            if (postalCode && postalCode.value.trim() !== '' &&
-                !/^[0-9]{3,10}$/.test(postalCode.value.trim())) {
-                showFieldError(postalCode, postalError, 'Postal code must be numeric.');
+            var provinceVal = province ? province.value.trim() : '';
+            if (!provinceVal) {
+                showFieldError(province, provinceError, 'Province is required.');
                 valid = false;
             }
+
+            var regionVal = region ? region.value.trim() : '';
+            if (!regionVal) {
+                showFieldError(region, regionError, 'Region is required.');
+                valid = false;
+            }
+
+            var postalVal = postalCode ? postalCode.value.trim() : '';
+            if (!postalVal) {
+                showFieldError(postalCode, postalError, 'Postal code is required.');
+                valid = false;
+            } else if (!/^[0-9]{3,10}$/.test(postalVal)) {
+                showFieldError(postalCode, postalError, 'Postal code must be numeric (3–10 digits).');
+                valid = false;
+            }
+
+            return valid;
+        }
+
+        function validateStep4() {
+            clearStepErrors(4);
+            var valid = true;
 
             var efnVal = emergencyFirstName ? emergencyFirstName.value.trim() : '';
             if (efnVal.length < 2) {
@@ -961,8 +857,8 @@
             return valid;
         }
 
-        function validateStep4() {
-            clearStepErrors(4);
+        function validateStep5() {
+            clearStepErrors(5);
             var valid = true;
 
             if (!profileInput || !profileInput.files || !profileInput.files[0]) {
@@ -1031,8 +927,8 @@
             return valid;
         }
 
-        function validateStep5() {
-            clearStepErrors(5);
+        function validateStep6() {
+            clearStepErrors(6);
             var valid = true;
 
             if (!termsCheckbox || !termsCheckbox.checked) {
@@ -1054,8 +950,102 @@
                 case 3: return validateStep3();
                 case 4: return validateStep4();
                 case 5: return validateStep5();
+                case 6: return validateStep6();
                 default: return true;
             }
+        }
+
+        // ============================================
+        // REVIEW SUMMARY
+        // ============================================
+
+        function setText(id, value) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            el.textContent = value;
+        }
+
+        function buildReviewSummary() {
+            var fullName = [firstName && firstName.value, middleName && middleName.value, lastName && lastName.value]
+                .map(function (v) { return (v || '').trim(); })
+                .filter(Boolean)
+                .join(' ');
+
+            var emergencyFullName = [
+                emergencyFirstName && emergencyFirstName.value,
+                emergencyMiddleName && emergencyMiddleName.value,
+                emergencyLastName && emergencyLastName.value,
+            ]
+                .map(function (v) { return (v || '').trim(); })
+                .filter(Boolean)
+                .join(' ');
+
+            var addressParts = [block, barangay, city, province, region, postalCode]
+                .map(function (el) { return (el && el.value || '').trim(); })
+                .filter(Boolean);
+
+            var vehicleTypeText = (vehicleType && vehicleType.options[vehicleType.selectedIndex])
+                ? vehicleType.options[vehicleType.selectedIndex].text
+                : '—';
+            var plateText = (vehiclePlate && vehiclePlate.value) ? vehiclePlate.value.trim() : '—';
+            var makeText  = (vehicleMake && vehicleMake.value) ? vehicleMake.value.trim() : '';
+            var modelText = (vehicleModel && vehicleModel.value) ? vehicleModel.value.trim() : '';
+            var makeModel = [makeText, modelText].filter(Boolean).join(' ') || '—';
+
+            var emergencyRelText = (emergencyRel && emergencyRel.options[emergencyRel.selectedIndex])
+                ? emergencyRel.options[emergencyRel.selectedIndex].text
+                : '—';
+
+            var profileFileName = (profileInput && profileInput.files && profileInput.files[0])
+                ? profileInput.files[0].name
+                : '—';
+            var licenseFileName = (licenseInput && licenseInput.files && licenseInput.files[0])
+                ? licenseInput.files[0].name
+                : '—';
+
+            var isBicycle = vehicleType && vehicleType.value === 'bicycle';
+
+            if (reviewIdDocLabel) {
+                reviewIdDocLabel.textContent = isBicycle
+                    ? 'Valid Government ID'
+                    : "Driver's License";
+            }
+
+            if (reviewLicenseDatesRow) {
+                reviewLicenseDatesRow.style.display = isBicycle ? 'none' : '';
+            }
+
+            var licenseDatesText = '—';
+            if (!isBicycle && ((licenseIssue && licenseIssue.value) || (licenseExpiry && licenseExpiry.value))) {
+                var fmt = function (d) {
+                    if (!d) return '?';
+                    var t = new Date(d);
+                    if (isNaN(t.getTime())) return d;
+                    return t.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' });
+                };
+                licenseDatesText = fmt(licenseIssue && licenseIssue.value) + ' → ' + fmt(licenseExpiry && licenseExpiry.value);
+            } else if (isBicycle) {
+                licenseDatesText = '';
+            }
+
+            setText('reviewName', fullName || '—');
+            setText('reviewEmail', (email && email.value) || '—');
+            setText('reviewContact', (contactNumber && contactNumber.value) || '—');
+            setText('reviewUsername', (username && username.value) || '—');
+
+            setText('reviewVehicleType', vehicleTypeText);
+            setText('reviewVehiclePlate', plateText);
+            setText('reviewVehicleMakeModel', makeModel);
+
+            setText('reviewAddress', addressParts.join(', ') || '—');
+
+            setText('reviewEmergencyName', emergencyFullName || '—');
+            setText('reviewEmergencyRelationship', emergencyRelText);
+            setText('reviewEmergencyContact', (emergencyContact && emergencyContact.value) || '—');
+
+            setText('reviewProfilePhoto', profileFileName);
+            setText('reviewLicensePhoto', licenseFileName);
+            setText('reviewLicenseDates', licenseDatesText);
         }
 
         // ============================================
@@ -1097,6 +1087,10 @@
 
             hideBanner();
 
+            if (stepNumber === 6) {
+                buildReviewSummary();
+            }
+
             var progressBar = document.querySelector('.register-progress');
             if (progressBar) progressBar.setAttribute('aria-valuenow', String(stepNumber));
 
@@ -1129,28 +1123,32 @@
             email:                  { input: email,              errorEl: emailError,              step: 1 },
             contact_number:         { input: contactNumber,      errorEl: contactError,            step: 1 },
             username:               { input: username,           errorEl: usernameError,           step: 1 },
-            password:               { input: password,           errorEl: passwordError,           step: 1 },
-            confirm_password:       { input: confirmPassword,    errorEl: confirmError,            step: 1 },
 
             vehicle_type:           { input: vehicleType,        errorEl: vehicleTypeError,        step: 2 },
             vehicle_plate:          { input: vehiclePlate,       errorEl: vehiclePlateError,       step: 2 },
+            vehicle_make:           { input: vehicleMake,        errorEl: vehicleMakeError,        step: 2 },
+            vehicle_model:          { input: vehicleModel,       errorEl: vehicleModelError,       step: 2 },
             vehicle_year:           { input: vehicleYear,        errorEl: vehicleYearError,        step: 2 },
 
             block:                  { input: block,              errorEl: blockError,              step: 3 },
+            barangay:               { input: barangay,           errorEl: barangayError,           step: 3 },
             city:                   { input: city,               errorEl: cityError,               step: 3 },
+            province:               { input: province,           errorEl: provinceError,           step: 3 },
+            region:                 { input: region,             errorEl: regionError,             step: 3 },
             postal_code:            { input: postalCode,         errorEl: postalError,             step: 3 },
-            emergency_first_name:   { input: emergencyFirstName, errorEl: emergencyFirstNameError, step: 3 },
-            emergency_last_name:    { input: emergencyLastName,  errorEl: emergencyLastNameError,  step: 3 },
-            emergency_relationship: { input: emergencyRel,       errorEl: emergencyRelError,       step: 3 },
-            emergency_contact:      { input: emergencyContact,   errorEl: emergencyContactError,   step: 3 },
 
-            profile_picture:        { input: profileInput,       errorEl: profilePicError,         step: 4 },
-            drivers_license:        { input: licenseInput,       errorEl: licenseError,            step: 4 },
-            license_issue_date:     { input: licenseIssue,       errorEl: licenseIssueError,       step: 4 },
-            license_expiry_date:    { input: licenseExpiry,      errorEl: licenseExpiryError,      step: 4 },
+            emergency_first_name:   { input: emergencyFirstName, errorEl: emergencyFirstNameError, step: 4 },
+            emergency_last_name:    { input: emergencyLastName,  errorEl: emergencyLastNameError,  step: 4 },
+            emergency_relationship: { input: emergencyRel,       errorEl: emergencyRelError,       step: 4 },
+            emergency_contact:      { input: emergencyContact,   errorEl: emergencyContactError,   step: 4 },
 
-            upload:                 { input: null,               errorEl: null,                    step: 4 },
-            terms:                  { input: null,               errorEl: null,                    step: 5 },
+            profile_picture:        { input: profileInput,       errorEl: profilePicError,         step: 5 },
+            drivers_license:        { input: licenseInput,       errorEl: licenseError,            step: 5 },
+            license_issue_date:     { input: licenseIssue,       errorEl: licenseIssueError,       step: 5 },
+            license_expiry_date:    { input: licenseExpiry,      errorEl: licenseExpiryError,      step: 5 },
+
+            upload:                 { input: null,               errorEl: null,                    step: 5 },
+            terms:                  { input: null,               errorEl: null,                    step: 6 },
         };
 
         // ============================================
@@ -1198,7 +1196,7 @@
                     }
 
                     if (data && data.field === 'terms') {
-                        goToStep(5);
+                        goToStep(6);
                         if (termsError) {
                             termsError.textContent = data.message;
                             termsError.style.display = 'block';
@@ -1209,7 +1207,7 @@
 
                     if (data && data.field === 'upload') {
                         var message = (data && data.message) || '';
-                        goToStep(4);
+                        goToStep(5);
                         if (/license|ID|government/i.test(message)) {
                             showFieldError(licenseInput, licenseError, message);
                         } else {

@@ -41,39 +41,91 @@
  * ---------------------------------------------------------------------
  * SIGN-OUT GUARD CONTRACT
  * ---------------------------------------------------------------------
- * The header emits two JS globals on every AUTHENTICATED page:
+ * The header emits two JS globals on every authenticated page
+ * whose account is scoped to a branch:
  *
  *   window.RESTAURANT_SIGNOUT_GUARD_ENDPOINT
  *     The URL that answers "how many active orders does this
  *     branch have right now?". Points at
  *     kitchen-order-handler.php, whose `active_orders_count`
  *     action is already implemented and already used by the
- *     kitchen page. The previous revision pointed this at
- *     order-handler.php, which was renamed to
- *     kitchen-order-handler.php and no longer exists on disk, so
- *     every guard check returned 404 and logout.js failed open.
+ *     kitchen page.
  *
  *   window.RESTAURANT_CSRF_TOKEN
  *     The restaurant role's CSRF token, needed by the guard's
  *     POST body.
  *
- * These globals exist so logout.js can run the same pre-flight on
- * dashboard.php and profile.php that it already runs on
- * kitchen.php.
+ * ---------------------------------------------------------------------
+ * WHY THE GUARD IS BRANCH-SCOPED, NOT PAGE-SCOPED
+ * ---------------------------------------------------------------------
+ * The guard answers a branch-scoped question: does the branch the
+ * signed-in staff member belongs to have any live orders right
+ * now? The kitchen page has an obvious claim to the answer, but so
+ * does dashboard.php and profile.php: a staff member who leaves
+ * from either of those pages leaves the same set of live orders
+ * unattended. Emitting the globals only on kitchen.php was the
+ * bug: a branch staff member with live orders who opened
+ * dashboard.php saw the plain confirmation modal and was able to
+ * sign out.
  *
- * The two globals are NOT emitted on the sign-in or sign-up pages,
- * because those pages are unauthenticated and the guard endpoint
- * would be irrelevant.
+ * The header therefore emits the globals on every authenticated
+ * page whose account is branch-scoped. The scope test is
+ * $restaurantScope === 'branch' AND $restaurantBranchId > 0.
+ *
+ * Owner and partner accounts are never branch-scoped: their
+ * restaurant_scope is 'owner' and their restaurant_branch_id is
+ * NULL. They are excluded by construction. The guard is not their
+ * concern: an owner's session is not tied to a single branch's
+ * live orders, and blocking them on someone else's live work would
+ * be wrong.
+ *
+ * The sign-in and sign-up pages are unauthenticated and are also
+ * excluded, because the guard endpoint requires a live session.
  *
  * ---------------------------------------------------------------------
- * ROLE GATING
+ * VERIFICATION GATE
  * ---------------------------------------------------------------------
- * The Kitchen nav link is shown only to role in
- * {manager, staff, kitchen}. Owner and partner accounts see
- * Dashboard and Profile only — the kitchen page is an operational
- * surface for branch staff, and the sign-out guard's
- * active_orders_count action is also branch-scoped, so owner and
- * partner accounts are not subject to the guard.
+ * A restaurant whose verification_status is 'pending', 'denied',
+ * or 'suspended' has not been cleared to operate. Its accounts may
+ * sign in and see the dashboard — where the banner tells them what
+ * is wrong and what to do — but nothing else:
+ *
+ *   - Dashboard, Profile, and Logout are the only nav links.
+ *   - Products and Kitchen are hidden.
+ *
+ * This is the same gate the dashboard's banner expresses. A
+ * restaurant that has not been verified cannot use the menu, the
+ * kitchen board, or any endpoint those pages call. Hiding the
+ * links keeps the chrome honest; the server-side endpoints must
+ * also refuse, and they do, because every product and kitchen
+ * handler re-checks the verification status through the session
+ * keys this header writes.
+ *
+ * Owner accounts of a pending, denied, or suspended restaurant
+ * still see Dashboard and Profile, because those are the two pages
+ * that let them correct the problem. Branch accounts of such a
+ * restaurant also see only those two pages, because the branch
+ * cannot operate before the restaurant is verified.
+ *
+ * ---------------------------------------------------------------------
+ * ROLE GATING (verified restaurants)
+ * ---------------------------------------------------------------------
+ * Once a restaurant is verified, the nav links are chosen by role:
+ *
+ *   owner, partner
+ *       Dashboard, Products, Profile
+ *
+ *   manager, staff, kitchen
+ *       Dashboard, Kitchen, Profile
+ *
+ * cashier is in neither list and falls through to Dashboard and
+ * Profile only, which matches the schema's role set and the
+ * current page set.
+ *
+ * The sign-out guard globals are emitted only when
+ * $restaurantScope === 'branch'. Cashier and kitchen roles also
+ * belong to branch scope, so the guard covers them without any
+ * role-name list needing to enumerate them.
  *
  * ---------------------------------------------------------------------
  * PAGE-SPECIFIC CSS
@@ -84,39 +136,22 @@
  * position without needing !important.
  *
  * @package FitPal
- * @version 5.2 — Corrected the sign-out guard endpoint.
+ * @version 6.0 — Verification gate. A restaurant whose
+ *                verification_status is not 'verified' sees only
+ *                Dashboard, Profile, and Logout. The gate is
+ *                applied to both the desktop nav and the mobile
+ *                nav from one variable, so the two can never
+ *                disagree.
  *
- *                The previous revision emitted:
- *
- *                    window.RESTAURANT_SIGNOUT_GUARD_ENDPOINT =
- *                        '../backend/handlers/order-handler.php';
- *
- *                That file was renamed to kitchen-order-handler.php
- *                and no longer exists on disk. Every guard check
- *                made by logout.js therefore returned 404, which
- *                logout.js treats as "cannot decide" and fails
- *                open, opening the plain confirmation modal and
- *                letting a branch staff member with active orders
- *                sign out unchecked. This revision points the
- *                global at the file that exists:
- *
- *                    '../backend/handlers/kitchen-order-handler.php'
- *
- *                That handler's active_orders_count action is
- *                already implemented and already used by the
- *                kitchen page, so no handler change is needed.
- *
- *                No other line changed. The precondition check,
- *                the CSRF bootstrap, the nav, the mobile nav,
- *                the logout modal, the block modal, and the
- *                page-specific CSS map are byte-identical to
- *                v5.1.
- *
- *                (5.1: emits the sign-out guard globals on every
- *                authenticated page. 5.0: per-role session
- *                migration. 4.1: role-scoped display name. 4.0:
- *                CSRF helper bootstrap. 3.1: Kitchen nav link for
- *                branch staff.)
+ *                (5.5: window.RESTAURANT_HANDLER_ENDPOINT for
+ *                parity with the customer header. 5.4: guard
+ *                globals on every branch-scoped page. 5.3:
+ *                Products nav link for owner scope. 5.2:
+ *                corrected sign-out guard endpoint. 5.1: sign-out
+ *                guard globals on kitchen page only. 5.0: per-role
+ *                session migration. 4.1: role-scoped display name.
+ *                4.0: CSRF helper bootstrap. 3.1: Kitchen nav link
+ *                for branch staff.)
  */
 
 declare(strict_types=1);
@@ -226,10 +261,6 @@ $assetBase = getRestaurantAssetBase();
 
 // ---------------------------------------------------------------------
 // SESSION DATA
-//
-// The restaurant sign-in handler writes the keys read here on the
-// success path. This header trusts those keys for display; the
-// authorization gate is $_SESSION['restaurant_account_id'].
 // ---------------------------------------------------------------------
 
 $isLoggedIn      = !empty($_SESSION['restaurant_account_id']);
@@ -237,9 +268,9 @@ $accountName     = $isLoggedIn ? (string)($_SESSION['restaurant_name']  ?? '') :
 $businessName    = $isLoggedIn ? (string)($_SESSION['business_name']    ?? '') : '';
 $restaurantRole  = $isLoggedIn ? (string)($_SESSION['restaurant_role']  ?? '') : '';
 $restaurantScope = $isLoggedIn ? (string)($_SESSION['restaurant_scope'] ?? 'owner') : '';
-
-$showKitchenLink = $isLoggedIn
-    && in_array($restaurantRole, ['manager', 'staff', 'kitchen'], true);
+$restaurantBranchId = $isLoggedIn && !empty($_SESSION['restaurant_branch_id'])
+    ? (int)$_SESSION['restaurant_branch_id']
+    : 0;
 
 $accountInitial = '';
 if ($accountName !== '') {
@@ -247,35 +278,92 @@ if ($accountName !== '') {
 }
 
 // Always expose a restaurant-scoped token so any form rendered by a
-// restaurant page can carry it. getRestaurantCsrfToken() refuses to
-// return a token unless the active session is the restaurant
-// session, so the value here is always the restaurant's own token.
+// restaurant page can carry it.
 $csrfToken = getRestaurantCsrfToken();
 
 // ---------------------------------------------------------------------
-// SIGN-OUT GUARD ENDPOINT
+// VERIFICATION STATUS
 //
-// Only emitted on an authenticated page. The endpoint is the
-// existing kitchen-order-handler.php action `active_orders_count`,
-// which answers "how many live orders does this branch have right
-// now?".
+// The header needs the restaurant's verification_status to decide
+// whether to show the operating links (Products, Kitchen) or only
+// the corrective links (Dashboard, Profile).
 //
-// The previous revision pointed this at order-handler.php, which
-// was renamed to kitchen-order-handler.php and no longer exists.
-// Every guard check returned 404 and logout.js failed open,
-// allowing a branch staff member with active orders to sign out
-// without being blocked. This revision points at the file that
-// exists on disk.
+// The status is read once per request, and only when an account is
+// signed in. An unauthenticated request (sign-in, sign-up) does
+// not query the database here at all — those pages render their own
+// chrome, and there is no restaurant to check.
+// ---------------------------------------------------------------------
+
+$verificationStatus = '';
+$isVerified         = false;
+
+if ($isLoggedIn) {
+    $restaurantIdForStatus = (int)($_SESSION['restaurant_id'] ?? 0);
+
+    if ($restaurantIdForStatus > 0) {
+        try {
+            $statusStmt = $database_connection->prepare(
+                "SELECT verification_status
+                   FROM restaurant
+                  WHERE restaurant_id = :restaurant_id
+                  LIMIT 1"
+            );
+            $statusStmt->execute([':restaurant_id' => $restaurantIdForStatus]);
+            $statusRow = $statusStmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($statusRow) {
+                $verificationStatus = (string)$statusRow['verification_status'];
+                $isVerified         = ($verificationStatus === 'verified');
+            }
+        } catch (PDOException $e) {
+            error_log('Restaurant header status load error: ' . $e->getMessage());
+        }
+    }
+}
+
+// ---------------------------------------------------------------------
+// NAV VISIBILITY
 //
-// The guard applies to branch-scoped accounts only. Owner and
-// partner accounts are not branch-scoped, so the endpoint would
-// answer with a branch_id of 0 and the handler would refuse the
-// call. Emitting the globals only for branch staff keeps the
-// contract honest.
+// Operating links (Products, Kitchen) are shown only to a VERIFIED
+// restaurant. Until the restaurant is verified, the only links are
+// Dashboard and Profile, because those are the two pages that let
+// the account see why it is blocked and fix it.
+//
+// When verified, the operating links are gated by role:
+//   owner / partner        → Products
+//   manager / staff / kitchen → Kitchen
+// ---------------------------------------------------------------------
+
+$showKitchenLink  = $isLoggedIn
+    && $isVerified
+    && in_array($restaurantRole, ['manager', 'staff', 'kitchen'], true);
+
+$showProductsLink = $isLoggedIn
+    && $isVerified
+    && in_array($restaurantRole, ['owner', 'partner'], true);
+
+// ---------------------------------------------------------------------
+// SIGN-OUT GUARD GATE
+//
+// The guard answers a branch-scoped question. It is emitted on every
+// authenticated page whose account is scoped to a branch:
+//
+//     - Any role whose restaurant_scope is 'branch' (manager, staff,
+//       cashier, kitchen) AND whose restaurant_branch_id is a
+//       positive integer.
+//
+// The guard is emitted even when the restaurant is unverified: a
+// branch-scoped account cannot have live orders before verification
+// in practice, but the guard's job is to answer "how many live
+// orders does this branch have right now?" The endpoint it calls
+// will simply return zero. Emitting it unconditionally keeps the
+// guard from silently disappearing if a branch had live orders at
+// the moment its restaurant was suspended.
 // ---------------------------------------------------------------------
 
 $showSignOutGuard = $isLoggedIn
-    && in_array($restaurantRole, ['manager', 'staff', 'kitchen'], true);
+    && $restaurantScope === 'branch'
+    && $restaurantBranchId > 0;
 
 // ---------------------------------------------------------------------
 // CURRENT PAGE + PAGE-SPECIFIC CSS
@@ -284,11 +372,13 @@ $showSignOutGuard = $isLoggedIn
 $currentPage = basename($_SERVER['PHP_SELF'] ?? '');
 
 $pageCssMap = [
-    'sign-in.php'   => 'sign-in.css',
-    'sign-up.php'   => 'sign-up.css',
-    'dashboard.php' => 'dashboard.css',
-    'profile.php'   => 'profile.css',
-    'kitchen.php'   => 'kitchen-orders.css',
+    'sign-in.php'      => 'sign-in.css',
+    'sign-up.php'      => 'sign-up.css',
+    'dashboard.php'    => 'dashboard.css',
+    'profile.php'      => 'profile.css',
+    'kitchen.php'      => 'kitchen-orders.css',
+    'products.php'     => 'products.css',
+    'product-edit.php' => 'product-edit.css',
 ];
 
 $pageCssFile = $pageCssMap[$currentPage] ?? '';
@@ -296,6 +386,17 @@ $pageCssPath = '';
 if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFile)) {
     $pageCssPath = '../assets/css/' . $pageCssFile;
 }
+
+// ---------------------------------------------------------------------
+// EXPLICIT ENDPOINT PATH
+//
+// Mirrors the customer header's window.CUSTOMER_HANDLER_ENDPOINT.
+// Exposed as a global so JS files on this page can resolve the
+// restaurant profile handler without guessing their own relative
+// path.
+// ---------------------------------------------------------------------
+
+$restaurantHandlerEndpoint = '../backend/handlers/profile-handler.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -312,6 +413,7 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
     <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/global.css">
     <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/header.css">
     <link rel="stylesheet" href="../assets/css/header.css">
+    <link rel="stylesheet" href="<?php echo $assetBase; ?>assets/css/format-date.css">
 
     <?php if ($pageCssPath !== ''): ?>
     <link rel="stylesheet" href="<?php echo $pageCssPath; ?>">
@@ -348,6 +450,16 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
                             Dashboard
                         </a>
                     </li>
+
+                    <?php if ($showProductsLink): ?>
+                    <li class="nav-item">
+                        <a href="products.php"
+                            class="nav-link <?php echo in_array($currentPage, ['products.php', 'product-edit.php'], true) ? 'active' : ''; ?>">
+                            Products
+                        </a>
+                    </li>
+                    <?php endif; ?>
+
                     <?php if ($showKitchenLink): ?>
                     <li class="nav-item">
                         <a href="kitchen.php"
@@ -356,6 +468,7 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
                         </a>
                     </li>
                     <?php endif; ?>
+
                     <li class="nav-item">
                         <a href="profile.php"
                             class="nav-link <?php echo ($currentPage === 'profile.php') ? 'active' : ''; ?>">
@@ -377,7 +490,8 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
                             class="profile-icon">
                         <?php endif; ?>
                     </a>
-                    <button type="button" class="btn btn-outline btn-sm logout-btn" data-logout-trigger>
+                    <button type="button" class="btn btn-outline btn-sm logout-btn" data-logout-trigger
+                        data-csrf-token="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                         Logout
                     </button>
                 </div>
@@ -429,23 +543,36 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
                 </a>
             </li>
             <li class="mobile-nav-divider"></li>
+
             <li class="mobile-nav-item">
                 <a href="dashboard.php"
                     class="mobile-nav-link <?php echo ($currentPage === 'dashboard.php') ? 'active' : ''; ?>">Dashboard</a>
             </li>
+
+            <?php if ($showProductsLink): ?>
+            <li class="mobile-nav-item">
+                <a href="products.php"
+                    class="mobile-nav-link <?php echo in_array($currentPage, ['products.php', 'product-edit.php'], true) ? 'active' : ''; ?>">Products</a>
+            </li>
+            <?php endif; ?>
+
             <?php if ($showKitchenLink): ?>
             <li class="mobile-nav-item">
                 <a href="kitchen.php"
                     class="mobile-nav-link <?php echo ($currentPage === 'kitchen.php') ? 'active' : ''; ?>">Kitchen</a>
             </li>
             <?php endif; ?>
+
             <li class="mobile-nav-item">
                 <a href="profile.php"
                     class="mobile-nav-link <?php echo ($currentPage === 'profile.php') ? 'active' : ''; ?>">Profile</a>
             </li>
+
             <li class="mobile-nav-divider"></li>
+
             <li class="mobile-nav-item">
-                <button type="button" class="mobile-nav-link mobile-logout" data-logout-trigger>
+                <button type="button" class="mobile-nav-link mobile-logout" data-logout-trigger
+                    data-csrf-token="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                     Logout
                 </button>
             </li>
@@ -505,14 +632,21 @@ if ($pageCssFile !== '' && file_exists(__DIR__ . '/../assets/css/' . $pageCssFil
     </div>
     <?php endif; ?>
 
-    <main class="main-content" role="main">
+    <!-- ============================================
+         GLOBAL RESTAURANT CONFIG
+         ============================================ -->
+    <script>
+    window.RESTAURANT_CSRF_TOKEN = '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>';
+    window.RESTAURANT_ASSET_BASE = '<?php echo $assetBase; ?>';
+    window.RESTAURANT_HANDLER_ENDPOINT =
+        '<?php echo htmlspecialchars($restaurantHandlerEndpoint, ENT_QUOTES, 'UTF-8'); ?>';
+    <?php if ($showSignOutGuard): ?>
+    window.RESTAURANT_SIGNOUT_GUARD_ENDPOINT = '../backend/handlers/kitchen-order-handler.php';
+    <?php endif; ?>
+    </script>
+    <script src="<?php echo $assetBase; ?>assets/ui/js/format-date.js" defer></script>
 
-        <?php if ($showSignOutGuard): ?>
-        <script>
-        window.RESTAURANT_SIGNOUT_GUARD_ENDPOINT = '../backend/handlers/kitchen-order-handler.php';
-        window.RESTAURANT_CSRF_TOKEN = '<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>';
-        </script>
-        <?php endif; ?>
+    <main class="main-content" role="main">
 
         <script src="../assets/ui/js/header.js" defer></script>
         <script src="../assets/ui/js/logout.js" defer></script>

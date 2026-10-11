@@ -55,28 +55,87 @@
  * numbers the customer sees are guaranteed to come from the same
  * constants.
  *
+ * ---------------------------------------------------------------------
+ * RESTAURANT PERMIT READING (v11.0)
+ * ---------------------------------------------------------------------
+ * The restaurant role's re-apply handler stores permits using a
+ * slot model:
+ *
+ *     shared/uploads/restaurant/permits/<restaurant_id>/
+ *         image-1.jpg
+ *         image-2.png
+ *         image-3.webp
+ *         image-4.jpg
+ *         image-5.png
+ *
+ * There is exactly ONE restaurant_permit row per restaurant. Its
+ * file_path column carries the folder path ending with a slash:
+ *
+ *     shared/uploads/restaurant/permits/<restaurant_id>/
+ *
+ * getRestaurantPermits() is the reader for the admin's restaurant
+ * detail modal. It resolves the folder from the single row, scans
+ * the folder for the five slot files, and returns one entry per
+ * slot. Each entry carries:
+ *
+ *   slot         1..5
+ *   filename     the file for that slot, or ''
+ *   url          project-root-relative URL for that file, or ''
+ *   folder       the folder path exactly as stored, ending with a
+ *                slash
+ *   has_permit   true when a file exists for the slot
+ *
+ * The return is keyed by slot number, 1 through 5, so a caller can
+ * iterate slots 1..5 unconditionally. A slot with no file is present
+ * in the array with has_permit = false and an empty url.
+ *
+ * A legacy single-row-per-file layout from an older schema revision
+ * is not recognized. A folder path that does not end with a slash is
+ * treated as a folder anyway and has one appended. A stored value
+ * that is actually a file path from an older layout is not
+ * recognized as a folder, is_dir() fails, and the function returns
+ * the five empty slots — the caller shows the empty state for each
+ * slot and the admin sees that no permits are on file.
+ *
+ * ---------------------------------------------------------------------
+ * URL RESOLUTION IN getRestaurantPermits()
+ * ---------------------------------------------------------------------
+ * getRestaurantPermits() derives the project-root URL prefix from
+ * $_SERVER['SCRIPT_NAME'] at call time. A page under
+ * admin/pages/ gets '../../'; a handler under
+ * admin/backend/handlers/ gets '../../../'. Both are correct
+ * relative to their own request, so the same function returns a
+ * URL the browser can load from whichever caller ran it.
+ *
  * @package FitPal
- * @version 10.0 — Requires the shared fee schedule from
- *                 shared/backend/database/fee-queries.php.
+ * @version 11.0 — getRestaurantPermits() now reads the slot model
+ *                 written by the restaurant re-apply handler. It
+ *                 returns five slot entries keyed 1..5, each
+ *                 carrying slot, filename, url, folder, and
+ *                 has_permit. The wide five-column permit grid in
+ *                 the admin restaurant modal renders one preview
+ *                 per slot from this array.
  *
- *                 Revenue aggregates widened to exclude 'failed'
- *                 alongside 'cancelled' and 'refunded':
- *                   - getAdminDashboardStats
- *                   - getAdminWeeklyRevenue
- *                   - getAdminWeeklyFeeBreakdown
- *                   - getAdminTopRestaurants
- *
- *                 getAdminWeeklyOrders is unchanged; it counts
- *                 orders per status bucket, which is an operational
- *                 metric, not a revenue one.
- *
- *                 (9.0: analytics readers. 8.0: merged dashboard
- *                 order scans. 7.0: admin profile picture
- *                 functions. 6.0: getRestaurantPermits().)
+ *                 (10.0: analytics readers. 9.0: merged dashboard
+ *                 order scans. 8.0: admin profile picture
+ *                 functions. 7.0: getRestaurantPermits() read one
+ *                 row per file.)
  */
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../../shared/backend/database/fee-queries.php';
+
+/* =============================================================
+ * PERMIT SLOT CONSTANTS
+ * ============================================================= */
+
+if (!defined('FITPAL_PERMIT_MAX_SLOTS')) {
+    define('FITPAL_PERMIT_MAX_SLOTS', 5);
+}
+
+if (!defined('FITPAL_PERMIT_ALLOWED_EXT')) {
+    define('FITPAL_PERMIT_ALLOWED_EXT', ['jpg', 'jpeg', 'png', 'webp']);
+}
 
 /* =============================================================
  * PAGINATION HELPER
@@ -1299,22 +1358,122 @@ function getRestaurantAccounts(PDO $db, int $restaurantId): array
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
+/**
+ * Return the permit slot set for a restaurant.
+ *
+ * Reads the folder path from the single restaurant_permit row and
+ * scans that folder for the five slot files. Each entry carries:
+ *
+ *   slot        1..5
+ *   filename    the file for that slot, or ''
+ *   url         project-root-relative URL for that file, or ''
+ *   folder      the folder path exactly as stored, ending with a slash
+ *   has_permit  true when a file exists for the slot
+ *
+ * The return is keyed by slot number, 1 through 5, so a caller can
+ * iterate slots 1..5 unconditionally. A slot with no file is present
+ * in the array with has_permit = false and an empty url.
+ *
+ * @param PDO $db
+ * @param int $restaurantId
+ * @return array<int, array{
+ *   slot:int, filename:string, url:string, folder:string, has_permit:bool
+ * }>
+ */
 function getRestaurantPermits(PDO $db, int $restaurantId): array
 {
+    $slots = [];
+    for ($i = 1; $i <= FITPAL_PERMIT_MAX_SLOTS; $i++) {
+        $slots[$i] = [
+            'slot'       => $i,
+            'filename'   => '',
+            'url'        => '',
+            'folder'     => '',
+            'has_permit' => false,
+        ];
+    }
+
+    if ($restaurantId <= 0) {
+        return $slots;
+    }
+
     $stmt = $db->prepare(
-        "SELECT
-            permit_id,
-            restaurant_id,
-            file_path,
-            original_name,
-            display_order,
-            created_at
-         FROM restaurant_permit
-         WHERE restaurant_id = :rid
-         ORDER BY display_order ASC, permit_id ASC"
+        "SELECT file_path
+           FROM restaurant_permit
+          WHERE restaurant_id = :restaurant_id
+          ORDER BY permit_id ASC
+          LIMIT 1"
     );
-    $stmt->execute([':rid' => $restaurantId]);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $stmt->execute([':restaurant_id' => $restaurantId]);
+    $storedFolder = (string)($stmt->fetchColumn() ?: '');
+
+    if ($storedFolder === '') {
+        return $slots;
+    }
+
+    // Normalize to a project-root-relative folder ending with a slash.
+    $relativeFolder = rtrim($storedFolder, '/') . '/';
+
+    $projectRoot = dirname(__DIR__, 3);
+    $absolute    = $projectRoot . '/' . $relativeFolder;
+
+    if (!is_dir($absolute)) {
+        return $slots;
+    }
+
+    $allowedExt = FITPAL_PERMIT_ALLOWED_EXT;
+    $entries    = @scandir($absolute);
+
+    if ($entries === false) {
+        return $slots;
+    }
+
+    $bySlot = [];
+
+    foreach ($entries as $entry) {
+        if ($entry === '.' || $entry === '..') {
+            continue;
+        }
+
+        if (!preg_match('/^image-(\d+)\.([A-Za-z0-9]+)$/', $entry, $m)) {
+            continue;
+        }
+
+        $slot = (int)$m[1];
+        if ($slot < 1 || $slot > FITPAL_PERMIT_MAX_SLOTS) {
+            continue;
+        }
+
+        $ext = strtolower($m[2]);
+        if (!in_array($ext, $allowedExt, true)) {
+            continue;
+        }
+
+        $path = $absolute . DIRECTORY_SEPARATOR . $entry;
+        if (!is_file($path)) {
+            continue;
+        }
+
+        if (!isset($bySlot[$slot])) {
+            $bySlot[$slot] = $entry;
+        }
+    }
+
+    // Derive the project-root URL prefix for the current request.
+    $scriptPath = $_SERVER['SCRIPT_NAME'] ?? '';
+    $dirPath    = $scriptPath !== '' ? dirname($scriptPath) : '';
+    $segments   = $dirPath !== '' ? array_filter(explode('/', $dirPath)) : [];
+    $depth      = count($segments);
+    $rootUrl    = $depth > 0 ? str_repeat('../', $depth) : './';
+
+    foreach ($bySlot as $slot => $filename) {
+        $slots[$slot]['filename']   = $filename;
+        $slots[$slot]['url']        = $rootUrl . $relativeFolder . $filename;
+        $slots[$slot]['folder']     = $relativeFolder;
+        $slots[$slot]['has_permit'] = true;
+    }
+
+    return $slots;
 }
 
 function setRestaurantVerificationStatus(

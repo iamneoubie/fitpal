@@ -1,7 +1,7 @@
 # Web Project Structure
 
 **Project:** fitpal
-**Generated:** 2026-10-02 23:06:10
+**Generated:** 2026-10-11 11:22:35
 **Mode:** all
 
 ```
@@ -123,7 +123,6 @@ fitpal/
 │       ├── cart.php
 │       ├── checkout.php
 │       ├── dashboard.php
-│       ├── image-debug.php
 │       ├── menu.php
 │       ├── order-receipt.php
 │       ├── order-tracking.php
@@ -139,12 +138,17 @@ fitpal/
 │   │   └── rider-resto.md
 │   ├── content-fetcher-configuration/
 │   │   ├── all_path.py
+│   │   ├── dir-admin.py
 │   │   ├── dir-cutomer.py
 │   │   ├── dir-menu-product-detail.py
 │   │   ├── dir-restaurant.py
 │   │   ├── dir-rider.py
 │   │   ├── dir-shared.py
 │   │   └── technical.py
+│   ├── diagram/
+│   │   ├── data-flow-diagram.puml
+│   │   ├── system-architecture.puml
+│   │   └── use-case.puml
 │   ├── enhancement/
 │   │   └── logic.md
 │   ├── flowchart/
@@ -155,12 +159,16 @@ fitpal/
 │   │   ├── test-create-guide.md
 │   │   └── updating-fetcher-guide.md
 │   ├── logic/
-│   │   └── business-logic.md
+│   │   ├── business-logic.md
+│   │   ├── CONTEXT DIAGRAM.md
+│   │   └── FitPal is divided into five main modules.md
 │   ├── output/
+│   │   ├── dir-admin_fetched_codebase.md
+│   │   ├── dir-cutomer_fetched_codebase.md
+│   │   ├── dir-restaurant_fetched_codebase.md
+│   │   ├── dir-rider_fetched_codebase.md
 │   │   ├── dir-shared_fetched_codebase.md
-│   │   ├── directories_customer_fetched_codebase.md
-│   │   ├── directories_restaurant_fetched_codebase.md
-│   │   ├── directories_rider_fetched_codebase.md
+│   │   ├── nojscss_fetched_codebase.md
 │   │   └── technical_fetched_codebase.md
 │   ├── tree-mapper/
 │   │   └── project_structure.md
@@ -175,13 +183,23 @@ fitpal/
 │   ├── content-fetcher.py
 │   ├── tree-mapper.py
 │   └── update-config.py
+├── out/
+│   └── logs/
+│       └── diagram/
+│           ├── system-architecture/
+│           │   └── system-architecture.png
+│           └── use-case/
+│               └── use-case.png
 ├── restaurant/
 │   ├── assets/
 │   │   ├── css/
 │   │   │   ├── dashboard.css
 │   │   │   ├── header.css
 │   │   │   ├── kitchen-orders.css
+│   │   │   ├── product-edit.css
+│   │   │   ├── products.css
 │   │   │   ├── profile.css
+│   │   │   ├── restaurant-reapply.css
 │   │   │   ├── sign-in.css
 │   │   │   └── sign-up.css
 │   │   └── ui/
@@ -191,8 +209,11 @@ fitpal/
 │   │           ├── kitchen-order.js
 │   │           ├── kitchen-realtime.js
 │   │           ├── logout.js
+│   │           ├── product-edit.js
+│   │           ├── products.js
 │   │           ├── profile.js
 │   │           ├── restaurant-chat-modal.js
+│   │           ├── restaurant-reapply.js
 │   │           ├── sign-in.js
 │   │           └── sign-up.js
 │   ├── backend/
@@ -206,7 +227,10 @@ fitpal/
 │   │       ├── branch-lookup-handler.php
 │   │       ├── chat-handler.php
 │   │       ├── kitchen-order-handler.php
+│   │       ├── product-handler.php
+│   │       ├── product-media-handler.php
 │   │       ├── profile-handler.php
+│   │       ├── restaurant-reapply-handler.php
 │   │       ├── sign-in-handler.php
 │   │       ├── sign-out-handler.php
 │   │       └── sign-up-handler.php
@@ -217,7 +241,10 @@ fitpal/
 │   └── pages/
 │       ├── dashboard.php
 │       ├── kitchen.php
+│       ├── product-edit.php
+│       ├── products.php
 │       ├── profile.php
+│       ├── restaurant-reapply.php
 │       ├── sign-in.php
 │       └── sign-up.php
 ├── rider/
@@ -229,6 +256,7 @@ fitpal/
 │   │   │   ├── earnings.css
 │   │   │   ├── header.css
 │   │   │   ├── profile.css
+│   │   │   ├── rider-reapply.css
 │   │   │   ├── sign-in.css
 │   │   │   └── sign-up.css
 │   │   └── ui/
@@ -241,6 +269,7 @@ fitpal/
 │   │           ├── logout.js
 │   │           ├── profile.js
 │   │           ├── rider-chat-modal.js
+│   │           ├── rider-reapply.js
 │   │           ├── sign-in.js
 │   │           └── sign-up.js
 │   ├── backend/
@@ -265,6 +294,7 @@ fitpal/
 │       ├── deliveries.php
 │       ├── earnings.php
 │       ├── profile.php
+│       ├── rider-reapply.php
 │       ├── sign-in.php
 │       └── sign-up.php
 ├── shared/
@@ -274,6 +304,7 @@ fitpal/
 │   │   │   ├── contact.css
 │   │   │   ├── database-connect.css
 │   │   │   ├── footer.css
+│   │   │   ├── format-date.css
 │   │   │   ├── global.css
 │   │   │   ├── header.css
 │   │   │   ├── landing.css
@@ -395,7 +426,7 @@ fitpal/
 │   │   │   │   ├── qr-scan-line.svg
 │   │   │   │   ├── question-fill.svg
 │   │   │   │   ├── question-line.svg
-│   │   │   │   ├── remove-circle-fillsvg
+│   │   │   │   ├── remove-circle-fill.svg
 │   │   │   │   ├── remove-circle-line.svg
 │   │   │   │   ├── remove-fill.svg
 │   │   │   │   ├── remove-large-fill.svg
@@ -450,8 +481,8 @@ fitpal/
 │   │   │   │   │   ├── national-id-2.jpg
 │   │   │   │   │   └── national-id-3.jpg
 │   │   │   │   ├── permits/
-│   │   │   │   │   ├── business-permit.png
-│   │   │   │   │   └── sanitary-permit.jpg
+│   │   │   │   │   ├── image-1.png
+│   │   │   │   │   └── image-2.jpg
 │   │   │   │   ├── products/
 │   │   │   │   │   └── restaurant/
 │   │   │   │   │       ├── asian-fusion-fit/
@@ -567,6 +598,7 @@ fitpal/
 │   │   └── ui/
 │   │       └── js/
 │   │           ├── contact.js
+│   │           ├── format-date.js
 │   │           └── header.js
 │   ├── backend/
 │   │   ├── database/
@@ -591,23 +623,36 @@ fitpal/
 │       ├── customer/
 │       │   └── profiles/
 │       │       └── 1/
-│       │           └── 10_02_2026_0.jpg
+│       │           └── 10_10_2026_0.jpg
 │       ├── restaurant/
-│       │   └── permits/
-│       │       └── 10/
-│       │           ├── 10_02_2026_0.jpg
-│       │           ├── 10_02_2026_1.png
-│       │           ├── 10_02_2026_2.jpg
-│       │           └── 10_02_2026_3.png
+│       │   ├── permits/
+│       │   │   └── 4/
+│       │   │       ├── image-1.jpg
+│       │   │       ├── image-2.jpg
+│       │   │       └── image-3.jpg
+│       │   └── products/
+│       │       └── 31/
+│       │           ├── image-1.jpg
+│       │           └── image-2.jpg
 │       └── rider/
 │           ├── documents/
 │           │   └── 4/
-│           │       ├── 10_02_2026_0.jpg
-│           │       └── 10_02_2026_1.jpg
+│           │       ├── 10_10_2026_0.jpg
+│           │       ├── 10_10_2026_1.jpg
+│           │       ├── 10_10_2026_2.jpg
+│           │       ├── 10_10_2026_3.jpg
+│           │       ├── 10_10_2026_4.jpg
+│           │       └── 10_10_2026_5.jpg
 │           └── profiles/
 │               └── 4/
-│                   ├── 10_02_2026_0.jpg
-│                   └── 10_02_2026_1.jpg
+│                   ├── 10_10_2026_0.jpg
+│                   ├── 10_10_2026_1.jpg
+│                   ├── 10_10_2026_2.jpg
+│                   ├── 10_10_2026_3.jpg
+│                   ├── 10_10_2026_4.jpg
+│                   ├── 10_10_2026_5.jpg
+│                   ├── 10_10_2026_6.png
+│                   └── 10_10_2026_7.jpg
 ├── sql/
 │   ├── seed/
 │   │   ├── test/
@@ -635,16 +680,16 @@ fitpal/
 | File Type | Count |
 |-----------|-------|
 | HTML Files | 0 |
-| PHP Files | 115 |
-| CSS Files | 49 |
-| JavaScript Files | 48 |
+| PHP Files | 121 |
+| CSS Files | 54 |
+| JavaScript Files | 53 |
 | JSON Files | 2 |
-| Text/Markdown | 16 |
-| Image Files | 247 |
-| Other Files | 20 |
+| Text/Markdown | 20 |
+| Image Files | 261 |
+| Other Files | 23 |
 
-**Total Directories:** 125
-**Total Files:** 495
+**Total Directories:** 133
+**Total Files:** 532
 
 ---
 

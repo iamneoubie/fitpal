@@ -1,6 +1,6 @@
 -- =====================================================
 -- FitPal Seed Data — CONSOLIDATED, SINGLE-PASS INSERT
--- Version 9.0
+-- Version 10.1
 --
 -- ALIGNED WITH: fitpal_food_delivery schema v2.5.0
 --
@@ -15,9 +15,68 @@
 --     If you prefer zero UPDATEs, pre-compute these values
 --     and inline them (see note at end of file).
 --
+-- -----------------------------------------------------
+-- v10.1 CHANGES — original_name IS NOT NULL
+-- -----------------------------------------------------
+-- restaurant_permit.original_name is declared
+-- VARCHAR(255) NOT NULL in schema.sql. The v10.0 seed
+-- passed NULL for it and MySQL rejected the insert.
+--
+-- Every seeded restaurant_permit row now carries a
+-- non-empty original_name. The three rows use
+-- 'Seeded Permit 1', 'Seeded Permit 2', and
+-- 'Seeded Permit 3' so they are distinguishable in an
+-- audit even though all three rows point at the same
+-- folder.
+--
+-- -----------------------------------------------------
+-- v10.0 CHANGES — PERMIT STORAGE MOVED TO THE SLOT MODEL
+-- -----------------------------------------------------
+-- The restaurant role's permit storage now matches the
+-- shape used by every other media table in the project:
+--
+--     ONE row per restaurant in restaurant_permit.
+--     file_path stores the FOLDER, ending with a slash.
+--     The five slots are the files image-1.* through
+--     image-5.* inside that folder.
+--     display_order is written as 0 and is never read.
+--
+-- This is the model declared by
+-- restaurant/backend/database/restaurant-queries.php (v10.0):
+--
+--     createRestaurantPermit($db, $restaurantId, $folderPath)
+--     getRestaurantPermits($db, $restaurantId)  →  slot-keyed map
+--
+-- The previous revision of this seed inserted THREE rows
+-- per restaurant, each carrying a full file path and a
+-- distinct display_order. That layout is abandoned. The
+-- new layout inserts ONE row per restaurant.
+--
+-- The folder referenced by every seeded restaurant is the
+-- shared manifest folder:
+--
+--     shared/assets/images/manifest/permits/
+--         image-1.png
+--         image-2.jpg
+--
+-- Slots 1 and 2 resolve to those two files. Slots 3, 4,
+-- and 5 are empty. getRestaurantPermits() therefore
+-- returns a two-entry map for every seeded restaurant.
+-- This is the correct seed state: the three sample
+-- restaurants share the same two demo permit images.
+--
+-- Once a real owner signs in and uses the re-apply or
+-- upload flow, the handler and the queries write to
+-- shared/uploads/restaurant/permits/<restaurant_id>/ and
+-- the restaurant_permit row is rewritten to point there.
+-- The manifest folder is a seed-only starting point; it
+-- is not touched after the seed runs.
+-- -----------------------------------------------------
+--
 -- PREREQUISITE — these files must exist on disk:
---   shared/assets/images/manifest/permits/business-permit.png
---   shared/assets/images/manifest/permits/sanitary-permit.jpg
+--   shared/assets/images/manifest/permits/
+--     image-1.png
+--     image-2.jpg
 --   shared/assets/images/manifest/drivers-license/drivers-license-1.jpg
 --   shared/assets/images/manifest/drivers-license/drivers-license-2.jpg
 --   shared/assets/images/manifest/national-id/national-id-1.jpg
@@ -379,6 +438,22 @@ VALUES (
         1
     );
 
+-- -----------------------------------------------------
+-- Permit — SLOT MODEL, ONE ROW PER RESTAURANT
+--
+-- file_path carries the FOLDER, ending with a slash.
+-- The five slots are image-1.* through image-5.*
+-- inside that folder. display_order is 0 and unused.
+-- original_name is NOT NULL in the schema; the seed
+-- supplies a distinct label per restaurant so the
+-- three rows are distinguishable in an audit even
+-- though they all point at the same folder.
+--
+-- Every seeded restaurant points at the same shared
+-- manifest folder. Slots 1 and 2 resolve to
+-- image-1.png and image-2.jpg respectively; slots 3–5
+-- are empty.
+-- -----------------------------------------------------
 INSERT INTO
     restaurant_permit (
         restaurant_id,
@@ -388,21 +463,9 @@ INSERT INTO
     )
 VALUES (
         @rest1_id,
-        'shared/assets/images/manifest/permits/business-permit.png',
-        'DTI-Certificate-of-Business-Name.png',
+        'shared/assets/images/manifest/permits/',
+        'Seeded Permit 1',
         0
-    ),
-    (
-        @rest1_id,
-        'shared/assets/images/manifest/permits/business-permit.png',
-        'Mayors-Permit-2026.png',
-        1
-    ),
-    (
-        @rest1_id,
-        'shared/assets/images/manifest/permits/sanitary-permit.jpg',
-        'Sanitary-Permit.jpg',
-        2
     );
 
 -- -----------------------------------------------------
@@ -557,21 +620,9 @@ INSERT INTO
     )
 VALUES (
         @rest2_id,
-        'shared/assets/images/manifest/permits/business-permit.png',
-        'DTI-Registration-Keto-Kitchen.png',
+        'shared/assets/images/manifest/permits/',
+        'Seeded Permit 2',
         0
-    ),
-    (
-        @rest2_id,
-        'shared/assets/images/manifest/permits/business-permit.png',
-        'Business-Permit-Makati.png',
-        1
-    ),
-    (
-        @rest2_id,
-        'shared/assets/images/manifest/permits/sanitary-permit.jpg',
-        'Sanitary-Permit-KK.jpg',
-        2
     );
 
 -- -----------------------------------------------------
@@ -726,21 +777,9 @@ INSERT INTO
     )
 VALUES (
         @rest3_id,
-        'shared/assets/images/manifest/permits/business-permit.png',
-        'DTI-AFF-Registration.png',
+        'shared/assets/images/manifest/permits/',
+        'Seeded Permit 3',
         0
-    ),
-    (
-        @rest3_id,
-        'shared/assets/images/manifest/permits/business-permit.png',
-        'Mayors-Permit-Quezon-City.png',
-        1
-    ),
-    (
-        @rest3_id,
-        'shared/assets/images/manifest/permits/sanitary-permit.jpg',
-        'Business-Permit-AFF.jpg',
-        2
     );
 
 -- =====================================================
@@ -5183,7 +5222,7 @@ COMMIT;
 -- =====================================================
 -- VERIFICATION
 -- =====================================================
-SELECT '=== FitPal consolidated seed loaded (v9.0, single-pass insert) ===' AS status;
+SELECT '=== FitPal consolidated seed loaded (v10.1, slot-model permits with non-null original_name) ===' AS status;
 
 -- V1. Every customizable product's default price modifiers sum to 0.
 SELECT
@@ -5327,8 +5366,13 @@ FROM
 WHERE
     drp.is_available <> 0;
 
--- V12. Every restaurant has at least one permit row.
-SELECT r.restaurant_id, r.business_name, COUNT(rp.permit_id) AS permit_count
+-- V12. SLOT-MODEL PERMIT CHECK — every restaurant has EXACTLY ONE
+--      permit row.
+--
+--      Under the slot model there is one row per restaurant and
+--      the row carries the folder path. A restaurant with zero
+--      rows or with more than one row is malformed.
+SELECT r.restaurant_id, r.business_name, COUNT(rp.permit_id) AS permit_row_count
 FROM
     restaurant r
     LEFT JOIN restaurant_permit rp ON rp.restaurant_id = r.restaurant_id
@@ -5336,24 +5380,33 @@ GROUP BY
     r.restaurant_id,
     r.business_name
 HAVING
-    permit_count = 0;
+    permit_row_count <> 1;
 
--- V13. Permit display_order values are contiguous starting at 0.
+-- V13. SLOT-MODEL PERMIT CHECK — every permit row's file_path ends
+--      with a slash, its display_order is 0, and its original_name
+--      is a non-empty string.
+--
+--      A row that does not end with a slash is holding a file path
+--      from the old model, not a folder. A row with a non-zero
+--      display_order was written by the old model. A row with an
+--      empty original_name violates the NOT NULL constraint's
+--      intent and is reported for completeness.
 SELECT
+    rp.permit_id,
     rp.restaurant_id,
-    COUNT(*) AS permit_count,
-    MIN(rp.display_order) AS min_order,
-    MAX(rp.display_order) AS max_order,
+    rp.file_path,
+    rp.original_name,
+    rp.display_order,
     CASE
-        WHEN MIN(rp.display_order) <> 0 THEN 'not_zero_based'
-        WHEN MAX(rp.display_order) <> COUNT(*) - 1 THEN 'not_contiguous'
+        WHEN RIGHT(rp.file_path, 1) <> '/' THEN 'path_not_a_folder'
+        WHEN rp.display_order <> 0 THEN 'non_zero_display_order'
+        WHEN rp.original_name IS NULL
+        OR rp.original_name = '' THEN 'empty_original_name'
         ELSE 'ok'
-    END AS order_state
+    END AS row_state
 FROM restaurant_permit rp
-GROUP BY
-    rp.restaurant_id
 HAVING
-    order_state <> 'ok';
+    row_state <> 'ok';
 
 -- V14. Every financial account balance is 0.00.
 SELECT

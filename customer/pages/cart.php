@@ -48,15 +48,15 @@
  *                        AJAX the JS reads from window.FITPAL_CART
  *
  * @package FitPal
- * @version 5.1.0 — Renders the customer's special instructions inside
- *                  the customization panel. The "Customized" toggle
- *                  now appears whenever a row has either ingredient
- *                  modifications or special instructions.
+ * @version 5.1.1 — Ensures the "Remove" button is always rendered
+ *                  and enabled for unavailable items, allowing the
+ *                  customer to clean up their cart even when a
+ *                  product has been soft-deleted or is out of stock.
  *
- *                  (5.0.0: cart item images resolve through
- *                  resolveCartImageUrl(). 4.0.0: handler targets
- *                  verified. 3.5.0: CSRF token inherited from
- *                  header.php.)
+ *                  (5.1.0: Renders special instructions inside the
+ *                  customization panel. 5.0.0: cart item images
+ *                  resolve through resolveCartImageUrl(). 4.0.0:
+ *                  handler targets verified.)
  */
 
 declare(strict_types=1);

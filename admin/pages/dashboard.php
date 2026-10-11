@@ -738,7 +738,7 @@ foreach ($topRiders as $r) {
                 <?php if (empty($pendingRiders)): ?>
                 <div class="admin-empty-state">
                     <div class="admin-empty-icon" aria-hidden="true">
-                        <img src="<?php echo $assetBase; ?>assets/images/icons/verified-fill.svg" alt="">
+                        <img src="<?php echo $assetBase; ?>assets/images/icons/equalizer-line.svg" alt="">
                     </div>
                     <p class="admin-empty-title">All caught up</p>
                     <p class="admin-empty-text">No riders are awaiting verification.</p>

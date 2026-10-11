@@ -18,16 +18,15 @@
  *       Do not declare any *Address* function in this file.
  *
  * @package FitPal
- * @version 3.2 — Adds updateCustomerProfilePicture() and
- *                getCustomerProfilePicture(). These back the profile
- *                picture upload flow on customer/pages/profile.php.
- *                The UPDATE is scoped to the owning customer so a
- *                call can only ever change the authenticated
- *                customer's own row. No other function in this file
- *                is changed.
+ * @version 3.3 — Adds updateCustomerDietaryProfile() for the profile
+ *                page's new Dietary Preferences & Allergies tab.
+ *                The UPDATE is scoped to the owning customer and
+ *                writes only to customer_profile.
  *
- *                (3.1: Adds formatCurrency() so profile, dashboard,
- *                and wallet share one peso formatter.)
+ *                (3.2: Adds updateCustomerProfilePicture() and
+ *                getCustomerProfilePicture(). 3.1: Adds
+ *                formatCurrency() so profile, dashboard, and wallet
+ *                share one peso formatter.)
  */
 
 declare(strict_types=1);
@@ -287,6 +286,40 @@ function getCustomerProfilePicture(PDO $db, int $customerId): string
 
     $value = $stmt->fetchColumn();
     return $value === false || $value === null ? '' : (string)$value;
+}
+
+/**
+ * Update the customer's dietary preferences and allergies.
+ *
+ * Scoped to the owning customer. Both values are stored as
+ * comma-separated strings in customer_profile. An empty array or an
+ * empty string stores NULL.
+ *
+ * @param PDO $db
+ * @param int $customerId
+ * @param string|null $dietaryPreferences  Comma-separated string or NULL
+ * @param string|null $allergies           Comma-separated string or NULL
+ * @return bool
+ */
+function updateCustomerDietaryProfile(
+    PDO $db,
+    int $customerId,
+    ?string $dietaryPreferences,
+    ?string $allergies
+): bool {
+    $stmt = $db->prepare(
+        "UPDATE customer_profile
+            SET dietary_preferences = :dietary_preferences,
+                allergies           = :allergies
+          WHERE customer_id = :customer_id"
+    );
+    $stmt->execute([
+        ':dietary_preferences' => $dietaryPreferences !== '' ? $dietaryPreferences : null,
+        ':allergies'           => $allergies !== '' ? $allergies : null,
+        ':customer_id'         => $customerId,
+    ]);
+
+    return $stmt->rowCount() > 0;
 }
 
 /* ---------------------------------------------------------------

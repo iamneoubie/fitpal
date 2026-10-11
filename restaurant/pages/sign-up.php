@@ -2,9 +2,35 @@
 /**
  * FitPal Restaurant Registration Page
  *
- * Two-step registration:
+ * Five-step registration:
  *   Step 1 — Account Holder
- *   Step 2 — Business Details + up to 5 permit photos + terms
+ *   Step 2 — Security
+ *   Step 3 — Business Details
+ *   Step 4 — Branch & Permits
+ *   Step 5 — Review & Submit
+ *
+ * ---------------------------------------------------------------------
+ * WHY FIVE STEPS
+ * ---------------------------------------------------------------------
+ * The previous revision packed the account fields, the password, the
+ * business details, the branch address, the permit grid, and the
+ * terms checkbox into a single Step 2. That step carried eleven text
+ * inputs, five file slots, and a checkbox — enough to require
+ * scrolling on every viewport and to make the form feel like one
+ * undifferentiated block.
+ *
+ * The five-step layout matches restaurant/pages/restaurant-reapply.php
+ * step for step:
+ *
+ *   1  Account Holder    first_name, middle_name, last_name, email,
+ *                        contact_number, username
+ *   2  Security          password, confirm_password
+ *   3  Business Details  business_name, cuisine_type,
+ *                        business_description, dietary_tags
+ *   4  Branch & Permits  branch_name, block, barangay, city,
+ *                        province, region, postal_code,
+ *                        five permit slots, terms checkbox
+ *   5  Review & Submit   read-only summary
  *
  * ---------------------------------------------------------------------
  * PER-ROLE SESSION MODEL
@@ -26,63 +52,63 @@
  * sign-up-handler.php validates against the same key.
  *
  * ---------------------------------------------------------------------
+ * HANDLER PATH
+ * ---------------------------------------------------------------------
+ * This page is served from restaurant/pages/. Every relative URL
+ * on the page starts one directory up:
+ *
+ *     ../backend/handlers/sign-up-handler.php
+ *     ../assets/ui/js/sign-up.js
+ *
+ * Both resolve from the browser URL
+ * http://<host>/restaurant/pages/sign-up.php to:
+ *
+ *     http://<host>/restaurant/backend/handlers/sign-up-handler.php
+ *     http://<host>/restaurant/assets/ui/js/sign-up.js
+ *
+ * ---------------------------------------------------------------------
+ * REQUIRED FIELDS
+ * ---------------------------------------------------------------------
+ * Enforced by sign-up.js:
+ *
+ *   Step 1:  first_name, last_name, email, contact_number, username
+ *   Step 2:  password, confirm_password
+ *   Step 3:  business_name, cuisine_type, business_description,
+ *            dietary_tags
+ *   Step 4:  branch_name, block, barangay, city, province, region,
+ *            postal_code, at least one permit, terms checkbox
+ *
+ * ---------------------------------------------------------------------
+ * FIRST-LETTER CAPITALIZATION
+ * ---------------------------------------------------------------------
+ * Business Description carries `.capitalize-field`. The paired JS
+ * uppercases the first letter of the first word on input.
+ *
+ * ---------------------------------------------------------------------
  * WHAT REGISTRATION CREATES
  * ---------------------------------------------------------------------
  * The form posts to ../backend/handlers/sign-up-handler.php, which
  * writes a single set of rows in one transaction:
  *
- *   1. restaurant                    (verification_status = 'pending')
- *   2. financial_account             (account_type = 'restaurant',
- *                                     balance 0)
- *   3. restaurant_branch             (linked to the financial account)
- *   4. restaurant_account            (role 'owner', branch_id NULL)
- *   5. restaurant_permit × 1..5      (one row per uploaded permit)
- *
- * The financial_account row is created with a zero balance and is
- * never debited or credited by registration. The shared
- * order-transaction layer credits the same account on the first
- * successful delivery, but that only happens after the restaurant
- * is verified, its branch is active, and a customer has placed and
- * completed an order through the branch. A pending restaurant
- * therefore has no path to the ledger from registration.
- *
- * A pending restaurant is also invisible to the customer role:
- * getMenuDataPaginated() filters on
- * `r.is_active = 1 AND rb.is_active = 1`, and searchRestaurantsByName()
- * further filters on `r.verification_status = 'verified'`, so
- * neither the menu nor the branch sign-in autocomplete will surface
- * an unverified restaurant.
- *
- * ---------------------------------------------------------------------
- * PERMIT UPLOAD LAYOUT
- * ---------------------------------------------------------------------
- * Permits are stored under
- * shared/uploads/restaurant/permits/<owner_account_id>/ with the
- * MM_DD_YYYY_<n>.<ext> naming scheme, matching the rider role's
- * per-account, per-day upload layout. The owner account is created
- * before the permits are moved so the folder can be keyed on the
- * account id. On any failure after a file has been moved, the moved
- * files are unlinked and the transaction is rolled back.
- *
- * ---------------------------------------------------------------------
- * FEE SCHEDULE
- * ---------------------------------------------------------------------
- * Registration does not read or write the fee schedule
- * (shared/backend/database/fee-queries.php). The fee schedule is
- * the platform-wide constant set applied to every order regardless
- * of which restaurant produced it.
+ *   1. restaurant
+ *   2. financial_account
+ *   3. restaurant_branch
+ *   4. restaurant_account
+ *   5. restaurant_permit × 1..N
  *
  * @package FitPal
- * @version 2.1 — Docblock records that registration creates a
- *                pending restaurant with a zero-balance financial
- *                account and cannot reach the ledger, and that a
- *                pending restaurant is invisible to the customer
- *                role. No markup, form, permit slot, or JS config
- *                change from the previous revision.
+ * @version 4.0 — Restructured into five steps, matching
+ *                restaurant-reapply.php step for step. Step 2 now
+ *                carries only the password pair. Step 3 carries the
+ *                business details. Step 4 carries the branch
+ *                address, the permit grid, and the terms checkbox.
+ *                Step 5 is a read-only review. The handler and the
+ *                POST field names are unchanged.
  *
- *                (2.0: page no longer generates its own CSRF token;
- *                header assigns $csrfToken. 1.2: uses the
- *                restaurant role's own session key.)
+ *                (3.0: business_description, dietary_tags,
+ *                barangay, province, region, postal_code required.
+ *                2.3: restored one-level prefix. 2.0: header owns
+ *                CSRF. 1.2: restaurant role's own session key.)
  */
 
 declare(strict_types=1);
@@ -101,13 +127,21 @@ require_once __DIR__ . '/../includes/header.php';
 
 $errorMessage = $_SESSION['restaurant_registration_error'] ?? '';
 unset($_SESSION['restaurant_registration_error']);
+
+$stepTitles = [
+    1 => 'Step 1 of 5 — Account Holder',
+    2 => 'Step 2 of 5 — Security',
+    3 => 'Step 3 of 5 — Business Details',
+    4 => 'Step 4 of 5 — Branch & Permits',
+    5 => 'Step 5 of 5 — Review & Submit',
+];
 ?>
 
 <div class="content register-page">
     <div class="container">
         <div class="register-card">
 
-            <div class="register-progress" role="progressbar" aria-valuenow="1" aria-valuemin="1" aria-valuemax="2"
+            <div class="register-progress" role="progressbar" aria-valuenow="1" aria-valuemin="1" aria-valuemax="5"
                 aria-label="Registration progress">
                 <div class="progress-step active" data-step="1">
                     <span class="step-number">1</span>
@@ -116,13 +150,30 @@ unset($_SESSION['restaurant_registration_error']);
                 <div class="progress-line" id="progressLine1"></div>
                 <div class="progress-step" data-step="2">
                     <span class="step-number">2</span>
+                    <span class="step-label">Security</span>
+                </div>
+                <div class="progress-line" id="progressLine2"></div>
+                <div class="progress-step" data-step="3">
+                    <span class="step-number">3</span>
                     <span class="step-label">Business</span>
+                </div>
+                <div class="progress-line" id="progressLine3"></div>
+                <div class="progress-step" data-step="4">
+                    <span class="step-number">4</span>
+                    <span class="step-label">Branch</span>
+                </div>
+                <div class="progress-line" id="progressLine4"></div>
+                <div class="progress-step" data-step="5">
+                    <span class="step-number">5</span>
+                    <span class="step-label">Review</span>
                 </div>
             </div>
 
             <div class="register-header">
                 <p class="heading-2">Register Your <span>Restaurant</span></p>
-                <p class="text-muted" id="stepSubtitle">Step 1 of 2 — Account Holder</p>
+                <p class="text-muted" id="stepSubtitle">
+                    <?php echo htmlspecialchars($stepTitles[1], ENT_QUOTES, 'UTF-8'); ?>
+                </p>
             </div>
 
             <?php if (!empty($errorMessage)): ?>
@@ -142,20 +193,22 @@ unset($_SESSION['restaurant_registration_error']);
                     value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="current_step" id="currentStep" value="1">
 
-                <!-- STEP 1 — Account Holder -->
+                <!-- ============================================================
+                     STEP 1 — ACCOUNT HOLDER
+                     ============================================================ -->
                 <div class="register-step" id="step1">
 
                     <div class="step-description">
                         <p>The primary account holder will have full owner-level access to the restaurant dashboard.</p>
                     </div>
 
-                    <div class="form-row">
+                    <div class="form-row form-row-3">
                         <div class="form-group">
                             <label for="first_name" class="form-label">
                                 First Name <span class="text-danger">*</span>
                             </label>
-                            <input type="text" id="first_name" name="first_name" class="form-control"
-                                placeholder="Enter your first name" autocomplete="given-name" required>
+                            <input type="text" id="first_name" name="first_name" class="form-control name-field"
+                                placeholder="Enter your first name" autocomplete="given-name" maxlength="50" required>
                             <div class="form-error" id="firstNameError"></div>
                         </div>
 
@@ -163,16 +216,16 @@ unset($_SESSION['restaurant_registration_error']);
                             <label for="middle_name" class="form-label">
                                 Middle Name <span class="text-muted">(Optional)</span>
                             </label>
-                            <input type="text" id="middle_name" name="middle_name" class="form-control"
-                                placeholder="Enter your middle name" autocomplete="additional-name">
+                            <input type="text" id="middle_name" name="middle_name" class="form-control name-field"
+                                placeholder="Optional" autocomplete="additional-name" maxlength="50">
                         </div>
 
                         <div class="form-group">
                             <label for="last_name" class="form-label">
                                 Last Name <span class="text-danger">*</span>
                             </label>
-                            <input type="text" id="last_name" name="last_name" class="form-control"
-                                placeholder="Enter your last name" autocomplete="family-name" required>
+                            <input type="text" id="last_name" name="last_name" class="form-control name-field"
+                                placeholder="Enter your last name" autocomplete="family-name" maxlength="50" required>
                             <div class="form-error" id="lastNameError"></div>
                         </div>
                     </div>
@@ -182,8 +235,8 @@ unset($_SESSION['restaurant_registration_error']);
                             <label for="email" class="form-label">
                                 Email Address <span class="text-danger">*</span>
                             </label>
-                            <input type="email" id="email" name="email" class="form-control"
-                                placeholder="Enter your email address" autocomplete="email" required>
+                            <input type="email" id="email" name="email" class="form-control email-field"
+                                placeholder="Enter your email address" autocomplete="email" maxlength="100" required>
                             <div class="form-error" id="emailError"></div>
                         </div>
 
@@ -191,9 +244,9 @@ unset($_SESSION['restaurant_registration_error']);
                             <label for="contact_number" class="form-label">
                                 Contact Number <span class="text-danger">*</span>
                             </label>
-                            <input type="tel" id="contact_number" name="contact_number" class="form-control"
-                                placeholder="09XX XXX XXXX" autocomplete="tel" inputmode="numeric" maxlength="13"
-                                required>
+                            <input type="tel" id="contact_number" name="contact_number"
+                                class="form-control digits-field" placeholder="09XX XXX XXXX" autocomplete="tel"
+                                inputmode="numeric" maxlength="13" required>
                             <div class="form-error" id="contactError"></div>
                             <div class="form-hint">11 digits, starting with 09</div>
                         </div>
@@ -204,11 +257,28 @@ unset($_SESSION['restaurant_registration_error']);
                             <label for="username" class="form-label">
                                 Username <span class="text-danger">*</span>
                             </label>
-                            <input type="text" id="username" name="username" class="form-control"
+                            <input type="text" id="username" name="username" class="form-control username-field"
                                 placeholder="Choose a username" autocomplete="username" maxlength="20" required>
                             <div class="form-error" id="usernameError"></div>
                             <div class="form-hint">3–20 characters; letters, numbers, underscore</div>
                         </div>
+                    </div>
+
+                    <div class="step-actions">
+                        <button type="button" class="btn btn-primary btn-next" data-next="2">
+                            Next Step
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                     STEP 2 — SECURITY
+                     ============================================================ -->
+                <div class="register-step" id="step2" style="display: none;">
+
+                    <div class="step-description">
+                        <p>Choose a password for your account. You will use this
+                            together with your email or username to sign in.</p>
                     </div>
 
                     <div class="form-row">
@@ -226,7 +296,7 @@ unset($_SESSION['restaurant_registration_error']);
                                 </button>
                             </div>
                             <div class="form-error" id="passwordError"></div>
-                            <div class="form-hint">8-20 characters (letters and numbers only)</div>
+                            <div class="form-hint">8–20 characters, letters and numbers only</div>
                         </div>
 
                         <div class="form-group">
@@ -248,17 +318,23 @@ unset($_SESSION['restaurant_registration_error']);
                     </div>
 
                     <div class="step-actions">
-                        <button type="button" class="btn btn-primary btn-next" data-next="2">
+                        <button type="button" class="btn btn-outline btn-prev" data-prev="1">
+                            Back
+                        </button>
+                        <button type="button" class="btn btn-primary btn-next" data-next="3">
                             Next Step
                         </button>
                     </div>
                 </div>
 
-                <!-- STEP 2 — Business Details -->
-                <div class="register-step" id="step2" style="display: none;">
+                <!-- ============================================================
+                     STEP 3 — BUSINESS DETAILS
+                     ============================================================ -->
+                <div class="register-step" id="step3" style="display: none;">
 
                     <div class="step-description">
-                        <p>Tell us about your restaurant and its first branch. You can add more branches later.</p>
+                        <p>Tell us about your restaurant. This information appears
+                            on the customer-facing menu.</p>
                     </div>
 
                     <div class="form-row">
@@ -266,7 +342,7 @@ unset($_SESSION['restaurant_registration_error']);
                             <label for="business_name" class="form-label">
                                 Business Name <span class="text-danger">*</span>
                             </label>
-                            <input type="text" id="business_name" name="business_name" class="form-control"
+                            <input type="text" id="business_name" name="business_name" class="form-control name-field"
                                 placeholder="e.g. Green Bowl Cafe" maxlength="100" required>
                             <div class="form-error" id="businessNameError"></div>
                         </div>
@@ -275,7 +351,7 @@ unset($_SESSION['restaurant_registration_error']);
                             <label for="cuisine_type" class="form-label">
                                 Cuisine Type <span class="text-danger">*</span>
                             </label>
-                            <input type="text" id="cuisine_type" name="cuisine_type" class="form-control"
+                            <input type="text" id="cuisine_type" name="cuisine_type" class="form-control name-field"
                                 placeholder="e.g. Cafe, Asian Fusion, American" maxlength="50" required>
                             <div class="form-error" id="cuisineTypeError"></div>
                         </div>
@@ -283,21 +359,44 @@ unset($_SESSION['restaurant_registration_error']);
 
                     <div class="form-group">
                         <label for="business_description" class="form-label">
-                            Business Description <span class="text-muted">(Optional)</span>
+                            Business Description <span class="text-danger">*</span>
                         </label>
-                        <textarea id="business_description" name="business_description" class="form-control"
+                        <textarea id="business_description" name="business_description"
+                            class="form-control capitalize-field"
                             placeholder="Describe your restaurant, your specialty, and what makes it unique..."
-                            maxlength="2000"></textarea>
+                            maxlength="2000" rows="5" required></textarea>
                         <div class="form-hint">Max 2000 characters</div>
+                        <div class="form-error" id="businessDescriptionError"></div>
                     </div>
 
                     <div class="form-group">
                         <label for="dietary_tags" class="form-label">
-                            Dietary Tags <span class="text-muted">(Optional)</span>
+                            Dietary Tags <span class="text-danger">*</span>
                         </label>
                         <input type="text" id="dietary_tags" name="dietary_tags" class="form-control"
-                            placeholder="e.g. vegan,organic,gluten_free (comma-separated)" maxlength="200">
+                            placeholder="e.g. vegan,organic,gluten_free (comma-separated)" maxlength="200" required>
                         <div class="form-hint">Comma-separated. Example: vegan, gluten_free, halal</div>
+                        <div class="form-error" id="dietaryTagsError"></div>
+                    </div>
+
+                    <div class="step-actions">
+                        <button type="button" class="btn btn-outline btn-prev" data-prev="2">
+                            Back
+                        </button>
+                        <button type="button" class="btn btn-primary btn-next" data-next="4">
+                            Next Step
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                     STEP 4 — BRANCH & PERMITS
+                     ============================================================ -->
+                <div class="register-step" id="step4" style="display: none;">
+
+                    <div class="step-description">
+                        <p>Add your first branch address and upload the permits
+                            that verify your restaurant is authorized to sell food.</p>
                     </div>
 
                     <div class="section-divider">
@@ -309,7 +408,7 @@ unset($_SESSION['restaurant_registration_error']);
                             <label for="branch_name" class="form-label">
                                 Branch Name <span class="text-danger">*</span>
                             </label>
-                            <input type="text" id="branch_name" name="branch_name" class="form-control"
+                            <input type="text" id="branch_name" name="branch_name" class="form-control name-field"
                                 placeholder="e.g. Main Branch" maxlength="50" required>
                             <div class="form-error" id="branchNameError"></div>
                         </div>
@@ -320,17 +419,18 @@ unset($_SESSION['restaurant_registration_error']);
                             <label for="block" class="form-label">
                                 Block / Street / Unit <span class="text-danger">*</span>
                             </label>
-                            <input type="text" id="block" name="block" class="form-control"
+                            <input type="text" id="block" name="block" class="form-control address-field"
                                 placeholder="e.g. 12-A Sunrise St., Unit 5B" autocomplete="address-line1" required>
                             <div class="form-error" id="blockError"></div>
                         </div>
 
                         <div class="form-group">
                             <label for="barangay" class="form-label">
-                                Barangay <span class="text-muted">(Optional)</span>
+                                Barangay <span class="text-danger">*</span>
                             </label>
-                            <input type="text" id="barangay" name="barangay" class="form-control"
-                                placeholder="e.g. Barangay San Antonio" autocomplete="address-line2">
+                            <input type="text" id="barangay" name="barangay" class="form-control address-field"
+                                placeholder="e.g. Barangay San Antonio" autocomplete="address-line2" required>
+                            <div class="form-error" id="barangayError"></div>
                         </div>
                     </div>
 
@@ -339,35 +439,38 @@ unset($_SESSION['restaurant_registration_error']);
                             <label for="city" class="form-label">
                                 City / Municipality <span class="text-danger">*</span>
                             </label>
-                            <input type="text" id="city" name="city" class="form-control" placeholder="e.g. Pasig"
-                                autocomplete="address-level2" required>
+                            <input type="text" id="city" name="city" class="form-control address-field"
+                                placeholder="e.g. Pasig" autocomplete="address-level2" required>
                             <div class="form-error" id="cityError"></div>
                         </div>
 
                         <div class="form-group">
                             <label for="province" class="form-label">
-                                Province <span class="text-muted">(Optional)</span>
+                                Province <span class="text-danger">*</span>
                             </label>
-                            <input type="text" id="province" name="province" class="form-control"
-                                placeholder="e.g. Metro Manila" autocomplete="address-level1">
+                            <input type="text" id="province" name="province" class="form-control address-field"
+                                placeholder="e.g. Metro Manila" autocomplete="address-level1" required>
+                            <div class="form-error" id="provinceError"></div>
                         </div>
                     </div>
 
                     <div class="form-row">
                         <div class="form-group">
                             <label for="region" class="form-label">
-                                Region <span class="text-muted">(Optional)</span>
+                                Region <span class="text-danger">*</span>
                             </label>
-                            <input type="text" id="region" name="region" class="form-control" placeholder="e.g. NCR"
-                                autocomplete="address-level1">
+                            <input type="text" id="region" name="region" class="form-control address-field"
+                                placeholder="e.g. NCR" autocomplete="address-level1" required>
+                            <div class="form-error" id="regionError"></div>
                         </div>
 
                         <div class="form-group">
                             <label for="postal_code" class="form-label">
-                                Postal Code <span class="text-muted">(Optional)</span>
+                                Postal Code <span class="text-danger">*</span>
                             </label>
-                            <input type="text" id="postal_code" name="postal_code" class="form-control"
-                                placeholder="e.g. 1605" autocomplete="postal-code" maxlength="10" inputmode="numeric">
+                            <input type="text" id="postal_code" name="postal_code" class="form-control digits-field"
+                                placeholder="e.g. 1605" autocomplete="postal-code" maxlength="10" inputmode="numeric"
+                                required>
                             <div class="form-error" id="postalError"></div>
                         </div>
                     </div>
@@ -431,7 +534,85 @@ unset($_SESSION['restaurant_registration_error']);
                     </div>
 
                     <div class="step-actions">
-                        <button type="button" class="btn btn-outline btn-prev" data-prev="1">
+                        <button type="button" class="btn btn-outline btn-prev" data-prev="3">
+                            Back
+                        </button>
+                        <button type="button" class="btn btn-primary btn-next" data-next="5">
+                            Next Step
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                     STEP 5 — REVIEW & SUBMIT
+                     ============================================================ -->
+                <div class="register-step" id="step5" style="display: none;">
+
+                    <div class="step-description">
+                        <p>Review your information below. If everything looks correct, submit
+                            your application for review.</p>
+                    </div>
+
+                    <div class="review-summary" id="reviewSummary">
+                        <div class="review-section">
+                            <p class="review-section-title">Account Holder</p>
+                            <div class="review-row">
+                                <span class="review-label">Name</span>
+                                <span class="review-value" id="reviewName">—</span>
+                            </div>
+                            <div class="review-row">
+                                <span class="review-label">Email</span>
+                                <span class="review-value" id="reviewEmail">—</span>
+                            </div>
+                            <div class="review-row">
+                                <span class="review-label">Mobile</span>
+                                <span class="review-value" id="reviewContact">—</span>
+                            </div>
+                            <div class="review-row">
+                                <span class="review-label">Username</span>
+                                <span class="review-value" id="reviewUsername">—</span>
+                            </div>
+                        </div>
+
+                        <div class="review-section">
+                            <p class="review-section-title">Business</p>
+                            <div class="review-row">
+                                <span class="review-label">Name</span>
+                                <span class="review-value" id="reviewBusinessName">—</span>
+                            </div>
+                            <div class="review-row">
+                                <span class="review-label">Cuisine</span>
+                                <span class="review-value" id="reviewCuisineType">—</span>
+                            </div>
+                            <div class="review-row">
+                                <span class="review-label">Dietary Tags</span>
+                                <span class="review-value" id="reviewDietaryTags">—</span>
+                            </div>
+                        </div>
+
+                        <div class="review-section">
+                            <p class="review-section-title">Branch</p>
+                            <div class="review-row">
+                                <span class="review-label">Name</span>
+                                <span class="review-value" id="reviewBranchName">—</span>
+                            </div>
+                            <div class="review-row">
+                                <span class="review-label">Address</span>
+                                <span class="review-value" id="reviewBranchAddress">—</span>
+                            </div>
+                        </div>
+
+                        <div class="review-section">
+                            <p class="review-section-title">Permits</p>
+                            <div class="review-row">
+                                <span class="review-label">Uploaded</span>
+                                <span class="review-value" id="reviewPermitStatus">—</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="step-actions">
+                        <button type="button" class="btn btn-outline btn-prev" data-prev="4">
                             Back
                         </button>
                         <button type="submit" class="btn btn-primary" id="registerBtn">

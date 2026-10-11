@@ -1,9 +1,54 @@
 /**
  * FitPal Restaurant Sign-Up Styles
  *
+ * Five-step registration wizard. The progress bar geometry matches
+ * restaurant-reapply.css so the two wizards look identical.
+ *
+ * ---------------------------------------------------------------------
+ * PROGRESS BAR GEOMETRY
+ * ---------------------------------------------------------------------
+ * The previous revision sized the progress bar for two steps:
+ * centered, wide connectors, large step numbers. Five steps do not
+ * fit in that geometry without the labels colliding. This revision
+ * adopts the re-apply sheet's five-step geometry:
+ *
+ *   .register-progress  display:flex, space-between, no gap
+ *   .progress-step      flex:1, each step equal width
+ *   .step-number        28px circle, 11px font, 4px halo on active
+ *   .step-label         9px, nowrap, ellipsis on overflow
+ *   .progress-line      flex:1, 2px tall, top:-13px so it lines up
+ *                       with the number circle's center
+ *
+ * That is exactly the re-apply sheet's geometry. The two sheets now
+ * produce visually identical progress bars.
+ *
+ * ---------------------------------------------------------------------
+ * EVERYTHING BELOW THE PROGRESS BAR
+ * ---------------------------------------------------------------------
+ * The card, form, permit grid, terms group, password toggles, and
+ * notifier are preserved from the previous revision. They work the
+ * same on a two-step and a five-step form. No changes to those
+ * sections.
+ *
+ * ---------------------------------------------------------------------
+ * REVIEW SUMMARY
+ * ---------------------------------------------------------------------
+ * Step 5 renders a read-only summary. The summary rules are copied
+ * from restaurant-reapply.css so the two review panels look
+ * identical.
+ *
  * @package FitPal
- * @version 1.1 — Adds permit upload grid.
+ * @version 2.0 — Progress bar rebuilt for five steps. Review
+ *                summary rules added for Step 5. No changes to the
+ *                card, form, permit grid, terms group, password
+ *                toggles, or notifier.
+ *
+ *                (1.1: permit upload grid. 1.0: initial.)
  */
+
+/* ============================================================
+   PAGE SHELL
+   ============================================================ */
 
 .content {
     flex: 1;
@@ -42,14 +87,18 @@
     margin: 16px 0;
 }
 
-/* Progress — two steps */
+/* ============================================================
+   PROGRESS BAR — FIVE STEPS
+   Geometry sized so the five steps and four connectors fit in
+   the 700px container without overflow at every breakpoint.
+   ============================================================ */
+
 .register-progress {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 8px;
+    justify-content: space-between;
     margin-bottom: 30px;
-    padding: 0 20px;
+    padding: 0 4px;
 }
 
 .progress-step {
@@ -57,13 +106,14 @@
     flex-direction: column;
     align-items: center;
     gap: 6px;
+    flex: 1;
     position: relative;
     min-width: 0;
 }
 
 .progress-step .step-number {
-    width: 36px;
-    height: 36px;
+    width: 28px;
+    height: 28px;
     border-radius: var(--radius-full);
     background: var(--gray-200);
     color: var(--gray-500);
@@ -71,9 +121,10 @@
     align-items: center;
     justify-content: center;
     font-weight: var(--font-weight-bold);
-    font-size: var(--font-size-sm);
+    font-size: 11px;
     transition: all var(--transition-base);
     flex-shrink: 0;
+    line-height: 1;
 }
 
 .progress-step.active .step-number {
@@ -88,12 +139,16 @@
 }
 
 .progress-step .step-label {
-    font-size: var(--font-size-xs);
+    font-size: 9px;
     color: var(--gray-400);
     text-align: center;
     font-weight: var(--font-weight-medium);
+    transition: color var(--transition-base);
     line-height: 1.2;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
 }
 
 .progress-step.active .step-label,
@@ -103,18 +158,21 @@
 
 .progress-line {
     flex: 1;
-    max-width: 120px;
     height: 2px;
     background: var(--gray-200);
-    margin: 0 4px;
+    margin: 0 2px;
     position: relative;
-    top: -12px;
-    transition: background var(--transition-base);
+    top: -13px;
+    min-width: 6px;
 }
 
 .progress-line.completed {
     background: var(--primary);
 }
+
+/* ============================================================
+   HEADER
+   ============================================================ */
 
 .register-header {
     text-align: center;
@@ -134,7 +192,12 @@
     color: var(--gray-500);
     font-size: var(--font-size-base);
     margin: 0;
+    line-height: 1.5;
 }
+
+/* ============================================================
+   STEPS
+   ============================================================ */
 
 .register-step {
     animation: restaurantStepFade 0.3s ease;
@@ -187,6 +250,14 @@
     background: var(--gray-200);
 }
 
+.section-divider:first-child {
+    margin-top: 0;
+}
+
+/* ============================================================
+   FORM CONTROLS
+   ============================================================ */
+
 .register-form .form-group {
     margin-bottom: 16px;
     flex: 1;
@@ -197,6 +268,10 @@
     display: flex;
     gap: 16px;
     margin-bottom: 0;
+}
+
+.register-form .form-row-3 .form-group {
+    flex: 1;
 }
 
 .register-form .form-label {
@@ -271,7 +346,12 @@
     min-height: 100px;
     padding: 12px 16px;
     line-height: 1.6;
+    resize: none;
 }
+
+/* ============================================================
+   PASSWORD TOGGLES
+   ============================================================ */
 
 .password-wrapper {
     position: relative;
@@ -309,6 +389,10 @@
     height: 20px;
     display: block;
 }
+
+/* ============================================================
+   STEP ACTIONS
+   ============================================================ */
 
 .step-actions {
     display: flex;
@@ -377,6 +461,10 @@
     box-shadow: none;
 }
 
+/* ============================================================
+   ALERTS
+   ============================================================ */
+
 .alert {
     padding: 12px 16px;
     border-radius: var(--radius-base);
@@ -398,7 +486,10 @@
     border-color: #c3e6cb;
 }
 
-/* Terms */
+/* ============================================================
+   TERMS
+   ============================================================ */
+
 .terms-group {
     margin: 24px 0 0 0;
     padding: 14px 16px;
@@ -496,6 +587,10 @@
     text-decoration: underline;
 }
 
+/* ============================================================
+   FOOTER
+   ============================================================ */
+
 .register-footer {
     margin-top: 24px;
     text-align: center;
@@ -521,7 +616,67 @@
     text-decoration: underline;
 }
 
-/* Notifier */
+/* ============================================================
+   REVIEW SUMMARY — STEP 5
+   ============================================================ */
+
+.review-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 8px;
+}
+
+.review-section {
+    padding: 14px 16px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-base);
+}
+
+.review-section-title {
+    margin: 0 0 8px 0;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-bold);
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+
+.review-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    font-size: var(--font-size-sm);
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--gray-200);
+}
+
+.review-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.review-label {
+    color: var(--gray-500);
+    font-weight: var(--font-weight-semibold);
+    flex-shrink: 0;
+    min-width: 120px;
+}
+
+.review-value {
+    color: var(--text);
+    text-align: right;
+    word-break: break-word;
+    flex: 1;
+    font-weight: var(--font-weight-medium);
+}
+
+/* ============================================================
+   NOTIFIER
+   ============================================================ */
+
 .notifier {
     position: fixed;
     inset: 0;
@@ -612,9 +767,9 @@
     border-color: var(--primary-dark);
 }
 
-/* ============================================
+/* ============================================================
    PERMIT UPLOAD GRID
-   ============================================ */
+   ============================================================ */
 
 .permit-dropzone-grid {
     display: grid;
@@ -732,7 +887,9 @@
     transform: scale(0.92);
 }
 
-/* Responsive */
+/* ============================================================
+   RESPONSIVE — TABLET (≤ 768px)
+   ============================================================ */
 
 @media (max-width: 768px) {
     .register-page {
@@ -748,7 +905,8 @@
         font-size: var(--font-size-2xl);
     }
 
-    .register-form .form-row {
+    .register-form .form-row,
+    .register-form .form-row-3 {
         flex-direction: column;
         gap: 0;
     }
@@ -765,33 +923,48 @@
 
     .step-actions .btn {
         width: 100%;
-        min-width: 100%;
+        min-width: 0;
     }
 
     .register-progress {
-        padding: 0 4px;
-        gap: 4px;
+        padding: 0 2px;
+        gap: 1px;
+        margin-bottom: 22px;
     }
 
     .progress-step .step-number {
-        width: 30px;
-        height: 30px;
-        font-size: var(--font-size-xs);
-    }
-
-    .progress-step .step-label {
+        width: 24px;
+        height: 24px;
         font-size: 10px;
     }
 
+    .progress-step .step-label {
+        font-size: 8px;
+    }
+
     .progress-line {
-        top: -10px;
-        margin: 0 2px;
+        top: -11px;
+        margin: 0 1px;
+        min-width: 4px;
     }
 
     .permit-dropzone-grid {
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
+
+    .review-label {
+        min-width: 100px;
+        font-size: var(--font-size-xs);
+    }
+
+    .review-value {
+        font-size: var(--font-size-xs);
+    }
 }
+
+/* ============================================================
+   RESPONSIVE — MOBILE (≤ 480px)
+   ============================================================ */
 
 @media (max-width: 480px) {
     .register-page {
@@ -812,7 +985,7 @@
     }
 
     .register-form .form-control {
-        height: 40px;
+        height: 42px;
         font-size: var(--font-size-sm);
         padding: 8px 10px;
     }
@@ -852,23 +1025,44 @@
     }
 
     .progress-step .step-number {
-        width: 24px;
-        height: 24px;
-        font-size: 10px;
-    }
-
-    .progress-step .step-label {
+        width: 22px;
+        height: 22px;
         font-size: 9px;
     }
 
+    .progress-step .step-label {
+        font-size: 8px;
+    }
+
     .progress-line {
-        top: -8px;
-        margin: 0 1px;
-        min-width: 4px;
+        top: -9px;
+        margin: 0 0.5px;
+        min-width: 2px;
     }
 
     .permit-dropzone-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .review-section {
+        padding: 12px 14px;
+    }
+
+    .review-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        padding: 5px 0;
+    }
+
+    .review-label {
+        min-width: 0;
+        font-size: 10px;
+    }
+
+    .review-value {
+        text-align: left;
+        font-size: var(--font-size-xs);
     }
 }
 
@@ -882,7 +1076,7 @@
     }
 
     .register-form .form-control {
-        height: 36px;
+        height: 38px;
         font-size: var(--font-size-xs);
         padding: 6px 8px;
     }
@@ -903,13 +1097,18 @@
     }
 
     .progress-step .step-label {
-        font-size: 8px;
+        font-size: 7px;
     }
 
     .progress-step .step-number {
-        width: 22px;
-        height: 22px;
-        font-size: 9px;
+        width: 20px;
+        height: 20px;
+        font-size: 8px;
+    }
+
+    .progress-line {
+        min-width: 2px;
+        top: -8px;
     }
 }
 

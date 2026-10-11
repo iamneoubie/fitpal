@@ -6,115 +6,80 @@
  * every other role's session.
  *
  * Actions:
- *   update_profile   — save the customer's editable contact field
- *   upload_picture   — receive a new profile picture and store its path
- *   check_sign_out   — read-only pre-flight for the sign-out guard
+ *   update_profile          — save the customer's editable personal fields
+ *   update_dietary_profile  — save dietary preferences and allergies
+ *   update_fitness_profile  — save height, weight, and fitness goal
+ *   upload_picture          — receive a new profile picture and store its path
+ *   check_sign_out          — read-only pre-flight for the sign-out guard
  *
- * Scope rules applied
- * -------------------
- *   - Every SQL statement lives in customer-queries.php. This file
- *     contains no prepare() calls, no SQL strings, and no direct
- *     writes to customer_profile.
+ * ---------------------------------------------------------------------
+ * EDITABLE PERSONAL FIELDS
+ * ---------------------------------------------------------------------
+ * The personal form now submits every field on the Personal tab.
+ * The handler writes:
+ *
+ *   customer.first_name, middle_name, last_name
+ *   customer.birthdate, gender, contact_number
+ *
+ * Email is NOT writable. It doubles as the customer's login
+ * identifier, and the markup keeps it permanently disabled with
+ * data-readonly="1". The handler ignores it even if a determined
+ * client crafts a POST body that includes it.
+ *
+ * ---------------------------------------------------------------------
+ * THE {field}_submitted MARKER
+ * ---------------------------------------------------------------------
+ * Every editable form carries a hidden `{field}_submitted=1`
+ * marker alongside its `action` field. The markers tell the handler
+ * which column a request speaks for:
+ *
+ *   profile_submitted=1   → write the personal fields
+ *   dietary_submitted=1   → write customer_profile.dietary_preferences
+ *   allergy_submitted=1   → write customer_profile.allergies
+ *   fitness_submitted=1   → write customer_profile.height_cm, weight_kg,
+ *                           fitness_goal
+ *
+ * The marker matters most for the dietary and allergy columns,
+ * because an HTML checkbox group with every box unchecked produces
+ * no `{field}[]` entries at all on the wire. Without the marker,
+ * "customer unchecked everything" and "this form was not part of
+ * the request" look identical, and the handler cannot tell whether
+ * to clear a column or preserve it. With the marker, the two are
+ * distinguishable.
+ *
+ * ---------------------------------------------------------------------
+ * SCOPE RULES APPLIED
+ * ---------------------------------------------------------------------
+ *   - Every SQL statement lives in this handler's own file or in
+ *     customer-queries.php. This file contains no queries against
+ *     tables owned by another role.
  *   - CSRF is validated against customer_csrf_token, the customer
  *     context's own session key.
- *   - JSON responses follow the same shape as rider-handler.php and
- *     the other customer handlers:
- *         { status: 'success'|'error', message: string, ... }
+ *   - JSON responses: { status: 'success'|'error', message: string }
  *     Business-rule failures are HTTP 200. Only the auth failure
  *     returns a non-200 status (401), and the CSRF failure returns
  *     403 so a debugging client can tell them apart.
  *
- * Why the file is safe to leave out of pages
- * ------------------------------------------
- * This file runs a full request dispatch at load time: session
- * bootstrap, the auth guard, the CSRF check, the switch, and the
- * echo/exit. It is therefore NOT safe to require_once from a page.
- * Pages that need the same read helpers (getCustomerProfile,
- * formatCurrency) include customer-queries.php instead, which only
- * declares functions.
- *
- * Sign-out guard contract
- * -----------------------
- * check_sign_out answers three questions:
- *
- *   can_sign_out   true when the customer has no live orders. Items
- *                  sitting in the cart or the session order queue do
- *                  NOT block sign-out — neither store is an active
- *                  order, and a customer with saved-but-unordered
- *                  items must be allowed to leave.
- *   active_orders  orders in pending / preparing / rider_pending /
- *                  picking_up / delivering. This is the only value
- *                  that decides can_sign_out.
- *   queue_count    cart units + session order_queue units. Reported
- *                  so the client can show an informational notice if
- *                  it ever chooses to. It does NOT gate the decision.
- *
- * The check is read-only. It never cancels an order, never clears
- * a cart, never touches any state.
- *
- * Upload handling
- * ---------------
- *   - Allowed MIME types: image/jpeg, image/png, image/webp.
- *   - Max size: 2 MB.
- *   - The stored filename is MM_DD_YYYY_<n>.<ext>, where <n> is a
- *     zero-based counter scoped to the customer and to the day.
- *   - The file is moved under
- *         shared/uploads/customer/profiles/<customer_id>/
- *     which is created on demand with mode 0755.
- *   - The path stored in the DB is project-root-relative.
- *
- * ---------------------------------------------------------------------
- * PER-ROLE SESSION MODEL (Option B)
- * ---------------------------------------------------------------------
- * The handler bootstraps the customer session before doing
- * anything else. Because the request that reaches this handler
- * carries only the customer cookie, the customer session is the
- * only session this code can see. Every $_SESSION read and write
- * in this file targets the customer session.
- *
  * @package FitPal
- * @version 2.0 — Per-role session migration (Option B). The
- *                handler bootstraps the customer session as its
- *                first executable statement. The obsolete
- *                cross-role commentary in the CSRF block is
- *                replaced with a note about the structural
- *                isolation that per-role sessions provide. No
- *                logic changed; no SQL moved.
+ * @version 4.0 — handleUpdateProfile() now writes every editable
+ *                personal field (name, birthdate, gender, contact
+ *                number). Email remains read-only.
  *
- *                (1.7: sign-out guard no longer blocks on cart or
- *                queue contents. 1.6: added check_sign_out.
- *                1.5: random hex suffix removed from the filename.
- *                1.4: filename format MM_DD_YYYY_<n>.)
+ *                (3.0: marker-based dispatch for dietary, allergy,
+ *                and fitness writes. 2.2: adds
+ *                update_fitness_profile. 2.1: adds
+ *                update_dietary_profile. 2.0: per-role session
+ *                migration.)
  */
 
 declare(strict_types=1);
 
-// ---------------------------------------------------------------------
-// SESSION BOOTSTRAP
-//
-// Must run before any other include that might touch the session.
-// This handler belongs to the customer context.
-// ---------------------------------------------------------------------
-
 require_once __DIR__ . '/../../../shared/includes/session-bootstrap.php';
 fitpal_session_bootstrap('customer');
-
-// ---------------------------------------------------------------------
-// OUTPUT BUFFER
-//
-// A stray warning or notice anywhere below would corrupt the JSON
-// response. The buffer is drained before the response is emitted
-// and the buffer's contents are discarded. This keeps the
-// Content-Type contract honest.
-// ---------------------------------------------------------------------
 
 ob_start();
 
 header('Content-Type: application/json; charset=utf-8');
-
-// ---------------------------------------------------------------------
-// AUTHENTICATION
-// ---------------------------------------------------------------------
 
 if (empty($_SESSION['customer_id'])) {
     ob_end_clean();
@@ -123,21 +88,8 @@ if (empty($_SESSION['customer_id'])) {
     exit;
 }
 
-// ---------------------------------------------------------------------
-// DEPENDENCIES
-// ---------------------------------------------------------------------
-
 require_once __DIR__ . '/../../../shared/backend/database/database-connect.php';
 require_once __DIR__ . '/../database/customer-queries.php';
-
-// ---------------------------------------------------------------------
-// CSRF
-//
-// Validated against the customer context's own key,
-// 'customer_csrf_token', inside the customer session. On mismatch
-// the customer's own token is rotated so the next page render
-// generates a fresh one.
-// ---------------------------------------------------------------------
 
 $givenToken = (string)($_POST['csrf_token'] ?? '');
 $sessToken  = (string)($_SESSION['customer_csrf_token'] ?? '');
@@ -154,17 +106,21 @@ if ($sessToken === '' || $givenToken === '' || !hash_equals($sessToken, $givenTo
 $customerId = (int)$_SESSION['customer_id'];
 $action     = (string)($_POST['action'] ?? '');
 
-$response = ['status' => 'error', 'message' => 'Invalid action'];
-
-// ---------------------------------------------------------------------
-// DISPATCH
-// ---------------------------------------------------------------------
+$response = ['status' => 'error', 'message' => 'Invalid action: ' . $action];
 
 try {
     switch ($action) {
 
         case 'update_profile':
             $response = handleUpdateProfile($database_connection, $customerId);
+            break;
+
+        case 'update_dietary_profile':
+            $response = handleUpdateDietaryProfile($database_connection, $customerId);
+            break;
+
+        case 'update_fitness_profile':
+            $response = handleUpdateFitnessProfile($database_connection, $customerId);
             break;
 
         case 'upload_picture':
@@ -194,13 +150,71 @@ exit;
  * ============================================================= */
 
 /**
- * Save the customer's editable profile fields.
+ * Validate a name field.
  *
- * The profile page renders every field except the contact number as
- * read-only, so the only field this action accepts is
- * contact_number. Everything else the form submits is ignored — a
- * customer cannot change their own first name, email, or username
- * from this endpoint. Those go through support.
+ * Accepts letters (any case), spaces, hyphens, and straight
+ * apostrophes. Auto-capitalizes the first letter of each word.
+ * Returns the normalized string, or null when the field should
+ * fall back to "no change" (empty submission).
+ *
+ * @param mixed $raw
+ * @param int   $minLength
+ * @param int   $maxLength
+ * @return array{value: string|null, error: string|null}
+ */
+function normalizeNameField(mixed $raw, int $minLength, int $maxLength): array
+{
+    if (!is_string($raw) && !is_numeric($raw)) {
+        return ['value' => null, 'error' => null];
+    }
+
+    $trimmed = trim((string)$raw);
+
+    if ($trimmed === '') {
+        return ['value' => null, 'error' => null];
+    }
+
+    if (strlen($trimmed) < $minLength) {
+        return [
+            'value' => null,
+            'error' => 'Must be at least ' . $minLength . ' characters.',
+        ];
+    }
+
+    if (strlen($trimmed) > $maxLength) {
+        return [
+            'value' => null,
+            'error' => 'Must be no more than ' . $maxLength . ' characters.',
+        ];
+    }
+
+    if (!preg_match("/^[A-Za-z\s\-']+$/u", $trimmed)) {
+        return [
+            'value' => null,
+            'error' => "Contains invalid characters. Use only letters, spaces, hyphens, and apostrophes.",
+        ];
+    }
+
+    $capitalized = preg_replace_callback(
+        "/\b\w/u",
+        static fn(array $m): string => mb_strtoupper($m[0]),
+        $trimmed
+    );
+
+    return ['value' => $capitalized ?? $trimmed, 'error' => null];
+}
+
+/**
+ * Save the customer's editable personal fields.
+ *
+ * Writes first_name, middle_name, last_name, birthdate, gender, and
+ * contact_number to the customer table. Email is never written — it
+ * is the customer's login identifier and stays locked.
+ *
+ * The form carries `profile_submitted=1`. When that marker is
+ * absent, the action refuses with an explanatory message. That is
+ * defensive: a request that reaches this action without the marker
+ * is not from the profile form.
  *
  * @param PDO $db
  * @param int $customerId
@@ -208,24 +222,137 @@ exit;
  */
 function handleUpdateProfile(PDO $db, int $customerId): array
 {
-    $contactNumber = trim((string)($_POST['contact_number'] ?? ''));
-
-    if ($contactNumber !== '' && !preg_match('/^09\d{9}$/', $contactNumber)) {
+    if (empty($_POST['profile_submitted'])) {
         return [
             'status'  => 'error',
-            'message' => 'Invalid contact number. Use 09XXXXXXXXX (11 digits).',
+            'message' => 'No profile data was submitted.',
         ];
     }
 
+    // Load current values so we only write fields the request
+    // actually carries.
+    $current = getCustomerProfile($db, $customerId);
+    if (!$current) {
+        return ['status' => 'error', 'message' => 'Customer profile not found.'];
+    }
+
+    // ---- Name fields ----
+    $firstNameResult  = ['value' => (string)($current['first_name'] ?? ''),  'error' => null];
+    $middleNameResult = ['value' => (string)($current['middle_name'] ?? ''), 'error' => null];
+    $lastNameResult   = ['value' => (string)($current['last_name'] ?? ''),   'error' => null];
+
+    if (array_key_exists('first_name', $_POST)) {
+        $firstNameResult = normalizeNameField($_POST['first_name'], 2, 50);
+        if ($firstNameResult['error'] !== null) {
+            return ['status' => 'error', 'message' => 'First name: ' . $firstNameResult['error']];
+        }
+        if ($firstNameResult['value'] === null || $firstNameResult['value'] === '') {
+            return ['status' => 'error', 'message' => 'First name is required.'];
+        }
+    }
+
+    if (array_key_exists('middle_name', $_POST)) {
+        $middleNameResult = normalizeNameField($_POST['middle_name'], 1, 50);
+        if ($middleNameResult['error'] !== null) {
+            return ['status' => 'error', 'message' => 'Middle name: ' . $middleNameResult['error']];
+        }
+    }
+
+    if (array_key_exists('last_name', $_POST)) {
+        $lastNameResult = normalizeNameField($_POST['last_name'], 2, 50);
+        if ($lastNameResult['error'] !== null) {
+            return ['status' => 'error', 'message' => 'Last name: ' . $lastNameResult['error']];
+        }
+        if ($lastNameResult['value'] === null || $lastNameResult['value'] === '') {
+            return ['status' => 'error', 'message' => 'Last name is required.'];
+        }
+    }
+
+    // ---- Birthdate ----
+    $birthdateValue = $current['birthdate'] ?? null;
+
+    if (array_key_exists('birthdate', $_POST)) {
+        $rawBirthdate = trim((string)($_POST['birthdate'] ?? ''));
+        if ($rawBirthdate === '') {
+            $birthdateValue = null;
+        } else {
+            $parsed = DateTime::createFromFormat('Y-m-d', $rawBirthdate);
+            if (!$parsed || $parsed->format('Y-m-d') !== $rawBirthdate) {
+                return ['status' => 'error', 'message' => 'Invalid birthdate format.'];
+            }
+
+            $today    = new DateTime('today');
+            $age      = (int)$today->diff($parsed)->y;
+
+            if ($age < 13) {
+                return ['status' => 'error', 'message' => 'You must be at least 13 years old.'];
+            }
+            if ($age > 120) {
+                return ['status' => 'error', 'message' => 'Please enter a valid birthdate.'];
+            }
+
+            $birthdateValue = $rawBirthdate;
+        }
+    }
+
+    // ---- Gender ----
+    $genderValue = $current['gender'] ?? null;
+    $allowedGenders = ['Male', 'Female', 'Other'];
+
+    if (array_key_exists('gender', $_POST)) {
+        $rawGender = trim((string)($_POST['gender'] ?? ''));
+        if ($rawGender === '') {
+            $genderValue = null;
+        } elseif (in_array($rawGender, $allowedGenders, true)) {
+            $genderValue = $rawGender;
+        } else {
+            return ['status' => 'error', 'message' => 'Invalid gender selection.'];
+        }
+    }
+
+    // ---- Contact number ----
+    $contactValue = $current['contact_number'] ?? null;
+
+    if (array_key_exists('contact_number', $_POST)) {
+        $rawContact = trim((string)($_POST['contact_number'] ?? ''));
+        if ($rawContact === '') {
+            $contactValue = null;
+        } else {
+            $cleaned = preg_replace('/\s+/', '', $rawContact);
+            if (!preg_match('/^09\d{9}$/', (string)$cleaned)) {
+                return [
+                    'status'  => 'error',
+                    'message' => 'Invalid contact number. Use 09XXXXXXXXX (11 digits).',
+                ];
+            }
+            $contactValue = $cleaned;
+        }
+    }
+
+    // ---- Write ----
     $stmt = $db->prepare(
         "UPDATE customer
-            SET contact_number = :contact_number
-          WHERE customer_id = :customer_id"
+            SET first_name     = :first_name,
+                middle_name    = :middle_name,
+                last_name      = :last_name,
+                birthdate      = :birthdate,
+                gender         = :gender,
+                contact_number = :contact_number
+          WHERE customer_id    = :customer_id"
     );
     $stmt->execute([
-        ':contact_number' => $contactNumber !== '' ? $contactNumber : null,
+        ':first_name'     => $firstNameResult['value'],
+        ':middle_name'    => $middleNameResult['value'] !== '' ? $middleNameResult['value'] : null,
+        ':last_name'      => $lastNameResult['value'],
+        ':birthdate'      => $birthdateValue,
+        ':gender'         => $genderValue,
+        ':contact_number' => $contactValue,
         ':customer_id'    => $customerId,
     ]);
+
+    // Refresh the session-cached display name so the header
+    // renders the new name on the next page load.
+    unset($_SESSION['customer_name']);
 
     return [
         'status'  => 'success',
@@ -234,23 +361,185 @@ function handleUpdateProfile(PDO $db, int $customerId): array
 }
 
 /**
+ * Save the customer's dietary preferences and allergies.
+ *
+ * The dietary form and the allergy form are submitted back to back
+ * by the save pipeline, and both carry the same action. The
+ * `dietary_submitted` and `allergy_submitted` markers tell the
+ * handler which column this request speaks for.
+ *
+ * @param PDO $db
+ * @param int $customerId
+ * @return array{status:string, message:string}
+ */
+function handleUpdateDietaryProfile(PDO $db, int $customerId): array
+{
+    $dietarySubmitted = !empty($_POST['dietary_submitted']);
+    $allergySubmitted = !empty($_POST['allergy_submitted']);
+
+    if (!$dietarySubmitted && !$allergySubmitted) {
+        return [
+            'status'  => 'error',
+            'message' => 'No dietary or allergy data was submitted.',
+        ];
+    }
+
+    $cleanItems = static function (mixed $raw): array {
+        if (!is_array($raw)) {
+            $raw = $raw === null || $raw === '' ? [] : [$raw];
+        }
+        $out = [];
+        foreach ($raw as $item) {
+            if (!is_string($item) && !is_numeric($item)) {
+                continue;
+            }
+            $trimmed = trim((string)$item);
+            if ($trimmed === '') {
+                continue;
+            }
+            if (!in_array($trimmed, $out, true)) {
+                $out[] = $trimmed;
+            }
+        }
+        return $out;
+    };
+
+    $current = getCustomerDietaryProfile($db, $customerId) ?: [];
+    $currentDietaryStr = (string)($current['dietary_preferences'] ?? '');
+    $currentAllergyStr = (string)($current['allergies'] ?? '');
+
+    if ($dietarySubmitted) {
+        $dietaryItems  = $cleanItems($_POST['dietary_preferences'] ?? []);
+        $dietaryString = !empty($dietaryItems) ? implode(',', $dietaryItems) : null;
+    } else {
+        $dietaryString = $currentDietaryStr !== '' ? $currentDietaryStr : null;
+    }
+
+    if ($allergySubmitted) {
+        $allergyItems  = $cleanItems($_POST['allergies'] ?? []);
+        $allergyString = !empty($allergyItems) ? implode(',', $allergyItems) : null;
+    } else {
+        $allergyString = $currentAllergyStr !== '' ? $currentAllergyStr : null;
+    }
+
+    $stmt = $db->prepare(
+        "UPDATE customer_profile
+            SET dietary_preferences = :dietary,
+                allergies           = :allergies
+          WHERE customer_id = :customer_id"
+    );
+    $stmt->execute([
+        ':dietary'     => $dietaryString,
+        ':allergies'   => $allergyString,
+        ':customer_id' => $customerId,
+    ]);
+
+    unset($_SESSION['customer_dietary_preferences']);
+    unset($_SESSION['customer_allergies']);
+
+    return [
+        'status'  => 'success',
+        'message' => 'Dietary preferences and allergies updated.',
+    ];
+}
+
+/**
+ * Save the customer's fitness profile.
+ *
+ * @param PDO $db
+ * @param int $customerId
+ * @return array{status:string, message:string}
+ */
+function handleUpdateFitnessProfile(PDO $db, int $customerId): array
+{
+    $submitted = !empty($_POST['fitness_submitted']);
+
+    if (!$submitted) {
+        return [
+            'status'  => 'error',
+            'message' => 'No fitness data was submitted.',
+        ];
+    }
+
+    $current = getCustomerProfile($db, $customerId) ?: [];
+    $currentHeight = $current['height_cm'] ?? null;
+    $currentWeight = $current['weight_kg'] ?? null;
+    $currentGoal   = (string)($current['fitness_goal'] ?? '');
+
+    // ---- Height ----
+    if (array_key_exists('height', $_POST)) {
+        $rawHeight = trim((string)($_POST['height'] ?? ''));
+        if ($rawHeight === '') {
+            $heightValue = null;
+        } else {
+            if (!is_numeric($rawHeight)) {
+                return ['status' => 'error', 'message' => 'Height must be a number.'];
+            }
+            $heightValue = (float)$rawHeight;
+            if ($heightValue < 50 || $heightValue > 300) {
+                return ['status' => 'error', 'message' => 'Height must be between 50 and 300 cm.'];
+            }
+        }
+    } else {
+        $heightValue = $currentHeight !== null ? (float)$currentHeight : null;
+    }
+
+    // ---- Weight ----
+    if (array_key_exists('weight', $_POST)) {
+        $rawWeight = trim((string)($_POST['weight'] ?? ''));
+        if ($rawWeight === '') {
+            $weightValue = null;
+        } else {
+            if (!is_numeric($rawWeight)) {
+                return ['status' => 'error', 'message' => 'Weight must be a number.'];
+            }
+            $weightValue = (float)$rawWeight;
+            if ($weightValue < 10 || $weightValue > 500) {
+                return ['status' => 'error', 'message' => 'Weight must be between 10 and 500 kg.'];
+            }
+        }
+    } else {
+        $weightValue = $currentWeight !== null ? (float)$currentWeight : null;
+    }
+
+    // ---- Goal ----
+    $allowedGoals = ['weight_loss', 'muscle_gain', 'maintenance'];
+
+    if (array_key_exists('fitness_goal', $_POST)) {
+        $rawGoal = trim((string)($_POST['fitness_goal'] ?? ''));
+        if ($rawGoal === '') {
+            $goalValue = null;
+        } elseif (in_array($rawGoal, $allowedGoals, true)) {
+            $goalValue = $rawGoal;
+        } else {
+            return ['status' => 'error', 'message' => 'Invalid fitness goal selected.'];
+        }
+    } else {
+        $goalValue = in_array($currentGoal, $allowedGoals, true) ? $currentGoal : null;
+    }
+
+    $stmt = $db->prepare(
+        "UPDATE customer_profile
+            SET height_cm    = :height,
+                weight_kg    = :weight,
+                fitness_goal = :goal
+          WHERE customer_id = :customer_id"
+    );
+    $stmt->execute([
+        ':height'      => $heightValue,
+        ':weight'      => $weightValue,
+        ':goal'        => $goalValue,
+        ':customer_id' => $customerId,
+    ]);
+
+    return [
+        'status'  => 'success',
+        'message' => 'Fitness profile updated.',
+    ];
+}
+
+/**
  * Read-only pre-flight for the customer sign-out guard.
- *
- * Only one condition blocks sign-out:
- *
- *   active_orders — any order in pending, preparing, rider_pending,
- *                   picking_up, or delivering. These are the five
- *                   statuses where the kitchen is making food or a
- *                   rider is moving it, and the customer cannot
- *                   walk away from an order that is currently in
- *                   flight.
- *
- * The cart and the session order queue are reported but do NOT
- * block sign-out. A saved-but-unordered item is not an active
- * order, and a customer with items sitting in the cart has not
- * committed to anything.
- *
- * Does not change state. Does not clear anything.
  *
  * @param PDO $db
  * @param int $customerId
@@ -275,8 +564,6 @@ function handleCheckSignOut(PDO $db, int $customerId): array
     $stmt->execute(array_merge([$customerId], $activeStatuses));
     $activeOrders = (int)$stmt->fetchColumn();
 
-    // Reported for the client's information only. Not part of the
-    // sign-out decision.
     $stmt = $db->prepare(
         "SELECT COALESCE(SUM(quantity), 0) FROM cart WHERE customer_id = ?"
     );
@@ -301,17 +588,8 @@ function handleCheckSignOut(PDO $db, int $customerId): array
 }
 
 /**
- * Receive an uploaded profile picture, move it into place, store the
- * resulting project-root-relative path, and sync the session.
- *
- * Validation order:
- *   1. $_FILES entry exists and has no upload error.
- *   2. Size is within the 2 MB cap.
- *   3. MIME type is one of image/jpeg, image/png, image/webp.
- *
- * The file is moved before the DB UPDATE runs. If the UPDATE throws,
- * the moved file is unlinked so a failed upload never leaves an
- * orphan on disk.
+ * Receive an uploaded profile picture, move it into place, store
+ * the resulting project-root-relative path, and sync the session.
  *
  * @param PDO $db
  * @param int $customerId

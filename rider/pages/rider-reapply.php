@@ -2,22 +2,50 @@
 /**
  * FitPal Rider Re-Application Page
  *
- * (unchanged docblock head)
+ * Six-step re-application wizard:
+ *   Step 1 — Personal Information
+ *   Step 2 — Vehicle Details
+ *   Step 3 — Address
+ *   Step 4 — Emergency Contact
+ *   Step 5 — Verification Uploads
+ *   Step 6 — Review & Submit
+ *
+ * Mirrors rider/pages/sign-up.php step for step. Every field on
+ * Steps 1–4 is pre-filled from the rider's existing database rows,
+ * so a re-applying rider confirms or corrects what is already on
+ * file rather than re-entering it from scratch.
+ *
+ * ---------------------------------------------------------------------
+ * WHAT THIS PAGE UPDATES
+ * ---------------------------------------------------------------------
+ *   Step 1  delivery_rider row (names, birthdate, gender, email,
+ *           contact_number, username). Password is NOT touched.
+ *   Step 2  delivery_rider_profile row (vehicle_type, vehicle_plate).
+ *           Make/model/year have no column in the current schema.
+ *   Step 3  delivery_rider_address row (updated in place, not
+ *           inserted as a new row).
+ *   Step 4  delivery_rider_emergency_contact row (updated in place).
+ *   Step 5  delivery_rider_document row (per the document-row policy
+ *           in the handler: 'keep' or 'replace').
+ *
+ * ---------------------------------------------------------------------
+ * REQUIRED FIELDS
+ * ---------------------------------------------------------------------
+ * Same rules as sign-up.php. On Step 2, vehicle_make, vehicle_model,
+ * and vehicle_year are required for every non-bicycle vehicle. On
+ * Step 3, all six address fields are required.
  *
  * @package FitPal
- * @version 2.2 — Step 1's password row gains a third field: the
- *                rider's Current Password. The server now requires
- *                it whenever a new password is posted, so the page
- *                collects it in the same row as the new password
- *                and its confirmation. The "New Password" and
- *                "Confirm New Password" labels drop their
- *                "(Optional)" note, because leaving all three blank
- *                is what keeps the current password; filling any
- *                of them requires all three.
+ * @version 4.0 — Six-step wizard. Address (Step 3) and Emergency
+ *                Contact (Step 4) are split into their own steps.
+ *                Uploads moves from Step 4 to Step 5. Verify moves
+ *                from Step 5 to Step 6. Step 2's make/model/year
+ *                fields gain the `required` attribute. Step 3's
+ *                barangay/province/region/postal_code lose their
+ *                "(Optional)" notes and gain the `*` marker.
  *
- *                (2.1: shorter labels, longer hint. 2.0: five-step
- *                wizard. 1.1: emits its own <link> to
- *                reapply.css. 1.0: initial re-application page.)
+ *                (3.1: review summary on Step 5. 3.0: password row
+ *                removed. 2.0: five-step wizard.)
  */
 
 declare(strict_types=1);
@@ -101,14 +129,14 @@ $isBicycle = ($vehicleType === 'bicycle');
 require_once __DIR__ . '/../includes/header.php';
 ?>
 
-<link rel="stylesheet" href="../assets/css/reapply.css">
+<link rel="stylesheet" href="../assets/css/rider-reapply.css">
 
 <div class="content register-page"
     data-vehicle-type="<?php echo htmlspecialchars($vehicleType, ENT_QUOTES, 'UTF-8'); ?>">
     <div class="container">
         <div class="register-card">
 
-            <div class="register-progress" role="progressbar" aria-valuenow="1" aria-valuemin="1" aria-valuemax="5"
+            <div class="register-progress" role="progressbar" aria-valuenow="1" aria-valuemin="1" aria-valuemax="6"
                 aria-label="Re-application progress">
                 <div class="progress-step active" data-step="1">
                     <span class="step-number">1</span>
@@ -127,18 +155,23 @@ require_once __DIR__ . '/../includes/header.php';
                 <div class="progress-line" id="progressLine3"></div>
                 <div class="progress-step" data-step="4">
                     <span class="step-number">4</span>
-                    <span class="step-label">Uploads</span>
+                    <span class="step-label">Emergency</span>
                 </div>
                 <div class="progress-line" id="progressLine4"></div>
                 <div class="progress-step" data-step="5">
                     <span class="step-number">5</span>
+                    <span class="step-label">Uploads</span>
+                </div>
+                <div class="progress-line" id="progressLine5"></div>
+                <div class="progress-step" data-step="6">
+                    <span class="step-number">6</span>
                     <span class="step-label">Verify</span>
                 </div>
             </div>
 
             <div class="register-header">
                 <p class="heading-2">Update Your <span>Application</span></p>
-                <p class="text-muted" id="stepSubtitle">Step 1 of 5 — Personal Information</p>
+                <p class="text-muted" id="stepSubtitle">Step 1 of 6 — Personal Information</p>
             </div>
 
             <div id="registerError" class="alert alert-danger" style="display: none;" role="alert">
@@ -153,6 +186,9 @@ require_once __DIR__ . '/../includes/header.php';
                 <input type="hidden" name="mode" value="reapply">
                 <input type="hidden" name="current_step" id="currentStep" value="1">
 
+                <!-- ============================================================
+                     STEP 1 — Personal Information
+                     ============================================================ -->
                 <div class="register-step" id="step1">
 
                     <div class="form-row">
@@ -252,64 +288,6 @@ require_once __DIR__ . '/../includes/header.php';
                         </div>
                     </div>
 
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="current_password" class="form-label">
-                                Current Password
-                            </label>
-                            <div class="password-wrapper">
-                                <input type="password" id="current_password" name="current_password"
-                                    class="form-control" placeholder="Enter your current password"
-                                    autocomplete="current-password" maxlength="20">
-                                <button type="button" class="password-toggle" id="toggleCurrentPassword" tabindex="-1"
-                                    aria-label="Toggle current password visibility">
-                                    <img src="<?php echo $assetBase; ?>assets/images/icons/password-hide.svg"
-                                        alt="Hide password" id="currentPasswordIcon">
-                                </button>
-                            </div>
-                            <div class="form-error" id="currentPasswordError"></div>
-                            <div class="form-hint">
-                                Required only if you change your password below.
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="password" class="form-label">
-                                New Password
-                            </label>
-                            <div class="password-wrapper">
-                                <input type="password" id="password" name="password" class="form-control"
-                                    placeholder="Enter a new password" autocomplete="new-password" maxlength="20">
-                                <button type="button" class="password-toggle" id="togglePassword" tabindex="-1"
-                                    aria-label="Toggle password visibility">
-                                    <img src="<?php echo $assetBase; ?>assets/images/icons/password-hide.svg"
-                                        alt="Hide password" id="passwordIcon">
-                                </button>
-                            </div>
-                            <div class="form-error" id="passwordError"></div>
-                            <div class="form-hint">
-                                Leave all three password fields blank to keep your current password.
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="confirm_password" class="form-label">
-                                Confirm New Password
-                            </label>
-                            <div class="password-wrapper">
-                                <input type="password" id="confirm_password" name="confirm_password"
-                                    class="form-control" placeholder="Confirm the new password"
-                                    autocomplete="new-password" maxlength="20">
-                                <button type="button" class="password-toggle" id="toggleConfirmPassword" tabindex="-1"
-                                    aria-label="Toggle confirm password visibility">
-                                    <img src="<?php echo $assetBase; ?>assets/images/icons/password-hide.svg"
-                                        alt="Hide password" id="confirmPasswordIcon">
-                                </button>
-                            </div>
-                            <div class="form-error" id="confirmError"></div>
-                        </div>
-                    </div>
-
                     <div class="step-actions">
                         <button type="button" class="btn btn-primary btn-next" data-next="2">
                             Next Step
@@ -317,6 +295,9 @@ require_once __DIR__ . '/../includes/header.php';
                     </div>
                 </div>
 
+                <!-- ============================================================
+                     STEP 2 — Vehicle Details
+                     ============================================================ -->
                 <div class="register-step" id="step2" style="display: none;">
 
                     <div class="step-description">
@@ -345,40 +326,41 @@ require_once __DIR__ . '/../includes/header.php';
                         <div class="form-row">
                             <div class="form-group">
                                 <label for="vehicle_plate" class="form-label">
-                                    Plate Number
+                                    Plate Number <span class="text-danger">*</span>
                                 </label>
                                 <input type="text" id="vehicle_plate" name="vehicle_plate" class="form-control"
                                     value="<?php echo htmlspecialchars($vehiclePlate, ENT_QUOTES, 'UTF-8'); ?>"
-                                    placeholder="e.g. ABC 1234" autocomplete="off" maxlength="10">
+                                    placeholder="e.g. ABC 1234" autocomplete="off" maxlength="10" required>
                                 <div class="form-error" id="vehiclePlateError"></div>
-                                <div class="form-hint">Required for motor vehicles</div>
                             </div>
                         </div>
 
                         <div class="form-row">
                             <div class="form-group">
                                 <label for="vehicle_make" class="form-label">
-                                    Make / Brand <span class="text-muted">(Optional)</span>
+                                    Make / Brand <span class="text-danger">*</span>
                                 </label>
                                 <input type="text" id="vehicle_make" name="vehicle_make" class="form-control"
-                                    placeholder="e.g. Honda" autocomplete="off" maxlength="40">
+                                    placeholder="e.g. Honda" autocomplete="off" maxlength="40" required>
+                                <div class="form-error" id="vehicleMakeError"></div>
                             </div>
 
                             <div class="form-group">
                                 <label for="vehicle_model" class="form-label">
-                                    Model <span class="text-muted">(Optional)</span>
+                                    Model <span class="text-danger">*</span>
                                 </label>
                                 <input type="text" id="vehicle_model" name="vehicle_model" class="form-control"
-                                    placeholder="e.g. Click 125i" autocomplete="off" maxlength="40">
+                                    placeholder="e.g. Click 125i" autocomplete="off" maxlength="40" required>
+                                <div class="form-error" id="vehicleModelError"></div>
                             </div>
 
                             <div class="form-group">
                                 <label for="vehicle_year" class="form-label">
-                                    Year <span class="text-muted">(Optional)</span>
+                                    Year <span class="text-danger">*</span>
                                 </label>
                                 <input type="number" id="vehicle_year" name="vehicle_year" class="form-control"
                                     placeholder="e.g. 2022" min="1980" max="<?php echo (int)date('Y') + 1; ?>"
-                                    autocomplete="off" inputmode="numeric">
+                                    autocomplete="off" inputmode="numeric" required>
                                 <div class="form-error" id="vehicleYearError"></div>
                             </div>
                         </div>
@@ -394,10 +376,13 @@ require_once __DIR__ . '/../includes/header.php';
                     </div>
                 </div>
 
+                <!-- ============================================================
+                     STEP 3 — Address
+                     ============================================================ -->
                 <div class="register-step" id="step3" style="display: none;">
 
                     <div class="step-description">
-                        <p>Update your address and emergency contact if they have changed.</p>
+                        <p>Update your address if it has changed.</p>
                     </div>
 
                     <div class="form-row">
@@ -413,11 +398,12 @@ require_once __DIR__ . '/../includes/header.php';
 
                         <div class="form-group">
                             <label for="barangay" class="form-label">
-                                Barangay <span class="text-muted">(Optional)</span>
+                                Barangay <span class="text-danger">*</span>
                             </label>
                             <input type="text" id="barangay" name="barangay" class="form-control"
                                 value="<?php echo htmlspecialchars($addressBarangay, ENT_QUOTES, 'UTF-8'); ?>"
-                                placeholder="e.g. Barangay San Antonio" autocomplete="address-line2">
+                                placeholder="e.g. Barangay San Antonio" autocomplete="address-line2" required>
+                            <div class="form-error" id="barangayError"></div>
                         </div>
                     </div>
 
@@ -434,37 +420,55 @@ require_once __DIR__ . '/../includes/header.php';
 
                         <div class="form-group">
                             <label for="province" class="form-label">
-                                Province <span class="text-muted">(Optional)</span>
+                                Province <span class="text-danger">*</span>
                             </label>
                             <input type="text" id="province" name="province" class="form-control"
                                 value="<?php echo htmlspecialchars($addressProvince, ENT_QUOTES, 'UTF-8'); ?>"
-                                placeholder="e.g. Metro Manila" autocomplete="address-level1">
+                                placeholder="e.g. Metro Manila" autocomplete="address-level1" required>
+                            <div class="form-error" id="provinceError"></div>
                         </div>
                     </div>
 
                     <div class="form-row">
                         <div class="form-group">
                             <label for="region" class="form-label">
-                                Region <span class="text-muted">(Optional)</span>
+                                Region <span class="text-danger">*</span>
                             </label>
                             <input type="text" id="region" name="region" class="form-control"
                                 value="<?php echo htmlspecialchars($addressRegion, ENT_QUOTES, 'UTF-8'); ?>"
-                                placeholder="e.g. NCR" autocomplete="address-level1">
+                                placeholder="e.g. NCR" autocomplete="address-level1" required>
+                            <div class="form-error" id="regionError"></div>
                         </div>
 
                         <div class="form-group">
                             <label for="postal_code" class="form-label">
-                                Postal Code <span class="text-muted">(Optional)</span>
+                                Postal Code <span class="text-danger">*</span>
                             </label>
                             <input type="text" id="postal_code" name="postal_code" class="form-control"
                                 value="<?php echo htmlspecialchars($addressPostal, ENT_QUOTES, 'UTF-8'); ?>"
-                                placeholder="e.g. 1605" autocomplete="postal-code" maxlength="10" inputmode="numeric">
+                                placeholder="e.g. 1605" autocomplete="postal-code" maxlength="10" inputmode="numeric"
+                                required>
                             <div class="form-error" id="postalError"></div>
                         </div>
                     </div>
 
-                    <div class="section-divider">
-                        <span>Emergency Contact</span>
+                    <div class="step-actions">
+                        <button type="button" class="btn btn-outline btn-prev" data-prev="2">
+                            Back
+                        </button>
+                        <button type="button" class="btn btn-primary btn-next" data-next="4">
+                            Next Step
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                     STEP 4 — Emergency Contact
+                     ============================================================ -->
+                <div class="register-step" id="step4" style="display: none;">
+
+                    <div class="step-description">
+                        <p>Update your emergency contact if it has changed.</p>
                     </div>
 
                     <div class="form-row">
@@ -527,16 +531,19 @@ require_once __DIR__ . '/../includes/header.php';
                     </div>
 
                     <div class="step-actions">
-                        <button type="button" class="btn btn-outline btn-prev" data-prev="2">
+                        <button type="button" class="btn btn-outline btn-prev" data-prev="3">
                             Back
                         </button>
-                        <button type="button" class="btn btn-primary btn-next" data-next="4">
+                        <button type="button" class="btn btn-primary btn-next" data-next="5">
                             Next Step
                         </button>
                     </div>
                 </div>
 
-                <div class="register-step" id="step4" style="display: none;">
+                <!-- ============================================================
+                     STEP 5 — Verification Uploads
+                     ============================================================ -->
+                <div class="register-step" id="step5" style="display: none;">
 
                     <div class="step-description">
                         <p>
@@ -678,22 +685,103 @@ require_once __DIR__ . '/../includes/header.php';
                     </div>
 
                     <div class="step-actions">
-                        <button type="button" class="btn btn-outline btn-prev" data-prev="3">
+                        <button type="button" class="btn btn-outline btn-prev" data-prev="4">
                             Back
                         </button>
-                        <button type="button" class="btn btn-primary btn-next" data-next="5">
+                        <button type="button" class="btn btn-primary btn-next" data-next="6">
                             Next Step
                         </button>
                     </div>
                 </div>
 
-                <div class="register-step" id="step5" style="display: none;">
+                <!-- ============================================================
+                     STEP 6 — Review & Submit
+                     ============================================================ -->
+                <div class="register-step" id="step6" style="display: none;">
 
                     <div class="step-description">
                         <p>
                             One last check. Review everything, re-accept the terms, and submit your
                             updated application.
                         </p>
+                    </div>
+
+                    <div class="review-summary" id="reviewSummary">
+                        <div class="review-section">
+                            <p class="review-section-title">Personal</p>
+                            <div class="review-row">
+                                <span class="review-label">Name</span>
+                                <span class="review-value" id="reviewName">—</span>
+                            </div>
+                            <div class="review-row">
+                                <span class="review-label">Email</span>
+                                <span class="review-value" id="reviewEmail">—</span>
+                            </div>
+                            <div class="review-row">
+                                <span class="review-label">Mobile</span>
+                                <span class="review-value" id="reviewContact">—</span>
+                            </div>
+                            <div class="review-row">
+                                <span class="review-label">Username</span>
+                                <span class="review-value" id="reviewUsername">—</span>
+                            </div>
+                        </div>
+
+                        <div class="review-section">
+                            <p class="review-section-title">Vehicle</p>
+                            <div class="review-row">
+                                <span class="review-label">Type</span>
+                                <span class="review-value" id="reviewVehicleType">—</span>
+                            </div>
+                            <div class="review-row">
+                                <span class="review-label">Plate</span>
+                                <span class="review-value" id="reviewVehiclePlate">—</span>
+                            </div>
+                            <div class="review-row">
+                                <span class="review-label">Make / Model</span>
+                                <span class="review-value" id="reviewVehicleMakeModel">—</span>
+                            </div>
+                        </div>
+
+                        <div class="review-section">
+                            <p class="review-section-title">Address</p>
+                            <div class="review-row">
+                                <span class="review-label">Full Address</span>
+                                <span class="review-value" id="reviewAddress">—</span>
+                            </div>
+                        </div>
+
+                        <div class="review-section">
+                            <p class="review-section-title">Emergency Contact</p>
+                            <div class="review-row">
+                                <span class="review-label">Name</span>
+                                <span class="review-value" id="reviewEmergencyName">—</span>
+                            </div>
+                            <div class="review-row">
+                                <span class="review-label">Relationship</span>
+                                <span class="review-value" id="reviewEmergencyRelationship">—</span>
+                            </div>
+                            <div class="review-row">
+                                <span class="review-label">Mobile</span>
+                                <span class="review-value" id="reviewEmergencyContact">—</span>
+                            </div>
+                        </div>
+
+                        <div class="review-section">
+                            <p class="review-section-title">Verification Uploads</p>
+                            <div class="review-row">
+                                <span class="review-label">Formal Photo</span>
+                                <span class="review-value" id="reviewProfilePhoto">—</span>
+                            </div>
+                            <div class="review-row">
+                                <span class="review-label" id="reviewIdDocLabel">Driver's License</span>
+                                <span class="review-value" id="reviewLicensePhoto">—</span>
+                            </div>
+                            <div class="review-row" id="reviewLicenseDatesRow">
+                                <span class="review-label">License Validity</span>
+                                <span class="review-value" id="reviewLicenseDates">—</span>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-group terms-group" id="termsGroup">
@@ -713,7 +801,7 @@ require_once __DIR__ . '/../includes/header.php';
                     </div>
 
                     <div class="step-actions">
-                        <button type="button" class="btn btn-outline btn-prev" data-prev="4">
+                        <button type="button" class="btn btn-outline btn-prev" data-prev="5">
                             Back
                         </button>
                         <button type="submit" class="btn btn-primary" id="registerBtn">
@@ -733,7 +821,7 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
 </div>
 
-<script src="../assets/ui/js/reapply.js" defer></script>
+<script src="../assets/ui/js/rider-reapply.js" defer></script>
 
 <?php
 require_once __DIR__ . '/../../shared/includes/footer.php';

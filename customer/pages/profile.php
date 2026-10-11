@@ -2,91 +2,57 @@
 /**
  * FitPal Customer Profile Page
  *
- * Shows personal information and delivery addresses, with a
- * multi-step address modal for add/edit, plus a profile picture
- * upload control in the header card.
+ * Shows personal information, delivery addresses, dietary
+ * preferences, allergies, and fitness goals as five separate tabs.
  *
  * ---------------------------------------------------------------------
- * SCOPE RULES APPLIED
+ * TABS
  * ---------------------------------------------------------------------
- *  - No SQL. getCustomerProfile() and getCustomerAddresses() come from
- *    the query layer.
- *  - No inline CSS. profile.css is loaded via the customer header's
- *    $pageCssMap.
- *  - No inline style attributes beyond the two `display:none` /
- *    `display:flex` toggles on the avatar image and its initial
- *    fallback. Every other show/hide is a class defined in profile.css.
- *  - formatAddress() and getAddressLabel() come from
- *    customer/backend/database/address-queries.php.
- *  - formatCurrency() comes from customer-queries.php.
+ * Five tabs:
+ *
+ *   personal    Personal Information (contact number, birthdate, etc.)
+ *   addresses   Delivery Addresses (add / edit / delete)
+ *   dietary     Dietary Preferences (checkbox card grid)
+ *   allergies   Allergies (checkbox card grid)
+ *   fitness     Fitness Goals (height, weight, goal select)
+ *
  * ---------------------------------------------------------------------
+ * EDITABLE FIELDS
+ * ---------------------------------------------------------------------
+ * Every field on the Personal tab is editable except email, which
+ * remains read-only because it is the customer's login identifier.
+ * The name fields, contact number, birthdate, and gender all become
+ * editable when the customer enters edit mode.
  *
- * THE BALANCE THIS PAGE RENDERS
- * -----------------------------
- * The header card's "Balance:" line is read straight from
- * financial_account.balance via getCustomerProfile(). That account
- * is the same account the shared order-transaction layer debits and
- * credits:
+ * The save pipeline submits the personal form first, then the
+ * dietary, allergy, and fitness forms, then the picture upload.
  *
- *   - Wallet payments on order placement  → `payment` transaction,
- *                                            trigger debits the
- *                                            balance.
- *   - Refunds on cancellation (Wallet or
- *     Online)                             → `refund` transaction,
- *                                            trigger credits the
- *                                            balance.
- *   - Deposits                            → `deposit` transaction,
- *                                            trigger credits the
- *                                            balance.
+ * ---------------------------------------------------------------------
+ * SUBMIT MARKERS
+ * ---------------------------------------------------------------------
+ * Every editable form carries a hidden `{field}_submitted=1`
+ * marker alongside its `action` field. The markers let the handler
+ * tell "the form was submitted with every checkbox unchecked" apart
+ * from "the form was never part of this request". Without them, an
+ * all-unchecked save is indistinguishable from a not-submitted
+ * request, and the handler cannot decide whether to clear a column
+ * or preserve it.
  *
- * This page never writes to the balance. The number it shows is
- * whatever the triggers last computed, so a customer who cancels an
- * order and immediately reloads their profile sees the corrected
- * balance without any additional code here.
- *
- * Page flow
- * ---------
- *   1. The customer opens the page in view mode. Every field is
- *      disabled, the Save/Cancel row is hidden, the Edit Profile
- *      button is visible, and the avatar edit button is hidden.
- *
- *   2. Clicking "Edit Profile" opens a confirmation modal. Confirming
- *      enters edit mode: fields enable, the avatar edit button
- *      appears, and the header card's right side swaps from the Edit
- *      button to Save Changes + Cancel.
- *
- *   3. Picking a file only produces a LOCAL PREVIEW. The upload is
- *      deferred until the customer presses Save Changes. Cancel
- *      reverts the preview to the server-rendered picture.
- *
- *   4. Save is triggered by the Save Changes button, which is a
- *      type="button" control. Its click handler runs the save
- *      pipeline in profile.js: first a POST with action=update_profile
- *      for the text fields, then — when a new picture is pending —
- *      a separate POST with action=upload_picture. Cancel reverts
- *      the form fields and the avatar to the values the server
- *      rendered and exits edit mode without a reload.
- *
- *   5. Leaving the page while in edit mode with pending changes
- *      triggers an unsaved-changes modal with "Keep Editing" and
- *      "Save Changes".
- *
- * Save button contract
- * --------------------
- * The Save button is deliberately type="button", NOT type="submit".
- * The click handler in profile.js is the single entry point into the
- * save pipeline. No native form submission path exists, so the
- * browser can never POST to a URL derived from a DOM property.
+ * ---------------------------------------------------------------------
+ * EMPTY STATES
+ * ---------------------------------------------------------------------
+ * The addresses, dietary, and allergy tabs render a proper empty
+ * state when there is no data, using the same shape as the cart and
+ * orders pages.
  *
  * @package FitPal
- * @version 6.2 — Docblock records the shared order-transaction layer
- *                as the writer of the balance this page renders. No
- *                markup, form, or JS config change from the previous
- *                revision.
+ * @version 7.5 — The Personal tab now enables every field in edit
+ *                mode except email. Dietary empty state uses
+ *                equalizer-line.svg; allergy empty state uses
+ *                list-settings-fill.svg.
  *
- *                (6.1: Save button changed from type="submit"
- *                form="profileForm" to type="button". 6.0: profile
- *                picture change deferred behind Save Changes.)
+ *                (7.4: submit markers. 7.3: empty states. 7.2:
+ *                Fitness tab. 7.1: four tabs. 7.0: three tabs.)
  */
 
 declare(strict_types=1);
@@ -99,9 +65,6 @@ if (!isset($_SESSION['customer_id']) || empty($_SESSION['customer_id'])) {
     exit;
 }
 
-// ---------------------------------------------------------------
-// Return destination tracking
-// ---------------------------------------------------------------
 const PROFILE_RETURN_DESTINATIONS = [
     'checkout'  => 'checkout.php',
     'menu'      => 'menu.php',
@@ -124,9 +87,6 @@ require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../backend/database/customer-queries.php';
 require_once __DIR__ . '/../backend/database/address-queries.php';
 
-// $csrfToken is provided by header.php, stored under the customer
-// role's own session key 'customer_csrf_token'.
-
 $customerId = (int)$_SESSION['customer_id'];
 
 $profileData = getCustomerProfile($database_connection, $customerId) ?: null;
@@ -136,9 +96,80 @@ $hasAddresses = !empty($addresses);
 $fullName     = trim(($profileData['first_name'] ?? '') . ' ' . ($profileData['last_name'] ?? ''));
 $balance      = (float)($profileData['balance'] ?? 0);
 
-// -----------------------------------------------------------------
-// Resolve the profile picture URL.
-// -----------------------------------------------------------------
+$currentDietaryRaw = (string)($profileData['dietary_preferences'] ?? '');
+$currentAllergyRaw = (string)($profileData['allergies'] ?? '');
+
+$currentDietary = [];
+if (trim($currentDietaryRaw) !== '') {
+    foreach (explode(',', $currentDietaryRaw) as $item) {
+        $trimmed = trim($item);
+        if ($trimmed !== '' && strtolower($trimmed) !== 'none') {
+            $currentDietary[] = $trimmed;
+        }
+    }
+}
+
+$currentAllergies = [];
+if (trim($currentAllergyRaw) !== '') {
+    foreach (explode(',', $currentAllergyRaw) as $item) {
+        $trimmed = trim($item);
+        if ($trimmed !== '' && strtolower($trimmed) !== 'none') {
+            $currentAllergies[] = $trimmed;
+        }
+    }
+}
+
+$currentFitnessGoal = (string)($profileData['fitness_goal'] ?? '');
+$currentHeight      = $profileData['height_cm'] ?? '';
+$currentWeight      = $profileData['weight_kg'] ?? '';
+
+$dietaryOptions = [
+    'vegan'         => 'Vegan',
+    'vegetarian'    => 'Vegetarian',
+    'keto'          => 'Keto',
+    'high_protein'  => 'High Protein',
+    'low_carb'      => 'Low Carb',
+    'gluten_free'   => 'Gluten Free',
+    'dairy_free'    => 'Dairy Free',
+    'pescatarian'   => 'Pescatarian',
+    'mediterranean' => 'Mediterranean',
+    'halal'         => 'Halal',
+];
+
+$allergyOptions = [
+    'nuts'      => 'Nuts',
+    'dairy'     => 'Dairy',
+    'eggs'      => 'Eggs',
+    'soy'       => 'Soy',
+    'wheat'     => 'Wheat / Gluten',
+    'shellfish' => 'Shellfish',
+    'fish'      => 'Fish',
+    'peanuts'   => 'Peanuts',
+    'sesame'    => 'Sesame',
+];
+
+$fitnessGoalOptions = [
+    'weight_loss' => 'Weight Loss',
+    'muscle_gain' => 'Muscle Gain',
+    'maintenance' => 'Maintenance / General Health',
+];
+
+$dietarySummaryLabels = [];
+foreach ($currentDietary as $value) {
+    $dietarySummaryLabels[] = $dietaryOptions[$value] ?? ucwords(str_replace('_', ' ', $value));
+}
+
+$allergySummaryLabels = [];
+foreach ($currentAllergies as $value) {
+    $allergySummaryLabels[] = $allergyOptions[$value] ?? ucwords(str_replace('_', ' ', $value));
+}
+
+$fitnessGoalLabel = $fitnessGoalOptions[$currentFitnessGoal]
+    ?? ($currentFitnessGoal !== '' ? ucwords(str_replace('_', ' ', $currentFitnessGoal)) : '');
+
+$hasDietary   = !empty($dietarySummaryLabels);
+$hasAllergies = !empty($allergySummaryLabels);
+
 $profilePicPath = (string)($profileData['profile_picture'] ?? '');
 $profilePicUrl  = '';
 
@@ -183,14 +214,10 @@ if ($initial === '') {
         </div>
         <?php endif; ?>
 
-        <!-- ============================================================
-             PROFILE HEADER CARD
-             ============================================================ -->
         <div class="profile-header-card" id="profileHeaderCard">
 
             <div class="profile-header-left">
 
-                <!-- Avatar: image or initial, ring border, edit button. -->
                 <div class="profile-avatar-wrap">
 
                     <?php if ($profilePicUrl !== ''): ?>
@@ -243,13 +270,21 @@ if ($initial === '') {
             </div>
         </div>
 
-        <!-- Tabs -->
         <div class="profile-tabs">
             <button type="button" id="tabBtnPersonal" class="profile-tab active" data-tab="personal">
-                Personal Information
+                Personal
             </button>
             <button type="button" id="tabBtnAddresses" class="profile-tab" data-tab="addresses">
-                Delivery Addresses
+                Addresses
+            </button>
+            <button type="button" id="tabBtnDietary" class="profile-tab" data-tab="dietary">
+                Dietary
+            </button>
+            <button type="button" id="tabBtnAllergies" class="profile-tab" data-tab="allergies">
+                Allergies
+            </button>
+            <button type="button" id="tabBtnFitness" class="profile-tab" data-tab="fitness">
+                Fitness
             </button>
         </div>
 
@@ -267,20 +302,21 @@ if ($initial === '') {
                         <input type="hidden" name="csrf_token"
                             value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
                         <input type="hidden" name="action" value="update_profile">
+                        <input type="hidden" name="profile_submitted" value="1">
 
                         <div class="form-row">
                             <div class="form-group">
                                 <label for="first_name" class="field-label">First Name</label>
                                 <input type="text" id="first_name" name="first_name" class="form-control"
                                     value="<?php echo htmlspecialchars($profileData['first_name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
-                                    disabled>
+                                    maxlength="50" autocomplete="given-name" disabled>
                             </div>
 
                             <div class="form-group">
                                 <label for="middle_name" class="field-label">Middle Name</label>
                                 <input type="text" id="middle_name" name="middle_name" class="form-control"
                                     value="<?php echo htmlspecialchars($profileData['middle_name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
-                                    disabled>
+                                    maxlength="50" autocomplete="additional-name" disabled>
                             </div>
                         </div>
 
@@ -289,14 +325,17 @@ if ($initial === '') {
                                 <label for="last_name" class="field-label">Last Name</label>
                                 <input type="text" id="last_name" name="last_name" class="form-control"
                                     value="<?php echo htmlspecialchars($profileData['last_name'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
-                                    disabled>
+                                    maxlength="50" autocomplete="family-name" disabled>
                             </div>
 
                             <div class="form-group">
-                                <label for="email" class="field-label">Email</label>
-                                <input type="email" id="email" class="form-control"
+                                <label for="email" class="field-label">
+                                    Email
+                                    <span class="field-label-note">(cannot be changed)</span>
+                                </label>
+                                <input type="email" id="email" name="email" class="form-control"
                                     value="<?php echo htmlspecialchars($profileData['email'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
-                                    disabled>
+                                    autocomplete="email" disabled>
                             </div>
                         </div>
 
@@ -305,14 +344,15 @@ if ($initial === '') {
                                 <label for="contact_number" class="field-label">Contact Number</label>
                                 <input type="tel" id="contact_number" name="contact_number" class="form-control"
                                     value="<?php echo htmlspecialchars($profileData['contact_number'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
-                                    placeholder="09XXXXXXXXX" maxlength="11" inputmode="numeric" disabled>
+                                    placeholder="09XXXXXXXXX" maxlength="11" inputmode="numeric" autocomplete="tel"
+                                    disabled>
                             </div>
 
                             <div class="form-group">
                                 <label for="birthdate" class="field-label">Birthdate</label>
                                 <input type="date" id="birthdate" name="birthdate" class="form-control"
                                     value="<?php echo htmlspecialchars($profileData['birthdate'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
-                                    disabled>
+                                    autocomplete="bday" disabled>
                             </div>
                         </div>
 
@@ -373,12 +413,14 @@ if ($initial === '') {
                                     data-id="<?php echo (int)$addr['customer_address_id']; ?>">
                                     <img src="<?php echo $assetBase; ?>assets/images/icons/edit.svg" alt="Edit"
                                         class="btn-icon">
+                                    <span>Edit</span>
                                 </button>
                                 <button type="button" class="btn btn-sm btn-delete delete-address"
                                     data-id="<?php echo (int)$addr['customer_address_id']; ?>"
                                     <?php echo $addr['is_default'] ? 'disabled' : ''; ?>>
                                     <img src="<?php echo $assetBase; ?>assets/images/icons/trash.svg" alt="Delete"
                                         class="btn-icon">
+                                    <span>Delete</span>
                                 </button>
                             </div>
                         </div>
@@ -389,23 +431,218 @@ if ($initial === '') {
                     <?php endforeach; ?>
                     <?php else: ?>
                     <div class="empty-state">
-                        <div class="empty-icon">
-                            <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg"
-                                alt="No addresses">
+                        <div class="empty-state-content">
+                            <div class="empty-state-icon">
+                                <img src="<?php echo $assetBase; ?>assets/images/icons/location-fill.svg"
+                                    alt="No addresses">
+                            </div>
+                            <p class="heading-4">No Delivery Addresses</p>
+                            <p class="text-muted">
+                                Add a delivery address so we know where to send your orders.
+                            </p>
+                            <button type="button" class="btn btn-primary empty-state-action" id="addAddressEmptyBtn">
+                                Add Address
+                            </button>
                         </div>
-                        <p class="text-muted">You don't have any delivery addresses yet.</p>
-                        <p class="text-muted small">Add an address to start ordering!</p>
                     </div>
                     <?php endif; ?>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================
+             TAB: DIETARY PREFERENCES
+             ============================================================ -->
+        <div class="profile-tab-content" id="tab-dietary">
+            <div class="profile-card">
+                <div class="card-header">
+                    <h3>Dietary Preferences</h3>
+                </div>
+                <div class="card-body">
+
+                    <div class="preference-summary" id="dietarySummary">
+                        <?php if (!$hasDietary): ?>
+                        <div class="empty-state empty-state-inline">
+                            <div class="empty-state-content">
+                                <div class="empty-state-icon">
+                                    <img src="<?php echo $assetBase; ?>assets/images/icons/equalizer-line.svg"
+                                        alt="No dietary preferences">
+                                </div>
+                                <p class="heading-4">No Dietary Preferences</p>
+                                <p class="text-muted">
+                                    Tell us how you eat and we'll prioritise matching dishes on the menu.
+                                </p>
+                            </div>
+                        </div>
+                        <?php else: ?>
+                        <div class="preference-chips">
+                            <?php foreach ($dietarySummaryLabels as $label): ?>
+                            <span class="preference-chip">
+                                <?php echo htmlspecialchars($label, ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <form id="dietaryForm" method="POST" action="../backend/handlers/profile-handler.php" novalidate
+                        class="preference-edit is-hidden">
+                        <input type="hidden" name="csrf_token"
+                            value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="update_dietary_profile">
+                        <input type="hidden" name="dietary_submitted" value="1">
+
+                        <p class="form-hint">
+                            Select any dietary preferences you follow. The menu will prioritise matching
+                            dishes when you browse. Leave all unchecked to clear your preferences.
+                        </p>
+
+                        <div class="options-grid" id="profileDietaryOptions">
+                            <?php foreach ($dietaryOptions as $value => $label):
+                                $isChecked = in_array($value, $currentDietary, true);
+                            ?>
+                            <label class="filter-check"
+                                for="profile_diet_<?php echo htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); ?>">
+                                <input type="checkbox"
+                                    id="profile_diet_<?php echo htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); ?>"
+                                    name="dietary_preferences[]"
+                                    value="<?php echo htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); ?>"
+                                    <?php echo $isChecked ? 'checked' : ''; ?>>
+                                <span><?php echo htmlspecialchars($label, ENT_QUOTES, 'UTF-8'); ?></span>
+                            </label>
+                            <?php endforeach; ?>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================
+             TAB: ALLERGIES
+             ============================================================ -->
+        <div class="profile-tab-content" id="tab-allergies">
+            <div class="profile-card">
+                <div class="card-header">
+                    <h3>Allergies</h3>
+                </div>
+                <div class="card-body">
+
+                    <div class="preference-summary" id="allergySummary">
+                        <?php if (!$hasAllergies): ?>
+                        <div class="empty-state empty-state-inline">
+                            <div class="empty-state-content">
+                                <div class="empty-state-icon">
+                                    <img src="<?php echo $assetBase; ?>assets/images/icons/list-settings-fill.svg"
+                                        alt="No allergies">
+                                </div>
+                                <p class="heading-4">No Allergies</p>
+                                <p class="text-muted">
+                                    You haven't listed any allergies. Add them here and we'll filter
+                                    matching dishes out of the menu.
+                                </p>
+                            </div>
+                        </div>
+                        <?php else: ?>
+                        <div class="preference-chips">
+                            <?php foreach ($allergySummaryLabels as $label): ?>
+                            <span class="preference-chip preference-chip-danger">
+                                <?php echo htmlspecialchars($label, ENT_QUOTES, 'UTF-8'); ?>
+                            </span>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <form id="allergyForm" method="POST" action="../backend/handlers/profile-handler.php" novalidate
+                        class="preference-edit is-hidden">
+                        <input type="hidden" name="csrf_token"
+                            value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="update_dietary_profile">
+                        <input type="hidden" name="allergy_submitted" value="1">
+
+                        <p class="form-hint">
+                            Select any allergies you have. Dishes that contain an excluded allergen
+                            will be filtered out of the menu. Leave all unchecked to clear your
+                            allergy list.
+                        </p>
+
+                        <div class="options-grid" id="profileAllergyOptions">
+                            <?php foreach ($allergyOptions as $value => $label):
+                                $isChecked = in_array($value, $currentAllergies, true);
+                            ?>
+                            <label class="filter-check filter-check-danger"
+                                for="profile_allergy_<?php echo htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); ?>">
+                                <input type="checkbox"
+                                    id="profile_allergy_<?php echo htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); ?>"
+                                    name="allergies[]"
+                                    value="<?php echo htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); ?>"
+                                    <?php echo $isChecked ? 'checked' : ''; ?>>
+                                <span><?php echo htmlspecialchars($label, ENT_QUOTES, 'UTF-8'); ?></span>
+                            </label>
+                            <?php endforeach; ?>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================
+             TAB: FITNESS GOALS
+             ============================================================ -->
+        <div class="profile-tab-content" id="tab-fitness">
+            <div class="profile-card">
+                <div class="card-header">
+                    <h3>Fitness Goals</h3>
+                </div>
+                <div class="card-body">
+                    <form id="fitnessForm" method="POST" action="../backend/handlers/profile-handler.php" novalidate>
+                        <input type="hidden" name="csrf_token"
+                            value="<?php echo htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8'); ?>">
+                        <input type="hidden" name="action" value="update_fitness_profile">
+                        <input type="hidden" name="fitness_submitted" value="1">
+
+                        <p class="form-hint">
+                            Tell us about your fitness goals. This information helps personalise the
+                            meals we recommend.
+                        </p>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="height" class="field-label">Height (cm)</label>
+                                <input type="number" id="height" name="height" class="form-control"
+                                    value="<?php echo htmlspecialchars((string)$currentHeight, ENT_QUOTES, 'UTF-8'); ?>"
+                                    placeholder="e.g. 175" min="50" max="300" step="0.1" inputmode="decimal" disabled>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="weight" class="field-label">Weight (kg)</label>
+                                <input type="number" id="weight" name="weight" class="form-control"
+                                    value="<?php echo htmlspecialchars((string)$currentWeight, ENT_QUOTES, 'UTF-8'); ?>"
+                                    placeholder="e.g. 70" min="10" max="500" step="0.1" inputmode="decimal" disabled>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group form-group-full">
+                                <label for="fitness_goal" class="field-label">Fitness Goal</label>
+                                <select id="fitness_goal" name="fitness_goal" class="form-control" disabled>
+                                    <option value="">Select your goal</option>
+                                    <?php foreach ($fitnessGoalOptions as $value => $label): ?>
+                                    <option value="<?php echo htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); ?>"
+                                        <?php echo $currentFitnessGoal === $value ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($label, ENT_QUOTES, 'UTF-8'); ?>
+                                    </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- ============================================================
-     EDIT-CONFIRM MODAL
-     ============================================================ -->
 <div id="confirmEditModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmEditModalTitle">
     <div class="modal-overlay" data-modal-dismiss></div>
     <div class="modal-content confirm-modal-content">
@@ -424,9 +661,6 @@ if ($initial === '') {
     </div>
 </div>
 
-<!-- ============================================================
-     UNSAVED-CHANGES MODAL
-     ============================================================ -->
 <div id="unsavedChangesModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="unsavedChangesTitle">
     <div class="modal-overlay" data-modal-dismiss></div>
     <div class="modal-content confirm-modal-content">
@@ -444,7 +678,6 @@ if ($initial === '') {
     </div>
 </div>
 
-<!-- Address Modal (Multi-Step) -->
 <div id="addressModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
@@ -548,7 +781,6 @@ if ($initial === '') {
     </div>
 </div>
 
-<!-- Delete Address Modal -->
 <div id="deleteAddressModal" class="modal">
     <div class="modal-content">
         <div class="modal-icon">

@@ -1,25 +1,20 @@
 /**
  * FitPal Customer Cart Page Styles
- * Version 2.10 — Adds a Special Instructions block inside the
- *                 customization panel.
+ * Version 2.11 — Ensures the Remove button on unavailable items is
+ *                 visible and clickable, with a danger color to
+ *                 indicate it's a destructive action.
  *
- *                 The customer's free-text notes are stored inside
- *                 the same customization_data JSON as the ingredient
- *                 modifications, as a {type:'notes'} entry. Before
- *                 this revision the cart page rendered only the
- *                 modifications, so a customer who customized a
- *                 product purely by typing notes saw nothing.
+ *                 Adds a rule for `.cart-item-unavailable .cart-item-remove`
+ *                 to override the default neutral style and apply
+ *                 the danger color, making it clear to the customer
+ *                 that they can clean up their cart.
  *
- *                 The three new rules are:
- *
- *                     .cart-customs-notes          the block
- *                     .cart-customs-notes-label    its heading
- *                     .cart-customs-notes-text     its body
- *
- *                 Everything else is byte-identical to v2.9.
+ *                 (2.10: Adds a Special Instructions block inside the
+ *                 customization panel. 2.9: Neutral Remove button
+ *                 styling.)
  *
  * @package FitPal
- * @version 2.10
+ * @version 2.11
  */
 
 /* Reserve the scrollbar gutter permanently. */
@@ -828,6 +823,26 @@ html {
     text-transform: uppercase;
     letter-spacing: 0.3px;
     width: fit-content;
+}
+
+/* Ensure the Remove button on unavailable items is prominent
+   and uses the danger color to signal it's a destructive action. */
+.cart-item-unavailable .cart-item-remove {
+    background: var(--danger);
+    color: #ffffff;
+    border: 1px solid var(--danger);
+}
+
+.cart-item-unavailable .cart-item-remove:hover,
+.cart-item-unavailable .cart-item-remove:focus {
+    background: #b91c1c;
+    border-color: #b91c1c;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+}
+
+.cart-item-unavailable .cart-item-remove:active {
+    transform: scale(0.97);
 }
 
 /* ============================================

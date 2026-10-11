@@ -128,7 +128,6 @@ filesToCheck = [
     "/customer/pages/cart.php",
     "/customer/pages/checkout.php",
     "/customer/pages/dashboard.php",
-    "/customer/pages/image-debug.php",
     "/customer/pages/menu.php",
     "/customer/pages/order-receipt.php",
     "/customer/pages/order-tracking.php",
@@ -144,7 +143,10 @@ filesToCheck = [
     "/restaurant/assets/css/dashboard.css",
     "/restaurant/assets/css/header.css",
     "/restaurant/assets/css/kitchen-orders.css",
+    "/restaurant/assets/css/product-edit.css",
+    "/restaurant/assets/css/products.css",
     "/restaurant/assets/css/profile.css",
+    "/restaurant/assets/css/restaurant-reapply.css",
     "/restaurant/assets/css/sign-in.css",
     "/restaurant/assets/css/sign-up.css",
 
@@ -154,8 +156,11 @@ filesToCheck = [
     "/restaurant/assets/ui/js/kitchen-order.js",
     "/restaurant/assets/ui/js/kitchen-realtime.js",
     "/restaurant/assets/ui/js/logout.js",
+    "/restaurant/assets/ui/js/product-edit.js",
+    "/restaurant/assets/ui/js/products.js",
     "/restaurant/assets/ui/js/profile.js",
     "/restaurant/assets/ui/js/restaurant-chat-modal.js",
+    "/restaurant/assets/ui/js/restaurant-reapply.js",
     "/restaurant/assets/ui/js/sign-in.js",
     "/restaurant/assets/ui/js/sign-up.js",
 
@@ -170,7 +175,10 @@ filesToCheck = [
     "/restaurant/backend/handlers/branch-lookup-handler.php",
     "/restaurant/backend/handlers/chat-handler.php",
     "/restaurant/backend/handlers/kitchen-order-handler.php",
+    "/restaurant/backend/handlers/product-handler.php",
+    "/restaurant/backend/handlers/product-media-handler.php",
     "/restaurant/backend/handlers/profile-handler.php",
+    "/restaurant/backend/handlers/restaurant-reapply-handler.php",
     "/restaurant/backend/handlers/sign-in-handler.php",
     "/restaurant/backend/handlers/sign-out-handler.php",
     "/restaurant/backend/handlers/sign-up-handler.php",
@@ -183,7 +191,10 @@ filesToCheck = [
     # ===== restaurant/pages =====
     "/restaurant/pages/dashboard.php",
     "/restaurant/pages/kitchen.php",
+    "/restaurant/pages/product-edit.php",
+    "/restaurant/pages/products.php",
     "/restaurant/pages/profile.php",
+    "/restaurant/pages/restaurant-reapply.php",
     "/restaurant/pages/sign-in.php",
     "/restaurant/pages/sign-up.php",
 
@@ -194,6 +205,7 @@ filesToCheck = [
     "/rider/assets/css/earnings.css",
     "/rider/assets/css/header.css",
     "/rider/assets/css/profile.css",
+    "/rider/assets/css/rider-reapply.css",
     "/rider/assets/css/sign-in.css",
     "/rider/assets/css/sign-up.css",
 
@@ -206,6 +218,7 @@ filesToCheck = [
     "/rider/assets/ui/js/logout.js",
     "/rider/assets/ui/js/profile.js",
     "/rider/assets/ui/js/rider-chat-modal.js",
+    "/rider/assets/ui/js/rider-reapply.js",
     "/rider/assets/ui/js/sign-in.js",
     "/rider/assets/ui/js/sign-up.js",
 
@@ -233,6 +246,7 @@ filesToCheck = [
     "/rider/pages/deliveries.php",
     "/rider/pages/earnings.php",
     "/rider/pages/profile.php",
+    "/rider/pages/rider-reapply.php",
     "/rider/pages/sign-in.php",
     "/rider/pages/sign-up.php",
 
@@ -241,6 +255,7 @@ filesToCheck = [
     "/shared/assets/css/contact.css",
     "/shared/assets/css/database-connect.css",
     "/shared/assets/css/footer.css",
+    "/shared/assets/css/format-date.css",
     "/shared/assets/css/global.css",
     "/shared/assets/css/header.css",
     "/shared/assets/css/landing.css",
@@ -249,6 +264,7 @@ filesToCheck = [
 
     # ===== shared/assets/ui/js =====
     "/shared/assets/ui/js/contact.js",
+    "/shared/assets/ui/js/format-date.js",
     "/shared/assets/ui/js/header.js",
 
     # ===== shared/backend/database =====
@@ -272,12 +288,4 @@ filesToCheck = [
     "/shared/pages/contact.php",
     "/shared/pages/privacy-policy.php",
     "/shared/pages/terms-conditions.php",
-
-    # ===== test/customer =====
-    "/test/customer/cart-test.php",
-    "/test/customer/menu-test.php",
-    "/test/customer/product-detail-test.php",
-    "/test/customer/sign-in-test.php",
-    "/test/customer/sign-up-test.php",
-
 ]

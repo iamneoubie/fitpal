@@ -1,0 +1,542 @@
+/**
+ * FitPal Global Date Input Formatter — Styles
+ *
+ * Pairs with format-date.js. Everything is scoped to the
+ * `.fitpal-date-` prefix so it cannot leak into other components.
+ *
+ * ---------------------------------------------------------------------
+ * v2.6 CHANGES
+ * ---------------------------------------------------------------------
+ * No CSS rules changed. v2.6 is a JS-only fix for the disabled-
+ * state reconciliation. The stylesheet is byte-identical to v2.5.
+ *
+ * ---------------------------------------------------------------------
+ * v2.5 — Disabled toggle button styling
+ * ---------------------------------------------------------------------
+ * The disabled toggle button reads as disabled: reduced opacity,
+ * not-allowed cursor, no hover.
+ *
+ * ---------------------------------------------------------------------
+ * v2.4 — :disabled native input hiding
+ * ---------------------------------------------------------------------
+ * Chromium's user-agent rule for
+ * input[type="date"]:disabled cannot restore the native calendar-
+ * picker-indicator because every hiding rule has a :disabled
+ * variant.
+ *
+ * ---------------------------------------------------------------------
+ * v2.3 — Inline hiding and background protection
+ * ---------------------------------------------------------------------
+ *
+ * ---------------------------------------------------------------------
+ * v2.2 — Toggle button stretch
+ * ---------------------------------------------------------------------
+ * Toggle no longer uses height:100%.
+ *
+ * ---------------------------------------------------------------------
+ * v2.1 — Global override hardening
+ * ---------------------------------------------------------------------
+ * Every property a page stylesheet could plausibly set is declared
+ * with `!important`.
+ *
+ * @package FitPal
+ * @version 2.6
+ */
+
+/* ============================================================
+   WRAPPER
+   ============================================================ */
+
+.fitpal-date-wrapper {
+    position: relative !important;
+    display: block !important;
+    width: 100% !important;
+    min-height: 44px !important;
+    isolation: isolate !important;
+    box-sizing: border-box !important;
+}
+
+/* ============================================================
+   NATIVE INPUT — HIDDEN, NEVER A CLICK TARGET
+   ============================================================ */
+
+.fitpal-date-wrapper > input[type="date"],
+.fitpal-date-wrapper > input[type="date"]:disabled {
+    display: none !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    z-index: -1 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    -webkit-appearance: none !important;
+    appearance: none !important;
+}
+
+.fitpal-date-wrapper > input[type="date"]::-webkit-calendar-picker-indicator,
+.fitpal-date-wrapper > input[type="date"]:disabled::-webkit-calendar-picker-indicator,
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="date"]:disabled::-webkit-calendar-picker-indicator {
+    display: none !important;
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    pointer-events: none !important;
+    -webkit-appearance: none !important;
+    appearance: none !important;
+}
+
+.fitpal-date-wrapper > input[type="date"]::-webkit-inner-spin-button,
+.fitpal-date-wrapper > input[type="date"]:disabled::-webkit-inner-spin-button,
+.fitpal-date-wrapper > input[type="date"]::-webkit-clear-button,
+.fitpal-date-wrapper > input[type="date"]:disabled::-webkit-clear-button {
+    display: none !important;
+    -webkit-appearance: none !important;
+    appearance: none !important;
+}
+
+/* ============================================================
+   VISIBLE INPUT
+   ============================================================ */
+
+.fitpal-date-visible {
+    position: relative !important;
+    z-index: 1 !important;
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    box-sizing: border-box !important;
+
+    font-family: inherit !important;
+    font-size: 14px !important;
+    line-height: 1.4 !important;
+    color: #111111 !important;
+
+    padding: 12px 44px 12px 14px !important;
+    margin: 0 !important;
+
+    background-color: #ffffff !important;
+    background-image: none !important;
+    background-repeat: no-repeat !important;
+    background-position: right 12px center !important;
+    background-size: 16px 16px !important;
+
+    border: 1px solid #d0d5dd !important;
+    border-radius: 8px !important;
+
+    cursor: text !important;
+    -webkit-appearance: none !important;
+    appearance: none !important;
+
+    pointer-events: auto !important;
+}
+
+.fitpal-date-visible:disabled {
+    cursor: not-allowed !important;
+    opacity: 0.6 !important;
+}
+
+.fitpal-date-visible:focus {
+    outline: none !important;
+    border-color: var(--primary, #59c14a) !important;
+    box-shadow: 0 0 0 3px rgba(89, 193, 74, 0.15) !important;
+}
+
+/* ============================================================
+   TOGGLE BUTTON
+   ============================================================ */
+
+.fitpal-date-wrapper > button.fitpal-date-toggle {
+    position: absolute !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: auto !important;
+
+    width: 40px !important;
+    height: auto !important;
+    min-height: 32px !important;
+
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    padding: 0 !important;
+    margin: 0 !important;
+
+    background: transparent !important;
+    background-color: transparent !important;
+    border: 0 !important;
+    border-radius: 0 8px 8px 0 !important;
+
+    cursor: pointer !important;
+    color: #666666 !important;
+
+    z-index: 10 !important;
+    box-sizing: border-box !important;
+
+    -webkit-appearance: none !important;
+    appearance: none !important;
+
+    pointer-events: auto !important;
+
+    visibility: visible !important;
+    opacity: 1 !important;
+
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.fitpal-date-wrapper > button.fitpal-date-toggle:hover:not(:disabled) {
+    background: #f3f4f6 !important;
+    color: #111111 !important;
+}
+
+.fitpal-date-wrapper > button.fitpal-date-toggle:focus-visible {
+    outline: 2px solid #59c14a !important;
+    outline-offset: -2px !important;
+}
+
+.fitpal-date-wrapper > button.fitpal-date-toggle:disabled {
+    cursor: not-allowed !important;
+    opacity: 0.5 !important;
+    background: transparent !important;
+}
+
+.fitpal-date-wrapper > button.fitpal-date-toggle:disabled:hover {
+    background: transparent !important;
+    color: #666666 !important;
+}
+
+.fitpal-date-wrapper > button.fitpal-date-toggle svg {
+    display: block !important;
+    width: 16px !important;
+    height: 16px !important;
+    pointer-events: none !important;
+}
+
+/* ============================================================
+   CALENDAR OVERLAY — FIXED, TOP OF THE STACK
+   ============================================================ */
+
+.fitpal-date-calendar {
+    position: fixed !important;
+    z-index: 2147483647 !important;
+    top: -9999px;
+    left: -9999px;
+    width: 280px;
+    padding: 12px;
+
+    background: #ffffff !important;
+    border: 1px solid #e0e0e0 !important;
+    border-radius: 10px !important;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14) !important;
+
+    font-family: inherit !important;
+    font-size: 14px !important;
+    line-height: 1.4 !important;
+    color: #111111 !important;
+
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    user-select: none;
+    pointer-events: auto !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+}
+
+.fitpal-date-calendar *,
+.fitpal-date-calendar *::before,
+.fitpal-date-calendar *::after {
+    pointer-events: auto !important;
+    box-sizing: border-box !important;
+}
+
+.fitpal-date-calendar.is-open {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.fitpal-date-calendar[hidden] {
+    display: none !important;
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+
+.fitpal-date-cal-header {
+    display: grid !important;
+    grid-template-columns: 32px 1fr 32px !important;
+    align-items: center !important;
+    gap: 4px !important;
+    padding-bottom: 10px !important;
+    margin-bottom: 10px !important;
+    border-bottom: 1px solid #f0f0f0 !important;
+}
+
+.fitpal-date-cal-prev,
+.fitpal-date-cal-next {
+    width: 32px !important;
+    height: 32px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: transparent !important;
+    border: none !important;
+    border-radius: 6px !important;
+    cursor: pointer !important;
+    font-family: inherit !important;
+    font-size: 18px !important;
+    line-height: 1 !important;
+    color: #666666 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    pointer-events: auto !important;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.fitpal-date-cal-prev:hover,
+.fitpal-date-cal-next:hover {
+    background: #f3f4f6 !important;
+    color: #111111 !important;
+}
+
+.fitpal-date-cal-prev:focus-visible,
+.fitpal-date-cal-next:focus-visible {
+    outline: 2px solid #59c14a !important;
+    outline-offset: 2px !important;
+}
+
+button.fitpal-date-cal-title {
+    display: block !important;
+    width: 100% !important;
+    padding: 6px 8px !important;
+    background: none !important;
+    border: none !important;
+    border-radius: 6px !important;
+    cursor: pointer !important;
+    font-family: inherit !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    color: #111111 !important;
+    line-height: 1.2 !important;
+    text-align: center !important;
+    user-select: none !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    margin: 0 !important;
+    pointer-events: auto !important;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+button.fitpal-date-cal-title:hover {
+    background: #f3f4f6 !important;
+}
+
+button.fitpal-date-cal-title:focus-visible {
+    outline: 2px solid #59c14a !important;
+    outline-offset: 2px !important;
+}
+
+/* ============================================================
+   WEEKDAY STRIP
+   ============================================================ */
+
+.fitpal-date-cal-weekdays {
+    display: grid !important;
+    grid-template-columns: repeat(7, 1fr) !important;
+    gap: 2px !important;
+    margin-bottom: 4px !important;
+}
+
+.fitpal-date-calendar.is-year-view .fitpal-date-cal-weekdays {
+    display: none !important;
+}
+
+.fitpal-date-cal-weekdays span {
+    text-align: center !important;
+    font-family: inherit !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    color: #999999 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.4px !important;
+    padding: 4px 0 !important;
+    user-select: none !important;
+    background: transparent !important;
+    border: none !important;
+    line-height: 1.4 !important;
+}
+
+/* ============================================================
+   MONTH GRID
+   ============================================================ */
+
+.fitpal-date-cal-grid {
+    display: grid !important;
+    grid-template-columns: repeat(7, 1fr) !important;
+    gap: 2px !important;
+}
+
+.fitpal-date-cal-blank {
+    aspect-ratio: 1 / 1 !important;
+    display: block !important;
+}
+
+.fitpal-date-cal-day {
+    aspect-ratio: 1 / 1 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    border-radius: 6px !important;
+    cursor: pointer !important;
+    font-family: inherit !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    line-height: 1 !important;
+    color: #111111 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    pointer-events: auto !important;
+    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.fitpal-date-cal-day:hover {
+    background: #f3f4f6 !important;
+}
+
+.fitpal-date-cal-day:focus-visible {
+    outline: 2px solid #59c14a !important;
+    outline-offset: -2px !important;
+}
+
+.fitpal-date-cal-day.is-selected {
+    background: #59c14a !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    border-color: #59c14a !important;
+}
+
+.fitpal-date-cal-day.is-selected:hover {
+    background: #4aad3c !important;
+    border-color: #4aad3c !important;
+}
+
+.fitpal-date-cal-day.is-cursor:not(.is-selected) {
+    border-color: #59c14a !important;
+    color: #111111 !important;
+}
+
+/* ============================================================
+   YEAR GRID
+   ============================================================ */
+
+.fitpal-date-cal-grid[data-view="year"] {
+    grid-template-columns: repeat(3, 1fr) !important;
+    grid-auto-rows: 44px !important;
+    gap: 6px !important;
+    padding-top: 2px !important;
+}
+
+.fitpal-date-cal-year {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    height: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    border-radius: 6px !important;
+    cursor: pointer !important;
+    font-family: inherit !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    line-height: 1 !important;
+    color: #111111 !important;
+    pointer-events: auto !important;
+    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.fitpal-date-cal-year:hover {
+    background: #f3f4f6 !important;
+}
+
+.fitpal-date-cal-year:focus-visible {
+    outline: 2px solid #59c14a !important;
+    outline-offset: -2px !important;
+}
+
+.fitpal-date-cal-year.is-selected {
+    background: #59c14a !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    border-color: #59c14a !important;
+}
+
+.fitpal-date-cal-year.is-selected:hover {
+    background: #4aad3c !important;
+    border-color: #4aad3c !important;
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 480px) {
+    .fitpal-date-calendar {
+        width: 260px !important;
+        padding: 10px !important;
+    }
+
+    .fitpal-date-cal-day {
+        font-size: 12px !important;
+    }
+
+    .fitpal-date-cal-grid[data-view="year"] {
+        grid-auto-rows: 40px !important;
+        gap: 4px !important;
+    }
+
+    .fitpal-date-cal-year {
+        font-size: 13px !important;
+    }
+
+    .fitpal-date-wrapper > button.fitpal-date-toggle {
+        width: 36px !important;
+    }
+
+    .fitpal-date-visible {
+        padding-right: 40px !important;
+    }
+}
+
+/* ============================================================
+   REDUCED MOTION
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    .fitpal-date-calendar,
+    .fitpal-date-cal-day,
+    .fitpal-date-cal-year,
+    .fitpal-date-cal-prev,
+    .fitpal-date-cal-next,
+    .fitpal-date-wrapper > button.fitpal-date-toggle,
+    button.fitpal-date-cal-title {
+        transition: none !important;
+    }
+}
