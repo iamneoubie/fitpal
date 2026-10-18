@@ -2198,19 +2198,3 @@ FROM
     AND rt.rating_type = 'rider'
 GROUP BY
     dr.delivery_rider_id;
-
--- =====================================================
--- COMPANION FILE: 00_session.sql
--- =====================================================
--- Run once per MySQL server (requires SUPER or SYSTEM_VARIABLES_ADMIN):
---
---   SET GLOBAL init_connect = 'SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ';
---
--- This makes every non-SUPER connection start in REPEATABLE READ,
--- which the trigger suite assumes. The application startup probe
--- should additionally run:
---
---   SELECT @@transaction_isolation;   -- must return 'REPEATABLE-READ'
---
--- and refuse to serve traffic if it does not.
--- =====================================================
