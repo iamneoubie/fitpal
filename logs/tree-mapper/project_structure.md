@@ -1,7 +1,7 @@
 # Web Project Structure
 
 **Project:** fitpal
-**Generated:** 2026-10-11 11:22:35
+**Generated:** 2026-10-20 03:50:59
 **Mode:** all
 
 ```
@@ -133,6 +133,226 @@ fitpal/
 │       ├── sign-in.php
 │       ├── sign-up.php
 │       └── wallet.php
+├── docker/
+│   ├── mysql_data/
+│   │   ├── #innodb_redo/
+│   │   │   ├── #ib_redo10_tmp
+│   │   │   ├── #ib_redo11_tmp
+│   │   │   ├── #ib_redo12_tmp
+│   │   │   ├── #ib_redo13_tmp
+│   │   │   ├── #ib_redo14_tmp
+│   │   │   ├── #ib_redo15_tmp
+│   │   │   ├── #ib_redo16_tmp
+│   │   │   ├── #ib_redo17_tmp
+│   │   │   ├── #ib_redo18_tmp
+│   │   │   ├── #ib_redo19_tmp
+│   │   │   ├── #ib_redo20_tmp
+│   │   │   ├── #ib_redo21_tmp
+│   │   │   ├── #ib_redo22_tmp
+│   │   │   ├── #ib_redo23_tmp
+│   │   │   ├── #ib_redo24_tmp
+│   │   │   ├── #ib_redo25_tmp
+│   │   │   ├── #ib_redo26_tmp
+│   │   │   ├── #ib_redo27_tmp
+│   │   │   ├── #ib_redo28_tmp
+│   │   │   ├── #ib_redo29_tmp
+│   │   │   ├── #ib_redo30_tmp
+│   │   │   ├── #ib_redo31_tmp
+│   │   │   ├── #ib_redo32_tmp
+│   │   │   ├── #ib_redo33_tmp
+│   │   │   ├── #ib_redo34_tmp
+│   │   │   ├── #ib_redo35_tmp
+│   │   │   ├── #ib_redo36_tmp
+│   │   │   ├── #ib_redo37_tmp
+│   │   │   ├── #ib_redo38_tmp
+│   │   │   ├── #ib_redo39_tmp
+│   │   │   ├── #ib_redo40_tmp
+│   │   │   └── #ib_redo9
+│   │   ├── #innodb_temp/
+│   │   │   ├── temp_1.ibt
+│   │   │   ├── temp_10.ibt
+│   │   │   ├── temp_2.ibt
+│   │   │   ├── temp_3.ibt
+│   │   │   ├── temp_4.ibt
+│   │   │   ├── temp_5.ibt
+│   │   │   ├── temp_6.ibt
+│   │   │   ├── temp_7.ibt
+│   │   │   ├── temp_8.ibt
+│   │   │   └── temp_9.ibt
+│   │   ├── fitpal_food_delivery/
+│   │   │   ├── administrator.ibd
+│   │   │   ├── administrator_profile.ibd
+│   │   │   ├── cart.ibd
+│   │   │   ├── customer.ibd
+│   │   │   ├── customer_address.ibd
+│   │   │   ├── customer_profile.ibd
+│   │   │   ├── customization_instance.ibd
+│   │   │   ├── delivery_rider.ibd
+│   │   │   ├── delivery_rider_address.ibd
+│   │   │   ├── delivery_rider_document.ibd
+│   │   │   ├── delivery_rider_emergency_contact.ibd
+│   │   │   ├── delivery_rider_profile.ibd
+│   │   │   ├── dietary_information.ibd
+│   │   │   ├── feedback.ibd
+│   │   │   ├── financial_account.ibd
+│   │   │   ├── ingredient.ibd
+│   │   │   ├── message.ibd
+│   │   │   ├── notification.ibd
+│   │   │   ├── orders.ibd
+│   │   │   ├── product.ibd
+│   │   │   ├── product_composition.ibd
+│   │   │   ├── queue_item.ibd
+│   │   │   ├── restaurant.ibd
+│   │   │   ├── restaurant_account.ibd
+│   │   │   ├── restaurant_branch.ibd
+│   │   │   ├── restaurant_permit.ibd
+│   │   │   ├── rider_collection.ibd
+│   │   │   └── transaction.ibd
+│   │   ├── mysql/
+│   │   │   ├── general_log.CSM
+│   │   │   ├── general_log.CSV
+│   │   │   ├── general_log_213.sdi
+│   │   │   ├── slow_log.CSM
+│   │   │   ├── slow_log.CSV
+│   │   │   └── slow_log_214.sdi
+│   │   ├── performance_schema/
+│   │   │   ├── accounts_145.sdi
+│   │   │   ├── binary_log_trans_189.sdi
+│   │   │   ├── cond_instances_82.sdi
+│   │   │   ├── data_lock_waits_161.sdi
+│   │   │   ├── data_locks_160.sdi
+│   │   │   ├── error_log_83.sdi
+│   │   │   ├── events_errors_su_139.sdi
+│   │   │   ├── events_errors_su_140.sdi
+│   │   │   ├── events_errors_su_141.sdi
+│   │   │   ├── events_errors_su_142.sdi
+│   │   │   ├── events_errors_su_143.sdi
+│   │   │   ├── events_stages_cu_111.sdi
+│   │   │   ├── events_stages_hi_112.sdi
+│   │   │   ├── events_stages_hi_113.sdi
+│   │   │   ├── events_stages_su_114.sdi
+│   │   │   ├── events_stages_su_115.sdi
+│   │   │   ├── events_stages_su_116.sdi
+│   │   │   ├── events_stages_su_117.sdi
+│   │   │   ├── events_stages_su_118.sdi
+│   │   │   ├── events_statement_119.sdi
+│   │   │   ├── events_statement_120.sdi
+│   │   │   ├── events_statement_121.sdi
+│   │   │   ├── events_statement_122.sdi
+│   │   │   ├── events_statement_123.sdi
+│   │   │   ├── events_statement_124.sdi
+│   │   │   ├── events_statement_125.sdi
+│   │   │   ├── events_statement_126.sdi
+│   │   │   ├── events_statement_127.sdi
+│   │   │   ├── events_statement_128.sdi
+│   │   │   ├── events_statement_129.sdi
+│   │   │   ├── events_statement_130.sdi
+│   │   │   ├── events_transacti_131.sdi
+│   │   │   ├── events_transacti_132.sdi
+│   │   │   ├── events_transacti_133.sdi
+│   │   │   ├── events_transacti_134.sdi
+│   │   │   ├── events_transacti_135.sdi
+│   │   │   ├── events_transacti_136.sdi
+│   │   │   ├── events_transacti_137.sdi
+│   │   │   ├── events_transacti_138.sdi
+│   │   │   ├── events_waits_cur_84.sdi
+│   │   │   ├── events_waits_his_85.sdi
+│   │   │   ├── events_waits_his_86.sdi
+│   │   │   ├── events_waits_sum_87.sdi
+│   │   │   ├── events_waits_sum_88.sdi
+│   │   │   ├── events_waits_sum_89.sdi
+│   │   │   ├── events_waits_sum_90.sdi
+│   │   │   ├── events_waits_sum_91.sdi
+│   │   │   ├── events_waits_sum_92.sdi
+│   │   │   ├── file_instances_93.sdi
+│   │   │   ├── file_summary_by__94.sdi
+│   │   │   ├── file_summary_by__95.sdi
+│   │   │   ├── global_status_181.sdi
+│   │   │   ├── global_variables_184.sdi
+│   │   │   ├── host_cache_96.sdi
+│   │   │   ├── hosts_146.sdi
+│   │   │   ├── keyring_componen_191.sdi
+│   │   │   ├── keyring_keys_152.sdi
+│   │   │   ├── log_status_174.sdi
+│   │   │   ├── memory_summary_b_154.sdi
+│   │   │   ├── memory_summary_b_155.sdi
+│   │   │   ├── memory_summary_b_156.sdi
+│   │   │   ├── memory_summary_b_157.sdi
+│   │   │   ├── memory_summary_g_153.sdi
+│   │   │   ├── metadata_locks_159.sdi
+│   │   │   ├── mutex_instances_97.sdi
+│   │   │   ├── objects_summary__98.sdi
+│   │   │   ├── performance_time_99.sdi
+│   │   │   ├── persisted_variab_187.sdi
+│   │   │   ├── prepared_stateme_175.sdi
+│   │   │   ├── processlist_100.sdi
+│   │   │   ├── replication_appl_165.sdi
+│   │   │   ├── replication_appl_166.sdi
+│   │   │   ├── replication_appl_167.sdi
+│   │   │   ├── replication_appl_168.sdi
+│   │   │   ├── replication_appl_170.sdi
+│   │   │   ├── replication_appl_171.sdi
+│   │   │   ├── replication_asyn_172.sdi
+│   │   │   ├── replication_asyn_173.sdi
+│   │   │   ├── replication_conn_162.sdi
+│   │   │   ├── replication_conn_164.sdi
+│   │   │   ├── replication_grou_163.sdi
+│   │   │   ├── replication_grou_169.sdi
+│   │   │   ├── rwlock_instances_101.sdi
+│   │   │   ├── session_account__151.sdi
+│   │   │   ├── session_connect__150.sdi
+│   │   │   ├── session_status_182.sdi
+│   │   │   ├── session_variable_185.sdi
+│   │   │   ├── setup_actors_102.sdi
+│   │   │   ├── setup_consumers_103.sdi
+│   │   │   ├── setup_instrument_104.sdi
+│   │   │   ├── setup_objects_105.sdi
+│   │   │   ├── setup_threads_106.sdi
+│   │   │   ├── socket_instances_147.sdi
+│   │   │   ├── socket_summary_b_148.sdi
+│   │   │   ├── socket_summary_b_149.sdi
+│   │   │   ├── status_by_accoun_177.sdi
+│   │   │   ├── status_by_host_178.sdi
+│   │   │   ├── status_by_thread_179.sdi
+│   │   │   ├── status_by_user_180.sdi
+│   │   │   ├── table_handles_158.sdi
+│   │   │   ├── table_io_waits_s_107.sdi
+│   │   │   ├── table_io_waits_s_108.sdi
+│   │   │   ├── table_lock_waits_109.sdi
+│   │   │   ├── threads_110.sdi
+│   │   │   ├── tls_channel_stat_190.sdi
+│   │   │   ├── user_defined_fun_188.sdi
+│   │   │   ├── user_variables_b_176.sdi
+│   │   │   ├── users_144.sdi
+│   │   │   ├── variables_by_thr_183.sdi
+│   │   │   └── variables_info_186.sdi
+│   │   ├── sys/
+│   │   │   └── sys_config.ibd
+│   │   ├── #ib_16384_0.dblwr
+│   │   ├── #ib_16384_1.dblwr
+│   │   ├── auto.cnf
+│   │   ├── binlog.000001
+│   │   ├── binlog.000002
+│   │   ├── binlog.index
+│   │   ├── ca-key.pem
+│   │   ├── ca.pem
+│   │   ├── client-cert.pem
+│   │   ├── client-key.pem
+│   │   ├── ib_buffer_pool
+│   │   ├── ibdata1
+│   │   ├── ibtmp1
+│   │   ├── mysql.ibd
+│   │   ├── private_key.pem
+│   │   ├── public_key.pem
+│   │   ├── server-cert.pem
+│   │   ├── server-key.pem
+│   │   ├── undo_001
+│   │   └── undo_002
+│   ├── www/
+│   ├── commands.sh
+│   ├── docker-compose.yaml
+│   ├── my.cnf
+│   └── setup.md
 ├── logs/
 │   ├── bugs/
 │   │   └── rider-resto.md
@@ -144,7 +364,7 @@ fitpal/
 │   │   ├── dir-restaurant.py
 │   │   ├── dir-rider.py
 │   │   ├── dir-shared.py
-│   │   └── technical.py
+│   │   └── dir-technical.py
 │   ├── diagram/
 │   │   ├── data-flow-diagram.puml
 │   │   ├── system-architecture.puml
@@ -163,11 +383,13 @@ fitpal/
 │   │   ├── CONTEXT DIAGRAM.md
 │   │   └── FitPal is divided into five main modules.md
 │   ├── output/
+│   │   ├── all_path_fetched_codebase.md
 │   │   ├── dir-admin_fetched_codebase.md
 │   │   ├── dir-cutomer_fetched_codebase.md
 │   │   ├── dir-restaurant_fetched_codebase.md
 │   │   ├── dir-rider_fetched_codebase.md
 │   │   ├── dir-shared_fetched_codebase.md
+│   │   ├── dir-technical_fetched_codebase.md
 │   │   ├── nojscss_fetched_codebase.md
 │   │   └── technical_fetched_codebase.md
 │   ├── tree-mapper/
@@ -183,13 +405,6 @@ fitpal/
 │   ├── content-fetcher.py
 │   ├── tree-mapper.py
 │   └── update-config.py
-├── out/
-│   └── logs/
-│       └── diagram/
-│           ├── system-architecture/
-│           │   └── system-architecture.png
-│           └── use-case/
-│               └── use-case.png
 ├── restaurant/
 │   ├── assets/
 │   │   ├── css/
@@ -620,47 +835,19 @@ fitpal/
 │   │   ├── privacy-policy.php
 │   │   └── terms-conditions.php
 │   └── uploads/
-│       ├── customer/
-│       │   └── profiles/
-│       │       └── 1/
-│       │           └── 10_10_2026_0.jpg
-│       ├── restaurant/
-│       │   ├── permits/
-│       │   │   └── 4/
-│       │   │       ├── image-1.jpg
-│       │   │       ├── image-2.jpg
-│       │   │       └── image-3.jpg
-│       │   └── products/
-│       │       └── 31/
-│       │           ├── image-1.jpg
-│       │           └── image-2.jpg
-│       └── rider/
-│           ├── documents/
-│           │   └── 4/
-│           │       ├── 10_10_2026_0.jpg
-│           │       ├── 10_10_2026_1.jpg
-│           │       ├── 10_10_2026_2.jpg
-│           │       ├── 10_10_2026_3.jpg
-│           │       ├── 10_10_2026_4.jpg
-│           │       └── 10_10_2026_5.jpg
+│       └── customer/
 │           └── profiles/
-│               └── 4/
-│                   ├── 10_10_2026_0.jpg
-│                   ├── 10_10_2026_1.jpg
-│                   ├── 10_10_2026_2.jpg
-│                   ├── 10_10_2026_3.jpg
-│                   ├── 10_10_2026_4.jpg
-│                   ├── 10_10_2026_5.jpg
-│                   ├── 10_10_2026_6.png
-│                   └── 10_10_2026_7.jpg
+│               └── 1/
+│                   └── 10_19_2026_0.jpg
 ├── sql/
+│   ├── debug/
+│   │   └── test.sql
 │   ├── seed/
-│   │   ├── test/
-│   │   │   └── orders.sql
 │   │   ├── all-in-one.sql
 │   │   ├── seed-1-core.sql
 │   │   ├── seed-2-content.sql
-│   │   └── seed-3-paths.sql
+│   │   ├── seed-3-paths.sql
+│   │   └── seed-4-orders.sql
 │   └── database.sql
 ├── test/
 │   └── customer/
@@ -684,12 +871,12 @@ fitpal/
 | CSS Files | 54 |
 | JavaScript Files | 53 |
 | JSON Files | 2 |
-| Text/Markdown | 20 |
-| Image Files | 261 |
-| Other Files | 23 |
+| Text/Markdown | 23 |
+| Image Files | 240 |
+| Other Files | 235 |
 
-**Total Directories:** 133
-**Total Files:** 532
+**Total Directories:** 127
+**Total Files:** 725
 
 ---
 

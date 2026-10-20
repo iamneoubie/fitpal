@@ -16,3 +16,4 @@ shared/uploads/*
 out/*
 logs/content-fetcher-configuration/all_path.py
 logs/content-fetcher-configuration/all_path.py
+docker/mysql_data/*

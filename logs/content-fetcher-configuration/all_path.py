@@ -288,4 +288,12 @@ filesToCheck = [
     "/shared/pages/contact.php",
     "/shared/pages/privacy-policy.php",
     "/shared/pages/terms-conditions.php",
+
+    # ===== test/customer =====
+    "/test/customer/cart-test.php",
+    "/test/customer/menu-test.php",
+    "/test/customer/product-detail-test.php",
+    "/test/customer/sign-in-test.php",
+    "/test/customer/sign-up-test.php",
+
 ]

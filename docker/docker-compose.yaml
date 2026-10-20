@@ -1,0 +1,80 @@
+# FitPal docker stack
+#
+# This file only defines services. It does NOT initialize the
+# database. Initialization is done by ../commands.sh, which:
+#
+#   1. Resets docker/mysql_data
+#   2. Starts only the `db` service and waits for it to be healthy
+#   3. docker cp's sql/database.sql into the container
+#   4. Imports the schema
+#   5. Verifies the schema
+#   6. docker cp's sql/seed/all-in-one.sql into the container
+#   7. Imports the seed
+#   8. Verifies the seed
+#   9. Starts `web` and `phpmyadmin`
+#
+# The docker cp step exists because Windows bind mounts present
+# host files as world-writable (0777), which MySQL refuses to read
+# for config files, and which can also make a container see a stale
+# copy of a SQL file through the bind mount for a few seconds after
+# the host file changes. Piping the SQL through docker cp removes
+# both failure modes.
+# 
+# Running `docker compose up -d` without commands.sh will start
+# the stack but leave the database empty. Use commands.sh instead.
+
+services:
+
+  db:
+    image: mysql:8.0
+    container_name: my-mysql-db
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      MYSQL_DATABASE: fitpal_food_delivery
+      MYSQL_ROOT_HOST: "%"
+      TZ: Asia/Manila
+    volumes:
+      - ./mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "--silent"]
+      interval: 3s
+      timeout: 3s
+      retries: 60
+      start_period: 45s
+
+  web:
+    image: php:8.2-apache
+    container_name: my-php-web
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ../:/var/www/html
+    environment:
+      DB_HOST: db
+      DB_NAME: fitpal_food_delivery
+      DB_USER: root
+      DB_PASS: ""
+      APP_ENV: development
+    depends_on:
+      db:
+        condition: service_healthy
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: my-phpmyadmin
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: ""
+      UPLOAD_LIMIT: 256M
+    depends_on:
+      db:
+        condition: service_healthy
