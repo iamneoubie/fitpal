@@ -1,44 +1,32 @@
+// Web Development Profile
 {
-
-  // UNDO / REDO / AUTO SAVE
+  // ============================================================================
+  // 1. CORE SYSTEM / AUTO SAVE / SECURITY
+  // ============================================================================
   "files.autoSave": "off",
   "files.hotExit": "onExitAndWindowClose",
-  "editor.formatOnSave": true,
-
-
-  // FILE OPERATIONS — NO CONFIRMATIONS / NO TRUST PROMPTS
-  "explorer.confirmDelete": false,
-  "explorer.confirmDragAndDrop": false,
-  "explorer.confirmPasteNative": false,
+  "files.enableTrash": true,
   "files.confirmDelete": false,
   "files.confirmTrash": false,
-  "files.enableTrash": true,
   "window.confirmBeforeClose": "never",
   "security.workspace.trust.enabled": false,
 
-
-  // `NOTIF`ICATIONS / UPDATES / TELEMETRY — SILENT
+  // ============================================================================
+  // 2. SILENT MODE (NOTIFICATIONS, TELEMETRY, UPDATES)
+  // ============================================================================
   "notifications.toasts": false,
   "workbench.silentNotifications": true,
   "workbench.tips.enabled": false,
+  "update.mode": "none",
+  "telemetry.telemetryLevel": "off",
   "extensions.ignoreRecommendations": true,
   "extensions.showRecommendationsOnlyOnDemand": true,
   "extensions.autoCheckUpdates": false,
   "extensions.autoUpdate": false,
-  "update.mode": "none",
-  "telemetry.telemetryLevel": "off",
 
-
-  // GIT — DISABLED
-  "git.enabled": false,
-  "git.autofetch": false,
-  "git.enableSmartCommit": false,
-  "git.decorations.enabled": false,
-  "scm.diffDecorations": "none",
-  "scm.alwaysShowActions": false,
-
-
-  // AI / COPILOT / CHAT — DISABLED
+  // ============================================================================
+  // 3. AI / COPILOT / CHAT (DISABLED)
+  // ============================================================================
   "chat.disableAIFeatures": true,
   "github.copilot.enable": false,
   "github.copilot.editor.enableAutoCompletions": false,
@@ -46,24 +34,38 @@
   "github.copilot.editor.enableTerminalChat": false,
   "github.copilot.chat.enable": false,
   "github.copilot.inlineChat.enable": false,
+  "editor.inlineSuggest.enabled": false,
+  "intellicode.enable": false,
+  "workbench.settings.showAISearchToggle": false,
 
-
-  // OTHER EXTENSIONS — SILENT / DISABLED
+  // ============================================================================
+  // 4. THIRD-PARTY EXTENSIONS (SILENT MODE)
+  // ============================================================================
   "tabnine.experimental.disableNotifications": true,
   "tabnine.experimental.editor.hideOnStart": true,
   "liveServer.settings.donotShowInfoMsg": true,
   "liveServer.settings.donotVerifyTags": true,
-  "intellicode.enable": false,
+  "database-client.telemetry.usesOnlineServices": false,
 
+  // ============================================================================
+  // 5. GIT & SOURCE CONTROL
+  // ============================================================================
+  "git.enabled": true,
+  "git.autofetch": false,
+  "git.enableSmartCommit": true,
+  "git.confirmSync": false,
+  "git.decorations.enabled": false,
+  "scm.diffDecorations": "none",
+  "scm.alwaysShowActions": false,
 
-  // WINDOW & WORKBENCH LAYOUT
+  // ============================================================================
+  // 6. WINDOW & WORKBENCH LAYOUT
+  // ============================================================================
   "window.title": "${profileName} - ${folderName}",
   "window.menuBarVisibility": "compact",
   "window.commandCenter": false,
   "window.restoreFullscreen": true,
   "window.newWindowDimensions": "fullscreen",
-  "workbench.activityBar.location": "top",
-  "workbench.activityBar.compact": true,
   "workbench.sideBar.location": "right",
   "workbench.editor.closeOnFileDelete": true,
   "workbench.startupEditor": "none",
@@ -71,17 +73,31 @@
   "workbench.editor.enablePreview": false,
   "workbench.quickInput.position": "center",
 
-
-  // TREE & NAVIGATION
+  // ============================================================================
+  // 7. TREE, NAVIGATION & EXPLORER
+  // ============================================================================
   "workbench.tree.enableStickyScroll": false,
   "workbench.tree.renderIndentGuides": "none",
   "workbench.tree.indent": 20,
   "breadcrumbs.enabled": true,
   "breadcrumbs.filePath": "on",
   "breadcrumbs.symbolPath": "off",
+  "explorer.compactFolders": false,
+  "explorer.decorations.badges": false,
+  "explorer.decorations.colors": false,
+  "explorer.openEditors.enabled": false,
+  // "explorer.autoReveal": "focusNoScroll",
+  "explorer.autoReveal": false,
+  "explorer.autoRevealExclude": {
+    "**/node_modules": true,
+    "**/bower_components": true,
+  },
+  "explorer.confirmDragAndDrop": false,
+  "explorer.confirmPasteNative": false,
 
-
-  // THEME & COLORS
+  // ============================================================================
+  // 8. THEME & VISUAL CUSTOMIZATIONS
+  // ============================================================================
   "workbench.colorTheme": "Catppuccin Mocha",
   "workbench.iconTheme": "material-icon-theme",
   "workbench.colorCustomizations": {
@@ -139,44 +155,24 @@
     }
   },
 
-
-  // EDITOR
+  // ============================================================================
+  // 9. EDITOR & SEARCH
+  // ============================================================================
+  "editor.formatOnSave": true,
   "editor.cursorBlinking": "smooth",
   "editor.cursorSmoothCaretAnimation": "on",
   "editor.minimap.scale": 1,
   "editor.codeLens": false,
   "editor.stickyScroll.enabled": false,
-
-
-  // EXPLORER
-  "explorer.compactFolders": false,
-  "explorer.decorations.badges": false,
-  "explorer.openEditors.enabled": false,
-  "explorer.autoReveal": "focusNoScroll",
-  "explorer.autoRevealExclude": {
-    "**/node_modules": true,
-    "**/bower_components": true
-  },
-
-
-  // SEARCH
   "search.searchOnType": false,
 
-
-  // TERMINAL
-  "terminal.integrated.defaultProfile.windows": "Git Bash",
-  "terminal.integrated.gpuAcceleration": "on",
-  "terminal.integrated.stickyScroll.enabled": false,
-  "terminal.integrated.shellIntegration.decorationsEnabled": "never",
-  "terminal.integrated.suggest.enabled": false,
-
-
-  // SUGGESTIONS — SNIPPETS ONLY (NO AI, NO INTELLISENSE)
-  "editor.inlineSuggest.enabled": false,
+  // ============================================================================
+  // 10. SUGGESTIONS (SNIPPETS ONLY, NO AI/WORD)
+  // ============================================================================
   "editor.quickSuggestions": {
     "other": true,
     "comments": false,
-    "strings": false
+    "strings": false,
   },
   "editor.quickSuggestionsDelay": 10,
   "editor.suggestOnTriggerCharacters": true,
@@ -193,32 +189,17 @@
   "editor.suggest.showWords": false,
   "editor.suggest.preview": false,
   "editor.suggest.showIcons": false,
-
-
-  // EMMET
   "emmet.triggerExpansionOnTab": true,
   "emmet.showExpandedAbbreviation": "always",
 
-
-  // LANGUAGE-SPECIFIC
-  "[markdown]": {
-    "editor.quickSuggestions": {
-      "other": true,
-      "comments": false,
-      "strings": false
-    },
-    "editor.snippetSuggestions": "top"
-  },
-  "json.validate.enable": false,
-
-
-  // PHP
-  "php.validate.executablePath": "D:\\Application Program\\Xampp\\php\\php.exe",
-  "phpserver.ip": "127.0.0.1",
-  "phpserver.phpPath": "D:\\Application Program\\Xampp\\php\\php.exe",
-
-
-  // CODE RUNNER
+  // ============================================================================
+  // 11. TERMINAL & CODE RUNNER
+  // ============================================================================
+  "terminal.integrated.defaultProfile.windows": "Git Bash",
+  "terminal.integrated.gpuAcceleration": "on",
+  "terminal.integrated.stickyScroll.enabled": false,
+  "terminal.integrated.shellIntegration.decorationsEnabled": "never",
+  "terminal.integrated.suggest.enabled": false,
   "code-runner.showRunIconInEditorTitleMenu": true,
   "code-runner.runInTerminal": true,
   "code-runner.ignoreSelection": true,
@@ -232,10 +213,29 @@
     "csharp": "clear && SOURCE_DIR=\"$(dirname \"$file\")\" && SOURCE_FILE=\"$fileName\" && BASENAME=\"$(basename \"$SOURCE_FILE\" .cs)\" && cd \"$SOURCE_DIR\" && if [ ! -d dotnet-runner ]; then dotnet new console -n dotnet-runner > /dev/null && sed -i 's|<OutputType>Exe</OutputType>|<OutputType>Exe</OutputType><BaseOutputPath>bin/</BaseOutputPath><BaseIntermediateOutputPath>obj/</BaseIntermediateOutputPath><OutputPath>bin/debug/</OutputPath><IntermediateOutputPath>obj/debug/</IntermediateOutputPath>|' dotnet-runner/dotnet-runner.csproj; fi && rm -rf dotnet-runner/bin dotnet-runner/obj && rm -f dotnet-runner/*.cs && cp \"$SOURCE_FILE\" \"dotnet-runner/${BASENAME}.cs\" && (cd dotnet-runner && dotnet run --file \"${BASENAME}.cs\" 2>&1 | grep -v 'MSB3539\\|MSB[0-9]\\+')"
   },
 
+  // ============================================================================
+  // 12. LANGUAGE & FRAMEWORK SPECIFIC
+  // ============================================================================
+  "[markdown]": {
+    "editor.quickSuggestions": {
+      "other": true,
+      "comments": false,
+      "strings": false,
+    },
+    "editor.snippetSuggestions": "top"
+  },
+  "json.validate.enable": false,
+  "php.validate.executablePath": "D:\\Application Program\\Xampp\\php\\php.exe",
+  "phpserver.ip": "127.0.0.1",
+  "phpserver.phpPath": "D:\\Application Program\\Xampp\\php\\php.exe",
+  "files.associations": {
+    "*.cnf": "ini"
+  },
 
-  // DATABASE CLIENT
+  // ============================================================================
+  // 13. DATABASE CLIENT
+  // ============================================================================
   "database-client.completionTriggerKey": [" ", "@", "."],
-  "database-client.telemetry.usesOnlineServices": false,
   "database-client.openResultsAsVertically": false,
   "database-client.splitEditorWhenQuery": false,
   "database-client.showSecurity": false,
@@ -247,26 +247,9 @@
   "database-client.enableSQLVariable": false,
   "database-client.enableEditorCodeLens": false,
 
-
-  // FUN / VISUAL EXTENSIONS
-  "powermode.enabled": true,
-  "powermode.combo.location": "off",
-  "powermode.explosions.backgroundMode": "image",
-  "powermode.explosions.size": 10,
-  "powermode.explosions.maxExplosions": 3,
-  "powermode.shake.enabled": false,
-  "vscode-pets.petSize": "medium",
-  "vscode-pets.petColor": "orange",
-  "vscode-pets.theme": "autumn",
-  "vscode-pets.throwBallWithMouse": true,
-  "vscode-pets.disableEffects": true,
-
-
-  // DOCUMENT VIEWER
-  "documentViewer.enableMd": false,
-
-
-  // WORKBENCH EDITOR ASSOCIATIONS
+  // ============================================================================
+  // 14. WORKBENCH EDITOR ASSOCIATIONS
+  // ============================================================================
   "workbench.editorAssociations": {
     "*.copilotmd": "vscode.markdown.preview.editor",
     "*.md": "default",
@@ -284,14 +267,32 @@
     "*.pdf": "syncfusion-pdf-viewer"
   },
 
-
-  // SETTINGS UI
-  "workbench.settings.showAISearchToggle": false,
+  // ============================================================================
+  // 15. FUN / VISUAL EXTENSIONS & CUSTOM CSS
+  // ============================================================================
+  "powermode.enabled": true,
+  "powermode.combo.location": "off",
+  "powermode.explosions.backgroundMode": "image",
+  "powermode.explosions.size": 10,
+  "powermode.explosions.maxExplosions": 3,
+  "powermode.shake.enabled": false,
+  "vscode-pets.petSize": "medium",
+  "vscode-pets.petColor": "orange",
+  "vscode-pets.theme": "autumn",
+  "vscode-pets.throwBallWithMouse": true,
+  "vscode-pets.disableEffects": true,
+  "documentViewer.enableMd": false,
   "codesnap.transparentBackground": true,
-
   "vscode_custom_css.imports": [
-    "file:///C:/Users/Admin/Documents/VS%20Code%20Profile/custom-vscode.css",
-    "file:///C:/Users/Admin/Documents/VS%20Code%20Profile/custom-vscode-script.js"
+    "file:///C:/vscode-customization/styles/main.css",
+    "file:///C:/vscode-customization/scripts/date-profile-hover.js",
   ],
-  "workbench.statusBar.visible": false
+  "yaml.schemas": {
+    "file:///c%3A/Users/Admin/.vscode/extensions/continue.continue-2.0.0-win32-x64/config-yaml-schema.json": [
+      ".continue/**/*.yaml"
+    ]
+  },
+  "explorer.confirmDelete": false,
+  "workbench.activityBar.compact": true,
+  "workbench.activityBar.location": "top"
 }

@@ -1,6 +1,6 @@
 [mysqld]
 # ---------------------------------------------------------------------------
-# FitPal my.cnf
+# FitPal docker.cnf
 # ---------------------------------------------------------------------------
 #
 # NOTE — READ BEFORE WONDERING WHY IT IS IGNORED
@@ -11,7 +11,7 @@
 # refuses to read world-writable config files. That produces:
 #
 #     mysql: [Warning] World-writable config file
-#     '/etc/mysql/conf.d/my.cnf' is ignored.
+#     '/etc/mysql/conf.d/docker.cnf' is ignored.
 #
 # The bind mount for this file has therefore been removed from
 # docker/docker-compose.yaml. MySQL uses its built-in defaults,

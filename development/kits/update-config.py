@@ -57,7 +57,7 @@ def should_skip_dir(dir_path: Path, project_root: Path) -> bool:
     if dir_path.name in EXCLUDED_DIRS:
         return True
     if dir_path.name.startswith("."):
-        return True
+        return True``
     # Skip anything nested under logs/
     try:
         rel_parts = dir_path.relative_to(project_root).parts

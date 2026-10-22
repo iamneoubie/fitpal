@@ -1724,5 +1724,19 @@
     {
         "key": "ctrl+alt+s",
         "command": "workbench.action.toggleStatusbarVisibility"
+    },
+    {
+        "key": "ctrl+alt+b",
+        "command": "-workbench.action.toggleAuxiliaryBar"
+    },
+    {
+        "key": "ctrl+alt+win+n",
+        "command": "-welcome.showNewFileEntries",
+        "when": "!isSessionsWindow"
+    },
+    {
+        "key": "ctrl+shift+x",
+        "command": "-workbench.view.extensions",
+        "when": "viewContainer.workbench.view.extensions.enabled"
     }
 ]
