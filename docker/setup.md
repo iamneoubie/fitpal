@@ -28,6 +28,7 @@ Both must print a version. If either is missing, reinstall Docker Desktop.
 2. Check both:
    - [x] Virtual Machine Platform
    - [x] Windows Subsystem for Linux
+   - [x] wsl --update
 3. Click **OK** and restart.
 
 Hyper-V is not required.

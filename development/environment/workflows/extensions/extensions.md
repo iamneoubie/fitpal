@@ -1,3 +1,9 @@
+auto-close-tag
+
+```
+formulahendry.auto-close-tag
+```
+
 auto-rename-tag
 
 ```

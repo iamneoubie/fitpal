@@ -1,417 +1,516 @@
 #!/usr/bin/env python3
 """
-Web Project Tree Mapper - Directory structure visualization for web projects
-Python version
-Revised to output clean tree structure with proper code block formatting
+Web Project Tree Mapper - Directory structure visualization for web projects.
+
+Generates a clean, code-block-wrapped tree structure with a summary table.
+Project root is auto-discovered by walking up from the script until a known
+marker file is found (.git, composer.json, package.json, LICENSE, readme.md).
 """
 
+from __future__ import annotations
+
+import argparse
 import os
 import sys
-from pathlib import Path
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple, Set
+from enum import Enum
+from pathlib import Path
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 
-# Text colors for terminal output
-class Colors:
-    GREEN = '\033[1;32m'
-    YELLOW = '\033[1;33m'
-    RED = '\033[1;31m'
-    BLUE = '\033[1;34m'
-    CYAN = '\033[1;36m'
-    PURPLE = '\033[1;35m'
-    RESET = '\033[0m'
 
-def color_text(text: str, color: str) -> str:
-    """Return colored text for terminal output."""
-    return f"{color}{text}{Colors.RESET}"
+# ---------------------------------------------------------------------------
+# Terminal helpers
+# ---------------------------------------------------------------------------
 
-# File type definitions
-FILE_TYPES = {
-    '.html': 'HTML',
-    '.htm': 'HTML',
-    '.php': 'PHP',
-    '.css': 'CSS',
-    '.js': 'JavaScript',
-    '.json': 'JSON',
-    '.md': 'Markdown',
-    '.txt': 'Text',
-    '.sh': 'Shell',
-    '.py': 'Python',
-    '.sql': 'SQL',
-    '.xml': 'XML',
+class C:
+    """ANSI color palette categorized by semantic meaning."""
+    RESET   = "\033[0m"
+    BOLD    = "\033[1m"
+    DIM     = "\033[2m"
+    
+    # Semantic Colors
+    INFO    = "\033[1;36m"  # Cyan
+    SUCCESS = "\033[1;32m"  # Green
+    WARNING = "\033[1;33m"  # Yellow
+    DANGER  = "\033[1;31m"  # Red
+    
+    # UI Colors
+    MAGENTA = "\033[1;35m"
+    WHITE   = "\033[1;37m"
+
+
+def paint(text: str, *styles: str) -> str:
+    """Wrap text in one or more ANSI styles."""
+    if not styles:
+        return text
+    return "".join(styles) + text + C.RESET
+
+
+def clear_screen() -> None:
+    if os.name == "nt":
+        os.system("cls")
+    else:
+        sys.stdout.write("\033[2J\033[H")
+        sys.stdout.flush()
+
+
+# ---------------------------------------------------------------------------
+# Enums & constants
+# ---------------------------------------------------------------------------
+
+class Mode(str, Enum):
+    ALL = "all"
+    WEB_ONLY = "web_only"
+    ASSETS_ONLY = "assets_only"
+
+
+MENU_CHOICES: List[Tuple[str, Optional[Mode], str]] = [
+    ("1", Mode.ALL,         "All files and folders"),
+    ("2", Mode.WEB_ONLY,    "Web files only"),
+    ("3", Mode.ASSETS_ONLY, "Assets only"),
+    ("0", None,             "Exit"),
+]
+MENU_MAP: Dict[str, Optional[Mode]] = {k: m for k, m, _ in MENU_CHOICES}
+
+ROOT_MARKERS: Tuple[str, ...] = (
+    ".git", "composer.json", "package.json",
+    "LICENSE", "readme.md", "README.md",
+)
+
+IMAGE_EXTENSIONS: Set[str] = {
+    ".png", ".jpg", ".jpeg", ".gif", ".svg",
+    ".ico", ".webp", ".bmp",
 }
 
-# Image extensions
-IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.bmp'}
+WEB_EXTENSIONS: Set[str] = {
+    ".html", ".htm", ".php", ".css", ".js",
+    ".json", ".md", ".txt",
+}
 
-# Web file extensions for web_only mode
-WEB_EXTENSIONS = {'.html', '.htm', '.php', '.css', '.js', '.json', '.md', '.txt'}
+DEFAULT_EXCLUDED_DIRS: Set[str] = {
+    ".git", "node_modules", "__pycache__",
+    ".venv", "venv", "env",
+}
 
-# Directories to exclude
-EXCLUDED_DIRS = {'.git', 'node_modules', '__pycache__', '.venv', 'venv', 'env'}
+SUMMARY_BUCKETS: Dict[str, Set[str]] = {
+    "html":   {".html", ".htm"},
+    "php":    {".php"},
+    "css":    {".css"},
+    "js":     {".js"},
+    "json":   {".json"},
+    "text":   {".txt", ".md"},
+    "images": IMAGE_EXTENSIONS,
+}
 
-def is_hidden_file(file_path: Path) -> bool:
-    """Check if file or directory is hidden."""
-    return file_path.name.startswith('.')
+SUMMARY_DISPLAY_NAMES: Dict[str, str] = {
+    "html":   "HTML files",
+    "php":    "PHP files",
+    "css":    "CSS files",
+    "js":     "JavaScript files",
+    "json":   "JSON files",
+    "text":   "Text / Markdown",
+    "images": "Images",
+    "other":  "Other",
+}
 
-def should_exclude_directory(dir_name: str) -> bool:
-    """Check if directory should be excluded."""
-    return dir_name in EXCLUDED_DIRS
 
-def should_include_file(file_name: str, mode: str) -> bool:
-    """Check if file should be included based on mode."""
-    suffix = Path(file_name).suffix.lower()
-    
-    if mode == 'web_only':
-        return suffix in WEB_EXTENSIONS
-    elif mode == 'assets_only':
-        return suffix in IMAGE_EXTENSIONS
-    elif mode == 'all':
-        return True
-    else:
+# ---------------------------------------------------------------------------
+# Root discovery
+# ---------------------------------------------------------------------------
+
+def find_project_root(
+    start: Path,
+    markers: Tuple[str, ...] = ROOT_MARKERS,
+) -> Optional[Path]:
+    current = start.resolve()
+    for candidate in [current, *current.parents]:
+        if any((candidate / marker).exists() for marker in markers):
+            return candidate
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
+
+@dataclass
+class Config:
+    script_path: Path = field(default_factory=lambda: Path(__file__).resolve())
+    project_root: Optional[Path] = None
+    output_subdir: Path = Path("development") / "documentation" / "architecture"
+    output_filename: str = "project_structure.md"
+    mode: Mode = Mode.ALL
+    excluded_dirs: Set[str] = field(default_factory=lambda: set(DEFAULT_EXCLUDED_DIRS))
+    extra_excluded_dirs: Set[str] = field(default_factory=set)
+    skip_hidden: bool = True
+    exclude_self: bool = True
+
+    @property
+    def root(self) -> Path:
+        if self.project_root is not None:
+            return self.project_root
+        discovered = find_project_root(self.script_path.parent)
+        if discovered is None:
+            raise FileNotFoundError(
+                f"Could not locate project root from {self.script_path}. "
+                f"Pass --project-root explicitly to override."
+            )
+        return discovered
+
+    @property
+    def output_dir(self) -> Path:
+        return self.root / self.output_subdir
+
+    @property
+    def output_file(self) -> Path:
+        return self.output_dir / self.output_filename
+
+    @property
+    def all_excluded_dirs(self) -> Set[str]:
+        return self.excluded_dirs | self.extra_excluded_dirs
+
+
+# ---------------------------------------------------------------------------
+# Filtering
+# ---------------------------------------------------------------------------
+
+class Filter:
+    def __init__(self, config: Config) -> None:
+        self.config = config
+
+    def include_file(self, name: str) -> bool:
+        suffix = Path(name).suffix.lower()
+        mode = self.config.mode
+        if mode is Mode.ALL:
+            return True
+        if mode is Mode.WEB_ONLY:
+            return suffix in WEB_EXTENSIONS
+        if mode is Mode.ASSETS_ONLY:
+            return suffix in IMAGE_EXTENSIONS
         return False
 
-def count_files_by_type(project_root: Path) -> Dict[str, int]:
-    """Count files by type."""
-    counts = {
-        'html': 0,
-        'php': 0,
-        'css': 0,
-        'js': 0,
-        'json': 0,
-        'text': 0,
-        'images': 0,
-        'other': 0
-    }
-    
-    for file_path in project_root.rglob('*'):
-        if not file_path.is_file():
-            continue
-        
-        # Skip excluded directories
-        skip = False
-        for part in file_path.parts:
-            if should_exclude_directory(part):
-                skip = True
-                break
-        if skip:
-            continue
-        
-        suffix = file_path.suffix.lower()
-        
-        if suffix in ['.html', '.htm']:
-            counts['html'] += 1
-        elif suffix == '.php':
-            counts['php'] += 1
-        elif suffix == '.css':
-            counts['css'] += 1
-        elif suffix == '.js':
-            counts['js'] += 1
-        elif suffix == '.json':
-            counts['json'] += 1
-        elif suffix in ['.txt', '.md']:
-            counts['text'] += 1
-        elif suffix in IMAGE_EXTENSIONS:
-            counts['images'] += 1
-        else:
-            counts['other'] += 1
-    
-    return counts
+    def include_dir(self, name: str) -> bool:
+        if self.config.skip_hidden and name.startswith("."):
+            return False
+        return name not in self.config.all_excluded_dirs
 
-def generate_tree_structure(
-    dir_path: Path,
-    output_lines: List[str],
-    indent: str,
-    mode: str,
-    exclude_logs: bool = False
-) -> None:
-    """
-    Recursively generate clean tree structure.
-    
-    Args:
-        dir_path: Directory to process
-        output_lines: List to append output lines to
-        indent: Current indentation string
-        mode: Filter mode ('web_only', 'all', 'assets_only')
-        exclude_logs: Whether to exclude logs directory
-    """
-    try:
-        # Skip excluded directories
-        if should_exclude_directory(dir_path.name):
-            return
-        
-        # Skip hidden directories
-        if is_hidden_file(dir_path):
-            return
-        
-        # Get all entries, sorted
-        entries = []
-        
-        # Directories first
-        for item in sorted(dir_path.iterdir()):
-            if item.is_dir():
-                if exclude_logs and item.name == 'logs':
-                    continue
-                entries.append((item, 'dir'))
-        
-        # Files next
-        for item in sorted(dir_path.iterdir()):
-            if item.is_file():
-                entries.append((item, 'file'))
-        
+    def include_entry(self, path: Path) -> bool:
+        if path.is_dir():
+            return self.include_dir(path.name)
+        if not path.is_file():
+            return False
+        if self.config.skip_hidden and path.name.startswith("."):
+            return False
+        if self.config.exclude_self and path.resolve() == self.config.script_path:
+            return False
+        return self.include_file(path.name)
+
+
+# ---------------------------------------------------------------------------
+# Tree building
+# ---------------------------------------------------------------------------
+
+class TreeBuilder:
+    def __init__(self, config: Config, filt: Filter) -> None:
+        self.config = config
+        self.filter = filt
+        self.lines: List[str] = []
+
+    def build(self, root: Path) -> List[str]:
+        self.lines = [f"{root.name}/", "│"]
+        self._walk(root, indent="")
+        return self.lines
+
+    def _walk(self, directory: Path, indent: str) -> None:
+        entries = self._collect_entries(directory)
         total = len(entries)
-        counter = 1
-        
-        for entry, entry_type in entries:
-            base_name = entry.name
-            
-            # Skip hidden files
-            if is_hidden_file(entry):
-                counter += 1
-                continue
-            
-            is_last = (counter == total)
-            
-            if entry_type == 'dir':
-                # Handle directories
-                if is_last:
-                    output_lines.append(f"{indent}└── {base_name}/")
-                    generate_tree_structure(entry, output_lines, indent + "    ", mode, exclude_logs)
-                else:
-                    output_lines.append(f"{indent}├── {base_name}/")
-                    generate_tree_structure(entry, output_lines, indent + "│   ", mode, exclude_logs)
-            else:
-                # Handle files - filter based on mode
-                if not should_include_file(base_name, mode):
-                    counter += 1
-                    continue
-                
-                # Files
-                if is_last:
-                    output_lines.append(f"{indent}└── {base_name}")
-                else:
-                    output_lines.append(f"{indent}├── {base_name}")
-            
-            counter += 1
-    
-    except PermissionError:
-        # Skip directories we don't have permission to access
-        pass
-    except Exception as e:
-        # Log other errors but continue
-        print(color_text(f"Warning: Error processing {dir_path}: {e}", Colors.YELLOW))
+        for index, (entry, is_dir) in enumerate(entries, start=1):
+            is_last = index == total
+            connector = "└── " if is_last else "├── "
+            name = f"{entry.name}/" if is_dir else entry.name
+            self.lines.append(f"{indent}{connector}{name}")
+            if is_dir:
+                child_indent = indent + ("    " if is_last else "│   ")
+                self._walk(entry, child_indent)
 
-def generate_map(project_root: Path, output_file: Path, mode: str) -> None:
-    """
-    Generate the project structure map with proper code block formatting.
-    
-    Args:
-        project_root: Root directory of the project
-        output_file: Path to output file
-        mode: Filter mode ('web_only', 'all', 'assets_only')
-    """
-    print(color_text("\nGenerating project structure map...", Colors.GREEN))
-    print(color_text(f"Project root: {project_root}", Colors.YELLOW))
-    print(color_text(f"Output file: {output_file}", Colors.YELLOW))
-    print()
-    
-    output_lines = []
-    
-    # Header
-    output_lines.append("# Web Project Structure")
-    output_lines.append("")
-    output_lines.append(f"**Project:** {project_root.name}")
-    output_lines.append(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    output_lines.append(f"**Mode:** {mode}")
-    output_lines.append("")
-    
-    # Start code block for tree structure
-    output_lines.append("```")
-    output_lines.append(f"{project_root.name}/")
-    output_lines.append("│")
-    
-    # Get root level entries
-    root_entries = []
-    script_name = Path(__file__).name
-    
-    # Directories first
-    for item in sorted(project_root.iterdir()):
-        if item.is_dir():
-            if not should_exclude_directory(item.name) and not is_hidden_file(item):
-                root_entries.append((item, 'dir'))
-    
-    # Files at root level
-    for item in sorted(project_root.iterdir()):
-        if item.is_file():
-            if item.name != script_name:
-                root_entries.append((item, 'file'))
-    
-    total_root = len(root_entries)
-    root_counter = 1
-    
-    # Process root entries
-    for entry, entry_type in root_entries:
-        base_name = entry.name
-        is_last = (root_counter == total_root)
-        
-        if entry_type == 'dir':
-            if is_last:
-                output_lines.append(f"└── {base_name}/")
-                generate_tree_structure(entry, output_lines, "    ", mode, exclude_logs=False)
-            else:
-                output_lines.append(f"├── {base_name}/")
-                generate_tree_structure(entry, output_lines, "│   ", mode, exclude_logs=False)
-        else:
-            # Filter files at root level based on mode
-            if not should_include_file(base_name, mode):
-                root_counter += 1
+    def _collect_entries(self, directory: Path) -> List[Tuple[Path, bool]]:
+        try:
+            children = list(directory.iterdir())
+        except PermissionError:
+            return []
+
+        dirs, files = [], []
+        for child in children:
+            if child.is_dir():
+                if self.filter.include_dir(child.name):
+                    dirs.append(child)
+            elif child.is_file():
+                if self.filter.include_entry(child):
+                    files.append(child)
+
+        dirs.sort(key=lambda p: p.name.lower())
+        files.sort(key=lambda p: p.name.lower())
+        return [(d, True) for d in dirs] + [(f, False) for f in files]
+
+
+# ---------------------------------------------------------------------------
+# Statistics
+# ---------------------------------------------------------------------------
+
+@dataclass
+class Stats:
+    by_bucket: Dict[str, int] = field(default_factory=dict)
+    total_dirs: int = 0
+    total_files: int = 0
+
+    @classmethod
+    def empty(cls) -> "Stats":
+        return cls(by_bucket={name: 0 for name in SUMMARY_DISPLAY_NAMES})
+
+
+class StatsCollector:
+    def __init__(self, config: Config, filt: Filter) -> None:
+        self.config = config
+        self.filter = filt
+
+    def collect(self, root: Path) -> Stats:
+        stats = Stats.empty()
+        for path in self._iter_visible(root):
+            if path.is_dir():
+                stats.total_dirs += 1
                 continue
-            
-            if is_last:
-                output_lines.append(f"└── {base_name}")
-            else:
-                output_lines.append(f"├── {base_name}")
-        
-        root_counter += 1
-    
-    # Close code block
-    output_lines.append("```")
-    output_lines.append("")
-    
-    # Add summary section
-    output_lines.append("## Summary")
-    output_lines.append("")
-    
-    # Count files by type
-    counts = count_files_by_type(project_root)
-    
-    # Count directories
-    dir_count = 0
-    for item in project_root.rglob('*'):
-        if item.is_dir():
-            # Skip excluded directories
-            skip = False
-            for part in item.parts:
-                if should_exclude_directory(part):
-                    skip = True
-                    break
-            if not skip and not is_hidden_file(item):
-                dir_count += 1
-    
-    # Count all files
-    file_count = 0
-    for item in project_root.rglob('*'):
-        if item.is_file():
-            # Skip files in excluded directories
-            skip = False
-            for part in item.parts:
-                if should_exclude_directory(part):
-                    skip = True
-                    break
-            if not skip and not is_hidden_file(item) and should_include_file(item.name, mode):
-                file_count += 1
-    
-    # Create summary table
-    output_lines.append("| File Type | Count |")
-    output_lines.append("|-----------|-------|")
-    output_lines.append(f"| HTML Files | {counts['html']} |")
-    output_lines.append(f"| PHP Files | {counts['php']} |")
-    output_lines.append(f"| CSS Files | {counts['css']} |")
-    output_lines.append(f"| JavaScript Files | {counts['js']} |")
-    output_lines.append(f"| JSON Files | {counts['json']} |")
-    output_lines.append(f"| Text/Markdown | {counts['text']} |")
-    output_lines.append(f"| Image Files | {counts['images']} |")
-    output_lines.append(f"| Other Files | {counts['other']} |")
-    output_lines.append("")
-    output_lines.append(f"**Total Directories:** {dir_count}")
-    output_lines.append(f"**Total Files:** {file_count}")
-    output_lines.append("")
-    output_lines.append("---")
-    output_lines.append("")
-    output_lines.append(f"*Generated by Web Project Tree Mapper*")
-    output_lines.append(f"*Script: {Path(__file__).name}*")
-    
-    # Write to file
-    try:
-        with open(output_file, 'w', encoding='utf-8') as f:
-            f.write('\n'.join(output_lines))
-        
-        print(color_text("\n✓ Project structure mapping complete!", Colors.GREEN))
-        print(color_text(f"✓ File created: {output_file}", Colors.YELLOW))
-        print()
-        
-    except IOError as e:
-        print(color_text(f"\n✗ Error writing to output file: {e}", Colors.RED))
-        sys.exit(1)
+            if not path.is_file():
+                continue
+            if not self.filter.include_entry(path):
+                continue
+            stats.total_files += 1
+            stats.by_bucket[self._classify(path.suffix.lower())] += 1
+        return stats
+
+    def _iter_visible(self, root: Path) -> Iterable[Path]:
+        stack = [root]
+        while stack:
+            current = stack.pop()
+            try:
+                children = list(current.iterdir())
+            except PermissionError:
+                continue
+            for child in children:
+                if child.is_dir():
+                    if self.filter.include_dir(child.name):
+                        stack.append(child)
+                        yield child
+                else:
+                    yield child
+
+    @staticmethod
+    def _classify(suffix: str) -> str:
+        for bucket, extensions in SUMMARY_BUCKETS.items():
+            if suffix in extensions:
+                return bucket
+        return "other"
+
+
+# ---------------------------------------------------------------------------
+# Markdown rendering
+# ---------------------------------------------------------------------------
+
+class MarkdownRenderer:
+    def __init__(self, config: Config) -> None:
+        self.config = config
+
+    def render(self, tree_lines: List[str], stats: Stats) -> str:
+        parts: List[str] = []
+        parts.extend(self._header())
+        parts.append("```")
+        parts.extend(tree_lines)
+        parts.append("```")
+        parts.append("")
+        parts.extend(self._summary(stats))
+        parts.extend(self._footer())
+        return "\n".join(parts)
+
+    def _header(self) -> List[str]:
+        return [
+            "# Web Project Structure",
+            "",
+            f"**Project:** {self.config.root.name}",
+            f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            f"**Mode:** {self.config.mode.value}",
+            "",
+        ]
+
+    def _summary(self, stats: Stats) -> List[str]:
+        rows = ["## Summary", "", "| File Type | Count |", "|-----------|-------|"]
+        for bucket in SUMMARY_DISPLAY_NAMES:
+            label = SUMMARY_DISPLAY_NAMES[bucket]
+            rows.append(f"| {label} | {stats.by_bucket.get(bucket, 0)} |")
+        rows.append("")
+        rows.append(f"**Total directories:** {stats.total_dirs}")
+        rows.append(f"**Total files:** {stats.total_files}")
+        rows.append("")
+        return rows
+
+    def _footer(self) -> List[str]:
+        return [
+            "---",
+            "",
+            "*Generated by Web Project Tree Mapper*",
+            f"*Script: {self.config.script_path.name}*",
+            "",
+        ]
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator
+# ---------------------------------------------------------------------------
+
+class TreeMapper:
+    def __init__(self, config: Config) -> None:
+        self.config = config
+        self.filter = Filter(config)
+        self.builder = TreeBuilder(config, self.filter)
+        self.collector = StatsCollector(config, self.filter)
+        self.renderer = MarkdownRenderer(config)
+
+    def run(self) -> Tuple[Path, Stats]:
+        root = self.config.root
+        if not root.exists():
+            raise FileNotFoundError(f"Project root does not exist: {root}")
+        tree_lines = self.builder.build(root)
+        stats = self.collector.collect(root)
+        content = self.renderer.render(tree_lines, stats)
+        self.config.output_dir.mkdir(parents=True, exist_ok=True)
+        self.config.output_file.write_text(content, encoding="utf-8")
+        return self.config.output_file, stats
+
+
+# ---------------------------------------------------------------------------
+# UI / Feedback
+# ---------------------------------------------------------------------------
 
 def show_menu() -> None:
-    """Display the menu options."""
-    print(color_text("Choose mapping option:", Colors.BLUE))
-    print("[1] Web files only (.html, .php, .css, .js, .json, .md, .txt)")
-    print("[2] All files and folders (excluding node_modules/.git)")
-    print("[3] Assets only (images, icons, media files)")
-    print("[0] Exit")
+    print(paint("  Choose mapping option", C.WARNING, C.BOLD))
+    print()
+    for key, _mode, label in MENU_CHOICES:
+        # Use the exact colors from the screenshot you liked
+        num = paint(f"[{key}]", C.INFO)
+        txt = paint(label, C.SUCCESS if key != "0" else C.DIM)
+        print(f"  {num} {txt}")
+    print()
 
-def get_user_choice() -> str:
-    """Get user choice from menu."""
+
+def get_user_mode() -> Optional[Mode]:
     while True:
-        choice = input(color_text("\nEnter your choice: ", Colors.YELLOW)).strip()
-        if choice in ['0', '1', '2', '3']:
-            return choice
-        print(color_text("Invalid choice. Please enter 0, 1, 2, or 3.", Colors.RED))
+        # No space after the arrow, input starts immediately
+        prompt = paint("  Choice ", C.MAGENTA, C.BOLD) + paint("› ", C.DIM)
+        choice = input(prompt).strip()
+        if choice in MENU_MAP:
+            return MENU_MAP[choice]
+        valid = paint(", ".join(MENU_MAP.keys()), C.WARNING)
+        print(paint(f"  Invalid choice. Enter one of: ", C.DANGER) + valid)
+        print()
 
-def main() -> None:
-    """Main execution function."""
-    # Setup paths
-    script_dir = Path(__file__).parent.absolute()
-    project_root = script_dir.parent.absolute()
-    
-    # Output path: /logs/output/
-    logs_path = project_root / 'logs'
-    output_path = logs_path / 'tree-mapper'
-    
-    # Create directories if they don't exist
-    output_path.mkdir(parents=True, exist_ok=True)
-    
-    # Output file with .md extension
-    output_file = output_path / 'project_structure.md'
-    
-    # Display banner
-    print(color_text("\n=== Web Project Tree Mapper ===", Colors.CYAN))
+
+def print_error(message: str) -> None:
     print()
-    print(color_text(f"Project Root: {project_root}", Colors.GREEN))
-    print(color_text(f"Project Name: {project_root.name}", Colors.GREEN))
-    print(color_text(f"Output Folder: {output_path}", Colors.GREEN))
+    print(paint("  [ERROR] ", C.DANGER, C.BOLD) + paint(message, C.DANGER))
+    print()
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Generate a tree structure map for a web project.",
+    )
+    parser.add_argument("-m", "--mode", choices=[m.value for m in Mode], default=None,
+                        help="Filtering mode. If omitted, an interactive menu is shown.")
+    parser.add_argument("-o", "--output-dir", type=Path, default=None,
+                        help="Output directory relative to project root.")
+    parser.add_argument("-n", "--output-name", default="project_structure.md",
+                        help="Output filename.")
+    parser.add_argument("--project-root", type=Path, default=None,
+                        help="Override project root.")
+    parser.add_argument("--exclude", nargs="*", default=[], metavar="DIR",
+                        help="Additional directory names to exclude.")
+    parser.add_argument("--include-hidden", action="store_true",
+                        help="Include hidden files/dirs.")
+    parser.add_argument("--no-clear", action="store_true",
+                        help="Do not clear the screen before running.")
+    return parser
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    args = build_parser().parse_args(argv)
+
+    if not args.no_clear:
+        clear_screen()
+
+    print()
+    print(paint("  Web Project Tree Mapper", C.INFO, C.BOLD))
+    print()
+
+    if args.mode is not None:
+        mode: Optional[Mode] = Mode(args.mode)
+    else:
+        show_menu()
+        mode = get_user_mode()
+        if mode is None:
+            print(paint("  Cancelled.", C.DIM))
+            print()
+            return 0
+        print()
+
+    config = Config(
+        mode=mode,
+        output_filename=args.output_name,
+        extra_excluded_dirs=set(args.exclude),
+        skip_hidden=not args.include_hidden,
+    )
+    if args.output_dir is not None:
+        config.output_subdir = args.output_dir
+    if args.project_root is not None:
+        config.project_root = args.project_root.resolve()
+
+    try:
+        root = config.root
+    except FileNotFoundError as exc:
+        print_error(str(exc))
+        return 1
+
+    # Context Output
+    print(paint("  [READ]  ", C.INFO) + paint(str(root), C.WHITE))
+    print(paint("  [WRITE] ", C.INFO) + paint(str(config.output_file), C.WHITE))
+    print(paint("  [MODE]  ", C.INFO) + paint(config.mode.value, C.WHITE))
+    print()
+
+    print(paint("  [SUCCESS] ", C.SUCCESS) + paint("Mapping...", C.WHITE), end="", flush=True)
+
+    try:
+        result, stats = TreeMapper(config).run()
+    except Exception as exc:
+        print()
+        print_error(str(exc))
+        return 1
+
+    print(" " + paint("done", C.SUCCESS))
     print()
     
-    # Check if output file exists (inform user but always overwrite)
-    if output_file.exists():
-        print(color_text(f"Overwriting existing file: {output_file}", Colors.YELLOW))
+    # Summary Output
+    print(paint("  [SUMMARY] ", C.WARNING) + paint(f"{stats.total_dirs} directories", C.WHITE))
+    print(paint("  [SUMMARY] ", C.WARNING) + paint(f"{stats.total_files} files", C.WHITE))
+    print()
+
+    # Final Success Output
+    print(paint("  Written to ", C.DIM) + paint(str(result), C.SUCCESS))
+    print()
     
-    # Show menu and get choice
-    show_menu()
-    choice = get_user_choice()
-    
-    if choice == '0':
-        print("Exiting...")
-        sys.exit(0)
-    
-    # Map choice to mode
-    mode_map = {
-        '1': 'web_only',
-        '2': 'all',
-        '3': 'assets_only'
-    }
-    
-    mode = mode_map[choice]
-    
-    # Verify project root exists and has content
-    if not project_root.exists():
-        print(color_text(f"Error: Project root does not exist: {project_root}", Colors.RED))
-        sys.exit(1)
-    
-    # Generate the map
-    generate_map(project_root, output_file, mode)
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -34,6 +34,7 @@
   "github.copilot.editor.enableTerminalChat": false,
   "github.copilot.chat.enable": false,
   "github.copilot.inlineChat.enable": false,
+  "git.terminalAuthentication": false,
   "editor.inlineSuggest.enabled": false,
   "intellicode.enable": false,
   "workbench.settings.showAISearchToggle": false,
@@ -192,27 +193,31 @@
   "emmet.triggerExpansionOnTab": true,
   "emmet.showExpandedAbbreviation": "always",
 
-  // ============================================================================
-  // 11. TERMINAL & CODE RUNNER
-  // ============================================================================
-  "terminal.integrated.defaultProfile.windows": "Git Bash",
-  "terminal.integrated.gpuAcceleration": "on",
-  "terminal.integrated.stickyScroll.enabled": false,
-  "terminal.integrated.shellIntegration.decorationsEnabled": "never",
-  "terminal.integrated.suggest.enabled": false,
-  "code-runner.showRunIconInEditorTitleMenu": true,
-  "code-runner.runInTerminal": true,
-  "code-runner.ignoreSelection": true,
-  "code-runner.clearPreviousOutput": true,
-  "code-runner.temporaryFileName": "",
-  "code-runner.executorMap": {
-    "python": "clear && cd \"$(dirname \"$file\")\" && python3 -u \"$fileName\"",
-    "java": "clear && cd \"$(dirname \"$file\")\" && mkdir -p javac-build/classes && rm -rf javac-build/classes/* && javac -d javac-build/classes \"$fileName\" && java -cp javac-build/classes \"$fileNameWithoutExt\"",
-    "c": "clear && cd \"$(dirname \"$file\")\" && mkdir -p gcc-build/bin && rm -rf gcc-build/bin/* && gcc \"$fileName\" -o \"gcc-build/bin/$fileNameWithoutExt\" && ./\"gcc-build/bin/$fileNameWithoutExt\"",
-    "cpp": "clear && cd \"$(dirname \"$file\")\" && mkdir -p g++-build/bin && rm -rf g++-build/bin/* && g++ \"$fileName\" -o \"g++-build/bin/$fileNameWithoutExt\" && ./\"g++-build/bin/$fileNameWithoutExt\"",
-    "csharp": "clear && SOURCE_DIR=\"$(dirname \"$file\")\" && SOURCE_FILE=\"$fileName\" && BASENAME=\"$(basename \"$SOURCE_FILE\" .cs)\" && cd \"$SOURCE_DIR\" && if [ ! -d dotnet-runner ]; then dotnet new console -n dotnet-runner > /dev/null && sed -i 's|<OutputType>Exe</OutputType>|<OutputType>Exe</OutputType><BaseOutputPath>bin/</BaseOutputPath><BaseIntermediateOutputPath>obj/</BaseIntermediateOutputPath><OutputPath>bin/debug/</OutputPath><IntermediateOutputPath>obj/debug/</IntermediateOutputPath>|' dotnet-runner/dotnet-runner.csproj; fi && rm -rf dotnet-runner/bin dotnet-runner/obj && rm -f dotnet-runner/*.cs && cp \"$SOURCE_FILE\" \"dotnet-runner/${BASENAME}.cs\" && (cd dotnet-runner && dotnet run --file \"${BASENAME}.cs\" 2>&1 | grep -v 'MSB3539\\|MSB[0-9]\\+')"
-  },
+ // ============================================================================
+// 11. TERMINAL & CODE RUNNER
+// ============================================================================
+"terminal.integrated.defaultProfile.windows": "Git Bash",
+"terminal.integrated.gpuAcceleration": "on",
+"terminal.integrated.stickyScroll.enabled": false,
+"terminal.integrated.shellIntegration.decorationsEnabled": "never",
+"terminal.integrated.suggest.enabled": false,
+"code-runner.showRunIconInEditorTitleMenu": true,
+"code-runner.runInTerminal": true,
+"code-runner.ignoreSelection": true,
+"code-runner.clearPreviousOutput": true,
+"code-runner.temporaryFileName": "",
+"code-runner.fileDirectoryAsCwd": true,
+"code-runner.executorMap": {
+  "python": "clear && python3 -u \"$fileName\"",
 
+  "java": "clear && rm -rf javac-build && mkdir -p javac-build/classes && javac -d javac-build/classes \"$fileName\" && java -cp javac-build/classes \"$fileNameWithoutExt\"",
+
+  "c": "clear && rm -rf c-build && mkdir -p c-build/bin && gcc \"$fileName\" -o \"c-build/bin/$fileNameWithoutExt\" && ./\"c-build/bin/$fileNameWithoutExt\"",
+
+  "cpp": "clear && rm -rf cpp-build && mkdir -p cpp-build/bin && g++ \"$fileName\" -o \"cpp-build/bin/$fileNameWithoutExt\" && ./\"cpp-build/bin/$fileNameWithoutExt\"",
+
+  "csharp": "clear && rm -rf dotnet-runner && dotnet new console -n dotnet-runner -o dotnet-runner > /dev/null 2>&1 && rm -f dotnet-runner/Program.cs && cp \"$fileName\" \"dotnet-runner/\" && cd dotnet-runner && dotnet run 2>&1"
+},
   // ============================================================================
   // 12. LANGUAGE & FRAMEWORK SPECIFIC
   // ============================================================================
@@ -294,5 +299,6 @@
   },
   "explorer.confirmDelete": false,
   "workbench.activityBar.compact": true,
-  "workbench.activityBar.location": "top"
-}
+  "workbench.activityBar.location": "top",
+  "workbench.layoutControl.enabled": false
+} 

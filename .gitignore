@@ -7,13 +7,10 @@
 # To select all files
 # *.extension
 # folder/another_folder/*
-logs/content-fetcher-configuration/
-logs/output
-logs/tree-mapper/
 *env
 *txt
-shared/uploads/*
 out/*
-logs/content-fetcher-configuration/all_path.py
-logs/content-fetcher-configuration/all_path.py
+shared/uploads/*
 docker/mysql_data/*
+development/kits/temp
+development/documentation/architecture
